@@ -30,18 +30,15 @@
 #include <linux/module.h>
 #include <linux/tty.h>
 #include <linux/string.h>
-#include <linux/kd.h>
 #include <linux/malloc.h>
 #include <linux/vt_kern.h>
 #include <linux/vt_buffer.h>
-#include <linux/selection.h>
 #include <linux/spinlock.h>
 #include <linux/ioport.h>
 #include <linux/delay.h>
 #include <linux/init.h>
 
-#include <asm/io.h>
-#include <asm/vga.h>
+#include "vga.h"
 
 static spinlock_t mda_lock = SPIN_LOCK_UNLOCKED;
 
@@ -293,9 +290,9 @@ static void __init mda_initialize(void)
 }
 
 #ifdef MODULE
-static const char *mdacon_startup(struct vt_struct *vt)
+static const char *mdacon_startup(struct vt_struct *vt, int init)
 #else
-static const char __init *mdacon_startup(struct vt_struct *vt)
+static const char __init *mdacon_startup(struct vt_struct *vt, int init)
 #endif
 {
 	mda_num_columns = 80;
@@ -325,30 +322,28 @@ static const char __init *mdacon_startup(struct vt_struct *vt)
 	/* cursor looks ugly during boot-up, so turn it off */
 	mda_set_cursor(mda_vram_len - 1);
 
+	vt->default_mode->vc_cols = mda_num_columns;
+	vt->default_mode->vc_rows = mda_num_lines;
+
 	printk("mdacon: %s with %ldK of memory detected.\n",
 		mda_type_name, mda_vram_len/1024);
-
+	MOD_INC_USE_COUNT;
 	return "MDA-2";
 }
 
-static void mdacon_init(struct vc_data *c, int init)
+static void mdacon_init(struct vc_data *vc)
 {
-	c->vc_complement_mask = 0x0800;	 /* reverse video */
+	vc->vc_complement_mask = 0x0800;	 /* reverse video */
 
-	if (init) {
-		c->vc_cols = mda_num_columns;
-		c->vc_rows = mda_num_lines;
-	} else {
-		vc_resize(c, mda_num_lines, mda_num_columns);
-        }
-	MOD_INC_USE_COUNT;
+	vc->vc_cols = vc->display_fg->default_mode->vc_cols;
+	vc->vc_rows = vc->display_fg->default_mode->vc_rows;
 }
 
-static void mdacon_deinit(struct vc_data *c)
+static void mdacon_deinit(struct vc_data *vc)
 {
-	/* con_set_default_unimap(c->vc_num); */
+	/* con_set_default_unimap(c->vc_num); 
 
-	MOD_DEC_USE_COUNT;
+	MOD_DEC_USE_COUNT; */
 }
 
 static inline u16 mda_convert_attr(u16 ch)
@@ -410,19 +405,19 @@ static void mdacon_putcs(struct vc_data *c, const unsigned short *s,
 	}
 }
 
-static void mdacon_clear(struct vc_data *c, int y, int x, 
+static void mdacon_clear(struct vc_data *vc, int y, int x, 
 			  int height, int width)
 {
 	u16 *dest = MDA_ADDR(x, y);
-	u16 eattr = mda_convert_attr(c->vc_video_erase_char);
+	u16 eattr = mda_convert_attr(vc->vc_video_erase_char);
 
 	if (width <= 0 || height <= 0)
 		return;
 
-	if (x==0 && width==mda_num_columns) {
+	if (x==0 && width == vc->vc_cols) {
 		scr_memsetw(dest, eattr, height*width*2);
 	} else {
-		for (; height > 0; height--, dest+=mda_num_columns)
+		for (; height > 0; height--, dest += vc->vc_cols)
 			scr_memsetw(dest, eattr, width*2);
 	}
 }
@@ -435,7 +430,7 @@ static void mdacon_bmove(struct vc_data *c, int sy, int sx,
 	if (width <= 0 || height <= 0)
 		return;
 		
-	if (sx==0 && dx==0 && width==mda_num_columns) {
+	if (sx==0 && dx==0 && width == vc->vc_cols) {
 		scr_memmovew(MDA_ADDR(0,dy), MDA_ADDR(0,sy), height*width*2);
 
 	} else if (dy < sy || (dy == sy && dx < sx)) {
@@ -444,8 +439,8 @@ static void mdacon_bmove(struct vc_data *c, int sy, int sx,
 
 		for (; height > 0; height--) {
 			scr_memmovew(dest, src, width*2);
-			src  += mda_num_columns;
-			dest += mda_num_columns;
+			src  += vc->vc_cols;
+			dest += vc->vc_cols;
 		}
 	} else {
 		src  = MDA_ADDR(sx, sy+height-1);
@@ -453,8 +448,8 @@ static void mdacon_bmove(struct vc_data *c, int sy, int sx,
 
 		for (; height > 0; height--) {
 			scr_memmovew(dest, src, width*2);
-			src  -= mda_num_columns;
-			dest -= mda_num_columns;
+			src  -= vc->vc_cols;
+			dest -= vc->vc_cols;
 		}
 	}
 }
@@ -464,18 +459,18 @@ static int mdacon_switch(struct vc_data *c)
 	return 1;	/* redrawing needed */
 }
 
-static int mdacon_set_palette(struct vc_data *c, unsigned char *table)
+static int mdacon_set_palette(struct vc_data *vc, unsigned char *table)
 {
 	return -EINVAL;
 }
 
-static int mdacon_blank(struct vc_data *c, int blank)
+static int mdacon_blank(struct vc_data *vc, int blank)
 {
 	if (mda_type == TYPE_MDA) {
 		if (blank) 
 			scr_memsetw((void *)mda_vram_base, 
-				mda_convert_attr(c->vc_video_erase_char),
-				c->vc_screenbuf_size);
+				mda_convert_attr(vc->vc_video_erase_char),
+				vc->vc_screenbuf_size);
 		/* Tell console.c that it has to restore the screen itself */
 		return 1;
 	} else {
@@ -488,26 +483,26 @@ static int mdacon_blank(struct vc_data *c, int blank)
 	}
 }
 
-static int mdacon_font_op(struct vc_data *c, struct console_font_op *op)
+static int mdacon_font_op(struct vc_data *vc, struct console_font_op *op)
 {
 	return -ENOSYS;
 }
 
-static int mdacon_scrolldelta(struct vc_data *c, int lines)
+static int mdacon_scrolldelta(struct vc_data *vc, int lines)
 {
 	return 0;
 }
 
-static void mdacon_cursor(struct vc_data *c, int mode)
+static void mdacon_cursor(struct vc_data *vc, int mode)
 {
 	if (mode == CM_ERASE) {
 		mda_set_cursor(mda_vram_len - 1);
 		return;
 	}
 
-	mda_set_cursor(c->vc_y*mda_num_columns*2 + c->vc_x*2);
+	mda_set_cursor(vc->vc_y * vc->vc_cols*2 + vc->vc_x*2);
 
-	switch (c->vc_cursor_type & 0x0f) {
+	switch (vc->vc_cursor_type & 0x0f) {
 
 		case CUR_LOWER_THIRD:	mda_set_cursor_size(10, 13); break;
 		case CUR_LOWER_HALF:	mda_set_cursor_size(7,  13); break;
@@ -518,29 +513,29 @@ static void mdacon_cursor(struct vc_data *c, int mode)
 	}
 }
 
-static int mdacon_scroll(struct vc_data *c, int t, int b, int dir, int lines)
+static int mdacon_scroll(struct vc_data *vc, int t, int b, int dir, int lines)
 {
-	u16 eattr = mda_convert_attr(c->vc_video_erase_char);
+	u16 eattr = mda_convert_attr(vc->vc_video_erase_char);
 
 	if (!lines)
 		return 0;
 
-	if (lines > c->vc_rows)   /* maximum realistic size */
-		lines = c->vc_rows;
+	if (lines > vc->vc_rows)   /* maximum realistic size */
+		lines = vc->vc_rows;
 
 	switch (dir) {
 
 	case SM_UP:
 		scr_memmovew(MDA_ADDR(0,t), MDA_ADDR(0,t+lines),
-				(b-t-lines)*mda_num_columns*2);
+				(b-t-lines)*vc->vc_cols*2);
 		scr_memsetw(MDA_ADDR(0,b-lines), eattr,
-				lines*mda_num_columns*2);
+				lines*vc->vc_cols*2);
 		break;
 
 	case SM_DOWN:
 		scr_memmovew(MDA_ADDR(0,t+lines), MDA_ADDR(0,t),
-				(b-t-lines)*mda_num_columns*2);
-		scr_memsetw(MDA_ADDR(0,t), eattr, lines*mda_num_columns*2);
+				(b-t-lines)*vc->vc_cols*2);
+		scr_memsetw(MDA_ADDR(0,t), eattr, lines*vc->vc_cols*2);
 		break;
 	}
 
@@ -583,16 +578,24 @@ void __init mda_console_init(void)
 
         vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
         if (!vt) return;
-        display_desc = create_vt(vt, &mda_con);
+	vt->kmalloced = 1;
+	vt->vt_sw = &mda_con;
+	vt->default_mode = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
+	if (!vt->default_mode) {
+		kfree(vt);
+		return;
+	}
+#ifdef MODULE
+        display_desc = create_vt(vt, 1);
+#else
+	display_desc = create_vt(vt, 0);
+#endif
         if (!display_desc) {
+		kfree(vt->default_mode);
                 kfree(vt);
-                return;
+		return;
         }
-        i = vc_allocate(vt->vcs.first_vc);
-        if (i)  {
-                kfree(vt);
-                return;
-        }
+	
         printk("Console: mono %s %dx%d",display_desc,vc->vc_cols,vc->vc_rows);
         return;
 }
