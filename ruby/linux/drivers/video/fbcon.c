@@ -194,8 +194,8 @@ static const char *fbcon_startup(struct vt_struct *vt, int init)
     struct fbcon_font_desc *font = NULL;
     struct fb_info *info;
     struct module *owner;
+    int font_size, logo;	
     struct vc_data *vc;		
-    int logo;	
 
     /*
      *  If num_registered_fb is zero, this is a call for the dummy part.
@@ -234,10 +234,13 @@ static const char *fbcon_startup(struct vt_struct *vt, int init)
     vc = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);	
     vt->default_mode = vc;	
 
+    /* Setup the defualt font. */
+    font_size = font->width * font->height * 256; /* Evil hack */
+    vc->vc_font.data = kmalloc(font_size, GFP_KERNEL);
     vc->vc_font.width = font->width;
     vc->vc_font.height = font->height;
-    vc->vc_font.charcount = 256; /* Gross hack :-( */ 
-    vc->vc_font.data = font->data;
+    vc->vc_font.charcount = 256; /* Gross hack :-( */
+    memcpy(vc->vc_font.data, font->data, font_size);  
 
     info->var.xoffset = info->var.yoffset = 0;  /* reset wrap/pan */
     info->var.activate = FB_ACTIVATE_NOW;	
@@ -578,22 +581,17 @@ static int fbcon_blank(struct vc_data *vc, int blank)
     return 0;
 }
 
+/* This function validates the font for the current mode. */
 static int fbcon_font_op(struct vc_data *vc, struct console_font_op *op)
 {
-    switch (op->op) {
-/*
-	case KD_FONT_OP_SET:
-	    return fbcon_set_font(vc, op);
-	case KD_FONT_OP_GET:
-	    return fbcon_get_font(vc, op);
-	case KD_FONT_OP_SET_DEFAULT:
-	    return fbcon_set_def_font(vc, op);
-	case KD_FONT_OP_COPY:
-	    return fbcon_copy_font(vc, op);
-*/
-	default:
-	    return -ENOSYS;
-    }
+    struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
+
+#ifdef CONFIG_FBCON_FONTWIDTH8_ONLY
+    if (op->width != 8)
+	return -ENXIO;	
+#endif
+    if ((info->var.xres % op->width) || (info->yres % op->width))	
+	return -ENXIO;
 }
 
 static int fbcon_resize(struct vc_data *vc,unsigned int cols,unsigned int rows)
