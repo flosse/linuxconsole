@@ -306,8 +306,6 @@ struct fb_image {
 
 #ifdef __KERNEL__
 
-#define GET_FB_IDX(node)	(MINOR(node))
-
 #include <linux/fs.h>
 #include <linux/poll.h>
 #include <linux/init.h>

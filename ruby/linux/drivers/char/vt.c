@@ -1204,7 +1204,7 @@ out:
 /* Allocate the console screen memory. */
 static int vt_open(struct tty_struct *tty, struct file * filp)
 {
-        unsigned int currcons = MINOR(tty->device);
+        unsigned int currcons = minor(tty->device);
 	struct vc_data *vc = (struct vc_data *) tty->driver_data;
 
 	if (!vc) {
@@ -1232,7 +1232,7 @@ static void vt_close(struct tty_struct *tty, struct file * filp)
         if (!tty)
                 return;
         if (tty->count != 1) return;
-        vcs_make_devfs(MINOR(tty->device), 1);
+        vcs_make_devfs(minor(tty->device), 1);
         tty->driver_data = 0;
 }
 
@@ -1423,14 +1423,13 @@ quit:
 
 static kdev_t vt_console_device(struct console *c)
 {
-        return MKDEV(TTY_MAJOR, c->index ? c->index : admin_vt->fg_console->vc_num);
+        return mk_dev(TTY_MAJOR, c->index ? c->index : admin_vt->fg_console->vc_num);
 }
 
 struct console vt_console_driver = {
 	name:		"tty",
         write:		vt_console_print,
         device:		vt_console_device,
-        wait_key:	keyboard_wait_for_keypress,
         flags:		CON_PRINTBUFFER,
         index:		-1,
 };

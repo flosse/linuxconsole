@@ -165,8 +165,6 @@ if [ "$CONFIG_NET" = "y" ]; then
    source net/Config.in
 fi
 
-source drivers/input/Config.in
-
 mainmenu_option next_comment
 comment 'ATA/IDE/MFM/RLL support'
 
@@ -357,6 +355,8 @@ if [ "$CONFIG_NET" = "y" ]; then
 
 fi
 
+source drivers/input/Config.in
+
 mainmenu_option next_comment
 comment 'Character devices'
  
@@ -377,7 +377,7 @@ if [ "$CONFIG_SERIAL_EXTENDED" = "y" ]; then
 fi
 
 if [ "$CONFIG_VME" = "n" -a "$CONFIG_INPUT" = "y" ]; then
-   bool 'Virtual terminal' CONFIG_VT	
+   define_bool CONFIG_VT y
    if [ "$CONFIG_VT" = "y" ]; then
       bool 'Support for console on virtual terminal' CONFIG_VT_CONSOLE
    fi
@@ -436,13 +436,10 @@ else
    define_bool CONFIG_SUN3X_ZS n
 fi
 if [ "$CONFIG_SUN3X_ZS" = "y" ]; then
-   define_bool CONFIG_INPUT_SUNKBD y
    define_bool CONFIG_SBUS y
    define_bool CONFIG_SBUSCHAR y
    define_bool CONFIG_SUN_SERIAL y
 else
-   define_bool CONFIG_INPUT_SUNKBD n
-   define_bool CONFIG_SUN_MOUSE n
    define_bool CONFIG_SBUS n
 fi
 
@@ -517,3 +514,5 @@ comment 'Kernel hacking'
 #bool 'Debug kmalloc/kfree' CONFIG_DEBUG_MALLOC
 bool 'Magic SysRq key' CONFIG_MAGIC_SYSRQ
 endmenu
+
+source lib/Config.in

@@ -7,8 +7,10 @@
 #include <linux/slab.h>
 #include <asm/io.h>
 #include <linux/pm.h>
-#include <linux/keyboard.h>
+#include <linux/input.h>
+#include <asm/system.h>
 
+unsigned long dmi_broken;
 int is_sony_vaio_laptop;
 
 struct dmi_header
@@ -86,7 +88,7 @@ static int __init dmi_table(u32 base, int len, int num, void (*decode)(struct dm
 }
 
 
-int __init dmi_iterate(void (*decode)(struct dmi_header *))
+static int __init dmi_iterate(void (*decode)(struct dmi_header *))
 {
 	unsigned char buf[20];
 	long fp=0xE0000L;
@@ -97,7 +99,7 @@ int __init dmi_iterate(void (*decode)(struct dmi_header *))
  	 *	Skip on x86/64 with simnow. Will eventually go away
  	 *	If you see this ifdef in 2.6pre mail me !
  	 */
-	return;
+	return -1;
 #endif
  	
 	while( fp < 0xFFFFF)
@@ -189,6 +191,7 @@ struct dmi_blacklist
  *	corruption problems
  */ 
  
+#if 0
 static __init int disable_ide_dma(struct dmi_blacklist *d)
 {
 #ifdef CONFIG_BLK_DEV_IDE
@@ -201,6 +204,7 @@ static __init int disable_ide_dma(struct dmi_blacklist *d)
 #endif	
 	return 0;
 }
+#endif
 
 /* 
  * Reboot options and system auto-detection code provided by
@@ -314,15 +318,14 @@ static __init int broken_apm_power(struct dmi_blacklist *d)
 	return 0;
 }		
 
-#if defined(CONFIG_SONYPI) || defined(CONFIG_SONYPI_MODULE)
 /*
- * Check for a Sony Vaio system in order to enable the use of
- * the sonypi driver (we don't want this driver to be used on
- * other systems, even if they have the good PCI IDs).
+ * Check for a Sony Vaio system
  *
- * This one isn't a bug detect for those who asked, we simply want to
- * activate Sony specific goodies like the camera and jogdial..
+ * On a Sony system we want to enable the use of the sonypi
+ * driver for Sony-specific goodies like the camera and jogdial.
+ * We also want to avoid using certain functions of the PnP BIOS.
  */
+
 static __init int sony_vaio_laptop(struct dmi_blacklist *d)
 {
 	if (is_sony_vaio_laptop == 0)
@@ -332,7 +335,6 @@ static __init int sony_vaio_laptop(struct dmi_blacklist *d)
 	}
 	return 0;
 }
-#endif
 
 /*
  * This bios swaps the APM minute reporting bytes over (Many sony laptops
@@ -358,8 +360,62 @@ static __init int broken_pirq(struct dmi_blacklist *d)
 	printk(KERN_INFO " *** Possibly defective BIOS detected (irqtable)\n");
 	printk(KERN_INFO " *** Many BIOSes matching this signature have incorrect IRQ routing tables.\n");
 	printk(KERN_INFO " *** If you see IRQ problems, in paticular SCSI resets and hangs at boot\n");
-	printk(KERN_INFO " *** contact your vendor and ask about updates.\n");
+	printk(KERN_INFO " *** contact your hardware vendor and ask about updates.\n");
 	printk(KERN_INFO " *** Building an SMP kernel may evade the bug some of the time.\n");
+	return 0;
+}
+
+/*
+ * ASUS K7V-RM has broken ACPI table defining sleep modes
+ */
+
+static __init int broken_acpi_Sx(struct dmi_blacklist *d)
+{
+	printk(KERN_WARNING "Detected ASUS mainboard with broken ACPI sleep table\n");
+	dmi_broken |= BROKEN_ACPI_Sx;
+	return 0;
+}
+
+/*
+ * Toshiba fails to preserve interrupts over S1
+ */
+
+static __init int init_ints_after_s1(struct dmi_blacklist *d)
+{
+	printk(KERN_WARNING "Toshiba with broken S1 detected.\n");
+	dmi_broken |= BROKEN_INIT_AFTER_S1;
+	return 0;
+}
+
+/*
+ * Some Bioses enable the PS/2 mouse (touchpad) at resume, even if it
+ * was disabled before the suspend. Linux gets terribly confused by that.
+ */
+
+typedef void (pm_kbd_func) (void);
+
+static __init int broken_ps2_resume(struct dmi_blacklist *d)
+{
+#ifdef CONFIG_INPUT
+/*
+	if (pm_kbd_request_override == NULL)
+	{
+		pm_kbd_request_override = pckbd_pm_resume;
+		printk(KERN_INFO "%s machine detected. Mousepad Resume Bug workaround enabled.\n", d->ident);
+	}
+*/
+#endif
+	return 0;
+}
+
+
+/*
+ *	Simple "print if true" callback
+ */
+ 
+static __init int print_if_true(struct dmi_blacklist *d)
+{
+	printk("%s\n", d->ident);
 	return 0;
 }
 
@@ -380,6 +436,11 @@ static __initdata struct dmi_blacklist dmi_blacklist[]={
 			NO_MATCH, NO_MATCH, NO_MATCH
 			} },
 #endif			
+	{ broken_ps2_resume, "Dell Latitude C600", {	/* Handle problems with APM on the C600 */
+		        MATCH(DMI_SYS_VENDOR, "Dell"),
+			MATCH(DMI_PRODUCT_NAME, "Latitude C600"),
+			NO_MATCH, NO_MATCH
+	                } },
 	{ broken_apm_power, "Dell Inspiron 5000e", {	/* Handle problems with APM on Inspiron 5000e */
 			MATCH(DMI_BIOS_VENDOR, "Phoenix Technologies LTD"),
 			MATCH(DMI_BIOS_VERSION, "A04"),
@@ -399,10 +460,6 @@ static __initdata struct dmi_blacklist dmi_blacklist[]={
 			MATCH(DMI_SYS_VENDOR, "Dell Computer Corporation"),
 			MATCH(DMI_PRODUCT_NAME, "PowerEdge 300/"),
 			NO_MATCH, NO_MATCH
-			} },
-	{ set_apm_ints, "IBM", {	/* Allow interrupts during suspend on IBM laptops */
-			MATCH(DMI_SYS_VENDOR, "IBM"),
-			NO_MATCH, NO_MATCH, NO_MATCH
 			} },
 	{ set_apm_ints, "Dell Inspiron", {	/* Allow interrupts during suspend on Dell Inspiron laptops*/
 			MATCH(DMI_SYS_VENDOR, "Dell Computer Corporation"),
@@ -431,13 +488,11 @@ static __initdata struct dmi_blacklist dmi_blacklist[]={
 			MATCH(DMI_BIOS_VENDOR,"SystemSoft"),
 			MATCH(DMI_BIOS_VERSION,"Version R2.08")
 			} },
-#if defined(CONFIG_SONYPI) || defined(CONFIG_SONYPI_MODULE)
 	{ sony_vaio_laptop, "Sony Vaio", { /* This is a Sony Vaio laptop */
 			MATCH(DMI_SYS_VENDOR, "Sony Corporation"),
 			MATCH(DMI_PRODUCT_NAME, "PCG-"),
 			NO_MATCH, NO_MATCH,
 			} },
-#endif
 	{ swab_apm_power_in_minutes, "Sony VAIO", { /* Handle problems with APM on Sony Vaio PCG-N505X(DE) */
 			MATCH(DMI_BIOS_VENDOR, "Phoenix Technologies LTD"),
 			MATCH(DMI_BIOS_VERSION, "R0206H"),
@@ -460,6 +515,12 @@ static __initdata struct dmi_blacklist dmi_blacklist[]={
 			MATCH(DMI_BIOS_VENDOR, "Phoenix Technologies LTD"),
 			MATCH(DMI_BIOS_VERSION, "R0121Z1"),
 			MATCH(DMI_BIOS_DATE, "05/11/00"), NO_MATCH
+			} },
+
+	{ swab_apm_power_in_minutes, "Sony VAIO", {	/* Handle problems with APM on Sony Vaio PCG-Z600NE */
+			MATCH(DMI_BIOS_VENDOR, "Phoenix Technologies LTD"),
+			MATCH(DMI_BIOS_VERSION, "WME01Z1"),
+			MATCH(DMI_BIOS_DATE, "08/11/00"), NO_MATCH
 			} },
 
 	{ swab_apm_power_in_minutes, "Sony VAIO", {	/* Handle problems with APM on Sony Vaio PCG-Z505LS */
@@ -503,9 +564,19 @@ static __initdata struct dmi_blacklist dmi_blacklist[]={
 			MATCH(DMI_BIOS_VERSION,"L440GX0.86B.0094.P10"),
 			NO_MATCH, NO_MATCH
                         } },
+	{ broken_pirq, "l44GX Bios", {        		/* Bad $PIR */
+			MATCH(DMI_BIOS_VENDOR, "Intel Corporation"),
+			MATCH(DMI_BIOS_VERSION,"L440GX0.86B.0120.P12"),
+			NO_MATCH, NO_MATCH
+                        } },
 	{ broken_pirq, "l44GX Bios", {		/* Bad $PIR */
 			MATCH(DMI_BIOS_VENDOR, "Intel Corporation"),
 			MATCH(DMI_BIOS_VERSION,"L440GX0.86B.0125.P13"),
+			NO_MATCH, NO_MATCH
+			} },
+	{ broken_pirq, "l44GX Bios", {		/* Bad $PIR */
+			MATCH(DMI_BIOS_VENDOR, "Intel Corporation"),
+			MATCH(DMI_BIOS_VERSION,"L440GX0.86B.0066.P07.9906041405"),
 			NO_MATCH, NO_MATCH
 			} },
                         
@@ -513,6 +584,33 @@ static __initdata struct dmi_blacklist dmi_blacklist[]={
 	   too well either... */
 	{ broken_pirq, "Dell PowerEdge 8450", {		/* Bad $PIR */
 			MATCH(DMI_PRODUCT_NAME, "Dell PowerEdge 8450"),
+			NO_MATCH, NO_MATCH, NO_MATCH
+			} },
+			
+	{ broken_acpi_Sx, "ASUS K7V-RM", {		/* Bad ACPI Sx table */
+			MATCH(DMI_BIOS_VERSION,"ASUS K7V-RM ACPI BIOS Revision 1003A"),
+			MATCH(DMI_BOARD_NAME, "<K7V-RM>"),
+			NO_MATCH, NO_MATCH
+			} },
+			
+	{ init_ints_after_s1, "Toshiba Satellite 4030cdt", { /* Reinitialization of 8259 is needed after S1 resume */
+			MATCH(DMI_PRODUCT_NAME, "S4030CDT/4.3"),
+			NO_MATCH, NO_MATCH, NO_MATCH
+			} },
+
+	{ print_if_true, KERN_WARNING "IBM T23 - BIOS 1.03b+ and controller firmware 1.02+ may be needed for Linux APM.", {
+			MATCH(DMI_SYS_VENDOR, "IBM"),
+			MATCH(DMI_BIOS_VERSION, "1AET38WW (1.01b)"),
+			NO_MATCH, NO_MATCH
+			} },
+	 
+			
+	/*
+	 *	Generic per vendor APM settings
+	 */
+	 
+	{ set_apm_ints, "IBM", {	/* Allow interrupts during suspend on IBM laptops */
+			MATCH(DMI_SYS_VENDOR, "IBM"),
 			NO_MATCH, NO_MATCH, NO_MATCH
 			} },
 

@@ -13,6 +13,10 @@
 #include <linux/kbd_kern.h>
 #include <linux/input.h>
 
+#define MIN_NR_CONSOLES 1       /* must be at least 1 */
+#define MAX_NR_CONSOLES 63      /* serial lines start at 64 */
+#define MAX_NR_USER_CONSOLES 16 /* number of VCs per VT */
+
 /* scroll */
 #define SM_UP       (1)
 #define SM_DOWN     (2)

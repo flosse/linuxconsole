@@ -33,7 +33,7 @@
 #include <linux/init.h>
 #include <linux/vt_kern.h>
 #include <linux/selection.h>
-#include <linux/console.h>
+#include <linux/kbd_kern.h>
 #include <asm/uaccess.h>
 #include <asm/byteorder.h>
 #include <asm/unaligned.h>
@@ -46,35 +46,35 @@
 /* note the word offset */
 unsigned short *screen_pos(struct vc_data *vc, int w_offset, int viewed)
 {
-        return screenpos(vc, 2 * w_offset, viewed);
+	return screenpos(vc, 2 * w_offset, viewed);
 }
 
 void getconsxy(struct vc_data *vc, char *p)
 {
-        p[0] = vc->vc_x;
-        p[1] = vc->vc_y;
+	p[0] = vc->vc_x;
+	p[1] = vc->vc_y;
 }
 
 void putconsxy(struct vc_data *vc, char *p)
 {
-        gotoxy(vc, p[0], p[1]);
-        set_cursor(vc);
+	gotoxy(vc, p[0], p[1]);
+	set_cursor(vc);
 }
 
 u16 vcs_scr_readw(struct vc_data *vc, const u16 *org)
 {
-        if ((unsigned long)org == vc->vc_pos && vc->display_fg->cursor_original != -1)
-                return vc->display_fg->cursor_original;
-        return scr_readw(org);
+	if ((unsigned long)org == vc->vc_pos && vc->display_fg->cursor_original != -1)
+		return vc->display_fg->cursor_original;
+	return scr_readw(org);
 }
 
 void vcs_scr_writew(struct vc_data *vc, u16 val, u16 *org)
 {
-        scr_writew(val, org);
-        if ((unsigned long)org == vc->vc_pos) {
-                vc->display_fg->cursor_original = -1;
-                add_softcursor(vc);
-        }
+	scr_writew(val, org);
+	if ((unsigned long)org == vc->vc_pos) {
+		vc->display_fg->cursor_original = -1;
+		add_softcursor(vc);
+	}	
 }
 
 static loff_t vcs_lseek(struct file *file, loff_t offset, int orig)
@@ -89,11 +89,11 @@ static loff_t vcs_lseek(struct file *file, loff_t offset, int orig)
 			return -ENXIO;
 		vc = vt_cons->fg_console;
 	}
-	
+
 	size = vc->vc_rows * vc->vc_cols;
 
-	if (MINOR(inode->i_rdev) & 128)
-                size = 2*size + HEADER_SIZE;
+	if (minor(inode->i_rdev) & 128)
+		size = 2*size + HEADER_SIZE;		
 
 	switch (orig) {
 		default:
@@ -112,14 +112,12 @@ static loff_t vcs_lseek(struct file *file, loff_t offset, int orig)
 	return file->f_pos;
 }
 
-#define CON_BUF_SIZE	PAGE_SIZE
-
 static ssize_t
 vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 {
 	struct vc_data *vc = (struct vc_data *) file->private_data;
 	struct inode *inode = file->f_dentry->d_inode;
-	unsigned int currcons = MINOR(inode->i_rdev);
+	unsigned int currcons = minor(inode->i_rdev);
 	long pos = *ppos;
 	long viewed, attr, read;
 	int col, maxcol;
@@ -136,13 +134,12 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 	attr = (currcons & 128);
 	currcons = (currcons & 127);
 	if (currcons == 0) {
-                vc = vt_cons->fg_console;
+		vc = vt_cons->fg_console;
 		viewed = 1;
-        } else {
-                vc = (struct vc_data *) file->private_data;
+	} else {
+		vc = (struct vc_data *) file->private_data;
 		viewed = 0;
-        }
-
+	}
 	ret = -ENXIO;
 	if (!vc)
 		goto unlock_out;
@@ -163,8 +160,8 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 		 * could sleep.
 		 */
 		size = vc->vc_rows * vc->vc_cols;
-		if (MINOR(inode->i_rdev) & 128)
-	                size = 2*size + HEADER_SIZE;
+		if (minor(inode->i_rdev) & 128)		
+			size = 2*size + HEADER_SIZE;
 
 		if (pos >= size)
 			break;
@@ -175,7 +172,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 		if (this_round > CON_BUF_SIZE)
 			this_round = CON_BUF_SIZE;
 
-		/* Perform the whole read into the current VT's con_buf.
+		/* Perform the whole read into the current VC's con_buf.
 		 * Then we can drop the console spinlock and safely
 		 * attempt to move it to userspace.
 		 */
@@ -217,7 +214,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 				/* Advance state pointers and move on. */
 				this_round -= tmp_count;
 				p = HEADER_SIZE;
-				con_buf0 = vc->display_fg->con_buf+HEADER_SIZE;
+				con_buf0 = vc->display_fg->con_buf + HEADER_SIZE;
 				/* If this_round >= 0, then p is even... */
 			} else if (p & 1) {
 				/* Skip first byte for output if start address is odd
@@ -258,9 +255,13 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 			}
 		}
 
-		/* Finally, temporarily drop the console lock and push
+		/* Finally, release the console semaphore while we push
 		 * all the data to userspace from our temporary buffer.
+		 *
+		 * AKPM: Even though it's a semaphore, we should drop it because
+		 * the pagefault handling code may want to call printk().
 		 */
+
 		release_console_sem(vc->vc_tty->device);
 		ret = copy_to_user(buf, con_buf_start, orig_count);
 		acquire_console_sem(vc->vc_tty->device);
@@ -289,7 +290,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 {
 	struct vc_data *vc = (struct vc_data *) file->private_data;
 	struct inode *inode = file->f_dentry->d_inode;
-	unsigned int currcons = MINOR(inode->i_rdev);
+	unsigned int currcons = minor(inode->i_rdev);
 	long pos = *ppos;
 	long viewed, attr, size, written;
 	char *con_buf0;
@@ -308,20 +309,19 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	currcons = (currcons & 127);
 
 	if (currcons == 0) {
-                vc = vt_cons->fg_console;
+		vc = vt_cons->fg_console;
 		viewed = 1;
-        } else {
-                vc = (struct vc_data *) file->private_data;
+	} else {
+		vc = (struct vc_data *) file->private_data;
 		viewed = 0;
-	} 
-	
+	}
 	ret = -ENXIO;
 	if (!vc)
 		goto unlock_out;
 
 	size = vc->vc_rows * vc->vc_cols;
-	if (MINOR(inode->i_rdev) & 128)
-                size = 2*size + HEADER_SIZE;
+	if (minor(inode->i_rdev) & 128)
+		size = 2*size + HEADER_SIZE;
 
 	ret = -EINVAL;
 	if (pos < 0 || pos > size)
@@ -357,13 +357,13 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 			}
 		}
 
-		/* The vcs size might have changed while we slept to grab
+		/* The vcs_size might have changed while we slept to grab
 		 * the user buffer, so recheck.
 		 * Return data written up to now on failure.
 		 */
 		size = vc->vc_rows * vc->vc_cols;
-		if (MINOR(inode->i_rdev) & 128)
-	                size = 2*size + HEADER_SIZE;
+		if (minor(inode->i_rdev) & 128)
+			size = 2*size + HEADER_SIZE;
 
 		if (pos >= size)
 			break;
@@ -387,7 +387,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 				unsigned char c = *con_buf0++;
 
 				this_round--;
-				vcs_scr_writew(vc, (vcs_scr_readw(vc, org) & 0xff00) | c, org);
+				vcs_scr_writew(vc, (vcs_scr_readw(vc, org) & 0xff00) | c, org); 
 				org++;
 				if (++col == maxcol) {
 					org = screen_pos(vc, p, viewed);
@@ -417,7 +417,8 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 					this_round--;
 					c = *con_buf0++;
 #ifdef __BIG_ENDIAN
-					vcs_scr_writew(vc, c | (vcs_scr_readw(vc, org) & 0xff00), org);
+					vcs_scr_writew(vc, c |
+					     (vcs_scr_readw(vc, org) & 0xff00), org);
 #else
 					vcs_scr_writew(vc, (c << 8) |
 					     (vcs_scr_readw(vc, org) & 0xff), org);
@@ -475,7 +476,7 @@ unlock_out:
 static int
 vcs_open(struct inode *inode, struct file *filp)
 {
-	unsigned int currcons = (MINOR(inode->i_rdev) & 127);
+	unsigned int currcons = (minor(inode->i_rdev) & 127);
 	struct vc_data *vc;
 
 	if (currcons) {
@@ -484,7 +485,7 @@ vcs_open(struct inode *inode, struct file *filp)
 			filp->private_data = vc;
 		else
 			return -ENXIO;
-	}	
+	}
 	return 0;
 }
 
@@ -503,12 +504,15 @@ void vcs_make_devfs (unsigned int index, int unregister)
     char name[8];
 
     sprintf (name, "a%u", index + 1);
-    if (unregister) {
-	devfs_unregister ( devfs_find_handle (devfs_handle, name + 1, 0, 0, 
+    if (unregister)
+    {
+	devfs_unregister ( devfs_find_handle (devfs_handle, name + 1, 0, 0,
 					      DEVFS_SPECIAL_CHR, 0) );
-	devfs_unregister ( devfs_find_handle (devfs_handle, name, 0, 0, 
+	devfs_unregister ( devfs_find_handle (devfs_handle, name, 0, 0,
 					      DEVFS_SPECIAL_CHR, 0) );
-    } else {
+    }
+    else
+    {
 	devfs_register (devfs_handle, name + 1, DEVFS_FL_DEFAULT,
 			VCS_MAJOR, index + 1,
 			S_IFCHR | S_IRUSR | S_IWUSR, &vcs_fops, NULL);

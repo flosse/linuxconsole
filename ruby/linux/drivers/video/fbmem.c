@@ -21,6 +21,7 @@
 #include <linux/kernel.h>
 #include <linux/major.h>
 #include <linux/slab.h>
+#include <linux/mm.h>
 #include <linux/mman.h>
 #include <linux/tty.h>
 #include <linux/init.h>
@@ -376,7 +377,7 @@ static int fbmem_read_proc(char *buf, char **start, off_t offset,
 	for (fi = registered_fb; fi < &registered_fb[FB_MAX] && len < 4000; fi++)
 		if (*fi)
 			clen += sprintf(buf + clen, "%d %s\n",
-				        GET_FB_IDX((*fi)->node),
+				        minor((*fi)->node),
 				        (*fi)->fix.id);
 	*start = buf + offset;
 	if (clen > offset)
@@ -391,7 +392,7 @@ fb_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 {
 	unsigned long p = *ppos;
 	struct inode *inode = file->f_dentry->d_inode;
-	int fbidx = GET_FB_IDX(inode->i_rdev);
+	int fbidx = minor(inode->i_rdev);
 	struct fb_info *info = registered_fb[fbidx];
 	struct fb_ops *fb = info->fbops;
 
@@ -421,7 +422,7 @@ fb_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 {
 	unsigned long p = *ppos;
 	struct inode *inode = file->f_dentry->d_inode;
-	int fbidx = GET_FB_IDX(inode->i_rdev);
+	int fbidx = minor(inode->i_rdev);
 	struct fb_info *info = registered_fb[fbidx];
 	struct fb_ops *fb = info->fbops;
 	int err;
@@ -455,7 +456,7 @@ static unsigned int
 fb_poll(struct file *file, poll_table *wait)
 {
 	struct inode *inode = file->f_dentry->d_inode;
-        int fbidx = GET_FB_IDX(inode->i_rdev);
+        int fbidx = minor(inode->i_rdev);
         struct fb_info *info = registered_fb[fbidx];
        	struct fb_ops *fb = info->fbops;
 
@@ -480,7 +481,7 @@ static int
 fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 	 unsigned long arg)
 {
-	int fbidx = GET_FB_IDX(inode->i_rdev);
+	int fbidx = minor(inode->i_rdev);
 	struct fb_info *info = registered_fb[fbidx];
 	struct fb_ops *fb = info->fbops;
 	struct fb_var_screeninfo var;
@@ -584,7 +585,7 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 static int 
 fb_mmap(struct file *file, struct vm_area_struct * vma)
 {
-	int fbidx = GET_FB_IDX(file->f_dentry->d_inode->i_rdev);
+	int fbidx = minor(file->f_dentry->d_inode->i_rdev);
 	struct fb_info *info = registered_fb[fbidx];
 	struct fb_ops *fb = info->fbops;
 	unsigned long off;
@@ -634,12 +635,13 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 		return -EINVAL;
 	off += start;
 	vma->vm_pgoff = off >> PAGE_SHIFT;
+	/* This is an IO map - tell maydump to skip this VMA */
+	vma->vm_flags |= VM_IO;
 #if defined(__sparc_v9__)
 	vma->vm_flags |= (VM_SHM | VM_LOCKED);
 	if (io_remap_page_range(vma->vm_start, off,
 				vma->vm_end - vma->vm_start, vma->vm_page_prot, 0))
 		return -EAGAIN;
-	vma->vm_flags |= VM_IO;
 #else
 #if defined(__mc68000__)
 #if defined(CONFIG_SUN3)
@@ -665,8 +667,6 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 	pgprot_val(vma->vm_page_prot) |= _CACHE_UNCACHED;
 #elif defined(__arm__)
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
-	/* This is an IO map - tell maydump to skip this VMA */
-	vma->vm_flags |= VM_IO;
 #elif defined(__sh__)
 	pgprot_val(vma->vm_page_prot) &= ~_PAGE_CACHABLE;
 #else
@@ -683,7 +683,7 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 static int
 fb_open(struct inode *inode, struct file *file)
 {
-	int fbidx = GET_FB_IDX(inode->i_rdev);
+	int fbidx = minor(inode->i_rdev);
 #ifdef CONFIG_VT
 	struct tty_struct *tty = current->tty;
 #endif
@@ -719,7 +719,7 @@ fb_open(struct inode *inode, struct file *file)
 static int 
 fb_release(struct inode *inode, struct file *file)
 {
-	int fbidx = GET_FB_IDX(inode->i_rdev);
+	int fbidx = minor(inode->i_rdev);
 #ifdef CONFIG_VT
 	struct tty_struct *tty = current->tty;
 #endif
@@ -866,7 +866,7 @@ register_framebuffer(struct fb_info *fb_info)
 	for (i = 0 ; i < FB_MAX; i++)
 		if (!registered_fb[i])
 			break;
-	fb_info->node = MKDEV(FB_MAJOR, i);
+	fb_info->node = mk_kdev(FB_MAJOR, i);
 	registered_fb[i] = fb_info;
 	init_waitqueue_head(&fb_info->wait);
 	sprintf (name_buf, "%d", i);
@@ -876,7 +876,7 @@ register_framebuffer(struct fb_info *fb_info)
 			    &fb_fops, NULL);
 
 	printk(KERN_INFO "fb%d: %s frame buffer device\n",
-	       GET_FB_IDX(fb_info->node), fb_info->fix.id);
+	       minor(fb_info->node), fb_info->fix.id);
 
 #ifdef CONFIG_MTRR
 	/*
@@ -909,7 +909,7 @@ unregister_framebuffer(struct fb_info *fb_info)
 {
 	int i;
 
-	i = GET_FB_IDX(fb_info->node);
+	i = minor(fb_info->node);
 	if (fb_info->open)
 		return -EBUSY;
 	if (!registered_fb[i])

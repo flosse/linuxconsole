@@ -1,6 +1,6 @@
 VERSION = 2
 PATCHLEVEL = 5
-SUBLEVEL = 1
+SUBLEVEL = 2
 EXTRAVERSION = -ruby
 
 KERNELRELEASE=$(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
@@ -122,7 +122,7 @@ CORE_FILES	=kernel/kernel.o mm/mm.o fs/fs.o ipc/ipc.o
 NETWORKS	=net/network.o
 
 LIBS		=$(TOPDIR)/lib/lib.a
-SUBDIRS		=kernel drivers mm fs net ipc lib
+SUBDIRS		=kernel lib drivers mm fs net ipc
 
 DRIVERS-n :=
 DRIVERS-y :=
@@ -264,9 +264,9 @@ vmlinux: include/linux/version.h $(CONFIGURATION) init/main.o init/version.o ini
 	$(LD) $(LINKFLAGS) $(HEAD) init/main.o init/version.o init/do_mounts.o \
 		--start-group \
 		$(CORE_FILES) \
+		$(LIBS) \
 		$(DRIVERS) \
 		$(NETWORKS) \
-		$(LIBS) \
 		--end-group \
 		-o vmlinux
 	$(NM) vmlinux | grep -v '\(compiled\)\|\(\.o$$\)\|\( [aUw] \)\|\(\.\.ng$$\)\|\(LASH[RL]DI\)' | sort > System.map

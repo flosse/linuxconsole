@@ -977,11 +977,11 @@ static int hid_submit_ctrl(struct hid_device *hid)
 	hid->urbctrl.pipe = dir ? usb_rcvctrlpipe(hid->dev, 0) : usb_sndctrlpipe(hid->dev, 0);
 	hid->urbctrl.dev = hid->dev;
 	
-	hid->dr.length = cpu_to_le16(hid->urbctrl.transfer_buffer_length);
-	hid->dr.requesttype = USB_TYPE_CLASS | USB_RECIP_INTERFACE | dir;
-	hid->dr.request = dir ? HID_REQ_GET_REPORT : HID_REQ_SET_REPORT;
-	hid->dr.index = cpu_to_le16(hid->ifnum);
-	hid->dr.value = ((report->type + 1) << 8) | report->id;
+	hid->dr.wLength = cpu_to_le16(hid->urbctrl.transfer_buffer_length);
+	hid->dr.bRequestType = USB_TYPE_CLASS | USB_RECIP_INTERFACE | dir;
+	hid->dr.bRequest = dir ? HID_REQ_GET_REPORT : HID_REQ_SET_REPORT;
+	hid->dr.wIndex = cpu_to_le16(hid->ifnum);
+	hid->dr.wValue = ((report->type + 1) << 8) | report->id;
 
 	dbg("submitting ctrl urb");
 

@@ -18,13 +18,19 @@
 
 #ifndef __ASSEMBLY__
 
-#define BUG()		bust_spinlocks(1); __builtin_trap();
+#ifdef CONFIG_DEBUG_BUGVERBOSE
+#define BUG() do {					\
+	do_BUG(__FILE__, __LINE__);			\
+	__builtin_trap();				\
+} while (0)
+#else
+#define BUG()		bust_spinlocks(1); __builtin_trap()
+#endif
+
 #define PAGE_BUG(page)	BUG()
 
 extern void _clear_page(void *page);
-extern void _copy_page(void *to, void *from);
 #define clear_page(X)	_clear_page((void *)(X))
-#define copy_page(X,Y)	_copy_page((void *)(X), (void *)(Y))
 extern void clear_user_page(void *page, unsigned long vaddr);
 extern void copy_user_page(void *to, void *from, unsigned long vaddr);
 

@@ -45,7 +45,6 @@ struct console
 	void	(*write)(struct console *, const char *, unsigned);
 	int	(*read)(struct console *, const char *, unsigned);
 	kdev_t	(*device)(struct console *);
-	int	(*wait_key)(struct console *);
 	int	(*setup)(struct console *, char *);
 	struct  semaphore lock;
 	short	flags;

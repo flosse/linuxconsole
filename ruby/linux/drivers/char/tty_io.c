@@ -95,16 +95,16 @@
 #include <asm/system.h>
 #include <asm/bitops.h>
 
-#include <linux/devfs_fs_kernel.h>
-#include <linux/kmod.h>
-
 #ifdef CONFIG_VT
 #include <linux/vt_kern.h>
 #endif
+#include <linux/devfs_fs_kernel.h>
 
-#define TTY_DEV MKDEV(TTYAUX_MAJOR,0)
-#define SYSCONS_DEV MKDEV(TTYAUX_MAJOR,1)
-#define PTMX_DEV MKDEV(TTYAUX_MAJOR,2)
+#include <linux/kmod.h>
+
+#define IS_TTY_DEV(dev)		(kdev_val(dev) == __mkdev(TTYAUX_MAJOR,0))
+#define IS_SYSCONS_DEV(dev)	(kdev_val(dev) == __mkdev(TTYAUX_MAJOR,1))
+#define IS_PTMX_DEV(dev)	(kdev_val(dev) == __mkdev(TTYAUX_MAJOR,2))
 
 #undef TTY_DEBUG_HANGUP
 
@@ -183,7 +183,7 @@ static inline void free_tty_struct(struct tty_struct *tty)
 static char *
 _tty_make_name(struct tty_struct *tty, const char *name, char *buf)
 {
-	int idx = (tty)?MINOR(tty->device) - tty->driver.minor_start:0;
+	int idx = (tty)? minor(tty->device) - tty->driver.minor_start:0;
 
 	if (!tty) /* Hmm.  NULL pointer.  That's fun. */
 		strcpy(buf, "NULL tty");
@@ -194,7 +194,7 @@ _tty_make_name(struct tty_struct *tty, const char *name, char *buf)
 	return buf;
 }
 
-#define TTY_NUMBER(tty) (MINOR((tty)->device) - (tty)->driver.minor_start + \
+#define TTY_NUMBER(tty) (minor((tty)->device) - (tty)->driver.minor_start + \
 			 (tty)->driver.name_base)
 
 char *tty_name(struct tty_struct *tty, char *buf)
@@ -329,8 +329,8 @@ struct tty_driver *get_tty_driver(kdev_t device)
 	int	major, minor;
 	struct tty_driver *p;
 	
-	minor = MINOR(device);
-	major = MAJOR(device);
+	minor = minor(device);
+	major = major(device);
 
 	for (p = tty_drivers; p; p = p->next) {
 		if (p->major != major)
@@ -440,7 +440,7 @@ void do_tty_hangup(void *data)
 	file_list_lock();
 	for (l = tty->tty_files.next; l != &tty->tty_files; l = l->next) {
 		struct file * filp = list_entry(l, struct file, f_list);
-		if (filp->f_dentry->d_inode->i_rdev == SYSCONS_DEV) { 
+		if (IS_SYSCONS_DEV(filp->f_dentry->d_inode->i_rdev)) {
 			cons_filp = filp;
 			continue;
 		}
@@ -594,12 +594,6 @@ void disassociate_ctty(int on_exit)
 	read_unlock(&tasklist_lock);
 }
 
-void wait_for_keypress(void)
-{
-        struct console *c = console_drivers;
-        if (c) c->wait_key(c);
-}
-
 void stop_tty(struct tty_struct *tty)
 {
 	if (tty->stopped)
@@ -655,7 +649,7 @@ static ssize_t tty_read(struct file * file, char * buf, size_t count,
 	   moved it to there.  This should only be done for the N_TTY
 	   line discipline, anyway.  Same goes for write_chan(). -- jlc. */
 #if 0
-	if ((inode->i_rdev != SYSCONS_DEV) && /* don't stop on /dev/console */
+	if (!IS_SYSCONS_DEV(inode->i_rdev) && /* don't stop on /dev/console */
 	    (tty->pgrp > 0) &&
 	    (current->tty == tty) &&
 	    (tty->pgrp != current->pgrp))
@@ -740,10 +734,10 @@ static ssize_t tty_write(struct file * file, const char * buf, size_t count,
 		return -ESPIPE;
 
 	/*
-	 *      For now, we redirect writes from /dev/console. 
+	 *      For now, we redirect writes from /dev/console.
 	 */
 	inode = file->f_dentry->d_inode;
-	is_console = (inode->i_rdev == SYSCONS_DEV);
+	is_console = IS_SYSCONS_DEV(inode->i_rdev);
 
 	if (is_console && redirect)
 		tty = redirect;
@@ -804,7 +798,7 @@ static int init_dev(kdev_t device, struct tty_struct **ret_tty)
 	if (!driver)
 		return -ENODEV;
 
-	idx = MINOR(device) - driver->minor_start;
+	idx = minor(device) - driver->minor_start;
 
 	/* 
 	 * Check whether we need to acquire the tty semaphore to avoid
@@ -858,7 +852,7 @@ static int init_dev(kdev_t device, struct tty_struct **ret_tty)
 		if (!o_tty)
 			goto free_mem_out;
 		initialize_tty_struct(o_tty);
-		o_tty->device = (kdev_t) MKDEV(driver->other->major,
+		o_tty->device = mk_kdev(driver->other->major,
 					driver->other->minor_start + idx);
 		o_tty->driver = *driver->other;
 
@@ -1050,7 +1044,7 @@ static void release_dev(struct file * filp)
 
 	tty_fasync(-1, filp, 0);
 
-	idx = MINOR(tty->device) - tty->driver.minor_start;
+	idx = minor(tty->device) - tty->driver.minor_start;
 	pty_master = (tty->driver.type == TTY_DRIVER_TYPE_PTY &&
 		      tty->driver.subtype == PTY_TYPE_MASTER);
 	o_tty = tty->link;
@@ -1286,15 +1280,14 @@ static int tty_open(struct inode * inode, struct file * filp)
 retry_open:
 	noctty = filp->f_flags & O_NOCTTY;
 	device = inode->i_rdev;
-	if (device == TTY_DEV) {
+	if (IS_TTY_DEV(device)) {
 		if (!current->tty)
 			return -ENXIO;
 		device = current->tty->device;
 		filp->f_flags |= O_NONBLOCK; /* Don't let /dev/tty block */
 		/* noctty = 1; */
 	}
-	
-	if (device == SYSCONS_DEV) {
+	if (IS_SYSCONS_DEV(device)) {
 		struct console *c = console_drivers;
 		while(c && !c->device)
 			c = c->next;
@@ -1305,7 +1298,7 @@ retry_open:
 		noctty = 1;
 	}
 
-	if (device == PTMX_DEV) {
+	if (IS_PTMX_DEV(device)) {
 #ifdef CONFIG_UNIX98_PTYS
 
 		/* find a free pty. */
@@ -1319,7 +1312,7 @@ retry_open:
 			for (minor = driver->minor_start ;
 			     minor < driver->minor_start + driver->num ;
 			     minor++) {
-				device = MKDEV(driver->major, minor);
+				device = mk_kdev(driver->major, minor);
 				if (!init_dev(device, &tty)) goto ptmx_found; /* ok! */
 			}
 		}
@@ -1327,8 +1320,8 @@ retry_open:
 	ptmx_found:
 		set_bit(TTY_PTY_LOCK, &tty->flags); /* LOCK THE SLAVE */
 		minor -= driver->minor_start;
-		devpts_pty_new(driver->other->name_base + minor, MKDEV(driver->other->major, minor + driver->other->minor_start));
-		tty_register_devfs(&pts_driver[major], DEVFS_FL_NO_PERSISTENCE,
+		devpts_pty_new(driver->other->name_base + minor, mk_kdev(driver->other->major, minor + driver->other->minor_start));
+		tty_register_devfs(&pts_driver[major], DEVFS_FL_DEFAULT,
 				   pts_driver[major].minor_start + minor);
 		noctty = 1;
 		goto init_dev_done;
@@ -1489,12 +1482,12 @@ static int tiocswinsz(struct tty_struct *tty, struct tty_struct *real_tty,
 	if (!memcmp(&tmp_ws, &tty->winsize, sizeof(*arg)))
 		return 0;
 #ifdef CONFIG_VT
-       	if (tty->driver.type == TTY_DRIVER_TYPE_CONSOLE) {
-               	struct vc_data *vc = (struct vc_data *) tty->driver_data;
+	if (tty->driver.type == TTY_DRIVER_TYPE_CONSOLE) {
+		struct vc_data *vc = (struct vc_data *) tty->driver_data;
 
-               	if (!vc || vc_resize(vc, tmp_ws.ws_col, tmp_ws.ws_row))
-                       	return -ENXIO;
-       	}
+		if (!vc || vc_resize(vc, tmp_ws.ws_col, tmp_ws.ws_row))
+			return -ENXIO;
+	}
 #endif
 	if (tty->pgrp > 0)
 		kill_pg(tty->pgrp, SIGWINCH, 1);
@@ -1508,7 +1501,7 @@ static int tiocswinsz(struct tty_struct *tty, struct tty_struct *real_tty,
 static int tioccons(struct inode *inode,
 	struct tty_struct *tty, struct tty_struct *real_tty)
 {
-	if (inode->i_rdev == SYSCONS_DEV) {
+	if (IS_SYSCONS_DEV(inode->i_rdev)) { 
 		if (!suser())
 			return -EPERM;
 		redirect = NULL;
@@ -2004,19 +1997,15 @@ void tty_register_devfs (struct tty_driver *driver, unsigned int flags, unsigned
 {
 #ifdef CONFIG_DEVFS_FS
 	umode_t mode = S_IFCHR | S_IRUSR | S_IWUSR;
-	kdev_t device = MKDEV (driver->major, minor);
+	kdev_t device = mk_kdev(driver->major, minor);
 	int idx = minor - driver->minor_start;
 	char buf[32];
 
-	switch (device) {
-		case TTY_DEV:
-		case PTMX_DEV:
+	if (IS_TTY_DEV(device) || IS_PTMX_DEV(device)) 
+		mode |= S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
+	else {
+		if (driver->major == PTY_MASTER_MAJOR)
 			mode |= S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
-			break;
-		default:
-			if (driver->major == PTY_MASTER_MAJOR)
-				mode |= S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
-			break;
 	}
 	if ( (minor <  driver->minor_start) || 
 	     (minor >= driver->minor_start + driver->num) ) {
@@ -2082,7 +2071,7 @@ int tty_register_driver(struct tty_driver *driver)
 	if (!driver->console) {
 		driver->tty_lock = kmalloc(sizeof(struct semaphore),GFP_KERNEL);
 		init_MUTEX(driver->tty_lock);
-	} else 
+	} else
 		driver->tty_lock = &driver->console->lock;
 	
 	if ( !(driver->flags & TTY_DRIVER_NO_DEVFS) ) {
@@ -2246,9 +2235,6 @@ static struct tty_driver dev_ptmx_driver;
  */
 void __init tty_init(void)
 {
-	struct tty_driver *p;
-	int i;
-
 	/*
 	 * dev_tty_driver and dev_console_driver are actually magic
 	 * devices which get redirected at open time.  Nevertheless,
@@ -2280,33 +2266,23 @@ void __init tty_init(void)
 	if (tty_register_driver(&dev_syscons_driver))
 		panic("Couldn't register /dev/console driver\n");
 
-	/* 
-	 * Some console calls tty_register_driver() before kmalloc() works.
-	 * Thus, we can't devfs_register() then.  Do so now, instead. 
-	 */
-	for (p = tty_drivers; p; p = p->next) {
-		if (p->flags && TTY_DRIVER_NO_DEVFS) {
-			for (i = 0; i < p->num; i++)
-				tty_register_devfs(p, DEVFS_FL_AOPEN_NOTIFY, p->minor_start + i);
-		}
-	}
-
 #ifdef CONFIG_UNIX98_PTYS
 	dev_ptmx_driver = dev_tty_driver;
 	dev_ptmx_driver.driver_name = "/dev/ptmx";
 	dev_ptmx_driver.name = dev_ptmx_driver.driver_name + 5;
-	dev_ptmx_driver.major= MAJOR(PTMX_DEV);
-	dev_ptmx_driver.minor_start = MINOR(PTMX_DEV);
+	dev_ptmx_driver.major= TTYAUX_MAJOR;
+	dev_ptmx_driver.minor_start = 2;
 	dev_ptmx_driver.type = TTY_DRIVER_TYPE_SYSTEM;
 	dev_ptmx_driver.subtype = SYSTEM_TYPE_SYSPTMX;
 
 	if (tty_register_driver(&dev_ptmx_driver))
 		panic("Couldn't register /dev/ptmx driver\n");
 #endif
-	
+
 #ifdef CONFIG_VT
-	vty_init();
+	vty_init();	
 #endif
+
 #ifdef CONFIG_ESPSERIAL  /* init ESP before rs, so rs doesn't see the port */
 	espserial_init();
 #endif
