@@ -18,6 +18,7 @@ subdir-$(CONFIG_DIO)		+= dio
 subdir-$(CONFIG_PCI)		+= pci
 subdir-$(CONFIG_PCMCIA)		+= pcmcia
 subdir-$(CONFIG_MTD)		+= mtd
+subdir-$(CONFIG_UART)		+= serial
 subdir-$(CONFIG_SBUS)		+= sbus
 subdir-$(CONFIG_ZORRO)		+= zorro
 subdir-$(CONFIG_NUBUS)		+= nubus
