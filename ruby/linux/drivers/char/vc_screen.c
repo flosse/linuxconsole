@@ -33,7 +33,6 @@
 #include <linux/init.h>
 #include <linux/vt_kern.h>
 #include <linux/selection.h>
-#include <linux/kbd_kern.h>
 #include <linux/console.h>
 #include <asm/uaccess.h>
 #include <asm/byteorder.h>
