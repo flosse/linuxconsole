@@ -381,6 +381,9 @@ if [ "$CONFIG_VT" = "y" ]; then
          tristate 'MDA text console (dual-headed) (EXPERIMENTAL)' CONFIG_MDA_CONSOLE
       fi
    fi
+   if [ "$CONFIG_PCI" = "y" ]; then	
+      tristate 'NVIDIA hardware text console' CONFIG_NVIDIA_CONSOLE	
+   fi
    if [ "$CONFIG_FB" = "y" ]; then
       comment 'Support for frame buffer console'
       define_bool CONFIG_DUMMY_CONSOLE y
