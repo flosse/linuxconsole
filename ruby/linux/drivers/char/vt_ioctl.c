@@ -94,7 +94,7 @@ void kd_mksound(struct vc_data *vc, unsigned int period, unsigned int duration)
 	 * is in something like msecs. Due to the various underlying
 	 * types of hardware we can't convert it to milliseconds. Sorry
 	 * but the console api sucks.
-         */
+         
 	input_event(handle->dev, EV_REP, REP_PERIOD, period);
 	input_event(handle->dev, EV_REP, REP_DELAY, duration);
 
@@ -102,6 +102,7 @@ void kd_mksound(struct vc_data *vc, unsigned int period, unsigned int duration)
 		input_event(handle->dev, EV_SND, SND_BELL, 1);
 	else
 		input_event(handle->dev, EV_SND, SND_BELL, 0);
+	*/
 }
 
 /*
