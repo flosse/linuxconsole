@@ -92,6 +92,8 @@ if [ "$CONFIG_FB" = "y" ]; then
       tristate '  Simple frame buffer display support' CONFIG_FB_SIMPLE
       tristate '  Epson SED1345 Color Graphics LCD/CRT Controller' CONFIG_FB_SED1345
       tristate '  Toshiba R3912 / Philips PR31700 LCD Controller' CONFIG_FB_R3912
+      tristate '  NEC VR4181 LCD Controller' CONFIG_FB_VR4181
+      tristate '  NEC VRC4171 LCD Controller' CONFIG_FB_VRC4171
       if [ "$CONFIG_VTECH_HELIO" = "y" ]; then
          bool '    Force 1bpp mode' CONFIG_FB_R3912_FORCE_MONO
       fi

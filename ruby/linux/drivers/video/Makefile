@@ -109,6 +109,8 @@ obj-$(CONFIG_FB_ANAKIN)           += anakinfb.o
 obj-$(CONFIG_FB_SIMPLE)		  += sfb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 obj-$(CONFIG_FB_SED1345)	  += sed1345fb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 obj-$(CONFIG_FB_R3912)		  += r3912fb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
+obj-$(CONFIG_FB_VR4181)           += vr4181fb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
+obj-$(CONFIG_FB_VRC4171)          += vrc4171fb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 
 include $(TOPDIR)/Rules.make
 

@@ -133,6 +133,8 @@ extern int anakinfb_init(void);
 extern int sfb_init(void);
 extern int sed1345fb_init(void);
 extern int r3912fb_init(void);
+extern int vrc4171fb_init(void);
+extern int vr4181fb_init(void);
 
 static struct {
 	const char *name;
@@ -300,6 +302,12 @@ static struct {
 #endif
 #ifdef CONFIG_FB_R3912
 	{ "r3912fb", r3912fb_init, NULL },
+#endif
+#ifdef CONFIG_FB_VRC4171
+	{ "vrc4171fb", vrc4171fb_init, NULL },
+#endif
+#ifdef CONFIG_FB_VR4181
+	{ "vr4181fb", vr4181fb_init, NULL },
 #endif
 
 	/*
