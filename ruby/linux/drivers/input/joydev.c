@@ -50,7 +50,7 @@
 #define JOYDEV_BUFFER_SIZE	64
 
 struct joydev {
-	int used;
+	int exist;
 	int open;
 	int minor;
 	struct input_handle handle;
@@ -168,13 +168,14 @@ static int joydev_release(struct inode * inode, struct file * file)
 		listptr = &((*listptr)->next);
 	*listptr = (*listptr)->next;
 
-	if (!--list->joydev->open)
-		input_close_device(&list->joydev->handle);
-	
-	if (!--list->joydev->used) {
-		input_unregister_minor(list->joydev->devfs);
-		joydev_table[list->joydev->minor] = NULL;
-		kfree(list->joydev);
+	if (!--list->joydev->open) {
+		if (list->joydev->exist) {
+			input_close_device(&list->joydev->handle);
+		} else {
+			input_unregister_minor(list->joydev->devfs);
+			joydev_table[list->joydev->minor] = NULL;
+			kfree(list->joydev);
+		}
 	}
 
 	kfree(list);
@@ -190,9 +191,8 @@ static int joydev_open(struct inode *inode, struct file *file)
 	if (i > JOYDEV_MINORS || !joydev_table[i])
 		return -ENODEV;
 
-	if (!(list = kmalloc(sizeof(struct joydev_list), GFP_KERNEL))) {
+	if (!(list = kmalloc(sizeof(struct joydev_list), GFP_KERNEL)))
 		return -ENOMEM;
-	}
 	memset(list, 0, sizeof(struct joydev_list));
 
 	list->joydev = joydev_table[i];
@@ -201,10 +201,9 @@ static int joydev_open(struct inode *inode, struct file *file)
 
 	file->private_data = list;
 
-	list->joydev->used++;
-
 	if (!list->joydev->open++)
-		input_open_device(&list->joydev->handle);
+		if (list->joydev->exist)
+			input_open_device(&list->joydev->handle);
 
 	return 0;
 }
@@ -409,7 +408,7 @@ static struct input_handle *joydev_connect(struct input_handler *handler, struct
 	joydev->handle.handler = handler;
 	joydev->handle.private = joydev;
 
-	joydev->used = 1;
+	joydev->exist = 1;
 
 	for (i = 0; i < ABS_MAX; i++)
 		if (test_bit(i, dev->absbit)) {
@@ -459,10 +458,11 @@ static void joydev_disconnect(struct input_handle *handle)
 {
 	struct joydev *joydev = handle->private;
 
-	if (joydev->open)
-		input_close_device(handle);	
+	joydev->exist = 0;
 
-	if (!--joydev->used) {
+	if (joydev->open) {
+		input_close_device(handle);	
+	} else {
 		input_unregister_minor(joydev->devfs);
 		joydev_table[joydev->minor] = NULL;
 		kfree(joydev);
