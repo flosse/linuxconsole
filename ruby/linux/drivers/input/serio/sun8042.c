@@ -134,7 +134,7 @@ static char * __init do_pcikbd_init_hw(void)
 	return NULL; /* success */
 }
 
-void __init pcikbd_init_hw(void)
+int __init sun8042_port_register(&i8042_kbd_values, &i8042_kbd_port)
 {
 	struct linux_ebus *ebus;
 	struct linux_ebus_device *edev;
@@ -219,7 +219,7 @@ ebus_done:
 		printk("8042: keyboard init failure [%s]\n", msg);
 }
 
-int __init pcimouse_init(void)
+int __init sun8042_port_register(&i8042_aux_values, &i8042_aux_port)
 {
 	struct linux_ebus *ebus;
 	struct linux_ebus_device *edev;
@@ -228,7 +228,7 @@ int __init pcimouse_init(void)
 	if (pcikbd_mrcoffee) {
 		if ((pcimouse_iobase = pcikbd_iobase) == 0) {
 			printk("pcimouse_init: no 8042 given\n");
-			goto do_enodev;
+			return -ENODEV;
 		}
 		pcimouse_irq = pcikbd_irq;
 	} else {
@@ -244,62 +244,27 @@ int __init pcimouse_init(void)
 			}
 		}
 		printk("pcimouse_init: no 8042 found\n");
-		goto do_enodev;
-
+		return -ENODEV;
 found:
 		pcimouse_iobase = child->resource[0].start;
 		pcimouse_irq = child->irqs[0];
 	}
 
-	queue = (struct aux_queue *) kmalloc(sizeof(*queue), GFP_KERNEL);
-	if (!queue) {
-		printk("pcimouse_init: kmalloc(aux_queue) failed.\n");
-		return -ENOMEM;
-	}
-	memset(queue, 0, sizeof(*queue));
-
-	init_waitqueue_head(&queue->proc_list);
-
 	if (request_irq(pcimouse_irq, &pcimouse_interrupt,
 		        SA_SHIRQ, "mouse", (void *)pcimouse_iobase)) {
 		printk("8042: Cannot register IRQ %s\n",
 		       __irq_itoa(pcimouse_irq));
-		goto do_enodev;
+		return -ENODEV;
 	}
 
 	printk("8042(mouse) at %lx (irq %s)\n", pcimouse_iobase,
 	       __irq_itoa(pcimouse_irq));
 
 	printk("8042: PS/2 auxiliary pointing device detected.\n");
-	aux_present = 1;
-	pckbd_read_mask = AUX_STAT_OBF;
-
-	misc_register(&psaux_mouse);
-	aux_start_atomic();
-	pcimouse_outb(KBD_CCMD_MOUSE_ENABLE, pcimouse_iobase + KBD_CNTL_REG);
-	aux_write_ack(AUX_RESET);
-	aux_write_ack(AUX_SET_SAMPLE);
-	aux_write_ack(100);
-	aux_write_ack(AUX_SET_RES);
-	aux_write_ack(3);
-	aux_write_ack(AUX_SET_SCALE21);
-	poll_aux_status();
-	pcimouse_outb(KBD_CCMD_MOUSE_DISABLE, pcimouse_iobase + KBD_CNTL_REG);
-	poll_aux_status();
-	pcimouse_outb(KBD_CCMD_WRITE_MODE, pcimouse_iobase + KBD_CNTL_REG);
-	poll_aux_status();
-	pcimouse_outb(AUX_INTS_OFF, pcimouse_iobase + KBD_DATA_REG);
-	poll_aux_status();
-	aux_end_atomic();
-
 	return 0;
-
-do_enodev:
-	misc_register(&psaux_no_mouse);
-	return -ENODEV;
 }
 
-int __init ps2kbd_probe(void)
+int __init sun8042_init(void)
 {
 	int pnode, enode, node, dnode, xnode;
 	int kbnode = 0, msnode = 0, bnode = 0;
@@ -314,11 +279,11 @@ int __init ps2kbd_probe(void)
 	len = prom_getproperty(prom_root_node, "name", prop, sizeof(prop));
 	if (len < 0) {
 		printk("ps2kbd_probe: no name of root node\n");
-		goto do_enodev;
+		return -ENODEV;
 	}
 	if (strncmp(prop, "SUNW,JavaStation-1", len) == 0) {
 		pcikbd_mrcoffee = 1;	/* Brain damage detected */
-		goto found;
+		return 0;
 	}
 #endif
 	/*
@@ -327,7 +292,7 @@ int __init ps2kbd_probe(void)
         node = prom_getchild(prom_root_node);
 	node = prom_searchsiblings(node, "aliases");
 	if (!node)
-		goto do_enodev;
+		return -ENODEV;
 
 	len = prom_getproperty(node, "keyboard", prop, sizeof(prop));
 	if (len > 0) {
@@ -335,7 +300,7 @@ int __init ps2kbd_probe(void)
 		kbnode = prom_finddevice(prop);
 	}
 	if (!kbnode)
-		goto do_enodev;
+		return -ENODEV;
 
 	len = prom_getproperty(node, "mouse", prop, sizeof(prop));
 	if (len > 0) {
@@ -343,7 +308,7 @@ int __init ps2kbd_probe(void)
 		msnode = prom_finddevice(prop);
 	}
 	if (!msnode)
-		goto do_enodev;
+		return -ENODEV;
 
 	/*
 	 * Find matching EBus nodes...
@@ -387,23 +352,17 @@ int __init ps2kbd_probe(void)
 				 * Does it match?
 				 */
 				if ((xnode = prom_searchsiblings(dnode, PCI_KB_NAME1)) == kbnode) {
-					++devices;
+					sun8042_port_register(&i8042_kbd_values, &i8042_kbd_port);
 				} else if ((xnode = prom_searchsiblings(dnode, PCI_KB_NAME2)) == kbnode) {
-					++devices;
+					sun8042_port_register(&i8042_kbd_values, &i8042_kbd_port);
 				}
 
 				if ((xnode = prom_searchsiblings(dnode, PCI_MS_NAME1)) == msnode) {
-					++devices;
+					sun8042_port_register(&i8042_aux_values, &i8042_aux_port);
 				} else if ((xnode = prom_searchsiblings(dnode, PCI_MS_NAME2)) == msnode) {
-					++devices;
+				
+					sun8042_port_register(&i8042_aux_values, &i8042_aux_port);
 				}
-
-				/*
-				 * Found everything we need?
-				 */
-				if (devices == 2)
-					goto found;
-
 				node = prom_getsibling(node);
 				node = prom_searchsiblings(node, "8042");
 			}
@@ -413,17 +372,5 @@ int __init ps2kbd_probe(void)
 		pnode = prom_getsibling(pnode);
 		pnode = prom_searchsiblings(pnode, "pci");
 	}
-do_enodev:
-	sunkbd_setinitfunc(pcimouse_no_init);
-	return -ENODEV;
-
-found:
-        sunkbd_setinitfunc(pcimouse_init);
-        sunkbd_setinitfunc(pcikbd_init);
-	kbd_ops.compute_shiftstate = pci_compute_shiftstate;
-	kbd_ops.setledstate = pci_setledstate;
-	kbd_ops.getledstate = pci_getledstate;
-	kbd_ops.setkeycode = pci_setkeycode;
-	kbd_ops.getkeycode = pci_getkeycode;
 	return 0;
 }
