@@ -759,8 +759,7 @@ static ssize_t tty_write(struct file * file, const char * buf, size_t count,
 		return -ESPIPE;
 
 	/*
-	 *      For now, we redirect writes from /dev/console as
-	 *      well as /dev/tty0.
+	 *      For now, we redirect writes from /dev/console.
 	 */
 	inode = file->f_dentry->d_inode;
 	is_console = (inode->i_rdev == SYSCONS_DEV); 
