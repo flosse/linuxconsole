@@ -393,13 +393,14 @@ static void adi_id_decode(struct adi *adi, struct adi_port *port)
 static void adi_init_input(struct adi *adi, struct adi_port *port)
 {
 	int i, t;
+	char buf[ADI_MAX_NAME_LENGTH];
 
 	if (!adi->length) return;
 
 	t = adi->id < ADI_ID_MAX ? adi->id : ADI_ID_MAX;
 
-	sprintf(adi->name, adi_names[t], adi->id);
-	sprintf(adi->name, "Logitech %s", adi->name);
+	sprintf(buf, adi_names[t], adi->id);
+	sprintf(adi->name, "Logitech %s", buf);
 
 	adi->abs = adi_abs[t];
 	adi->key = adi_key[t];
