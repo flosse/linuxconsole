@@ -39,6 +39,7 @@
 #include <linux/input.h>
 #include <linux/config.h>
 #include <linux/smp_lock.h>
+#include <linux/random./h>
 
 #ifndef CONFIG_INPUT_MOUSEDEV_SCREEN_X
 #define CONFIG_INPUT_MOUSEDEV_SCREEN_X	1024
@@ -87,6 +88,8 @@ static void mousedev_event(struct input_handle *handle, unsigned int type, unsig
 	struct mousedev **mousedev = mousedevs;
 	struct mousedev_list *list;
 	int index, size;
+
+	add_mouse_randomness((type << 4) ^ code ^ (code >> 4) ^ value);
 
 	while (*mousedev) {
 		list = (*mousedev)->list;
