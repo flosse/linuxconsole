@@ -79,6 +79,7 @@ obj-$(CONFIG_INPUT_GRIP)	+= grip.o gameport.o
 obj-$(CONFIG_INPUT_INTERACT)	+= interact.o gameport.o
 obj-$(CONFIG_INPUT_TMDC)	+= tmdc.o gameport.o
 obj-$(CONFIG_INPUT_SIDEWINDER)	+= sidewinder.o gameport.o
+obj-$(CONFIG_INPUT_JOYDUMP)	+= joydump.o gameport.o
 
 obj-$(CONFIG_INPUT_DB9)		+= db9.o
 obj-$(CONFIG_INPUT_GAMECON)	+= gamecon.o
@@ -130,11 +131,13 @@ OX_OBJS		:= $(filter     $(export-objs), $(obj-y))
 M_OBJS		:= $(sort $(filter-out $(export-objs), $(obj-m)))
 MX_OBJS		:= $(sort $(filter     $(export-objs), $(obj-m)))
 
+# The global Rules.make.
+
+include $(TOPDIR)/Rules.make
+
 # Link rules for multi-part drivers.
 
 hid.o: $(hid-objs)
 	$(LD) -r -o $@ $(hid-objs)
 
-# The global Rules.make.
 
-include $(TOPDIR)/Rules.make
