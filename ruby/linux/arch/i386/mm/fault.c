@@ -77,43 +77,6 @@ bad_area:
 	return 0;
 }
 
-extern spinlock_t console_lock, timerlist_lock;
-
-/*
- * Unlock any spinlocks which will prevent us from getting the
- * message out (timerlist_lock is acquired through the
- * console unblank code)
- */
-void bust_spinlocks(int yes)
-{
-	//spin_lock_init(&console_lock);
-	//spin_lock_init(&timerlist_lock);
-	if (yes) {
-		oops_in_progress = 1; 
-	#ifdef CONFIG_SMP
-               	global_irq_lock = 0;/* Many serial drivers do __global_cli() */
-	#endif
-	} else {
-        	int loglevel_save = console_loglevel;
-               	oops_in_progress = 0;
-               	/*
-               	 * OK, the message is on the console.  Now we call printk()
-                 * without oops_in_progress set so that printk will give klogd
-                 * a poke.  Hold onto your hats...
-                 */
-                console_loglevel = 15; 
-		/* NMI oopser may have shut the console up */
-               	printk(" \b");
-               	console_loglevel = loglevel_save;
-       }                                    
-}
-
-void do_BUG(const char *file, int line)
-{
-       bust_spinlocks(1);
-       printk("kernel BUG at %s:%d!\n", file, line);
-}       
-
 asmlinkage void do_invalid_op(struct pt_regs *, unsigned long);
 extern unsigned long idt;
 
