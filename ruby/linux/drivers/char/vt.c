@@ -677,12 +677,34 @@ static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
 /*
  *      Allocation, freeing and resizing of VTs.
  */
+static void visual_init(struct vc_data *vc)
+{
+    /* ++Geert: sw->con_startup determines console size */
+        
+
+    vc->vc_uni_pagedir_loc = &vc->vc_uni_pagedir;
+    vc->vc_uni_pagedir = 0;
+    hi_font_mask = 0;
+    complement_mask = 0;
+    can_do_color = vc->display_fg->default_mode->vc_can_do_color;
+    video_num_columns = vc->display_fg->default_mode->vc_cols;
+    video_num_lines = vc->display_fg->default_mode->vc_rows;
+    vc->vc_font = vc->display_fg->default_mode->vc_font;	
+    sw->con_init(vc);
+    if (!complement_mask)
+        complement_mask = can_do_color ? 0x7700 : 0x0800;
+    s_complement_mask = complement_mask;
+    video_size_row = video_num_columns<<1;
+    screenbuf_size = video_num_lines*video_size_row;
+}
 
 const char *create_vt(struct vt_struct *vt, int init)
 {
 	const char *display_desc = vt->vt_sw->con_startup(vt, init);
 
 	if (!display_desc) return NULL;	
+	vt->next = vt_cons;
+	vt_cons = vt;
 	vt->vt_dont_switch = 0;
         vt->scrollback_delta = 0;
         vt->vt_blanked = 0;
@@ -690,13 +712,12 @@ const char *create_vt(struct vt_struct *vt, int init)
         vt->off_interval = 0;
 	init_MUTEX(&vt->lock);
 	vt->default_mode->display_fg = vt;
+	visual_init(vt->default_mode);
 	vt->vcs.vc_cons[0] = vt->default_mode;
 	vt->vcs.first_vc = vt->vcs.vc_cons[0]->vc_num = current_vc;
 	vt->fg_console = vt->last_console = vt->vcs.vc_cons[0];
 	vt->vcs.next = NULL;
 	vt->keyboard = NULL;
-        vt->next = vt_cons;
-	vt_cons = vt;
 	current_vc += MAX_NR_USER_CONSOLES;
 
         init_timer(&vt->timer);
@@ -731,22 +752,6 @@ struct vc_data* find_vc(int currcons)
 		}
 	} 
 	return pool->vc_cons[currcons - pool->first_vc];	
-}
-
-static void visual_init(struct vc_data *vc)
-{
-    /* ++Geert: sw->con_init determines console size */
-    vc->vc_uni_pagedir_loc = &vc->vc_uni_pagedir;
-    vc->vc_uni_pagedir = 0;
-    hi_font_mask = 0;
-    complement_mask = 0;
-    can_do_color = 0;
-    sw->con_init(vc);
-    if (!complement_mask)
-        complement_mask = can_do_color ? 0x7700 : 0x0800;
-    s_complement_mask = complement_mask;
-    video_size_row = video_num_columns<<1;
-    screenbuf_size = video_num_lines*video_size_row;
 }
 
 static void vc_init(struct vc_data *vc, int do_clear)
@@ -1580,11 +1585,9 @@ void __init vt_console_init(void)
 		return;
 	}
         admin_vt = vt;
-	visual_init(vc);
         screenbuf = (unsigned short *) alloc_bootmem(screenbuf_size);
         vc_init(vc, !sw->con_save_screen); 
         
-        set_origin(vc);
         save_screen(vc);
         gotoxy(vc, x, y);
         vte_ed(vc, 0);
