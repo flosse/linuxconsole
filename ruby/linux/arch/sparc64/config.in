@@ -23,9 +23,9 @@ comment 'General setup'
 
 tristate 'UltraSPARC-III bootbus i2c controller driver' CONFIG_BBC_I2C
 
+define_bool CONFIG_INPUT y
 define_bool CONFIG_VT y
 define_bool CONFIG_VT_CONSOLE y
-define_bool CONFIG_INPUT y
 
 bool 'Symmetric multi-processing support' CONFIG_SMP
 
@@ -137,9 +137,7 @@ if [ "$CONFIG_SCSI" != "n" ]; then
 
    dep_tristate '  SCSI tape support' CONFIG_CHR_DEV_ST $CONFIG_SCSI
 
-   if [ "$CONFIG_BLK_DEV_ST" != "n" ]; then
-      int  'Maximum number of SCSI tapes that can be loaded as modules' CONFIG_ST_EXTRA_DEVS 2
-   fi
+   dep_tristate '  SCSI OnStream SC-x0 tape support' CONFIG_CHR_DEV_OSST $CONFIG_SCSI
 
    dep_tristate '  SCSI CDROM support' CONFIG_BLK_DEV_SR $CONFIG_SCSI
 
@@ -326,6 +324,15 @@ dep_tristate '  Creator/Creator3D' CONFIG_DRM_FFB $CONFIG_DRM
 endmenu
 
 source fs/Config.in
+
+mainmenu_option next_comment
+comment 'Sound'
+
+tristate 'Sound card support' CONFIG_SOUND
+if [ "$CONFIG_SOUND" != "n" ]; then
+   source drivers/sound/Config.in
+fi
+endmenu
 
 source drivers/usb/Config.in
 source drivers/input/Config.in

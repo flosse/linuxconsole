@@ -1,6 +1,6 @@
 VERSION = 2
 PATCHLEVEL = 4
-SUBLEVEL = 4
+SUBLEVEL = 5
 EXTRAVERSION = -ruby
 
 KERNELRELEASE=$(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
@@ -118,11 +118,7 @@ export SVGA_MODE = -DSVGA_MODE=NORMAL_VGA
 
 CORE_FILES	=kernel/kernel.o mm/mm.o fs/fs.o ipc/ipc.o
 NETWORKS	=net/network.o
-DRIVERS		=drivers/block/block.o \
-		 drivers/char/char.o \
-		 drivers/misc/misc.o \
-		 drivers/net/net.o \
-		 drivers/media/media.o
+
 LIBS		=$(TOPDIR)/lib/lib.a
 SUBDIRS		=kernel drivers mm fs net ipc lib
 
@@ -132,6 +128,11 @@ DRIVERS-m :=
 DRIVERS-  :=
 
 DRIVERS-$(CONFIG_PARPORT) += drivers/parport/driver.o
+DRIVERS-y += drivers/char/char.o \
+	drivers/block/block.o \
+	drivers/misc/misc.o \
+	drivers/net/net.o \
+	drivers/media/media.o
 DRIVERS-$(CONFIG_AGP) += drivers/char/agp/agp.o
 DRIVERS-$(CONFIG_DRM) += drivers/char/drm/drm.o
 DRIVERS-$(CONFIG_NUBUS) += drivers/nubus/nubus.a
@@ -144,7 +145,6 @@ DRIVERS-$(CONFIG_ARCNET) += drivers/net/arcnet/arcnetdrv.o
 DRIVERS-$(CONFIG_ATM) += drivers/atm/atm.o
 DRIVERS-$(CONFIG_IDE) += drivers/ide/idedriver.o
 DRIVERS-$(CONFIG_SCSI) += drivers/scsi/scsidrv.o
-DRIVERS-$(CONFIG_SCSI_AIC7XXX) += drivers/scsi/aic7xxx/aic7xxx_drv.o
 DRIVERS-$(CONFIG_IEEE1394) += drivers/ieee1394/ieee1394drv.o
 
 ifneq ($(CONFIG_CD_NO_IDESCSI)$(CONFIG_BLK_DEV_IDECD)$(CONFIG_BLK_DEV_SR)$(CONFIG_PARIDE_PCD),)
@@ -178,7 +178,7 @@ DRIVERS-$(CONFIG_PHONE) += drivers/telephony/telephony.o
 DRIVERS-$(CONFIG_ACPI) += drivers/acpi/acpi.o
 DRIVERS-$(CONFIG_MD) += drivers/md/mddev.o
 
-DRIVERS += $(DRIVERS-y)
+DRIVERS := $(DRIVERS-y)
 
 
 # files removed with 'make clean'
@@ -416,7 +416,7 @@ mrproper: clean archmrproper
 distclean: mrproper
 	rm -f core `find . \( -name '*.orig' -o -name '*.rej' -o -name '*~' \
 		-o -name '*.bak' -o -name '#*#' -o -name '.*.orig' \
-		-o -name '.*.rej' -o -name '.SUMS' -o -size 0 \) -print` TAGS tags
+		-o -name '.*.rej' -o -name '.SUMS' -o -size 0 \) -type f -print` TAGS tags
 
 backup: mrproper
 	cd .. && tar cf - linux/ | gzip -9 > backup.gz

@@ -126,6 +126,9 @@ unsigned int machine_submodel_id;
 unsigned int BIOS_revision;
 unsigned int mca_pentium_flag;
 
+/* For PCI or other memory-mapped resources */
+unsigned long pci_mem_start = 0x10000000;
+
 /*
  * Setup options
  */
@@ -763,7 +766,7 @@ static inline void parse_mem_cmdline (char ** cmdline_p)
 
 void __init setup_arch(char **cmdline_p)
 {
-	unsigned long bootmap_size;
+	unsigned long bootmap_size, low_mem_size;
 	unsigned long start_pfn, max_pfn, max_low_pfn;
 	int i;
 
@@ -1007,6 +1010,11 @@ void __init setup_arch(char **cmdline_p)
 	/* request I/O space for devices used on all i[345]86 PCs */
 	for (i = 0; i < STANDARD_IO_RESOURCES; i++)
 		request_resource(&ioport_resource, standard_io_resources+i);
+
+	/* Tell the PCI layer not to allocate too close to the RAM area.. */
+	low_mem_size = ((max_low_pfn << PAGE_SHIFT) + 0xfffff) & ~0xfffff;
+	if (low_mem_size > pci_mem_start)
+		pci_mem_start = low_mem_size;
 }
 
 #ifndef CONFIG_X86_TSC
@@ -1648,7 +1656,7 @@ static void __init init_rise(struct cpuinfo_x86 *c)
 
 	/* Unhide possibly hidden capability flags
 	   The mp6 iDragon family don't have MSRs.
-	   We switch on extra features with this cpuid wierdness: */
+	   We switch on extra features with this cpuid weirdness: */
 	__asm__ (
 		"movl $0x6363452a, %%eax\n\t"
 		"movl $0x3231206c, %%ecx\n\t"
@@ -2259,7 +2267,7 @@ void __init identify_cpu(struct cpuinfo_x86 *c)
 
 	/* Now the feature flags better reflect actual CPU features! */
 
-	printk(KERN_DEBUG "CPU: After generic, caps: %08x %08x %08x %08x\n",
+	printk(KERN_DEBUG "CPU:     After generic, caps: %08x %08x %08x %08x\n",
 	       c->x86_capability[0],
 	       c->x86_capability[1],
 	       c->x86_capability[2],
@@ -2277,7 +2285,7 @@ void __init identify_cpu(struct cpuinfo_x86 *c)
 			boot_cpu_data.x86_capability[i] &= c->x86_capability[i];
 	}
 
-	printk(KERN_DEBUG "CPU: Common caps: %08x %08x %08x %08x\n",
+	printk(KERN_DEBUG "CPU:             Common caps: %08x %08x %08x %08x\n",
 	       boot_cpu_data.x86_capability[0],
 	       boot_cpu_data.x86_capability[1],
 	       boot_cpu_data.x86_capability[2],

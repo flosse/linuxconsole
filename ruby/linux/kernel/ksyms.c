@@ -98,6 +98,8 @@ EXPORT_SYMBOL(__free_pages);
 EXPORT_SYMBOL(free_pages);
 #ifndef CONFIG_DISCONTIGMEM
 EXPORT_SYMBOL(contig_page_data);
+#else
+EXPORT_SYMBOL(alloc_pages);
 #endif
 EXPORT_SYMBOL(num_physpages);
 EXPORT_SYMBOL(kmem_find_general_cachep);
@@ -146,7 +148,7 @@ EXPORT_SYMBOL(path_init);
 EXPORT_SYMBOL(path_walk);
 EXPORT_SYMBOL(path_release);
 EXPORT_SYMBOL(__user_walk);
-EXPORT_SYMBOL(lookup_one);
+EXPORT_SYMBOL(lookup_one_len);
 EXPORT_SYMBOL(lookup_hash);
 EXPORT_SYMBOL(sys_close);
 EXPORT_SYMBOL(dcache_lock);
@@ -174,6 +176,7 @@ EXPORT_SYMBOL(files_lock);
 EXPORT_SYMBOL(check_disk_change);
 EXPORT_SYMBOL(__invalidate_buffers);
 EXPORT_SYMBOL(invalidate_inodes);
+EXPORT_SYMBOL(invalidate_device);
 EXPORT_SYMBOL(invalidate_inode_pages);
 EXPORT_SYMBOL(truncate_inode_pages);
 EXPORT_SYMBOL(fsync_dev);
@@ -185,6 +188,8 @@ EXPORT_SYMBOL(write_inode_now);
 EXPORT_SYMBOL(notify_change);
 EXPORT_SYMBOL(set_blocksize);
 EXPORT_SYMBOL(getblk);
+EXPORT_SYMBOL(cdget);
+EXPORT_SYMBOL(cdput);
 EXPORT_SYMBOL(bdget);
 EXPORT_SYMBOL(bdput);
 EXPORT_SYMBOL(bread);
@@ -202,6 +207,7 @@ EXPORT_SYMBOL(cont_prepare_write);
 EXPORT_SYMBOL(generic_commit_write);
 EXPORT_SYMBOL(block_truncate_page);
 EXPORT_SYMBOL(generic_block_bmap);
+EXPORT_SYMBOL(waitfor_one_page);
 EXPORT_SYMBOL(generic_file_read);
 EXPORT_SYMBOL(do_generic_file_read);
 EXPORT_SYMBOL(generic_file_write);
@@ -262,6 +268,8 @@ EXPORT_SYMBOL(default_llseek);
 EXPORT_SYMBOL(dentry_open);
 EXPORT_SYMBOL(filemap_nopage);
 EXPORT_SYMBOL(filemap_sync);
+EXPORT_SYMBOL(filemap_fdatasync);
+EXPORT_SYMBOL(filemap_fdatawait);
 EXPORT_SYMBOL(lock_page);
 
 /* device registration */
@@ -312,7 +320,7 @@ EXPORT_SYMBOL(do_SAK);
 EXPORT_SYMBOL(register_filesystem);
 EXPORT_SYMBOL(unregister_filesystem);
 EXPORT_SYMBOL(kern_mount);
-EXPORT_SYMBOL(kern_umount);
+EXPORT_SYMBOL(__mntput);
 EXPORT_SYMBOL(may_umount);
 
 /* executable format registration */
@@ -474,7 +482,6 @@ EXPORT_SYMBOL(si_meminfo);
 
 /* Added to make file system as module */
 EXPORT_SYMBOL(sys_tz);
-EXPORT_SYMBOL(__wait_on_super);
 EXPORT_SYMBOL(file_fsync);
 EXPORT_SYMBOL(fsync_inode_buffers);
 EXPORT_SYMBOL(clear_inode);

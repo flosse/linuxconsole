@@ -24,9 +24,9 @@ endmenu
 mainmenu_option next_comment
 comment 'General setup'
 
+define_bool CONFIG_INPUT y
 define_bool CONFIG_VT y
 define_bool CONFIG_VT_CONSOLE y
-define_bool CONFIG_INPUT y
 
 bool 'Symmetric multi-processing support (does not work on sun4/sun4c)' CONFIG_SMP
 
@@ -153,9 +153,7 @@ if [ "$CONFIG_SCSI" != "n" ]; then
 
    dep_tristate '  SCSI tape support' CONFIG_CHR_DEV_ST $CONFIG_SCSI
 
-   if [ "$CONFIG_BLK_DEV_ST" != "n" ]; then
-      int  'Maximum number of SCSI tapes that can be loaded as modules' CONFIG_ST_EXTRA_DEVS 2
-   fi
+   dep_tristate '  SCSI OnStream SC-x0 tape support' CONFIG_CHR_DEV_OSST $CONFIG_SCSI
 
    dep_tristate '  SCSI CDROM support' CONFIG_BLK_DEV_SR $CONFIG_SCSI
 
