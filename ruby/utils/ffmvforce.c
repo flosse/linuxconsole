@@ -28,13 +28,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <math.h>
-#include <linux/types.h>
 #include <linux/input.h>
 #include <SDL.h>
 
@@ -46,13 +44,13 @@
 
 /* File descriptor of the force feedback /dev entry */
 static int ff_fd;
+static struct ff_effect effect;
 
 static void generate_force(int x, int y)
 {
 	static int first = 1;
 	double nx, ny;
 	double angle;
-	static struct ff_effect effect;
 
 	nx = 2*(x-WIN_W/2.0)/WIN_W;
 	ny = 2*(y-WIN_H/2.0)/WIN_H;
@@ -102,7 +100,7 @@ static void stop_effect()
 {
 	struct input_event stop;
 	stop.type = EV_FF;
-	stop.code = 0;
+	stop.code = effect.id;
 	stop.value = 0;
 
 	if (write(ff_fd, (const void*) &stop, sizeof(stop)) == -1) {
