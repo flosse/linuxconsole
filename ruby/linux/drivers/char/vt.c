@@ -66,10 +66,8 @@ static int current_vc;			/* Which /dev/vc/X to allocate next */
 struct vt_struct *admin_vt;		/* VT of /dev/console */
 
 /*
- * want_vc is the virtual console we want to switch to,
  * kmsg_redirect is the virtual console for kernel messages,
  */
-struct vc_data *want_vc;
 int kmsg_redirect;
 
 /* 
@@ -228,8 +226,8 @@ void reset_palette(struct vc_data *vc)
 static inline void scrolldelta(struct vc_data *vc, int lines)
 {
         vc->display_fg->scrollback_delta += lines;
-	want_vc = vc;
-	tasklet_schedule(&console_tasklet);
+	vc->display_fg->want_vc = vc;
+	tasklet_schedule(&vc->display_fg->vt_tasklet);
 }
 
 void scrollback(struct vc_data *vc, int lines)
@@ -674,6 +672,44 @@ static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
 }
 
 /*
+ * This is the console switching tasklet.
+ *
+ * Doing console switching in a tasklet allows
+ * us to do the switches asynchronously (needed when we want
+ * to switch due to a keyboard interrupt).  Synchronization
+ * with other console code and prevention of re-entrancy is
+ * ensured with console_lock.
+ */
+static void console_softint(unsigned long private)
+{
+        struct vt_struct *vt = (struct vt_struct *) private;
+        if  (!vt->want_vc) return;
+
+        spin_lock_irq(&console_lock);
+
+        if (vt->want_vc->vc_num != vt->fg_console->vc_num &&
+            !vt->vt_dont_switch) {
+                hide_cursor(vt->fg_console);
+                /* New console, old console */
+                change_console(vt->want_vc, vt->fg_console);
+                /* we only changed when the console had already
+                   been allocated - a new console is not created
+                   in an interrupt routine */
+        }
+        /* do not unblank for a LED change */
+        poke_blanked_console(vt);
+
+        if (vt->scrollback_delta) {
+                struct vc_data *vc = vt->fg_console;
+                clear_selection();
+                if (vcmode == KD_TEXT)
+                      sw->con_scrolldelta(vt->fg_console,vt->scrollback_delta);
+                vt->scrollback_delta = 0;
+        }
+        spin_unlock_irq(&console_lock);
+}
+
+/*
  *      Allocation, freeing and resizing of VTs.
  */
 static void visual_init(struct vc_data *vc)
@@ -697,9 +733,11 @@ static void visual_init(struct vc_data *vc)
 
 const char *create_vt(struct vt_struct *vt, int init)
 {
+	DECLARE_TASKLET_DISABLED(console_tasklet, console_softint, (long) vt);
 	const char *display_desc = vt->vt_sw->con_startup(vt, init);
 
 	if (!display_desc) return NULL;	
+	vt->vt_tasklet = console_tasklet;
 	vt->next = vt_cons;
 	vt_cons = vt;
 	vt->vt_dont_switch = 0;
@@ -712,7 +750,7 @@ const char *create_vt(struct vt_struct *vt, int init)
 	memcpy(vt->vcs.vc_cons[0], vt->default_mode, sizeof(struct vc_data));
 	visual_init(vt->vcs.vc_cons[0]);
 	vt->vcs.first_vc = vt->vcs.vc_cons[0]->vc_num = current_vc;
-	vt->fg_console = vt->last_console = vt->vcs.vc_cons[0];
+	vt->want_vc = vt->fg_console = vt->last_console = vt->vcs.vc_cons[0];
 	vt->vcs.next = NULL;
 	vt->keyboard = NULL;
 	current_vc += MAX_NR_USER_CONSOLES;
@@ -751,7 +789,7 @@ struct vc_data* find_vc(int currcons)
 	return pool->vc_cons[currcons - pool->first_vc];	
 }
 
-static void vc_init(struct vc_data *vc, int do_clear)
+void vc_init(struct vc_data *vc, int do_clear)
 {
         set_origin(vc);
         pos = origin;
@@ -1177,43 +1215,6 @@ out:
 }
 
 /*
- * This is the console switching tasklet.
- *
- * Doing console switching in a tasklet allows
- * us to do the switches asynchronously (needed when we want
- * to switch due to a keyboard interrupt).  Synchronization
- * with other console code and prevention of re-entrancy is
- * ensured with console_lock.
- */
-static void console_softint(unsigned long ignored)
-{
-	if  (!want_vc)	return;
-
-        spin_lock_irq(&console_lock);
-
-	if (want_vc->vc_num != want_vc->display_fg->fg_console->vc_num &&
-	    !want_vc->display_fg->vt_dont_switch) { 
-		hide_cursor(want_vc->display_fg->fg_console);
-		/* New console, old console */
-                change_console(want_vc, want_vc->display_fg->fg_console);
-                /* we only changed when the console had already
-                   been allocated - a new console is not created
-                   in an interrupt routine */
-        }
-	/* do not unblank for a LED change */
-        poke_blanked_console(want_vc->display_fg);
-	
-	if (want_vc->display_fg->scrollback_delta) {
-		struct vc_data *vc = want_vc->display_fg->fg_console;
-                clear_selection();
-                if (vcmode == KD_TEXT)
-                      sw->con_scrolldelta(vc,vc->display_fg->scrollback_delta); 
-                vc->display_fg->scrollback_delta = 0;
-        }
-        spin_unlock_irq(&console_lock);
-}
-
-/*
  *      Handling of Linux-specific VC ioctls
  */
 
@@ -1516,8 +1517,6 @@ struct console vt_console_driver = {
 struct tty_driver console_driver;
 static int console_refcount;
 
-DECLARE_TASKLET_DISABLED(console_tasklet, console_softint, 0);
-
 void __init vt_console_init(void)
 {
         const char *display_desc = NULL;
@@ -1597,9 +1596,8 @@ void __init vt_console_init(void)
 #ifdef CONFIG_VT_CONSOLE
         register_console(&vt_console_driver);
 #endif
-	want_vc = vc;
-        tasklet_enable(&console_tasklet);
-        tasklet_schedule(&console_tasklet);
+        tasklet_enable(&vt->vt_tasklet);
+        tasklet_schedule(&vt->vt_tasklet);
 }
 
 static void clear_buffer_attributes(struct vc_data *vc)
@@ -1680,6 +1678,6 @@ EXPORT_SYMBOL(default_blu);
 EXPORT_SYMBOL(create_vt);
 EXPORT_SYMBOL(release_vt);
 EXPORT_SYMBOL(vc_resize);
-EXPORT_SYMBOL(vc_allocate);
+EXPORT_SYMBOL(vc_init);
 EXPORT_SYMBOL(console_blank_hook);
 EXPORT_SYMBOL(take_over_console);
