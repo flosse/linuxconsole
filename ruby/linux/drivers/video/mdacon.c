@@ -560,6 +560,7 @@ const struct consw mda_con = {
 	con_invert_region:	mdacon_invert_region,
 };
 
+#ifdef MODULE
 void __init mda_console_init(void)
 {
         const char *display_desc = NULL;
@@ -585,11 +586,7 @@ void __init mda_console_init(void)
 	vt->kmalloced = 1;
 	vt->vt_sw = &mda_con;
 	vt->vc_cons[0] = vc;
-#ifdef MODULE
         display_desc = create_vt(vt, 1);
-#else
-	display_desc = create_vt(vt, 0);
-#endif
 	q = (long) kmalloc(vc->vc_screenbuf_size, GFP_KERNEL);
         if (!display_desc || !q) {
 		kfree(vt->vc_cons[0]);
@@ -607,8 +604,6 @@ void __init mda_console_init(void)
         return;
 }
 
-#ifdef MODULE
-
 int init_module(void)
 {
 	mda_console_init();
@@ -619,5 +614,5 @@ void cleanup_module(void)
 {
 	/* release_vt(&mda_vt); */
 }
-
 #endif
+
