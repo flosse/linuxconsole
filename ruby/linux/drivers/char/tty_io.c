@@ -100,6 +100,15 @@
 
 #ifdef CONFIG_VT
 extern void con_init_devfs (void);
+#ifdef CONFIG_PROM_CONSOLE
+extern void prom_con_init(void);
+#endif
+#ifdef CONFIG_MDA_CONSOLE
+extern void mda_console_init(void);
+#endif
+#ifdef CONFIG_FB
+extern void fb_console_init(void);
+#endif
 #endif
 extern int rio_init(void);
 
@@ -2277,6 +2286,12 @@ void __init tty_init(void)
 	if (tty_register_driver(&dev_console_driver))
 		panic("Couldn't register /dev/tty0 driver\n");
 
+#if defined (CONFIG_PROM_CONSOLE)
+        prom_con_init();
+#endif
+#if defined (CONFIG_MDA_CONSOLE)
+        mda_console_init();
+#endif
 	kbd_init();
 	console_map_init();
         vcs_init();
