@@ -46,6 +46,12 @@ int minimum_console_loglevel = MINIMUM_CONSOLE_LOGLEVEL;
 int default_console_loglevel = DEFAULT_CONSOLE_LOGLEVEL;
 int oops_in_progress;
 
+/*
+ * console_sem protects the console_drivers list, and also
+ * provides serialisation for access to the entire console
+ * driver system.
+ */
+static DECLARE_MUTEX(console_sem);
 struct console *console_drivers;
 
 /*
@@ -346,6 +352,17 @@ static void call_console_drivers(unsigned long start, unsigned long end)
                        	cur_index++;
 
                        	if (c == '\n') {
+				if (msg_level < 0) {
+                                	/*
+                                         * printk() has already given us 
+					 * loglevel tages in the buffer.
+                                         * This code is here in case the
+                                         * log buffer has wrapped right 
+					 * around and scribbled on those
+                                         * tags.
+                                         */
+                                       	msg_level = default_message_loglevel;
+                               	}
                         	_call_console_drivers(start_print, cur_index, 
 							msg_level);
                                	msg_level = -1;
@@ -439,30 +456,6 @@ void console_print(const char *s)
 }
 EXPORT_SYMBOL(console_print);
 
-void lock_all_consoles(void)
-{
-	struct console *con;
-
-	if (console_drivers) {
-       		for (con = console_drivers; con; con = con->next) {
-               		if (con->flags & CON_ENABLED)
-				spin_lock_irq(&con->lock);
-		}
-	}
-}
-
-void unlock_all_consoles(void)
-{
-	struct console *con;
-
-	if (console_drivers) {
-       		for (con = console_drivers; con; con = con->next) {
-               		if (con->flags & CON_ENABLED)
-				spin_unlock_irq(&con->lock);
-		}
-	}
-}
-
 /*
  * The console driver calls this routine during kernel initialization
  * to register the console printing procedure with printk() and to
@@ -518,7 +511,7 @@ void register_console(struct console * console)
 	 *	Put this console in the list - keep the
 	 *	preferred driver at the head of the list.
 	 */
-	lock_all_consoles();
+	down(&console_sem);
 	if ((console->flags & CON_CONSDEV) || console_drivers == NULL) {
 		console->next = console_drivers;
 		console_drivers = console;
@@ -527,7 +520,7 @@ void register_console(struct console * console)
 		console_drivers->next = console;
 	}
 	spin_lock_init(&console->lock);
-	unlock_all_consoles();
+	up(&console_sem);
 	if (console->flags & CON_PRINTBUFFER) { 
 		/*
 	 	 *	Print out buffered log messages.
@@ -552,7 +545,7 @@ int unregister_console(struct console * console)
         struct console *a,*b;
 	int res = 1;
 
-	lock_all_consoles();
+	down(&console_sem);
 	if (console_drivers == console) {
 		console_drivers=console->next;
 		res = 0;
@@ -573,7 +566,7 @@ int unregister_console(struct console * console)
 	 */
 	if (console_drivers == NULL)
 		preferred_console = -1;
-	unlock_all_consoles();
+	up(&console_sem);
 	return res;
 }
 EXPORT_SYMBOL(unregister_console);
