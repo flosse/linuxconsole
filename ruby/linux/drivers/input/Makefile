@@ -34,7 +34,8 @@ obj-$(CONFIG_INPUT)		+= input.o
 obj-$(CONFIG_INPUT_I8042)	+= i8042.o serio.o
 obj-$(CONFIG_INPUT_CT82C710)	+= ct82c710.o serio.o
 #obj-$(CONFIG_INPUT_Q40KBD)	+= q40kbd.o serio.o
-#obj-$(CONFIG_INPUT_SUNPCIKBD)	+= sunpcikbd.o serio.o
+#obj-$(CONFIG_INPUT_SUN8042)	+= sun8042.o serio.o
+#obj-$(CONFIG_INPUT_RPCKBD)	+= rpckbd.o
 obj-$(CONFIG_INPUT_PARKBD)	+= parkbd.o serio.o
 
 obj-$(CONFIG_INPUT_SERPORT)	+= serport.o serio.o
@@ -63,16 +64,6 @@ obj-$(CONFIG_INPUT_COBRA)	+= cobra.o gameport.o
 #obj-$(CONFIG_INPUT_TMDC)	+= tmdc.o gameport.o
 #obj-$(CONFIG_INPUT_SIDEWINDER)	+= sidewinder.o gameport.o
 
-obj-$(CONFIG_INPUT_INPORT)	+= inport.o
-obj-$(CONFIG_INPUT_LOGIBM)	+= logibm.o
-#obj-$(CONFIG_INPUT_PC110PAD)	+= pc110pad.o
-#obj-$(CONFIG_INPUT_AMIKEYB)	+= amikeyb.o
-#obj-$(CONFIG_INPUT_AMIMOUSE)	+= amimouse.o
-#obj-$(CONFIG_INPUT_AMIJOY)	+= amijoy.o
-#obj-$(CONFIG_INPUT_ATARIKBD)	+= atarikbd.o
-#obj-$(CONFIG_INPUT_ATARIMOUSE) += atarimouse.o
-#obj-$(CONFIG_INPUT_ATARIJOY)	+= atarijoy.o
-
 #obj-$(CONFIG_INPUT_DB9)	+= db9.o
 #obj-$(CONFIG_INPUT_GAMECON)	+= gamecon.o
 #obj-$(CONFIG_INPUT_TURBOGRAFX)	+= turbografx.o
@@ -93,6 +84,20 @@ obj-$(CONFIG_INPUT_MOUSEDEV)	+= mousedev.o
 obj-$(CONFIG_INPUT_JOYDEV)	+= joydev.o
 obj-$(CONFIG_INPUT_EVDEV)	+= evdev.o
 obj-$(CONFIG_INPUT_EVBUG)	+= evbug.o
+
+obj-$(CONFIG_INPUT_INPORT)	+= inport.o
+obj-$(CONFIG_INPUT_LOGIBM)	+= logibm.o
+#obj-$(CONFIG_INPUT_PC110PAD)	+= pc110pad.o
+obj-$(CONFIG_INPUT_AMIKEYB)	+= amikeyb.o
+obj-$(CONFIG_INPUT_AMIMOUSE)	+= amimouse.o
+obj-$(CONFIG_INPUT_AMIJOY)	+= amijoy.o
+#obj-$(CONFIG_INPUT_ATARIKBD)	+= atarikbd.o
+#obj-$(CONFIG_INPUT_ATARIMOUSE) += atarimouse.o
+#obj-$(CONFIG_INPUT_ATARIJOY)	+= atarijoy.o
+#obj-$(CONFIG_INPUT_RPCMOUSE)	+= rpcmouse.o
+#obj-$(CONFIG_INPUT_ARCKBD)	+= arckbd.o
+
+
 
 # Files that are both resident and modular: remove from modular.
 

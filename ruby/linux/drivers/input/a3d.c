@@ -1,13 +1,13 @@
 /*
- *  a3d.c.c  Version 1.2
+ *  a3d.c  Version 1.2
  *
- *  Copyright (c) 1998-1999 Vojtech Pavlik
+ *  Copyright (c) 1998-2000 Vojtech Pavlik
  *
  *  Sponsored by SuSE
  */
 
 /*
- * This is a module for the Linux joystick driver, supporting
+ * This is a module for the Linux input driver, supporting
  * joysticks using FP-Gaming's Assassin 3D protocol.
  */
 

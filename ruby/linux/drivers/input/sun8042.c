@@ -54,34 +54,10 @@ static int pcikbd_mrcoffee = 0;
 static unsigned long pcikbd_iobase = 0;
 static unsigned int pcikbd_irq = 0;
 
-/* used only by send_data - set by keyboard_interrupt */
-static volatile unsigned char reply_expected = 0;
-static volatile unsigned char acknowledge = 0;
-static volatile unsigned char resend = 0;
-
 unsigned char pckbd_read_mask = KBD_STAT_OBF;
-
-extern int pcikbd_init(void);
-extern void pci_compute_shiftstate(void);
-extern int pci_setkeycode(unsigned int, unsigned int);
-extern int pci_getkeycode(unsigned int);
-extern void pci_setledstate(struct kbd_struct *, unsigned int);
-extern unsigned char pci_getledstate(void);
 
 #define pcikbd_inb(x)     inb(x)
 #define pcikbd_outb(v,x)  outb(v,x)
-
-#if 0 /* deadwood */
-static __inline__ unsigned char pcikbd_inb(unsigned long port)
-{
-	return inb(port);
-}
-
-static __inline__ void pcikbd_outb(unsigned char val, unsigned long port)
-{
-	outb(val, port);
-}
-#endif
 
 static inline void kb_wait(void)
 {
@@ -91,222 +67,6 @@ static inline void kb_wait(void)
 		if(!(pcikbd_inb(pcikbd_iobase + KBD_STATUS_REG) & KBD_STAT_IBF))
 			return;
 	} while (jiffies - start < KBC_TIMEOUT);
-}
-
-/*
- * Translation of escaped scancodes to keycodes.
- * This is now user-settable.
- * The keycodes 1-88,96-111,119 are fairly standard, and
- * should probably not be changed - changing might confuse X.
- * X also interprets scancode 0x5d (KEY_Begin).
- *
- * For 1-88 keycode equals scancode.
- */
-
-#define E0_KPENTER 96
-#define E0_RCTRL   97
-#define E0_KPSLASH 98
-#define E0_PRSCR   99
-#define E0_RALT    100
-#define E0_BREAK   101  /* (control-pause) */
-#define E0_HOME    102
-#define E0_UP      103
-#define E0_PGUP    104
-#define E0_LEFT    105
-#define E0_RIGHT   106
-#define E0_END     107
-#define E0_DOWN    108
-#define E0_PGDN    109
-#define E0_INS     110
-#define E0_DEL     111
-
-#define E1_PAUSE   119
-
-/*
- * The keycodes below are randomly located in 89-95,112-118,120-127.
- * They could be thrown away (and all occurrences below replaced by 0),
- * but that would force many users to use the `setkeycodes' utility, where
- * they needed not before. It does not matter that there are duplicates, as
- * long as no duplication occurs for any single keyboard.
- */
-#define SC_LIM 89
-
-#define FOCUS_PF1 85           /* actual code! */
-#define FOCUS_PF2 89
-#define FOCUS_PF3 90
-#define FOCUS_PF4 91
-#define FOCUS_PF5 92
-#define FOCUS_PF6 93
-#define FOCUS_PF7 94
-#define FOCUS_PF8 95
-#define FOCUS_PF9 120
-#define FOCUS_PF10 121
-#define FOCUS_PF11 122
-#define FOCUS_PF12 123
-
-#define JAP_86     124
-/* tfj@olivia.ping.dk:
- * The four keys are located over the numeric keypad, and are
- * labelled A1-A4. It's an rc930 keyboard, from
- * Regnecentralen/RC International, Now ICL.
- * Scancodes: 59, 5a, 5b, 5c.
- */
-#define RGN1 124
-#define RGN2 125
-#define RGN3 126
-#define RGN4 127
-
-static unsigned char high_keys[128 - SC_LIM] = {
-  RGN1, RGN2, RGN3, RGN4, 0, 0, 0,                   /* 0x59-0x5f */
-  0, 0, 0, 0, 0, 0, 0, 0,                            /* 0x60-0x67 */
-  0, 0, 0, 0, 0, FOCUS_PF11, 0, FOCUS_PF12,          /* 0x68-0x6f */
-  0, 0, 0, FOCUS_PF2, FOCUS_PF9, 0, 0, FOCUS_PF3,    /* 0x70-0x77 */
-  FOCUS_PF4, FOCUS_PF5, FOCUS_PF6, FOCUS_PF7,        /* 0x78-0x7b */
-  FOCUS_PF8, JAP_86, FOCUS_PF10, 0                   /* 0x7c-0x7f */
-};
-
-/* BTC */
-#define E0_MACRO   112
-/* LK450 */
-#define E0_F13     113
-#define E0_F14     114
-#define E0_HELP    115
-#define E0_DO      116
-#define E0_F17     117
-#define E0_KPMINPLUS 118
-/*
- * My OmniKey generates e0 4c for  the "OMNI" key and the
- * right alt key does nada. [kkoller@nyx10.cs.du.edu]
- */
-#define E0_OK	124
-/*
- * New microsoft keyboard is rumoured to have
- * e0 5b (left window button), e0 5c (right window button),
- * e0 5d (menu button). [or: LBANNER, RBANNER, RMENU]
- * [or: Windows_L, Windows_R, TaskMan]
- */
-#define E0_MSLW	125
-#define E0_MSRW	126
-#define E0_MSTM	127
-
-static unsigned char e0_keys[128] = {
-  0, 0, 0, 0, 0, 0, 0, 0,			      /* 0x00-0x07 */
-  0, 0, 0, 0, 0, 0, 0, 0,			      /* 0x08-0x0f */
-  0, 0, 0, 0, 0, 0, 0, 0,			      /* 0x10-0x17 */
-  0, 0, 0, 0, E0_KPENTER, E0_RCTRL, 0, 0,	      /* 0x18-0x1f */
-  0, 0, 0, 0, 0, 0, 0, 0,			      /* 0x20-0x27 */
-  0, 0, 0, 0, 0, 0, 0, 0,			      /* 0x28-0x2f */
-  0, 0, 0, 0, 0, E0_KPSLASH, 0, E0_PRSCR,	      /* 0x30-0x37 */
-  E0_RALT, 0, 0, 0, 0, E0_F13, E0_F14, E0_HELP,	      /* 0x38-0x3f */
-  E0_DO, E0_F17, 0, 0, 0, 0, E0_BREAK, E0_HOME,	      /* 0x40-0x47 */
-  E0_UP, E0_PGUP, 0, E0_LEFT, E0_OK, E0_RIGHT, E0_KPMINPLUS, E0_END,/* 0x48-0x4f */
-  E0_DOWN, E0_PGDN, E0_INS, E0_DEL, 0, 0, 0, 0,	      /* 0x50-0x57 */
-  0, 0, 0, E0_MSLW, E0_MSRW, E0_MSTM, 0, 0,	      /* 0x58-0x5f */
-  0, 0, 0, 0, 0, 0, 0, 0,			      /* 0x60-0x67 */
-  0, 0, 0, 0, 0, 0, 0, E0_MACRO,		      /* 0x68-0x6f */
-  0, 0, 0, 0, 0, 0, 0, 0,			      /* 0x70-0x77 */
-  0, 0, 0, 0, 0, 0, 0, 0			      /* 0x78-0x7f */
-};
-
-/* Simple translation table for the SysRq keys */
-
-#ifdef CONFIG_MAGIC_SYSRQ
-unsigned char pcikbd_sysrq_xlate[128] =
-	"\000\0331234567890-=\177\t"			/* 0x00 - 0x0f */
-	"qwertyuiop[]\r\000as"				/* 0x10 - 0x1f */
-	"dfghjkl;'`\000\\zxcv"				/* 0x20 - 0x2f */
-	"bnm,./\000*\000 \000\201\202\203\204\205"	/* 0x30 - 0x3f */
-	"\206\207\210\211\212\000\000789-456+1"		/* 0x40 - 0x4f */
-	"230\177\000\000\213\214\000\000\000\000\000\000\000\000\000\000" /* 0x50 - 0x5f */
-	"\r\000/";					/* 0x60 - 0x6f */
-#endif
-
-int pcikbd_setkeycode(unsigned int scancode, unsigned int keycode)
-{
-	if(scancode < SC_LIM || scancode > 255 || keycode > 127)
-		return -EINVAL;
-	if(scancode < 128)
-		high_keys[scancode - SC_LIM] = keycode;
-	else
-		e0_keys[scancode - 128] = keycode;
-	return 0;
-}
-
-int pcikbd_getkeycode(unsigned int scancode)
-{
-	return
-		(scancode < SC_LIM || scancode > 255) ? -EINVAL :
-		(scancode < 128) ? high_keys[scancode - SC_LIM] :
-		e0_keys[scancode - 128];
-}
-
-int do_acknowledge(unsigned char scancode)
-{
-	if(reply_expected) {
-		if(scancode == KBD_REPLY_ACK) {
-			acknowledge = 1;
-			reply_expected = 0;
-			return 0;
-		} else if(scancode == KBD_REPLY_RESEND) {
-			resend = 1;
-			reply_expected = 0;
-			return 0;
-		}
-	}
-	return 1;
-}
-
-int pcikbd_translate(unsigned char scancode, unsigned char *keycode,
-		     char raw_mode)
-{
-	static int prev_scancode = 0;
-
-	if (scancode == 0xe0 || scancode == 0xe1) {
-		prev_scancode = scancode;
-		return 0;
-	}
-	if (scancode == 0x00 || scancode == 0xff) {
-		prev_scancode = 0;
-		return 0;
-	}
-	scancode &= 0x7f;
-	if(prev_scancode) {
-		if(prev_scancode != 0xe0) {
-			if(prev_scancode == 0xe1 && scancode == 0x1d) {
-				prev_scancode = 0x100;
-				return 0;
-			} else if(prev_scancode == 0x100 && scancode == 0x45) {
-				*keycode = E1_PAUSE;
-				prev_scancode = 0;
-			} else {
-				prev_scancode = 0;
-				return 0;
-			}
-		} else {
-			prev_scancode = 0;
-			if(scancode == 0x2a || scancode == 0x36)
-				return 0;
-			if(e0_keys[scancode])
-				*keycode = e0_keys[scancode];
-			else
-				return 0;
-		}
-	} else if(scancode >= SC_LIM) {
-		*keycode = high_keys[scancode - SC_LIM];
-		if(!*keycode)
-			return 0;
-
-	} else
-		*keycode = scancode;
-	return 1;
-}
-
-char pcikbd_unexpected_up(unsigned char keycode)
-{
-	if(keycode >= SC_LIM || keycode == 85)
-		return 0;
-	else
-		return 0200;
 }
 
 static void
@@ -348,13 +108,6 @@ static int send_data(unsigned char data)
 		} while(!resend);
 	} while(retries-- > 0);
 	return 0;
-}
-
-void pcikbd_leds(unsigned char leds)
-{
-	if(!send_data(KBD_CMD_SET_LEDS) || !send_data(leds))
-		send_data(KBD_CMD_ENABLE);
-		
 }
 
 static int __init pcikbd_wait_for_input(void)
@@ -420,17 +173,12 @@ static void pcikbd_kd_mksound(unsigned int hz, unsigned int ticks)
 }
 #endif
 
-static void nop_kd_mksound(unsigned int hz, unsigned int ticks)
-{
-}
-
 extern void (*kd_mksound)(unsigned int hz, unsigned int ticks);
 
 static char * __init do_pcikbd_init_hw(void)
 {
 
-	while(pcikbd_wait_for_input() != -1)
-		;
+	while(pcikbd_wait_for_input() != -1);
 
 	pcikbd_write(KBD_CNTL_REG, KBD_CCMD_SELF_TEST);
 	if(pcikbd_wait_for_input() != 0x55)
@@ -554,78 +302,8 @@ ebus_done:
 		printk("8042: keyboard init failure [%s]\n", msg);
 }
 
-
-/*
- * Here begins the Mouse Driver.
- */
-
-static unsigned long pcimouse_iobase = 0;
-static unsigned int pcimouse_irq;
-
-#define AUX_BUF_SIZE	2048
-
-struct aux_queue {
-	unsigned long head;
-	unsigned long tail;
-	wait_queue_head_t proc_list;
-	struct fasync_struct *fasync;
-	unsigned char buf[AUX_BUF_SIZE];
-};
-
-static struct aux_queue *queue;
-static int aux_ready = 0;
-static int aux_count = 0;
-static int aux_present = 0;
-
 #define pcimouse_inb(x)     inb(x)
 #define pcimouse_outb(v,x)  outb(v,x)
-
-#if 0
-
-static __inline__ unsigned char pcimouse_inb(unsigned long port)
-{
-	return inb(port);
-}
-
-static __inline__ void pcimouse_outb(unsigned char val, unsigned long port)
-{
-	outb(val, port);
-}
-
-#endif
-
-/*
- *	Shared subroutines
- */
-
-static unsigned int get_from_queue(void)
-{
-	unsigned int result;
-	unsigned long flags;
-
-	save_flags(flags);
-	cli();
-	result = queue->buf[queue->tail];
-	queue->tail = (queue->tail + 1) & (AUX_BUF_SIZE-1);
-	restore_flags(flags);
-	return result;
-}
-
-
-static inline int queue_empty(void)
-{
-	return queue->head == queue->tail;
-}
-
-static int aux_fasync(int fd, struct file *filp, int on)
-{
-	int retval;
-
-	retval = fasync_helper(fd, filp, on, &queue->fasync);
-	if (retval < 0)
-		return retval;
-	return 0;
-}
 
 /*
  *	PS/2 Aux Device
@@ -696,32 +374,6 @@ static void aux_write_cmd(int val)
 	pcimouse_outb(KBD_CCMD_WRITE_MODE, pcimouse_iobase + KBD_CNTL_REG);
 	poll_aux_status();
 	pcimouse_outb(val, pcimouse_iobase + KBD_DATA_REG);
-}
-
-/*
- * AUX handler critical section start and end.
- * 
- * Only one process can be in the critical section and all keyboard sends are
- * deferred as long as we're inside. This is necessary as we may sleep when
- * waiting for the keyboard controller and other processes / BH's can
- * preempt us. Please note that the input buffer must be flushed when
- * aux_end_atomic() is called and the interrupt is no longer enabled as not
- * doing so might cause the keyboard driver to ignore all incoming keystrokes.
- */
-
-static DECLARE_MUTEX(aux_sema4);
-
-static inline void aux_start_atomic(void)
-{
-	down(&aux_sema4);
-	tasklet_disable_nosync(&keyboard_tasklet);
-	tasklet_unlock_wait(&keyboard_tasklet);
-}
-
-static inline void aux_end_atomic(void)
-{
-	tasklet_enable(&keyboard_tasklet);
-	up(&aux_sema4);
 }
 
 /*
@@ -839,83 +491,6 @@ static ssize_t aux_write(struct file * file, const char * buffer,
 	return retval;
 }
 
-/*
- *	Generic part continues...
- */
-
-/*
- * Put bytes from input queue to buffer.
- */
-
-static ssize_t aux_read(struct file * file, char * buffer,
-		        size_t count, loff_t *ppos)
-{
-	DECLARE_WAITQUEUE(wait, current);
-	ssize_t i = count;
-	unsigned char c;
-
-	if (queue_empty()) {
-		if (file->f_flags & O_NONBLOCK)
-			return -EAGAIN;
-		add_wait_queue(&queue->proc_list, &wait);
-repeat:
-		set_current_state(TASK_INTERRUPTIBLE);
-		if (queue_empty() && !signal_pending(current)) {
-			schedule();
-			goto repeat;
-		}
-		current->state = TASK_RUNNING;
-		remove_wait_queue(&queue->proc_list, &wait);
-	}
-	while (i > 0 && !queue_empty()) {
-		c = get_from_queue();
-		put_user(c, buffer++);
-		i--;
-	}
-	aux_ready = !queue_empty();
-	if (count-i) {
-		file->f_dentry->d_inode->i_atime = CURRENT_TIME;
-		return count-i;
-	}
-	if (signal_pending(current))
-		return -ERESTARTSYS;
-	return 0;
-}
-
-static unsigned int aux_poll(struct file *file, poll_table * wait)
-{
-	poll_wait(file, &queue->proc_list, wait);
-	if (aux_ready)
-		return POLLIN | POLLRDNORM;
-	return 0;
-}
-
-struct file_operations psaux_fops = {
-	read:		aux_read,
-	write:		aux_write,
-	poll:		aux_poll,
-	open:		aux_open,
-	release:	aux_release,
-	fasync:		aux_fasync,
-};
-
-static int aux_no_open(struct inode *inode, struct file *file)
-{
-	return -ENODEV;
-}
-
-struct file_operations psaux_no_fops = {
-	open:		aux_no_open,
-};
-
-static struct miscdevice psaux_mouse = {
-	PSMOUSE_MINOR, "ps2aux", &psaux_fops
-};
-
-static struct miscdevice psaux_no_mouse = {
-	PSMOUSE_MINOR, "ps2aux", &psaux_no_fops
-};
-
 int __init pcimouse_init(void)
 {
 	struct linux_ebus *ebus;
@@ -992,12 +567,6 @@ found:
 	return 0;
 
 do_enodev:
-	misc_register(&psaux_no_mouse);
-	return -ENODEV;
-}
-
-int __init pcimouse_no_init(void)
-{
 	misc_register(&psaux_no_mouse);
 	return -ENODEV;
 }

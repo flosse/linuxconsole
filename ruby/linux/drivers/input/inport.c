@@ -1,9 +1,19 @@
 /*
- *  inport.c  Version 0.1
+ *  inport.c  Version 0.2
  *
- *  Copyright (c) 1999 Vojtech Pavlik
+ *  Copyright (c) 1999-2000 Vojtech Pavlik
  *
- *  Inport (ATI XL and Microsoft) Bus Mouse Driver for Linux
+ *  Based on the work of:
+ *	Teemu Rantanen		Derrick Cole
+ *	Peter Cervasio		Christoph Niemann
+ *	Philip Blundell		Russell King
+ *	Bob Harris
+ *
+ *  Sponsored by SuSE
+ */
+
+/*
+ * Inport (ATI XL and Microsoft) busmouse driver for Linux
  */
 
 /*
@@ -54,7 +64,7 @@
 #define INPORT_SPEED_50HZ	0x02
 #define INPORT_SPEED_100HZ	0x03
 #define INPORT_SPEED_200HZ	0x04
-#define INPORT_MODE_BASE	INPORT_SPEED_50HZ
+#define INPORT_MODE_BASE	INPORT_SPEED_100HZ
 #define INPORT_MODE_IRQ		0x08
 #else
 #define INPORT_NAME		"Microsoft"
@@ -109,28 +119,31 @@ static void inport_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 	outb(INPORT_MODE_HOLD | INPORT_MODE_IRQ | INPORT_MODE_BASE, INPORT_DATA_PORT);
 
 	outb(INPORT_REG_X, INPORT_CONTROL_PORT);
-	input_event(&inport_dev, EV_REL, REL_X, inb(INPORT_DATA_PORT));
+	input_report_rel(&inport_dev, REL_X, inb(INPORT_DATA_PORT));
 
 	outb(INPORT_REG_Y, INPORT_CONTROL_PORT);
-	input_event(&inport_dev, EV_REL, REL_Y, inb(INPORT_DATA_PORT));
+	input_report_rel(&inport_dev, REL_Y, inb(INPORT_DATA_PORT));
 
 	outb(INPORT_REG_BTNS, INPORT_CONTROL_PORT);
 	buttons = inb(INPORT_DATA_PORT);
 
-	input_event(&inport_dev, EV_KEY, BTN_MIDDLE,  buttons       & 1);
-	input_event(&inport_dev, EV_KEY, BTN_LEFT,   (buttons >> 1) & 1);
-	input_event(&inport_dev, EV_KEY, BTN_RIGHT,  (buttons >> 2) & 1);
+	input_report_btn(&inport_dev, BTN_MIDDLE, buttons & 1);
+	input_report_btn(&inport_dev, BTN_LEFT,   buttons & 2);
+	input_report_btn(&inport_dev, BTN_RIGHT,  buttons & 4);
 
 	outb(INPORT_REG_MODE, INPORT_CONTROL_PORT);
 	outb(INPORT_MODE_IRQ | INPORT_MODE_BASE, INPORT_DATA_PORT);
 }
 
-void __init inport_setup(char *str, int *ints)
+static int __init inport_setup(char *str)
 {
-        if (!ints[0]) inport_irq = ints[1];
+        int ints[4];
+        str = get_options(str, ARRAY_SIZE(ints), ints);
+        if (ints[0] > 0) inport_irq = ints[1];
+        return 1;
 }
 
-int __init inport_init(void)
+static int __init inport_init(void)
 {
 	unsigned char a,b,c;
 
@@ -157,11 +170,12 @@ int __init inport_init(void)
 	return 0;
 }
 
-void __exit inport_exit(void)
+static void __exit inport_exit(void)
 {
 	input_unregister_device(&inport_dev);
 	release_region(INPORT_BASE, INPORT_EXTENT);
 }
 
+__setup("inport_irq=", inport_setup);
 module_init(inport_init);
 module_exit(inport_exit);

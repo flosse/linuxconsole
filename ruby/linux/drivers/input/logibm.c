@@ -1,9 +1,20 @@
 /*
  *  logibm.c  Version 0.2
  *
- *  Copyright (c) 2000 Vojtech Pavlik
+ *  Copyright (c) 1999-2000 Vojtech Pavlik
  *
- *  Logitech Bus Mouse Driver for Linux
+ *  Based on the work of:
+ *	James Banks		Matthew Dillon
+ *	David Giller		Nathan Laredo
+ *	Linus Torvalds		Johan Myreen
+ *	Cliff Matthews		Philip Blundell
+ *	Russell King
+ *
+ *  Sponsored by SuSE
+ */
+
+/*
+ * Logitech Bus Mouse Driver for Linux
  */
 
 /*
@@ -123,7 +134,7 @@ static int __init logibm_setup(char *str)
         return 1;
 }
 
-int __init logibm_init(void)
+static int __init logibm_init(void)
 {
 	if (request_region(LOGIBM_BASE, LOGIBM_EXTENT, "logibm")) {
 		printk(KERN_ERR "logibm.c: Can't allocate ports at %#x\n", LOGIBM_BASE);
@@ -151,7 +162,7 @@ int __init logibm_init(void)
 	return 0;
 }
 
-void __exit logibm_exit(void)
+static void __exit logibm_exit(void)
 {
 	input_unregister_device(&logibm_dev);
 	release_region(LOGIBM_BASE, LOGIBM_EXTENT);

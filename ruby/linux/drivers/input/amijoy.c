@@ -7,8 +7,7 @@
  */
 
 /*
- * This is a module for the Linux joystick driver, supporting
- * microswitch based joystick connected to Amiga joystick port.
+ * Driver for Amiga joysticks for Linux/m68k
  */
 
 /*
@@ -44,43 +43,52 @@
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 MODULE_PARM(amijoy, "1-2i");
 
-#define AMIJOY_REFRESH_TIME	HZ/100
-
-static int amijoy[2] = { 0, 0 };
+static int amijoy[2] = { 0, 1 };
 static int amijoy_used[2] = { 0, 0 };
 struct input_dev amijoy_dev[2];
-struct timer_list amijoy_timer;
 
-static void analog_timer(unsigned long unused)
+static void amijoy_interrupt(int irq, void *dummy, struct pt_regs *fp)
 {
 	int i, data = 0, button = 0;
 
 	for (i = 0; i < 2; i++)
 		if (amijoy[i]) {
+
 			switch (i) {
 				case 0: data = ~custom.joy0dat; button = (~ciaa.pra >> 6) & 1; break;
 				case 1: data = ~custom.joy1dat; button = (~ciaa.pra >> 7) & 1; break;
 			}
+
 			input_report_btn(amijoy_dev + i, BTN_TRIGGER, button);
+
 			input_report_abs(amijoy_dev + i, ABS_X, ((data >> 1) & 1) - ((data >> 9) & 1);
 			data = ~(data ^ (data << 1));
 			input_report_abs(amijoy_dev + i, ABS_Y, ((data >> 1) & 1) - ((data >> 9) & 1);
 		}
-
-	mod_timer(amijoy_timer, jiffies + AMIJOY_REFRESH_TIME);
 }
 
 static int amijoy_open(struct input_dev *dev)
 {
 	int *used = dev->private;
-	if (!(*used)++) mod_timer(amijoy_timer, jiffies + AMIJOY_REFRESH_TIME);	
+
+	if ((*used)++)
+		return 0;
+	
+	if (request_irq(IRQ_AMIGA_VERTB, amijoy_interrupt, 0, "amijoy", NULL)) {
+		amijoy_used--;
+		printk(KERN_ERR "amijoy.c: Can't allocate irq %d\n", amijoy_irq);
+		return -EBUSY;
+	}
+		
 	return 0;
 }
 
 static void amijoy_close(struct input_dev *dev)
 {
 	int *used = dev->private;
-	if (!--(*port->used)) del_timer(&port->timer);
+
+	if (!--(*port->used))
+		free_irq(IRQ_AMIGA_VERTB, amijoy_interrupt);
 }
 
 static int __init amijoy_setup(char *str)
