@@ -43,7 +43,6 @@
 
 /* SA1100 serial defines */
 #include <asm/arch/hardware.h>
-#include <asm/arch/serial_reg.h>
 #include <asm/arch/irqs.h>
 
 /*
@@ -270,23 +269,6 @@ static void h3600ts_process_packet(struct h3600_dev *ts)
 }
 
 /*
- * Power management can't be done in a interrupt context. So we have to
- * use keventd.
- */
-static int suspend_button_pushed = 0;
-static void suspend_button_task_handler(void *data)
-{
-        extern void pm_do_suspend(void);
-        udelay(200); /* debounce */
-        pm_do_suspend();
-        suspend_button_pushed = 0;
-}
-
-static struct tq_struct suspend_button_task = {
-        routine: suspend_button_task_handler
-};
-
-/*
  * h3600ts_event() handles events from the input module.
  */
 static int h3600ts_event(struct input_dev *dev, unsigned int type, 
@@ -296,23 +278,9 @@ static int h3600ts_event(struct input_dev *dev, unsigned int type,
 
 	switch (type) {
 		case EV_LED: {
-			//ts->serio->write(ts->serio, SOME_CMD);
+		//	ts->serio->write(ts->serio, SOME_CMD);
 			return 0;
 		}
-		/* 
-		 * We actually provide power management when you press the
-		 * power management button= 
-		 */
-		case EV_KEY:
-			if (code == KEY_SUSPEND) {
-				printk("Handling power key\n");
-				
-				if (!suspend_button_pushed) {
-                        		suspend_button_pushed = 1;
-                        		schedule_task(&suspend_button_task);
-                		}
-			}  	
-			return 0;	
 	}					
 	return -1;
 }
@@ -432,6 +400,9 @@ static void h3600ts_connect(struct serio *serio, struct serio_dev *dev)
 
 	set_bit(KEY_RECORD, ts->dev.keybit);
 	set_bit(KEY_Q, ts->dev.keybit);
+	set_bit(KEY_PROG1, ts->dev.keybit);
+	set_bit(KEY_PROG2, ts->dev.keybit);
+	set_bit(KEY_PROG3, ts->dev.keybit);
 	set_bit(KEY_UP, ts->dev.keybit);
 	set_bit(KEY_RIGHT, ts->dev.keybit);
 	set_bit(KEY_LEFT, ts->dev.keybit);
