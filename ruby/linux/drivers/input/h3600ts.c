@@ -61,7 +61,7 @@
         TODO there are holes - specifically  1,7,0x0a
 */
 #define VERSION_ID              0       /* Get Version (request/respose) */
-#define KEYBD_ID                2       /* Keboard (event) */
+#define KEYBD_ID                2       /* Keyboard (event) */
 #define TOUCHS_ID               3       /* Touch Screen (event)*/
 #define EEPROM_READ_ID          4       /* (request/response) */
 #define EEPROM_WRITE_ID         5       /* (request/response) */
@@ -78,12 +78,17 @@
 #define H3600_MAX_LENGTH 16
 #define H3600_KEY 0xf 
 
-static char *h3600_name = "H3600 TouchScreen";
+#define H3600_SCANCODE_RECORD	1	 /* 1 -> record button */
+#define H3600_SCANCODE_CALENDAR 2	 /* 2 -> calendar */
+#define H3600_SCANCODE_CONTACTS 3	 /* 3 -> contact */
+#define H3600_SCANCODE_Q	4	 /* 4 -> Q button */
+#define	H3600_SCANCODE_START	5	 /* 5 -> start menu */
+#define	H3600_SCANCODE_UP	6	 /* 6 -> up */
+#define H3600_SCANCODE_RIGHT	7 	 /* 7 -> right */
+#define H3600_SCANCODE_LEFT 	8	 /* 8 -> left */
+#define H3600_SCANCODE_DOWN 	9	 /* 9 -> down */
 
-static unsigned char h3600_keycode[10] = {
-	KEY_RESERVED, KEY_RECORD, 0 /* CALENDAR */, 0 /* CONTACTS */, KEY_Q, 
-	0 /* start ? */, KEY_UP, KEY_RIGHT, KEY_LEFT, KEY_DOWN       	 
-};
+static char *h3600_name = "H3600 TouchScreen";
 
 /*
  * Per-touchscreen data.
@@ -91,7 +96,6 @@ static unsigned char h3600_keycode[10] = {
 struct h3600_dev {
 	struct input_dev dev;
 	struct serio *serio;
-	unsigned char keycode[10];
 	unsigned char event;	/* event ID from packet */
 	unsigned char chksum;
 	unsigned char len;
@@ -102,7 +106,6 @@ struct h3600_dev {
 /*
 static int h3600_write(struct serio *dev, unsigned char val)
 {
-	
 	return 0;
 }
 
@@ -118,35 +121,34 @@ static void action_button_handler(int irq, void *dev_id, struct pt_regs *regs)
         int down = (GPLR & GPIO_BITSY_ACTION_BUTTON) ? 0 : 1;
 	struct input_dev *dev = (struct input_dev *) dev_id;
 
-	/* Which key ??? */
-	input_report_key(dev, KEY_POWER, down);
+	input_report_key(dev, KEY_ENTER, down);
 }
 
 /* ??? Why place it in a task queue */
 static int suspend_button_pushed = 0;
-static int suspend_button_mode = 0;
-
-enum power_button_mode {
-   PBM_SUSPEND,
-   PBM_GENERATE_KEYPRESS
-};
+static int suspend_button_mode = 1;
 
 static void npower_button_handler(int irq, void *dev_id, struct pt_regs *regs)
 {
         int down = (GPLR & GPIO_BITSY_NPOWER_BUTTON) ? 0 : 1;
 	struct input_dev *dev = (struct input_dev *) dev_id;
 
-        if (suspend_button_mode == PBM_GENERATE_KEYPRESS) {
+	input_report_key(dev, KEY_SUSPEND, down); 	
+/*
+        if (suspend_button_mode) {
                	input_report_key(dev, KEY_SUSPEND, down); 	
         } else {
                 if (!suspend_button_pushed) {
-                        suspend_button_pushed = 1;
+                        extern void pm_do_suspend(void);
+
+			suspend_button_pushed = 1;
         
-			udelay(200); /* debounce */
+			udelay(200);  debounce 
         		pm_do_suspend();
         		suspend_button_pushed = 0;
                 }
         }
+*/
 }
 
 #ifdef CONFIG_PM
@@ -179,12 +181,13 @@ static int h3600_ts_pm_callback(struct pm_dev *pm_dev, pm_request_t req,
 
 /*
  * This function translates the native event packets to linux input event
- * packets.
+ * packets. Some packets coming from ldisc are not touchscreen related. In
+ * this case we send them off to be processed elsewhere. 
  */
 static void h3600ts_process_packet(struct h3600_dev *ts)
 {
         struct input_dev *dev = &ts->dev;
-	int press_flag = 0;
+	int key, press_flag = 0;
 
         switch (ts->event) {
                 /*
@@ -199,10 +202,39 @@ static void h3600ts_process_packet(struct h3600_dev *ts)
                 Note: This is true for non interrupt generated key events.
                 */
                 case KEYBD_ID:
-                        if (ts->keycode[ts->buf[0] & H3600_KEY]) 
-                                input_report_key(dev,
-                                   ts->keycode[ts->buf[0] & H3600_KEY],
-                                   !(ts->buf[0] & 255));
+			switch (ts->buf[0]) {
+				case H3600_SCANCODE_RECORD:
+					key = KEY_RECORD;
+					break;
+				case H3600_SCANCODE_CALENDAR:
+					key = 0;
+                                        break;
+				case H3600_SCANCODE_CONTACTS:
+					key = 0;
+                                        break;
+				case H3600_SCANCODE_Q:        
+					key = KEY_Q;
+                                        break;
+				case H3600_SCANCODE_START:
+					key = 0;
+                                        break;
+				case H3600_SCANCODE_UP:
+					key = KEY_UP;
+                                        break;
+				case H3600_SCANCODE_RIGHT:
+					key = KEY_RIGHT;
+                                        break;
+				case H3600_SCANCODE_LEFT:
+					key = KEY_LEFT;
+                                        break;
+				case H3600_SCANCODE_DOWN:
+					key = KEY_DOWN;
+                                        break;
+				default:
+					key = 0;	
+			}	
+                        if (key) 
+                        	input_report_key(dev, key,!(ts->buf[0] & 255));
                         break;
                 /*
                  * Native touchscreen event data is formatted as shown below:-
@@ -217,6 +249,9 @@ static void h3600ts_process_packet(struct h3600_dev *ts)
                         input_report_abs(dev, ABS_Y, (u16) ts->buf[2]);
                         input_report_key(dev, BTN_TOUCH, press_flag);
                         break;
+		default:
+			/* Send a non input event elsewhere */
+			break;
         }
 }
 
@@ -237,7 +272,7 @@ static int h3600ts_event(struct input_dev *dev, unsigned int type,
 		 * power management button= 
 		 */
 		case EV_KEY:
-			if (code == KEY_POWER) {
+			if (code == KEY_SUSPEND) {
 				if (value == 0) {
 					/* Turn off the power */
 					//h3600_flite_power(FLITE_PWR_OFF);
@@ -265,47 +300,55 @@ static int h3600ts_event(struct input_dev *dev, unsigned int type,
   bit   0     7  8    11 12   15 16
 
 */
+
+static int state;
+
+/* decode States  */
+#define STATE_SOF       0       /* start of FRAME */
+#define STATE_ID        1       /* state where we decode the ID & len */
+#define STATE_DATA      2       /* state where we decode data */
+#define STATE_EOF       3       /* state where we decode checksum or EOF */
+
 static void h3600ts_interrupt(struct serio *serio, unsigned char data,
                               unsigned int flags)
 {
         struct h3600_dev *ts = serio->private;
 
 	/*
-         * We have a new frame coming in. If we already have a frame
-         * that is not finished we drop it by over writing it.
+         * We have a new frame coming in. 
          */
-        if (data == CHAR_SOF) {
-                ts->event = ts->chksum = ts->len = ts->idx = 0;
-                return;
-        }
-
-        /*
-         * If we have acquired all the data and it is valid we send it.
-         */
-        if (data == CHAR_EOF || data == ts->chksum) {
-                h3600ts_process_packet(ts);
-                ts->event = ts->chksum = ts->len = ts->idx = 0;
-        } else {
-                /*
-                 * We test to see if we have the frame header and data about
-                 * the frame. If we do now it is just a matter of collecting
-                 * the data.
-                 */
-                if (ts->len) {
+	switch (state) {
+		case STATE_SOF:
+        		if (data == CHAR_SOF)
+                		state = STATE_ID;	
+			return;
+        	case STATE_ID:
+			ts->event = (data & 0xf0) >> 4;
+			ts->len = (data & 0xf);
                         ts->chksum += data;
-                        ts->buf[ts->idx++] = data;
-                } else {
-                        ts->event = (data & 0xf0) >> 4;
-                        ts->len = (data & 0xf);
-                        /*
-                        * If we recieve some unknow event start from
-                        * scratch.
-                        */
-                        if(ts->event >= MAX_ID||ts->len >= H3600_MAX_LENGTH) {
-				ts->event = ts->chksum = ts->len = ts->idx = 0;
-         			printk(KERN_WARNING "h3600ts.c: bad packet: >%s<\n", ts->buf);
-                        }
-                }
+			ts->idx = 0;
+			if (ts->event >= MAX_ID) {
+				state = STATE_SOF;
+                        	break;
+			}
+			ts->chksum = data;
+                	state=(ts->len > 0 ) ? STATE_DATA : STATE_EOF;
+			break;
+		case STATE_DATA:
+			ts->chksum += data;
+			ts->buf[ts->idx]= data;
+			if(++ts->idx == ts->len) 
+                        	state = STATE_EOF;
+			break;
+		case STATE_EOF:
+                	state = STATE_SOF;
+                	if (data == CHAR_EOF || data == ts->chksum ) {
+				h3600ts_process_packet(ts);
+                        } 
+                	break;
+        	default:
+                	printk("Error3\n");
+                	break;
 	}
 }
 
@@ -349,17 +392,25 @@ static void h3600ts_connect(struct serio *serio, struct serio_dev *dev)
 	/* Now we have things going we setup our input device */
 	ts->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS) | BIT(EV_LED);	
 	ts->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y);
-	ts->dev.keybit[LONG(BTN_TOUCH)] = BIT(BTN_TOUCH);
+	//ts->dev.keybit[LONG(BTN_TOUCH)] = BIT(BTN_TOUCH);
 	ts->dev.ledbit[0] = BIT(LED_SLEEP); 
 
 	/* values ???? */
-	ts->dev.absmin[ABS_X] = 96;   ts->dev.absmin[ABS_Y] = 72;
-	ts->dev.absmax[ABS_X] = 4000; ts->dev.absmax[ABS_Y] = 3000;
+	ts->dev.absmin[ABS_X] = 0;   ts->dev.absmin[ABS_Y] = 0;
+	ts->dev.absmax[ABS_X] = 4000; ts->dev.absmax[ABS_Y] = 4000;
 
 	ts->serio = serio;
 	serio->private = ts;
 
-	ts->dev.keycode = h3600_keycode;
+        set_bit(BTN_TOUCH, ts->dev.keybit);
+	set_bit(KEY_RECORD, ts->dev.keybit);
+	set_bit(KEY_Q, ts->dev.keybit);
+	set_bit(KEY_UP, ts->dev.keybit);
+	set_bit(KEY_RIGHT, ts->dev.keybit);
+	set_bit(KEY_LEFT, ts->dev.keybit);
+	set_bit(KEY_DOWN, ts->dev.keybit);
+	set_bit(KEY_ENTER, ts->dev.keybit);
+	set_bit(KEY_SUSPEND, ts->dev.keybit);
        	ts->dev.event = h3600ts_event;
 	ts->dev.private = ts;
 	ts->dev.name = h3600_name;
