@@ -460,9 +460,9 @@ static int __init mousedev_init(void)
 	mousedev_table[MOUSEDEV_MIX] = &mousedev_mix;
 	mousedev_mix.used = 1;
 	mousedev_mix.minor = MOUSEDEV_MIX;
-	mousedev_mix.devfs = input_register_minor("mousemix", MOUSEDEV_MIX, MOUSEDEV_MINOR_BASE);
+	mousedev_mix.devfs = input_register_minor("mice", MOUSEDEV_MIX, MOUSEDEV_MINOR_BASE);
 
-	printk("mousemix: PS/2 mouse device for all mice mixed together\n");
+	printk("mice: PS/2 mouse device common for all mice\n");
 
 	return 0;
 }

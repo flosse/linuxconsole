@@ -92,8 +92,8 @@ static void spaceball_process_packet(struct spaceball* spaceball)
 
 		case '.':				/* Button data, part2 */
 			if (spaceball->idx != 4) return;
-			input_report_btn(dev, BTN_LEFT,  data[2] & 1);
-			input_report_btn(dev, BTN_RIGHT, data[2] & 2);
+			input_report_key(dev, BTN_LEFT,  data[2] & 1);
+			input_report_key(dev, BTN_RIGHT, data[2] & 2);
 			break;
 
 		case '?':				/* Error packet */

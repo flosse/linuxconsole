@@ -1,1 +1,0 @@
-/System.map /System.old /arch /bin /boot /cdrom /dev /etc /floppy /home /lib /lost+found /mnt /nfs /old /opt /proc /root /sbin /tmp /usr /var /vmlinuz /vmlinuz.old /x SideWinder 3D Pro Mac driver not yet here */

@@ -111,11 +111,14 @@ static int __init amikbd_init(void)
 	ciaa.cra &= ~0x41;	 /* serial data in, turn off TA */
 	request_irq(IRQ_AMIGA_CIAA_SP, amikbd_interrupt, 0, "amikbd", NULL);
 
+	input_register_device(&amikbd_dev);
+
 	return 0;
 }
 
 static void __exit amikbd_exit(void)
 {
+	input_unregister_device(&amikbd_dev);
 	free_irq(IRQ_AMIGA_CIAA_SP, amikbd_interrupt);
 }
 

@@ -179,10 +179,15 @@ void input_close_device(struct input_handle *handle)
 
 static void input_link_handle(struct input_handle *handle)
 {
+	printk("a\n");
 	handle->dnext = handle->dev->handle;
+	printk("b\n");
 	handle->hnext = handle->handler->handle;
+	printk("c\n");
 	handle->dev->handle = handle;
+	printk("d\n");
 	handle->handler->handle = handle;
+	printk("e\n");
 }
 
 static void input_unlink_handle(struct input_handle *handle)

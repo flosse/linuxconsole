@@ -137,18 +137,18 @@ static void wacom_graphire_irq(struct urb *urb)
 	switch ((data[1] >> 5) & 3) {
 
 		case 0:	/* Pen */
-			input_report_btn(dev, BTN_TOOL_PEN, data[1] & 0x80);
+			input_report_key(dev, BTN_TOOL_PEN, data[1] & 0x80);
 			break;
 
 		case 1: /* Rubber */
-			input_report_btn(dev, BTN_TOOL_RUBBER, data[1] & 0x80);
+			input_report_key(dev, BTN_TOOL_RUBBER, data[1] & 0x80);
 			break;
 
 		case 2: /* Mouse */
-			input_report_btn(dev, BTN_TOOL_MOUSE, data[7] > 24);
-			input_report_btn(dev, BTN_LEFT, data[1] & 0x01);
-			input_report_btn(dev, BTN_RIGHT, data[1] & 0x02);
-			input_report_btn(dev, BTN_MIDDLE, data[1] & 0x04);
+			input_report_key(dev, BTN_TOOL_MOUSE, data[7] > 24);
+			input_report_key(dev, BTN_LEFT, data[1] & 0x01);
+			input_report_key(dev, BTN_RIGHT, data[1] & 0x02);
+			input_report_key(dev, BTN_MIDDLE, data[1] & 0x04);
 			input_report_abs(dev, ABS_DISTANCE, data[7]);
 			input_report_rel(dev, REL_WHEEL, (signed char) data[6]);
 			return;
@@ -156,9 +156,9 @@ static void wacom_graphire_irq(struct urb *urb)
 
 	input_report_abs(dev, ABS_PRESSURE, data[6] | ((__u32)data[7] << 8));
 
-	input_report_btn(dev, BTN_TOUCH, data[1] & 0x01);
-	input_report_btn(dev, BTN_STYLUS, data[1] & 0x02);
-	input_report_btn(dev, BTN_STYLUS2, data[1] & 0x04);
+	input_report_key(dev, BTN_TOUCH, data[1] & 0x01);
+	input_report_key(dev, BTN_STYLUS, data[1] & 0x02);
+	input_report_key(dev, BTN_STYLUS2, data[1] & 0x04);
 }
 
 static void wacom_intuos_irq(struct urb *urb)
@@ -177,21 +177,23 @@ static void wacom_intuos_irq(struct urb *urb)
 
 		switch (((__u32)data[2] << 4) | (data[3] >> 4)) {
 			case 0x012: wacom->tool = BTN_TOOL_PENCIL;	break;	/* Inking pen */
+			case 0x822:
 			case 0x022: wacom->tool = BTN_TOOL_PEN;		break;	/* Pen */
 			case 0x032: wacom->tool = BTN_TOOL_BRUSH;	break;	/* Stroke pen */
 			case 0x094: wacom->tool = BTN_TOOL_MOUSE;	break;	/* Mouse 4D */
 			case 0x096: wacom->tool = BTN_TOOL_LENS;	break;	/* Lens cursor */
+			case 0x82a:
 			case 0x0fa: wacom->tool = BTN_TOOL_RUBBER;	break;	/* Eraser */
 			case 0x112: wacom->tool = BTN_TOOL_AIRBRUSH;	break;	/* Airbrush */
 			default:    wacom->tool = BTN_TOOL_PEN;		break;	/* Unknown tool */
 		}			
-		input_report_btn(dev, wacom->tool, 1);
+		input_report_key(dev, wacom->tool, 1);
 		return;
 	}
 
 	if ((data[1] | data[2] | data[3] | data[4] | data[5] |
 	     data[6] | data[7] | data[8] | data[9]) == 0x80) {		/* Exit report */
-		input_report_btn(dev, wacom->tool, 0);
+		input_report_key(dev, wacom->tool, 0);
 		return;
 	}
 
@@ -202,9 +204,9 @@ static void wacom_intuos_irq(struct urb *urb)
 	input_report_abs(dev, ABS_TILT_X, ((data[7] << 1) & 0x7e) | (data[8] >> 7));
 	input_report_abs(dev, ABS_TILT_Y, data[8] & 0x7f);
 
-	input_report_btn(dev, BTN_STYLUS, data[1] & 2);
-	input_report_btn(dev, BTN_STYLUS2, data[1] & 4);
-	input_report_btn(dev, BTN_TOUCH, t > 10);
+	input_report_key(dev, BTN_STYLUS, data[1] & 2);
+	input_report_key(dev, BTN_STYLUS2, data[1] & 4);
+	input_report_key(dev, BTN_TOUCH, t > 10);
 }
 
 #define WACOM_INTUOS_TOOLS	(BIT(BTN_TOOL_BRUSH) | BIT(BTN_TOOL_PENCIL) | BIT(BTN_TOOL_AIRBRUSH) | BIT(BTN_TOOL_LENS))

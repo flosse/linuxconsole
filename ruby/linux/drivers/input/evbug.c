@@ -36,12 +36,12 @@ static void evbug_event(struct input_handle *handle, unsigned int type, unsigned
 	printk(KERN_DEBUG "evbug.c: Event. Dev: input%d, Type: %d, Code: %d, Value: %d\n", handle->dev->number, type, code, value);
 }
 
-static int evbug_connect(struct input_handler *handler, struct input_dev *dev)
+static struct input_handle *evbug_connect(struct input_handler *handler, struct input_dev *dev)
 {
 	struct input_handle *handle;
 
 	if (!(handle = kmalloc(sizeof(struct input_handle), GFP_KERNEL)))
-		return -1;
+		return NULL;
 	memset(handle, 0, sizeof(struct input_handle));
 
 	handle->dev = dev;
@@ -51,7 +51,7 @@ static int evbug_connect(struct input_handler *handler, struct input_dev *dev)
 
 	printk(KERN_DEBUG "evbug.c: Connected device: input%d\n", dev->number);
 
-	return 0;
+	return handle;
 }
 
 static void evbug_disconnect(struct input_handle *handle)

@@ -72,9 +72,9 @@ static void rpcmouse_irq(int irq, void *dev_id, struct pt_regs *regs)
 	input_report_rel(&rpcmouse_dev, REL_X, dx);
 	input_report_rel(&rpcmouse_dev, REL_Y, dy);
 
-	input_report_btn(&amimouse_dev, BTN_LEFT,   buttons & 0x10);
-	input_report_btn(&amimouse_dev, BTN_MIDDLE, buttons & 0x20);
-	input_report_btn(&amimouse_dev, BTN_RIGHT,  buttons & 0x40);
+	input_report_key(&amimouse_dev, BTN_LEFT,   buttons & 0x10);
+	input_report_key(&amimouse_dev, BTN_MIDDLE, buttons & 0x20);
+	input_report_key(&amimouse_dev, BTN_RIGHT,  buttons & 0x40);
 }
 
 static int __init rpcmouse_init(void)

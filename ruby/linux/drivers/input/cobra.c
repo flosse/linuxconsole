@@ -130,18 +130,18 @@ static void cobra_timer(unsigned long private)
 			input_report_abs(dev, ABS_X, ((data[i] >> 4) & 1) - ((data[i] >> 3) & 1));
 			input_report_abs(dev, ABS_Y, ((data[i] >> 2) & 1) - ((data[i] >> 1) & 1));
 
-			input_report_btn(dev, BTN_START,  data[i] & 0x20);
-			input_report_btn(dev, BTN_SELECT, data[i] & 0x40);
-			input_report_btn(dev, BTN_TL,     data[i] & 0x80);
-			input_report_btn(dev, BTN_TR,     data[i] & 0x100);
-			input_report_btn(dev, BTN_X,      data[i] & 0x200);
-			input_report_btn(dev, BTN_Y,      data[i] & 0x400);
-			input_report_btn(dev, BTN_Z,      data[i] & 0x800);
-			input_report_btn(dev, BTN_A,      data[i] & 0x1000);
-			input_report_btn(dev, BTN_B,      data[i] & 0x2000);
-			input_report_btn(dev, BTN_C,      data[i] & 0x4000);
-			input_report_btn(dev, BTN_TL2,    data[i] & 0x8000);
-			input_report_btn(dev, BTN_TR2,    data[i] & 0x10000);
+			input_report_key(dev, BTN_START,  data[i] & 0x20);
+			input_report_key(dev, BTN_SELECT, data[i] & 0x40);
+			input_report_key(dev, BTN_TL,     data[i] & 0x80);
+			input_report_key(dev, BTN_TR,     data[i] & 0x100);
+			input_report_key(dev, BTN_X,      data[i] & 0x200);
+			input_report_key(dev, BTN_Y,      data[i] & 0x400);
+			input_report_key(dev, BTN_Z,      data[i] & 0x800);
+			input_report_key(dev, BTN_A,      data[i] & 0x1000);
+			input_report_key(dev, BTN_B,      data[i] & 0x2000);
+			input_report_key(dev, BTN_C,      data[i] & 0x4000);
+			input_report_key(dev, BTN_TL2,    data[i] & 0x8000);
+			input_report_key(dev, BTN_TR2,    data[i] & 0x10000);
 
 		}
 

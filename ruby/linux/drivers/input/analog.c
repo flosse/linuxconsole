@@ -169,16 +169,16 @@ static void analog_decode(struct analog *analog, int *axes, int *initial, unsign
 	k = ANALOG_BUTTONS;
 	for (j = 0; j < 6; j++)
 		if (analog->mask & (0x10 << j))
-			input_report_btn(dev, analog_buttons[k++], (buttons >> j) & 1);
+			input_report_key(dev, analog_buttons[k++], (buttons >> j) & 1);
 
 	if (analog->mask & ANALOG_BTN_TL)
-		input_report_btn(dev, BTN_TL, axes[2] < (initial[2] >> 1));
+		input_report_key(dev, BTN_TL, axes[2] < (initial[2] >> 1));
 	if (analog->mask & ANALOG_BTN_TR)
-		input_report_btn(dev, BTN_TR, axes[3] < (initial[3] >> 1));
+		input_report_key(dev, BTN_TR, axes[3] < (initial[3] >> 1));
 	if (analog->mask & ANALOG_BTN_TL2)
-		input_report_btn(dev, BTN_TL2, axes[2] > (initial[2] + (initial[2] >> 1)));
+		input_report_key(dev, BTN_TL2, axes[2] > (initial[2] + (initial[2] >> 1)));
 	if (analog->mask & ANALOG_BTN_TR2)
-		input_report_btn(dev, BTN_TR2, axes[3] > (initial[3] + (initial[3] >> 1)));
+		input_report_key(dev, BTN_TR2, axes[3] > (initial[3] + (initial[3] >> 1)));
 
 	if (analog->mask & ANALOG_HAT_FCS)
 		for (j = 0; j < 4; j++)

@@ -103,13 +103,13 @@ static void spaceorb_process_packet(struct spaceorb *spaceorb)
 			for (i = 0; i < 6; i++)
 				input_report_abs(dev, spaceorb_axes[i], axes[i] - ((axes[i] & 0x200) ? 0 : 1024));
 			for (i = 0; i < 8; i++)
-				input_report_btn(dev, spaceorb_buttons[i], (data[1] >> i) & 1);
+				input_report_key(dev, spaceorb_buttons[i], (data[1] >> i) & 1);
 			break;
 
 		case 'K':				/* Button data */
 			if (spaceorb->idx != 5) return;
 			for (i = 0; i < 8; i++)
-				input_report_btn(dev, spaceorb_buttons[i], (data[2] >> i) & 1);
+				input_report_key(dev, spaceorb_buttons[i], (data[2] >> i) & 1);
 
 			break;
 

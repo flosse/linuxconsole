@@ -42,201 +42,195 @@
 #include <linux/string.h>
 #include <linux/init.h>
 
-#define JS_L4_PORT		0x201
-#define JS_L4_SELECT_ANALOG	0xa4
-#define JS_L4_SELECT_DIGITAL	0xa5
-#define JS_L4_SELECT_SECONDARY	0xa6
-#define JS_L4_CMD_ID		0x80
-#define JS_L4_CMD_GETCAL	0x92
-#define JS_L4_CMD_SETCAL	0x93
-#define JS_L4_ID		0x04
-#define JS_L4_BUSY		0x01
-#define JS_L4_TIMEOUT		80	/* 80 us */
+#define L4_PORT			0x201
+#define L4_SELECT_ANALOG	0xa4
+#define L4_SELECT_DIGITAL	0xa5
+#define L4_SELECT_SECONDARY	0xa6
+#define L4_CMD_ID		0x80
+#define L4_CMD_GETCAL		0x92
+#define L4_CMD_SETCAL		0x93
+#define L4_ID			0x04
+#define L4_BUSY			0x01
+#define L4_TIMEOUT		80	/* 80 us */
 
-static struct js_port* __initdata js_l4_port = NULL;
+static struct js_port* __initdata l4_port = NULL;
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
-MODULE_PARM(js_l4, "2-24i");
 
-static int __initdata js_l4[] = { -1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0 };
-
-#include "joy-analog.h"
-
-struct js_l4_info {
+struct l4 {
 	int port;
-	struct js_an_info an;
 };
 
 /*
- * js_l4_wait_ready() waits for the L4 to become ready.
+ * l4_wait_ready() waits for the L4 to become ready.
  */
 
-static int js_l4_wait_ready(void)
+static int l4_wait_ready(void)
 {
 	unsigned int t;
-	t = JS_L4_TIMEOUT;
-	while ((inb(JS_L4_PORT) & JS_L4_BUSY) && t > 0) t--;
+	t = L4_TIMEOUT;
+	while ((inb(L4_PORT) & L4_BUSY) && t > 0) t--;
 	return -(t<=0);
 }
 
 /*
- * js_l4_read() reads data from the Lightning 4.
+ * l4_read() reads data from the Lightning 4.
  */
 
-static int js_l4_read(void *xinfo, int **axes, int **buttons)
+static int l4_read(void *xl4, int **axes, int **buttons)
 {
-	struct js_l4_info *info = xinfo;
+	struct l4 *l4 = xl4;
 	int i;
 	unsigned char status;
 
-	outb(JS_L4_SELECT_ANALOG, JS_L4_PORT);
-	outb(JS_L4_SELECT_DIGITAL + (info->port >> 2), JS_L4_PORT);
+	outb(L4_SELECT_ANALOG, L4_PORT);
+	outb(L4_SELECT_DIGITAL + (l4->port >> 2), L4_PORT);
 
-	if (inb(JS_L4_PORT) & JS_L4_BUSY) return -1;
-	outb(info->port & 3, JS_L4_PORT);
+	if (inb(L4_PORT) & L4_BUSY) return -1;
+	outb(l4->port & 3, L4_PORT);
 
-	if (js_l4_wait_ready()) return -1;
-	status = inb(JS_L4_PORT);
+	if (l4_wait_ready()) return -1;
+	status = inb(L4_PORT);
 
 	for (i = 0; i < 4; i++)
 		if (status & (1 << i)) {
-			if (js_l4_wait_ready()) return -1;
-			info->an.axes[i] = inb(JS_L4_PORT);
+			if (l4_wait_ready()) return -1;
+			l4->an.axes[i] = inb(L4_PORT);
 		}
 
 	if (status & 0x10) {
-		if (js_l4_wait_ready()) return -1;
-		info->an.buttons = inb(JS_L4_PORT);
+		if (l4_wait_ready()) return -1;
+		l4->an.buttons = inb(L4_PORT);
 	}
 
-	js_an_decode(&info->an, axes, buttons);
+	js_an_decode(&l4->an, axes, buttons);
 
 	return 0;
 }
 
 /*
- * js_l4_getcal() reads the L4 with calibration values.
+ * l4_getcal() reads the L4 with calibration values.
  */
 
-static int js_l4_getcal(int port, int *cal)
+static int l4_getcal(int port, int *cal)
 {
 	int i;
 	
-	outb(JS_L4_SELECT_ANALOG, JS_L4_PORT);
-	outb(JS_L4_SELECT_DIGITAL + (port >> 2), JS_L4_PORT);
+	outb(L4_SELECT_ANALOG, L4_PORT);
+	outb(L4_SELECT_DIGITAL + (port >> 2), L4_PORT);
 
-	if (inb(JS_L4_PORT) & JS_L4_BUSY) return -1;
-	outb(JS_L4_CMD_GETCAL, JS_L4_PORT);
+	if (inb(L4_PORT) & L4_BUSY) return -1;
+	outb(L4_CMD_GETCAL, L4_PORT);
 
-	if (js_l4_wait_ready()) return -1;
-	if (inb(JS_L4_PORT) != JS_L4_SELECT_DIGITAL + (port >> 2)) return -1;
+	if (l4_wait_ready()) return -1;
+	if (inb(L4_PORT) != L4_SELECT_DIGITAL + (port >> 2)) return -1;
 
-	if (js_l4_wait_ready()) return -1;
-        outb(port & 3, JS_L4_PORT);
+	if (l4_wait_ready()) return -1;
+        outb(port & 3, L4_PORT);
 
 	for (i = 0; i < 4; i++) {
-		if (js_l4_wait_ready()) return -1;
-		cal[i] = inb(JS_L4_PORT);
+		if (l4_wait_ready()) return -1;
+		cal[i] = inb(L4_PORT);
 	}
 
 	return 0;
 }
 
 /*
- * js_l4_setcal() programs the L4 with calibration values.
+ * l4_setcal() programs the L4 with calibration values.
  */
 
-static int js_l4_setcal(int port, int *cal)
+static int l4_setcal(int port, int *cal)
 {
 	int i;
 
-	outb(JS_L4_SELECT_ANALOG, JS_L4_PORT);
-	outb(JS_L4_SELECT_DIGITAL + (port >> 2), JS_L4_PORT);
+	outb(L4_SELECT_ANALOG, L4_PORT);
+	outb(L4_SELECT_DIGITAL + (port >> 2), L4_PORT);
 
-	if (inb(JS_L4_PORT) & JS_L4_BUSY) return -1;
-	outb(JS_L4_CMD_SETCAL, JS_L4_PORT);
+	if (inb(L4_PORT) & L4_BUSY) return -1;
+	outb(L4_CMD_SETCAL, L4_PORT);
 
-	if (js_l4_wait_ready()) return -1;
-	if (inb(JS_L4_PORT) != JS_L4_SELECT_DIGITAL + (port >> 2)) return -1;
+	if (l4_wait_ready()) return -1;
+	if (inb(L4_PORT) != L4_SELECT_DIGITAL + (port >> 2)) return -1;
 
-	if (js_l4_wait_ready()) return -1;
-        outb(port & 3, JS_L4_PORT);
+	if (l4_wait_ready()) return -1;
+        outb(port & 3, L4_PORT);
 
 	for (i = 0; i < 4; i++) {
-		if (js_l4_wait_ready()) return -1;
-		outb(cal[i], JS_L4_PORT);
+		if (l4_wait_ready()) return -1;
+		outb(cal[i], L4_PORT);
 	}
 
 	return 0;
 }
 
 /*
- * js_l4_calibrate() calibrates the L4 for the attached device, so
+ * l4_calibrate() calibrates the L4 for the attached device, so
  * that the device's resistance fits into the L4's 8-bit range.
  */
 
-static void js_l4_calibrate(struct js_l4_info *info)
+static void l4_calibrate(struct l4 *l4)
 {
 	int i;
 	int cal[4];
 	int axes[4];
 	int t;
 
-	js_l4_getcal(info->port, cal);
+	l4_getcal(l4->port, cal);
 
 	for (i = 0; i < 4; i++)
-		axes[i] = info->an.axes[i];
+		axes[i] = l4->an.axes[i];
 	
-	if ((info->an.extensions & JS_AN_BUTTON_PXY_X) && !(info->an.extensions & JS_AN_BUTTON_PXY_U))
+	if ((l4->an.extensions & JS_AN_BUTTON_PXY_X) && !(l4->an.extensions & JS_AN_BUTTON_PXY_U))
 		axes[2] >>= 1;							/* Pad button X */
 
-	if ((info->an.extensions & JS_AN_BUTTON_PXY_Y) && !(info->an.extensions & JS_AN_BUTTON_PXY_V))
+	if ((l4->an.extensions & JS_AN_BUTTON_PXY_Y) && !(l4->an.extensions & JS_AN_BUTTON_PXY_V))
 		axes[3] >>= 1;							/* Pad button Y */
 
-	if (info->an.extensions & JS_AN_HAT_FCS) 
+	if (l4->an.extensions & JS_AN_HAT_FCS) 
 		axes[3] >>= 1;							/* FCS hat */
 
-	if (((info->an.mask[0] & 0xb) == 0xb) || ((info->an.mask[1] & 0xb) == 0xb))
+	if (((l4->an.mask[0] & 0xb) == 0xb) || ((l4->an.mask[1] & 0xb) == 0xb))
 		axes[3] = (axes[0] + axes[1]) >> 1;				/* Throttle */
 
 	for (i = 0; i < 4; i++) {
 		t = (axes[i] * cal[i]) / 100;
 		if (t > 255) t = 255;
-		info->an.axes[i] = (info->an.axes[i] * cal[i]) / t;
+		l4->an.axes[i] = (l4->an.axes[i] * cal[i]) / t;
 		cal[i] = t;
 	}
 
-	js_l4_setcal(info->port, cal);
+	l4_setcal(l4->port, cal);
 }
 	
 /*
- * js_l4_open() is a callback from the file open routine.
+ * l4_open() is a callback from the file open routine.
  */
 
-static int js_l4_open(struct js_dev *jd)
+static int l4_open(struct js_dev *jd)
 {
 	MOD_INC_USE_COUNT;
 	return 0;
 }
 
 /*
- * js_l4_close() is a callback from the file release routine.
+ * l4_close() is a callback from the file release routine.
  */
 
-static int js_l4_close(struct js_dev *jd)
+static int l4_close(struct js_dev *jd)
 {
 	MOD_DEC_USE_COUNT;
 	return 0;
 }
 
 /*
- * js_l4_probe() probes for joysticks on the L4 cards.
+ * l4_probe() probes for joysticks on the L4 cards.
  */
 
-static struct js_port __init *js_l4_probe(unsigned char *cards, int l4port, int mask0, int mask1, struct js_port *port)
+static struct js_port __init *l4_probe(unsigned char *cards, int l4port, int mask0, int mask1, struct js_port *port)
 {
-	struct js_l4_info iniinfo;
-	struct js_l4_info *info = &iniinfo;
+	struct l4 inil4;
+	struct l4 *l4 = &inil4;
 	int cal[4] = {255,255,255,255};
 	int i, numdev;
 	unsigned char u;
@@ -244,108 +238,108 @@ static struct js_port __init *js_l4_probe(unsigned char *cards, int l4port, int 
 	if (l4port < 0) return port;
 	if (!cards[(l4port >> 2)]) return port;
 
-	memset(info, 0, sizeof(struct js_l4_info));
-	info->port = l4port;
+	memset(l4, 0, sizeof(struct l4));
+	l4->port = l4port;
 
-	if (cards[l4port >> 2] > 0x28) js_l4_setcal(info->port, cal);
-	if (js_l4_read(info, NULL, NULL)) return port;
+	if (cards[l4port >> 2] > 0x28) l4_setcal(l4->port, cal);
+	if (l4_read(l4, NULL, NULL)) return port;
 
-	for (i = u = 0; i < 4; i++) if (info->an.axes[i] < 253) u |= 1 << i;
+	for (i = u = 0; i < 4; i++) if (l4->an.axes[i] < 253) u |= 1 << i;
 
-	if ((numdev = js_an_probe_devs(&info->an, u, mask0, mask1, port)) <= 0)
+	if ((numdev = js_an_probe_devs(&l4->an, u, mask0, mask1, port)) <= 0)
 		return port;
 
-	port = js_register_port(port, info, numdev, sizeof(struct js_l4_info), js_l4_read);
+	port = js_register_port(port, l4, numdev, sizeof(struct l4), l4_read);
 
-	info = port->info;
+	l4 = port->l4;
 
 	for (i = 0; i < numdev; i++)
 		printk(KERN_INFO "js%d: %s on L4 port %d\n",
-			js_register_device(port, i, js_an_axes(i, &info->an), js_an_buttons(i, &info->an),
-				js_an_name(i, &info->an), js_l4_open, js_l4_close),
-			js_an_name(i, &info->an), info->port);
+			js_register_device(port, i, js_an_axes(i, &l4->an), js_an_buttons(i, &l4->an),
+				js_an_name(i, &l4->an), l4_open, l4_close),
+			js_an_name(i, &l4->an), l4->port);
 
-	js_l4_calibrate(info);
-	js_l4_read(info, port->axes, port->buttons);
-	js_an_init_corr(&info->an, port->axes, port->corr, 0);
+	l4_calibrate(l4);
+	l4_read(l4, port->axes, port->buttons);
+	js_an_init_corr(&l4->an, port->axes, port->corr, 0);
 
 	return port;
 }
 
 /*
- * js_l4_card_probe() probes for presence of the L4 card(s).
+ * l4_card_probe() probes for presence of the L4 card(s).
  */
 
-static void __init js_l4_card_probe(unsigned char *cards)
+static void __init l4_card_probe(unsigned char *cards)
 {
 	int i;
 	unsigned char rev = 0;
 
-	if (check_region(JS_L4_PORT, 1)) return;
+	if (check_region(L4_PORT, 1)) return;
 
 	for (i = 0; i < 2; i++) {
 
-		outb(JS_L4_SELECT_ANALOG, JS_L4_PORT);
-		outb(JS_L4_SELECT_DIGITAL + i, JS_L4_PORT);		/* Select card 0-1 */
+		outb(L4_SELECT_ANALOG, L4_PORT);
+		outb(L4_SELECT_DIGITAL + i, L4_PORT);		/* Select card 0-1 */
 
-		if (inb(JS_L4_PORT) & JS_L4_BUSY) continue;
-		outb(JS_L4_CMD_ID, JS_L4_PORT);				/* Get card ID & rev */
+		if (inb(L4_PORT) & L4_BUSY) continue;
+		outb(L4_CMD_ID, L4_PORT);				/* Get card ID & rev */
 
-		if (js_l4_wait_ready()) continue;
-		if (inb(JS_L4_PORT) != JS_L4_SELECT_DIGITAL + i) continue;
+		if (l4_wait_ready()) continue;
+		if (inb(L4_PORT) != L4_SELECT_DIGITAL + i) continue;
 
-		if (js_l4_wait_ready()) continue;
-		if (inb(JS_L4_PORT) != JS_L4_ID) continue;
+		if (l4_wait_ready()) continue;
+		if (inb(L4_PORT) != L4_ID) continue;
 
-		if (js_l4_wait_ready()) continue;
-		rev = inb(JS_L4_PORT);
+		if (l4_wait_ready()) continue;
+		rev = inb(L4_PORT);
 
 		cards[i] = rev; 
 
 		printk(KERN_INFO "js: PDPI Lightning 4 %s card (ports %d-%d) firmware v%d.%d at %#x\n",
-			i ? "secondary" : "primary", (i << 2), (i << 2) + 3, rev >> 4, rev & 0xf, JS_L4_PORT);
+			i ? "secondary" : "primary", (i << 2), (i << 2) + 3, rev >> 4, rev & 0xf, L4_PORT);
 	}
 
 }
 
 #ifndef MODULE
-int __init js_l4_setup(SETUP_PARAM)
+int __init l4_setup(SETUP_PARAM)
 {
 	int i;
 	SETUP_PARSE(24);
-	for (i = 0; i <= ints[0] && i < 24; i++) js_l4[i] = ints[i+1];
+	for (i = 0; i <= ints[0] && i < 24; i++) l4[i] = ints[i+1];
 	return 1;
 }
-__setup("js_l4=", js_l4_setup);
+__setup("l4=", l4_setup);
 #endif
 
 #ifdef MODULE
 int init_module(void)
 #else
-int __init js_l4_init(void)
+int __init l4_init(void)
 #endif
 {
 	int i;
 	unsigned char cards[2] = {0, 0};
 
-	js_l4_card_probe(cards);
+	l4_card_probe(cards);
 
-	if (js_l4[0] >= 0) {
-		for (i = 0; (js_l4[i*3] >= 0) && i < 8; i++)
-			js_l4_port = js_l4_probe(cards, js_l4[i*3], js_l4[i*3+1], js_l4[i*3+2], js_l4_port);
+	if (l4[0] >= 0) {
+		for (i = 0; (l4[i*3] >= 0) && i < 8; i++)
+			l4_port = l4_probe(cards, l4[i*3], l4[i*3+1], l4[i*3+2], l4_port);
 	} else {
 		for (i = 0; i < 8; i++)
-			js_l4_port = js_l4_probe(cards, i, 0, 0, js_l4_port);
+			l4_port = l4_probe(cards, i, 0, 0, l4_port);
 	}
 
-	if (!js_l4_port) {
+	if (!l4_port) {
 #ifdef MODULE
 		printk(KERN_WARNING "joy-lightning: no joysticks found\n");
 #endif
 		return -ENODEV;
 	}
 
-	request_region(JS_L4_PORT, 1, "joystick (lightning)");
+	request_region(L4_PORT, 1, "joystick (lightning)");
 
 	return 0;
 }
@@ -355,17 +349,17 @@ void cleanup_module(void)
 {
 	int i;
 	int cal[4] = {59, 59, 59, 59};
-	struct js_l4_info *info;
+	struct l4 *l4;
 
-	while (js_l4_port) {
-		for (i = 0; i < js_l4_port->ndevs; i++)
-			if (js_l4_port->devs[i])
-				js_unregister_device(js_l4_port->devs[i]);
-		info = js_l4_port->info;
-		js_l4_setcal(info->port, cal);
-		js_l4_port = js_unregister_port(js_l4_port);
+	while (l4_port) {
+		for (i = 0; i < l4_port->ndevs; i++)
+			if (l4_port->devs[i])
+				js_unregister_device(l4_port->devs[i]);
+		l4 = l4_port->l4;
+		l4_setcal(l4->port, cal);
+		l4_port = js_unregister_port(l4_port);
 	}
-	outb(JS_L4_SELECT_ANALOG, JS_L4_PORT);
-	release_region(JS_L4_PORT, 1);
+	outb(L4_SELECT_ANALOG, L4_PORT);
+	release_region(L4_PORT, 1);
 }
 #endif

@@ -138,9 +138,9 @@ static void a3d_timer(unsigned long private)
 			input_report_rel(dev, REL_X, ((data[5] << 6) | (data[6] << 3) | data[ 7]) - ((data[5] & 4) << 7));
 			input_report_rel(dev, REL_Y, ((data[8] << 6) | (data[9] << 3) | data[10]) - ((data[8] & 4) << 7));
 			
-			input_report_btn(dev, BTN_RIGHT,  data[2] & 1);
-			input_report_btn(dev, BTN_LEFT,   data[3] & 2);
-			input_report_btn(dev, BTN_MIDDLE, data[3] & 4);
+			input_report_key(dev, BTN_RIGHT,  data[2] & 1);
+			input_report_key(dev, BTN_LEFT,   data[3] & 2);
+			input_report_key(dev, BTN_MIDDLE, data[3] & 4);
 
 			a3d->axes[0] = ((char)((data[11] << 6) | (data[12] << 3) | (data[13]))) + 128;
 			a3d->axes[1] = ((char)((data[14] << 6) | (data[15] << 3) | (data[16]))) + 128;
@@ -157,11 +157,11 @@ static void a3d_timer(unsigned long private)
 			input_report_rel(dev, REL_X, ((data[ 9] << 6) | (data[10] << 3) | data[11]) - ((data[ 9] & 4) << 7));
 			input_report_rel(dev, REL_Y, ((data[12] << 6) | (data[13] << 3) | data[14]) - ((data[12] & 4) << 7));
 
-			input_report_btn(dev, BTN_RIGHT,  data[2] & 1);
-			input_report_btn(dev, BTN_LEFT,   data[3] & 2);
-			input_report_btn(dev, BTN_MIDDLE, data[3] & 4);
-			input_report_btn(dev, BTN_SIDE,   data[7] & 2);
-			input_report_btn(dev, BTN_EXTRA,  data[7] & 4);
+			input_report_key(dev, BTN_RIGHT,  data[2] & 1);
+			input_report_key(dev, BTN_LEFT,   data[3] & 2);
+			input_report_key(dev, BTN_MIDDLE, data[3] & 4);
+			input_report_key(dev, BTN_SIDE,   data[7] & 2);
+			input_report_key(dev, BTN_EXTRA,  data[7] & 4);
 
 			input_report_abs(dev, ABS_X,        ((char)((data[15] << 6) | (data[16] << 3) | (data[17]))) + 128);
 			input_report_abs(dev, ABS_Y,        ((char)((data[18] << 6) | (data[19] << 3) | (data[20]))) + 128);
@@ -173,10 +173,10 @@ static void a3d_timer(unsigned long private)
 			input_report_abs(dev, ABS_HAT1X, ((data[4] >> 1) & 1) - ( data[3]       & 1));
 			input_report_abs(dev, ABS_HAT1Y, ((data[4] >> 2) & 1) - ( data[4]       & 1));
 
-			input_report_btn(dev, BTN_TRIGGER, data[8] & 1);
-			input_report_btn(dev, BTN_THUMB,   data[8] & 2);
-			input_report_btn(dev, BTN_TOP,     data[8] & 4);
-			input_report_btn(dev, BTN_PINKIE,  data[7] & 1);
+			input_report_key(dev, BTN_TRIGGER, data[8] & 1);
+			input_report_key(dev, BTN_THUMB,   data[8] & 2);
+			input_report_key(dev, BTN_TOP,     data[8] & 4);
+			input_report_key(dev, BTN_PINKIE,  data[7] & 1);
 
 			break;
 	}

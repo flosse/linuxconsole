@@ -127,9 +127,9 @@ static void inport_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 	outb(INPORT_REG_BTNS, INPORT_CONTROL_PORT);
 	buttons = inb(INPORT_DATA_PORT);
 
-	input_report_btn(&inport_dev, BTN_MIDDLE, buttons & 1);
-	input_report_btn(&inport_dev, BTN_LEFT,   buttons & 2);
-	input_report_btn(&inport_dev, BTN_RIGHT,  buttons & 4);
+	input_report_key(&inport_dev, BTN_MIDDLE, buttons & 1);
+	input_report_key(&inport_dev, BTN_LEFT,   buttons & 2);
+	input_report_key(&inport_dev, BTN_RIGHT,  buttons & 4);
 
 	outb(INPORT_REG_MODE, INPORT_CONTROL_PORT);
 	outb(INPORT_MODE_IRQ | INPORT_MODE_BASE, INPORT_DATA_PORT);

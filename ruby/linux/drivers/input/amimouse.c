@@ -50,8 +50,38 @@
 
 static int amimouse_used = 0;
 static int amimouse_lastx, amimouse_lasty;
+static struct input_dev amimouse_dev;
 
-static void amimouse_interrupt(int irq, void *dev_id, struct pt_regs *regs);
+static void amimouse_interrupt(int irq, void *dummy, struct pt_regs *fp)
+{
+	unsigned short joy0dat, potgor;
+	int nx, ny, dx, dy;
+
+	joy0dat = custom.joy0dat;
+
+	nx = joy0dat & 0xff;
+	ny = joy0dat >> 8;
+
+	dx = nx - amimouse_lastx;
+	dy = ny - amimouse_lasty;
+
+	if (dx < -127) dx = (256 + nx) - lastx;
+	if (dx >  127) dx = (nx - 256) - lastx;
+	if (dy < -127) dy = (256 + ny) - lasty;
+	if (dy >  127) dy = (ny - 256) - lasty;
+
+	amimouse_lastx = nx;
+	amimouse_lasty = ny;
+
+	potgor = custom.potgor;
+
+	input_report_rel(&amimouse_dev, REL_X, dx);
+	input_report_rel(&amimouse_dev, REL_Y, dy);
+	
+	input_report_key(&amimouse_dev, BTN_LEFT,   ciaa.pra & 0x40);
+	input_report_key(&amimouse_dev, BTN_MIDDLE, potgor & 0x0100);
+	input_report_key(&amimouse_dev, BTN_RIGHT,  potgor & 0x0400);
+}
 
 static int amimouse_open(struct input_dev *dev)
 {
@@ -80,49 +110,16 @@ static void amimouse_close(struct input_dev *dev)
 		free_irq(IRQ_AMIGA_VERTB, amimouse_interrupt);
 }
 
-static struct input_dev amimouse_dev = {
-	evbit:	{BIT(EV_KEY) | BIT(EV_REL)},
-	keybit:	{BIT(BTN_LEFT) | BIT(BTN_MIDDLE) | BIT(BTN_RIGHT)},
-	relbit:	{BIT(REL_X) | BIT(REL_Y)},
-	open:	amimouse_open,
-	close:	amimouse_close
-};
-
-static void amimouse_interrupt(int irq, void *dummy, struct pt_regs *fp)
-{
-	unsigned short joy0dat, potgor;
-	int nx, ny, dx, dy;
-
-	joy0dat = custom.joy0dat;
-
-	nx = joy0dat & 0xff;
-	ny = joy0dat >> 8;
-
-	dx = nx - amimouse_lastx;
-	dy = ny - amimouse_lasty;
-
-	if (dx < -127) dx = (256 + nx) - lastx;
-	if (dx >  127) dx = (nx - 256) - lastx;
-	if (dy < -127) dy = (256 + ny) - lasty;
-	if (dy >  127) dy = (ny - 256) - lasty;
-
-	amimouse_lastx = nx;
-	amimouse_lasty = ny;
-
-	potgor = custom.potgor;
-
-	input_report_rel(&amimouse_dev, REL_X, dx);
-	input_report_rel(&amimouse_dev, REL_Y, dy);
-	
-	input_report_btn(&amimouse_dev, BTN_LEFT,   ciaa.pra & 0x40);
-	input_report_btn(&amimouse_dev, BTN_MIDDLE, potgor & 0x0100);
-	input_report_btn(&amimouse_dev, BTN_RIGHT,  potgor & 0x0400);
-}
-
 static int __init amimouse_init(void)
 {
 	if (!MACH_IS_AMIGA || !AMIGAHW_PRESENT(AMI_MOUSE))
 		return -ENODEV;
+
+	amimouse_dev.evbit[0] = BIT(EV_KEY) | BIT(EV_REL);
+	amimouse_dev.relbit[0] = BIT(REL_X) | BIT(REL_Y);
+	amimouse_dev.keybit[LONG(BTN_LEFT)] = BIT(BTN_LEFT) | BIT(BTN_MIDDLE) | BIT(BTN_RIGHT);
+	amimouse_dev.open = amimouse_open;
+	amimouse_dev.close = amimouse_close;
 
 	input_register_device(&amimouse_dev);
 
