@@ -281,7 +281,7 @@ void compute_shiftstate(void)
 	shift_state = 0;
 	memset(shift_down, 0, sizeof(shift_down));
 
-	for(i = 0; i < SIZE(key_down); i += BITS_PER_LONG) {
+	for(i = 0; i < SIZE(key_down); i++) {
 
 		if (!key_down[i])
 			continue;
