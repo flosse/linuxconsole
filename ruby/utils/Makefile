@@ -32,12 +32,17 @@
 CC		= gcc
 CFLAGS		= -g -O2 -Wall -I../linux/include
 
-PROGRAMS	= evtest inputattach jstest jscal fftest ffmvforce ffset
+PROGRAMS	= evtest inputattach jstest jscal fftest ffmvforce ffset \
+		  ffcfstress
 
 compile: $(PROGRAMS)
 
 clean:
 	$(RM) *.o *.swp $(PROGRAMS) *.orig *.rej map *~
+
+ffcfstress: ffcfstress.c
+	$(CC) -O2 -mcpu=pentiumpro -fno-implement-inlines -funsigned-char \
+	 -lm ffcfstress.c -o ffcfstress
 
 ffmvforce.o: ffmvforce.c
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $^ -o $@ `sdl-config --cflags`
