@@ -153,7 +153,7 @@ static unsigned long analog_faketime = 0;
 #endif
 
 /*
- * analog_decode() decodes analog ioysticj data and reports input events.
+ * analog_decode() decodes analog joystick data and reports input events.
  */
 
 static void analog_decode(struct analog *analog, int *axes, int *initial, unsigned char buttons)
@@ -265,7 +265,7 @@ static int analog_button_read(struct analog_port *port)
 }
 
 /*
- * analog_timer() repeatedly polls the Logitech joysticks.
+ * analog_timer() repeatedly polls the Analog joysticks.
  */
 
 static void analog_timer(unsigned long data)
@@ -569,8 +569,8 @@ struct analog_types analog_types[] = {
 	{ "auto",	0x000000ff },
 	{ "2btn",	0x0000003f },
 	{ "4btn",	0x000000ff },
-	{ "twojoy",	0x00cc0033 },
-	{ "twopad",	0x11cc0033 },
+	{ "y-joy",	0x00cc0033 },
+	{ "y-pad",	0x11cc0033 },
 	{ "fcs",	0x000008f7 },
 	{ "chf",	0x000002ff },
 	{ "fullchf",	0x000007ff },
