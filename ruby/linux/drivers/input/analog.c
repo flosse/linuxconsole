@@ -303,10 +303,8 @@ static void analog_timer(unsigned long data)
 		port->reads++;
 	} else {
 		if (!port->axtime--) {
-			if (!analog_cooked_read(port))
-				port->bads -= analog_button_read(port, saitek, chf);
-			else
-				port->bads++;
+			port->bads -= analog_cooked_read(port);
+			port->bads -= analog_button_read(port, saitek, chf);
 			port->reads++;
 			port->axtime = ANALOG_AXIS_TIME - 1;
 		} else {
