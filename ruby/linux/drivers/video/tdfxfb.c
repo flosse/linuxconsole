@@ -249,10 +249,6 @@ static int  tdfxfb_encode_var(struct fb_var_screeninfo *var,
 			      const struct tdfxfb_par *par,
 			      const struct fb_info *info);
 
-static void tdfxfb_hwcursor_init(void);
-static void tdfxfb_createcursorshape(struct display* p);
-static void tdfxfb_createcursor(struct display * p);  
-
 /*
  * do_xxx: Hardware-specific functions
  */
@@ -503,6 +499,7 @@ static void tdfx_imageblit(void *par, int dx, int dy, unsigned int width,
    u8 *image = drawing;
    int i, num_longs, left_overs, fw = (width + 7) >> 3;
    u32 fmt = stride | ((bpp + ((bpp == 8) ? 0 : 8)) << 13); 
+   u32 fgx, bgx;
 
    banshee_make_room(8+((height*fw + 3) >> 2));
    tdfx_outl(COLORFORE, fgx);
@@ -632,68 +629,6 @@ static unsigned long do_lfb_size(void) {
 /* ------------------------------------------------------------------------- 
  *              Hardware independent part, interface to the world
  * ------------------------------------------------------------------------- */
-
-#if 0
-
-static void  do_flashcursor(unsigned long ptr);
-
-/*
- * Invert the hardware cursor image (timerfunc)
- */
-static void do_flashcursor(unsigned long ptr)
-{
-   struct tdfx_par *i = (struct tdfx_par *)ptr;
-   spin_lock(&i->DAClock);
-   banshee_make_room(1);
-   tdfx_outl( VIDPROCCFG, tdfx_inl(VIDPROCCFG) ^ VIDCFG_HWCURSOR_ENABLE );
-   i->cursor.timer.expires=jiffies+HZ/2;
-   add_timer(&i->cursor.timer);
-   spin_unlock(&i->DAClock);
-}
-
-static void tdfx_cfbX_cursor(struct display *p, int mode, int x, int y) 
-{
-   unsigned long flags;
-   int tip;
-   struct fb_info *info=(struct fb_info *)p->fb_info;
-   struct tdfxfb_par *par = (struct tdfxfb_par *) fb_info->par; 
-     
-   tip = p->conp->vc_cursor_type & CUR_HWMASK;
-   if (mode == CM_ERASE) {
-	if (par->cursor.state != CM_ERASE) {
-	     spin_lock_irqsave(&par->DAClock, flags);
-	     par->cursor.state=CM_ERASE;
-	     del_timer(&(par->cursor.timer));
-	     tdfx_outl(VIDPROCCFG, par->cursor.disable); 
-	     spin_unlock_irqrestore(&par->DAClock, flags);
-	}
-	return;
-   }
-   if ((p->conp->vc_cursor_type & CUR_HWMASK) != par->cursor.type)
-	 tdfxfb_createcursor(p);
-   x *= fontwidth(p);
-   y *= fontheight(p);
-   y -= info->var.yoffset;
-   spin_lock_irqsave(&par->DAClock, flags);
-   if ((x! = par->cursor.x) || (y! = par->cursor.y) || (par->cursor.redraw)) {
-          par->cursor.x=x;
-	  par->cursor.y=y;
-	  par->cursor.redraw=0;
-	  x += 63;
-	  y += 63;    
-          banshee_make_room(2);
-	  tdfx_outl(VIDPROCCFG, par->cursor.disable);
-	  tdfx_outl(HWCURLOC, (y << 16) + x);
-   }
-   par->cursor.state = CM_DRAW;
-   mod_timer(&par->cursor.timer,jiffies+HZ/2);
-   banshee_make_room(1);
-   tdfx_outl(VIDPROCCFG, par->cursor.enable);
-   spin_unlock_irqrestore(&par->DAClock, flags);
-   return;     
-}
-
-#endif
 
 /* ------------------------------------------------------------------------- */
 
@@ -1211,7 +1146,6 @@ static int tdfxfb_ioctl(struct inode *inode, struct file *file, u_int cmd,
 int __init tdfxfb_init(void) 
 {
   struct pci_dev *pdev = NULL;
-  struct fb_var_screeninfo var;
 
   while ((pdev = pci_find_device(PCI_VENDOR_ID_3DFX, PCI_ANY_ID, pdev))) {
     if(((pdev->class >> 16) == PCI_BASE_CLASS_DISPLAY) &&
@@ -1225,6 +1159,9 @@ int __init tdfxfb_init(void)
 	pdev->device == PCI_DEVICE_ID_3DFX_BANSHEE 
 	? BANSHEE_MAX_PIXCLOCK
 	: VOODOO3_MAX_PIXCLOCK;
+
+      /* Configure the default fb_screeninfo_fix first */
+      info.fix = tdfx_fix;
 
       info.fix.mmio_start = pdev->resource[0].start;
       info.fix.mmio_len = 1 << 24;
@@ -1241,18 +1178,18 @@ int __init tdfxfb_init(void)
 	printk("fb: Can't count %s memory.\n", name);
 	return -ENXIO;
       }
-      info.screen_base = 
-	(u32)ioremap_nocache(info.fix.smem_start, info.fix.smem_len);
+      info.screen_base = ioremap_nocache(info.fix.smem_start, 
+					 info.fix.smem_len);
       if(!info.screen_base) {
 	printk("fb: Can't remap %s framebuffer.\n", name);
 	iounmap((void*)info.screen_base);
 	return -ENXIO;
       }
 
-      par.iobase = pdev->resource[2].start;
-      
       printk("fb: %s memory = %ldK\n", name, info.fix.smem_len >> 10);
 
+      par.iobase = pdev->resource[2].start;
+      
 #ifdef CONFIG_MTRR
        if (!nomtrr) {
 	  if (mtrr_add(info.fix.smem_start, info.fix.smem_len, 
@@ -1263,6 +1200,9 @@ int __init tdfxfb_init(void)
 
       /* clear framebuffer memory */
       memset_io(info.screen_base, 0, info.fix.smem_len);
+     
+      /* Need to define a cursor API */
+#if 0
       if (!nohwcursor) tdfxfb_hwcursor_init();
        
       par.cursor.timer.function = do_flashcursor; 
@@ -1270,6 +1210,7 @@ int __init tdfxfb_init(void)
       par.cursor.timer.prev = par.cursor.timer.next=NULL;
       par.cursor.timer.data = (unsigned long)(&info);
       spin_lock_init(&par.DAClock);
+#endif
        
       strcat(info.fix.id, name);
       
@@ -1280,36 +1221,28 @@ int __init tdfxfb_init(void)
       info.updatevar  = &tdfxfb_updatevar;
       info.flags      = FBINFO_FLAG_DEFAULT;
       
-      memset(&var, 0, sizeof(var));
       if(!mode_option || 
-	 !fb_find_mode(&var, &info, mode_option, NULL, 0, NULL, 8))
-	var = default_mode[0].var;
+	 !fb_find_mode(&info.var, &info, mode_option, NULL, 0, NULL, 8)) {
+    	 info.var = tdfx_var;
       
-      if (noaccel) var.accel_flags &= ~FB_ACCELF_TEXT;
-      else var.accel_flags |= FB_ACCELF_TEXT;
-      
-      if(tdfxfb_decode_var(&var, &par, &info)) {
+      if(tdfxfb_decode_var(&info.var, &info.par, &info)) {
 	/* ugh -- can't use the mode from the mode db. (or command line),
 	   so try the default */
-
+	
 	printk("tdfxfb: "
 	       "can't decode the supplied video mode, using default\n");
-
-	var = default_mode[0].var;
-	if(noaccel) var.accel_flags &= ~FB_ACCELF_TEXT;
-	else var.accel_flags |= FB_ACCELF_TEXT;
-      
-	if(tdfxfb_decode_var(&var, &par, &info)) {
+	      
+	if(tdfxfb_decode_var(&info.var, &par, &info)) {
 	  /* this is getting really bad!... */
 	  printk("tdfxfb: can't decode default video mode\n");
 	  return -ENXIO;
 	}
       }
-      
-      info.var = tdfx_var;
-      info.par = par;	
-      
-      if(tdfxfb_set_var(&var, &info)) {
+    
+      if (noaccel) info.var.accel_flags &= ~FB_ACCELF_TEXT;
+      else info.var.accel_flags |= FB_ACCELF_TEXT;
+             
+      if(tdfxfb_set_var(&info.var, &info)) {
 	printk("tdfxfb: can't set default video mode\n");
 	return -ENXIO;
       }
@@ -1369,13 +1302,13 @@ static int tdfxfb_switch_con(int con, struct fb_info *info)
        // fb_get_cmap(&fb_display[fg_console].cmap, 1, fb);
    
    fb_display[fg_console].var.activate = FB_ACTIVATE_NOW; 
-   tdfxfb_decode_var(&fb_display[con].var, &par, info);
-   tdfxfb_set_par(&par, info);
-   if (fb_display[con].dispsw && fb_display[con].conp)
+   tdfxfb_decode_var(&fb_display[con].var, par, info);
+   tdfxfb_set_par(par, info);
+   if (fb_display[fg_console].dispsw && fb_display[con].conp)
      fb_con.con_cursor(fb_display[con].conp, CM_ERASE);
    
    del_timer(&(par->cursor.timer));
-   info.cursor.state=CM_ERASE; 
+   par->cursor.state=CM_ERASE; 
    
    if (!nohwcursor) 
      if (fb_display[con].conp)
@@ -1398,6 +1331,71 @@ static int  tdfxfb_updatevar(int con, struct fb_info *info)
              return err;
    }
    return 0;
+}
+
+/* Hardware Cursor support */
+
+#if 0
+
+static void  do_flashcursor(unsigned long ptr);
+static void tdfxfb_hwcursor_init(void);
+static void tdfxfb_createcursorshape(struct display* p);
+static void tdfxfb_createcursor(struct display * p);
+
+/*
+ * Invert the hardware cursor image (timerfunc)
+ */
+static void do_flashcursor(unsigned long ptr)
+{
+   struct tdfx_par *i = (struct tdfx_par *)ptr;
+   spin_lock(&i->DAClock);
+   banshee_make_room(1);
+   tdfx_outl( VIDPROCCFG, tdfx_inl(VIDPROCCFG) ^ VIDCFG_HWCURSOR_ENABLE );
+   i->cursor.timer.expires=jiffies+HZ/2;
+   add_timer(&i->cursor.timer);
+   spin_unlock(&i->DAClock);
+}
+
+static void tdfx_cfbX_cursor(struct display *p, int mode, int x, int y) 
+{
+   unsigned long flags;
+   int tip;
+   struct fb_info *info=(struct fb_info *)p->fb_info;
+   struct tdfxfb_par *par = (struct tdfxfb_par *) fb_info->par; 
+     
+   tip = p->conp->vc_cursor_type & CUR_HWMASK;
+   if (mode == CM_ERASE) {
+	if (par->cursor.state != CM_ERASE) {
+	     spin_lock_irqsave(&par->DAClock, flags);
+	     par->cursor.state=CM_ERASE;
+	     del_timer(&(par->cursor.timer));
+	     tdfx_outl(VIDPROCCFG, par->cursor.disable); 
+	     spin_unlock_irqrestore(&par->DAClock, flags);
+	}
+	return;
+   }
+   if ((p->conp->vc_cursor_type & CUR_HWMASK) != par->cursor.type)
+	 tdfxfb_createcursor(p);
+   x *= fontwidth(p);
+   y *= fontheight(p);
+   y -= info->var.yoffset;
+   spin_lock_irqsave(&par->DAClock, flags);
+   if ((x! = par->cursor.x) || (y! = par->cursor.y) || (par->cursor.redraw)) {
+          par->cursor.x=x;
+	  par->cursor.y=y;
+	  par->cursor.redraw=0;
+	  x += 63;
+	  y += 63;    
+          banshee_make_room(2);
+	  tdfx_outl(VIDPROCCFG, par->cursor.disable);
+	  tdfx_outl(HWCURLOC, (y << 16) + x);
+   }
+   par->cursor.state = CM_DRAW;
+   mod_timer(&par->cursor.timer,jiffies+HZ/2);
+   banshee_make_room(1);
+   tdfx_outl(VIDPROCCFG, par->cursor.enable);
+   spin_unlock_irqrestore(&par->DAClock, flags);
+   return;     
 }
 
 static void tdfxfb_createcursorshape(struct display* p) 
@@ -1489,5 +1487,5 @@ static void tdfxfb_hwcursor_init(void)
    printk("tdfxfb: reserving 1024 bytes for the hwcursor at 0x%08lx\n",
 	  par->regbase_virt + par->cursor.cursorimage);
 }
-
+#endif
  
