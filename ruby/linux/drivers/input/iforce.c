@@ -69,7 +69,8 @@ MODULE_DESCRIPTION("USB/RS232 I-Force joysticks and wheels driver");
 #define FF_CORE_IS_USED		2
 #define FF_CORE_IS_PLAYED	3	/* Effect is actually being played */
 #define FF_CORE_SHOULD_PLAY	4	/* User wants the effect to be played */
-#define FF_MODCORE_MAX		4
+#define FF_CORE_UPDATE		5	/* Effect is being updated */
+#define FF_MODCORE_MAX		5
 
 #define CHECK_OWNERSHIP(i, iforce)	\
 	((i) < FF_EFFECTS_MAX && i >= 0 && \
@@ -232,7 +233,7 @@ static void iforce_usb_xmit(struct iforce *iforce)
 	}
 	XMIT_INC(iforce->xmit.tail, n);
 
-	if (n=usb_submit_urb(&iforce->out)) {
+	if ( (n=usb_submit_urb(&iforce->out)) ) {
 		printk(KERN_WARNING "iforce.c: iforce_usb_xmit: usb_submit_urb failed %d\n", n);
 	}
 
@@ -367,6 +368,23 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 	}
 }
 
+/* Mark an effect that was being updated as ready. That means it can be updated
+ * again */
+static void mark_core_as_ready(struct iforce *iforce, unsigned short addr)
+{
+	int i;
+	for (i=0; i<iforce->dev.ff_effects_max; ++i) {
+		if (test_bit(FF_CORE_IS_USED, iforce->core_effects[i].flags) &&
+		    (iforce->core_effects[i].mod1_chunk.start == addr ||
+		     iforce->core_effects[i].mod2_chunk.start == addr)) {
+			clear_bit(FF_CORE_UPDATE, iforce->core_effects[i].flags);
+printk(KERN_DEBUG "iforce.c: marked effect %d as ready\n", i);
+			return;
+		}
+	}
+	printk(KERN_WARNING "iforce.c: unused effect %04x updated !!!\n", addr);
+}
+
 static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char *data)
 {
 	struct input_dev *dev = &iforce->dev;
@@ -432,7 +450,13 @@ printk(KERN_DEBUG "iforce.c: effect %d stopped, while it should not\nStarting ag
 					iforce_input_event(dev, EV_FF, i, 1);
 				}
 			}
-
+			if (LO(cmd) > 3) {
+				int j;
+dump_packet("ff status", cmd, data);
+				for (j=3; j<LO(cmd); j+=2) {
+					mark_core_as_ready(iforce, data[j] | (data[j+1]<<8));
+				}
+			}
 			break;
 	}
 }
@@ -1020,6 +1044,10 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 	else {
 		/* We want to update an effect */
 		if (!CHECK_OWNERSHIP(effect->id, iforce)) return -1;
+		
+		/* Check the effect is not allready being updated */
+		if (test_bit(FF_CORE_UPDATE, iforce->core_effects[effect->id].flags))
+			return -1;
 	}
 
 /*
@@ -1041,6 +1069,7 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 		default:
 			return -1;
 	}
+	set_bit(FF_CORE_UPDATE, iforce->core_effects[id].flags);
 }
 
 /*
