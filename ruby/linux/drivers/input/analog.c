@@ -374,10 +374,11 @@ static void analog_name(struct analog *analog)
 
 /*
  * analog_init_device()
+ */
 
 static int analog_init_device(struct analog_port *port, struct analog *analog)
 {
-	int i;
+	int i, j, t, x;
 
 	analog_name(analog);
 
@@ -386,28 +387,49 @@ static int analog_init_device(struct analog_port *port, struct analog *analog)
 	analog->dev.private = port;
 	analog->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 	
-	for (i = 0; i < 4; i++)
-		if ((analog->mask >> i) & 1)
-			set_bit(analog_axes[i], analog->dev.absbit);
+	for (i = j = 0; i < 4; i++)
+		if ((analog->mask >> i) & 1) {
+			
+			t = analog_axes[j];
+			x = port->axes[i];
+	
+			set_bit(t, analog->dev.absbit);
 
-	for (i = 0; i < 3; i++) 
-		if (analog->mask & analog_exts[i]) {
-			set_bit(analog_hats[i * 2 + 0], analog->dev.absbit);
-			set_bit(analog_hats[i * 2 + 1], analog->dev.absbit);
+			if ((i == 2 || i == 3) && (t == ABS_THROTTLE || t == ABS_RUDDER))
+				x = (port->axes[1] + port->axes[2]) >> 1;
+
+			adi->dev.absmax[t] = x * 2 - 32;
+			adi->dev.absmin[t] = 32;
+			adi->dev.absfuzz[t] = 2;
+			adi->dev.absflat[t] = 8;
+
+			j++;
 		}
 
-	for (i = 0; i < 4; i++)
-		if (analog->mask & (1 << i))
-			set_bit(analog->buttons[i], analog->dev.keybit);
+	for (i = 0; i < 3; i++) 
+		if (analog->mask & analog_exts[i])
+			for (j = 0; j < 2; j++) {
+				t = analog_hats[i * 2 + j];
+				set_bit(t, analog->dev.absbit);
+				adi->dev.absmax[t] = 1;
+				adi->dev.absmin[t] = -1;
+			}
+
+	for (i = j = 0; i < 4; i++)
+		if (analog->mask & (1 << i)) {
+			set_bit(analog->buttons[j++], analog->dev.keybit);
+		}
 
 	if (analog->mask & ANALOG_BTNS_CHF) {
-		set_bit(analog->buttons[4], analog->dev.keybit);
-		set_bit(analog->buttons[5], analog->dev.keybit);
+		set_bit(analog->buttons[j++], analog->dev.keybit);
+		set_bit(analog->buttons[j++], analog->dev.keybit);
 	}
 
 	for (i = 0; i < 4; i++)
 		if (analog->mask & (ANALOG_BTN_TL << i))
 			set_bit(analog->buttons[i + 6], analog->dev.keybit);
+
+	analog_decode(analog, port->axes, port->initial, port->buttons);
 
 	input_register_device(&analog->dev);
 
@@ -442,7 +464,7 @@ static int analog_init_masks(struct analog_port *port)
 		return -1;
 	}
 
-	if (0 /* Some options */) {
+	if (0 /* Parse user options */) {
 	} else {
 		analog[0].mask = 0xff;
 		analog[0].buttons = analog_joy_btn;
@@ -463,6 +485,9 @@ static int analog_init_masks(struct analog_port *port)
 
 	analog[1].mask &= (analog[0].mask & ANALOG_EXTENSIONS) ? 0 
 			: ((ANALOG_BUTTONS_STD | mask) & ~analog[0].mask);
+
+	for (i = 0; i < 4; i++) 
+		port->initial[i] = port->axes[i];
 
 	return -!(analog[0].mask || analog[1].mask);	
 }

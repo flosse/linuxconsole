@@ -419,34 +419,34 @@ static void adi_init_input(struct adi *adi, struct adi_port *port)
 
 static void adi_init_center(struct adi *adi)
 {
-	int i, t;
+	int i, t, x;
 
 	if (!adi->length) return;
 
 	for (i = 0; i < adi->axes10 + adi->axes8 + adi->hats * 2; i++) {
 
 		t = adi->abs[i];
+		x = adi->dev.abs[t];
 
-		if (t == ABS_THROTTLE || t == ABS_RUDDER || adi->id == ADI_ID_WGPE)
-			if (i < adi->axes10) adi->dev.abs[t] = 512; else adi->dev.abs[t] = 128;
+		if (t == ABS_THROTTLE || t == ABS_RUDDER || adi->id == ADI_ID_WGPE) {
+			if (i < adi->axes10) x = 512; else x = 128;
+		}
 
 		if (i < adi->axes10) {
-			adi->dev.absmax[t] = adi->dev.abs[t] * 2 - 8;
-			adi->dev.absmin[t] = 8;
+			adi->dev.absmax[t] = x * 2 - 64;
+			adi->dev.absmin[t] = 64;
 			adi->dev.absfuzz[t] = 2;
-			adi->dev.absflat[t] = 8;
+			adi->dev.absflat[t] = 16;
 			continue;
 		}
 
 		if (i < adi->axes10 + adi->axes8) {
-			adi->dev.absmax[t] =  adi->dev.abs[t] * 2 - 48;
+			adi->dev.absmax[t] = x * 2 - 48;
 			adi->dev.absmin[t] = 48;
-			adi->dev.absfuzz[t] = 0;
 			adi->dev.absflat[t] = 8;
 			continue;
 		}
 
-		adi->dev.abs[t] = 0;
 		adi->dev.absmax[t] = 1;
 		adi->dev.absmin[t] = -1;
 	}
