@@ -149,7 +149,7 @@ static int make_shape_modifier(struct iforce* iforce,
 
 static int make_interactive_modifier(struct iforce* iforce,
 	struct resource* mod_chunk, int no_alloc,
-	__s16 rsat, __s16 lsat, __s16 rk, __s16 lk, u16 db, __s16 center)
+	__u16 rsat, __u16 lsat, __s16 rk, __s16 lk, u16 db, __s16 center)
 {
 	unsigned char data[10];
 
@@ -167,17 +167,19 @@ static int make_interactive_modifier(struct iforce* iforce,
 	data[0] = LO(mod_chunk->start);
 	data[1] = HI(mod_chunk->start);
 
-	data[2] = HIFIX80(rk);
-	data[3] = HIFIX80(lk);
+	data[2] = (100*rk)>>15;	/* Dangerous: the sign is extended by gcc on plateforms providing an arith shift */
+	data[3] = (100*lk)>>15; /* This code is incorrect on cpus lacking arith shift */
 
+	center = (500*center)>>15;
 	data[4] = LO(center);
 	data[5] = HI(center);
 
+	db = (1000*db)>>16;
 	data[6] = LO(db);
 	data[7] = HI(db);
 
-	data[8] = HIFIX80(rsat);
-	data[9] = HIFIX80(lsat);
+	data[8] = (100*rsat)>>16;
+	data[9] = (100*lsat)>>16;
 
 	iforce_send_packet(iforce, FF_CMD_INTERACT, data);
 
