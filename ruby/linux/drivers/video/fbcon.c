@@ -177,7 +177,6 @@ static inline void cursor_undrawn(void)
 static const char *fbcon_startup(void);
 static void fbcon_init(struct vc_data *conp, int init);
 static void fbcon_deinit(struct vc_data *conp);
-static int fbcon_changevar(int con);
 static void fbcon_clear(struct vc_data *conp, int sy, int sx, int height,
 		       int width);
 static void fbcon_putc(struct vc_data *conp, int c, int ypos, int xpos);
@@ -193,7 +192,6 @@ static int fbcon_blank(struct vc_data *conp, int blank);
 static int fbcon_font_op(struct vc_data *conp, struct console_font_op *op);
 static int fbcon_set_palette(struct vc_data *conp, unsigned char *table);
 static int fbcon_scrolldelta(struct vc_data *conp, int lines);
-
 
 /*
  *  Internal routines
@@ -280,6 +278,13 @@ int set_all_vcs(int fbidx, struct fb_ops *fb, struct fb_var_screeninfo *var,
     return 0;
 }
 
+int fbcon_changevar(int con)
+{
+    if (fb_display[con].conp)
+            fbcon_set_disp(con, 0, 0);
+    return 0;
+}
+
 void set_con2fb_map(int unit, int newidx)
 {
     int oldidx = con2fb_map[unit];
@@ -318,9 +323,7 @@ void set_con2fb_map(int unit, int newidx)
 	   conp->vc_display_fg = &newfb->display_fg;
        if (!newfb->display_fg)
 	   newfb->display_fg = conp;
-       if (!newfb->changevar)
-           newfb->changevar = &fbcon_changevar;
-       newfb->changevar(unit);
+       fbcon_changevar(unit);
    }
 }
 
@@ -497,15 +500,6 @@ static void fbcon_deinit(struct vc_data *conp)
     p->fb_info->count = 0;	
     p->conp = 0;
 }
-
-
-static int fbcon_changevar(int con)
-{
-    if (fb_display[con].conp)
-	    fbcon_set_disp(con, 0, 0);
-    return 0;
-}
-
 
 static __inline__ void updatescrollmode(struct display *p)
 {
@@ -1489,7 +1483,7 @@ static int fbcon_switch(struct vc_data *conp)
     if (logo_shown == -2) {
 	logo_shown = fg_console;
 	fbcon_show_logo(); /* This is protected above by initmem_freed */
-	update_region(fg_console,
+	update_region(vc_cons[fg_console].d,
 		      conp->vc_origin + conp->vc_size_row * conp->vc_top,
 		      conp->vc_size_row * (conp->vc_bottom - conp->vc_top) / 2);
 	return 0;
@@ -2004,7 +1998,7 @@ static int fbcon_scrolldelta(struct vc_data *conp, int lines)
     		    	scr_memcpyw((u16 *)q, (u16 *)p, conp->vc_size_row);
     		    }
     		    softback_in = p;
-    		    update_region(unit, conp->vc_origin, logo_lines * conp->vc_cols);
+    		    update_region(vc_cons[unit].d, conp->vc_origin, logo_lines * conp->vc_cols);
     		}
 		logo_shown = -1;
 	}
