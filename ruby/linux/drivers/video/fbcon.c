@@ -159,7 +159,7 @@ static void fbcon_bmove(struct vc_data *vc, int sy, int sx, int dy, int dx,
 			int height, int width);
 static int fbcon_blank(struct vc_data *vc, int blank);
 static int fbcon_font_op(struct vc_data *vc, struct console_font_op *op);
-static int fbcon_resize(struct vc_data *vc,unsigned int rows,unsigned int cols);
+static int fbcon_resize(struct vc_data *vc,unsigned int cols,unsigned int rows);
 static int fbcon_set_palette(struct vc_data *vc, unsigned char *table);
 static int fbcon_scroll(struct vc_data *vc, int lines);
 static int fbcon_set_origin(struct vc_data *vc);
@@ -591,8 +591,17 @@ static int fbcon_font_op(struct vc_data *vc, struct console_font_op *op)
     }
 }
 
-static int fbcon_resize(struct vc_data *vc,unsigned int rows,unsigned int cols)
+static int fbcon_resize(struct vc_data *vc,unsigned int cols,unsigned int rows)
 {
+    struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;	
+    struct fb_var_screeninfo var;
+    
+    var.xres = cols * vc->vc_font.width;
+    var.yres = rows * vc->vc_font.height;
+    if (fb_set_var(&var, info))
+	return 1;
+    vc->vc_can_do_color = var.bits_per_pixel != 1;
+    vc->vc_scrollback = 1;
     return 0;
 }
 
@@ -669,9 +678,9 @@ void __init fb_console_init(void)
    struct vc_data *vc;	
    long q;
   
-   take_over_console(admin_vt, &fb_con); 
+   //take_over_console(admin_vt, &fb_con); 
    
-   /* Allocate the memory we need for this VT  
+   /* Allocate the memory we need for this VT */ 
    vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
    if (!vt) return;
    memset(vt, 0, sizeof(struct vt_struct));
@@ -711,7 +720,6 @@ void __init fb_console_init(void)
 
    printk("Console: %s %s %dx%d\n", vc->vc_can_do_color ? "colour" : "mono",
            display_desc, vc->vc_cols, vc->vc_rows);
-*/
 }
 
 /*
