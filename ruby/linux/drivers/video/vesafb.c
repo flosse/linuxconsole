@@ -70,14 +70,10 @@ static int vesafb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 	if (var->yres_virtual < video_height_virtual ||
 	    var->yres_virtual > info->var.yres) 
 		return 0;
-*/
 	printk(KERN_ERR "Vesafb does not support changing the video mode\n");
 	return -EINVAL;	
-}
-
-static int vesafb_set_par(struct fb_info *info)
-{
-	return -EINVAL;
+*/
+	return 0;
 }
 
 static int vesafb_pan_display(struct fb_var_screeninfo *var, 
@@ -195,7 +191,6 @@ static int vesafb_setcolreg(unsigned regno, unsigned red, unsigned green,
 static struct fb_ops vesafb_ops = {
 	owner:		THIS_MODULE,
 	fb_check_var:	vesafb_check_var,
-	fb_set_par:	vesafb_set_par,
 	fb_setcolreg:	vesafb_setcolreg,
 	fb_pan_display:	vesafb_pan_display,
 	fb_fillrect:	cfb_fillrect,
@@ -379,10 +374,6 @@ int __init vesafb_init(void)
 	fb_info.var = vesafb_defined;
 	fb_info.fix = vesafb_fix;
 	fb_info.flags=FBINFO_FLAG_DEFAULT;
-
-	/* Alloc but do not set the default color map. */
-	fb_info.cmap.len = video_cmap_len; 
-    	fb_alloc_cmap(&fb_info.cmap, fb_info.cmap.len, 0);
 
 	if (register_framebuffer(&fb_info)<0)
 		return -EINVAL;
