@@ -143,8 +143,8 @@ fail:
 }
 
 static struct file_operations misc_fops = {
-	owner:		THIS_MODULE,
-	open:		misc_open,
+	.owner		= THIS_MODULE,
+	.open		= misc_open,
 };
 
 

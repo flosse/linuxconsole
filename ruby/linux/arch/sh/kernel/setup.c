@@ -29,6 +29,7 @@
 #include <linux/blk.h>
 #endif
 #include <linux/bootmem.h>
+#include <linux/console.h>
 #include <linux/ctype.h>
 #include <linux/seq_file.h>
 #include <linux/root_dev.h>
@@ -55,6 +56,7 @@
  */
 struct sh_cpuinfo boot_cpu_data = { CPU_SH_NONE, 0, 10000000, };
 struct screen_info screen_info;
+unsigned char aux_device_present = 0xaa;
 
 #if defined(CONFIG_SH_GENERIC) || defined(CONFIG_SH_UNKNOWN)
 struct sh_machine_vector sh_mv;
@@ -169,12 +171,12 @@ static int __init sh_console_setup(struct console *co, char *options)
 }
 
 static struct console sh_console = {
-	name:		"bios",
-	write:		sh_console_write,
-	device:		sh_console_device,
-	setup:		sh_console_setup,
-	flags:		CON_PRINTBUFFER,
-	index:		-1,
+	.name		= "bios",
+	.write		= sh_console_write,
+	.device		= sh_console_device,
+	.setup		= sh_console_setup,
+	.flags		= CON_PRINTBUFFER,
+	.index		= -1,
 };
 
 void sh_console_init(void)
@@ -458,6 +460,7 @@ void __init setup_arch(char **cmdline_p)
 	for (i = 0; i < STANDARD_IO_RESOURCES; i++)
 		request_resource(&ioport_resource, standard_io_resources+i);
 #endif
+
 	/* Perform the machine specific initialisation */
 	if (sh_mv.mv_init_arch != NULL) {
 		sh_mv.mv_init_arch();
@@ -537,9 +540,9 @@ static void c_stop(struct seq_file *m, void *v)
 {
 }
 struct seq_operations cpuinfo_op = {
-	start:	c_start,
-	next:	c_next,
-	stop:	c_stop,
-	show:	show_cpuinfo,
+	.start	= c_start,
+	.next	= c_next,
+	.stop	= c_stop,
+	.show	= show_cpuinfo,
 };
 #endif

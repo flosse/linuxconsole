@@ -29,14 +29,15 @@
 #include <linux/string.h>
 #include <linux/threads.h>
 #include <linux/tty.h>
+#include <linux/efi.h>
 
 #include <asm/ia32.h>
 #include <asm/page.h>
+#include <asm/pgtable.h>
 #include <asm/machvec.h>
 #include <asm/processor.h>
 #include <asm/sal.h>
 #include <asm/system.h>
-#include <asm/efi.h>
 #include <asm/mca.h>
 #include <asm/smp.h>
 
@@ -48,23 +49,21 @@
 # error "struct cpuinfo_ia64 too big!"
 #endif
 
-#define MIN(a,b)	((a) < (b) ? (a) : (b))
-#define MAX(a,b)	((a) > (b) ? (a) : (b))
-
 extern char _end;
 
 #ifdef CONFIG_SMP
 unsigned long __per_cpu_offset[NR_CPUS];
 #endif
 
-struct cpuinfo_ia64 cpu_info __per_cpu_data;
-
-unsigned long ia64_phys_stacked_size_p8;
+DEFINE_PER_CPU(struct cpuinfo_ia64, cpu_info);
+DEFINE_PER_CPU(unsigned long, ia64_phys_stacked_size_p8);
 unsigned long ia64_cycles_per_usec;
 struct ia64_boot_param *ia64_boot_param;
 struct screen_info screen_info;
 
 unsigned long ia64_iobase;	/* virtual address for I/O accesses */
+
+unsigned char aux_device_present = 0xaa;        /* XXX remove this when legacy I/O is gone */
 
 #define COMMAND_LINE_SIZE	512
 
@@ -93,6 +92,10 @@ struct rsvd_region {
 static struct rsvd_region rsvd_region[IA64_MAX_RSVD_REGIONS + 1];
 static int num_rsvd_regions;
 
+#define IGNORE_PFN0	1	/* XXX fix me: ignore pfn 0 until TLB miss handler is updated... */
+
+#ifndef CONFIG_DISCONTIGMEM
+
 static unsigned long bootmap_start; /* physical address where the bootmem map is located */
 
 static int
@@ -106,17 +109,63 @@ find_max_pfn (unsigned long start, unsigned long end, void *arg)
 	return 0;
 }
 
-#define IGNORE_PFN0	1	/* XXX fix me: ignore pfn 0 until TLB miss handler is updated... */
+#else /* CONFIG_DISCONTIGMEM */
 
 /*
- * Free available memory based on the primitive map created from
- * the boot parameters. This routine does not assume the incoming
- * segments are sorted.
+ * efi_memmap_walk() knows nothing about layout of memory across nodes. Find
+ * out to which node a block of memory belongs.  Ignore memory that we cannot
+ * identify, and split blocks that run across multiple nodes.
+ *
+ * Take this opportunity to round the start address up and the end address
+ * down to page boundaries.
  */
-static int
-free_available_memory (unsigned long start, unsigned long end, void *arg)
+void
+call_pernode_memory (unsigned long start, unsigned long end, void *arg)
+{
+	unsigned long rs, re;
+	void (*func)(unsigned long, unsigned long, int, int);
+	int i;
+
+	start = PAGE_ALIGN(start);
+	end &= PAGE_MASK;
+	if (start >= end)
+		return;
+
+	func = arg;
+
+	if (!num_memblks) {
+		/*
+		 * This machine doesn't have SRAT, so call func with
+		 * nid=0, bank=0.
+		 */
+		if (start < end)
+			(*func)(start, end - start, 0, 0);
+		return;
+	}
+
+	for (i = 0; i < num_memblks; i++) {
+		rs = max(start, node_memblk[i].start_paddr);
+		re = min(end, node_memblk[i].start_paddr+node_memblk[i].size);
+
+		if (rs < re)
+			(*func)(rs, re-rs, node_memblk[i].nid,
+				node_memblk[i].bank);
+	}
+}
+
+#endif /* CONFIG_DISCONTIGMEM */
+
+/*
+ * Filter incoming memory segments based on the primitive map created from the boot
+ * parameters. Segments contained in the map are removed from the memory ranges. A
+ * caller-specified function is called with the memory ranges that remain after filtering.
+ * This routine does not assume the incoming segments are sorted.
+ */
+int
+filter_rsvd_memory (unsigned long start, unsigned long end, void *arg)
 {
 	unsigned long range_start, range_end, prev_start;
+	void (*func)(unsigned long, unsigned long);
 	int i;
 
 #if IGNORE_PFN0
@@ -130,13 +179,18 @@ free_available_memory (unsigned long start, unsigned long end, void *arg)
 	 * lowest possible address(walker uses virtual)
 	 */
 	prev_start = PAGE_OFFSET;
+	func = arg;
 
 	for (i = 0; i < num_rsvd_regions; ++i) {
-		range_start = MAX(start, prev_start);
-		range_end   = MIN(end, rsvd_region[i].start);
+		range_start = max(start, prev_start);
+		range_end   = min(end, rsvd_region[i].start);
 
 		if (range_start < range_end)
-			free_bootmem(__pa(range_start), range_end - range_start);
+#ifdef CONFIG_DISCONTIGMEM
+			call_pernode_memory(__pa(range_start), __pa(range_end), func);
+#else
+			(*func)(__pa(range_start), range_end - range_start);
+#endif
 
 		/* nothing more available in this segment */
 		if (range_end == end) return 0;
@@ -148,6 +202,7 @@ free_available_memory (unsigned long start, unsigned long end, void *arg)
 }
 
 
+#ifndef CONFIG_DISCONTIGMEM
 /*
  * Find a place to put the bootmap and return its starting address in bootmap_start.
  * This address must be page-aligned.
@@ -169,8 +224,8 @@ find_bootmap_location (unsigned long start, unsigned long end, void *arg)
 	free_start = PAGE_OFFSET;
 
 	for (i = 0; i < num_rsvd_regions; i++) {
-		range_start = MAX(start, free_start);
-		range_end   = MIN(end, rsvd_region[i].start & PAGE_MASK);
+		range_start = max(start, free_start);
+		range_end   = min(end, rsvd_region[i].start & PAGE_MASK);
 
 		if (range_end <= range_start) continue;	/* skip over empty range */
 
@@ -186,6 +241,7 @@ find_bootmap_location (unsigned long start, unsigned long end, void *arg)
 	}
 	return 0;
 }
+#endif /* !CONFIG_DISCONTIGMEM */
 
 static void
 sort_regions (struct rsvd_region *rsvd_region, int max)
@@ -250,6 +306,15 @@ find_memory (void)
 
 	sort_regions(rsvd_region, num_rsvd_regions);
 
+#ifdef CONFIG_DISCONTIGMEM
+	{
+		extern void discontig_mem_init (void);
+
+		bootmap_size = max_pfn = 0;	/* stop gcc warnings */
+		discontig_mem_init();
+	}
+#else /* !CONFIG_DISCONTIGMEM */
+
 	/* first find highest page frame number */
 	max_pfn = 0;
 	efi_memmap_walk(find_max_pfn, &max_pfn);
@@ -266,8 +331,9 @@ find_memory (void)
 	bootmap_size = init_bootmem(bootmap_start >> PAGE_SHIFT, max_pfn);
 
 	/* Free all available memory, then mark bootmem-map as being in use.  */
-	efi_memmap_walk(free_available_memory, 0);
+	efi_memmap_walk(filter_rsvd_memory, free_bootmem);
 	reserve_bootmem(bootmap_start, bootmap_size);
+#endif /* !CONFIG_DISCONTIGMEM */
 
 #ifdef CONFIG_BLK_DEV_INITRD
 	if (ia64_boot_param->initrd_start) {
@@ -293,6 +359,16 @@ setup_arch (char **cmdline_p)
 	saved_command_line[COMMAND_LINE_SIZE-1] = '\0';		/* for safety */
 
 	efi_init();
+
+#ifdef CONFIG_ACPI_BOOT
+	/* Initialize the ACPI boot-time table parser */
+	acpi_table_init(*cmdline_p);
+
+#ifdef CONFIG_ACPI_NUMA
+	acpi_numa_init();
+#endif
+
+#endif /* CONFIG_APCI_BOOT */
 
 	find_memory();
 
@@ -343,6 +419,14 @@ setup_arch (char **cmdline_p)
 
 #ifdef CONFIG_ACPI_BOOT
 	acpi_boot_init(*cmdline_p);
+#endif
+#ifdef CONFIG_SERIAL_HCDP
+	if (efi.hcdp) {
+		void setup_serial_hcdp(void *);
+
+		/* Setup the serial ports described by HCDP */
+		setup_serial_hcdp(efi.hcdp);
+	}
 #endif
 
 #ifdef CONFIG_IA64_MCA
@@ -418,7 +502,7 @@ static void *
 c_start (struct seq_file *m, loff_t *pos)
 {
 #ifdef CONFIG_SMP
-	while (*pos < NR_CPUS && !(cpu_online_map & (1 << *pos)))
+	while (*pos < NR_CPUS && !(cpu_online_map & (1UL << *pos)))
 		++*pos;
 #endif
 	return *pos < NR_CPUS ? cpu_data(*pos) : NULL;
@@ -437,10 +521,10 @@ c_stop (struct seq_file *m, void *v)
 }
 
 struct seq_operations cpuinfo_op = {
-	start:	c_start,
-	next:	c_next,
-	stop:	c_stop,
-	show:	show_cpuinfo
+	.start =	c_start,
+	.next =		c_next,
+	.stop =		c_stop,
+	.show =		show_cpuinfo
 };
 
 void
@@ -505,6 +589,7 @@ setup_per_cpu_areas (void)
 	/* start_kernel() requires this... */
 }
 
+
 /*
  * cpu_init() initializes state that is per-CPU.  This function acts
  * as a 'CPU state barrier', nothing should get across.
@@ -517,21 +602,36 @@ cpu_init (void)
 	unsigned long num_phys_stacked;
 	pal_vm_info_2_u_t vmi;
 	unsigned int max_ctx;
-	struct cpuinfo_ia64 *my_cpu_info;
-	void *my_cpu_data;
+	struct cpuinfo_ia64 *cpu_info;
+	void *cpu_data;
 
 #ifdef CONFIG_SMP
 	extern char __per_cpu_end[];
-	int cpu = smp_processor_id();
+	int cpu;
 
-	my_cpu_data = alloc_bootmem_pages(__per_cpu_end - __per_cpu_start);
-	memcpy(my_cpu_data, __phys_per_cpu_start, __per_cpu_end - __per_cpu_start);
-	__per_cpu_offset[cpu] = (char *) my_cpu_data - __per_cpu_start;
-	my_cpu_info = my_cpu_data + ((char *) &cpu_info - __per_cpu_start);
-#else
-	my_cpu_data = __phys_per_cpu_start;
+	/*
+	 * get_free_pages() cannot be used before cpu_init() done.  BSP allocates
+	 * "NR_CPUS" pages for all CPUs to avoid that AP calls get_zeroed_page().
+	 */
+	if (smp_processor_id() == 0) {
+		cpu_data = (unsigned long) __alloc_bootmem(PERCPU_PAGE_SIZE * NR_CPUS,
+							   PERCPU_PAGE_SIZE,
+							   __pa(MAX_DMA_ADDRESS));
+		for (cpu = 0; cpu < NR_CPUS; cpu++) {
+			memcpy(cpu_data, __phys_per_cpu_start, __per_cpu_end - __per_cpu_start);
+			__per_cpu_offset[cpu] = (char *) cpu_data - __per_cpu_start;
+			cpu_data += PERCPU_PAGE_SIZE;
+		}
+	}
+	cpu_data = __per_cpu_start + __per_cpu_offset[smp_processor_id()];
+#else /* !CONFIG_SMP */
+	cpu_data = __phys_per_cpu_start;
+#endif /* !CONFIG_SMP */
+
+	cpu_info = cpu_data + ((char *) &__get_cpu_var(cpu_info) - __per_cpu_start);
+#ifdef CONFIG_NUMA
+	cpu_info->node_data = get_node_data_ptr();
 #endif
-	my_cpu_info = my_cpu_data + ((char *) &cpu_info - __per_cpu_start);
 
 	/*
 	 * We can't pass "local_cpu_data" to identify_cpu() because we haven't called
@@ -539,14 +639,14 @@ cpu_init (void)
 	 * depends on the data returned by identify_cpu().  We break the dependency by
 	 * accessing cpu_data() the old way, through identity mapped space.
 	 */
-	identify_cpu(my_cpu_info);
+	identify_cpu(cpu_info);
 
 #ifdef CONFIG_MCKINLEY
 	{
-#define FEATURE_SET 16
+#		define FEATURE_SET 16
 		struct ia64_pal_retval iprv;
 
-		if (my_cpu_info->family == 0x1f) {
+		if (cpu_info->family == 0x1f) {
 			PAL_CALL_PHYS(iprv, PAL_PROC_GET_FEATURES, 0, FEATURE_SET, 0);
 			if ((iprv.status == 0) && (iprv.v0 & 0x80) && (iprv.v2 & 0x80))
 				PAL_CALL_PHYS(iprv, PAL_PROC_SET_FEATURES,
@@ -577,7 +677,7 @@ cpu_init (void)
 	if (current->mm)
 		BUG();
 
-	ia64_mmu_init(my_cpu_data);
+	ia64_mmu_init(cpu_data);
 
 #ifdef CONFIG_IA32_SUPPORT
 	/* initialize global ia32 state - CR0 and CR4 */
@@ -615,6 +715,6 @@ cpu_init (void)
 		num_phys_stacked = 96;
 	}
 	/* size of physical stacked register partition plus 8 bytes: */
-	ia64_phys_stacked_size_p8 = num_phys_stacked*8 + 8;
+	__get_cpu_var(ia64_phys_stacked_size_p8) = num_phys_stacked*8 + 8;
 	platform_cpu_init();
 }

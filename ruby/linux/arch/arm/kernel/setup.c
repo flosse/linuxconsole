@@ -35,10 +35,6 @@
 #define MEM_SIZE	(16*1024*1024)
 #endif
 
-#ifdef CONFIG_PREEMPT
-spinlock_t kernel_flag __cacheline_aligned_in_smp = SPIN_LOCK_UNLOCKED;
-#endif
-
 #if defined(CONFIG_FPE_NWFPE) || defined(CONFIG_FPE_FASTFPE)
 char fpe_type[8];
 
@@ -77,8 +73,11 @@ struct cpu_tlb_fns cpu_tlb;
 struct cpu_user_fns cpu_user;
 #endif
 
+unsigned char aux_device_present;
 char elf_platform[ELF_PLATFORM_SIZE];
 char saved_command_line[COMMAND_LINE_SIZE];
+unsigned long phys_initrd_start __initdata = 0;
+unsigned long phys_initrd_size __initdata = 0;
 
 static struct meminfo meminfo __initdata = { 0, };
 static struct proc_info_item proc_info;
@@ -170,6 +169,26 @@ static const char *cache_lockdown[16] = {
 	"undefined 15",
 };
 
+static const char *proc_arch[] = {
+	"undefined/unknown",
+	"3",
+	"4",
+	"4T",
+	"5",
+	"5T",
+	"5TE",
+	"?(8)",
+	"?(9)",
+	"?(10)",
+	"?(11)",
+	"?(12)",
+	"?(13)",
+	"?(14)",
+	"?(15)",
+	"?(16)",
+	"?(17)",
+};
+
 #define CACHE_TYPE(x)	(((x) >> 25) & 15)
 #define CACHE_S(x)	((x) & (1 << 24))
 #define CACHE_DSIZE(x)	(((x) >> 12) & 4095)	/* only if S=1 */
@@ -193,27 +212,43 @@ static inline void dump_cache(const char *prefix, unsigned int cache)
 			CACHE_LINE(cache)));
 }
 
-static inline void dump_cpu_cache_id(void)
+static void __init dump_cpu_info(void)
 {
-	unsigned int cache_info;
+	unsigned int info;
 
-	asm("mrc p15, 0, %0, c0, c0, 1" : "=r" (cache_info));
+	asm("mrc p15, 0, %0, c0, c0, 1" : "=r" (info));
 
-	if (cache_info == processor_id)
-		return;
-
-	printk("CPU: D %s cache\n", cache_types[CACHE_TYPE(cache_info)]);
-	if (CACHE_S(cache_info)) {
-		dump_cache("CPU: I cache", CACHE_ISIZE(cache_info));
-		dump_cache("CPU: D cache", CACHE_DSIZE(cache_info));
-	} else {
-		dump_cache("CPU: cache", CACHE_ISIZE(cache_info));
+	if (info != processor_id) {
+		printk("CPU: D %s cache\n", cache_types[CACHE_TYPE(info)]);
+		if (CACHE_S(info)) {
+			dump_cache("CPU: I cache", CACHE_ISIZE(info));
+			dump_cache("CPU: D cache", CACHE_DSIZE(info));
+		} else {
+			dump_cache("CPU: cache", CACHE_ISIZE(info));
+		}
 	}
 }
 
 #else
-#define dump_cpu_cache_id() do { } while (0)
+#define dump_cpu_info() do { } while (0)
 #endif
+
+int cpu_architecture(void)
+{
+	int cpu_arch;
+
+	if ((processor_id & 0x0000f000) == 0) {
+		cpu_arch = CPU_ARCH_UNKNOWN;
+	} else if ((processor_id & 0x0000f000) == 0x00007000) {
+		cpu_arch = (processor_id & (1 << 23)) ? CPU_ARCH_ARMv4T : CPU_ARCH_ARMv3;
+	} else {
+		cpu_arch = (processor_id >> 16) & 15;
+		if (cpu_arch)
+			cpu_arch += CPU_ARCH_ARMv3;
+	}
+
+	return cpu_arch;
+}
 
 static void __init setup_processor(void)
 {
@@ -251,11 +286,11 @@ static void __init setup_processor(void)
 	cpu_user = *list->user;
 #endif
 
-	printk("CPU: %s %s revision %d\n",
+	printk("CPU: %s %s revision %d (ARMv%s)\n",
 	       proc_info.manufacturer, proc_info.cpu_name,
-	       (int)processor_id & 15);
+	       (int)processor_id & 15, proc_arch[cpu_architecture()]);
 
-	dump_cpu_cache_id();
+	dump_cpu_info();
 
 	sprintf(system_utsname.machine, "%s%c", list->arch_name, ENDIANNESS);
 	sprintf(elf_platform, "%s%c", list->elf_name, ENDIANNESS);
@@ -328,6 +363,22 @@ parse_cmdline(struct meminfo *mi, char **cmdline_p, char *from)
 			mi->bank[mi->nr_banks].size  = size;
 			mi->bank[mi->nr_banks].node  = PHYS_TO_NID(start);
 			mi->nr_banks += 1;
+		} else if (c == ' ' && !memcmp(from, "initrd=", 7)) {
+			unsigned long start, size;
+
+			/*
+			 * Remove space character
+			 */
+			if (to != command_line)
+				to -= 1;
+
+			start = memparse(from + 7, &from);
+			if (*from == ',') {
+				size = memparse(from + 1, &from);
+
+				phys_initrd_start = start;
+				phys_initrd_size = size;
+			}
 		}
 		c = *from++;
 		if (!c)
@@ -352,19 +403,6 @@ setup_ramdisk(int doload, int prompt, int image_start, unsigned int rd_sz)
 
 	if (rd_sz)
 		rd_size = rd_sz;
-#endif
-}
-
-/*
- * initial ram disk
- */
-static void __init setup_initrd(unsigned int start, unsigned int size)
-{
-#ifdef CONFIG_BLK_DEV_INITRD
-	if (start == 0)
-		size = 0;
-	initrd_start = start;
-	initrd_end   = start + size;
 #endif
 }
 
@@ -464,12 +502,12 @@ __tagtable(ATAG_MEM, parse_tag_mem32);
 
 #if defined(CONFIG_VGA_CONSOLE) || defined(CONFIG_DUMMY_CONSOLE)
 struct screen_info screen_info = {
- orig_video_lines:	30,
- orig_video_cols:	80,
- orig_video_mode:	0,
- orig_video_ega_bx:	0,
- orig_video_isVGA:	1,
- orig_video_points:	8
+ .orig_video_lines	= 30,
+ .orig_video_cols	= 80,
+ .orig_video_mode	= 0,
+ .orig_video_ega_bx	= 0,
+ .orig_video_isVGA	= 1,
+ .orig_video_points	= 8
 };
 
 static int __init parse_tag_videotext(const struct tag *tag)
@@ -501,7 +539,8 @@ __tagtable(ATAG_RAMDISK, parse_tag_ramdisk);
 
 static int __init parse_tag_initrd(const struct tag *tag)
 {
-	setup_initrd(tag->u.initrd.start, tag->u.initrd.size);
+	phys_initrd_start = __virt_to_phys(tag->u.initrd.start);
+	phys_initrd_size = tag->u.initrd.size;
 	return 0;
 }
 
@@ -509,13 +548,8 @@ __tagtable(ATAG_INITRD, parse_tag_initrd);
 
 static int __init parse_tag_initrd2(const struct tag *tag)
 {
-	unsigned long start = 0;
-
-	if (tag->u.initrd.size) {
-		start = (unsigned long)phys_to_virt(tag->u.initrd.start);
-
-		setup_initrd(start, tag->u.initrd.size);
-	}
+	phys_initrd_start = tag->u.initrd.start;
+	phys_initrd_size = tag->u.initrd.size;
 	return 0;
 }
 
@@ -660,25 +694,6 @@ static const char *hwcap_str[] = {
 	NULL
 };
 
-static const char *proc_arch[16] = {
-	"undefined 0",
-	"4",
-	"4T",
-	"5",
-	"5T",
-	"5TE",
-	"undefined 6",
-	"undefined 7",
-	"undefined 8",
-	"undefined 9",
-	"undefined 10",
-	"undefined 11",
-	"undefined 12",
-	"undefined 13",
-	"undefined 14",
-	"undefined 15"
-};
-
 static void
 c_show_cache(struct seq_file *m, const char *type, unsigned int cache)
 {
@@ -714,30 +729,23 @@ static int c_show(struct seq_file *m, void *v)
 		if (elf_hwcap & (1 << i))
 			seq_printf(m, "%s ", hwcap_str[i]);
 
-	seq_puts(m, "\n");
+	seq_printf(m, "\nCPU implementer\t: 0x%02x\n", processor_id >> 24);
+	seq_printf(m, "CPU architecture: %s\n", proc_arch[cpu_architecture()]);
 
 	if ((processor_id & 0x0000f000) == 0x00000000) {
 		/* pre-ARM7 */
 		seq_printf(m, "CPU part\t\t: %07x\n", processor_id >> 4);
-	} else if ((processor_id & 0x0000f000) == 0x00007000) {
-		/* ARM7 */
-		seq_printf(m, "CPU implementor\t: 0x%02x\n"
-			      "CPU architecture: %s\n"
-			      "CPU variant\t: 0x%02x\n"
-			      "CPU part\t: 0x%03x\n",
-			   processor_id >> 24,
-			   processor_id & (1 << 23) ? "4T" : "3",
-			   (processor_id >> 16) & 127,
-			   (processor_id >> 4) & 0xfff);
 	} else {
-		/* post-ARM7 */
-		seq_printf(m, "CPU implementor\t: 0x%02x\n"
-			      "CPU architecture: %s\n"
-			      "CPU variant\t: 0x%x\n"
-			      "CPU part\t: 0x%03x\n",
-			   processor_id >> 24,
-			   proc_arch[(processor_id >> 16) & 15],
-			   (processor_id >> 20) & 15,
+		if ((processor_id & 0x0000f000) == 0x00007000) {
+			/* ARM7 */
+			seq_printf(m, "CPU variant\t: 0x%02x\n",
+				   (processor_id >> 16) & 127);
+		} else {
+			/* post-ARM7 */
+			seq_printf(m, "CPU variant\t: 0x%x\n",
+				   (processor_id >> 20) & 15);
+		}
+		seq_printf(m, "CPU part\t: 0x%03x\n",
 			   (processor_id >> 4) & 0xfff);
 	}
 	seq_printf(m, "CPU revision\t: %d\n", processor_id & 15);
@@ -793,8 +801,8 @@ static void c_stop(struct seq_file *m, void *v)
 }
 
 struct seq_operations cpuinfo_op = {
-	start:	c_start,
-	next:	c_next,
-	stop:	c_stop,
-	show:	c_show
+	.start	= c_start,
+	.next	= c_next,
+	.stop	= c_stop,
+	.show	= c_show
 };

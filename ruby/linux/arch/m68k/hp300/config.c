@@ -12,12 +12,10 @@
 #include <linux/mm.h>
 #include <linux/kd.h>
 #include <linux/tty.h>
-#include <linux/console.h>
 #include <linux/interrupt.h>
 #include <linux/init.h>
 #include <asm/machdep.h>
 #include <asm/blinken.h>
-#include <asm/io.h>                               /* readb() and writeb() */
 #include <asm/hwtest.h>                           /* hwreg_present() */
 
 #include "ints.h"

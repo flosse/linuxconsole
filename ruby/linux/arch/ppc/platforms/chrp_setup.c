@@ -1,7 +1,4 @@
 /*
- * BK Id: %F% %I% %G% %U% %#%
- */
-/*
  *  arch/ppc/platforms/setup.c
  *
  *  Copyright (C) 1995  Linus Torvalds
@@ -36,7 +33,6 @@
 #include <linux/delay.h>
 #include <linux/ide.h>
 #include <linux/irq.h>
-#include <linux/console.h>
 #include <linux/seq_file.h>
 #include <linux/root_dev.h>
 
@@ -68,7 +64,6 @@ void rtas_indicator_progress(char *, unsigned short);
 void btext_progress(char *, unsigned short);
 
 extern unsigned long pmac_find_end_of_memory(void);
-extern void select_adb_keyboard(void);
 extern int of_show_percpuinfo(struct seq_file *, int);
 
 extern kdev_t boot_dev;
@@ -430,22 +425,6 @@ chrp_init2(void)
 
 	if (ppc_md.progress)
 		ppc_md.progress("  Have fun!    ", 0x7777);
-
-#if defined(CONFIG_VT) && defined(CONFIG_INPUT)
-	/* see if there is a keyboard in the device tree
-	   with a parent of type "adb" */
-	{
-		struct device_node *kbd;
-
-		for (kbd = find_devices("keyboard"); kbd; kbd = kbd->next) {
-			if (kbd->parent && kbd->parent->type
-			    && strcmp(kbd->parent->type, "adb") == 0) {
-				select_adb_keyboard();
-				break;
-			}
-		}
-	}
-#endif /* CONFIG_VT && CONFIG_INPUT */
 }
 
 void __init

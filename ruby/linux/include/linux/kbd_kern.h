@@ -77,6 +77,8 @@ extern int kbd_init(void);
 extern unsigned char getledstate(void);
 extern void setledstate(struct kbd_struct *kbd, unsigned int led);
 
+extern int do_poke_blanked_console;
+
 extern void (*kbd_ledfunc) (unsigned int led);
 
 static inline void set_leds(void)

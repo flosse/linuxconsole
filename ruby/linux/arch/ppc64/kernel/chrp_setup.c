@@ -23,7 +23,6 @@
 #include <linux/mm.h>
 #include <linux/stddef.h>
 #include <linux/unistd.h>
-#include <linux/ptrace.h>
 #include <linux/slab.h>
 #include <linux/user.h>
 #include <linux/a.out.h>
@@ -55,12 +54,9 @@
 #include <asm/dma.h>
 #include <asm/machdep.h>
 #include <asm/irq.h>
-#include <asm/keyboard.h>
-#include <asm/init.h>
 #include <asm/naca.h>
 #include <asm/time.h>
 
-#include "local_irq.h"
 #include "i8259.h"
 #include "open_pic.h"
 #include "xics.h"
@@ -68,7 +64,6 @@
 
 extern volatile unsigned char *chrp_int_ack_special;
 
-void chrp_setup_pci_ptrs(void);
 void chrp_progress(char *, unsigned short);
 void chrp_request_regions(void);
 
@@ -82,29 +77,25 @@ extern void iSeries_pcibios_fixup(void);
 extern void pSeries_get_rtc_time(struct rtc_time *rtc_time);
 extern int  pSeries_set_rtc_time(struct rtc_time *rtc_time);
 void pSeries_calibrate_decr(void);
-static void fwnmi_init(void);
+void fwnmi_init(void);
 extern void SystemReset_FWNMI(void), MachineCheck_FWNMI(void);	/* from head.S */
 int fwnmi_active;  /* TRUE if an FWNMI handler is present */
 
 kdev_t boot_dev;
 unsigned long  virtPython0Facilities = 0;  // python0 facility area (memory mapped io) (64-bit format) VIRTUAL address.
 
-extern HPTE *Hash, *Hash_end;
-extern unsigned long Hash_size, Hash_mask;
-extern int probingmem;
 extern unsigned long loops_per_jiffy;
 
-#ifdef CONFIG_BLK_DEV_RAM
-extern int rd_doload;		/* 1 = load ramdisk, 0 = don't load */
-extern int rd_prompt;		/* 1 = prompt for ramdisk, 0 = don't prompt */
-extern int rd_image_start;	/* starting block # of image */
-#endif
+extern unsigned long ppc_proc_freq;
+extern unsigned long ppc_tb_freq;
 
 void 
 chrp_get_cpuinfo(struct seq_file *m)
 {
 	struct device_node *root;
 	const char *model = "";
+
+	seq_printf(m, "timebase\t: %lu\n", ppc_tb_freq);
 
 	root = find_path_device("/");
 	if (root)
@@ -166,13 +157,8 @@ chrp_setup_arch(void)
 		for (openpic = 0; n > 0; --n)
 			openpic = (openpic << 32) + *opprop++;
 		printk(KERN_DEBUG "OpenPIC addr: %lx\n", openpic);
-		udbg_printf("OpenPIC addr: %lx\n", openpic);
 		OpenPIC_Addr = __ioremap(openpic, 0x40000, _PAGE_NO_CACHE);
 	}
-
-#ifdef CONFIG_DUMMY_CONSOLE
-	conswitchp = &dummy_con;
-#endif
 }
 
 void __init
@@ -183,14 +169,16 @@ chrp_init2(void)
 	 * -- tibit
 	 */
 	chrp_request_regions();
-	ppc_md.progress(UTS_RELEASE, 0x7777);
+	/* Manually leave the kernel version on the panel. */
+	ppc_md.progress("Linux ppc64\n", 0);
+	ppc_md.progress(UTS_RELEASE, 0);
 }
 
 /* Initialize firmware assisted non-maskable interrupts if
  * the firmware supports this feature.
  *
  */
-static void __init fwnmi_init(void)
+void __init fwnmi_init(void)
 {
 	long ret;
 	int ibm_nmi_register = rtas_token("ibm,nmi-register");
@@ -243,8 +231,6 @@ chrp_init(unsigned long r3, unsigned long r4, unsigned long r5,
 #endif /* CONFIG_BLK_DEV_INITRD */
 #endif
 
-	ppc_md.ppc_machine = naca->platform;
-
 	ppc_md.setup_arch     = chrp_setup_arch;
 	ppc_md.setup_residual = NULL;
 	ppc_md.get_cpuinfo    = chrp_get_cpuinfo;
@@ -271,17 +257,16 @@ chrp_init(unsigned long r3, unsigned long r4, unsigned long r5,
 	ppc_md.power_off      = rtas_power_off;
 	ppc_md.halt           = rtas_halt;
 
-	ppc_md.time_init      = NULL;
 	ppc_md.get_boot_time  = pSeries_get_rtc_time;
 	ppc_md.get_rtc_time   = pSeries_get_rtc_time;
 	ppc_md.set_rtc_time   = pSeries_set_rtc_time;
 	ppc_md.calibrate_decr = pSeries_calibrate_decr;
 
 	ppc_md.progress = chrp_progress;
-	ppc_md.progress("Linux ppc64\n", 0x0);
+
 }
 
-void __chrp
+void
 chrp_progress(char *s, unsigned short hex)
 {
 	struct device_node *root;
@@ -290,10 +275,7 @@ chrp_progress(char *s, unsigned short hex)
 	static int display_character, set_indicator;
 	static int max_width;
 
-	if (hex)
-		udbg_printf("<chrp_progress> %s\n", s);
-
-	if (!rtas.base || (naca->platform != PLATFORM_PSERIES))
+	if (!rtas.base)
 		return;
 
 	if (max_width == 0) {
@@ -338,9 +320,6 @@ chrp_progress(char *s, unsigned short hex)
 }
 
 extern void setup_default_decr(void);
-
-extern unsigned long ppc_proc_freq;
-extern unsigned long ppc_tb_freq;
 
 void __init pSeries_calibrate_decr(void)
 {

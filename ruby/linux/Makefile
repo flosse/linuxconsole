@@ -1,6 +1,6 @@
 VERSION = 2
 PATCHLEVEL = 5
-SUBLEVEL = 45
+SUBLEVEL = 49
 EXTRAVERSION = -ruby
 
 # *DOCUMENTATION*
@@ -155,9 +155,9 @@ NM		= $(CROSS_COMPILE)nm
 STRIP		= $(CROSS_COMPILE)strip
 OBJCOPY		= $(CROSS_COMPILE)objcopy
 OBJDUMP		= $(CROSS_COMPILE)objdump
+AWK		= awk
 GENKSYMS	= /sbin/genksyms
-DEPMOD		= /sbin/depmod
-KALLSYMS	= /sbin/kallsyms
+KALLSYMS	= scripts/kallsyms
 PERL		= perl
 MODFLAGS	= -DMODULE
 CFLAGS_MODULE   = $(MODFLAGS)
@@ -173,8 +173,8 @@ AFLAGS		:= -D__ASSEMBLY__ $(CPPFLAGS)
 
 export	VERSION PATCHLEVEL SUBLEVEL EXTRAVERSION KERNELRELEASE ARCH \
 	CONFIG_SHELL TOPDIR HOSTCC HOSTCFLAGS CROSS_COMPILE AS LD CC \
-	CPP AR NM STRIP OBJCOPY OBJDUMP MAKE GENKSYMS PERL UTS_MACHINE \
-	HOSTCXX HOSTCXXFLAGS
+	CPP AR NM STRIP OBJCOPY OBJDUMP MAKE AWK GENKSYMS PERL UTS_MACHINE \
+	HOSTCXX HOSTCXXFLAGS LDFLAGS_BLOB
 
 export CPPFLAGS NOSTDINC_FLAGS OBJCOPYFLAGS LDFLAGS
 export CFLAGS CFLAGS_KERNEL CFLAGS_MODULE 
@@ -209,12 +209,12 @@ init-y		:= init/
 drivers-y	:= drivers/ sound/
 net-y		:= net/
 libs-y		:= lib/
-core-y		:=
+core-y		:= usr/
 SUBDIRS		:=
 
 ifeq ($(filter $(noconfig_targets),$(MAKECMDGOALS)),)
 
-export include-config := 1
+export include_config := 1
 
 -include .config
 
@@ -228,9 +228,10 @@ SUBDIRS		+= $(patsubst %/,%,$(filter %/, $(init-y) $(init-m) \
 		     $(core-y) $(core-m) $(drivers-y) $(drivers-m) \
 		     $(net-y) $(net-m) $(libs-y) $(libs-m)))
 
-ALL_SUBDIRS     := $(SUBDIRS) $(patsubst %/,%,$(filter %/, $(init-n) $(init-) \
+ALL_SUBDIRS     := $(sort $(SUBDIRS) $(patsubst %/,%,$(filter %/, \
+		     $(init-n) $(init-) \
 		     $(core-n) $(core-) $(drivers-n) $(drivers-) \
-		     $(net-n) $(net-) $(libs-n) $(libs-)))
+		     $(net-n)  $(net-)  $(libs-n)    $(libs-))))
 
 init-y		:= $(patsubst %/, %/built-in.o, $(init-y))
 core-y		:= $(patsubst %/, %/built-in.o, $(core-y))
@@ -238,7 +239,7 @@ drivers-y	:= $(patsubst %/, %/built-in.o, $(drivers-y))
 net-y		:= $(patsubst %/, %/built-in.o, $(net-y))
 libs-y		:= $(patsubst %/, %/lib.a, $(libs-y))
 
-ifdef include-config
+ifdef include_config
 
 # Here goes the main Makefile
 # ===========================================================================
@@ -250,7 +251,7 @@ ifdef include-config
 
 #	In this section, we need .config
 
--include ..config.cmd
+-include .config.cmd
 
 ifdef CONFIG_MODULES
 export EXPORT_FLAGS := -DEXPORT_SYMTAB
@@ -298,6 +299,8 @@ define cmd_vmlinux__
 endef
 
 #	set -e makes the rule exit immediately on error
+#	Final awk script makes sure per-cpu vars are in per-cpu section, as
+#	old gcc (eg egcs 2.92.11) ignores section attribute if uninitialized.
 
 define rule_vmlinux__
 	set -e
@@ -311,10 +314,21 @@ define rule_vmlinux__
 	echo 'cmd_$@ := $(cmd_vmlinux__)' > $(@D)/.$(@F).cmd
 endef
 
-define rule_vmlinux
+define rule_vmlinux_no_percpu
 	$(rule_vmlinux__)
 	$(NM) $@ | grep -v '\(compiled\)\|\(\.o$$\)\|\( [aUw] \)\|\(\.\.ng$$\)\|\(LASH[RL]DI\)' | sort > System.map
 endef
+
+ifdef CONFIG_SMP
+define rule_vmlinux
+	$(rule_vmlinux_no_percpu)
+	$(AWK) -f scripts/per-cpu-check.awk < System.map
+endef
+else
+define rule_vmlinux
+	$(rule_vmlinux_no_percpu)
+endef
+endif
 
 LDFLAGS_vmlinux += -T arch/$(ARCH)/vmlinux.lds.s
 
@@ -334,7 +348,7 @@ ifdef CONFIG_KALLSYMS
 kallsyms.o := .tmp_kallsyms2.o
 
 quiet_cmd_kallsyms = KSYM    $@
-cmd_kallsyms = $(KALLSYMS) $< > $@
+cmd_kallsyms = sh $(KALLSYMS) $< $@
 
 .tmp_kallsyms1.o: .tmp_vmlinux1
 	$(call cmd,kallsyms)
@@ -514,7 +528,7 @@ modules: $(SUBDIRS)
 #	Install modules
 
 .PHONY: modules_install
-modules_install: _modinst_ $(patsubst %, _modinst_%, $(SUBDIRS)) _modinst_post
+modules_install: _modinst_ $(patsubst %, _modinst_%, $(SUBDIRS))
 
 .PHONY: _modinst_
 _modinst_:
@@ -522,20 +536,6 @@ _modinst_:
 	@rm -f $(MODLIB)/build
 	@mkdir -p $(MODLIB)/kernel
 	@ln -s $(TOPDIR) $(MODLIB)/build
-
-# If System.map exists, run depmod.  This deliberately does not have a
-# dependency on System.map since that would run the dependency tree on
-# vmlinux.  This depmod is only for convenience to give the initial
-# boot a modules.dep even before / is mounted read-write.  However the
-# boot script depmod is the master version.
-ifeq "$(strip $(INSTALL_MOD_PATH))" ""
-depmod_opts	:=
-else
-depmod_opts	:= -b $(INSTALL_MOD_PATH) -r
-endif
-.PHONY: _modinst_post
-_modinst_post:
-	if [ -r System.map ]; then $(DEPMOD) -ae -F System.map $(depmod_opts) $(KERNELRELEASE); fi
 
 .PHONY: $(patsubst %, _modinst_%, $(SUBDIRS))
 $(patsubst %, _modinst_%, $(SUBDIRS)) :
@@ -602,7 +602,7 @@ rpm:	clean spec
 	rpm -ta $(TOPDIR)/../$(KERNELPATH).tar.gz ; \
 	rm $(TOPDIR)/../$(KERNELPATH).tar.gz
 
-else # ifdef include-config
+else # ifdef include_config
 
 ifeq ($(filter-out $(noconfig_targets),$(MAKECMDGOALS)),)
 
@@ -764,8 +764,7 @@ tags: FORCE
 help:
 	@echo  'Cleaning targets:'
 	@echo  '  clean		- remove most generated files but keep the config'
-	@echo  '  mrproper	- remove all generated files including the config'
-	@echo  '  distclean	- mrproper + remove files generated by editors and patch'
+	@echo  '  mrproper	- remove all generated files + config + various backup files'
 	@echo  ''
 	@echo  'Configuration targets:'
 	@echo  '  oldconfig	- Update current config utilising a line-oriented program'
@@ -798,7 +797,7 @@ help:
 # Documentation targets
 # ---------------------------------------------------------------------------
 sgmldocs psdocs pdfdocs htmldocs: scripts
-	$(Q)$(MAKE) -f Documentation/DocBook/Makefile $@
+	$(Q)$(MAKE) -f scripts/Makefile.build obj=Documentation/DocBook $@
 
 # Scripts to check various things for consistency
 # ---------------------------------------------------------------------------
@@ -828,7 +827,7 @@ else # ifneq ($(filter-out $(noconfig_targets),$(MAKECMDGOALS)),)
 	$(MAKE) $@
 
 endif # ifeq ($(filter-out $(noconfig_targets),$(MAKECMDGOALS)),)
-endif # ifdef include-config
+endif # ifdef include_config
 
 # FIXME Should go into a make.lib or something 
 # ===========================================================================
