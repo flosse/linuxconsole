@@ -453,7 +453,6 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 	struct fb_ops *fb = info->fbops;
 	unsigned long off;
 #if !defined(__sparc__) || defined(__sparc_v9__)
-	struct fb_var_screeninfo var;
 	unsigned long start;
 	u32 len;
 #endif
