@@ -100,13 +100,6 @@
 
 #ifdef CONFIG_VT
 #include <linux/vt_kern.h>
-extern void con_init_devfs (void);
-#ifdef CONFIG_PROM_CONSOLE
-extern void prom_con_init(void);
-#endif
-#ifdef CONFIG_FRAMEBUFFER_CONSOLE
-extern void fb_console_init(void);
-#endif
 #endif
 
 #define TTY_DEV MKDEV(TTYAUX_MAJOR,0)
@@ -2307,15 +2300,7 @@ void __init tty_init(void)
 #endif
 	
 #ifdef CONFIG_VT
-#if defined (CONFIG_PROM_CONSOLE)
-	prom_con_init();
-#endif
-#if defined (CONFIG_FRAMEBUFFER_CONSOLE)
-	fb_console_init();
-#endif
-	kbd_init();
-	console_map_init();
-	vcs_init();
+	vty_init();
 #endif
 #ifdef CONFIG_ESPSERIAL  /* init ESP before rs, so rs doesn't see the port */
 	espserial_init();

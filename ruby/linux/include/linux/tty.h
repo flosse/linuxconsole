@@ -416,6 +416,10 @@ extern void console_print(const char *);
 
 /* vt.c */
 
+extern int vty_init(void);
+
+/* vt_ioctl.c */
+
 extern int vt_ioctl(struct tty_struct *tty, struct file * file,
 		    unsigned int cmd, unsigned long arg);
 

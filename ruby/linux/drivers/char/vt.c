@@ -54,6 +54,12 @@ extern void vga_console_init(void);
 #ifdef CONFIG_MDA_CONSOLE
 extern void mda_console_init(void);	
 #endif
+#if defined (CONFIG_PROM_CONSOLE)
+extern void prom_con_init(void);
+#endif
+#if defined (CONFIG_FRAMEBUFFER_CONSOLE)
+extern void fb_console_init(void);
+#endif
 
 #ifndef MIN
 #define MIN(a,b)        ((a) < (b) ? (a) : (b))
@@ -1544,6 +1550,12 @@ const char *create_vt(struct tty_driver *drv, struct vt_struct *vt, int init)
 	vt->default_mode->display_fg = vt;
 	vt->vc_cons[0] = vc_allocate(current_vc);
 	vt->keyboard = NULL;
+
+        init_timer(&vt->timer);
+        vt->timer.data = (long) vt;
+        vt->timer.function = blank_screen;
+        mod_timer(&vt->timer, jiffies + vt->blank_interval);
+	INIT_TQUEUE(&vt->vt_tq, vt_callback, vt);
 	if (!admin_vt) {
 		struct vc_data *vc = vt->vc_cons[0];		
 
@@ -1556,11 +1568,6 @@ const char *create_vt(struct tty_driver *drv, struct vt_struct *vt, int init)
                 vte_ed(vt->vc_cons[0], 0);
                 update_screen(vt->vc_cons[0]);
 	}
-        init_timer(&vt->timer);
-        vt->timer.data = (long) vt;
-        vt->timer.function = blank_screen;
-        mod_timer(&vt->timer, jiffies + vt->blank_interval);
-	INIT_TQUEUE(&vt->vt_tq, vt_callback, vt);
 	current_vc += MAX_NR_USER_CONSOLES;
 	return display_desc;
 }
@@ -1583,6 +1590,20 @@ void __init vt_console_init(void)
 #if defined(CONFIG_MDA_CONSOLE)
 	mda_console_init();
 #endif
+}
+
+int __init vty_init(void)
+{
+#if defined (CONFIG_PROM_CONSOLE)
+	prom_con_init();
+#endif
+#if defined (CONFIG_FRAMEBUFFER_CONSOLE)
+	fb_console_init();
+#endif
+	kbd_init();
+	console_map_init();
+	vcs_init();
+	return 0;
 }
 
 static void clear_buffer_attributes(struct vc_data *vc)

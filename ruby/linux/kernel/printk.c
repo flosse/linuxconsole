@@ -14,6 +14,9 @@
  *     manfreds@colorfullife.com
  * Rewrote bits to get rid of console_lock
  *	01Mar01 Andrew Morton <andrewm@uow.edu.au>
+ * Added finer grain locking for the console system. Also made it more
+ * VT independent. 
+ *      11-28-2001 James Simmons <jsimmons@transvirtual.com>
  */
 
 #include <linux/mm.h>
