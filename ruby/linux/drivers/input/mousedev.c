@@ -78,6 +78,9 @@ static struct input_handler mousedev_handler;
 static struct mousedev *mousedev_table[MOUSEDEV_MINORS];
 static struct mousedev mousedev_mix;
 
+static int xres = CONFIG_INPUT_MOUSEDEV_SCREEN_X;
+static int yres = CONFIG_INPUT_MOUSEDEV_SCREEN_Y;
+
 static void mousedev_event(struct input_handle *handle, unsigned int type, unsigned int code, int value)
 {
 	struct mousedev *mousedevs[3] = { handle->private, &mousedev_mix, NULL };
@@ -95,12 +98,12 @@ static void mousedev_event(struct input_handle *handle, unsigned int type, unsig
 					switch (code) {
 						case ABS_X:	
 							size = handle->dev->absmax[ABS_X] - handle->dev->absmin[ABS_X];
-							list->dx += (value * CONFIG_INPUT_MOUSEDEV_SCREEN_X - list->oldx) / size;
+							list->dx += (value * xres - list->oldx) / size;
 							list->oldx += list->dx * size;
 							break;
 						case ABS_Y:
 							size = handle->dev->absmax[ABS_Y] - handle->dev->absmin[ABS_Y];
-							list->dy -= (value * CONFIG_INPUT_MOUSEDEV_SCREEN_Y - list->oldy) / size;
+							list->dy -= (value * yres - list->oldy) / size;
 							list->oldy -= list->dy * size;
 							break;
 					}
@@ -490,3 +493,7 @@ module_exit(mousedev_exit);
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 MODULE_DESCRIPTION("Input driver to PS/2 or ImPS/2 device driver");
+MODULE_PARM(xres, "i");
+MODULE_PARM_DESC(xres, "Horizontal screen resolution");
+MODULE_PARM(yres, "i");
+MODULE_PARM_DESC(yres, "Vertical screen resolution");
