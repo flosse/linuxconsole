@@ -379,6 +379,10 @@ static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* ef
 	default: return -1;
 	}
 
+	if ((effect->u.interactive.axis != FF_X) &&
+		(effect->u.interactive.axis != FF_Y))
+		return -1;
+
 	interactive_id = make_interactive_modifier(iforce,
 		effect->u.interactive.right_saturation,
 		effect->u.interactive.left_saturation,
@@ -388,8 +392,8 @@ static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* ef
 		effect->u.interactive.center);
 
 	make_core(iforce, effect->id, 
-		(effect->u.interactive.axis & BIT(FF_X))?interactive_id:0xffff,
-		(effect->u.interactive.axis & BIT(FF_Y))?interactive_id:0xffff,
+		(effect->u.interactive.axis == FF_X)?interactive_id:0xffff,
+		(effect->u.interactive.axis == FF_Y)?interactive_id:0xffff,
 		type,
 		effect->replay.length, effect->replay.delay,
 		effect->trigger.button, effect->trigger.interval,
