@@ -23,19 +23,19 @@
 #define DUMMY_ROWS	25
 #endif
 
-static const char *dummycon_startup(struct vt_struct *vt)
+static const char *dummycon_startup(struct vt_struct *vt, int init)
 {
+    vt->default_mode.vc_can_do_color = 1;
+    vt->default_mode.vc_cols = DUMMY_COLUMNS;
+    vt->default_mode.vc_rows = DUMMY_ROWS;
     return "dummy device";
 }
 
-static void dummycon_init(struct vc_data *vc, int init)
+static void dummycon_init(struct vc_data *vc)
 {
-    vc->vc_can_do_color = 1;
-    if (init) {
-	vc->vc_cols = DUMMY_COLUMNS;
-	vc->vc_rows = DUMMY_ROWS;
-    } else
-	vc_resize(vc, DUMMY_ROWS, DUMMY_COLUMNS);
+    vc = vc->display_fg->default_mode.vc_can_do_color = 1;
+    vc->vc_cols = vc->display_fg->default_mode.vc_cols;
+    vc->vc_rows = vc->display_fg->default_mode.vc_rows;
 }
 
 static int dummycon_dummy(void)
