@@ -46,6 +46,8 @@
 #include <linux/brlock.h>
 #include <linux/fs.h>
 #include <linux/tty.h>
+#include <linux/in6.h>
+#include <asm/checksum.h>
 
 #if defined(CONFIG_PROC_FS)
 #include <linux/proc_fs.h>
@@ -129,7 +131,6 @@ EXPORT_SYMBOL(def_blk_fops);
 EXPORT_SYMBOL(update_atime);
 EXPORT_SYMBOL(get_fs_type);
 EXPORT_SYMBOL(get_super);
-EXPORT_SYMBOL(get_empty_super);
 EXPORT_SYMBOL(getname);
 EXPORT_SYMBOL(names_cachep);
 EXPORT_SYMBOL(fput);
@@ -182,7 +183,6 @@ EXPORT_SYMBOL(inode_setattr);
 EXPORT_SYMBOL(inode_change_ok);
 EXPORT_SYMBOL(write_inode_now);
 EXPORT_SYMBOL(notify_change);
-EXPORT_SYMBOL(get_hardblocksize);
 EXPORT_SYMBOL(set_blocksize);
 EXPORT_SYMBOL(getblk);
 EXPORT_SYMBOL(bdget);
@@ -384,8 +384,6 @@ EXPORT_SYMBOL(__br_write_unlock);
 #endif
 
 /* Kiobufs */
-EXPORT_SYMBOL(kiobuf_init);
-
 EXPORT_SYMBOL(alloc_kiovec);
 EXPORT_SYMBOL(free_kiovec);
 EXPORT_SYMBOL(expand_kiobuf);
@@ -461,6 +459,7 @@ EXPORT_SYMBOL(get_random_bytes);
 EXPORT_SYMBOL(securebits);
 EXPORT_SYMBOL(cap_bset);
 EXPORT_SYMBOL(daemonize);
+EXPORT_SYMBOL(csum_partial); /* for networking and md */
 
 /* Program loader interfaces */
 EXPORT_SYMBOL(setup_arg_pages);
