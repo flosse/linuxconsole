@@ -133,8 +133,11 @@ static void npower_button_handler(int irq, void *dev_id, struct pt_regs *regs)
         int down = (GPLR & GPIO_BITSY_NPOWER_BUTTON) ? 0 : 1;
 	struct input_dev *dev = (struct input_dev *) dev_id;
 
-	printk("In power power handler\n");
-
+	/* 
+	 * This interrupt is only called when we release the key. So we have 
+	 * to fake a key press.
+	 */ 	
+	input_report_key(dev, KEY_SUSPEND, 1);
 	input_report_key(dev, KEY_SUSPEND, down); 	
 /*
         if (suspend_button_mode) {
@@ -189,7 +192,7 @@ static int h3600_ts_pm_callback(struct pm_dev *pm_dev, pm_request_t req,
 static void h3600ts_process_packet(struct h3600_dev *ts)
 {
         struct input_dev *dev = &ts->dev;
-	static int touched = 1;
+	static int touched = 0;
 	int key, down = 0;
 
         switch (ts->event) {
@@ -250,15 +253,22 @@ static void h3600ts_process_packet(struct h3600_dev *ts)
                  *       byte 0    1       2       3
                  */
                 case TOUCHS_ID:
+			if (!touched) { 
+				input_report_key(dev, BTN_TOUCH, 1);
+				touched = 1;
+			}			
+
 			if (ts->len) {
-                       		input_report_abs(dev, ABS_X, (u16) ts->buf[0]);
-                       		input_report_abs(dev, ABS_Y, (u16) ts->buf[2]);
+				unsigned short x, y;				
+
+				x = ts->buf[0]; x <<= 8; x += ts->buf[1];
+                                y = ts->buf[2]; y <<= 8; y += ts->buf[3];
+
+                       		input_report_abs(dev, ABS_X, x);
+                       		input_report_abs(dev, ABS_Y, y);
 			} else {
-				printk("event is %d, chksum is %d, len is %d,
-                                       idx is %d, buf is %lx\n", ts->event, 
-                                      ts->chksum, ts->len, ts->idx, ts->buf[0]);
 		               	input_report_key(dev, BTN_TOUCH, 0);
-				touched ^= 1;
+				touched = 0;
 			}	
                         break;
 		default:
@@ -285,6 +295,7 @@ static int h3600ts_event(struct input_dev *dev, unsigned int type,
 		 */
 		case EV_KEY:
 			if (code == KEY_SUSPEND) {
+				printk("Handling power key\n");
 				if (value == 0) {
 					/* Turn off the power */
 					//h3600_flite_power(FLITE_PWR_OFF);
