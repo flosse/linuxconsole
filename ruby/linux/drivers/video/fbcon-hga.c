@@ -21,8 +21,8 @@
 #include <linux/string.h>
 #include <linux/fb.h>
 
-#include <video/fbcon.h>
-#include <video/fbcon-hga.h>
+#include "fbcon-hga.h"
+#include "fbcon.h"
 
 #if 0
 #define DPRINTK(args...) printk(KERN_DEBUG __FILE__": " ##args)
@@ -213,9 +213,14 @@ void fbcon_hga_clear_margins(struct vc_data *conp, struct display *p,
 	 */
 
 struct display_switch fbcon_hga = {
-	fbcon_hga_setup, fbcon_hga_bmove, fbcon_hga_clear, fbcon_hga_putc,
-	fbcon_hga_putcs, fbcon_hga_revc, NULL, NULL, fbcon_hga_clear_margins,
-	FONTWIDTH(8)
+	setup:		fbcon_hga_setup,
+	bmove:		fbcon_hga_bmove,
+	clear:		fbcon_hga_clear,
+	putc:		fbcon_hga_putc,
+	putcs:		fbcon_hga_putcs,
+	revc:		fbcon_hga_revc,
+	clear_margins:	fbcon_hga_clear_margins,
+	fontwidthmask:	FONTWIDTH(8)
 };
 
 

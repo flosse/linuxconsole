@@ -19,8 +19,8 @@
 
 #include <asm/io.h>
 
-#include <video/fbcon.h>
-#include <video/fbcon-vga-planes.h>
+#include "fbcon-vga-planes.h"
+#include "fbcon.h"
 
 #define GRAPHICS_ADDR_REG 0x3ce		/* Graphics address register. */
 #define GRAPHICS_DATA_REG 0x3cf		/* Graphics data register. */
@@ -327,15 +327,23 @@ void fbcon_vga_planes_revc(struct display *p, int xx, int yy)
 }
 
 struct display_switch fbcon_vga_planes = {
-    fbcon_vga_planes_setup, fbcon_vga_planes_bmove, fbcon_vga_planes_clear,
-    fbcon_vga_planes_putc, fbcon_vga_planes_putcs, fbcon_vga_planes_revc,
-    NULL, NULL, NULL, FONTWIDTH(8)
+    setup:		fbcon_vga_planes_setup,
+    bmove:		fbcon_vga_planes_bmove,
+    clear:		fbcon_vga_planes_clear,
+    putc:		fbcon_vga_planes_putc,
+    putcs:		fbcon_vga_planes_putcs,
+    revc:		fbcon_vga_planes_revc,
+    fontwidthmask:	FONTWIDTH(8)
 };
 
 struct display_switch fbcon_ega_planes = {
-    fbcon_vga_planes_setup, fbcon_vga_planes_bmove, fbcon_vga_planes_clear,
-    fbcon_ega_planes_putc, fbcon_ega_planes_putcs, fbcon_vga_planes_revc,
-    NULL, NULL, NULL, FONTWIDTH(8)
+    setup:		fbcon_vga_planes_setup,
+    bmove:		fbcon_vga_planes_bmove,
+    clear:		fbcon_vga_planes_clear,
+    putc:		fbcon_ega_planes_putc,
+    putcs:		fbcon_ega_planes_putcs,
+    revc:		fbcon_vga_planes_revc,
+    fontwidthmask:	FONTWIDTH(8)
 };
 
 #ifdef MODULE

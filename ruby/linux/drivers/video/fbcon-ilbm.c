@@ -15,9 +15,8 @@
 #include <linux/string.h>
 #include <linux/fb.h>
 
-#include <video/fbcon.h>
-#include <video/fbcon-ilbm.h>
-
+#include "fbcon-ilbm.h"
+#include "fbcon.h"
 
     /*
      *  Interleaved bitplanes à la Amiga
@@ -259,8 +258,13 @@ void fbcon_ilbm_revc(struct display *p, int xx, int yy)
      */
 
 struct display_switch fbcon_ilbm = {
-    fbcon_ilbm_setup, fbcon_ilbm_bmove, fbcon_ilbm_clear, fbcon_ilbm_putc,
-    fbcon_ilbm_putcs, fbcon_ilbm_revc, NULL, NULL, NULL, FONTWIDTH(8)
+    setup:		fbcon_ilbm_setup,
+    bmove:		fbcon_ilbm_bmove,
+    clear:		fbcon_ilbm_clear,
+    putc:		fbcon_ilbm_putc,
+    putcs:		fbcon_ilbm_putcs,
+    revc:		fbcon_ilbm_revc,
+    fontwidthmask:	FONTWIDTH(8)
 };
 
 

@@ -15,9 +15,8 @@
 #include <linux/string.h>
 #include <linux/fb.h>
 
-#include <video/fbcon.h>
+#include "fbcon.h"
 #include <video/fbcon-cfb32.h>
-
 
     /*
      *  32 bpp packed pixels
@@ -266,9 +265,14 @@ void fbcon_cfb32_clear_margins(struct vc_data *conp, struct display *p,
      */
 
 struct display_switch fbcon_cfb32 = {
-    fbcon_cfb32_setup, fbcon_cfb32_bmove, fbcon_cfb32_clear, fbcon_cfb32_putc,
-    fbcon_cfb32_putcs, fbcon_cfb32_revc, NULL, NULL, fbcon_cfb32_clear_margins,
-    FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
+    setup:		fbcon_cfb32_setup,
+    bmove:		fbcon_cfb32_bmove,
+    clear:		fbcon_cfb32_clear,
+    putc:		fbcon_cfb32_putc,
+    putcs:		fbcon_cfb32_putcs,
+    revc:		fbcon_cfb32_revc,
+    clear_margins:	fbcon_cfb32_clear_margins,
+    fontwidthmask:	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
 };
 
 

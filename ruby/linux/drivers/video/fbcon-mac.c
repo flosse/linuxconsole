@@ -19,9 +19,8 @@
 #include <linux/fb.h>
 #include <linux/delay.h>
 
-#include <video/fbcon.h>
-#include <video/fbcon-mac.h>
-
+#include "fbcon-mac.h"
+#include "fbcon.h"
 
     /*
      *  variable bpp packed pixels
@@ -447,8 +446,13 @@ static int get_pixel_mac(struct display *p, int pixel_x, int pixel_y)
      */
 
 struct display_switch fbcon_mac = {
-    fbcon_mac_setup, fbcon_redraw_bmove, fbcon_redraw_clear, fbcon_mac_putc,
-    fbcon_mac_putcs, fbcon_mac_revc, NULL, NULL, NULL, FONTWIDTHRANGE(1,8)
+    setup:		fbcon_mac_setup,
+    bmove:		fbcon_redraw_bmove,
+    clear:		fbcon_redraw_clear,
+    putc:		fbcon_mac_putc,
+    putcs:		fbcon_mac_putcs,
+    revc:		fbcon_mac_revc,
+    fontwidthmask:	FONTWIDTHRANGE(1,8)
 };
 
 
