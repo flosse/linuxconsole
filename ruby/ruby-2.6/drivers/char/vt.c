@@ -99,6 +99,7 @@
 #include <linux/workqueue.h>
 #include <linux/bootmem.h>
 #include <linux/pm.h>
+#include <linux/font.h>
 
 #include <asm/io.h>
 #include <asm/system.h>
@@ -1205,7 +1206,6 @@ int mouse_reporting(struct vc_data *vc)
  * kernel memory allocation is available.
  */
 //char con_buf[PAGE_SIZE];
-#define CON_BUF_SIZE	PAGE_SIZE
 DECLARE_MUTEX(con_buf_sem);
 
 static int do_con_write(struct tty_struct *tty, int from_user,
@@ -1958,6 +1958,10 @@ int take_over_console(struct vt_struct *vt, const struct consw *csw)
 		if (vc) {
 			old_was_color = vc->vc_can_do_color;
 			cons_num = vt->first_vc + i;
+			origin = (unsigned long) screenbuf;
+			visible_origin = origin;
+			scr_end = origin + screenbuf_size;
+			pos = origin + video_size_row*y + 2*x;
 			visual_init(vc, 0);
 			update_attr(vc);
 			

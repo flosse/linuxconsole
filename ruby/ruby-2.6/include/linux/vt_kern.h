@@ -103,7 +103,7 @@ struct vc_data {
 	unsigned int vc_npar, vc_par[NPAR];	/* Parameters of current escape sequence */
 	struct kbd_struct kbd_table;	/* VC keyboard state */
 	unsigned short vc_hi_font_mask;	/* [#] Attribute set for upper 256 chars of font or 0 if not supported */
-	struct console_font_op vc_font;	/* VC current font set */
+	struct console_font vc_font;	/* VC current font set */
 	struct vt_struct *display_fg;	/* Ptr to display */
 	struct tty_struct *vc_tty;	/* TTY we are attached to */
 	/* data for manual vt switching */
@@ -200,7 +200,10 @@ struct consw {
 	void	(*con_bmove)(struct vc_data *, int, int, int, int, int, int);
 	int	(*con_switch)(struct vc_data *);
 	int	(*con_blank)(struct vc_data *, int, int);
-	int	(*con_font_op)(struct vc_data *, struct console_font_op *);
+	int	(*con_font_set)(struct vc_data *, struct console_font *, unsigned);
+	int	(*con_font_get)(struct vc_data *, struct console_font *);
+	int	(*con_font_default)(struct vc_data *, struct console_font *, char *);
+	int	(*con_font_copy)(struct vc_data *, int);
 	int	(*con_resize)(struct vc_data *, unsigned int, unsigned int);
 	int	(*con_set_palette)(struct vc_data *, unsigned char *);
 	int	(*con_scroll)(struct vc_data *, int);
@@ -315,9 +318,14 @@ void unblank_vt(struct vt_struct *vt);
 void unblank_screen(void);
 void poke_blanked_console(struct vt_struct *vt);
 int con_font_op(struct vc_data *vc, struct console_font_op *op);
+int con_font_set(struct vc_data *vc, struct console_font_op *op);
+int con_font_get(struct vc_data *vc, struct console_font_op *op);
+int con_font_default(struct vc_data *vc, struct console_font_op *op);
+int con_font_copy(struct vc_data *vc, struct console_font_op *op);
 int take_over_console(struct vt_struct *vt, const struct consw *sw);
 
 int tioclinux(struct tty_struct *tty, unsigned long arg);
+extern struct tty_driver *console_device(int *);
 
 /* consolemap.c */
 struct unimapinit;
@@ -348,4 +356,8 @@ void __init vt_sysfs_init(void);
 extern int vt_proc_attach(struct vt_struct *vt);
 extern int vt_proc_detach(struct vt_struct *vt);
 #endif
+
+#define CON_BUF_SIZE	PAGE_SIZE
+extern struct semaphore con_buf_sem;
+
 #endif				/* _VT_KERN_H */

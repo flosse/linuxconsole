@@ -27,6 +27,7 @@
 #include <linux/init.h>
 #include <linux/linux_logo.h>
 #include <linux/proc_fs.h>
+#include <linux/console.h>
 #ifdef CONFIG_KMOD
 #include <linux/kmod.h>
 #endif
@@ -45,7 +46,6 @@
 #include <asm/pgtable.h>
 
 #include <linux/fb.h>
-#include <linux/vt_kern.h>
 
 #ifdef CONFIG_FRAMEBUFFER_CONSOLE
 #include "console/fbcon.h"
@@ -73,8 +73,8 @@ extern int cyber2000fb_init(void);
 extern int cyber2000fb_setup(char*);
 extern int retz3fb_init(void);
 extern int retz3fb_setup(char*);
-extern int clgenfb_init(void);
-extern int clgenfb_setup(char*);
+extern int cirrusfb_init(void);
+extern int cirrusfb_setup(char*);
 extern int hitfb_init(void);
 extern int vfb_init(void);
 extern int vfb_setup(char*);
@@ -142,6 +142,8 @@ extern int tx3912fb_init(void);
 extern int tx3912fb_setup(char*);
 extern int radeonfb_init(void);
 extern int radeonfb_setup(char*);
+extern int radeonfb_old_init(void);
+extern int radeonfb_old_setup(char*);
 extern int e1355fb_init(void);
 extern int e1355fb_setup(char*);
 extern int pvr2fb_init(void);
@@ -170,6 +172,7 @@ extern int kyrofb_init(void);
 extern int kyrofb_setup(char*);
 extern int mc68x328fb_init(void);
 extern int mc68x328fb_setup(char *);
+extern int asiliantfb_init(void);
 
 static struct {
 	const char *name;
@@ -201,8 +204,8 @@ static struct {
 #ifdef CONFIG_FB_PM3
 	{ "pm3fb", pm3fb_init, pm3fb_setup },
 #endif           
-#ifdef CONFIG_FB_CLGEN
-	{ "clgenfb", clgenfb_init, clgenfb_setup },
+#ifdef CONFIG_FB_CIRRUS
+	{ "cirrusfb", cirrusfb_init, cirrusfb_setup },
 #endif
 #ifdef CONFIG_FB_ATY
 	{ "atyfb", atyfb_init, atyfb_setup },
@@ -380,6 +383,13 @@ static struct {
 #ifdef CONFIG_FB_KYRO
 	{ "kyrofb", kyrofb_init, kyrofb_setup },
 #endif
+#ifdef CONFIG_FB_68328
+	{ "68328fb", mc68x328fb_init, mc68x328fb_setup },
+#endif
+#ifdef CONFIG_FB_ASILIANT
+	{ "asiliantfb", asiliantfb_init, NULL },
+#endif
+
 	/*
 	 * Generic drivers that don't use resource management (yet)
 	 */
@@ -391,9 +401,6 @@ static struct {
 #ifdef CONFIG_GSP_RESOLVER
 	/* Not a real frame buffer device... */
 	{ "resolverfb", NULL, resolver_video_setup },
-#endif
-#ifdef CONFIG_FB_68328
-	{ "68328fb", mc68x328fb_init, mc68x328fb_setup },
 #endif
 
 #ifdef CONFIG_FB_VIRTUAL
@@ -423,20 +430,9 @@ static int ofonly __initdata = 0;
 /*
  * Drawing helpers.
  */
-static u8 fb_sys_inbuf(struct fb_info *info, u8 *src)
-{
-	return *src;
-}
-
-static void fb_sys_outbuf(struct fb_info *info, u8 *dst,
-				u8 *src, unsigned int size)
-{
-	memcpy(dst, src, size);
-}	
-
-void fb_move_buf_aligned(struct fb_info *info, struct fb_pixmap *buf,
-			u8 *dst, u32 d_pitch, u8 *src, u32 s_pitch,
-			u32 height)
+void fb_iomove_buf_aligned(struct fb_info *info, struct fb_pixmap *buf,
+			   u8 *dst, u32 d_pitch, u8 *src, u32 s_pitch,
+			   u32 height)
 {
 	int i;
 
@@ -447,10 +443,24 @@ void fb_move_buf_aligned(struct fb_info *info, struct fb_pixmap *buf,
 	}
 }
 
-void fb_move_buf_unaligned(struct fb_info *info, struct fb_pixmap *buf,
-			u8 *dst, u32 d_pitch, u8 *src, u32 idx,
-			u32 height, u32 shift_high, u32 shift_low,
-			u32 mod)
+void fb_sysmove_buf_aligned(struct fb_info *info, struct fb_pixmap *buf,
+			    u8 *dst, u32 d_pitch, u8 *src, u32 s_pitch,
+			    u32 height)
+{
+	int i, j;
+
+	for (i = height; i--; ) {
+		for (j = 0; j < s_pitch; j++)
+			dst[j] = src[j];
+		src += s_pitch;
+		dst += d_pitch;
+	}
+}
+
+void fb_iomove_buf_unaligned(struct fb_info *info, struct fb_pixmap *buf,
+			     u8 *dst, u32 d_pitch, u8 *src, u32 idx,
+			     u32 height, u32 shift_high, u32 shift_low,
+			     u32 mod)
 {
 	u8 mask = (u8) (0xfff << shift_high), tmp;
 	int i, j;
@@ -473,6 +483,37 @@ void fb_move_buf_unaligned(struct fb_info *info, struct fb_pixmap *buf,
 			tmp = *src << shift_high;
 			buf->outbuf(info, dst+idx+1, &tmp, 1);
 		}	
+		src++;
+		dst += d_pitch;
+	}
+}
+
+void fb_sysmove_buf_unaligned(struct fb_info *info, struct fb_pixmap *buf,
+			      u8 *dst, u32 d_pitch, u8 *src, u32 idx,
+			      u32 height, u32 shift_high, u32 shift_low,
+			      u32 mod)
+{
+	u8 mask = (u8) (0xfff << shift_high), tmp;
+	int i, j;
+
+	for (i = height; i--; ) {
+		for (j = 0; j < idx; j++) {
+			tmp = dst[j];
+			tmp &= mask;
+			tmp |= *src >> shift_low;
+			dst[j] = tmp;
+			tmp = *src << shift_high;
+			dst[j+1] = tmp;
+			src++;
+		}
+		tmp = dst[idx];
+		tmp &= mask;
+		tmp |= *src >> shift_low;
+		dst[idx] = tmp;
+		if (shift_high < mod) {
+			tmp = *src << shift_high;
+			dst[idx+1] = tmp;
+		}
 		src++;
 		dst += d_pitch;
 	}
@@ -522,7 +563,7 @@ static inline unsigned safe_shift(unsigned d, int n)
 	return n < 0 ? d >> -n : d << n;
 }
 
-static void __init fb_set_logocmap(struct fb_info *info,
+static void fb_set_logocmap(struct fb_info *info,
 				   const struct linux_logo *logo)
 {
 	struct fb_cmap palette_cmap;
@@ -552,11 +593,11 @@ static void __init fb_set_logocmap(struct fb_info *info,
 			palette_cmap.blue[j] = clut[2] << 8 | clut[2];
 			clut += 3;
 		}
-		fb_set_cmap(&palette_cmap, 1, info);
+		fb_set_cmap(&palette_cmap, info);
 	}
 }
 
-static void  __init fb_set_logo_truepalette(struct fb_info *info,
+static void  fb_set_logo_truepalette(struct fb_info *info,
 					    const struct linux_logo *logo,
 					    u32 *palette)
 {
@@ -586,7 +627,7 @@ static void  __init fb_set_logo_truepalette(struct fb_info *info,
 	}
 }
 
-static void __init fb_set_logo_directpalette(struct fb_info *info,
+static void fb_set_logo_directpalette(struct fb_info *info,
 					     const struct linux_logo *logo,
 					     u32 *palette)
 {
@@ -601,7 +642,7 @@ static void __init fb_set_logo_directpalette(struct fb_info *info,
 		palette[i] = i << redshift | i << greenshift | i << blueshift;
 }
 
-static void __init fb_set_logo(struct fb_info *info,
+static void fb_set_logo(struct fb_info *info,
 			       const struct linux_logo *logo, u8 *dst,
 			       int depth)
 {
@@ -799,7 +840,7 @@ static int fbmem_read_proc(char *buf, char **start, off_t offset,
 }
 
 static ssize_t
-fb_read(struct file *file, char *buf, size_t count, loff_t *ppos)
+fb_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 {
 	unsigned long p = *ppos;
 	struct inode *inode = file->f_dentry->d_inode;
@@ -836,7 +877,7 @@ fb_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 }
 
 static ssize_t
-fb_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
+fb_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 {
 	unsigned long p = *ppos;
 	struct inode *inode = file->f_dentry->d_inode;
@@ -890,53 +931,100 @@ fb_load_cursor_image(struct fb_info *info)
 	unsigned int width = (info->cursor.image.width + 7) >> 3;
 	u8 *data = (u8 *) info->cursor.image.data;
 
-	info->sprite.outbuf(info, info->sprite.addr, data, width);
+	if (info->sprite.outbuf)
+	    info->sprite.outbuf(info, info->sprite.addr, data, width);
+	else
+	    memcpy(info->sprite.addr, data, width);
 }
 
 int
-fb_cursor(struct fb_info *info, struct fb_cursor *sprite)
+fb_cursor(struct fb_info *info, struct fb_cursor_user __user *sprite)
 {
+	struct fb_cursor_user cursor_user;
 	struct fb_cursor cursor;
-	int err;
+	char *data = NULL, *mask = NULL;
+	u16 *red = NULL, *green = NULL, *blue = NULL, *transp = NULL;
+	int err = -EINVAL;
 	
-	if (copy_from_user(&cursor, sprite, sizeof(struct fb_cursor)))
+	if (copy_from_user(&cursor_user, sprite, sizeof(struct fb_cursor_user)))
 		return -EFAULT;
+
+	memcpy(&cursor, &cursor_user, sizeof(cursor));
+	cursor.mask = NULL;
+	cursor.image.data = NULL;
+	cursor.image.cmap.red = NULL;
+	cursor.image.cmap.green = NULL;
+	cursor.image.cmap.blue = NULL;
+	cursor.image.cmap.transp = NULL;
 
 	if (cursor.set & FB_CUR_SETCUR)
 		info->cursor.enable = 1;
 	
 	if (cursor.set & FB_CUR_SETCMAP) {
-		err = fb_copy_cmap(&cursor.image.cmap, &sprite->image.cmap, 1);
-		if (err)
-			return err;
+		unsigned len = cursor.image.cmap.len;
+		if ((int)len <= 0)
+			goto out;
+		len *= 2;
+		err = -ENOMEM;
+		red = kmalloc(len, GFP_USER);
+		green = kmalloc(len, GFP_USER);
+		blue = kmalloc(len, GFP_USER);
+		if (!red || !green || !blue)
+			goto out;
+		if (cursor_user.image.cmap.transp) {
+			transp = kmalloc(len, GFP_USER);
+			if (!transp)
+				goto out;
+		}
+		err = -EFAULT;
+		if (copy_from_user(red, cursor_user.image.cmap.red, len))
+			goto out;
+		if (copy_from_user(green, cursor_user.image.cmap.green, len))
+			goto out;
+		if (copy_from_user(blue, cursor_user.image.cmap.blue, len))
+			goto out;
+		if (transp) {
+			if (copy_from_user(transp,
+					   cursor_user.image.cmap.transp, len))
+				goto out;
+		}
+		cursor.image.cmap.red = red;
+		cursor.image.cmap.green = green;
+		cursor.image.cmap.blue = blue;
+		cursor.image.cmap.transp = transp;
 	}
 	
 	if (cursor.set & FB_CUR_SETSHAPE) {
 		int size = ((cursor.image.width + 7) >> 3) * cursor.image.height;		
+
 		if ((cursor.image.height != info->cursor.image.height) ||
 		    (cursor.image.width != info->cursor.image.width))
 			cursor.set |= FB_CUR_SETSIZE;
 		
-		cursor.image.data = kmalloc(size, GFP_KERNEL);
-		if (!cursor.image.data)
-			return -ENOMEM;
+		err = -ENOMEM;
+		data = kmalloc(size, GFP_USER);
+		mask = kmalloc(size, GFP_USER);
+		if (!mask || !data)
+			goto out;
 		
-		cursor.mask = kmalloc(size, GFP_KERNEL);
-		if (!cursor.mask) {
-			kfree(cursor.image.data);
-			return -ENOMEM;
-		}
+		err = -EFAULT;
+		if (copy_from_user(data, cursor_user.image.data, size) ||
+		    copy_from_user(mask, cursor_user.mask, size))
+			goto out;
 		
-		if (copy_from_user(cursor.image.data, sprite->image.data, size) ||
-		    copy_from_user(cursor.mask, sprite->mask, size)) { 
-			kfree(cursor.image.data);
-			kfree(cursor.mask);
-			return -EFAULT;
-		}
+		cursor.image.data = data;
+		cursor.mask = mask;
 	}
 	info->cursor.set = cursor.set;
 	info->cursor.rop = cursor.rop;
 	err = info->fbops->fb_cursor(info, &cursor);
+out:
+	kfree(data);
+	kfree(mask);
+	kfree(red);
+	kfree(green);
+	kfree(blue);
+	kfree(transp);
 	return err;
 }
 
@@ -985,9 +1073,13 @@ fb_set_var(struct fb_info *info, struct fb_var_screeninfo *var)
 
 			fb_pan_display(info, &info->var);
 
-			fb_set_cmap(&info->cmap, 1, info);
+			fb_set_cmap(&info->cmap, info);
 
-			notifier_call_chain(&fb_notifier_list, FB_EVENT_MODE_CHANGE, info);
+			if (info->flags & FBINFO_MISC_MODECHANGEUSER) {
+				info->flags &= ~FBINFO_MISC_MODECHANGEUSER;
+				notifier_call_chain(&fb_notifier_list,
+						    FB_EVENT_MODE_CHANGE, info);
+			}
 		}
 	}
 	return 0;
@@ -1010,28 +1102,7 @@ fb_blank(struct fb_info *info, int blank)
 		cmap.len = info->cmap.len;
 	} else
 		cmap = info->cmap;
-	return fb_set_cmap(&cmap, 1, info);
-}
-
-int
-fb_resize_vt(struct fb_info *info)
-{
-	struct vt_struct *vt = info->display_fg;
-	struct vc_data *vc;
-	int i;
-	
-	if(!vt)
-		return -ENODEV;
-
-	vc = vt->default_mode;
-	vc->vc_cols = info->var.xres/vc->vc_font.width;
-	vc->vc_rows = info->var.yres/vc->vc_font.height;
-	for(i = 0; i < vt->vc_count; i++) {
-		acquire_console_sem();
-		vc_resize(vt->vc_cons[i], vc->vc_cols, vc->vc_rows);
-		release_console_sem();
-	}
-	return 0;
+	return fb_set_cmap(&cmap, info);
 }
 
 static int 
@@ -1046,64 +1117,66 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 #ifdef CONFIG_FRAMEBUFFER_CONSOLE
 	struct fb_con2fbmap con2fb;
 #endif
-	struct fb_cmap cmap;
+	struct fb_cmap_user cmap;
+	void __user *argp = (void __user *)arg;
 	int i;
 	
 	if (!fb)
 		return -ENODEV;
 	switch (cmd) {
 	case FBIOGET_VSCREENINFO:
-		return copy_to_user((void *) arg, &info->var,
+		return copy_to_user(argp, &info->var,
 				    sizeof(var)) ? -EFAULT : 0;
 	case FBIOPUT_VSCREENINFO:
-		if (copy_from_user(&var, (void *) arg, sizeof(var)))
+		if (copy_from_user(&var, argp, sizeof(var)))
 			return -EFAULT;
 		acquire_console_sem();
+		info->flags |= FBINFO_MISC_MODECHANGEUSER;
 		i = fb_set_var(info, &var);
+		info->flags &= ~FBINFO_MISC_MODECHANGEUSER;
 		release_console_sem();
 		if (i) return i;
-		fb_resize_vt(info);
-		if (copy_to_user((void *) arg, &var, sizeof(var)))
+		if (copy_to_user(argp, &var, sizeof(var)))
 			return -EFAULT;
 		return 0;
 	case FBIOGET_FSCREENINFO:
-		return copy_to_user((void *) arg, &info->fix,
+		return copy_to_user(argp, &info->fix,
 				    sizeof(fix)) ? -EFAULT : 0;
 	case FBIOPUTCMAP:
-		if (copy_from_user(&cmap, (void *) arg, sizeof(cmap)))
+		if (copy_from_user(&cmap, argp, sizeof(cmap)))
 			return -EFAULT;
-		return (fb_set_cmap(&cmap, 0, info));
+		return (fb_set_user_cmap(&cmap, info));
 	case FBIOGETCMAP:
-		if (copy_from_user(&cmap, (void *) arg, sizeof(cmap)))
+		if (copy_from_user(&cmap, argp, sizeof(cmap)))
 			return -EFAULT;
-		return (fb_copy_cmap(&info->cmap, &cmap, 2));
+		return fb_cmap_to_user(&info->cmap, &cmap);
 	case FBIOPAN_DISPLAY:
-		if (copy_from_user(&var, (void *) arg, sizeof(var)))
+		if (copy_from_user(&var, argp, sizeof(var)))
 			return -EFAULT;
 		acquire_console_sem();
 		i = fb_pan_display(info, &var);
 		release_console_sem();
 		if (i)
 			return i;
-		if (copy_to_user((void *) arg, &var, sizeof(var)))
+		if (copy_to_user(argp, &var, sizeof(var)))
 			return -EFAULT;
 		return 0;
 	case FBIO_CURSOR:
 		acquire_console_sem();
-		i = fb_cursor(info, (struct fb_cursor *) arg);
+		i = fb_cursor(info, argp);
 		release_console_sem();
 		return i;
 #ifdef CONFIG_FRAMEBUFFER_CONSOLE
 	case FBIOGET_CON2FBMAP:
-		if (copy_from_user(&con2fb, (void *)arg, sizeof(con2fb)))
+		if (copy_from_user(&con2fb, argp, sizeof(con2fb)))
 			return -EFAULT;
 		if (con2fb.console < 1 || con2fb.console > MAX_NR_CONSOLES)
 		    return -EINVAL;
 		con2fb.framebuffer = con2fb_map[con2fb.console-1];
-		return copy_to_user((void *)arg, &con2fb,
+		return copy_to_user(argp, &con2fb,
 				    sizeof(con2fb)) ? -EFAULT : 0;
 	case FBIOPUT_CON2FBMAP:
-		if (copy_from_user(&con2fb, (void *)arg, sizeof(con2fb)))
+		if (copy_from_user(&con2fb, argp, sizeof(con2fb)))
 			return - EFAULT;
 		if (con2fb.console < 0 || con2fb.console > MAX_NR_CONSOLES)
 		    return -EINVAL;
@@ -1115,11 +1188,10 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 #endif /* CONFIG_KMOD */
 		if (!registered_fb[con2fb.framebuffer])
 		    return -EINVAL;
-		if (con2fb.console != 0)
-			set_con2fb_map(con2fb.console-1, con2fb.framebuffer);
-		else
-			fb_console_init();		
-		return 0;
+		if (con2fb.console > 0 && con2fb.console < MAX_NR_CONSOLES)
+			return set_con2fb_map(con2fb.console-1,
+					      con2fb.framebuffer);
+		return -EINVAL;
 #endif	/* CONFIG_FRAMEBUFFER_CONSOLE */
 	case FBIOBLANK:
 		acquire_console_sem();
@@ -1307,10 +1379,10 @@ register_framebuffer(struct fb_info *fb_info)
 		if (!registered_fb[i])
 			break;
 	fb_info->node = i;
-	
+
 	c = class_simple_device_add(fb_class, MKDEV(FB_MAJOR, i), NULL, "fb%d", i);
 	if (IS_ERR(c)) {
-		/* Not fatal */
+	/* Not fatal */
 		printk(KERN_WARNING "Unable to create class_device for framebuffer %d; errno = %ld\n", i, PTR_ERR(c));
 	}
 	
@@ -1325,10 +1397,6 @@ register_framebuffer(struct fb_info *fb_info)
 		}
 	}	
 	fb_info->pixmap.offset = 0;
-	if (fb_info->pixmap.outbuf == NULL)
-		fb_info->pixmap.outbuf = fb_sys_outbuf;
-	if (fb_info->pixmap.inbuf == NULL)
-		fb_info->pixmap.inbuf = fb_sys_inbuf;
 
 	if (fb_info->sprite.addr == NULL) {
 		fb_info->sprite.addr = kmalloc(FBPIXMAPSIZE, GFP_KERNEL);
@@ -1341,10 +1409,6 @@ register_framebuffer(struct fb_info *fb_info)
 		}
 	}
 	fb_info->sprite.offset = 0;
-	if (fb_info->sprite.outbuf == NULL)
-		fb_info->sprite.outbuf = fb_sys_outbuf;
-	if (fb_info->sprite.inbuf == NULL)
-		fb_info->sprite.inbuf = fb_sys_inbuf;
 
 	registered_fb[i] = fb_info;
 
@@ -1438,7 +1502,7 @@ fbmem_init(void)
 {
 	int i;
 
-	create_proc_read_entry("fb", 0, 0, fbmem_read_proc, NULL);
+	create_proc_read_entry("fb", 0, NULL, fbmem_read_proc, NULL);
 
 	devfs_mk_dir("fb");
 	if (register_chrdev(FB_MAJOR,"fb",&fb_fops))
@@ -1541,8 +1605,10 @@ EXPORT_SYMBOL(fb_set_var);
 EXPORT_SYMBOL(fb_blank);
 EXPORT_SYMBOL(fb_pan_display);
 EXPORT_SYMBOL(fb_get_buffer_offset);
-EXPORT_SYMBOL(fb_move_buf_unaligned);
-EXPORT_SYMBOL(fb_move_buf_aligned);
+EXPORT_SYMBOL(fb_iomove_buf_unaligned);
+EXPORT_SYMBOL(fb_iomove_buf_aligned);
+EXPORT_SYMBOL(fb_sysmove_buf_unaligned);
+EXPORT_SYMBOL(fb_sysmove_buf_aligned);
 EXPORT_SYMBOL(fb_load_cursor_image);
 EXPORT_SYMBOL(fb_set_suspend);
 EXPORT_SYMBOL(fb_register_client);
