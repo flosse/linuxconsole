@@ -40,7 +40,15 @@
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
 MODULE_DESCRIPTION("Input core");
+
+/*
+ * only in 2.4.10+, not in 2.4.8
+ *
+
 MODULE_LICENSE("GPL");
+ *
+
+ */
 
 EXPORT_SYMBOL(input_register_device);
 EXPORT_SYMBOL(input_unregister_device);
@@ -403,7 +411,7 @@ static void input_call_hotplug(char *verb, struct input_dev *dev)
 	if (dev->phys) {
 		envp[i++] = scratch;
 		scratch += sprintf(scratch, "PHYS=%s", dev->phys) + 1; 
-	]
+	}	
 
 	SPRINTF_BIT_A(evbit, "EV=", EV_MAX);
 	SPRINTF_BIT_A2(keybit, "KEY=", KEY_MAX, EV_KEY);
