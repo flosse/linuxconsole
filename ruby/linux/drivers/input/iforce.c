@@ -695,6 +695,7 @@ static int make_magnitude_modifier(struct iforce* iforce,
 
 	send_packet(iforce, FF_CMD_MAGNITUDE, data);
 
+	dump_packet("magnitude: ", FF_CMD_MAGNITUDE, data);
 	return 0;
 }
 
@@ -828,9 +829,76 @@ static unsigned char find_button(struct iforce *iforce, signed short button)
 }
 
 /*
+ * Analyse the changes in an effect, and tell if we need to send a magnitude
+ * parameter packet
+ */
+static int need_magnitude_modifier(struct iforce* iforce, const struct ff_effect* effect)
+{
+	int id = effect->id;
+	struct ff_effect* old = &iforce->core_effects[id].effect;
+
+	if (effect->type != FF_CONSTANT) {
+		printk(KERN_WARNING "iforce.c: bad effect type in need_shape_modifier\n");
+		return FALSE;
+	}
+
+	return (old->u.constant.level != effect->u.constant.level);
+}
+
+/*
+ * Analyse the changes in an effect, and tell if we need to send a shape
+ * parameter packet
+ */
+static int need_shape_modifier(struct iforce* iforce, const struct ff_effect* effect)
+{
+	int id = effect->id;
+	struct ff_effect* old = &iforce->core_effects[id].effect;
+
+	switch (effect->type) {
+	case FF_CONSTANT:
+		if (old->u.constant.shape.attack_length != effect->u.constant.shape.attack_length
+		|| old->u.constant.shape.attack_level != effect->u.constant.shape.attack_level
+		|| old->u.constant.shape.fade_length != effect->u.constant.shape.fade_length
+		|| old->u.constant.shape.fade_level != effect->u.constant.shape.fade_level)
+			return TRUE;
+		break;
+
+	case FF_PERIODIC:
+		if (old->u.periodic.shape.attack_length != effect->u.periodic.shape.attack_length
+		|| old->u.periodic.shape.attack_level != effect->u.periodic.shape.attack_level
+		|| old->u.periodic.shape.fade_length != effect->u.periodic.shape.fade_length
+		|| old->u.periodic.shape.fade_level != effect->u.periodic.shape.fade_level)
+			return TRUE;
+		break;
+
+	default:
+		printk(KERN_WARNING "iforce.c: bad effect type in need_shape_modifier\n");
+	}
+
+	return FALSE;
+}
+
+/*
+ * Analyse the changes in an effect, and tell if we need to send an effect
+ * packet
+ */
+static int need_core(struct iforce* iforce, const struct ff_effect* new)
+{
+	int id = new->id;
+	struct ff_effect* old = &iforce->core_effects[id].effect;
+
+	if (old->direction != new->direction
+		|| old->trigger.button != new->trigger.button
+		|| old->trigger.interval != new->trigger.interval
+		|| old->replay.length != new->replay.length
+		|| old->replay.delay != new->replay.delay)
+		return TRUE;
+
+	return FALSE;
+}
+/*
  * Send the part common to all effects to the device
  */
-
 static int make_core(struct iforce* iforce, u16 id, u16 mod_id1, u16 mod_id2,
 	u8 effect_type, u8 axes, u16 duration, u16 delay, u16 button,
 	u16 interval, u16 direction)
@@ -913,13 +981,17 @@ static int iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effec
 		effect->replay.delay,
 		effect->trigger.button,
 		effect->trigger.interval,
-		effect->u.periodic.direction);
+		effect->direction);
 
 	return err;
 }
 
 /*
  * Upload a constant force effect
+ * Return value:
+ *  <0 Error code
+ *  0 Ok, effect created or updated
+ *  1 effect did not change since last upload, and no packet was therefore sent
  */
 static int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effect, int is_update)
 {
@@ -927,37 +999,46 @@ static int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effec
 	struct iforce_core_effect* core_effect = iforce->core_effects + core_id;
 	struct resource* mod1_chunk = &(iforce->core_effects[core_id].mod1_chunk);
 	struct resource* mod2_chunk = &(iforce->core_effects[core_id].mod2_chunk);
-	int err = 0;
+	int ret = 1;
 
 	printk(KERN_DEBUG "iforce.c: make constant effect\n");
 
-	err = make_magnitude_modifier(iforce, mod1_chunk,
-		is_update,
-		effect->u.constant.level);
-	if (err) return err;
-	set_bit(FF_MOD1_IS_USED, core_effect->flags);
+	if (!is_update || need_magnitude_modifier(iforce, effect)) {
+		ret = make_magnitude_modifier(iforce, mod1_chunk,
+			is_update,
+			effect->u.constant.level);
+		if (ret) return ret;
+		set_bit(FF_MOD1_IS_USED, core_effect->flags);
+	}
 
-	err = make_shape_modifier(iforce, mod2_chunk,
-		is_update,
-		effect->u.constant.shape.attack_length,
-		effect->u.constant.shape.attack_level,
-		effect->u.constant.shape.fade_length,
-		effect->u.constant.shape.fade_level);
-	if (err) return err;
-	set_bit(FF_MOD2_IS_USED, core_effect->flags);
+	if (!is_update || need_shape_modifier(iforce, effect)) {
+		ret = make_shape_modifier(iforce, mod2_chunk,
+			is_update,
+			effect->u.constant.shape.attack_length,
+			effect->u.constant.shape.attack_level,
+			effect->u.constant.shape.fade_length,
+			effect->u.constant.shape.fade_level);
+		if (ret) return ret;
+		set_bit(FF_MOD2_IS_USED, core_effect->flags);
+	}
 
-	err = make_core(iforce, effect->id,
-		mod1_chunk->start,
-		mod2_chunk->start,
-		0x00,
-		0x20,
-		effect->replay.length,
-		effect->replay.delay,
-		effect->trigger.button,
-		effect->trigger.interval,
-		effect->u.constant.direction);
+	if (!is_update || need_core(iforce, effect)) {
+		ret = make_core(iforce, effect->id,
+			mod1_chunk->start,
+			mod2_chunk->start,
+			0x00,
+			0x20,
+			effect->replay.length,
+			effect->replay.delay,
+			effect->trigger.button,
+			effect->trigger.interval,
+			effect->direction);
+	}
+	else {
+		printk(KERN_DEBUG "iforce.c: no effect packet was needed\n");
+	}
 
-	return err;
+	return ret;
 }
 
 /*
@@ -998,7 +1079,7 @@ static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* ef
 		case 0: /* Only one axis, choose orientation */
 			mod1 = mod_chunk->start;
 			mod2 = 0xffff;
-			direction = effect->u.interactive.direction;
+			direction = effect->direction;
 			axes = 0x20;
 			break;
 
@@ -1072,8 +1153,12 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 		/* We want to update an effect */
 		if (!CHECK_OWNERSHIP(effect->id, iforce)) return -EACCES;
 		
-		/* Check the effect is not allready being updated */
-		if (test_and_set_bit(FF_CORE_UPDATE, iforce->core_effects[effect->id].flags)) {
+		/* Parameter type cannot be updated */
+		if (effect->type != iforce->core_effects[effect->id].effect.type)
+			return -EINVAL;
+
+		/* Check the effect is not already being updated */
+		if (test_bit(FF_CORE_UPDATE, iforce->core_effects[effect->id].flags)) {
 			printk(KERN_DEBUG "iforce.c: update too frequent refused\n");
 			return -EAGAIN;
 		}
@@ -1088,18 +1173,27 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 
 		case FF_PERIODIC:
 			ret = iforce_upload_periodic(iforce, effect, is_update);
+			break;
 
 		case FF_CONSTANT:
 			ret = iforce_upload_constant(iforce, effect, is_update);
+			break;
 
 		case FF_SPRING:
 		case FF_FRICTION:
 			ret = iforce_upload_interactive(iforce, effect, is_update);
+			break;
 
 		default:
 			return -EINVAL;
 	}
-	iforce->core_effects[id].effect = *effect;
+	if (ret == 0) {
+		/* A packet was sent, forbid new updates until we are notified
+		 * that the packet was updated
+		 */
+		set_bit(FF_CORE_UPDATE, iforce->core_effects[effect->id].flags);
+	}
+	iforce->core_effects[effect->id].effect = *effect;
 	return ret;
 }
 
