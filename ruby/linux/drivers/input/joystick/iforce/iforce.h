@@ -162,7 +162,7 @@ struct iforce {
 #define HIFIX80(a) ((unsigned char)(((a)<0? (a)+255 : (a))>>8))
 
 /* Encode a time value */
-#define TIME_SCALE(a)	((a) == 0xffff ? 0xffff : (a) * 1000 / 256)
+#define TIME_SCALE(a)	(a)
 
 
 /* Public functions */
