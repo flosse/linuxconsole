@@ -42,7 +42,7 @@
 
 #include "console_macros.h"
 
-struct consw *conswitchp;
+const struct consw *conswitchp;
 
 /* A bitmap for codes <32. A bit of 1 indicates that the code
  * corresponding to that bit number invokes some special action
@@ -64,7 +64,7 @@ static struct termios *console_termios_locked[MAX_NR_CONSOLES];
 
 static void con_flush_chars(struct tty_struct *tty);
 
-static int printable;	                /* Is console ready for printing? */
+static int printable;               	/* Is console ready for printing? */
 static int current_vc;			/* Which /dev/vc/X to allocate next */
 struct vt_struct *admin_vt;		/* VT of /dev/console */
 
@@ -680,7 +680,7 @@ static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
  *      Allocation, freeing and resizing of VTs.
  */
 
-const char *create_vt(struct vt_struct *vt, struct consw *vt_sw)
+const char *create_vt(struct vt_struct *vt, const struct consw *vt_sw)
 {
 	const char *display_desc = NULL;
 
@@ -992,7 +992,7 @@ static int do_con_write(struct tty_struct * tty, int from_user,
 
         if (!vc) {
             /* could this happen? */
-            static int error = 0;
+            static int error;
             if (!error) {
                 error = 1;
                 printk("con_write: tty %d not allocated\n", cons_num);
@@ -1401,8 +1401,8 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
 {
         struct vc_data *vc = admin_vt->fg_console;
 	static unsigned long printing;
-     	ushort cnt, ushort myx; 
 	const ushort *start;
+     	ushort myx, cnt = 0; 
         unsigned char c;
 
         /* console busy or not yet initialized */
@@ -1503,7 +1503,6 @@ struct console vt_console_driver = {
         unblank:	vt_console_unblank, 
         flags:		CON_PRINTBUFFER,
         index:		-1,
-        cflag:		0,
 };
 #endif
 
