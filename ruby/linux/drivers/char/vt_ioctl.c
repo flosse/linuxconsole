@@ -1287,10 +1287,8 @@ int vt_waitactive(int vt)
 
 #define vt_wake_waitactive() wake_up(&vt_activate_queue)
 
-void reset_vc(unsigned int new_console)
+void reset_vc(struct vc_data *vc)
 {
-	struct vc_data *vc = vc_cons[new_console];
-
 	vc->display_fg->vc_mode = KD_TEXT;
 	vc->kbd_table.kbdmode = VC_XLATE;
 	vc->vt_mode.mode = VT_AUTO;
@@ -1353,7 +1351,7 @@ void change_console(unsigned int new_console)
 		 * this outside of VT_PROCESS but there is no single process
 		 * to account for and tracking tty count may be undesirable.
 		 */
-		reset_vc(fg_console);
+		reset_vc(vc_cons[fg_console]);
 
 		/*
 		 * Fall through to normal (VT_AUTO) handling of the switch...
@@ -1409,7 +1407,7 @@ void complete_change_console(unsigned int new_console)
 		 * this outside of VT_PROCESS but there is no single process
 		 * to account for and tracking tty count may be undesirable.
 		 */
-		        reset_vc(new_console);
+		        reset_vc(vc_cons[new_console]);
 		}
 	}
 
