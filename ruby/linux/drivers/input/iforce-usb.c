@@ -114,9 +114,9 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	iforce->bus = IFORCE_USB;
 	iforce->usbdev = dev;
 
-	iforce->dr.requesttype = USB_TYPE_VENDOR | USB_DIR_IN | USB_RECIP_INTERFACE;
-	iforce->dr.index = 0;
-	iforce->dr.length = 16;
+	iforce->dr.bRequestType = USB_TYPE_VENDOR | USB_DIR_IN | USB_RECIP_INTERFACE;
+	iforce->dr.wIndex = 0;
+	iforce->dr.wLength = 16;
 
 	FILL_INT_URB(&iforce->irq, dev, usb_rcvintpipe(dev, epirq->bEndpointAddress),
 			iforce->data, 16, iforce_usb_irq, iforce, epirq->bInterval);

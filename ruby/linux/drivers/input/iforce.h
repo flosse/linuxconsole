@@ -140,7 +140,7 @@ struct iforce {
 #ifdef IFORCE_USB
 	struct usb_device *usbdev;	/* USB transfer */
 	struct urb irq, out, ctrl;
-	devrequest dr;
+	struct usb_ctrlrequest dr;
 #endif
 	spinlock_t xmit_lock;
 	/* Buffer used for asynchronous sending of bytes to the device */
