@@ -1770,26 +1770,16 @@ void pm3fb_copyarea(struct fb_info *info, int sx, int sy, unsigned int width,
 	pm3fb_wait_pm3(l_fb_info);
 }
 
-/**
- *      xxxfb_imageblit - REQUIRED function. Can use generic routines if
- *                        non acclerated hardware and packed pixel based.
- *                        Copies a image from system memory to the screen. 
- *
- *      @info: frame buffer structure that represents a single frame buffer
- *	@image:	structure defining the image.
- *
- *      This drawing operation draws a image on the screen. It can be a 
- *	mono image (needed for font handling) or a color image (needed for
- *	tux). 
- */
-void fb_imageblit(struct fb_info *info, struct fb_image *image) 
+void pm3fb_imageblit(struct fb_info *info, struct fb_image *image) 
 {
 	struct pm3fb_info *l_fb_info = ((struct pm3fb_par*)info->par)->l_fb_info;
 	unsigned long fgx, bgx, asx, asy, o_x = 0, o_y = 0, wm, ldat;
+	unsigned long c_w, c_h, o_w, o_h, ll;
 	int i;
+	char *o_d;
 	
 	/* should be improved someday... */
-	if ((image->depth != 1) || (image->width > 32) || (image->height > 32))
+	if (image->depth != 1)
 	{
 		cfb_imageblit(info, image);
 		return;
@@ -1799,62 +1789,76 @@ void fb_imageblit(struct fb_info *info, struct fb_image *image)
 	bgx = image->bg_color;
 	PM3_COLOR(fgx);
 	PM3_COLOR(bgx);
-	
-	if (image->width < 32)
-		wm = (1 << image->width) - 1;
-	else
-		wm = 0xFFFFFFFF;
 
-#define ADRESS_SELECT(size) (size <= 8 ? 2 : (size <= 16 ? 3 : 4))
-	asx = ADRESS_SELECT(image->width);
-	asy = ADRESS_SELECT(image->height);
-	
-	PM3_WAIT(6 + image->height);
-	
+	PM3_WAIT(3);
+	PM3_WRITE_REG(PM3ForegroundColor, fgx);
+	PM3_WRITE_REG(PM3FillBackgroundColor, bgx);
 	PM3_WRITE_REG(PM3Config2D,
 		      PM3Config2D_UseConstantSource |
 		      PM3Config2D_ForegroundROPEnable |
 		      (PM3Config2D_ForegroundROP(0x3)) |	/* Ox3 is GXcopy */
 		      PM3Config2D_FBWriteEnable | PM3Config2D_OpaqueSpan);
 	
-	PM3_WRITE_REG(PM3ForegroundColor, fgx);
-	PM3_WRITE_REG(PM3FillBackgroundColor, bgx);
-       
-	PM3_WRITE_REG(PM3AreaStippleMode,
-		      (o_x << 7) | (o_y << 12) |	/* x_offset, y_offset in pattern */
-		      (1 << 18) |	/* BE */
-		      1 | (asx << 1) | (asy << 4) |	/* address select x/y */
-		      (1 << 20));	/* OpaqueSpan */
-
-	for (i = 0; i < image->height; i++) {
-		switch (asx)
-		{
-		case 2: /* width <= 8 */
-			ldat = ((u8*)image->data)[i] & wm;
-			break;
-		case 3: /* width <= 16 */
-			ldat = ((u16*)image->data)[i] & wm;
-			break;
-		case 4: /* width <= 32 */
-			ldat = ((u32*)image->data)[i] & wm;
-			break;
+	ll = ((image->width + 7) / 8); /* image width in bytes, aka line length */
+	
+	o_w = 0;
+	while (o_w < image->width) {
+		o_h = 0;
+		while (o_h < image->height) {
+			c_w = ((image->width - o_w) < 32) ? (image->width - o_w) : 32;
+			c_h = ((image->height - o_h) < 32) ? (image->height - o_h) : 32;
+			o_d = image->data +
+				(ll * o_h) +
+				(o_w / 8);
+			if (c_w < 32)
+				wm = (1 << c_w) - 1; /* write mask */
+			else
+				wm = 0xFFFFFFFF;
+			
+#define ADRESS_SELECT(size) (size <= 8 ? 2 : (size <= 16 ? 3 : 4))
+			asx = ADRESS_SELECT(c_w);
+			asy = ADRESS_SELECT(c_h);
+			
+			PM3_WAIT(3 + c_h);
+			
+			PM3_WRITE_REG(PM3AreaStippleMode,
+				      (o_x << 7) | (o_y << 12) |	/* x_offset, y_offset in pattern */
+				      (1 << 18) |	/* BE */
+				      1 | (asx << 1) | (asy << 4) |	/* address select x/y */
+				      (1 << 20));	/* OpaqueSpan */
+			
+			for (i = 0; i < c_h; i++) {
+				switch (asx)
+				{
+				case 2: /* width <= 8 */
+					ldat = ((u8*)o_d)[i] & wm;
+					break;
+				case 3: /* width <= 16 */
+					ldat = ((u16*)o_d)[i] & wm;
+					break;
+				case 4: /* width <= 32 */
+					ldat = ((u32*)o_d)[i] & wm;
+					break;
+				}
+				PM3_WRITE_REG(AreaStipplePattern_indexed(i), ldat);
+			}
+			
+			PM3_WRITE_REG(PM3RectanglePosition,
+				      (PM3RectanglePosition_XOffset(image->x + o_w)) |
+				      (PM3RectanglePosition_YOffset(image->y + o_h)));
+			
+			PM3_WRITE_REG(PM3Render2D,
+				      PM3Render2D_AreaStippleEnable |
+				      PM3Render2D_XPositive |
+				      PM3Render2D_YPositive |
+				      PM3Render2D_Operation_Normal |
+				      PM3Render2D_SpanOperation |
+				      (PM3Render2D_Width(c_w)) |
+				      (PM3Render2D_Height(c_h)));
+			o_h += 32;
 		}
-		PM3_WRITE_REG(AreaStipplePattern_indexed(i), ldat);
+		o_w += 32;
 	}
-	
-	PM3_WRITE_REG(PM3RectanglePosition,
-		      (PM3RectanglePosition_XOffset(image->x)) |
-		      (PM3RectanglePosition_YOffset(image->y)));
-	
-	PM3_WRITE_REG(PM3Render2D,
-		      PM3Render2D_AreaStippleEnable |
-		      PM3Render2D_XPositive |
-		      PM3Render2D_YPositive |
-		      PM3Render2D_Operation_Normal |
-		      PM3Render2D_SpanOperation |
-		      (PM3Render2D_Width(image->width)) |
-		      (PM3Render2D_Height(image->height)));
-	
 	pm3fb_wait_pm3(l_fb_info);
 }
 
