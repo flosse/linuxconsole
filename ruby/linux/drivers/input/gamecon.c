@@ -279,7 +279,7 @@ static int gc_psx_read_packet(struct gc *gc, unsigned char *data)
 
 	parport_write_data(gc->pd->port, GC_PSX_CLOCK | GC_PSX_SELECT | GC_PSX_POWER);
 
-	return (ret === -1) ? ret : (ret >> 4);
+	return (ret == -1) ? ret : (ret >> 4);
 }
 
 /*
@@ -457,7 +457,7 @@ static struct gc __init *gc_probe(int *config)
 	struct gc *gc;
 	struct parport *pp;
 	int i, j, psx;
-	unsigned char data[2];
+	unsigned char data[32];
 
 	if (config[0] < 0)
 		return NULL;
@@ -547,7 +547,7 @@ static struct gc __init *gc_probe(int *config)
 
 			case GC_PSX:
 				
-				psx = gc_psx_read_packet(gc, 2, data);
+				psx = gc_psx_read_packet(gc, data);
 
 				switch(psx) {
 					case GC_PSX_NEGCON:
@@ -558,7 +558,7 @@ static struct gc __init *gc_probe(int *config)
 						for (j = 0; j < 6; j++) {
 							psx = gc_psx_abs[j];
 							set_bit(psx, gc->dev[i].absbit);
-							if (i < 4) {
+							if (j < 4) {
 								gc->dev[i].absmin[psx] = 4;
 								gc->dev[i].absmax[psx] = 252;
 								gc->dev[i].absflat[psx] = 2;
