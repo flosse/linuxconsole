@@ -399,6 +399,8 @@ static void mdacon_clear(struct vc_data *vc, int y, int x,
 	if (width <= 0 || height <= 0)
 		return;
 
+	height++;
+
 	if (x==0 && width == vc->vc_cols) {
 		scr_memsetw(dest, eattr, height*width*2);
 	} else {

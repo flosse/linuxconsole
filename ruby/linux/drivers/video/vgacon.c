@@ -579,8 +579,10 @@ static void vgacon_clear(struct vc_data *vc, int x, int y, int height,
         if (width <= 0 || height <= 0)
         	return;
 
+	height++;
+
         if (x == 0 && width == vc->vc_cols) {
-                scr_memsetw(dest, eattr, height*width);
+                scr_memsetw(dest, eattr, height*width*2); 
         } else {
                 for (; height > 0; height--, dest += vc->vc_cols)
                         scr_memsetw(dest, eattr, width);
