@@ -59,7 +59,7 @@ static struct tty_struct *console_table[MAX_NR_CONSOLES];
 static struct termios *console_termios[MAX_NR_CONSOLES];
 static struct termios *console_termios_locked[MAX_NR_CONSOLES];
 
-static void con_flush_chars(struct tty_struct *tty);
+static void vt_flush_chars(struct tty_struct *tty);
 
 static int printable;               	/* Is console ready for printing? */
 static int current_vc;			/* Which /dev/vc/X to allocate next */
@@ -230,7 +230,6 @@ inline void gotoxay(struct vc_data *vc, int new_x, int new_y)
 /*
  *      Palettes
  */
-
 void set_palette(struct vc_data *vc)
 {
         if (IS_VISIBLE && sw->con_set_palette && vcmode != KD_GRAPHICS)
@@ -586,6 +585,24 @@ void complement_pos(struct vc_data *vc, int offset)
         }
 }
 
+inline int resize_screen(struct vc_data *vc, int cols, int rows)
+{
+        /* Resizes the resolution of the display adapater */
+	int err = 1;
+
+        if (IS_VISIBLE && vcmode != KD_GRAPHICS && sw->con_resize) {
+		err = 0;
+		if ((rows != video_num_lines) || (cols != video_num_columns))
+                	err = sw->con_resize(vc, cols, rows);
+		if (!err) {
+			video_num_columns = cols;
+			video_num_lines = rows;
+			video_size_row = cols << 1;
+		} 
+	}
+	return err;
+}
+
 /*
  *      Screen blanking
  */
@@ -916,7 +933,7 @@ found_pool:
  * [this is to be used together with some user program
  * like resize that changes the hardware videomode]
  */
-int vc_resize(struct vc_data *vc, unsigned int lines, unsigned int cols)
+int vc_resize(struct vc_data *vc, unsigned int cols, unsigned int lines)
 {
 	unsigned long ol, nl, nlend, rlth, rrem;
 	unsigned int occ, oll, oss, osr;
@@ -933,26 +950,20 @@ int vc_resize(struct vc_data *vc, unsigned int lines, unsigned int cols)
 
 	if (!vc || (cc == video_num_columns && ll == video_num_lines))
                 return 0;
-
-        if (vc->display_fg->vt_sw->con_resize)
-                err = vc->display_fg->vt_sw->con_resize(vc, ll, cc);
 	
-	// err = resize_screen(vc, ll, cc);    
-	if (err) return err;    
-	
-	newscreens = (unsigned short *) kmalloc(ss, GFP_USER);
-        if (!newscreens) 
-        	return -ENOMEM;
-       
 	oll = video_num_lines;
         occ = video_num_columns;
         osr = video_size_row;
         oss = screenbuf_size;
 
-        video_num_lines = ll;
-        video_num_columns = cc;
-        video_size_row = sr;
-        screenbuf_size = ss;
+	err = resize_screen(vc, cc, ll);    
+	if (err) return err;    
+	
+	newscreens = (unsigned short *) kmalloc(ss * scrollback, GFP_USER);
+        if (!newscreens) 
+        	return -ENOMEM;
+       
+        screenbuf_size = ss * scrollback;
 
         rlth = MIN(osr, sr);
         rrem = sr - rlth;
@@ -976,11 +987,11 @@ int vc_resize(struct vc_data *vc, unsigned int lines, unsigned int cols)
         
 	/* 
 	if (vc->display_fg->kmalloced)
-        	kfree(screenbuf); 
-	*/
+	*/        
+	kfree(screenbuf); 
         screenbuf = newscreens;
-        /* vc->display_fg->kmalloced = 1; */
-        screenbuf_size = ss;
+        vc->display_fg->kmalloced = 1;
+        screenbuf_size = ss * scrollback;
         set_origin(vc);
 
         /* do part of a vte_ris() */
@@ -1282,7 +1293,7 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
  */
 
 /* Allocate the console screen memory. */
-static int con_open(struct tty_struct *tty, struct file * filp)
+static int vt_open(struct tty_struct *tty, struct file * filp)
 {
         unsigned int currcons = MINOR(tty->device) - tty->driver.minor_start;
 	struct vc_data *vc = (struct vc_data *) tty->driver_data;
@@ -1307,7 +1318,7 @@ static int con_open(struct tty_struct *tty, struct file * filp)
         return 0;
 }
 
-static void con_close(struct tty_struct *tty, struct file * filp)
+static void vt_close(struct tty_struct *tty, struct file * filp)
 {
         if (!tty)
                 return;
@@ -1316,20 +1327,20 @@ static void con_close(struct tty_struct *tty, struct file * filp)
         tty->driver_data = 0;
 }
 
-static int con_write(struct tty_struct * tty, int from_user,
-                     const unsigned char *buf, int count)
+static int vt_write(struct tty_struct * tty, int from_user,
+                    const unsigned char *buf, int count)
 {
         struct vc_data *vc = (struct vc_data *) tty->driver_data;
 	int     retval;
 
         pm_access(vc->display_fg->pm_con);
         retval = do_con_write(tty, from_user, buf, count);
-        con_flush_chars(tty);
+        vt_flush_chars(tty);
 
         return retval;
 }
 
-static void con_put_char(struct tty_struct *tty, unsigned char ch)
+static void vt_put_char(struct tty_struct *tty, unsigned char ch)
 {
 	struct vc_data *vc = (struct vc_data *) tty->driver_data;
 
@@ -1337,14 +1348,14 @@ static void con_put_char(struct tty_struct *tty, unsigned char ch)
         do_con_write(tty, 0, &ch, 1);
 }
 
-static int con_write_room(struct tty_struct *tty)
+static int vt_write_room(struct tty_struct *tty)
 {
         if (tty->stopped)
                 return 0;
         return 4096;            /* No limit, really; we're not buffering */
 }
 
-static void con_flush_chars(struct tty_struct *tty)
+static void vt_flush_chars(struct tty_struct *tty)
 {
         struct vc_data *vc = (struct vc_data *)tty->driver_data;
 
@@ -1352,7 +1363,7 @@ static void con_flush_chars(struct tty_struct *tty)
         set_cursor(vc);
 }
 
-static int con_chars_in_buffer(struct tty_struct *tty)
+static int vt_chars_in_buffer(struct tty_struct *tty)
 {
         return 0;               /* we're not buffering */
 }
@@ -1360,7 +1371,7 @@ static int con_chars_in_buffer(struct tty_struct *tty)
 /*
  * Turn the Scroll-Lock LED on when the tty is stopped
  */
-static void con_stop(struct tty_struct *tty)
+static void vt_stop(struct tty_struct *tty)
 {
 	struct vc_data *vc = (struct vc_data *) tty->driver_data;
         
@@ -1373,7 +1384,7 @@ static void con_stop(struct tty_struct *tty)
 /*
  * Turn the Scroll-Lock LED off when the console is started
  */
-static void con_start(struct tty_struct *tty)
+static void vt_start(struct tty_struct *tty)
 {
 	struct vc_data *vc = (struct vc_data *) tty->driver_data;
         
@@ -1388,11 +1399,11 @@ static void con_start(struct tty_struct *tty)
  * paste_selection(), which has to stuff in a large number of
  * characters...
  */
-static void con_throttle(struct tty_struct *tty)
+static void vt_throttle(struct tty_struct *tty)
 {
 }
 
-static void con_unthrottle(struct tty_struct *tty)
+static void vt_unthrottle(struct tty_struct *tty)
 {
         struct vc_data *vc = (struct vc_data *) tty->driver_data;
 
@@ -1516,7 +1527,7 @@ struct console vt_console_driver = {
  * the appropriate escape-sequence.
  */
 
-struct tty_driver console_driver;
+struct tty_driver vt_driver;
 static int console_refcount;
 
 void __init vt_console_init(void)
@@ -1525,40 +1536,40 @@ void __init vt_console_init(void)
 	struct vt_struct *vt;
 	struct vc_data *vc;
 
-        memset(&console_driver, 0, sizeof(struct tty_driver));
-        console_driver.magic = TTY_DRIVER_MAGIC;
-        console_driver.name = "vc/%d";
-        console_driver.name_base = 0;
-        console_driver.major = TTY_MAJOR;
-        console_driver.minor_start = 0;
-        console_driver.num = MAX_NR_CONSOLES;
-        console_driver.type = TTY_DRIVER_TYPE_CONSOLE;
-        console_driver.init_termios = tty_std_termios;
-        console_driver.flags = TTY_DRIVER_REAL_RAW | TTY_DRIVER_RESET_TERMIOS;
+        memset(&vt_driver, 0, sizeof(struct tty_driver));
+        vt_driver.magic = TTY_DRIVER_MAGIC;
+        vt_driver.name = "vc/%d";
+        vt_driver.name_base = 0;
+        vt_driver.major = TTY_MAJOR;
+        vt_driver.minor_start = 0;
+        vt_driver.num = MAX_NR_CONSOLES;
+        vt_driver.type = TTY_DRIVER_TYPE_CONSOLE;
+        vt_driver.init_termios = tty_std_termios;
+        vt_driver.flags = TTY_DRIVER_REAL_RAW | TTY_DRIVER_RESET_TERMIOS;
         /* Tell tty_register_driver() to skip consoles because they are
          * registered before kmalloc() is ready. We'll patch them in later.
          * See comments at console_init(); see also con_init_devfs().
          */
-        console_driver.flags |= TTY_DRIVER_NO_DEVFS;
-        console_driver.refcount = &console_refcount;
-        console_driver.table = console_table;
-        console_driver.termios = console_termios;
-        console_driver.termios_locked = console_termios_locked;
+        vt_driver.flags |= TTY_DRIVER_NO_DEVFS;
+        vt_driver.refcount = &console_refcount;
+        vt_driver.table = console_table;
+        vt_driver.termios = console_termios;
+        vt_driver.termios_locked = console_termios_locked;
 
-        console_driver.open = con_open;
-        console_driver.close = con_close;
-        console_driver.write = con_write;
-        console_driver.write_room = con_write_room;
-        console_driver.put_char = con_put_char;
-        console_driver.flush_chars = con_flush_chars;
-        console_driver.chars_in_buffer = con_chars_in_buffer;
-        console_driver.ioctl = vt_ioctl;
-        console_driver.stop = con_stop;
-        console_driver.start = con_start;
-        console_driver.throttle = con_throttle;
-        console_driver.unthrottle = con_unthrottle;
+        vt_driver.open = vt_open;
+        vt_driver.close = vt_close;
+        vt_driver.write = vt_write;
+        vt_driver.write_room = vt_write_room;
+        vt_driver.put_char = vt_put_char;
+        vt_driver.flush_chars = vt_flush_chars;
+        vt_driver.chars_in_buffer = vt_chars_in_buffer;
+        vt_driver.ioctl = vt_ioctl;
+        vt_driver.stop = vt_stop;
+        vt_driver.start = vt_start;
+        vt_driver.throttle = vt_throttle;
+        vt_driver.unthrottle = vt_unthrottle;
 
-        if (tty_register_driver(&console_driver))
+        if (tty_register_driver(&vt_driver))
                 panic("Couldn't register console driver\n");
 
         /*
@@ -1569,8 +1580,8 @@ void __init vt_console_init(void)
         vt->vc_cons[0] = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
 #if defined(CONFIG_VGA_CONSOLE)
 	vt->vt_sw = &vga_con;
-#else
-	vt->vt_sw = &dummy_con;
+#elif defined(CONFIG_MDA_CONSOLE)
+	vt->vt_sw = &mda_con;
 #endif
 	vt->kmalloced = 0;
 	display_desc = create_vt(vt, 1);
@@ -1595,6 +1606,8 @@ void __init vt_console_init(void)
         printk("\n");
 
 #ifdef CONFIG_VT_CONSOLE
+	if (!admin_vt)
+		vt_console_driver.flags &= ~CON_ENABLED;
         vt_console_driver.lock = vt->vt_lock;
 	register_console(&vt_console_driver);
 #endif
@@ -1640,7 +1653,7 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
 		return;
 	}
 	vt->vt_sw = csw;
-	
+
 	/* Set the VC states to the new default mode */
         for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
                 int old_was_color;
@@ -1649,6 +1662,7 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
                 if (vc) {
                 	old_was_color = vc->vc_can_do_color;
 			cons_num = vt->first_vc + i;
+			vc_resize(vc, vt->default_mode->vc_cols, vt->default_mode->vc_rows);
 			visual_init(vc);
 	        	update_attr(vc);
 
@@ -1660,7 +1674,7 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
                         	clear_buffer_attributes(vc);
         	}
 	}
-	vc = vt->fg_console; 
+	vc = vt->fg_console;
 	update_screen(vc);
 
        	printk("Console: switching to %s %s %dx%d\n", 
@@ -1676,9 +1690,9 @@ void __init con_init_devfs (void)
 {
         int i;
 
-        for (i = 0; i < console_driver.num; i++)
-                tty_register_devfs (&console_driver, DEVFS_FL_AOPEN_NOTIFY,
-                                    console_driver.minor_start + i);
+        for (i = 0; i < vt_driver.num; i++)
+                tty_register_devfs(&vt_driver, DEVFS_FL_AOPEN_NOTIFY,
+                                    vt_driver.minor_start + i);
 }
 
 /*
