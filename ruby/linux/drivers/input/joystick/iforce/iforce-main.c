@@ -221,23 +221,21 @@ static int iforce_open(struct input_dev *dev)
 {
 	struct iforce *iforce = dev->private;
 
+printk(KERN_DEBUG "In iforce_open\n");
+
 	switch (iforce->bus) {
 #ifdef IFORCE_USB
 		case IFORCE_USB:
-			if (!iforce->open) {
-				iforce->irq.dev = iforce->usbdev;
-				if (usb_submit_urb(&iforce->irq))
-					return -EIO;
-			}
+printk(KERN_DEBUG "Submitting irq URB\n");
+			iforce->irq.dev = iforce->usbdev;
+			if (usb_submit_urb(&iforce->irq))
+				return -EIO;
 			break;
 #endif
 	}
 
 	/* Enable force feedback */
-	if (!iforce->open)
-		iforce_send_packet(iforce, FF_CMD_ENABLE, "\004");
-
-	iforce->open++;
+	iforce_send_packet(iforce, FF_CMD_ENABLE, "\004");
 
 	return 0;
 }
@@ -275,26 +273,24 @@ static void iforce_release(struct input_dev *dev)
 	/* Disable force feedback playback */
 	iforce_send_packet(iforce, FF_CMD_ENABLE, "\001");
 
-
 	switch (iforce->bus) {
 #ifdef IFORCE_USB
 		case IFORCE_USB:
-			if (!--iforce->open) {
-				usb_unlink_urb(&iforce->irq);
-				usb_unlink_urb(&iforce->out);
+printk(KERN_DEBUG "Unlinking irq URB\n");
+			usb_unlink_urb(&iforce->irq);
+			usb_unlink_urb(&iforce->out);
 
-				/* The device was unplugged before the file
-				 * was released */
-				if (iforce->usbdev == NULL) {
-					iforce_delete(iforce);
-				}
+			/* The device was unplugged before the file
+			 * was released */
+			if (iforce->usbdev == NULL) {
+				iforce_delete_device(iforce);
 			}
-			break;
+		break;
 #endif
 	}
 }
 
-void iforce_delete(struct iforce *iforce)
+void iforce_delete_device(struct iforce *iforce)
 {
 #ifdef IFORCE_USB
 	iforce_usb_delete(iforce);
@@ -351,7 +347,7 @@ int iforce_init_device(struct iforce *iforce)
 
 	if (i == 20) { /* 5 seconds */
 		printk(KERN_ERR "iforce.c: Timeout waiting for response from device.\n");
-		iforce_delete(iforce);
+		iforce_delete_device(iforce);
 		return -1;
 	}
 
@@ -400,8 +396,6 @@ int iforce_init_device(struct iforce *iforce)
 			break;
 
 	iforce->type = iforce_device + i;
-
-	strncpy(iforce->name, iforce->type->name, 64);
 
 /*
  * Set input device bitfields and ranges.
@@ -462,6 +456,8 @@ int iforce_init_device(struct iforce *iforce)
  */
 
 	input_register_device(&iforce->dev);
+
+	printk(KERN_DEBUG "iforce->dev.open = %p\n", iforce->dev.open);
 
 	printk(KERN_INFO "input: %s [%d effects, %ld bytes memory]\n",
 		iforce->dev.name, iforce->dev.ff_effects_max,

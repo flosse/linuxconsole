@@ -1,8 +1,8 @@
 /*
  * $Id$
  *
- *  Copyright (c) 2000-2001 Vojtech Pavlik <vojtech@ucw.cz>
- *  Copyright (c) 2001 Johann Deneux <deneux@ifrance.com>
+ *  Copyright (c) 2000-2002 Vojtech Pavlik <vojtech@ucw.cz>
+ *  Copyright (c) 2001-2002 Johann Deneux <deneux@ifrance.com>
  *
  *  USB/RS232 I-Force joysticks and wheels.
  */
@@ -118,14 +118,13 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	iforce->cr.wIndex = 0;
 	iforce->cr.wLength = 16;
 
-	/* FIXME: use lower-case versions instead with 2.5 */
-	FILL_INT_URB(&iforce->irq, dev, usb_rcvintpipe(dev, epirq->bEndpointAddress),
+	usb_fill_int_urb(&iforce->irq, dev, usb_rcvintpipe(dev, epirq->bEndpointAddress),
 			iforce->data, 16, iforce_usb_irq, iforce, epirq->bInterval);
 
-	FILL_BULK_URB(&iforce->out, dev, usb_sndbulkpipe(dev, epout->bEndpointAddress),
+	usb_fill_bulk_urb(&iforce->out, dev, usb_sndbulkpipe(dev, epout->bEndpointAddress),
 			iforce + 1, 32, iforce_usb_out, iforce);
 
-	FILL_CONTROL_URB(&iforce->ctrl, dev, usb_rcvctrlpipe(dev, 0),
+	usb_fill_control_urb(&iforce->ctrl, dev, usb_rcvctrlpipe(dev, 0),
 			(void*) &iforce->cr, iforce->edata, 16, iforce_usb_ctrl, iforce);
 
 	if (iforce_init_device(iforce)) {
@@ -147,11 +146,13 @@ void iforce_usb_delete(struct iforce* iforce)
 static void iforce_usb_disconnect(struct usb_device *dev, void *ptr)
 {
 	struct iforce *iforce = ptr;
+	int open = iforce->dev.handle->open;
+
 	iforce->usbdev = NULL;
 	input_unregister_device(&iforce->dev);
 
-	if (iforce->open <= 0)
-		iforce_delete(iforce);
+	if (!open)
+		iforce_delete_device(iforce);
 }
 
 static struct usb_device_id iforce_usb_ids [] = {
