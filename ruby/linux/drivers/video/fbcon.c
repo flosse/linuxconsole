@@ -244,6 +244,13 @@ static const char *fbcon_startup(struct vt_struct *vt, int init)
     info->var.xoffset = info->var.yoffset = 0;  /* reset wrap/pan */
     info->var.activate = FB_ACTIVATE_NOW;	
 
+    if (divides(info->fix.ywrapstep, vc->vc_font.height) &&
+        	divides(vc->vc_font.height, info->var.yres_virtual))
+       	info->var.vmode |= FB_VMODE_YWRAP;
+    else if (divides(info->fix.ypanstep, vc->vc_font.height) &&
+             	info->var.yres_virtual >= info->var.yres + vc->vc_font.height)
+        info->var.vmode &= ~FB_VMODE_YWRAP;
+
     /* We trust the driver supplied us with a vaild resolution */	
     if (info->fbops->fb_set_par)
 	info->fbops->fb_set_par(info);	
@@ -611,6 +618,14 @@ static int fbcon_resize(struct vc_data *vc,unsigned int cols,unsigned int rows)
     err = fb_set_var(&var, info);
     if (err)
 	return err;
+
+    if (divides(info->fix.ywrapstep, vc->vc_font.height) &&
+                divides(vc->vc_font.height, info->var.yres_virtual))
+       	info->var.vmode |= FB_VMODE_YWRAP;
+    else if (divides(info->fix.ypanstep, vc->vc_font.height) &&
+                info->var.yres_virtual >= info->var.yres + vc->vc_font.height)
+        info->var.vmode &= ~FB_VMODE_YWRAP;
+
     DPRINTK("Graphics mode is now set at %dx%d depth %d\n", var.xres, var.yres, 		var.bits_per_pixel);	
     vc->vc_can_do_color = var.bits_per_pixel != 1;
     vc->vc_scrollback = 1;
@@ -646,25 +661,27 @@ static int fbcon_set_palette(struct vc_data *vc, unsigned char *table)
 
 static int fbcon_scroll(struct vc_data *vc, int lines)
 {
-    struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
-    /*
-     * ++Geert: Only use ywrap/ypan if the console is in text mode
-     * ++Andrew: Only use ypan on hardware text mode when scrolling the
-     *           whole screen (prevents flicker).
-     */
-    if (lines < 0) {
-               /* Scroll up */
-               info->var.xoffset = 0;
-               info->var.yoffset += lines * vc->vc_font.height;
-               info->var.vmode &= ~FB_VMODE_YWRAP;
-               fb_pan_display(&info->var, info);
-   } else {
-               info->var.xoffset = 0;
-               info->var.yoffset += lines * vc->vc_font.height;
-               info->var.vmode &= ~FB_VMODE_YWRAP;
-               fb_pan_display(&info->var, info);
-   }
-   return 0;
+   struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
+   int delta = lines * vc->vc_font.height, orig_y = info->var.yoffset;	
+
+   /*
+    * ++Geert: Only use ywrap/ypan if the console is in text mode
+    * ++Andrew: Only use ypan on hardware text mode when scrolling the
+    *           whole screen (prevents flicker).
+    */
+    info->var.xoffset = 0;
+    info->var.yoffset += delta;
+
+    /* Hardware panning support */
+    if (fb_pan_display(&info->var, info)) {
+	/* 
+	 * Oops it failed to work. Time to do cleanup then use 
+	 * a copyarea.
+   	 */ 
+	info->var.yoffset = orig_y;
+        info->fbops->fb_copyarea(info, 0, orig_y, info->var.xres, delta, 0, info->var.yoffset);
+    }
+    return 0;
 }
 
 static int fbcon_set_origin(struct vc_data *vc)
