@@ -49,6 +49,14 @@ spinlock_t console_lock = SPIN_LOCK_UNLOCKED;
 int oops_in_progress;
 
 struct console *console_drivers;
+
+/*
+ * logbuf_lock protects log_buf, log_start, log_end, con_start and logged_chars
+ * It is also used in interesting ways to provide interlocking in
+ * release_console_sem().
+ */
+static spinlock_t logbuf_lock = SPIN_LOCK_UNLOCKED;
+
 static char log_buf[LOG_BUF_LEN];
 #define LOG_BUF(idx) (log_buf[(idx) & LOG_BUF_MASK])
 
@@ -163,17 +171,17 @@ int do_syslog(int type, char * buf, int len)
 		if (error)
 			goto out;
 		i = 0;
-		spin_lock_irq(&console_lock);
+		spin_lock_irq(&logbuf_lock);
 		while ((log_start != log_end) && i < len) {
 			c = LOG_BUF(log_start);
 			log_start++;
-			spin_unlock_irq(&console_lock);
+			spin_unlock_irq(&logbuf_lock);
 			__put_user(c,buf);
 			buf++;
 			i++;
-			spin_lock_irq(&console_lock);
+			spin_lock_irq(&logbuf_lock);
 		}
-		spin_unlock_irq(&console_lock);
+		spin_unlock_irq(&logbuf_lock);
 		error = i;
 		break;
 	case 4:		/* Read/clear last kernel messages */
@@ -192,7 +200,7 @@ int do_syslog(int type, char * buf, int len)
 		count = len;
 		if (count > LOG_BUF_LEN)
 			count = LOG_BUF_LEN;
-		spin_lock_irq(&console_lock);
+		spin_lock_irq(&logbuf_lock);
 		if (count > logged_chars)
 			count = logged_chars;
 		if (do_clear)
@@ -209,11 +217,11 @@ int do_syslog(int type, char * buf, int len)
 			if (j+LOG_BUF_LEN < log_end)
 				break;
 			c = LOG_BUF(j);
-			spin_unlock_irq(&console_lock);
+			spin_unlock_irq(&logbuf_lock);
 			__put_user(c,&buf[count-1-i]);
-			spin_lock_irq(&console_lock);
+			spin_lock_irq(&logbuf_lock);
 		}
-		spin_unlock_irq(&console_lock);
+		spin_unlock_irq(&logbuf_lock);
 		error = i;
 		if(i != count) {
 			int offset = count-error;
@@ -226,19 +234,19 @@ int do_syslog(int type, char * buf, int len)
 
 		break;
 	case 5:		/* Clear ring buffer */
-		spin_lock_irq(&console_lock);
+		spin_lock_irq(&logbuf_lock);
 		logged_chars = 0;
-		spin_unlock_irq(&console_lock);
+		spin_unlock_irq(&logbuf_lock);
 		break;
 	case 6:		/* Disable logging to console */
-		spin_lock_irq(&console_lock);
+		spin_lock_irq(&logbuf_lock);
 		console_loglevel = minimum_console_loglevel;
-		spin_unlock_irq(&console_lock);
+		spin_unlock_irq(&logbuf_lock);
 		break;
 	case 7:		/* Enable logging to console */
-		spin_lock_irq(&console_lock);
+		spin_lock_irq(&logbuf_lock);
 		console_loglevel = default_console_loglevel;
-		spin_unlock_irq(&console_lock);
+		spin_unlock_irq(&logbuf_lock);
 		break;
 	case 8:		/* Set level of messages printed to console */
 		error = -EINVAL;
@@ -246,15 +254,15 @@ int do_syslog(int type, char * buf, int len)
 			goto out;
 		if (len < minimum_console_loglevel)
 			len = minimum_console_loglevel;
-		spin_lock_irq(&console_lock);
+		spin_lock_irq(&logbuf_lock);
 		console_loglevel = len;
-		spin_unlock_irq(&console_lock);
+		spin_unlock_irq(&logbuf_lock);
 		error = 0;
 		break;
 	case 9:		/* Number of chars in the log buffer */
-		spin_lock_irq(&console_lock);
+		spin_lock_irq(&logbuf_lock);
 		error = log_end - log_start;
-		spin_unlock_irq(&console_lock);
+		spin_unlock_irq(&logbuf_lock);
 		break;	
 	default:
 		error = -EINVAL;
@@ -368,9 +376,14 @@ asmlinkage int printk(const char *fmt, ...)
 	va_list args;
         char *p;
 
-	if (oops_in_progress)
-		spin_lock_init(&console_lock);
-	spin_lock_irqsave(&console_lock, flags);
+	if (oops_in_progress) {
+		/* If a crash is occurring, make sure we can't deadlock */
+		spin_lock_init(&logbuf_lock);
+		/* And make sure that we print immediately */
+	}
+
+	/* This stops the holder of console_sem just where we want him */
+	spin_lock_irqsave(&logbuf_lock, flags);
 	/* Emit the output into the temporary buffer */
 	printk_buf.semi_random += jiffies;
 	sr_copy = printk_buf.semi_random;
@@ -398,15 +411,21 @@ asmlinkage int printk(const char *fmt, ...)
                 if (*p == '\n')
 			log_level_unknown = 1;
 	}
+	spin_unlock_irqrestore(&logbuf_lock, flags);
+
+	if (oops_in_progress)
+		spin_lock_init(&console_lock);
+
 	if (con_start != log_end) {
 		unsigned long _con_start, _log_end;		
 
 		_con_start = con_start;
                 _log_end = log_end;
                 con_start = log_end;            /* Flush */
+		spin_lock_irqsave(&console_lock, flags);
 		call_console_drivers(_con_start, _log_end);
+		spin_unlock_irqrestore(&console_lock, flags);
 	}
-	spin_unlock_irqrestore(&console_lock, flags);
 	if (!oops_in_progress)
 		wake_up_interruptible(&log_wait);
 	return printed_len;
@@ -486,6 +505,8 @@ void register_console(struct console * console)
 		/*
 	 	 *	Print out buffered log messages.
 	 	 */
+		spin_lock_irqsave(&logbuf_lock, flags);
+		con_start = log_start;
 		if (con_start != log_end) {
                		unsigned long _con_start, _log_end;
 
@@ -494,6 +515,7 @@ void register_console(struct console * console)
                 	con_start = log_end;            /* Flush */
                 	call_console_drivers(_con_start, _log_end);
         	}
+		spin_unlock_irqrestore(&logbuf_lock, flags);
 	}
 	spin_unlock_irqrestore(&console_lock, flags);
 }
@@ -526,7 +548,6 @@ int unregister_console(struct console * console)
 	 */
 	if (console_drivers == NULL)
 		preferred_console = -1;
-		
 
 	spin_unlock_irqrestore(&console_lock, flags);
 	return res;
