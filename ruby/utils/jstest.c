@@ -114,7 +114,7 @@ int main (int argc, char **argv)
 	if (argc == 2 || !strcmp("--normal", argv[1])) {
 
 		int *axis;
-		int *button;
+		char *button;
 		int i;
 		struct js_event js;
 
