@@ -166,12 +166,14 @@ static int __init fbcon_setup(char *options);
 
 static int __init fbcon_setup(char *options)
 {
+    char *this_opt;
     if (!options || !*options)
             return 0;
 
     while (this_opt = strsep(&options, ",")) {	
-    	if (!strncmp(options, "font:", 5))
-        	strcpy(fontname, options+5);
+    	if (!strncmp(this_opt, "font:", 5))
+        	strcpy(fontname, this_opt+5);
+    }
     return 0;
 }
 
