@@ -16,7 +16,7 @@
  *  Intel Mobile Pentium II detection fix. Sean Gilley, June 1999.
  *
  *  IDT Winchip tweaks, misc clean ups.
- *	Dave Jones <dave@powertweak.com>, August 1999
+ *	Dave Jones <davej@suse.de>, August 1999
  *
  *  Support of BIGMEM added by Gerhard Wichert, Siemens AG, July 1999
  *
@@ -27,7 +27,7 @@
  *	David Parsons <orc@pell.chi.il.us>, July-August 1999
  *
  *  Cleaned up cache-detection code
- *	Dave Jones <dave@powertweak.com>, October 1999
+ *	Dave Jones <davej@suse.de>, October 1999
  *
  *	Added proper L2 cache detection for Coppermine
  *	Dragan Stancevic <visitor@valinux.com>, October 1999
@@ -38,7 +38,7 @@
  *
  *  Detection for Celeron coppermine, identify_cpu() overhauled,
  *  and a few other clean ups.
- *  Dave Jones <dave@powertweak.com>, April 2000
+ *  Dave Jones <davej@suse.de>, April 2000
  *
  *  Pentium III FXSR, SSE support
  *  General FPU state handling cleanups
@@ -47,6 +47,9 @@
  *  Added proper Cascades CPU and L2 cache detection for Cascades
  *  and 8-way type cache happy bunch from Intel:^)
  *  Dragan Stancevic <visitor@valinux.com>, May 2000 
+ *
+ *  Forward port AMD Duron errata T13 from 2.2.17pre
+ *  Dave Jones <davej@suse.de>, August 2000
  *
  */
 
@@ -76,7 +79,7 @@
 #include <linux/highmem.h>
 #include <linux/bootmem.h>
 #include <asm/processor.h>
-#include <linux/vt_kern.h>
+#include <linux/console.h>
 #include <asm/uaccess.h>
 #include <asm/system.h>
 #include <asm/io.h>
@@ -142,7 +145,7 @@ extern unsigned long cpu_hz;
 #define EXT_MEM_K (*(unsigned short *) (PARAM+2))
 #define ALT_MEM_K (*(unsigned long *) (PARAM+0x1e0))
 #define E820_MAP_NR (*(char*) (PARAM+E820NR))
-#define E820_MAP    ((unsigned long *) (PARAM+E820MAP))
+#define E820_MAP    ((struct e820entry *) (PARAM+E820MAP))
 #define APM_BIOS_INFO (*(struct apm_bios_info *) (PARAM+0x40))
 #define DRIVE_INFO (*(struct drive_info_struct *) (PARAM+0x80))
 #define SYS_DESC_TABLE (*(struct sys_desc_table_struct*)(PARAM+0xa0))
@@ -379,8 +382,8 @@ static void __init probe_roms(void)
 	}
 }
 
-void __init add_memory_region(unsigned long start,
-                                  unsigned long size, int type)
+void __init add_memory_region(unsigned long long start,
+                                  unsigned long long size, int type)
 {
 	int x = e820.nr_map;
 
@@ -397,12 +400,12 @@ void __init add_memory_region(unsigned long start,
 
 #define E820_DEBUG	1
 
-static void __init print_e820_map(void)
+static void __init print_memory_map(char *who)
 {
 	int i;
 
 	for (i = 0; i < e820.nr_map; i++) {
-		printk(" e820: %016Lx @ %016Lx ",
+		printk(" %s: %016Lx @ %016Lx ", who,
 			e820.map[i].size, e820.map[i].addr);
 		switch (e820.map[i].type) {
 		case E820_RAM:	printk("(usable)\n");
@@ -423,6 +426,57 @@ static void __init print_e820_map(void)
 }
 
 /*
+ * Copy the BIOS e820 map into a safe place.
+ *
+ * Sanity-check it while we're at it..
+ *
+ * If we're lucky and live on a modern system, the setup code
+ * will have given us a memory map that we can use to properly
+ * set up memory.  If we aren't, we'll fake a memory map.
+ *
+ * We check to see that the memory map contains at least 2 elements
+ * before we'll use it, because the detection code in setup.S may
+ * not be perfect and most every PC known to man has two memory
+ * regions: one from 0 to 640k, and one from 1mb up.  (The IBM
+ * thinkpad 560x, for example, does not cooperate with the memory
+ * detection code.)
+ */
+static int __init copy_e820_map(struct e820entry * biosmap, int nr_map)
+{
+	/* Only one memory region (or negative)? Ignore it */
+	if (nr_map < 2)
+		return -1;
+
+	do {
+		unsigned long long start = biosmap->addr;
+		unsigned long long size = biosmap->size;
+		unsigned long long end = start + size;
+		unsigned long type = biosmap->type;
+
+		/* Overflow in 64 bits? Ignore the memory map. */
+		if (start > end)
+			return -1;
+
+		/*
+		 * Some BIOSes claim RAM in the 640k - 1M region.
+		 * Not right. Fix it up.
+		 */
+		if (type == E820_RAM) {
+			if (start < 0x100000ULL && end > 0xA0000ULL) {
+				if (start < 0xA0000ULL)
+					add_memory_region(start, 0xA0000ULL-start, type);
+				if (end < 0x100000ULL)
+					continue;
+				start = 0x100000ULL;
+				size = end - start;
+			}
+		}
+		add_memory_region(start, size, type);
+	} while (biosmap++,--nr_map);
+	return 0;
+}
+
+/*
  * Do NOT EVER look at the BIOS memory size location.
  * It does not work on many machines.
  */
@@ -430,39 +484,32 @@ static void __init print_e820_map(void)
 
 void __init setup_memory_region(void)
 {
+	char *who = "BIOS-e820";
+
 	/*
-	 * If we're lucky and live on a modern system, the setup code
-	 * will have given us a memory map that we can use to properly
-	 * set up memory.  If we aren't, we'll fake a memory map.
+	 * Try to copy the BIOS-supplied E820-map.
 	 *
-	 * We check to see that the memory map contains at least 2 elements
-	 * before we'll use it, because the detection code in setup.S may
-	 * not be perfect and most every PC known to man has two memory
-	 * regions: one from 0 to 640k, and one from 1mb up.  (The IBM
-	 * thinkpad 560x, for example, does not cooperate with the memory
-	 * detection code.)
+	 * Otherwise fake a memory map; one section from 0k->640k,
+	 * the next section from 1mb->appropriate_mem_k
 	 */
-	if (E820_MAP_NR > 1) {
-		/* got a memory map; copy it into a safe place.
-		 */
-		e820.nr_map = E820_MAP_NR;
-		if (e820.nr_map > E820MAX)
-			e820.nr_map = E820MAX;
-		memcpy(e820.map, E820_MAP, e820.nr_map * sizeof e820.map[0]);
-	}
-	else {
-		/* otherwise fake a memory map; one section from 0k->640k,
-		 * the next section from 1mb->appropriate_mem_k
-		 */
+	if (copy_e820_map(E820_MAP, E820_MAP_NR) < 0) {
 		unsigned long mem_size;
 
-		mem_size = (ALT_MEM_K < EXT_MEM_K) ? EXT_MEM_K : ALT_MEM_K;
+		/* compare results from other methods and take the greater */
+		if (ALT_MEM_K < EXT_MEM_K) {
+			mem_size = EXT_MEM_K;
+			who = "BIOS-88";
+		} else {
+			mem_size = ALT_MEM_K;
+			who = "BIOS-e801";
+		}
 
+		e820.nr_map = 0;
 		add_memory_region(0, LOWMEMSIZE(), E820_RAM);
 		add_memory_region(HIGH_MEMORY, mem_size << 10, E820_RAM);
   	}
 	printk("BIOS-provided physical RAM map:\n");
-	print_e820_map();
+	print_memory_map(who);
 } /* setup_memory_region */
 
 
@@ -532,7 +579,7 @@ static inline void parse_mem_cmdline (char ** cmdline_p)
 	*cmdline_p = command_line;
 	if (usermem) {
 		printk("user-defined physical RAM map:\n");
-		print_e820_map();
+		print_memory_map("user");
 	}
 }
 
@@ -889,7 +936,7 @@ static int __init amd_model(struct cpuinfo_x86 *c)
 				break;
 			}
 			break;
-		case 6:	/* An Athlon. We can trust the BIOS probably */
+		case 6:	/* An Athlon/Duron. We can trust the BIOS probably */
 			break;		
 	}
 
@@ -900,10 +947,19 @@ static int __init amd_model(struct cpuinfo_x86 *c)
 			edx>>24, ecx>>24, edx&0xFF);
 		c->x86_cache_size=(ecx>>24)+(edx>>24);	
 	}
-	if (n >= 0x80000006) {
-		cpuid(0x80000006, &dummy, &dummy, &ecx, &edx);
-		printk("CPU: L2 Cache: %dK\n", ecx>>16);
-		c->x86_cache_size=(ecx>>16);
+
+	/* AMD errata T13 (order #21922) */
+	if (boot_cpu_data.x86 == 6 && boot_cpu_data.x86_model == 3 &&
+		boot_cpu_data.x86_mask == 0)
+	{
+		c->x86_cache_size = 64;
+		printk("CPU: L2 Cache: 64K\n");
+	} else {
+		if (n >= 0x80000006) {
+			cpuid(0x80000006, &dummy, &dummy, &ecx, &edx);
+			printk("CPU: L2 Cache: %dK\n", ecx>>16);
+			c->x86_cache_size=(ecx>>16);
+		}
 	}
 
 	return r;
@@ -1502,7 +1558,7 @@ void __init identify_cpu(struct cpuinfo_x86 *c)
 	
 	if(c->x86_vendor == X86_VENDOR_NEXGEN)
 		c->x86_cache_size = 256;	/* A few had 1Mb.. */
-	
+
 	for (i = 0; i < sizeof(cpu_models)/sizeof(struct cpu_model_info); i++) {
 		if (cpu_models[i].vendor == c->x86_vendor &&
 		    cpu_models[i].x86 == c->x86) {
@@ -1534,8 +1590,8 @@ void __init dodgy_tsc(void)
 
 	cyrix_model(&boot_cpu_data);
 }
-	
-	
+
+
 
 static char *cpu_vendor_names[] __initdata = {
 	"Intel", "Cyrix", "AMD", "UMC", "NexGen", "Centaur", "Rise", "Transmeta" };

@@ -302,8 +302,9 @@ endmenu
 
 source drivers/char/Config.in
 
-
 #source drivers/misc/Config.in
+
+source drivers/media/Config.in
 
 source fs/Config.in
 

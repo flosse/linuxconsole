@@ -75,6 +75,7 @@ if [ "$CONFIG_SUN4" != "y" ]; then
    source drivers/sbus/audio/Config.in
 fi
 
+source drivers/input/Config.in
 source drivers/video/Config.in
 
 mainmenu_option next_comment
@@ -94,7 +95,7 @@ tristate 'Multiple devices driver support' CONFIG_BLK_DEV_MD
 dep_tristate '  Linear (append) mode' CONFIG_MD_LINEAR $CONFIG_BLK_DEV_MD
 dep_tristate '  RAID-0 (striping) mode' CONFIG_MD_RAID0 $CONFIG_BLK_DEV_MD
 dep_tristate '  RAID-1 (mirroring) mode' CONFIG_MD_RAID1 $CONFIG_BLK_DEV_MD
-dep_tristate '  RAID-4/RAID-5 mode' CONFIG_MD_RAID5 $CONFIG_BLK_DEV_MD
+#dep_tristate '  RAID-4/RAID-5 mode' CONFIG_MD_RAID5 $CONFIG_BLK_DEV_MD
 #if [ "$CONFIG_MD_LINEAR" = "y" -o "$CONFIG_MD_RAID0" = "y" -o "$CONFIG_MD_RAID1" = "y" -o "$CONFIG_MD_RAID5" = "y" ]; then
 #        bool '  Boot support' CONFIG_MD_BOOT
 #        bool '  Auto Detect support' CONFIG_AUTODETECT_RAID
@@ -198,9 +199,10 @@ if [ "$CONFIG_NET" = "y" ]; then
    if [ "$CONFIG_NETDEVICES" = "y" ]; then
       tristate '  Dummy net driver support' CONFIG_DUMMY
       tristate '  Bonding driver support' CONFIG_BONDING
+      tristate '  Universal TUN/TAP device driver support' CONFIG_TUN
       if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
         if [ "$CONFIG_NETLINK" = "y" ]; then
-          tristate '  Ethertap network tap (EXPERIMENTAL)' CONFIG_ETHERTAP
+          tristate '  Ethertap network tap (OBSOLETE)' CONFIG_ETHERTAP
         fi
       fi
       tristate '  PPP (point-to-point) support' CONFIG_PPP

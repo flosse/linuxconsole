@@ -1,7 +1,7 @@
 VERSION = 2
 PATCHLEVEL = 4
 SUBLEVEL = 0
-EXTRAVERSION = -test6-ruby
+EXTRAVERSION = -test7-ruby
 
 KERNELRELEASE=$(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
 
@@ -123,6 +123,7 @@ DRIVERS		=drivers/block/block.o \
 		 drivers/char/char.o \
 		 drivers/misc/misc.o \
 		 drivers/net/net.o \
+		 drivers/media/media.o \
 	         drivers/parport/parport.a
 LIBS		=$(TOPDIR)/lib/lib.a
 SUBDIRS		=kernel drivers mm fs net ipc lib
@@ -136,10 +137,10 @@ DRIVERS-$(CONFIG_AGP) += drivers/char/agp/agp.o
 DRIVERS-$(CONFIG_DRM) += drivers/char/drm/drm.o
 DRIVERS-$(CONFIG_NUBUS) += drivers/nubus/nubus.a
 DRIVERS-$(CONFIG_ISDN) += drivers/isdn/isdn.a
-DRIVERS-$(CONFIG_NET_FC) += drivers/net/fc/fc.a
+DRIVERS-$(CONFIG_NET_FC) += drivers/net/fc/fc.o
 DRIVERS-$(CONFIG_APPLETALK) += drivers/net/appletalk/appletalk.a
 DRIVERS-$(CONFIG_TR) += drivers/net/tokenring/tr.a
-DRIVERS-$(CONFIG_WAN) += drivers/net/wan/wan.a
+DRIVERS-$(CONFIG_WAN) += drivers/net/wan/wan.o
 DRIVERS-$(CONFIG_ARCNET) += drivers/net/arcnet/arcnet.a
 DRIVERS-$(CONFIG_ATM) += drivers/atm/atm.o
 DRIVERS-$(CONFIG_IDE) += drivers/ide/idedriver.o
@@ -171,7 +172,7 @@ DRIVERS-$(CONFIG_TC) += drivers/tc/tc.a
 DRIVERS-$(CONFIG_USB) += drivers/usb/usbdrv.o
 DRIVERS-$(CONFIG_INPUT) += drivers/input/inputdrv.o
 DRIVERS-$(CONFIG_I2O) += drivers/i2o/i2o.o
-DRIVERS-$(CONFIG_IRDA) += drivers/net/irda/irda_drivers.a
+DRIVERS-$(CONFIG_IRDA) += drivers/net/irda/irda.o
 DRIVERS-$(CONFIG_I2C) += drivers/i2c/i2c.o
 DRIVERS-$(CONFIG_PHONE) += drivers/telephony/telephony.a
 DRIVERS-$(CONFIG_ACPI_INTERPRETER) += drivers/acpi/acpi.o
@@ -429,6 +430,9 @@ dep-files: scripts/mkdep archdep include/linux/version.h
 	scripts/mkdep init/*.c > .depend
 	scripts/mkdep `find $(FINDHPATH) -name SCCS -prune -o -follow -name \*.h ! -name modversions.h -print` > .hdepend
 	$(MAKE) $(patsubst %,_sfdep_%,$(SUBDIRS)) _FASTDEP_ALL_SUB_DIRS="$(SUBDIRS)"
+ifdef CONFIG_MODVERSIONS
+	$(MAKE) update-modverfile
+endif
 
 ifdef CONFIG_MODVERSIONS
 MODVERFILE := $(TOPDIR)/include/linux/modversions.h
@@ -437,7 +441,7 @@ MODVERFILE :=
 endif
 export	MODVERFILE
 
-depend dep: dep-files $(MODVERFILE)
+depend dep: dep-files
 
 # make checkconfig: Prune 'scripts' directory to avoid "false positives".
 checkconfig:

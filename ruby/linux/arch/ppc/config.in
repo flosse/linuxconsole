@@ -134,12 +134,6 @@ fi
 source drivers/parport/Config.in
 
 if [ "$CONFIG_4xx" != "y" -a "$CONFIG_8xx" != "y" ]; then
-  bool 'Support for VGA Console' CONFIG_VGA_CONSOLE
-  bool 'Support for frame buffer devices' CONFIG_FB
-  if [ "$CONFIG_FB" = "y" ]; then
-    bool 'Backward compatibility mode for Xpmac' CONFIG_FB_COMPAT_XPMAC
-  fi
-
   bool 'Power management support for PowerBooks' CONFIG_PMAC_PBOOK
   bool 'Support for PowerMac floppy' CONFIG_MAC_FLOPPY
   tristate 'Support for PowerMac serial ports' CONFIG_MAC_SERIAL
@@ -258,6 +252,9 @@ fi
 endmenu
 
 source drivers/char/Config.in
+
+source drivers/media/Config.in
+
 source fs/Config.in
 
 mainmenu_option next_comment
