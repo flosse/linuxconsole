@@ -198,6 +198,9 @@ static struct fb_ops vesafb_ops = {
 	fb_set_par:	vesafb_set_par,
 	fb_setcolreg:	vesafb_setcolreg,
 	fb_pan_display:	vesafb_pan_display,
+	fb_fillrect:	cfb_fillrect,
+	fb_copyarea:	cfb_copyarea,
+	fb_imageblit:	cfb_imageblit,
 };
 
 int __init vesafb_setup(char *options)
