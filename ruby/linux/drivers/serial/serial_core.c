@@ -1230,6 +1230,7 @@ static int uart_open(struct tty_struct *tty, struct file *filp)
 	struct uart_register *reg = (struct uart_register *)tty->driver.driver_state;
 	struct uart_info *info;
 	int retval, line = MINOR(tty->device) - tty->driver.minor_start;
+	int changed_termios = 0;
 
 #ifdef DEBUG
 	printk("uart_open(%d) called\n", line);
@@ -1276,15 +1277,15 @@ static int uart_open(struct tty_struct *tty, struct file *filp)
 		goto out;
 	}
 
-#ifdef CONFIG_PM
 	/*
 	 * Make sure the device is in D0 state.
 	 */
 	if (info->state->count == 1)
+#ifdef CONFIG_PM
 		pm_send(info->state->pm, PM_RESUME, (void *)0);
 #else
-	if (info->port->ops->pm)
-		info->port->ops->pm(info->port, 0, 3);
+		if (info->port->ops->pm)
+			info->port->ops->pm(info->port, 0, 3);
 #endif
 
 	/*
@@ -1315,9 +1316,12 @@ static int uart_open(struct tty_struct *tty, struct file *filp)
 		if (c && c->cflag && c->index == line) {
 			tty->termios->c_cflag = c->cflag;
 			c->cflag = 0;
+			changed_termios = 1;
 		}
 	}
 #endif
+	if (changed_termios)
+               	uart_change_speed(info, NULL);
 	info->session = current->session;
 	info->pgrp = current->pgrp;
 	return 0;
