@@ -90,13 +90,13 @@ struct iforce_core_effect {
 #define FF_CMD_QUERY		0xff01
 
 static signed short btn_joystick[] = { BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_TOP2, BTN_BASE,
-	BTN_BASE2, BTN_BASE3, BTN_BASE4, BTN_BASE5, BTN_A, BTN_B, BTN_C, -1 };
+	BTN_BASE2, BTN_BASE3, BTN_BASE4, BTN_BASE5, BTN_A, BTN_B, BTN_C, BTN_DEAD, -1 };
 static signed short btn_wheel[] =    { BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_TOP2, BTN_BASE,
 	BTN_BASE2, BTN_BASE3, BTN_BASE4, BTN_BASE5, BTN_A, BTN_B, BTN_C, -1 };
 static signed short abs_joystick[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, -1 };
-static signed short abs_wheel[]    = { ABS_WHEEL, ABS_GAS, ABS_BRAKE, ABS_HAT0X, ABS_HAT0Y };
-static signed short ff_joystick[] = { FF_X, FF_Y, -1 };
-static signed short ff_wheel[]    = { FF_X, -1 };
+static signed short abs_wheel[] =    { ABS_WHEEL, ABS_GAS, ABS_BRAKE, ABS_HAT0X, ABS_HAT0Y, -1 };
+static signed short ff_iforce[] =    { FF_PERIODIC, FF_CONSTANT, FF_SPRING, FF_FRICTION,
+	FF_SQUARE, FF_TRIANGLE, FF_SINE, FF_SAW_UP, FF_SAW_DOWN, FF_GAIN, FF_AUTOCENTER, -1 };
 
 static struct iforce_device {
 	u16 idvendor;
@@ -106,12 +106,12 @@ static struct iforce_device {
 	signed short *abs;
 	signed short *ff;
 } iforce_device[] = {
-	{ 0x046d, 0xc281, "Logitech WingMan Force",			btn_joystick, abs_joystick, ff_joystick },
-	{ 0x046d, 0xc291, "Logitech WingMan Formula Force",		btn_wheel, abs_wheel, ff_wheel },
-	{ 0x05ef, 0x020a, "AVB Top Shot Pegasus",			btn_joystick, abs_joystick, ff_joystick },
-	{ 0x05ef, 0x8884, "AVB Mag Turbo Force",			btn_wheel, abs_wheel, ff_wheel },
-	{ 0x06f8, 0x0001, "Guillemot Race Leader Force Feedback",	btn_wheel, abs_wheel, ff_wheel },
-	{ 0x0000, 0x0000, "Unknown I-Force Device [%04x:%04x]",		btn_joystick, abs_joystick, ff_joystick }
+	{ 0x046d, 0xc281, "Logitech WingMan Force",			btn_joystick, abs_joystick, ff_iforce },
+	{ 0x046d, 0xc291, "Logitech WingMan Formula Force",		btn_wheel, abs_wheel, ff_iforce },
+	{ 0x05ef, 0x020a, "AVB Top Shot Pegasus",			btn_joystick, abs_joystick, ff_iforce },
+	{ 0x05ef, 0x8884, "AVB Mag Turbo Force",			btn_wheel, abs_wheel, ff_iforce },
+	{ 0x06f8, 0x0001, "Guillemot Race Leader Force Feedback",	btn_wheel, abs_wheel, ff_iforce },
+	{ 0x0000, 0x0000, "Unknown I-Force Device [%04x:%04x]",		btn_joystick, abs_joystick, ff_iforce }
 };		
 
 struct iforce {
@@ -228,6 +228,7 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char *data)
 {
 	struct input_dev *dev = &iforce->dev;
+	int i;
 
 #ifdef IFORCE_232
 	if (HI(iforce->expect_packet) == HI(cmd)) {
@@ -257,18 +258,9 @@ static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char 
 			input_report_abs(dev, ABS_HAT0X, iforce_hat_to_axis[data[6] >> 4].x);
 			input_report_abs(dev, ABS_HAT0Y, iforce_hat_to_axis[data[6] >> 4].y);
 
-			input_report_key(dev, BTN_TRIGGER, data[5] & 0x01);
-			input_report_key(dev, BTN_TOP,     data[5] & 0x02);
-			input_report_key(dev, BTN_THUMB,   data[5] & 0x04);
-			input_report_key(dev, BTN_TOP2,    data[5] & 0x08);
-			input_report_key(dev, BTN_BASE,    data[5] & 0x10);
-			input_report_key(dev, BTN_BASE2,   data[5] & 0x20);
-			input_report_key(dev, BTN_BASE3,   data[5] & 0x40);
-			input_report_key(dev, BTN_BASE4,   data[5] & 0x80);
-			input_report_key(dev, BTN_BASE5,   data[6] & 0x01);
-			input_report_key(dev, BTN_A,       data[6] & 0x02);
-			input_report_key(dev, BTN_B,       data[6] & 0x04);
-			input_report_key(dev, BTN_C,       data[6] & 0x08);
+			for (i = 0; iforce->type->btn[i] >= 0; i++)
+				input_report_key(dev, iforce->type->btn[i], data[(i >> 3) + 5] & (1 << (i & 7)));
+
 			break;
 
 		case 0x02:	/* status report */
@@ -381,18 +373,46 @@ static int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned
 	struct iforce* iforce = (struct iforce*)(dev->private);
 	unsigned char data[3];
 
+	printk(KERN_DEBUG "iforce.c: input_event(type = %d, code = %d, value = %d)\n", type, code, value);
+
 	if (type != EV_FF)
 		return -1;
 
-	printk(KERN_DEBUG "iforce.c: input_event(type = %d, code = %d, value = %d)\n", type, code, value);
+	switch (code) {
 
-        data[0] = LO(code);
-        data[1] = (value > 0) ? ((value > 1) ? 0x41 : 0x01) : 0;
-        data[2] = LO(value);
- 
-        send_packet(iforce, FF_CMD_PLAY, data);
+		case FF_GAIN:
 
-	return 0;
+			data[0] = value >> 9;
+			send_packet(iforce, FF_CMD_GAIN, data);                                               
+
+			return 0;
+
+		case FF_AUTOCENTER:
+
+			data[0] = 0x03;
+			data[1] = value >> 9;
+			send_packet(iforce, FF_CMD_AUTOCENTER, data);
+
+			data[0] = 0x04;
+			data[1] = 0x01;
+			send_packet(iforce, FF_CMD_AUTOCENTER, data);
+
+			return 0;
+
+		default: /* Play an effect */
+
+			if (code >= iforce->dev.ff_effects_max)
+				return -1;
+
+		        data[0] = LO(code);
+		        data[1] = (value > 0) ? ((value > 1) ? 0x41 : 0x01) : 0;
+        		data[2] = LO(value);
+        		send_packet(iforce, FF_CMD_PLAY, data);
+
+			return 0;
+	}
+
+	return -1;
 }
 
 /*
@@ -525,6 +545,15 @@ static int make_interactive_modifier(struct iforce* iforce,
 	return 0;
 }
 
+static unsigned char find_button(struct iforce *iforce, signed short button)
+{
+	int i;
+	for (i = 1; iforce->type->btn[i] >= 0; i++)
+		if (iforce->type->btn[i] == button)
+			return i + 1;
+	return 0;
+}
+
 /*
  * Send the part common to all effects to the device
  */
@@ -541,8 +570,7 @@ static int make_core(struct iforce* iforce, u16 id, u16 mod_id1, u16 mod_id2,
  
 	data[0]  = LO(id);
 	data[1]  = effect_type;
-	data[2]  = LO((axes)
-		 | ((button == FF_BUTTON_NONE ? 0 : (button + 1)) & 0x0f));
+	data[2]  = LO(axes) | find_button(iforce, button);
 
 	data[3]  = LO(duration);
 	data[4]  = HI(duration);
@@ -684,38 +712,43 @@ static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* ef
 	if (err) return err;
 	set_bit(FF_MOD1_IS_USED, core_effect->flags);
 
-	/* Only X axis */
-	if (effect->u.interactive.axis == BIT(FF_X)) {
-		mod1 = mod_chunk->start;
-		mod2 = 0xffff;
-		direction = 0x5a00;
-		axes = 0x40;
+	
+	switch ((test_bit(ABS_X, &effect->u.interactive.axis) || 
+		test_bit(ABS_WHEEL, &effect->u.interactive.axis)) |
+		(!!test_bit(ABS_Y, &effect->u.interactive.axis) << 1)) {
+
+		case 0: /* Only one axis, choose orientation */
+			mod1 = mod_chunk->start;
+			mod2 = 0xffff;
+			direction = effect->u.interactive.direction;
+			axes = 0x20;
+			break;
+
+		case 1:	/* Only X axis */
+			mod1 = mod_chunk->start;
+			mod2 = 0xffff;
+			direction = 0x5a00;
+			axes = 0x40;
+			break;
+
+		case 2: /* Only Y axis */
+			mod1 = 0xffff;
+			mod2 = mod_chunk->start;
+			direction = 0xb400;
+			axes = 0x80;
+			break;
+
+		case 3:	/* Both X and Y axes */
+			/* TODO: same setting for both axes is not mandatory */
+			mod1 = mod_chunk->start;
+			mod2 = mod_chunk->start;
+			direction = 0x6000;
+			axes = 0xc0;
+			break;
+
+		default:
+			return -1;
 	}
-	/* Only Y axis */
-	else if (effect->u.interactive.axis == BIT(FF_Y)) {
-		mod1 = 0xffff;
-		mod2 = mod_chunk->start;
-		direction = 0xb400;
-		axes = 0x80;
-	} 
-	/* Only one axis, choose orientation */
-	else if (effect->u.interactive.axis == 0) {
-		mod1 = mod_chunk->start;
-		mod2 = 0xffff;
-		direction = effect->u.interactive.direction;
-		axes = 0x20;
-	}
-	/* Both X and Y axes */
-	else if ( effect->u.interactive.axis == (BIT(FF_X)|BIT(FF_Y)) ) {
-		/* TODO: same setting for both axes is not mandatory */
-		mod1 = mod_chunk->start;
-		mod2 = mod_chunk->start;
-		direction = 0x6000;
-		axes = 0xc0;
-	}
-	/* Error */
-	else
-		return -1;
 
 	err = make_core(iforce, effect->id, 
 		mod1, mod2,
@@ -800,48 +833,6 @@ static int iforce_erase_effect(struct input_dev *dev, int effect_id)
 
 	return err;
 }
-
-/*
- * Sets the gain for all forces.
- * 100% = 0xFFFF
- * 50%  = 0x8000
- * 0%   = 0x0000
- */
-static int iforce_set_forcegain(struct input_dev *dev, unsigned short gain)
-{
-	struct iforce* iforce = (struct iforce*)(dev->private);
-	unsigned char data = gain>>9;
-	
-	printk(KERN_DEBUG "iforce.c: set gain %02x\n", (unsigned int)data);
-	send_packet(iforce, FF_CMD_GAIN, &data);                                               
-
-	return 0;
-}
-
-/*
- * Enables or disables auto-centering
- * 0 -> auto-centering disabled
- * value up to 0xFFFF -> Set strength of spring providing auto-centering
- */
-static int iforce_set_autocenter(struct input_dev *dev, unsigned short strength)
-{
-	struct iforce* iforce = (struct iforce*)(dev->private);
-	unsigned char data[2];
-
-	data[0] = 0x03;
-	data[1] = strength>>9;
-
-	printk(KERN_DEBUG "iforce.c: set auto-center %02x\n", (unsigned int)data[1]);
-	send_packet(iforce, FF_CMD_AUTOCENTER, data);
-
-	data[0] = 0x04;
-	data[1] = 0x01;
-
-	send_packet(iforce, FF_CMD_AUTOCENTER, data);
-
-	return 0;
-}
-
 static int iforce_init_device(struct iforce *iforce)
 {
 	unsigned char c[] = "CEOV";
@@ -862,8 +853,6 @@ static int iforce_init_device(struct iforce *iforce)
 	iforce->dev.event = iforce_input_event;
 	iforce->dev.upload_effect = iforce_upload_effect;
 	iforce->dev.erase_effect = iforce_erase_effect;
-	iforce->dev.set_forcegain = iforce_set_forcegain;
-	iforce->dev.set_autocenter = iforce_set_autocenter;
 
 /*
  * On-device memory allocation.
@@ -940,38 +929,50 @@ static int iforce_init_device(struct iforce *iforce)
 
 	iforce->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS) | BIT(EV_FF);
 
-	for (i = 0; iforce->type->btn[i] >= 0; i++)
-		set_bit(iforce->type->btn[i], iforce->dev.keybit);
+	for (i = 0; iforce->type->btn[i] >= 0; i++) {
+		signed short t = iforce->type->btn[i];
+		set_bit(t, iforce->dev.keybit);
+		if (t != BTN_DEAD)
+			set_bit(FF_BTN(t), iforce->dev.ffbit);
+	}
 
 	for (i = 0; iforce->type->abs[i] >= 0; i++) {
 
 		signed short t = iforce->type->abs[i];
-
 		set_bit(t, iforce->dev.absbit);
-		
-		if (t >= ABS_X && t <= ABS_Y) {
-			iforce->dev.absmax[i] =  1920;
-			iforce->dev.absmin[i] = -1920;
-			iforce->dev.absflat[i] = 128;
-			iforce->dev.absfuzz[i] = 16;
-		}
 
-		if (t >= ABS_THROTTLE && t <= ABS_RUDDER) {
-			iforce->dev.absmax[i] = 255;
-			iforce->dev.absmin[i] = 0;
-		}
+		switch (t) {
 
-		if (t >= ABS_HAT0X && t <= ABS_HAT0Y) {
-			iforce->dev.absmax[i] =  1;
-			iforce->dev.absmin[i] = -1;
+			case ABS_X:
+			case ABS_Y:
+			case ABS_WHEEL:
+
+				iforce->dev.absmax[t] =  1920;
+				iforce->dev.absmin[t] = -1920;
+				iforce->dev.absflat[t] = 128;
+				iforce->dev.absfuzz[t] = 16;
+
+				set_bit(FF_ABS(t), iforce->dev.ffbit);
+				break;
+
+			case ABS_THROTTLE:
+			case ABS_GAS:
+			case ABS_BRAKE:
+
+				iforce->dev.absmax[t] = 255;
+				iforce->dev.absmin[t] = 0;
+				break;
+
+			case ABS_HAT0X:
+			case ABS_HAT0Y:
+				iforce->dev.absmax[t] =  1;
+				iforce->dev.absmin[t] = -1;
+				break;
 		}
 	}
 
 	for (i = 0; iforce->type->ff[i] >= 0; i++)
 		set_bit(iforce->type->ff[i], iforce->dev.ffbit);
-
-	/* Supported effects: Hopefully all I-Force devices support these */
-	iforce->dev.ffbit[0] |= BIT(FF_PERIODIC) | BIT(FF_CONSTANT) | BIT(FF_SPRING) | BIT(FF_FRICTION);
 
 /*
  * Register input device.

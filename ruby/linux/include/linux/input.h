@@ -513,7 +513,7 @@ struct ff_constant_effect {
 struct ff_interactive_effect {
 /* Axis along which effect must be created. If null, the field named direction
  * is used
- * It is a bit array (ie to enable axes X and Y, use BIT(FF_X) | BIT(FF_Y)
+ * It is a bit array (ie to enable axes X and Y, use BIT(ABS_X) | BIT(ABS_Y)
  */
 	__u16 axis;
 	__u16 direction;
@@ -564,33 +564,49 @@ struct ff_effect {
 };
 
 /*
- * Force feedback axes and supported effects types.
- * Those are position in a bit array
+ * Buttons that can trigger effects.  Use for example FF_BTN(BTN_TRIGGER) to
+ * access the bitmap. 
  */
-#define FF_X		0x00
-#define FF_Y		0x01
-#define FF_PERIODIC	0x02
-#define FF_CONSTANT	0x03
-#define FF_SPRING	0x04
-#define FF_FRICTION	0x05
-#define FF_RUMBLE	0x06
-#define FF_MAX		0x06
+
+#define FF_BTN(x)	((x) - BTN_MISC + FF_BTN_OFFSET)
+#define FF_BTN_OFFSET	0x00
 
 /*
- * Waveforms of periodic effects
+ * Force feedback axis mappings. Use FF_ABS() to access the bitmap.
  */
-#define FF_SQUARE	0x00
-#define FF_TRIANGLE	0x01
-#define FF_SINE		0x02
-#define FF_SAW_UP	0x03
-#define FF_SAW_DOWN	0x04
+
+#define FF_ABS(x)	((x) + FF_ABS_OFFSET)
+#define FF_ABS_OFFSET	0x40
 
 /*
- * Buttons that can trigger an effect when pressed
+ * Force feedback effect types
  */
-#define FF_BUTTON_NONE	0x00
-#define FF_BUTTON_1	0x01
-/* ... */
+
+#define FF_RUMBLE	0x50
+#define FF_PERIODIC	0x51
+#define FF_CONSTANT	0x52
+#define FF_SPRING	0x53
+#define FF_FRICTION	0x54
+
+/*
+ * Force feedback periodic effect types
+ */
+
+#define FF_SQUARE	0x58
+#define FF_TRIANGLE	0x59
+#define FF_SINE		0x5a
+#define FF_SAW_UP	0x5b
+#define FF_SAW_DOWN	0x5c
+#define FF_CUSTOM	0x5d
+
+/*
+ * Set ff device properties
+ */
+
+#define FF_GAIN		0x60
+#define FF_AUTOCENTER	0x61
+
+#define FF_MAX		0x7f
 
 #ifdef __KERNEL__
 
@@ -650,8 +666,6 @@ struct input_dev {
 	int (*event)(struct input_dev *dev, unsigned int type, unsigned int code, int value);
 	int (*upload_effect)(struct input_dev *dev, struct ff_effect *effect);
 	int (*erase_effect)(struct input_dev *dev, int effect_id);
-	int (*set_autocenter)(struct input_dev *dev, unsigned short strength);
-	int (*set_forcegain)(struct input_dev *dev, unsigned short gain);
 
 	struct input_handle *handle;
 	struct input_dev *next;

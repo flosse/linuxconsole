@@ -31,7 +31,11 @@
 #include <sys/ioctl.h>
 #include <stdio.h>
 
-#define BIT(x) (1<<(x))
+#define BITS_PER_LONG (sizeof(long) * 8)
+#define OFF(x)  ((x)%BITS_PER_LONG)
+#define BIT(x)  (1UL<<OFF(x))
+#define LONG(x) ((x)/BITS_PER_LONG)
+#define test_bit(bit, array)    ((array[LONG(bit)] >> OFF(bit)) & 1)
 
 #define N_EFFECTS 4
 
@@ -41,7 +45,7 @@ int main(int argc, char** argv)
 	struct input_event play, stop;
 	int fd;
 	char device_file_name[64];
-	unsigned long features;
+	unsigned long features[4];
 	int n_effects;	/* Number of effects the device can play at the same time */
 	int i;
 
@@ -67,34 +71,31 @@ int main(int argc, char** argv)
 	printf("Device %s opened\n", device_file_name);
 
 	/* Query device */
-	if (ioctl(fd, EVIOCGBIT(EV_FF, sizeof(unsigned long)), &features) == -1) {
+	if (ioctl(fd, EVIOCGBIT(EV_FF, sizeof(unsigned long) * 4), features) == -1) {
 		perror("Ioctl query");
 		exit(1);
 	}
+
 	printf("Axes query: ");
-	if ((features & (BIT(FF_X) | BIT(FF_Y))) == 0) {
-		printf("No features, strange ?!");
-	}
-	else {
-		if (features & BIT(FF_X)) printf("Axis X ");
-		if (features & BIT(FF_Y)) printf("Axis Y ");
-	}
+
+	if (test_bit(FF_ABS(ABS_X), features)) printf("Axis X ");
+	if (test_bit(FF_ABS(ABS_Y), features)) printf("Axis Y ");
+
 	printf("\nEffects: ");
-	if ((features & ~(BIT(FF_X) | BIT(FF_Y))) == 0) {
-		printf("No effects supported ?!");
-	}
-	else {
-		if (features & BIT(FF_CONSTANT)) printf("Constant ");
-		if (features & BIT(FF_PERIODIC)) printf("Periodic ");
-		if (features & BIT(FF_SPRING)) printf("Spring ");
-		if (features & BIT(FF_FRICTION)) printf("Friction ");
-		if (features & BIT(FF_RUMBLE)) printf("Rumble ");
-	}
+
+	if (test_bit(FF_CONSTANT, features)) printf("Constant ");
+	if (test_bit(FF_PERIODIC, features)) printf("Periodic ");
+	if (test_bit(FF_SPRING, features)) printf("Spring ");
+	if (test_bit(FF_FRICTION, features)) printf("Friction ");
+	if (test_bit(FF_RUMBLE, features)) printf("Rumble ");
+
 	printf("\nNumber of simultaneous effects: ");
+
 	if (ioctl(fd, EVIOCGEFFECTS, &n_effects) == -1) {
 		perror("Ioctl number of effects");
 		exit(1);
 	}
+
 	printf("%d\n", n_effects);
 
 	/* download a constant effect */
@@ -142,7 +143,7 @@ int main(int argc, char** argv)
 	/* download an interactive spring effect */
 	effects[2].type = FF_SPRING;
 	effects[2].id = -1;
-	effects[2].u.interactive.axis = FF_X;
+	effects[2].u.interactive.axis = ABS_X;
 	effects[2].u.interactive.right_saturation = 0x7fff;
 	effects[2].u.interactive.left_saturation = 0x7fff;
 	effects[2].u.interactive.right_coeff = 0x2000;
@@ -162,7 +163,7 @@ int main(int argc, char** argv)
 	/* download an interactive damper effect */
 	effects[3].type = FF_FRICTION;
 	effects[3].id = -1;
-	effects[3].u.interactive.axis = FF_X;
+	effects[3].u.interactive.axis = ABS_X;
 	effects[3].u.interactive.right_saturation = 0x7fff;
 	effects[3].u.interactive.left_saturation = 0x7fff;
 	effects[3].u.interactive.right_coeff = 0x2000;
