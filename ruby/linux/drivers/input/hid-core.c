@@ -831,7 +831,8 @@ static int hid_input_report(u8 *data, int len, struct hid_device *hid)
 		/*
 		 * Some low-speed devices have large reports and maxpacketsize 8.
 		 * We buffer the data in that case and parse it when we got it all.
-		 * Works only for unnumbered reports.
+		 * Works only for unnumbered reports. Doesn't make sense for numbered
+		 * reports anyway - then they don't need to be large.
 		 */
 
 		if (!report->data) 
@@ -1180,8 +1181,15 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 	FILL_CONTROL_URB(&hid->urbout, dev, usb_sndctrlpipe(dev, 0),
 		(void*) &hid->out[0].dr, hid->out[0].buffer, 1, hid_ctrl, hid);
 
+/*
+ * Some devices don't like this and crash. I don't know of any devices
+ * needing this, so it is disabled for now.
+ */
+
+#if 0
 	if (interface->bInterfaceSubClass == 1)
         	usb_set_protocol(dev, hid->ifnum, 1);
+#endif
 
 	return hid;
 }
