@@ -180,7 +180,7 @@ void panic_blink(void)
 	static unsigned long last_jiffie;
 	static char led;
 	/* Roughly 1/2s frequency. KDB uses about 1s. Make sure it is different. */
-	if (jiffies - last_jiffie > HZ/2) {
+	if (time_after(jiffies, last_jiffie + HZ/2)) {
 		led ^= 0x01 | 0x04;
 		keybdev_ledfunc(led);
 		last_jiffie = jiffies;

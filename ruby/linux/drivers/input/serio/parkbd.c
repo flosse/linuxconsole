@@ -109,7 +109,7 @@ static void parkbd_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 
 	if (parkbd_writing) {
 
-		if (parkbd_counter && ((parkbd_counter == 11) || (jiffies - parkbd_last > 1))) {
+		if (parkbd_counter && ((parkbd_counter == 11) || time_after(jiffies, parkbd_last + HZ/100))) {
 			parkbd_counter = 0;
 			parkbd_buffer = 0;
 			parkbd_writing = 0;
@@ -128,7 +128,7 @@ static void parkbd_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 
 	} else {
 
-		if ((parkbd_counter == parkbd_mode + 10) || (jiffies - parkbd_last > 1)) {
+		if ((parkbd_counter == parkbd_mode + 10) || time_after(jiffies, parkbd_last + HZ/100)) {
 			parkbd_counter = 0;
 			parkbd_buffer = 0;
 		}	
