@@ -99,13 +99,23 @@ static void mousedev_event(struct input_handle *handle, unsigned int type, unsig
 					switch (code) {
 						case ABS_X:	
 							size = handle->dev->absmax[ABS_X] - handle->dev->absmin[ABS_X];
-							list->dx += (value * xres - list->oldx) / size;
-							list->oldx += list->dx * size;
+							if (size != 0) {
+								list->dx += (value * xres - list->oldx) / size;
+								list->oldx += list->dx * size;
+							} else {
+								list->dx += value - list->oldx;
+								list->oldx += list->dx;
+							}
 							break;
 						case ABS_Y:
 							size = handle->dev->absmax[ABS_Y] - handle->dev->absmin[ABS_Y];
-							list->dy -= (value * yres - list->oldy) / size;
-							list->oldy -= list->dy * size;
+							if (size != 0) {
+								list->dy -= (value * yres - list->oldy) / size;
+								list->oldy -= list->dy * size;
+							} else {
+								list->dy -= value - list->oldy;
+								list->oldy -= list->dy;
+							}
 							break;
 					}
 					break;
