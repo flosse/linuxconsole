@@ -133,6 +133,8 @@ static void npower_button_handler(int irq, void *dev_id, struct pt_regs *regs)
         int down = (GPLR & GPIO_BITSY_NPOWER_BUTTON) ? 0 : 1;
 	struct input_dev *dev = (struct input_dev *) dev_id;
 
+	printk("In power power handler\n");
+
 	input_report_key(dev, KEY_SUSPEND, down); 	
 /*
         if (suspend_button_mode) {
@@ -187,7 +189,8 @@ static int h3600_ts_pm_callback(struct pm_dev *pm_dev, pm_request_t req,
 static void h3600ts_process_packet(struct h3600_dev *ts)
 {
         struct input_dev *dev = &ts->dev;
-	int key, press_flag = 0;
+	static int touched = 1;
+	int key, down = 0;
 
         switch (ts->event) {
                 /*
@@ -202,7 +205,9 @@ static void h3600ts_process_packet(struct h3600_dev *ts)
                 Note: This is true for non interrupt generated key events.
                 */
                 case KEYBD_ID:
-			switch (ts->buf[0]) {
+			down = (ts->buf[0] & 0x80) ? 0 : 1; 
+
+			switch (ts->buf[0] & 0x7f) {
 				case H3600_SCANCODE_RECORD:
 					key = KEY_RECORD;
 					break;
@@ -234,7 +239,7 @@ static void h3600ts_process_packet(struct h3600_dev *ts)
 					key = 0;	
 			}	
                         if (key) 
-                        	input_report_key(dev, key,!(ts->buf[0] & 255));
+                        	input_report_key(dev, key, down);
                         break;
                 /*
                  * Native touchscreen event data is formatted as shown below:-
@@ -245,9 +250,16 @@ static void h3600ts_process_packet(struct h3600_dev *ts)
                  *       byte 0    1       2       3
                  */
                 case TOUCHS_ID:
-                        input_report_abs(dev, ABS_X, (u16) ts->buf[0]);
-                        input_report_abs(dev, ABS_Y, (u16) ts->buf[2]);
-                        input_report_key(dev, BTN_TOUCH, press_flag);
+			if (ts->len) {
+                       		input_report_abs(dev, ABS_X, (u16) ts->buf[0]);
+                       		input_report_abs(dev, ABS_Y, (u16) ts->buf[2]);
+			} else {
+				printk("event is %d, chksum is %d, len is %d,
+                                       idx is %d, buf is %lx\n", ts->event, 
+                                      ts->chksum, ts->len, ts->idx, ts->buf[0]);
+		               	input_report_key(dev, BTN_TOUCH, 0);
+				touched ^= 1;
+			}	
                         break;
 		default:
 			/* Send a non input event elsewhere */
@@ -325,7 +337,6 @@ static void h3600ts_interrupt(struct serio *serio, unsigned char data,
         	case STATE_ID:
 			ts->event = (data & 0xf0) >> 4;
 			ts->len = (data & 0xf);
-                        ts->chksum += data;
 			ts->idx = 0;
 			if (ts->event >= MAX_ID) {
 				state = STATE_SOF;
@@ -342,9 +353,8 @@ static void h3600ts_interrupt(struct serio *serio, unsigned char data,
 			break;
 		case STATE_EOF:
                 	state = STATE_SOF;
-                	if (data == CHAR_EOF || data == ts->chksum ) {
+                	if (data == CHAR_EOF || data == ts->chksum )
 				h3600ts_process_packet(ts);
-                        } 
                 	break;
         	default:
                 	printk("Error3\n");
@@ -375,7 +385,7 @@ static void h3600ts_connect(struct serio *serio, struct serio_dev *dev)
 
         if (request_irq(IRQ_GPIO_BITSY_ACTION_BUTTON, action_button_handler,
 			SA_SHIRQ | SA_INTERRUPT | SA_SAMPLE_RANDOM,	
-			"h3600_action", ts)) {
+			"h3600_action", &ts->dev)) {
 		printk(KERN_ERR "h3600ts.c: Could not allocate Action Button IRQ!\n");
 		kfree(ts);
 		return;
@@ -383,8 +393,8 @@ static void h3600ts_connect(struct serio *serio, struct serio_dev *dev)
 
         if (request_irq(IRQ_GPIO_BITSY_NPOWER_BUTTON, npower_button_handler,
 			SA_SHIRQ | SA_INTERRUPT | SA_SAMPLE_RANDOM, 
-			"h3600_suspend", ts)) {
-		free_irq(IRQ_GPIO_BITSY_ACTION_BUTTON, NULL);
+			"h3600_suspend", &ts->dev)) {
+		free_irq(IRQ_GPIO_BITSY_ACTION_BUTTON, &ts->dev);
 		printk(KERN_ERR "h3600ts.c: Could not allocate Power Button IRQ!\n");
 		kfree(ts);
 		return;
@@ -392,17 +402,16 @@ static void h3600ts_connect(struct serio *serio, struct serio_dev *dev)
 	/* Now we have things going we setup our input device */
 	ts->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS) | BIT(EV_LED);	
 	ts->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y);
-	//ts->dev.keybit[LONG(BTN_TOUCH)] = BIT(BTN_TOUCH);
 	ts->dev.ledbit[0] = BIT(LED_SLEEP); 
 
 	/* values ???? */
 	ts->dev.absmin[ABS_X] = 0;   ts->dev.absmin[ABS_Y] = 0;
-	ts->dev.absmax[ABS_X] = 4000; ts->dev.absmax[ABS_Y] = 4000;
+	ts->dev.absmax[ABS_X] = 100; ts->dev.absmax[ABS_Y] = 100;
+	//ts->dev.absfuzz[ABS_X] = 1; ts->dev.absfuzz[ABS_Y] = 1;
 
 	ts->serio = serio;
 	serio->private = ts;
 
-        set_bit(BTN_TOUCH, ts->dev.keybit);
 	set_bit(KEY_RECORD, ts->dev.keybit);
 	set_bit(KEY_Q, ts->dev.keybit);
 	set_bit(KEY_UP, ts->dev.keybit);
@@ -410,7 +419,9 @@ static void h3600ts_connect(struct serio *serio, struct serio_dev *dev)
 	set_bit(KEY_LEFT, ts->dev.keybit);
 	set_bit(KEY_DOWN, ts->dev.keybit);
 	set_bit(KEY_ENTER, ts->dev.keybit);
-	set_bit(KEY_SUSPEND, ts->dev.keybit);
+	ts->dev.keybit[LONG(BTN_TOUCH)] |= BIT(BTN_TOUCH);
+	ts->dev.keybit[LONG(KEY_SUSPEND)] |= BIT(KEY_SUSPEND);
+
        	ts->dev.event = h3600ts_event;
 	ts->dev.private = ts;
 	ts->dev.name = h3600_name;
@@ -445,8 +456,8 @@ static void h3600ts_disconnect(struct serio *serio)
 {
 	struct h3600_dev *ts = serio->private;
 	
-        free_irq(IRQ_GPIO_BITSY_ACTION_BUTTON, ts);
-        free_irq(IRQ_GPIO_BITSY_NPOWER_BUTTON, ts);
+        free_irq(IRQ_GPIO_BITSY_ACTION_BUTTON, &ts->dev);
+        free_irq(IRQ_GPIO_BITSY_NPOWER_BUTTON, &ts->dev);
 #ifdef CONFIG_PM
         pm_unregister_all(h3600_ts_pm_callback);
 #endif
