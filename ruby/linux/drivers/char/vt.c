@@ -899,7 +899,10 @@ int vc_resize(struct vc_data *vc, unsigned int cols, unsigned int lines)
 	old_screenbuf = (unsigned long) screenbuf;	
 
 	err = resize_screen(vc, new_cols, new_rows);    
-	if (err) return err;    
+	if (err) {
+		resize_screen(vc, old_cols, old_rows);
+		return err;    
+	}
 
 	/* scrollback could have been changed by resize_screen */
 	newscreen = (unsigned short *) kmalloc(new_screenbuf_size, GFP_USER);
