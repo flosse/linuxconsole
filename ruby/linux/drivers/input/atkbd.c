@@ -267,7 +267,7 @@ static int atkbd_event(struct input_dev *dev, unsigned int type, unsigned int co
 					 | (test_bit(LED_SLEEP,   dev->led) ? 0x02 : 0)
 					 | (test_bit(LED_SUSPEND, dev->led) ? 0x04 : 0)
 				         | (test_bit(LED_MUTE,    dev->led) ? 0x20 : 0);
-				atkbd_command(atkbd, param, ATKBD_CMD_RA_SETLEDS);
+				atkbd_command(atkbd, param, ATKBD_CMD_EX_SETLEDS);
 			}
 
 			return 0;
