@@ -7,10 +7,13 @@
 #
 FONTMAPFILE = cp437.uni
 
-obj-y	 += mem.o random.o tty_io.o n_tty.o tty_ioctl.o pty.o misc.o
+obj-y	 += mem.o random.o tty_io.o n_tty.o tty_ioctl.o
 
-obj-$(CONFIG_VT)		+= vt_ioctl.o decvte.o vc_screen.o consolemap.o \
-				   consolemap_deftbl.o selection.o keyboard.o vt_proc.o vt_sysfs.o
+obj-$(CONFIG_LEGACY_PTYS)	+= pty.o
+obj-$(CONFIG_UNIX98_PTYS)	+= pty.o
+obj-y				+= misc.o
+obj-$(CONFIG_VT)		+= vt_ioctl.o vc_screen.o consolemap.o \
+				   consolemap_deftbl.o selection.o keyboard.o vt_proc.o vt_sysfs.o decvte.o
 obj-$(CONFIG_HW_CONSOLE)	+= vt.o defkeymap.o
 obj-$(CONFIG_MAGIC_SYSRQ)	+= sysrq.o
 obj-$(CONFIG_ESPSERIAL)		+= esp.o
@@ -39,8 +42,10 @@ obj-$(CONFIG_N_HDLC)		+= n_hdlc.o
 obj-$(CONFIG_AMIGA_BUILTIN_SERIAL) += amiserial.o
 obj-$(CONFIG_SX)		+= sx.o generic_serial.o
 obj-$(CONFIG_RIO)		+= rio/ generic_serial.o
-obj-$(CONFIG_HVC_CONSOLE)	+= hvc_console.o
+obj-$(CONFIG_HVC_CONSOLE)	+= hvc_console.o hvsi.o
 obj-$(CONFIG_RAW_DRIVER)	+= raw.o
+obj-$(CONFIG_SGI_SNSC)		+= snsc.o
+obj-$(CONFIG_MMTIMER)		+= mmtimer.o
 obj-$(CONFIG_VIOCONS) += viocons.o
 obj-$(CONFIG_VIOTAPE)		+= viotape.o
 obj-$(CONFIG_HVCS)		+= hvcs.o

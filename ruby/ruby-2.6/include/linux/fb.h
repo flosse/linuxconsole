@@ -158,6 +158,7 @@ struct fb_bitfield {
 #define FB_CHANGE_CMAP_VBL     32	/* change colormap on vbl	*/
 #define FB_ACTIVATE_ALL	       64	/* change all VCs on this fb	*/
 #define FB_ACTIVATE_FORCE     128	/* force apply even when no change*/
+#define FB_ACTIVATE_INV_MODE  256       /* invalidate videomode */
 
 #define FB_ACCELF_TEXT		1	/* (OBSOLETE) see fb_info.flags and vc_mode */
 
@@ -241,73 +242,6 @@ struct fb_con2fbmap {
 #define VESA_HSYNC_SUSPEND      2
 #define VESA_POWERDOWN          3
 
-/* Definitions below are used in the parsed monitor specs */
-#define FB_DPMS_ACTIVE_OFF	1
-#define FB_DPMS_SUSPEND		2
-#define FB_DPMS_STANDBY		4
-
-#define FB_DISP_DDI		1
-#define FB_DISP_ANA_700_300	2
-#define FB_DISP_ANA_714_286	4
-#define FB_DISP_ANA_1000_400	8
-#define FB_DISP_ANA_700_000	16
-
-#define FB_DISP_MONO		32
-#define FB_DISP_RGB		64
-#define FB_DISP_MULTI		128
-#define FB_DISP_UNKNOWN		256
-
-#define FB_SIGNAL_NONE		0
-#define FB_SIGNAL_BLANK_BLANK	1
-#define FB_SIGNAL_SEPARATE	2
-#define FB_SIGNAL_COMPOSITE	4
-#define FB_SIGNAL_SYNC_ON_GREEN	8
-#define FB_SIGNAL_SERRATION_ON	16
-
-#define FB_MISC_PRIM_COLOR	1
-#define FB_MISC_1ST_DETAIL	2	/* First Detailed Timing is preferred */
-
-struct fb_chroma {
-	__u32 redx;	/* in fraction of 1024 */
-	__u32 greenx;
-	__u32 bluex;
-	__u32 whitex;
-	__u32 redy;
-	__u32 greeny;
-	__u32 bluey;
-	__u32 whitey;
-};
-
-struct fb_monspecs {
-	struct fb_chroma chroma;
-	struct fb_videomode *modedb;	/* mode database */
-	__u8  manufacturer[4];		/* Manufacturer */
-	__u8  monitor[14];		/* Monitor String */
-	__u8  serial_no[14];		/* Serial Number */
-	__u8  ascii[14];		/* ? */
-	__u32 modedb_len;		/* mode database length */
-	__u32 model;			/* Monitor Model */
-	__u32 serial;			/* Serial Number - Integer */
-	__u32 year;			/* Year manufactured */
-	__u32 week;			/* Week Manufactured */
-	__u32 hfmin;			/* hfreq lower limit (Hz) */
-	__u32 hfmax;			/* hfreq upper limit (Hz) */
-	__u32 dclkmin;			/* pixelclock lower limit (Hz) */
-	__u32 dclkmax;			/* pixelclock upper limit (Hz) */
-	__u16 input;			/* display type - see FB_DISP_* */
-	__u16 dpms;			/* DPMS support - see FB_DPMS_ */
-	__u16 signal;			/* Signal Type - see FB_SIGNAL_* */
-	__u16 vfmin;			/* vfreq lower limit (Hz) */
-	__u16 vfmax;			/* vfreq upper limit (Hz) */
-	__u16 gamma;			/* Gamma - in fractions of 100 */
-	__u16 gtf	: 1;		/* supports GTF */
-	__u16 misc;			/* Misc flags - see FB_MISC_* */
-	__u8  version;			/* EDID version... */
-	__u8  revision;			/* ...and revision */
-	__u8  max_x;			/* Maximum horizontal size (cm) */
-	__u8  max_y;			/* Maximum vertical size (cm) */
-};
-
 #define FB_VBLANK_VBLANKING	0x001	/* currently in a vertical blank */
 #define FB_VBLANK_HBLANKING	0x002	/* currently in a horizontal blank */
 #define FB_VBLANK_HAVE_VBLANK	0x004	/* vertical blanks can be detected */
@@ -383,6 +317,8 @@ struct fb_cursor {
 	const char *mask;	/* cursor mask bits */
 	struct fbcurpos hot;	/* cursor hot spot */
 	struct fb_image	image;	/* Cursor image */
+/* all fields below are for fbcon use only */
+	char  *data;             /* copy of bitmap */
 };
 
 #ifdef __KERNEL__
@@ -394,12 +330,79 @@ struct fb_cursor {
 #include <linux/workqueue.h>
 #include <linux/devfs_fs_kernel.h>
 #include <linux/notifier.h>
+#include <linux/list.h>
 #include <asm/io.h>
 
 struct vm_area_struct;
 struct fb_info;
 struct device;
 struct file;
+
+/* Definitions below are used in the parsed monitor specs */
+#define FB_DPMS_ACTIVE_OFF	1
+#define FB_DPMS_SUSPEND		2
+#define FB_DPMS_STANDBY		4
+
+#define FB_DISP_DDI		1
+#define FB_DISP_ANA_700_300	2
+#define FB_DISP_ANA_714_286	4
+#define FB_DISP_ANA_1000_400	8
+#define FB_DISP_ANA_700_000	16
+
+#define FB_DISP_MONO		32
+#define FB_DISP_RGB		64
+#define FB_DISP_MULTI		128
+#define FB_DISP_UNKNOWN		256
+
+#define FB_SIGNAL_NONE		0
+#define FB_SIGNAL_BLANK_BLANK	1
+#define FB_SIGNAL_SEPARATE	2
+#define FB_SIGNAL_COMPOSITE	4
+#define FB_SIGNAL_SYNC_ON_GREEN	8
+#define FB_SIGNAL_SERRATION_ON	16
+
+#define FB_MISC_PRIM_COLOR	1
+#define FB_MISC_1ST_DETAIL	2	/* First Detailed Timing is preferred */
+struct fb_chroma {
+	__u32 redx;	/* in fraction of 1024 */
+	__u32 greenx;
+	__u32 bluex;
+	__u32 whitex;
+	__u32 redy;
+	__u32 greeny;
+	__u32 bluey;
+	__u32 whitey;
+};
+
+struct fb_monspecs {
+	struct fb_chroma chroma;
+	struct fb_videomode *modedb;	/* mode database */
+	__u8  manufacturer[4];		/* Manufacturer */
+	__u8  monitor[14];		/* Monitor String */
+	__u8  serial_no[14];		/* Serial Number */
+	__u8  ascii[14];		/* ? */
+	__u32 modedb_len;		/* mode database length */
+	__u32 model;			/* Monitor Model */
+	__u32 serial;			/* Serial Number - Integer */
+	__u32 year;			/* Year manufactured */
+	__u32 week;			/* Week Manufactured */
+	__u32 hfmin;			/* hfreq lower limit (Hz) */
+	__u32 hfmax;			/* hfreq upper limit (Hz) */
+	__u32 dclkmin;			/* pixelclock lower limit (Hz) */
+	__u32 dclkmax;			/* pixelclock upper limit (Hz) */
+	__u16 input;			/* display type - see FB_DISP_* */
+	__u16 dpms;			/* DPMS support - see FB_DPMS_ */
+	__u16 signal;			/* Signal Type - see FB_SIGNAL_* */
+	__u16 vfmin;			/* vfreq lower limit (Hz) */
+	__u16 vfmax;			/* vfreq upper limit (Hz) */
+	__u16 gamma;			/* Gamma - in fractions of 100 */
+	__u16 gtf	: 1;		/* supports GTF */
+	__u16 misc;			/* Misc flags - see FB_MISC_* */
+	__u8  version;			/* EDID version... */
+	__u8  revision;			/* ...and revision */
+	__u8  max_x;			/* Maximum horizontal size (cm) */
+	__u8  max_y;			/* Maximum vertical size (cm) */
+};
 
 struct fb_cmap_user {
 	__u32 start;			/* First entry	*/
@@ -445,8 +448,21 @@ struct fb_cursor_user {
  *	if you own it
  */
 #define FB_EVENT_RESUME			0x03
-#define FB_EVENT_ADD_CONSOLE		0x04
-#define FB_EVENT_DELETE_CONSOLE		0x05
+/*      An entry from the modelist was removed */
+#define FB_EVENT_MODE_DELETE            0x04
+/*      A driver registered itself */
+#define FB_EVENT_FB_REGISTERED          0x05
+/*      get console to framebuffer mapping */
+#define FB_EVENT_GET_CONSOLE_MAP        0x06
+/*      set console to framebuffer mapping */
+#define FB_EVENT_SET_CONSOLE_MAP        0x07
+
+
+struct fb_event {
+	struct fb_info *info;
+	void *data;
+};
+
 
 extern int fb_register_client(struct notifier_block *nb);
 extern int fb_unregister_client(struct notifier_block *nb);
@@ -583,9 +599,11 @@ struct fb_info {
 	struct fb_pixmap pixmap;	/* Image hardware mapper */
 	struct fb_pixmap sprite;	/* Cursor hardware mapper */
 	struct fb_cmap cmap;		/* Current cmap */
+	struct list_head modelist;      /* mode list */
 	struct fb_ops *fbops;
-	char *screen_base;		/* Virtual address */
-	struct vt_struct *display_fg;	/* Console visible on this display */
+	char __iomem *screen_base;	/* Virtual address */
+	unsigned long screen_size;	/* Amount of ioremapped VRAM or 0 */ 
+	struct vt_struct *display_fg;   /* Console visible on this display */
 	int currcon;			/* Current VC. */
 	void *pseudo_palette;		/* Fake palette of 16 colors */ 
 #define FBINFO_STATE_RUNNING	0
@@ -690,6 +708,8 @@ extern void fb_sysmove_buf_aligned(struct fb_info *info, struct fb_pixmap *buf,
 				u32 height);
 extern void fb_load_cursor_image(struct fb_info *);
 extern void fb_set_suspend(struct fb_info *info, int state);
+extern int fb_get_color_depth(struct fb_info *info);
+extern int fb_get_options(char *name, char **option);
 
 extern struct fb_info *registered_fb[FB_MAX];
 extern int num_registered_fb;
@@ -711,6 +731,7 @@ extern void framebuffer_release(struct fb_info *info);
 #define FB_MODE_IS_VESA		4
 #define FB_MODE_IS_CALCULATED	8
 #define FB_MODE_IS_FIRST	16
+#define FB_MODE_IS_FROM_VAR     32
 
 extern int fbmon_valid_timings(u_int pixclock, u_int htotal, u_int vtotal,
 			       const struct fb_info *fb_info);
@@ -729,6 +750,22 @@ extern void fb_destroy_modedb(struct fb_videomode *modedb);
 /* drivers/video/modedb.c */
 #define VESA_MODEDB_SIZE 34
 extern const struct fb_videomode vesa_modes[];
+extern void fb_var_to_videomode(struct fb_videomode *mode,
+				struct fb_var_screeninfo *var);
+extern void fb_videomode_to_var(struct fb_var_screeninfo *var,
+				struct fb_videomode *mode);
+extern int fb_mode_is_equal(struct fb_videomode *mode1,
+			    struct fb_videomode *mode2);
+extern int fb_add_videomode(struct fb_videomode *mode, struct list_head *head);
+extern void fb_delete_videomode(struct fb_videomode *mode,
+				struct list_head *head);
+extern struct fb_videomode *fb_match_mode(struct fb_var_screeninfo *var,
+					  struct list_head *head);
+extern struct fb_videomode *fb_find_best_mode(struct fb_var_screeninfo *var,
+					      struct list_head *head);
+extern void fb_destroy_modelist(struct list_head *head);
+extern void fb_videomode_to_modelist(struct fb_videomode *modedb, int num,
+				     struct list_head *head);
 
 /* drivers/video/fbcmap.c */
 extern int fb_alloc_cmap(struct fb_cmap *cmap, int len, int transp);
@@ -755,6 +792,11 @@ struct fb_videomode {
 	u32 sync;
 	u32 vmode;
 	u32 flag;
+};
+
+struct fb_modelist {
+	struct list_head list;
+	struct fb_videomode mode;
 };
 
 extern int fb_find_mode(struct fb_var_screeninfo *var,

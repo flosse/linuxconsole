@@ -26,10 +26,6 @@
 #include <linux/selection.h>
 #include <linux/tiocl.h>
 
-#ifndef MIN
-#define MIN(a,b)	((a) < (b) ? (a) : (b))
-#endif
-
 /* Don't take this from <ctype.h>: 011-015 on the screen aren't spaces */
 #define isspace(c)	((c) == ' ')
 
@@ -291,12 +287,15 @@ int paste_selection(struct tty_struct *tty)
 {
 	struct vc_data *vc = (struct vc_data *) tty->driver_data;
 	int	pasted = 0, count;
+	struct  tty_ldisc *ld;
 	DECLARE_WAITQUEUE(wait, current);
 
         acquire_console_sem();
 	poke_blanked_console(vc->display_fg);
         release_console_sem();
 
+	ld = tty_ldisc_ref_wait(tty);
+	
 	add_wait_queue(&vc->paste_wait, &wait);
 	while (sel_buffer && sel_buffer_lth > pasted) {
 		set_current_state(TASK_INTERRUPTIBLE);
@@ -305,12 +304,14 @@ int paste_selection(struct tty_struct *tty)
 			continue;
 		}
 		count = sel_buffer_lth - pasted;
-		count = MIN(count, tty->ldisc.receive_room(tty));
+		count = min(count, tty->ldisc.receive_room(tty));
 		tty->ldisc.receive_buf(tty, sel_buffer + pasted, 0, count);
 		pasted += count;
 	}
 	remove_wait_queue(&vc->paste_wait, &wait);
 	set_current_state(TASK_RUNNING);
+
+	tty_ldisc_deref(ld);
 	return 0;
 }
 

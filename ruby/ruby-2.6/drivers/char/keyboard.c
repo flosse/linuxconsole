@@ -94,7 +94,7 @@ int shift_state = 0;
  */
 
 static struct input_handler kbd_handler;
-static unsigned long key_down[256/BITS_PER_LONG];	/* keyboard key bitmap */
+static unsigned long key_down[NBITS(KEY_MAX)];		/* keyboard key bitmap */
 static unsigned char shift_down[NR_SHIFT];		/* shift state counters.. */
 static int dead_key_next;
 static int npadch = -1;					/* -1 or number assembled on pad */
@@ -110,7 +110,7 @@ static struct ledptr {
 /* Simple translation table for the SysRq keys */
 
 #ifdef CONFIG_MAGIC_SYSRQ
-unsigned char kbd_sysrq_xlate[128] =
+unsigned char kbd_sysrq_xlate[KEY_MAX] =
         "\000\0331234567890-=\177\t"                    /* 0x00 - 0x0f */
         "qwertyuiop[]\r\000as"                          /* 0x10 - 0x1f */
         "dfghjkl;'`\000\\zxcv"                          /* 0x20 - 0x2f */
@@ -890,6 +890,9 @@ void kbd_refresh_leds(struct input_handle *handle)
 	
 #if defined(CONFIG_X86) || defined(CONFIG_IA64) || defined(CONFIG_ALPHA) || defined(CONFIG_MIPS) || defined(CONFIG_PPC) || defined(CONFIG_SPARC32) || defined(CONFIG_SPARC64) || defined(CONFIG_PARISC) || defined(CONFIG_SUPERH)
 
+#define HW_RAW(dev) (test_bit(EV_MSC, dev->evbit) && test_bit(MSC_RAW, dev->mscbit) &&\
+			((dev)->id.bustype == BUS_I8042) && ((dev)->id.vendor == 0x0001) && ((dev)->id.product == 0x0001))
+
 static unsigned short x86_keycodes[256] =
 	{ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
 	 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
@@ -956,6 +959,8 @@ static int emulate_raw(struct vc_data *vc, unsigned int keycode,
 
 #else
 
+#define HW_RAW(dev)	0
+
 #warning "Cannot generate rawmode keyboard for your architecture yet."
 
 static int emulate_raw(struct vc_data *vc, unsigned int keycode, unsigned char up_flag)
@@ -968,7 +973,14 @@ static int emulate_raw(struct vc_data *vc, unsigned int keycode, unsigned char u
 }
 #endif
 
-void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down)
+void kbd_rawcode(struct vt_struct *vt, unsigned char data)
+{
+	struct vc_data *vc = vt->fg_console;
+	if (vc->kbd_table.kbdmode == VC_RAW)
+		put_queue(vc, data);
+}
+
+void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down, int hw_raw)
 {
 	struct vc_data *vc = vt->fg_console;
 	unsigned short keysym, *key_map;
@@ -1000,7 +1012,7 @@ void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down)
                 return;
 #endif /* CONFIG_MAC_EMUMOUSEBTN */
 
-	if ((raw_mode = (vc->kbd_table.kbdmode == VC_RAW)))
+	if ((raw_mode = (vc->kbd_table.kbdmode == VC_RAW)) && !hw_raw)
 		if (emulate_raw(vc, keycode, !down << 7))
 			if (keycode < BTN_MISC)
 				printk(KERN_WARNING "keyboard.c: can't emulate rawmode for keycode %d\n", keycode);
@@ -1066,6 +1078,9 @@ void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down)
 		return;
 	}
 
+	if (keycode > NR_KEYS)
+		return;
+
 	keysym = key_map[keycode];
 	type = KTYP(keysym);
 
@@ -1095,13 +1110,16 @@ void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down)
 }
 
 static void kbd_event(struct input_handle *handle, unsigned int event_type, 
-		      unsigned int keycode, int down)
+		      unsigned int event_code, int value)
 {
 	struct vt_struct *vt = handle->private;
-	
-	if ((event_type != EV_KEY) || !vt)
+
+	if (!vt)
 		return;
-	kbd_keycode(vt, keycode, down);
+	if (event_type == EV_MSC && event_code == MSC_RAW && HW_RAW(handle->dev))
+		kbd_rawcode(vt, value);
+	if (event_type == EV_KEY)
+		kbd_keycode(vt, event_code, value, HW_RAW(handle->dev));
 	tasklet_schedule(&keyboard_tasklet);
 	do_poke_blanked_console = 1;
 	schedule_work(&vt->vt_work);

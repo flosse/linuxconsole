@@ -49,6 +49,7 @@
 #include <asm/ist.h>
 #include <asm/io.h>
 #include "setup_arch_pre.h"
+#include <bios_ebda.h>
 
 /* This value is set up by the early boot code to point to the value
    immediately after the boot time page tables.  It contains a *physical*
@@ -218,9 +219,14 @@ static struct resource standard_io_resources[] = { {
 	.end	= 0x0021,
 	.flags	= IORESOURCE_BUSY | IORESOURCE_IO
 }, {
-	.name	= "timer",
+	.name   = "timer0",
 	.start	= 0x0040,
-	.end	= 0x005f,
+	.end    = 0x0043,
+	.flags  = IORESOURCE_BUSY | IORESOURCE_IO
+}, {
+	.name   = "timer1",
+	.start  = 0x0050,
+	.end    = 0x0053,
 	.flags	= IORESOURCE_BUSY | IORESOURCE_IO
 }, {
 	.name	= "keyboard",
@@ -809,6 +815,14 @@ static void __init parse_cmdline_early (char ** cmdline_p)
 		if (c == ' ' && !memcmp(from, "highmem=", 8))
 			highmem_pages = memparse(from+8, &from) >> PAGE_SHIFT;
 	
+		/*
+		 * vmalloc=size forces the vmalloc area to be exactly 'size'
+		 * bytes. This can be used to increase (or decrease) the
+		 * vmalloc area - the default is 128m.
+		 */
+		if (c == ' ' && !memcmp(from, "vmalloc=", 8))
+			__VMALLOC_RESERVE = memparse(from+8, &from);
+
 		c = *(from++);
 		if (!c)
 			break;
@@ -991,6 +1005,17 @@ static void __init register_bootmem_low_pages(unsigned long max_low_pfn)
 	}
 }
 
+/*
+ * workaround for Dell systems that neglect to reserve EBDA
+ */
+static void __init reserve_ebda_region(void)
+{
+	unsigned int addr;
+	addr = get_bios_ebda();
+	if (addr)
+		reserve_bootmem(addr, PAGE_SIZE);	
+}
+
 static unsigned long __init setup_memory(void)
 {
 	unsigned long bootmap_size, start_pfn, max_low_pfn;
@@ -1036,6 +1061,9 @@ static unsigned long __init setup_memory(void)
 	 * enabling clean reboots, SMP operation, laptop functions.
 	 */
 	reserve_bootmem(0, PAGE_SIZE);
+
+	/* reserve EBDA region, it's a 4K region */
+	reserve_ebda_region();
 
     /* could be an AMD 768MPX chipset. Reserve a page  before VGA to prevent
        PCI prefetch into it (errata #56). Usually the page is reserved anyways,
@@ -1335,13 +1363,22 @@ void __init setup_arch(char **cmdline_p)
 
 	/*
 	 * NOTE: before this point _nobody_ is allowed to allocate
-	 * any memory using the bootmem allocator.
+	 * any memory using the bootmem allocator.  Although the
+	 * alloctor is now initialised only the first 8Mb of the kernel
+	 * virtual address space has been mapped.  All allocations before
+	 * paging_init() has completed must use the alloc_bootmem_low_pages()
+	 * variant (which allocates DMA'able memory) and care must be taken
+	 * not to exceed the 8Mb limit.
 	 */
 
 #ifdef CONFIG_SMP
 	smp_alloc_memory(); /* AP processor realmode stacks in low memory*/
 #endif
 	paging_init();
+
+	/*
+	 * NOTE: at this point the bootmem allocator is fully available.
+	 */
 
 #ifdef CONFIG_EARLY_PRINTK
 	{

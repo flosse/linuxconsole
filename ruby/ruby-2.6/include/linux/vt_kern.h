@@ -215,6 +215,7 @@ struct consw {
 	unsigned long (*con_getxy)(struct vc_data *, unsigned long, int *, int *);
 };
 
+#define CON_BUF_SIZE    PAGE_SIZE
 struct vt_struct {
         unsigned short vt_num;          /* VT id */
 	struct vc_data *fg_console;	/* VC being displayed */
@@ -240,7 +241,7 @@ struct vt_struct {
 	 * calls.
          */
 	struct semaphore lock;		/* Lock for con_buf */
-	char con_buf[PAGE_SIZE];
+	char con_buf[CON_BUF_SIZE];
 	const struct consw *vt_sw;	/* Display driver for VT */
 	struct vc_data *default_mode;	/* Default mode */
 	struct work_struct vt_work;	/* VT work queue */
@@ -357,7 +358,6 @@ extern int vt_proc_attach(struct vt_struct *vt);
 extern int vt_proc_detach(struct vt_struct *vt);
 #endif
 
-#define CON_BUF_SIZE	PAGE_SIZE
 extern struct semaphore con_buf_sem;
 
 #endif				/* _VT_KERN_H */

@@ -66,7 +66,7 @@ config VT_CONSOLE
 
 config HW_CONSOLE
 	bool
-	depends on VT && !S390 && !UM
+	depends on VT && !S390 && !USERMODE
 	default y
 
 config SERIAL_NONSTANDARD
@@ -431,6 +431,14 @@ config A2232
 	  will also be built as a module. This has to be loaded before
 	  "ser_a2232". If you want to do this, answer M here.
 
+config SGI_SNSC
+	bool "SGI Altix system controller communication support"
+	depends on (IA64_SGI_SN2 || IA64_GENERIC)
+	help
+	  If you have an SGI Altix and you want to enable system
+	  controller communication from user space (you want this!),
+	  say Y.  Otherwise, say N.
+
 source "drivers/serial/Kconfig"
 
 config UNIX98_PTYS
@@ -594,39 +602,6 @@ config HVCS
 	  which will also be compiled when this driver is built as a
 	  module.
 
-config QIC02_TAPE
-	tristate "QIC-02 tape support"
-	help
-	  If you have a non-SCSI tape drive like that, say Y.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called tpqic02.
-
-config QIC02_DYNCONF
-	bool "Do you want runtime configuration for QIC-02"
-	depends on QIC02_TAPE
-	help
-	  You can either configure this driver once and for all by editing a
-	  header file (<file:include/linux/tpqic02.h>), in which case you
-	  should say N, or you can fetch a program via anonymous FTP which is
-	  able to configure this driver during runtime.  The program to do
-	  this is called 'qic02conf' and it is part of the
-	  tpqic02-support-X.Y.tar.gz support package.
-
-	  If you want to use the qic02conf program, say Y.
-
-comment "Edit configuration parameters in ./include/linux/tpqic02.h!"
-	depends on QIC02_TAPE && !QIC02_DYNCONF
-
-comment "Setting runtime QIC-02 configuration is done with qic02conf"
-	depends on QIC02_TAPE && QIC02_DYNCONF
-
-comment "from the tpqic02-support package.  It is available at"
-	depends on QIC02_TAPE && QIC02_DYNCONF
-
-comment "metalab.unc.edu or ftp://titus.cfw.com/pub/Linux/util/"
-	depends on QIC02_TAPE && QIC02_DYNCONF
-
 source "drivers/char/ipmi/Kconfig"
 
 source "drivers/char/watchdog/Kconfig"
@@ -785,7 +760,7 @@ config SGI_IP27_RTC
 
 config GEN_RTC
 	tristate "Generic /dev/rtc emulation"
-	depends on RTC!=y && !IA64
+	depends on RTC!=y && !IA64 && !ARM
 	---help---
 	  If you say Y here and create a character special file /dev/rtc with
 	  major number 10 and minor number 135 using mknod ("man mknod"), you
@@ -1012,6 +987,14 @@ config HANGCHECK_TIMER
 	  The hangcheck-timer module detects when the system has gone
 	  out to lunch past a certain margin.  It can reboot the system
 	  or merely print a warning.
+
+config MMTIMER
+	tristate "MMTIMER Memory mapped RTC for SGI Altix"
+	depends on IA64_GENERIC || IA64_SGI_SN2
+	default y
+	help
+	  The mmtimer device allows direct userspace access to the
+	  Altix system timer.
 
 endmenu
 

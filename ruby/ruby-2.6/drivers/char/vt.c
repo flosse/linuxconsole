@@ -424,7 +424,7 @@ void update_attr(struct vc_data *vc)
 	video_erase_char = (build_attr(vc, color, intensity, 0, 0, decscnm) << 8) | ' ';
 }
 
-static void clear_buffer_attributes(struct vc_data *vc)
+void clear_buffer_attributes(struct vc_data *vc)
 {
 	unsigned short *p = (unsigned short *) origin;
 	int count = screenbuf_size/2;
@@ -1775,6 +1775,8 @@ const char *vt_map_display(struct vt_struct *vt, int init, int vc_count)
 	if (current_vc + vc_count - 1 > MAX_NR_CONSOLES)
 	        return NULL;
 
+	vt->first_vc = current_vc;
+	vt->vc_count = vc_count;
 	display_desc = vt->vt_sw->con_startup(vt, init);
 	if (!display_desc)
 		return NULL;
@@ -1783,8 +1785,6 @@ const char *vt_map_display(struct vt_struct *vt, int init, int vc_count)
 	init_MUTEX(&vt->lock);
 	vt->vt_num = current_vt;
 	vt->display_desc = (char *)display_desc;
-	vt->first_vc = current_vc;
-	vt->vc_count = vc_count;
 	list_add_tail(&vt->node, &vt_list);
 	vt->vt_dont_switch = 0;
 	vt->scrollback_delta = 0;	

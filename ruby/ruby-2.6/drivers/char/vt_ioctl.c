@@ -615,7 +615,8 @@ inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
         hide_cursor(old_vc);
         if (old_vc != new_vc) {
 		int update;
-
+		int old_was_color = old_vc->vc_can_do_color;
+		
                 new_vc->display_fg->fg_console = new_vc;
                 save_screen(old_vc);
                 set_origin(old_vc);
@@ -623,7 +624,17 @@ inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
                 set_origin(new_vc);
                 update = new_vc->display_fg->vt_sw->con_switch(new_vc);
                 set_palette(new_vc);
-                if (update && new_vc->vc_mode != KD_GRAPHICS)
+		/*
+		 * If console changed from mono<->color, the best we can do
+		 * is to clear the buffer attributes. As it currently stands,
+		 * rebuilding new attributes from the old buffer is not doable
+		 * without overly complex code.
+		 */
+		if (old_was_color != new_vc->vc_can_do_color) {
+			update_attr(new_vc);
+			clear_buffer_attributes(new_vc);
+		}
+		if (update && new_vc->vc_mode != KD_GRAPHICS)
                         do_update_region(new_vc, new_vc->vc_origin, 
 					 new_vc->vc_screenbuf_size/2);
         }
@@ -942,8 +953,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		  default:
 			return -EINVAL;
 		}
-		if (tty->ldisc.flush_buffer)
-			tty->ldisc.flush_buffer(tty);
+		tty_ldisc_flush(tty);
 		return 0;
 
 	case KDGKBMODE:
