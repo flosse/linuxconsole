@@ -178,13 +178,21 @@ static void grip_timer(unsigned long private)
 
 				if (grip_gpp_read_packet(grip->gameport, (i << 1) + 4, data)) return -1;
 
-				input_report_abs(dev, ABS_X, ((data[0] >> 15) & 1) - ((data[0] >> 16) & 1));
-				input_report_abs(dev, ABS_X, ((data[0] >> 13) & 1) - ((data[0] >> 12) & 1));
+				input_report_abs(dev, ABS_X, ((*data >> 15) & 1) - ((*data >> 16) & 1));
+				input_report_abs(dev, ABS_Y, ((*data >> 13) & 1) - ((*data >> 12) & 1));
 
-				data[0] = ((data[0] >> 6) & 0x37) | (data[0] & 0x08) | ((data[0] << 1) & 0x40) |
-				       ((data[0] << 5) & 0x80) | ((data[0] << 8) & 0x300);
+				input_report_key(dev, BTN_A,      *data & 0x040);
+				input_report_key(dev, BTN_B,      *data & 0x080)
+				input_report_key(dev, BTN_C,      *data & 0x100);
+				input_report_key(dev, BTN_D,      *data & 0x008);
 
-				buttons[i][0] = (data[0] & 0xfc) | ((data[0] >> 1) & 0x101) | ((data[0] << 1) & 0x202);
+				input_report_key(dev, BTN_LT,     *data & 0x400);
+				input_report_key(dev, BTN_RT,     *data & 0x800);
+				input_report_key(dev, BTN_LT2,    *data & 0x020);
+				input_report_key(dev, BTN_RT2,    *data & 0x004);
+
+				input_report_key(dev, BTN_START,  *data & 0x001);
+				input_report_key(dev, BTN_SELECT, *data & 0x002);
 
 				break;
 
@@ -192,16 +200,16 @@ static void grip_timer(unsigned long private)
 
 				if (grip_xt_read_packet(grip->gameport, (i << 1) + 4, data)) return -1;
 
-				axes[i][0] =       (data[0] >> 2) & 0x3f;
-				axes[i][1] = 63 - ((data[0] >> 8) & 0x3f);
-				axes[i][2] =       (data[1] >> 2) & 0x3f;
-				axes[i][3] =       (data[1] >> 8) & 0x3f;
-				axes[i][4] =       (data[2] >> 8) & 0x3f;
+				input_report_abs(dev, ABS_X,       (data[0] >> 2) & 0x3f);
+				input_report_abs(dev, ABS_Y, 63 - ((data[0] >> 8) & 0x3f);
+				input_report_abs(dev, ABS_THROTTLE, (data[1] >> 2) & 0x3f);
+				input_report_abs(dev, ABS_TL, (data[1] >> 8) & 0x3f);
+				input_report_abs(dev, ABS_TR, (data[2] >> 8) & 0x3f);
 
-				axes[i][5] = ((data[2] >> 1) & 1) - ( data[2]       & 1);
-				axes[i][6] = ((data[2] >> 2) & 1) - ((data[2] >> 3) & 1);
-				axes[i][7] = ((data[2] >> 5) & 1) - ((data[2] >> 4) & 1);
-				axes[i][8] = ((data[2] >> 6) & 1) - ((data[2] >> 7) & 1);
+				input_report_abs(dev, ABS_HAT0X, ((data[2] >> 1) & 1) - ( data[2]       & 1));
+				input_report_abs(dev, ABS_HAT0Y, ((data[2] >> 2) & 1) - ((data[2] >> 3) & 1));
+				input_report_abs(dev, ABS_HAT1X, ((data[2] >> 5) & 1) - ((data[2] >> 4) & 1));
+				input_report_abs(dev, ABS_HAt0Y, ((data[2] >> 6) & 1) - ((data[2] >> 7) & 1));
 
 				buttons[i][0] = (data[3] >> 3) & 0x7ff;
 
