@@ -75,6 +75,7 @@ struct input_event {
 #define EVIOCRMFF		_IOW('E', 0x81, int)			/* Erase a force effect */
 #define EVIOCSGAIN		_IOW('E', 0x82, unsigned short)		/* Set overall gain */
 #define EVIOCSAUTOCENTER	_IOW('E', 0x83, unsigned short)		/* Enable or disable auto-centering */
+#define EVIOCGEFFECTS		_IOR('E', 0x84, int)			/* Report number of effects playable at the same time */
 
 /*
  * Event types
@@ -573,10 +574,7 @@ struct ff_effect {
 #define FF_SPRING	0x04
 #define FF_FRICTION	0x05
 #define FF_RUMBLE	0x06
-#define FF_N_EFFECTS_0	0x07
-/* ... */
-#define FF_N_EFFECTS_7  0x0e
-#define FF_MAX		0x0e
+#define FF_MAX		0x06
 
 /*
  * Waveforms of periodic effects
@@ -626,6 +624,7 @@ struct input_dev {
 	unsigned long ledbit[NBITS(LED_MAX)];
 	unsigned long sndbit[NBITS(SND_MAX)];
 	unsigned long ffbit[NBITS(FF_MAX)];
+	int ff_effects_max;
 
 	unsigned int keycodemax;
 	unsigned int keycodesize;
