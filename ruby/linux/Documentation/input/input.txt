@@ -251,8 +251,12 @@ independent.
 
 	http://www.suse.cz/development/input/
 
-You'll find both the latest HID driver and the complete Input driver there.
-There is also a mailing list for this:
+You'll find both the latest HID driver and the complete Input driver there
+as well as information how to access the CVS repository for latest revisions
+of the drivers.
+
+
+  There is also a mailing list for this:
 
 	majordomo@atrey.karlin.mff.cuni.cz
 
