@@ -558,35 +558,36 @@ do_unimap_ioctl(struct vc_data *vc,int cmd, struct unimapdesc *user_ud,int perm)
 int con_set_cmap(struct vc_data *vc, unsigned char *arg)
 {
 	struct vt_struct *vt = vc->display_fg;
+	int red[16], green[16], blue[16];
         int i, j, k;
 
         for (i = 0; i < 16; i++) {
-                get_user(default_red[i], arg++);
-                get_user(default_grn[i], arg++);
-                get_user(default_blu[i], arg++);
+                get_user(red[i], arg++);
+                get_user(green[i], arg++);
+                get_user(blue[i], arg++);
         }
         for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
 		struct vc_data *tmp = vt->vcs.vc_cons[i];
-                if (!tmp) {
+                if (tmp) {
                 	for (j = k = 0; j < 16; j++) {
-                                tmp->vc_palette[k++] = default_red[j];
-                                tmp->vc_palette[k++] = default_grn[j];
-                                tmp->vc_palette[k++] = default_blu[j];
+                                tmp->vc_palette[k++] = red[j];
+                                tmp->vc_palette[k++] = green[j];
+                                tmp->vc_palette[k++] = blue[j];
                         }
-                        set_palette(tmp);
-                }                                                       
+                } 
         }
+	set_palette(vc->display_fg->fg_console);
         return 0;
 }
 
-int con_get_cmap(unsigned char *arg)
+int con_get_cmap(struct vc_data *vc, unsigned char *arg)
 {
         int i;
 
         for (i = 0; i < 16; i++) {
-                put_user(default_red[i], arg++);
-                put_user(default_grn[i], arg++);
-                put_user(default_blu[i], arg++);
+                put_user(vc->vc_palette[i], arg++);
+                put_user(vc->vc_palette[i], arg++);
+                put_user(vc->vc_palette[i], arg++);
         }
         return 0;
 }
@@ -1146,7 +1147,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
                 return con_set_cmap(vc, (char *)arg);
 
 	case GIO_CMAP:
-                return con_get_cmap((char *)arg);
+                return con_get_cmap(vc, (char *)arg);
 
 	case PIO_FONTX:
 	case GIO_FONTX:
