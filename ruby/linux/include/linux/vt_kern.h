@@ -8,6 +8,7 @@
 
 #include <linux/config.h>
 #include <linux/vt.h>
+#include <linux/kbd_kern.h>
 
 /*
  * Presently, a lot of graphics programs do not restore the contents of
@@ -32,6 +33,11 @@
 
 int softcursor_original;
 struct console_font_op; 
+
+extern unsigned char color_table[];
+extern int default_red[];
+extern int default_grn[];
+extern int default_blu[];      
                           
 /*
  * this is what the terminal answers to a ESC-Z or csi0c query.
@@ -76,7 +82,12 @@ struct vc_data {
         unsigned long   vc_visible_origin;      /* [!] Top of visible window */
         unsigned long   vc_pos;                 /* Cursor address */
         unsigned int    vc_saved_x;
-        unsigned int    vc_saved_y;                                          
+        unsigned int    vc_saved_y;
+	struct kbd_struct kbd_table;		/* VC keyboard state */       
+	/* data for manual vt switching */
+	struct vt_mode  vt_mode;
+        int             vt_pid;
+        int             vt_newvt;
         /* mode flags */
         unsigned int    vc_charset      : 1;    /* Character set G0 / G1 */
         unsigned int    vc_s_charset    : 1;    /* Saved character set */
@@ -208,11 +219,7 @@ void take_over_console(struct consw *sw, int first, int last, int deflt);
 void give_up_console(struct consw *sw);
 
 extern struct vt_struct {
-	int vc_num;				/* The console number */
 	unsigned char	vc_mode;		/* KD_TEXT, ... */
-	struct vt_mode	vt_mode;
-	int		vt_pid;
-	int		vt_newvt;
 	struct consw	*sw;			/* Display driver for VT */
 } *vt_cons;
 
@@ -230,15 +237,15 @@ int vc_resize(unsigned int lines, unsigned int cols,
 #define vc_resize_con(l, c, x) vc_resize(l, c, x, x)
 void vc_disallocate(unsigned int console);
 void set_cursor(struct vc_data *vc);
+void hide_cursor(struct vc_data *vc);
 void add_softcursor(struct vc_data *vc);
 void reset_palette(struct vc_data *vc);
 void set_palette(struct vc_data *vc);
-void do_blank_screen(int gfx_mode);
+inline void save_screen(struct vc_data *vc);
+void set_origin(struct vc_data *vc);
 void unblank_screen(void);
 void poke_blanked_console(void);
 inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed);
-int con_set_cmap(unsigned char *cmap);
-int con_get_cmap(unsigned char *cmap);
 void scrollback(int);
 void scrollfront(int);
 void gotoxy(struct vc_data *vc, int new_x, int new_y);
@@ -260,13 +267,13 @@ int con_set_trans_old(unsigned char * table);
 int con_get_trans_old(unsigned char * table);
 int con_set_trans_new(unsigned short * table);
 int con_get_trans_new(unsigned short * table);
-int con_clear_unimap(int currcons, struct unimapinit *ui);
-int con_set_unimap(int currcons, ushort ct, struct unipair *list);
-int con_get_unimap(int currcons, ushort ct, ushort *uct, struct unipair *list);
-int con_set_default_unimap(int currcons);
-void con_free_unimap(int currcons);
-void con_protect_unimap(int currcons, int rdonly);
-int con_copy_unimap(int dstcons, int srccons);
+int con_clear_unimap(struct vc_data *vc, struct unimapinit *ui);
+int con_set_unimap(struct vc_data *vc, ushort ct, struct unipair *list);
+int con_get_unimap(struct vc_data *vc, ushort ct, ushort *uct, struct unipair *list);
+int con_set_default_unimap(struct vc_data *vc);
+void con_free_unimap(struct vc_data *vc);
+void con_protect_unimap(struct vc_data *vc, int rdonly);
+int con_copy_unimap(struct vc_data *dstcons, struct vc_data *srccons);
 
 /* vt_ioctl.c */
 
