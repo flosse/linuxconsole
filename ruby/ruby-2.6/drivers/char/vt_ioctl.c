@@ -1027,7 +1027,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 			if (!tmp || (tmp && !VT_IS_IN_USE(tmp)))
 				break;
 		}	
-		ucval = i < vc->display_fg->vc_count ? (j) : -1;
+		ucval = i < vc->display_fg->vc_count ? (j + 1) : -1;
 		goto setint;		 
 	}
 	/*
