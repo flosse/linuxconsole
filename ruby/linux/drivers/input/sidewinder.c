@@ -330,8 +330,8 @@ static int sw_parse(unsigned char *buf, struct sw *sw)
 
 				if (sw_parity(GB(i*15,15))) return -1;
 
-				input_report_key(dev + i, ABS_X, GB(i*15+3,1) - GB(i*15+2,1));
-				input_report_key(dev + i, ABS_Y, GB(i*15+0,1) - GB(i*15+1,1));
+				input_report_abs(dev + i, ABS_X, GB(i*15+3,1) - GB(i*15+2,1));
+				input_report_abs(dev + i, ABS_Y, GB(i*15+0,1) - GB(i*15+1,1));
 
 				for (j = 0; j < 10; j++)
 					input_report_key(dev, sw_btn[SW_ID_GP][j], !GB(i*15+j+4,1));
