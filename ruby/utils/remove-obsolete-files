@@ -1,80 +1,80 @@
 #!/bin/sh
 
-Documentation/usb/hid.txt
-arch/m68k/atari/atakeyb.c
-arch/m68k/atari/joystick.c
-arch/m68k/hp300/hil.c
-arch/m68k/hp300/hp300map.map
-arch/mips/jazz/kbd-jazz.c
-arch/mips/lib/kbd-no.c
-arch/mips/lib/kbd-std.c
-arch/mips64/lib/kbd-no.c
-arch/mips64/lib/kbd-std.c
-drivers/acorn/char/keyb_arc.c
-drivers/acorn/char/keyb_ps2.c
-drivers/acorn/char/mouse_rpc.c
-drivers/char/adbmouse.c
-drivers/char/amigamouse.c
-drivers/char/amikeyb.c
-drivers/char/atarimouse.c
-drivers/char/atixlmouse.c
-drivers/char/busmouse.c
-drivers/char/busmouse.h
-drivers/char/dn_keyb.c
-drivers/char/joystick/Config.in
-drivers/char/joystick/Makefile
-drivers/char/joystick/joy-amiga.c
-drivers/char/joystick/joy-analog.c
-drivers/char/joystick/joy-analog.h
-drivers/char/joystick/joy-assassin.c
-drivers/char/joystick/joy-console.c
-drivers/char/joystick/joy-creative.c
-drivers/char/joystick/joy-db9.c
-drivers/char/joystick/joy-gravis.c
-drivers/char/joystick/joy-lightning.c
-drivers/char/joystick/joy-logitech.c
-drivers/char/joystick/joy-magellan.c
-drivers/char/joystick/joy-pci.c
-drivers/char/joystick/joy-sidewinder.c
-drivers/char/joystick/joy-spaceball.c
-drivers/char/joystick/joy-spaceorb.c
-drivers/char/joystick/joy-thrustmaster.c
-drivers/char/joystick/joy-turbografx.c
-drivers/char/joystick/joy-warrior.c
-drivers/char/joystick/joystick.c
-drivers/char/logibusmouse.c
-drivers/char/msbusmouse.c
-drivers/char/pc110pad.c
-drivers/char/pc110pad.h
-drivers/char/pc_keyb.c
-drivers/char/q40_keyb.c
-drivers/char/qpmouse.c
-drivers/macintosh/mac_keyb.c
-drivers/sbus/char/pcikbd.c
-drivers/sbus/char/pcikbd.h
-drivers/sbus/char/sunkbd.c
-drivers/sbus/char/sunkbd.h
-drivers/sbus/char/sunkbdmap.c
-drivers/sbus/char/sunkeymap.c
-drivers/sbus/char/sunkeymap.map
-drivers/sbus/char/sunmouse.c
-drivers/sbus/char/sunmouse.h
-drivers/usb/evdev.c
-drivers/usb/hid-debug.h
-drivers/usb/hid.c
-drivers/usb/hid.h
-drivers/usb/input.c
-drivers/usb/joydev.c
-drivers/usb/keybdev.c
-drivers/usb/mousedev.c
-drivers/usb/usbkbd.c
-drivers/usb/usbmouse.c
-drivers/usb/wacom.c
-drivers/usb/wmforce.c
-include/asm-m68k/adb_mouse.h
-include/asm-m68k/atari_joystick.h
-include/asm-m68k/mac_mouse.h
-include/linux/adb_mouse.h
-include/linux/kbd_ll.h
-include/linux/logibusmouse.h
-include/linux/pc_keyb.h
+rm -fv Documentation/usb/hid.txt
+rm -fv arch/m68k/atari/atakeyb.c
+rm -fv arch/m68k/atari/joystick.c
+rm -fv arch/m68k/hp300/hil.c
+rm -fv arch/m68k/hp300/hp300map.map
+rm -fv arch/mips/jazz/kbd-jazz.c
+rm -fv arch/mips/lib/kbd-no.c
+rm -fv arch/mips/lib/kbd-std.c
+rm -fv arch/mips64/lib/kbd-no.c
+rm -fv arch/mips64/lib/kbd-std.c
+rm -fv drivers/acorn/char/keyb_arc.c
+rm -fv drivers/acorn/char/keyb_ps2.c
+rm -fv drivers/acorn/char/mouse_rpc.c
+rm -fv drivers/char/adbmouse.c
+rm -fv drivers/char/amigamouse.c
+rm -fv drivers/char/amikeyb.c
+rm -fv drivers/char/atarimouse.c
+rm -fv drivers/char/atixlmouse.c
+rm -fv drivers/char/busmouse.c
+rm -fv drivers/char/busmouse.h
+rm -fv drivers/char/dn_keyb.c
+rm -fv drivers/char/joystick/Config.in
+rm -fv drivers/char/joystick/Makefile
+rm -fv drivers/char/joystick/joy-amiga.c
+rm -fv drivers/char/joystick/joy-analog.c
+rm -fv drivers/char/joystick/joy-analog.h
+rm -fv drivers/char/joystick/joy-assassin.c
+rm -fv drivers/char/joystick/joy-console.c
+rm -fv drivers/char/joystick/joy-creative.c
+rm -fv drivers/char/joystick/joy-db9.c
+rm -fv drivers/char/joystick/joy-gravis.c
+rm -fv drivers/char/joystick/joy-lightning.c
+rm -fv drivers/char/joystick/joy-logitech.c
+rm -fv drivers/char/joystick/joy-magellan.c
+rm -fv drivers/char/joystick/joy-pci.c
+rm -fv drivers/char/joystick/joy-sidewinder.c
+rm -fv drivers/char/joystick/joy-spaceball.c
+rm -fv drivers/char/joystick/joy-spaceorb.c
+rm -fv drivers/char/joystick/joy-thrustmaster.c
+rm -fv drivers/char/joystick/joy-turbografx.c
+rm -fv drivers/char/joystick/joy-warrior.c
+rm -fv drivers/char/joystick/joystick.c
+rm -fv drivers/char/logibusmouse.c
+rm -fv drivers/char/msbusmouse.c
+rm -fv drivers/char/pc110pad.c
+rm -fv drivers/char/pc110pad.h
+rm -fv drivers/char/pc_keyb.c
+rm -fv drivers/char/q40_keyb.c
+rm -fv drivers/char/qpmouse.c
+rm -fv drivers/macintosh/mac_keyb.c
+rm -fv drivers/sbus/char/pcikbd.c
+rm -fv drivers/sbus/char/pcikbd.h
+rm -fv drivers/sbus/char/sunkbd.c
+rm -fv drivers/sbus/char/sunkbd.h
+rm -fv drivers/sbus/char/sunkbdmap.c
+rm -fv drivers/sbus/char/sunkeymap.c
+rm -fv drivers/sbus/char/sunkeymap.map
+rm -fv drivers/sbus/char/sunmouse.c
+rm -fv drivers/sbus/char/sunmouse.h
+rm -fv drivers/usb/evdev.c
+rm -fv drivers/usb/hid-debug.h
+rm -fv drivers/usb/hid.c
+rm -fv drivers/usb/hid.h
+rm -fv drivers/usb/input.c
+rm -fv drivers/usb/joydev.c
+rm -fv drivers/usb/keybdev.c
+rm -fv drivers/usb/mousedev.c
+rm -fv drivers/usb/usbkbd.c
+rm -fv drivers/usb/usbmouse.c
+rm -fv drivers/usb/wacom.c
+rm -fv drivers/usb/wmforce.c
+rm -fv include/asm-m68k/adb_mouse.h
+rm -fv include/asm-m68k/atari_joystick.h
+rm -fv include/asm-m68k/mac_mouse.h
+rm -fv include/linux/adb_mouse.h
+rm -fv include/linux/kbd_ll.h
+rm -fv include/linux/logibusmouse.h
+rm -fv include/linux/pc_keyb.h
