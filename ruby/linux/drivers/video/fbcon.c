@@ -476,6 +476,9 @@ void __init fb_console_init(void)
    struct vc_data *vc;	
    long q;
 
+#ifdef CONFIG_DUMMY_CONSOLE
+   take_over_console(admin_vt, &fb_con); 
+#else 
    /* Allocate the memory we need for this VT */
    vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
    if (!vt) return;
@@ -494,8 +497,9 @@ void __init fb_console_init(void)
        return;
    }
    vt->kmalloced = 1;
-   vt->vt_sw = &fb_con;
    vt->vc_cons[0] = vc;
+   
+   vt->vt_sw = &fb_con;
    display_desc = create_vt(vt, 0);
  
    q = (long) kmalloc(vc->vc_screenbuf_size, GFP_KERNEL);
@@ -514,6 +518,7 @@ void __init fb_console_init(void)
 
    printk("Console: %s %s %dx%d", vc->vc_can_do_color ? "colour" : "mono",
            display_desc, vc->vc_cols, vc->vc_rows);
+#endif
 }
 
 /*
