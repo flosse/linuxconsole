@@ -45,6 +45,27 @@
 /* File descriptor of the force feedback /dev entry */
 static int ff_fd;
 static struct ff_effect effect;
+static struct ff_effect dummy;
+
+static void init_dummy()
+{
+	dummy.type = FF_PERIODIC;
+	dummy.id = -1;
+	dummy.trigger.button = 0;
+	dummy.trigger.interval = 0;
+	dummy.replay.length = 0xFFFF;
+	dummy.replay.delay = 0;
+	dummy.u.periodic.waveform = FF_TRIANGLE;
+	dummy.u.periodic.period = 200;
+	dummy.u.periodic.magnitude = 0x7FFF;
+	dummy.u.periodic.offset = 0;
+	dummy.u.periodic.phase = 0;
+	dummy.u.periodic.direction = 0x4000;
+	dummy.u.periodic.shape.attack_length = 2000;
+	dummy.u.periodic.shape.attack_level = 0;
+	dummy.u.periodic.shape.fade_length = 2000;
+	dummy.u.periodic.shape.fade_level = 0;
+}
 
 static void generate_force(int x, int y)
 {
@@ -74,8 +95,7 @@ printf("level: %04x direction: %04x\n", (unsigned int)effect.u.constant.level, (
 	}
 
         if (ioctl(ff_fd, EVIOCSFF, &effect) < 0) {
-                perror("Upload effect");
-                exit(1);
+/* If updates are sent to frequently, they can be refused */
         }
 
 	/* If first time, start to play the effect */
@@ -92,18 +112,6 @@ printf("level: %04x direction: %04x\n", (unsigned int)effect.u.constant.level, (
 	}
 
 	first = 0;
-}
-
-static void stop_effect()
-{
-	struct input_event stop;
-	stop.type = EV_FF;
-	stop.code = effect.id;
-	stop.value = 0;
-
-	if (write(ff_fd, (const void*) &stop, sizeof(stop)) == -1) {
-		perror("Stop effect");
-	}
 }
 
 int main(int argc, char** argv)
@@ -151,7 +159,24 @@ int main(int argc, char** argv)
                 perror("Open device file");
 		exit(1);
 	}
-	on_exit(stop_effect, NULL);
+
+/*	init_dummy();
+        if (ioctl(ff_fd, EVIOCSFF, &dummy) < 0) {
+                perror("Upload dummy");
+                exit(1);
+        }
+
+	{
+		struct input_event play;
+		play.type = EV_FF;
+		play.code = dummy.id;
+		play.value = 1;
+
+		if (write(ff_fd, (const void*) &play, sizeof(play)) == -1) {
+			perror("Play effect");
+			exit(1);
+		}
+	}*/
 
 	ticks = SDL_GetTicks();
 	/* Main loop */
@@ -169,6 +194,7 @@ int main(int argc, char** argv)
 				ticks = SDL_GetTicks();
 				generate_force(event.motion.x, event.motion.y);
 			}
+			
 			break;
 		}
 	}
