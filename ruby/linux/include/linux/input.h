@@ -661,6 +661,8 @@ struct input_dev {
 	int absfuzz[ABS_MAX + 1];
 	int absflat[ABS_MAX + 1];
 
+	int only_one_writer;
+
 	int (*open)(struct input_dev *dev);
 	void (*close)(struct input_dev *dev);
 	int (*event)(struct input_dev *dev, unsigned int type, unsigned int code, int value);
