@@ -680,15 +680,12 @@ static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
  *      Allocation, freeing and resizing of VTs.
  */
 
-const char *create_vt(struct vt_struct *vt, const struct consw *vt_sw)
+const char *create_vt(struct vt_struct *vt)
 {
-	const char *display_desc = NULL;
+	const char *display_desc = vt->vt_sw->con_startup(vt);
 
+	if (!display_desc) return NULL;	
 	vt->data_hook = NULL;
-	if (vt_sw)
-                display_desc = vt_sw->con_startup(vt);
-        if (!display_desc) return NULL; 
-	vt->vt_sw = vt_sw;
 	vt->vt_dont_switch = 0;
         vt->scrollback_delta = 0;
         vt->vt_blanked = 0;
@@ -1564,7 +1561,12 @@ void __init vt_console_init(void)
          */
 	vt = (struct vt_struct *) alloc_bootmem(sizeof(struct vt_struct));
 	vt->kmalloced = 0;
-	display_desc = create_vt(vt, conswitchp);
+#if defined(CONFIG_VGA_CONSOLE)
+	vt->vt_sw = &vga_con;
+#elif defined(CONFIG_DUMMY_CONSOLE)
+	vt->vt_sw = &dummy_con;
+#endif
+	display_desc = create_vt(vt);
 	if (!display_desc) { 
 		free_bootmem((unsigned long) vt, sizeof(struct vt_struct));
 		return;
