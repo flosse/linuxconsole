@@ -122,9 +122,14 @@ static void sa1100_stop_tx(struct uart_port *port, u_int from_tty)
 static void sa1100_start_tx(struct uart_port *port, u_int nonempty, u_int from_tty)
 {
 	if (nonempty) {
-		u32 utcr3 = UART_GET_UTCR3(port);
+		unsigned long flags;
+		u32 utcr3;
+
+		local_irq_save(flags);
+		utcr3 = UART_GET_UTCR3(port);
 		port->read_status_mask |= UTSR0_TO_SM(UTSR0_TFS);
 		UART_PUT_UTCR3(port, utcr3 | UTCR3_TIE);
+		local_irq_restore(flags);
 	}
 }
 
@@ -315,6 +320,9 @@ static void sa1100_set_mctrl(struct uart_port *port, u_int mctrl)
 {
 }
 
+/*
+ * Interrupts always disabled.
+ */
 static void sa1100_break_ctl(struct uart_port *port, int break_state)
 {
 	u_int utcr3;
@@ -397,7 +405,7 @@ static void sa1100_change_speed(struct uart_port *port, u_int cflag, u_int iflag
 			utcr0 |= UTCR0_OES;
 	}
 
-	port->read_status_mask &= UTSR1_TO_SM(UTSR0_TFS);
+	port->read_status_mask &= UTSR0_TO_SM(UTSR0_TFS);
 	port->read_status_mask |= UTSR1_TO_SM(UTSR1_ROR);
 	if (iflag & INPCK)
 		port->read_status_mask |= UTSR1_TO_SM(UTSR1_FRE | UTSR1_PRE);
@@ -421,10 +429,10 @@ static void sa1100_change_speed(struct uart_port *port, u_int cflag, u_int iflag
 	}
 
 	/* first, disable interrupts and drain transmitter */
-	save_flags_cli(flags);
+	local_irq_save(flags);
 	old_utcr3 = UART_GET_UTCR3(port);
 	UART_PUT_UTCR3(port, old_utcr3 & ~(UTCR3_RIE | UTCR3_TIE));
-	restore_flags(flags);
+	local_irq_restore(flags);
 	while (UART_GET_UTSR1(port) & UTSR1_TBY);
 
 	/* then, disable everything */

@@ -28,6 +28,9 @@ if [ "$CONFIG_UART" != "n" ]; then
       dep_bool '  Use /dev/ttyS0 device (OBSOLETE)' CONFIG_SERIAL_21285_OLD $CONFIG_SERIAL_21285 $CONFIG_OBSOLETE
       dep_bool '  Console on DC21285 serial port' CONFIG_SERIAL_21285_CONSOLE $CONFIG_SERIAL_21285
 
+      dep_bool 'Excalibur serial port (uart00) support' CONFIG_SERIAL_UART00 $CONFIG_ARCH_CAMELOT
+      dep_bool '  Support for console on Excalibur serial port' CONFIG_SERIAL_UART00_CONSOLE $CONFIG_SERIAL_UART00	
+
       dep_bool 'SA1100 serial port support' CONFIG_SERIAL_SA1100 $CONFIG_ARCH_SA1100
       dep_bool '  Console on SA1100 serial port' CONFIG_SERIAL_SA1100_CONSOLE $CONFIG_SERIAL_SA1100
       if [ "$CONFIG_ARCH_SA1100" = "y" ]; then
@@ -46,21 +49,6 @@ if [ "$CONFIG_UART" != "n" ]; then
   dep_bool '  Support special multiport boards' CONFIG_SERIAL_8250_MULTIPORT $CONFIG_SERIAL_8250_EXTENDED
   dep_bool '  Support Bell Technologies HUB6 card' CONFIG_SERIAL_8250_HUB6 $CONFIG_SERIAL_8250_EXTENDED
 
-  if [ "$CONFIG_SERIAL_AMBA" = "y" -o \
-       "$CONFIG_SERIAL_CLPS711X" = "y" -o \
-       "$CONFIG_SERIAL_SA1100" = "y" -o \
-       "$CONFIG_SERIAL_ANAKIN" = "y" -o \
-       "$CONFIG_SERIAL_8250" = "y" ]; then
-     define_bool CONFIG_SERIAL_CORE y
-  else
-    if [ "$CONFIG_SERIAL_AMBA" = "m" -o \
-         "$CONFIG_SERIAL_CLPS711X" = "m" -o \
-         "$CONFIG_SERIAL_SA1100" = "m" -o \
-         "$CONFIG_SERIAL_ANAKIN" = "m" -o \
-         "$CONFIG_SERIAL_8250" = "m" ]; then
-        define_bool CONFIG_SERIAL_CORE m
-    fi
-  fi
   if [ "$CONFIG_SERIAL_AMBA_CONSOLE" = "y" -o \
        "$CONFIG_SERIAL_CLPS711X_CONSOLE" = "y" -o \
        "$CONFIG_SERIAL_SA1100_CONSOLE" = "y" -o \

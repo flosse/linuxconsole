@@ -46,6 +46,7 @@
 #define PORT_AMBA	32
 #define PORT_CLPS711X	33
 #define PORT_SA1100	34
+#define PORT_UART00    35
 
 #ifdef __KERNEL__
 
@@ -53,6 +54,7 @@
 #include <linux/interrupt.h>
 #include <linux/circ_buf.h>
 #include <linux/serial.h>
+#include <linux/spinlock.h>
 
 struct uart_port;
 struct uart_info;
@@ -160,6 +162,7 @@ struct uart_state {
  * stuff here.
  */
 struct uart_info {
+	spinlock_t		lock;
 	struct uart_port	*port;
 	struct uart_ops		*ops;
 	struct uart_state	*state;

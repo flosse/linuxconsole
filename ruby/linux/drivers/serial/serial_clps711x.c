@@ -396,6 +396,8 @@ static void clps711xuart_change_speed(struct uart_port *port, u_int cflag, u_int
 			port->ignore_status_mask |= UARTDR_OVERR;
 	}
 
+	quot -= 1;
+
 	/* first, disable everything */
 	save_flags(flags); cli();
 
@@ -435,8 +437,8 @@ static struct uart_ops clps711x_pops = {
 	shutdown:	clps711xuart_shutdown,
 	change_speed:	clps711xuart_change_speed,
 	config_port:	clps711xuart_config_port,
-	release_port:	clps711xuart_request_port,
-	request_port:	clps711xuart_release_port,
+	release_port:	clps711xuart_release_port,
+	request_port:	clps711xuart_request_port,
 };
 
 static struct uart_port clps711x_ports[UART_NR] = {
@@ -618,6 +620,7 @@ static int __init clps711xuart_console_setup(struct console *co, char *options)
 }
 
 static struct console clps711x_console = {
+	name:		SERIAL_CLPS711X_NAME,
 	write:		clps711xuart_console_write,
 #ifdef used_and_not_const_char_pointer
 	read:		clps711xuart_console_read,
