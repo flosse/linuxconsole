@@ -42,7 +42,7 @@
  * Definitions & global arrays.
  */
 
-#define	GUNZE_MAX_LENGTH	11
+#define	GUNZE_MAX_LENGTH	10
 
 /*
  * Per-touchscreen data.
@@ -59,15 +59,16 @@ static void gunze_process_packet(struct gunze* gunze)
 {
 	struct input_dev *dev = &gunze->dev;
 
-	if (gunze->idx != 11 || gunze->data[5] != ',' || gunze->data[10] != '\r' ||
+	if (gunze->idx != GUNZE_MAX_LENGTH || gunze->data[5] != ',' ||
 		(gunze->data[0] != 'T' && gunze->data[0] != 'R')) {
-		printk(KERN_WARNING "gunze.c: bad packet\n");
+		gunze->data[10] = 0;
+		printk(KERN_WARNING "gunze.c: bad packet: >%s<\n", gunze->data);
 		return;
 	}
 
+	input_report_abs(dev, ABS_X, simple_strtoul(gunze->data + 1, NULL, 10) * 4);
+	input_report_abs(dev, ABS_Y, 3072 - simple_strtoul(gunze->data + 6, NULL, 10) * 3);
 	input_report_key(dev, BTN_TOUCH, gunze->data[0] == 'T');
-	input_report_abs(dev, ABS_X, simple_strtol(gunze->data + 1, NULL, 10) * 4);
-	input_report_abs(dev, ABS_Y, simple_strtol(gunze->data + 1, NULL, 10) * 3);
 }
 
 static void gunze_interrupt(struct serio *serio, unsigned char data, unsigned int flags)
@@ -117,7 +118,7 @@ static void gunze_connect(struct serio *serio, struct serio_dev *dev)
 	gunze->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y);
 	gunze->dev.keybit[LONG(BTN_TOUCH)] = BIT(BTN_TOUCH);
 
-	gunze->dev.absmin[ABS_X] = 80;   gunze->dev.absmin[ABS_Y] = 60;
+	gunze->dev.absmin[ABS_X] = 96;   gunze->dev.absmin[ABS_Y] = 72;
 	gunze->dev.absmax[ABS_X] = 4000; gunze->dev.absmax[ABS_Y] = 3000;
 
 	gunze->serio = serio;
