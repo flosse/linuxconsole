@@ -29,7 +29,6 @@
 
 #include <asm/io.h>
 #include <asm/system.h>
-#include <asm/segment.h>
 #include <linux/delay.h>
 #include <linux/errno.h>
 #include <linux/joystick.h>
