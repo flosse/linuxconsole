@@ -615,11 +615,6 @@ static devfs_handle_t devfs_handle;
 int
 register_framebuffer(struct fb_info *fb_info)
 {
-/*
-	const char *display_desc = NULL;
-        struct vt_struct *vt;
-	struct vc_data *vc;
-*/
 	char name_buf[8];
 	int i;
 
@@ -632,24 +627,6 @@ register_framebuffer(struct fb_info *fb_info)
 			break;
 	fb_info->node = MKDEV(FB_MAJOR, i);
 	registered_fb[i] = fb_info;
-/*
-	vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
-        if (!vt) return -ENOMEM;
-        display_desc = create_vt(vt, &fb_con);
-        if (!display_desc) {
-        	kfree(vt);
-                return -ENXIO;
-        }
-        i = vc_allocate(vt->vcs.first_vc);
-        if (i)  {
-        	kfree(vt);
-                return -ENXIO;
-        }
-	vt->last_console = vt->fg_console = vc = vt->vcs.vc_cons[0];
-	printk("Console: %s %s %dx%d", vc->vc_can_do_color ? "colour" : "mono",
-                display_desc, vc->vc_cols, vc->vc_rows);
-        take_over_console(vt, &fb_con); 
-*/
 	sprintf (name_buf, "%d", i);
 	fb_info->devfs_handle =
 	    devfs_register (devfs_handle, name_buf, DEVFS_FL_DEFAULT,
