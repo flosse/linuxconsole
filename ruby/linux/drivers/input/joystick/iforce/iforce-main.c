@@ -33,25 +33,46 @@ MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>, Johann Deneux <deneux@ifrance.co
 MODULE_DESCRIPTION("USB/RS232 I-Force joysticks and wheels driver");
 MODULE_LICENSE("GPL");
 
-static signed short btn_joystick[] = { BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_TOP2, BTN_BASE,
-	BTN_BASE2, BTN_BASE3, BTN_BASE4, BTN_BASE5, BTN_A, BTN_B, BTN_C, BTN_DEAD, -1 };
-static signed short btn_wheel[] =    { BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_TOP2, BTN_BASE,
-	BTN_BASE2, BTN_BASE3, BTN_BASE4, BTN_BASE5, BTN_A, BTN_B, BTN_C, -1 };
-static signed short btn_avb_tw[] =    { BTN_TRIGGER, BTN_THUMB, BTN_TOP, BTN_TOP2, BTN_BASE,
-	BTN_BASE2, BTN_BASE3, BTN_BASE4, -1 };
-static signed short btn_avb_wheel[] =    { BTN_GEAR_DOWN, BTN_GEAR_UP, BTN_BASE, BTN_BASE2, BTN_BASE3,
-	BTN_BASE4, BTN_BASE5, BTN_BASE6, -1 };
-static signed short abs_joystick[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, -1 };
-static signed short abs_joystick2[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_RUDDER, ABS_HAT0X, ABS_HAT0Y, -1 };
-static signed short abs_wheel[] =    { ABS_WHEEL, ABS_GAS, ABS_BRAKE, ABS_HAT0X, ABS_HAT0Y, -1 };
-static signed short ff_iforce[] =    { FF_PERIODIC, FF_CONSTANT, FF_SPRING, FF_DAMPER,
-	FF_SQUARE, FF_TRIANGLE, FF_SINE, FF_SAW_UP, FF_SAW_DOWN, FF_GAIN, FF_AUTOCENTER, -1 };
+static signed short btn_joystick[] =
+{ BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_TOP2, BTN_BASE,
+  BTN_BASE2, BTN_BASE3, BTN_BASE4, BTN_BASE5, BTN_A, BTN_B, BTN_C, -1 };
+
+static signed short btn_avb_pegasus[] =
+{ BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_TOP2, BTN_BASE,
+  BTN_BASE2, BTN_BASE3, BTN_BASE4, -1 };
+
+static signed short btn_wheel[] =
+{ BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_TOP2, BTN_BASE,
+  BTN_BASE2, BTN_BASE3, BTN_BASE4, BTN_BASE5, BTN_A, BTN_B, BTN_C, -1 };
+
+static signed short btn_avb_tw[] =
+{ BTN_TRIGGER, BTN_THUMB, BTN_TOP, BTN_TOP2, BTN_BASE,
+  BTN_BASE2, BTN_BASE3, BTN_BASE4, -1 };
+
+static signed short btn_avb_wheel[] =
+{ BTN_GEAR_DOWN, BTN_GEAR_UP, BTN_BASE, BTN_BASE2, BTN_BASE3,
+  BTN_BASE4, BTN_BASE5, BTN_BASE6, -1 };
+
+static signed short abs_joystick[] =
+{ ABS_X, ABS_Y, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, -1 };
+
+static signed short abs_avb_pegasus[] =
+{ ABS_X, ABS_Y, ABS_THROTTLE, ABS_RUDDER, ABS_HAT0X, ABS_HAT0Y,
+  ABS_HAT1X, ABS_HAT1Y, -1 };
+
+static signed short abs_wheel[] =
+{ ABS_WHEEL, ABS_GAS, ABS_BRAKE, ABS_HAT0X, ABS_HAT0Y, -1 };
+
+static signed short ff_iforce[] =
+{ FF_PERIODIC, FF_CONSTANT, FF_SPRING, FF_DAMPER,
+  FF_SQUARE, FF_TRIANGLE, FF_SINE, FF_SAW_UP, FF_SAW_DOWN, FF_GAIN,
+  FF_AUTOCENTER, -1 };
 
 static struct iforce_device iforce_device[] = {
 	{ 0x044f, 0xa01c, "Thrustmaster Motor Sport GT",		btn_wheel, abs_wheel, ff_iforce },
 	{ 0x046d, 0xc281, "Logitech WingMan Force",			btn_joystick, abs_joystick, ff_iforce },
 	{ 0x046d, 0xc291, "Logitech WingMan Formula Force",		btn_wheel, abs_wheel, ff_iforce },
-	{ 0x05ef, 0x020a, "AVB Top Shot Pegasus",			btn_joystick, abs_joystick2, ff_iforce },
+	{ 0x05ef, 0x020a, "AVB Top Shot Pegasus",			btn_avb_pegasus, abs_avb_pegasus, ff_iforce },
 	{ 0x05ef, 0x8884, "AVB Mag Turbo Force",			btn_avb_wheel, abs_wheel, ff_iforce },
 	{ 0x05ef, 0x8888, "AVB Top Shot Force Feedback Racing Wheel",	btn_avb_tw, abs_wheel, ff_iforce },
 	{ 0x06f8, 0x0001, "Guillemot Race Leader Force Feedback",	btn_wheel, abs_wheel, ff_iforce },
@@ -65,8 +86,6 @@ static int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned
 {
 	struct iforce* iforce = (struct iforce*)(dev->private);
 	unsigned char data[3];
-
-	printk(KERN_DEBUG "iforce.c: input_event(type = %d, code = %d, value = %d)\n", type, code, value);
 
 	if (type != EV_FF)
 		return -1;
@@ -194,6 +213,8 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
  * Erases an effect: it frees the effect id and mark as unused the memory
  * allocated for the parameters
  */
+/*FIXME: stop effect before erasing */
+/*TODO: use CHECK_OWNERSHIP */
 static int iforce_erase_effect(struct input_dev *dev, int effect_id)
 {
 	struct iforce* iforce = (struct iforce*)(dev->private);
@@ -444,6 +465,8 @@ int iforce_init_device(struct iforce *iforce)
 
 			case ABS_HAT0X:
 			case ABS_HAT0Y:
+		        case ABS_HAT1X:
+		        case ABS_HAT1Y:
 				iforce->dev.absmax[t] =  1;
 				iforce->dev.absmin[t] = -1;
 				break;
