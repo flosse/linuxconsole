@@ -45,14 +45,12 @@ static char *sel_buffer = NULL;
    from interrupt (via scrollback/front) */
 
 /* set reverse video on characters s-e of console with selection. */
-inline static void
-highlight(const int s, const int e) {
+inline static void highlight(const int s, const int e) {
 	invert_screen(vc_cons[sel_cons], s, e-s+2, 1);
 }
 
 /* use complementary color to show the pointer */
-inline static void
-highlight_pointer(const int where) {
+inline static void highlight_pointer(const int where) {
 	complement_pos(vc_cons[sel_cons], where);
 }
 
@@ -71,10 +69,11 @@ static unsigned char sel_pos(int n)
 	return inverse_translate(vc_cons[sel_cons], screen_glyph(vc_cons[sel_cons], n));
 }
 
-/* remove the current selection highlight, if any,
-   from the console holding the selection. */
-void
-clear_selection(void) {
+/* 
+ * remove the current selection highlight, if any,
+ * from the console holding the selection. 
+ */
+void clear_selection(void) {
 	highlight_pointer(-1); /* hide the pointer */
 	if (sel_start != -1) {
 		highlight(sel_start, sel_end);
