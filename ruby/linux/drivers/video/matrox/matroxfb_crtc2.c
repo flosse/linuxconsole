@@ -464,7 +464,8 @@ static int matroxfb_dh_ioctl(struct inode* inode,
 				err = matroxfb_dh_get_vblank(m2info, &vblank);
 				if (err)
 					return err;
-				copy_to_user_ret((struct fb_vblank*)arg, &vblank, sizeof(vblank), -EFAULT);
+				if (copy_to_user((struct fb_vblank*)arg, &vblank, sizeof(vblank)))
+					return -EFAULT;
 				return 0;
 			}
 		case MATROXFB_SET_OUTPUT_MODE:
@@ -477,7 +478,8 @@ static int matroxfb_dh_ioctl(struct inode* inode,
 			{
 				u_int32_t tmp;
 
-				get_user_ret(tmp, (u_int32_t*)arg, -EFAULT);
+				if (get_user(tmp, (u_int32_t*)arg))
+					return -EFAULT;
 				if (tmp & ~ACCESS_FBINFO(output.all))
 					return -EINVAL;
 				if (tmp & ACCESS_FBINFO(output.ph))
@@ -494,7 +496,9 @@ static int matroxfb_dh_ioctl(struct inode* inode,
 			}
 		case MATROXFB_GET_OUTPUT_CONNECTION:
 			{
-				put_user_ret(ACCESS_FBINFO(output.sh), (u_int32_t*)arg, -EFAULT);
+				if (put_user(ACCESS_FBINFO(output.sh), 
+					     (u_int32_t*)arg))
+					return -EFAULT;
 				return 0;
 			}
 		case MATROXFB_GET_AVAILABLE_OUTPUTS:
