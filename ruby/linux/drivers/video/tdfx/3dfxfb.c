@@ -111,6 +111,7 @@ void tdfxfb_setup(char *options, int *ints);
 
 static int tdfxfb_check_var(struct fb_var_screeninfo *var, struct fb_info *fb); 
 static int tdfxfb_set_par(struct fb_info *info); 
+static int tdfxfb_cursor(struct fb_info *info, struct fbcursor *cursor);
 static int  tdfxfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue, 
 			     u_int transp, struct fb_info *info); 
 static int tdfxfb_blank(int blank, struct fb_info *info); 
@@ -129,6 +130,7 @@ static struct fb_ops tdfxfb_ops = {
 	owner:		THIS_MODULE,
 	fb_check_var:	tdfxfb_check_var,
 	fb_set_par:	tdfxfb_set_par,
+	fb_cursor:	tdfxfb_cursor,
 	fb_setcolreg:	tdfxfb_setcolreg,
 	fb_blank:	tdfxfb_blank,
 	fb_pan_display:	tdfxfb_pan_display,
@@ -139,16 +141,9 @@ static struct fb_ops tdfxfb_ops = {
 };
 
 /*
- *  Internal routines
- */
-//static void tdfxfb_hwcursor_init(struct fb_info *info, struct tdfx_par *par);
-//static void tdfxfb_createcursorshape(struct display *p);
-//static void tdfxfb_createcursor(struct display *p);  
-
-/*
  * do_xxx: Hardware-specific functions
  */
-//static void do_flashcursor(unsigned long ptr);
+static void do_flashcursor(unsigned long ptr);
 static u32 do_calc_pll(int freq, int *freq_out);
 static void  do_write_regs(struct banshee_reg *reg);
 static unsigned long do_lfb_size(void);
@@ -300,19 +295,19 @@ static inline void do_setpalentry(unsigned regno, u32 c) {
 
 /*
  * Invert the hardware cursor image (timerfunc)  
-
+ */
 static void do_flashcursor(unsigned long ptr)
 {
    struct tdfx_par *par = (struct tdfx_par *) ptr;
+   unsigned long flags;	
 
-   spin_lock(par->DAClock);
+   spin_lock_irqsave(par->DAClock, flags);
    banshee_make_room(1);
    tdfx_outl(VIDPROCCFG, tdfx_inl(VIDPROCCFG) ^ VIDCFG_HWCURSOR_ENABLE );
-   par->cursor.timer.expires=jiffies+HZ/2;
-   add_timer(&par->cursor.timer);
-   spin_unlock(par->DAClock);
+   par->hwcursor.timer.expires=jiffies+HZ/2;
+   add_timer(&par->hwcursor.timer);
+   spin_unlock_irqrestore(par->DAClock, flags);
 }
-*/
 
 static u32 do_calc_pll(int freq, int* freq_out) 
 {
@@ -442,53 +437,6 @@ static unsigned long do_lfb_size(void)
 
   return lfbsize;
 }
-
-/*
-static void tdfx_cfbX_cursor(struct display *p, int mode, int x, int y) 
-{
-   struct fb_info *info = (struct fb_info *) p->fb_info;
-   struct tdfx_par *par = (struct tdfx_par *) info->par;
-   unsigned long flags;
-   int tip;
-     
-   tip = p->conp->vc_cursor_type & CUR_HWMASK;
-   if (mode == CM_ERASE) {
-	if (par->cursor.state != CM_ERASE) {
-	     spin_lock_irqsave(par->DAClock, flags);
-	     par->cursor.state=CM_ERASE;
-	     del_timer(&(par->cursor.timer));
-	     tdfx_outl(VIDPROCCFG, par->cursor.disable); 
-	     spin_unlock_irqrestore(par->DAClock, flags);
-	}
-	return;
-   }
-   if ((p->conp->vc_cursor_type & CUR_HWMASK) != par->cursor.type)
-	 tdfxfb_createcursor(p);
-   x *= fontwidth(p);
-   y *= fontheight(p);
-   y -= p->var.yoffset;
-   spin_lock_irqsave(par->DAClock, flags);
-   if ((x != par->cursor.x) || (y != par->cursor.y) || (par->cursor.redraw)) {
-          par->cursor.x=x;
-	  par->cursor.y=y;
-	  par->cursor.redraw=0;
-	  x += 63;
-	  y += 63;    
-          banshee_make_room(2);
-	  tdfx_outl(VIDPROCCFG, par->cursor.disable);
-	  tdfx_outl(HWCURLOC, (y << 16) + x);
-	   fix cursor color - XFree86 forgets to restore it properly 
-	  tdfx_outl(HWCURC0, 0);
-	  tdfx_outl(HWCURC1, 0xffffff);
-   }
-   par->cursor.state = CM_DRAW;
-   mod_timer(&par->cursor.timer, jiffies+HZ/2);
-   banshee_make_room(1);
-   tdfx_outl(VIDPROCCFG, par->cursor.enable);
-   spin_unlock_irqrestore(par->DAClock, flags);
-   return;     
-}
-*/
 
 /* ------------------------------------------------------------------------- */
 
@@ -720,18 +668,19 @@ static int tdfxfb_set_par(struct fb_info *info)
     VIDCFG_CURS_X11 |
     ((cpp - 1) << VIDCFG_PIXFMT_SHIFT) |
     (cpp != 1 ? VIDCFG_CLUT_BYPASS : 0);
-  
-  par->cursor.enable=reg.vidcfg | VIDCFG_HWCURSOR_ENABLE;
-  par->cursor.disable=reg.vidcfg;
+ 
+  /* Setup the cursor */	 
+  par->hwcursor.enable=reg.vidcfg | VIDCFG_HWCURSOR_ENABLE;
+  par->hwcursor.disable=reg.vidcfg;
    
-  reg.stride    = info->var.xres * cpp;
   reg.cursloc   = 0;
    
   reg.cursc0    = 0; 
   reg.cursc1    = 0xffffff;
    
-  reg.curspataddr = par->cursor.cursorimage;   
-  
+  reg.curspataddr = (unsigned long) info->cursor.image;   
+
+  reg.stride    = info->var.xres * cpp;
   reg.startaddr = par->baseline*reg.stride;
   reg.srcbase   = reg.startaddr;
   reg.dstbase   = reg.startaddr;
@@ -756,14 +705,6 @@ static int tdfxfb_set_par(struct fb_info *info)
   reg.vidcfg &= ~VIDCFG_HALF_MODE;
 
   do_write_regs(&reg);
-
-  /*
-  del_timer(&par->cursor.timer); 
-  par->cursor.state=CM_ERASE; 
-  if (!nohwcursor) 
-	tdfxfb_createcursor(display);
-  par->cursor.redraw=1;
-  */
   memcpy(info->par, par, sizeof(struct tdfx_par));
 
   /* Now change fb_fix_screeninfo according to changes in par */
@@ -772,6 +713,123 @@ static int tdfxfb_set_par(struct fb_info *info)
   	  	                 ? FB_VISUAL_PSEUDOCOLOR
                      		 : FB_VISUAL_DIRECTCOLOR;
   return 0;	
+}
+
+static int tdfxfb_cursor(struct fb_info *info, struct fbcursor *cursor)
+{
+   struct tdfx_par *par = (struct tdfx_par *) info->par;
+   unsigned long flags;
+    
+   /* If the cursor is not be changed this means either we want the current
+    * cursor state (if enable is set) or we want to query what we can do with
+    * the cursor (if enable is not set) */
+   if (nohwcursor || !cursor->set) return 0; 
+
+   /* Too large of a cursor :-( */	
+   if (cursor->size.x > 64 || cursor->size.y > 64) 
+	return -ENXIO;	
+
+   /* If we are going to be changing things we should disable 
+      the cursor first */
+   if (info->cursor.enable) {
+	spin_lock_irqsave(par->DAClock, flags);
+   	info->cursor.enable = 0;
+    	del_timer(&(par->hwcursor.timer));
+    	tdfx_outl(VIDPROCCFG, par->hwcursor.disable); 
+	spin_unlock_irqrestore(par->DAClock, flags);
+   }
+ 
+   /* Disable the Cursor */	
+   if ((cursor->set && FB_CUR_SETCUR) && !cursor->enable)
+	return 0;
+
+   /* fix cursor color - XFree86 forgets to restore it properly */
+   if (cursor->set && FB_CUR_SETCMAP) {
+	unsigned long bg_color, fg_color;
+
+	cursor->cmap.len = 2; 	/* Voodoo 3+ only support 2 color cursors */
+	fg_color = ((cursor->cmap.red[cursor->cmap.start] << 16) | 
+		    (cursor->cmap.green[cursor->cmap.start] << 8)  |
+		    (cursor->cmap.blue[cursor->cmap.start]));
+   	bg_color = ((cursor->cmap.red[cursor->cmap.start+1] << 16) |
+                    (cursor->cmap.green[cursor->cmap.start+1] << 8) | 
+		    (cursor->cmap.blue[cursor->cmap.start+1]));
+	fb_copy_cmap(&cursor->cmap, &info->cursor.cmap, 0);   
+	spin_lock_irqsave(par->DAClock, flags);
+	banshee_make_room(2);
+	tdfx_outl(HWCURC0, bg_color);
+	tdfx_outl(HWCURC1, fg_color);
+   	spin_unlock_irqrestore(par->DAClock, flags);
+   }
+
+   if (cursor->set && FB_CUR_SETPOS) {
+	int x, y;
+
+   	x = cursor->pos.x;
+   	y = cursor->pos.y;
+   	y -= info->var.yoffset;
+	info->cursor.pos.x = x;
+	info->cursor.pos.y = y;
+	x += 63;
+	y += 63;	
+   	spin_lock_irqsave(par->DAClock, flags);
+	banshee_make_room(1);
+	tdfx_outl(HWCURLOC, (y << 16) + x);
+   	spin_unlock_irqrestore(par->DAClock, flags);
+   }	
+  
+   /* Not supported so we fake it */	 
+   if (cursor->set && FB_CUR_SETHOT) {
+	info->cursor.hot.x = cursor->hot.x;
+	info->cursor.hot.y = cursor->hot.y;
+   }	  
+	
+   if (cursor->set && FB_CUR_SETSHAPE) {
+	/* Voodoo 3 and above cards use 2 monochrome cursor patterns.
+         *   The reason is so the card can fetch 8 words at a time 
+         * and are stored on chip for use for the next 8 scanlines. 
+         * This reduces the number of times for access to draw the  
+         * cursor for each screen refresh. 
+	 *    Each pattern is a bitmap of 64 bit wide and 64 bit high 
+	 * (total of 8192 bits or 1024 Kbytes). The two patterns are
+         * stored in such a way that pattern 0 always resides in the
+         * lower half (least significant 64 bits) of a 128 bit word 
+	 * and pattern 1 the upper half. If you examine the data of 
+         * the cursor image the graphics card uses then from the 
+         * begining you see line one of pattern 0, line one of 
+	 * pattern 1, line two of pattern 0, line two of pattern 1, 
+         * etc etc. The linear stride for the cursor is always 16 bytes
+         * (128 bits) which is the maximum cursor width times two for
+         * the two monochrome patterns. 
+	 */
+	unsigned long bitmap = (unsigned long) cursor->image;
+	unsigned long mask = (unsigned long) cursor->mask;
+	u8 *cursorbase = (u8 *) info->cursor.image;
+	int i, h = 0;
+
+	for (i = 0; i < 64; i++) {
+		/* Pattern 0. Copy the cursor bitmap to it */
+		fb_writel(bitmap, cursorbase + h);	
+		bitmap++;
+		fb_writel(bitmap, cursorbase + h + 4);
+		bitmap++;
+		/* Pattern 1. Copy the cursor mask to it */
+		fb_writel(mask, cursorbase + h + 8);
+		mask++;
+		fb_writel(mask, cursorbase + h + 12);
+		mask++;
+		h += 16;
+	}
+   }
+   /* Turn the cursor on */
+   cursor->enable = 1;
+   info->cursor = *cursor;
+   mod_timer(&par->hwcursor.timer, jiffies+HZ/2);
+   spin_lock_irqsave(par->DAClock, flags);
+   banshee_make_room(1);
+   tdfx_outl(VIDPROCCFG, par->hwcursor.enable);
+   spin_unlock_irqrestore(par->DAClock, flags);
+   return 0;     
 }
 
 static int tdfxfb_setcolreg(unsigned regno, unsigned red, unsigned green,  
@@ -989,6 +1047,17 @@ static int tdfxfb_ioctl(struct inode *inode, struct file *file, u_int cmd,
    return -EINVAL;
 }
 
+static void tdfxfb_hwcursor_init(struct fb_info *info) 
+{
+   unsigned int start;
+
+   start = (info->fix.smem_len-1024) & PAGE_MASK;
+   info->fix.smem_len = start; 
+   info->cursor.image = info->screen_base + info->fix.smem_len;
+   printk("tdfxfb: reserving 1024 bytes for the hwcursor at %p\n",
+	   info->cursor.image);
+}
+
 int __init tdfxfb_init(void) 
 {
   struct pci_dev *pdev = NULL;
@@ -1059,15 +1128,15 @@ int __init tdfxfb_init(void)
 	 !fb_find_mode(&fb_info.var, &fb_info, mode_option, NULL, 0, NULL, 8)) 
 	fb_info.var = tdfx_var;
      
-      /* 
-      if (!nohwcursor) tdfxfb_hwcursor_init(&fb_info, &default_par);
-       
-      init_timer(&default_par.cursor.timer);
-      default_par.cursor.timer.function = do_flashcursor; 
-      default_par.cursor.timer.data = (unsigned long)(&default_par);
-      default_par.cursor.state = CM_ERASE;
-      spin_lock_init(default_par->DAClock);
-      */     
+      if (!nohwcursor) {
+	tdfxfb_hwcursor_init(&fb_info);
+      	init_timer(&default_par.hwcursor.timer);
+      	default_par.hwcursor.timer.function = do_flashcursor; 
+      	default_par.hwcursor.timer.data = (unsigned long)(&default_par);
+      	spin_lock_init(default_par->DAClock);
+      }	
+      fb_info.cursor.set = 0;
+      fb_info.cursor.enable = 0;	 
 
       if (register_framebuffer(&fb_info) < 0) {
 	printk("tdfxfb: can't register framebuffer\n");
@@ -1094,7 +1163,7 @@ static void __exit tdfxfb_exit (void)
 	struct tdfx_par *par = (struct tdfx_par *) fb_info.par;
 
 	unregister_framebuffer(&fb_info);
-	//del_timer_sync(&par->cursor.timer);
+	del_timer_sync(&par->hwcursor.timer);
 
 #ifdef CONFIG_MTRR
 	if (!nomtrr) {
@@ -1146,93 +1215,3 @@ void tdfxfb_setup(char *options, int *ints)
 }
 #endif
 
-/*
-static void tdfxfb_createcursorshape(struct display *p) 
-{
-   struct fb_info *info = p->fb_info;
-   struct tdfx_par *par = (struct tdfx_par *) info->par;	
-   unsigned int h, cu, cd;
-   
-   h = fontheight(p);
-   cd = h;
-   if (cd >= 10) cd --; 
-   par->cursor.type = p->conp->vc_cursor_type & CUR_HWMASK;
-   switch (par->cursor.type) {
-      case CUR_NONE: 
-	cu=cd; 
-	break;
-      case CUR_UNDERLINE: 
-	cu=cd - 2; 
-	break;
-      case CUR_LOWER_THIRD: 
-	cu=(h * 2) / 3; 
-	break;
-      case CUR_LOWER_HALF: 
-	cu=h / 2; 
-	break;
-      case CUR_TWO_THIRDS: 
-	cu=h / 3; 
-	break;
-      case CUR_BLOCK:
-      default:
-	cu=0;
-	cd = h;
-	break;
-   }
-   par->cursor.w=fontwidth(p);
-   par->cursor.u=cu;
-   par->cursor.d=cd;
-}
-   
-static void tdfxfb_createcursor(struct display *p)
-{
-   struct fb_info *info = p->fb_info;
-   struct tdfx_par *par = (struct tdfx_par *) info->par;	
-   unsigned int i, h, to;
-   u8 *cursorbase;
-   u32 xline;
-
-   tdfxfb_createcursorshape(p);
-   xline = (1 << par->cursor.w)-1;
-   cursorbase = (u8*) info->screen_base;
-   h = par->cursor.cursorimage;     
-   
-   to = par->cursor.u;
-   for (i = 0; i < to; i++) {
-	writel(0, cursorbase+h);
-	writel(0, cursorbase+h+4);
-	writel(~0, cursorbase+h+8);
-	writel(~0, cursorbase+h+12);
-	h += 16;
-   }
-   
-   to = par->cursor.d;
-   
-   for (; i < to; i++) {
-	writel(xline, cursorbase+h);
-	writel(0, cursorbase+h+4);
-	writel(~0, cursorbase+h+8);
-	writel(~0, cursorbase+h+12);
-	h += 16;
-   }
-   
-   for (; i < 64; i++) {
-	writel(0, cursorbase+h);
-	writel(0, cursorbase+h+4);
-	writel(~0, cursorbase+h+8);
-	writel(~0, cursorbase+h+12);
-	h += 16;
-   }
-}
-   
-static void tdfxfb_hwcursor_init(struct fb_info *info, struct tdfx_par *par) 
-{
-   unsigned int start;
-
-   start = (info->fix.smem_len-1024) & PAGE_MASK;
-   info->fix.smem_len = start; 
-   par->cursor.cursorimage = info->fix.smem_len;
-   printk("tdfxfb: reserving 1024 bytes for the hwcursor at %p\n",
-	  par->regbase_virt + par->cursor.cursorimage);
-}
-*/
