@@ -268,6 +268,11 @@ struct fb_ops {
     /* get settable parameters */
     int (*fb_get_var)(struct fb_var_screeninfo *var, int con,
 		      struct fb_info *info);		
+    /* checks var and creates a par based on it */
+    int (*fb_check_var)(const struct fb_var_screeninfo *var, void *par,
+                        struct fb_info *info);
+    /* set the video mode according to par */
+    void (*fb_set_par)(const void *par, struct fb_info *info);
     /* set settable parameters */
     int (*fb_set_var)(struct fb_var_screeninfo *var, int con,
 		      struct fb_info *info);		
@@ -331,34 +336,6 @@ struct fb_info {
 #else
 #define FBINFO_FLAG_DEFAULT	0
 #endif
-
-    /*
-     *  This structure abstracts from the underlying hardware. It is not
-     *  mandatory but used by the `generic' frame buffer operations.
-     *  Read drivers/video/skeletonfb.c for more information.
-     */
-
-struct fbgen_hwswitch {
-    void (*detect)(void);
-    int (*encode_fix)(struct fb_fix_screeninfo *fix, const void *par,
-		      struct fb_info *info);
-    int (*decode_var)(const struct fb_var_screeninfo *var, void *par,
-		      struct fb_info *info);
-    int (*encode_var)(struct fb_var_screeninfo *var, const void *par,
-		      struct fb_info *info);
-    void (*get_par)(void *par, struct fb_info *info);
-    void (*set_par)(const void *par, struct fb_info *info);
-    int (*pan_display)(const struct fb_var_screeninfo *var,
-		       struct fb_info *info);
-    void (*set_disp)(const void *par, struct display *disp,
-		     struct fb_info *info);
-};
-
-struct fbgen_par {
-    u_int parsize;
-    struct fbgen_hwswitch *fbhw;
-    void *par;
-};
 
     /*
      *  `Generic' versions of the frame buffer device operations
