@@ -145,7 +145,19 @@ static int evdev_open(struct inode * inode, struct file * file)
 
 static ssize_t evdev_write(struct file * file, const char * buffer, size_t count, loff_t *ppos)
 {
-	return -EINVAL;
+	struct evdev_list *list = file->private_data;
+	struct input_event event;
+	int retval = 0;
+
+	while (retval < count) {
+
+		if (copy_from_user(&event, buffer + retval, sizeof(struct input_event)))
+			return -EFAULT;
+		input_event(list->dev, event.type, event.code, event.data);
+		retval += sizeof(struct input_event);
+	}
+
+	return retval;
 }
 
 static ssize_t evdev_read(struct file * file, char * buffer, size_t count, loff_t *ppos)
