@@ -61,7 +61,7 @@ static unsigned char hid_keyboard[256] = {
 static struct {
 	__s32 x;
 	__s32 y;
-}  hid_hat_to_axis[] = {{ 0,-1}, { 1,-1}, { 1, 0}, { 1, 1}, { 0, 1}, {-1, 1}, {-1, 0}, {-1,-1}, { 0, 0}};
+}  hid_hat_to_axis[] = {{0, 0}, { 0,-1}, { 1,-1}, { 1, 0}, { 1, 1}, { 0, 1}, {-1, 1}, {-1, 0}, {-1,-1}};
 
 static void hidinput_configure_usage(struct hid_device *device, struct hid_field *field, struct hid_usage *usage)
 {
