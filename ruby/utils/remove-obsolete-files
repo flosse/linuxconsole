@@ -1,18 +1,7 @@
 #!/bin/sh
 
 rm -fv arch/m68k/hp300/hp300map.map
-rm -fv arch/mips/jazz/kbd-jazz.c
-rm -fv arch/mips/lib/kbd-no.c
-rm -fv arch/mips/lib/kbd-std.c
-rm -fv arch/mips64/lib/kbd-no.c
-rm -fv arch/mips64/lib/kbd-std.c
-rm -fv drivers/acorn/char/keyb_arc.c
-rm -fv drivers/acorn/char/mouse_ps2.c
-rm -rf drivers/acorn/char/defkeymap-acorn.c
-rm -rf drivers/acorn/char/defkeymap-acorn.map
 rm -rf drivers/acorn/char/defkeymap-l7200.c
-rm -fv drivers/char/busmouse.c
-rm -fv drivers/char/busmouse.h
 rm -fv drivers/char/ec3104_keyb.c
 rm -fv drivers/tc/lk201.c
 rm -fv drivers/tc/lk201-remap.c
@@ -21,7 +10,4 @@ rm -fv include/asm-m68k/adb_mouse.h
 rm -fv include/asm-m68k/atari_joystick.h
 rm -fv include/asm-m68k/mac_mouse.h
 rm -fv include/asm-m68k/atarikb.h
-rm -fv include/linux/adb_mouse.h
-rm -fv include/linux/kbd_ll.h
-rm -fv include/linux/pc_keyb.h
 rm -fv include/linux/console_struct.h
