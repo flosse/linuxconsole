@@ -310,7 +310,10 @@ static int hid_parser_global(struct hid_parser *parser, struct hid_item *item)
 			return 0;
 
 		case HID_GLOBAL_ITEM_TAG_LOGICAL_MAXIMUM:
-			parser->global.logical_maximum = item_sdata(item);
+			if (parser->global.logical_minimum < 0)
+				parser->global.logical_maximum = item_sdata(item);
+			else
+				parser->global.logical_maximum = item_udata(item);
 			return 0;
 
 		case HID_GLOBAL_ITEM_TAG_PHYSICAL_MINIMUM:
@@ -824,15 +827,18 @@ static int hid_input_report(int type, struct urb *urb)
 		len--;
 	}
 
-	if (!(report = report_enum->report_id_hash[n])) {
-		dbg("undefined report_id %d received", n);
-#ifdef DEBUG
-			printk(KERN_DEBUG __FILE__ ": report (size %u) = ", len);
-			for (n = 0; n < len; n++)
-				printk(" %02x", data[n]);
-			printk("\n");
+#ifdef DEBUG_DATA
+	{
+		int i;
+		printk(KERN_DEBUG __FILE__ ": report %d (size %u) = ", n, len);
+		for (i = 0; i < n; i++)
+			printk(" %02x", data[i]);
+		printk("\n");
+	}
 #endif
 
+	if (!(report = report_enum->report_id_hash[n])) {
+		dbg("undefined report_id %d received", n);
 		return -1;
 	}
 
