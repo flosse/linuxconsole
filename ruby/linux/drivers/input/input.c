@@ -784,8 +784,12 @@ static int input_handlers_read(char *buf, char **start, off_t pos, int count, in
 
 	while (handler) {
 
-		len = sprintf(buf, "N: Number=%d Minor=%d Name=%s\n",
-			i++, handler->minor, handler->name);
+		if (handler->fops)
+			len = sprintf(buf, "N: Number=%d Name=%s Minor=%d\n",
+				i++, handler->name, handler->minor);
+		else
+			len = sprintf(buf, "N: Number=%d Name=%s\n",
+				i++, handler->name);
 
 		at += len;
 
