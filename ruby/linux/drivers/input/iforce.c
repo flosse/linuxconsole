@@ -139,7 +139,6 @@ struct iforce {
 					/* Force Feedback */
 	wait_queue_head_t wait;
 	struct resource device_memory;  
-	int n_effects_max;
 	struct iforce_core_effect core_effects[FF_EFFECTS_MAX];
 };
 
@@ -746,7 +745,7 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 	for (id=0; id < FF_EFFECTS_MAX; ++id)
 		if (!test_bit(FF_CORE_IS_USED, iforce->core_effects[id].flags)) break;
 
-	if ( id == FF_EFFECTS_MAX || id >= iforce->n_effects_max)
+	if ( id == FF_EFFECTS_MAX || id >= iforce->dev.ff_effects_max)
 		return -ENOMEM;
 
 	effect->id = id;
@@ -849,7 +848,7 @@ static int iforce_init_device(struct iforce *iforce)
 	int i;
 
 	init_waitqueue_head(&iforce->wait);
-	iforce->n_effects_max = 10;
+	iforce->dev.ff_effects_max = 10;
 
 /*
  * Input device fields.
@@ -903,7 +902,7 @@ static int iforce_init_device(struct iforce *iforce)
 	if (!get_id_packet(iforce, "B"))
 		iforce->device_memory.end = (iforce->edata[2] << 8) | iforce->edata[1];
 	if (!get_id_packet(iforce, "N"))
-		iforce->n_effects_max = iforce->edata[1];
+		iforce->dev.ff_effects_max = iforce->edata[1];
 
 /*
  * Display additional info.
@@ -973,9 +972,6 @@ static int iforce_init_device(struct iforce *iforce)
 
 	/* Supported effects: Hopefully all I-Force devices support these */
 	iforce->dev.ffbit[0] |= BIT(FF_PERIODIC) | BIT(FF_CONSTANT) | BIT(FF_SPRING) | BIT(FF_FRICTION);
-
-	/* Number of effects that can be played at the same time */
-	iforce->dev.ffbit[0] |= iforce->n_effects_max<<FF_N_EFFECTS_0;
 
 /*
  * Register input device.
@@ -1047,7 +1043,7 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	}
 
 	printk(KERN_INFO "input%d: %s [%d effects, %ld bytes memory] on usb%d:%d.%d\n",
-		 iforce->dev.number, iforce->dev.name, iforce->n_effects_max,
+		 iforce->dev.number, iforce->dev.name, iforce->dev.ff_effects_max,
 		iforce->device_memory.end, dev->bus->busnum, dev->devnum, ifnum);
 
 	return iforce;
@@ -1154,7 +1150,7 @@ static void iforce_serio_connect(struct serio *serio, struct serio_dev *dev)
 	}
 
 	printk(KERN_INFO "input%d: %s [%d effects, %ld bytes memory] on serio%d\n",
-		iforce->dev.number, iforce->dev.name, iforce->n_effects_max,
+		iforce->dev.number, iforce->dev.name, iforce->dev.ff_effects_max,
 		iforce->device_memory.end, serio->number);
 }
 
