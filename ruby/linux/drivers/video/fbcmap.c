@@ -115,13 +115,12 @@ int fb_alloc_cmap(struct fb_cmap *cmap, int len, int transp)
     return 0;
 }
 
-
 /**
- * 	fb_dealloc_cmap - deallocate a colormap
- * 	@cmap: frame buffer colormap structure
- * 	
- * 	Deallocates a colormap that was previously allocated with
- * 	fb_alloc_cmap().
+ *      fb_dealloc_cmap - deallocate a colormap
+ *      @cmap: frame buffer colormap structure
+ *
+ *      Deallocates a colormap that was previously allocated with
+ *      fb_alloc_cmap().
  *
  */
 
@@ -139,7 +138,6 @@ void fb_dealloc_cmap(struct fb_cmap *cmap)
 	cmap->red = cmap->green = cmap->blue = cmap->transp = NULL;
 	cmap->len = 0;
 }
-
 
 /**
  *	fb_copy_cmap - copy a colormap
@@ -196,58 +194,6 @@ void fb_copy_cmap(struct fb_cmap *from, struct fb_cmap *to, int fsfromto)
 	break;
     }
 }
-
-
-/**
- *	fb_get_cmap - get a colormap
- *	@cmap: frame buffer colormap
- *	@kspc: boolean, 0 copy local, 1 put_user() function
- *	@getcolreg: pointer to a function to get a color register
- *	@info: frame buffer info structure
- *
- *	Get a colormap @cmap for a screen of device @info.
- *
- *	Returns negative errno on error, or zero on success.
- *
- */
-
-int fb_get_cmap(struct fb_cmap *cmap, int kspc, struct fb_info *info)
-{
-    u16 *red, *green, *blue, *transp;
-    int i, start;	
-
-    red = cmap->red;
-    green = cmap->green;
-    blue = cmap->blue;
-    transp = cmap->transp;
-    start = cmap->start;
-    if (start < 0)
-	return -EINVAL;
-    for (i = 0; i < cmap->len; i++) {
-	if (!&info->cmap)
-	    return 0;
-	if (kspc) {
-	    *red = info->cmap.red[i];
-	    *green = info->cmap.green[i];
-	    *blue = info->cmap.blue[i];
-	    if (transp)
-		*transp = info->cmap.transp[i];
-	} else {
-	    put_user(info->cmap.red[i], red);
-	    put_user(info->cmap.green[i], green);
-	    put_user(info->cmap.blue[i], blue);
-	    if (transp)
-		put_user(info->cmap.transp[i], transp);
-	}
-	red++;
-	green++;
-	blue++;
-	if (transp)
-	    transp++;
-    }
-    return 0;
-}
-
 
 /**
  *	fb_set_cmap - set the colormap
@@ -366,7 +312,6 @@ void fb_invert_cmaps(void)
 EXPORT_SYMBOL(fb_alloc_cmap);
 EXPORT_SYMBOL(fb_dealloc_cmap);
 EXPORT_SYMBOL(fb_copy_cmap);
-EXPORT_SYMBOL(fb_get_cmap);
 EXPORT_SYMBOL(fb_set_cmap);
 EXPORT_SYMBOL(fb_default_cmap);
 EXPORT_SYMBOL(fb_invert_cmaps);
