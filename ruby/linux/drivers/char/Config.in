@@ -6,7 +6,6 @@ comment 'Character devices'
 
 bool 'Virtual terminal' CONFIG_VT
 if [ "$CONFIG_VT" = "y" ]; then
-   define_bool CONFIG_VT_EXTENDED y
    define_bool CONFIG_INPUT y
    bool '  Support for console on virtual terminal' CONFIG_VT_CONSOLE
 #  if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then

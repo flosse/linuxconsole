@@ -148,7 +148,6 @@ inline void vte_bs(struct vc_data *vc)
         }
 }
 
-#ifdef CONFIG_VT_EXTENDED
 /*
  * CURSOR LINE TABULATION (CVT)
  *
@@ -200,7 +199,6 @@ static void vte_cht(struct vc_data *vc, int vpar)
         	pos += (x << 1);
         }
 }
-#endif /* CONFIG_VT_EXTENDED */
 
 /*
  * ERASE IN PAGE (ED)
@@ -312,9 +310,7 @@ static void vte_sgr(struct vc_data *vc)
                                 underline = 1;
                                 break;
                         case 5: /* slowly blinking (< 2.5 Hz) */
-#ifdef CONFIG_VT_EXTENDED
                         case 6: /* rapidly blinking (>= 2.5 Hz) */
-#endif /* CONFIG_VT_EXTENDED */
                                 blink = 1;
                                 break;
                         case 7: /* negative image */
@@ -336,9 +332,7 @@ static void vte_sgr(struct vc_data *vc)
                                 disp_ctrl = 1;
                                 toggle_meta = 1;
                                 break;
-#if 1 /* ndef CONFIG_VT_EXTENDED */
                         case 21:        /* normal intensity */
-#endif /* CONFIG_VT_EXTENDED */
                         case 22:        /* normal intensity */
                                 intensity = 1;
                                 break;
@@ -374,7 +368,6 @@ static void vte_sgr(struct vc_data *vc)
         update_attr(vc);
 }
 
-#ifdef CONFIG_VT_EXTENDED
 /*
  * Fake a DEC DSR for non-implemented features
  */
@@ -386,7 +379,6 @@ static void vte_fake_dec_dsr(struct tty_struct *tty, char *reply)
         sprintf(buf, "%s?%sn", __VTE_CSI, reply);
         respond_string(buf, tty);
 }
-#endif /* CONFIG_VT_EXTENDED */
 
 /*
  * CURSOR POSITION REPORT (CPR)
@@ -397,7 +389,6 @@ static void vte_cpr(struct tty_struct *tty, int ext)
         struct vc_data *vc = (struct vc_data *) tty->driver_data;
         char buf[40];
 
-#ifdef CONFIG_VT_EXTENDED
         if (ext) {
                 /*
                  * NOTE:  Since we do not (yet?) implement any form of page
@@ -410,10 +401,6 @@ static void vte_cpr(struct tty_struct *tty, int ext)
                                 y + (decom ? top + 1 : 1), x+1);
         }
         respond_string(buf, tty);
-#else   /* ndef CONFIG_VT_EXTENDED */
-        sprintf(buf, "\033[%d;%dR", y + (decom ? top + 1 : 1), x+1);
-        respond_string(buf, tty);
-#endif  /* ndef CONFIG_VT_EXTENDED */
 }
 
 /*
@@ -421,15 +408,11 @@ static void vte_cpr(struct tty_struct *tty, int ext)
  */
 static inline void vte_dsr(struct tty_struct * tty)
 {
-#ifdef CONFIG_VT_EXTENDED
         struct vc_data *vc = (struct vc_data *) tty->driver_data;
         char buf[40];
 
         sprintf(buf, "%s0n", __VTE_CSI);
         respond_string(buf, tty);
-#else /* ndef CONFIG_VT_EXTENDED */
-        respond_string("\033[0n", tty); /* Terminal ok */
-#endif
 }
 
 /*
@@ -445,23 +428,13 @@ static inline void vte_answerback(struct tty_struct *tty)
  */
 static inline void vte_da(struct tty_struct *tty)
 {
-#ifdef CONFIG_VT_EXTENDED
         struct vc_data *vc = (struct vc_data *) tty->driver_data;
         char buf[40];
 
         /* We claim VT220 compatibility... */
         sprintf(buf, "%s?62;1;2;6;7;8;9c", __VTE_CSI);
         respond_string(buf, tty);
-
-#else /* ! CONFIG_VT_EXTENDED */
-
-        /* We are a VT102 */
-        respond_string("\033[?6c", tty);
-
-#endif /* ! CONFIG_VT_EXTENDED */
 }
-
-#ifdef CONFIG_VT_EXTENDED
 
 #define VTE_VERSION        211
 /*
@@ -506,7 +479,6 @@ static void vte_decreptparm(struct tty_struct *tty)
         sprintf(buf, "\033[%d;1;1;120;120;1;0x", par[0] + 2);
         respond_string(buf, tty);
 }
-#endif /* CONFIG_VT_EXTENDED */
 
 /*
  * SM - SET MODE /
@@ -565,7 +537,6 @@ static void set_mode(struct vc_data *vc, int on_off)
                         case 25:        /* DECTCEM - Text cursor enable mode */
                                 dectcem = on_off;
                                 break;
-#ifdef CONFIG_VT_EXTENDED
                         case 42: /* DECNCRS - National character set replacement mode */
                                 break;
                         case 60: /* DECHCCM - Horizontal cursor coupling mode */                                break;
@@ -591,7 +562,6 @@ static void set_mode(struct vc_data *vc, int on_off)
                                 break;
                         case 81:        /* DECKPM - Keyboard position mode */
                                 break;
-#endif /* def CONFIG_VT_EXTENDED */
                         case 1000:
                                 report_mouse = on_off ? 2 : 0;
                                 break;
@@ -611,7 +581,6 @@ static void set_mode(struct vc_data *vc, int on_off)
                 }
 }
 
-#ifdef CONFIG_VT_EXTENDED
 /*
  * DECCIR - Cursor information report
  */
@@ -799,7 +768,6 @@ void vte_dectsr(struct tty_struct *tty)
 {
         /* not yet implemented */
 }
-#endif /* def CONFIG_VT_EXTENDED */
 
 static void setterm_command(struct vc_data *vc)
 {
@@ -928,10 +896,8 @@ void vte_decsc(struct vc_data *vc)
         s_color         = color;
         saved_G0        = G0_charset;
         saved_G1        = G1_charset;
-#ifdef CONFIG_VT_EXTENDED
         saved_G2        = G2_charset;
         saved_G3        = G3_charset;
-#endif /* def CONFIG_VT_EXTENDED */
 }
 
 /*
@@ -948,10 +914,8 @@ static void vte_decrc(struct vc_data *vc)
         color           = s_color;
         G0_charset      = saved_G0;
         G1_charset      = saved_G1;
-#ifdef CONFIG_VT_EXTENDED
         G2_charset      = saved_G2;
         G3_charset      = saved_G3;
-#endif /* ndef CONFIG_VT_EXTENDED */
         set_translate(vc, charset ? G1_charset : G0_charset);
         update_attr(vc);
         need_wrap = 0;
@@ -993,9 +957,7 @@ void vte_ris(struct vc_data *vc, int do_clear)
         disp_ctrl       = 0;
         toggle_meta     = 0;
 
-#ifdef CONFIG_VT_EXTENDED
         c8bit           = 0;    /* disable 8-bit controls */
-#endif
         decckm          = 0;    /* cursor key sequences */
         decsclm         = 0;    /* jump scroll */
         decscnm         = 0;    /* normal screen */
@@ -1182,8 +1144,8 @@ void terminal_emulation(struct tty_struct *tty, int c)
                  */
                 return;
         }
-#ifdef CONFIG_VT_EXTENDED
-        if (c8bit == 1)
+        
+	if (c8bit == 1)
                 /*
                  * C1 control functions (8-bit mode).
                  */
@@ -1252,18 +1214,15 @@ void terminal_emulation(struct tty_struct *tty, int c)
                 case 0x9f:      /* APC - Application program command */
                         return;
         }
-#endif /* CONFIG_VT_EXTENDED */
 
         switch(vc_state) {
         case ESesc:
                 vc_state = ESinit;
                 switch (c) {
 
-#ifdef CONFIG_VT_EXTENDED
                 case ' ':       /* ACS - Announce code structure */
                         vc_state = ESacs;
                         return;
-#endif /* CONFIG_VT_EXTENDED */
                 case '#':       /* SCF - Single control functions */
                         vc_state = ESscf;
                         return;
@@ -1281,7 +1240,6 @@ void terminal_emulation(struct tty_struct *tty, int c)
                 case ')':       /* G1D4 - G1-designate 94-set */
                         vc_state = ESg1d4;
                         return;
-#ifdef CONFIG_VT_EXTENDED
 #if 0
                 case '*':       /* G2D4 - G2-designate 94-set */
                         vc_state = ESg2d4;
@@ -1299,24 +1257,18 @@ void terminal_emulation(struct tty_struct *tty, int c)
                         vc_state = ESg3d6;
                         return;
 #endif
-#endif /* def CONFIG_VT_EXTENDED */
-
                         /* ===== Private control functions ===== */
 
-#ifdef CONFIG_VT_EXTENDED
                 case '6':       /* DECBI - Back index */
                         return;
-#endif /* def CONFIG_VT_EXTENDED */
                 case '7':       /* DECSC - Save cursor */
                         vte_decsc(vc);
                         return;
                 case '8':       /* DECRC - Restore cursor */
                         vte_decrc(vc);
                         return;
-#ifdef CONFIG_VT_EXTENDED
                 case '9':       /* DECFI - Forward index */
                         return;
-#endif /* def CONFIG_VT_EXTENDED */
                 case '=':       /* DECKPAM - Keypad application mode */
                         decnkm = 1;
                         set_vc_kbd_mode(&vc->kbd_table, VC_APPLIC);
@@ -1354,7 +1306,6 @@ void terminal_emulation(struct tty_struct *tty, int c)
                 case 'M': /* RI - Reverse line feed */
                         vte_ri(vc);
                         return;
-#ifdef CONFIG_VT_EXTENDED
                 case 'N': /* SS2 - Single shift 2 */
                         shift = 1;
                         GS_charset = G2_charset; /* G2 -> GS */
@@ -1363,7 +1314,6 @@ void terminal_emulation(struct tty_struct *tty, int c)
                         shift = 1;
                         GS_charset = G3_charset;
                         return;
-#endif /* def VTE_STRICT_ISO */
                 case 'P': /* DCS - Device control string */
                         return;
                 case 'Q': /* PU1 - Private use 1 */
@@ -1395,19 +1345,15 @@ void terminal_emulation(struct tty_struct *tty, int c)
                         return;
 
                         /* ===== Single control functions ===== */
-
-#ifdef CONFIG_VT_EXTENDED
                 case '`':       /* DMI - Disable manual input */
                         kam = 0;
                         return;
                 case 'b':       /* EMI - Enable manual input */
                         kam = 1;
                         return;
-#endif /* def CONFIG_VT_EXTENDED */
                 case 'c':       /* RIS - Reset ti initial state */
                         vte_ris(vc, 1);
                         return;
-#ifdef CONFIG_VT_EXTENDED
                 case 'd':       /* CMD - Coding Method Delimiter */
                         return;
 #if 0
@@ -1427,10 +1373,8 @@ void terminal_emulation(struct tty_struct *tty, int c)
                         GR_charset = G1_charset; /* G1 -> GR */
                         return;
 #endif
-#endif /* def CONFIG_VT_EXTENDED */
                 }
                 return;
-#ifdef CONFIG_VT_EXTENDED
         case ESacs:
                 vc_state = ESinit;
                 switch (c) {
@@ -1449,7 +1393,6 @@ void terminal_emulation(struct tty_struct *tty, int c)
                         return;
                 }
                 return;
-#endif /* def CONFIG_VT_EXTENDED */
         case ESosc:
                 vc_state = ESinit;
                 switch (c) {
@@ -1519,7 +1462,6 @@ void terminal_emulation(struct tty_struct *tty, int c)
                  * Process control functions  with private parameter flag.
                  */
                 switch(c) {
-#ifdef CONFIG_VT_EXTENDED
                 case '$':
                         if (priv4) {
                                 vc_state = EScsi_dollar;
@@ -1538,7 +1480,6 @@ void terminal_emulation(struct tty_struct *tty, int c)
                                 return;
                         }
                         break;
-#endif /* def CONFIG_VT_EXTENDED */
                 case 'h':       /* SM - Set Mode */
                         set_mode(vc, 1);
                         return;
@@ -1579,7 +1520,6 @@ void terminal_emulation(struct tty_struct *tty, int c)
                         }
                         break;
                 case 'n':
-#ifdef CONFIG_VT_EXTENDED
                         if (priv4) {
                                 switch (par[0]) {
                                 case 6: /* DECXCPR - Extended CPR */
@@ -1607,7 +1547,6 @@ void terminal_emulation(struct tty_struct *tty, int c)
                                         break;
                                 }
                         } else
-#endif /* CONFIG_VT_EXTENDED */
                                 switch (par[0]) {
                                 case 5: /* DSR - Device status report */
                                         vte_dsr(tty);
@@ -1632,7 +1571,6 @@ void terminal_emulation(struct tty_struct *tty, int c)
                 switch(c) {
 
                         /* ===== Control functions w/ intermediate byte ===== */
-#ifdef CONFIG_VT_EXTENDED
                 case ' ':       /* Intermediate byte: SP (ISO 6429) */
                         vc_state = EScsi_space;
                         return;
@@ -1654,16 +1592,12 @@ void terminal_emulation(struct tty_struct *tty, int c)
                 case '+':       /* Intermediate byte: + (DEC VT series) */
                         vc_state = EScsi_plus;
                         return;
-#endif /* def CONFIG_VT_EXTENDED */
-
                         /* ==== Control functions w/o intermediate byte ==== */
                 case '@':       /* ICH - Insert character */
                         vte_ich(vc, par[0]);
                         return;
                 case 'A':       /* CUU - Cursor up */
-#ifdef CONFIG_VT_EXTENDED
                 case 'k':       /* VPB - Line position backward */
-#endif /* def CONFIG_VT_EXTENDED */
                         if (!par[0]) par[0]++;
                         gotoxy(vc, x, y-par[0]);
                         return;
@@ -1678,9 +1612,7 @@ void terminal_emulation(struct tty_struct *tty, int c)
                         gotoxy(vc, x+par[0], y);
                         return;
                 case 'D':       /* CUB - Cursor left */
-#ifdef CONFIG_VT_EXTENDED
                 case 'j':       /* HPB - Character position backward */
-#endif /* def CONFIG_VT_EXTENDED */
                         if (!par[0]) par[0]++;
                         gotoxy(vc, x-par[0], y);
                         return;
@@ -1703,13 +1635,11 @@ void terminal_emulation(struct tty_struct *tty, int c)
                         if (par[1]) par[1]--;
                         gotoxay(vc, par[1], par[0]);
                         return;
-#ifdef CONFIG_VT_EXTENDED
                 case 'I':       /* CHT - Cursor forward tabulation */
                         if (!par[0])
                                 par[0]++;
                         vte_cht(vc, par[0]);
                         return;
-#endif /* def CONFIG_VT_EXTENDED */
                 case 'J':       /* ED - Erase in page */
                         vte_ed(vc, par[0]);
                         return;
@@ -1725,7 +1655,6 @@ void terminal_emulation(struct tty_struct *tty, int c)
                 case 'P':       /* DCH - Delete character */
                         vte_dch(vc, par[0]);
                         return;
-#ifdef CONFIG_VT_EXTENDED
                 case 'U':       /* NP - Next page */
                 case 'V':       /* PP - Preceeding page */
                         return;
@@ -1740,11 +1669,9 @@ void terminal_emulation(struct tty_struct *tty, int c)
                                 return;
                         }
                         return;
-#endif /* def CONFIG_VT_EXTENDED */
                 case 'X':       /* ECH - Erase character */
                         vte_ech(vc, par[0]);
                         return;
-#ifdef CONFIG_VT_EXTENDED
                 case 'Y':       /* CVT - Cursor line tabulation */
                         if (!par[0])
                                 par[0]++;
@@ -1753,7 +1680,6 @@ void terminal_emulation(struct tty_struct *tty, int c)
                 case 'Z':       /* CBT - Cursor backward tabulation */
                         vte_cbt(vc, par[0]);
                         return;
-#endif /* def CONFIG_VT_EXTENDED */
                 case ']':
 #ifndef VT_STRICT_ISO
                         setterm_command(vc);
@@ -1800,14 +1726,6 @@ void terminal_emulation(struct tty_struct *tty, int c)
                                 gotoxay(vc, 0, 0);
                         }
                         return;
-#ifndef CONFIG_VT_EXTENDED
-                case 's':       /* DECSC - Save cursor */
-                        vte_decsc(vc);
-                        return;
-                case 'u':       /* DECRC - Restore cursor */
-                        vte_decrc(vc);
-                        return;
-#else
                 case 's':       /* DECSLRM - Set left and right margin */
                         return;
                 case 't':       /* DECSLPP - Set lines per page */
@@ -1820,10 +1738,8 @@ void terminal_emulation(struct tty_struct *tty, int c)
                                 /* DECTST - Invoke confidence test */
                                 return;
                         }
-#endif /* CONFIG_VT_EXTENDED */
                 }
                 return;
-#ifdef CONFIG_VT_EXTENDED
         case EScsi_space:
                 vc_state = ESinit;
                 switch (c) {
@@ -1947,7 +1863,6 @@ attribute */
                                 return;
                 }
                 return;
-#endif /* CONFIG_VT_EXTENDED */
         case ESdocs:
                 vc_state = ESinit;
                 switch (c) {
@@ -2039,7 +1954,6 @@ attribute */
                         set_translate(vc, G1_charset);
                 vc_state = ESinit;
                 return;
-#ifdef CONFIG_VT_EXTENDED
         case ESg2d4:
                 switch (c) {
                 case '0':       /* DEC Special graphics */
@@ -2094,7 +2008,6 @@ attribute */
                         set_translate(vc, G3_charset);
                 vc_state = ESinit;
                 return;
-#endif /* CONFIG_VT_EXTENDED */
         default:
                 vc_state = ESinit;
         }
