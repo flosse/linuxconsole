@@ -1579,13 +1579,14 @@ int __init vty_init(void)
 #endif
 	kbd_init();
 	console_map_init();
-
+	
+	memset(&vty_driver, 0, sizeof(struct tty_driver));
+	
         vty_driver.refcount = &vty_refcount;
         vty_driver.table = vty_table;
         vty_driver.termios = vty_termios;
         vty_driver.termios_locked = vty_termios_locked;
 	
-	memset(&vty_driver, 0, sizeof(struct tty_driver));
 	vty_driver.magic = TTY_DRIVER_MAGIC;
         vty_driver.name = "vc/%d";
         vty_driver.name_base = 0; //current_vc;
