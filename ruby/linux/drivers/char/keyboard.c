@@ -1090,8 +1090,10 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 			handle->private = vt;
 			vt_map_input(vt);
 			/* enable receieving key events for each VC */
-			for (i = 0; i < MAX_NR_USER_CONSOLES; i++)
-				vt->vc_cons[i]->vc_kam = 1;
+			for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
+				vc = find_vc(vt->first_vc + i);
+				if (vc)	vc->vc_kam = 1;	 
+			}
 			break;
 		} else 
 			vt = vt->next;
@@ -1114,8 +1116,10 @@ static void kbd_disconnect(struct input_handle *handle)
 
 	if (vt && vt->keyboard == handle) {
 		/* disable receieving key events for each VC */
-		for (i = 0; i < MAX_NR_USER_CONSOLES; i++)
-			vt->vc_cons[i]->vc_kam = 1;
+		for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
+			vc = find_vc(vt->first_vc + i);
+			if (vc)	vc->vc_kam = 1;	 
+		}
 		vt->keyboard = NULL;
 		handle->private = NULL;
 	}
