@@ -171,7 +171,7 @@ static struct fb_ops controlfb_ops = {
 	fb_get_fix:		control_get_fix,
 	fb_get_var:		control_get_var,
 	fb_set_var:		control_set_var,
-	fb_get_cmap:		control_get_cmap,
+	fb_get_cmap:		fbgen_get_cmap,
 	fb_set_cmap:		fbgen_set_cmap,
 	fb_setcolreg:		control_setcolreg,
 	fb_blank:		control_blank,
@@ -308,20 +308,6 @@ static int control_pan_display(struct fb_var_screeninfo *var, int con,
 	if(con == currcon)
 		out_le32(&p->control_regs->start_addr.r,
 		    par->yoffset * (par->vxres << par->cmode));
-	return 0;
-}
-
-static int control_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info)
-{
-	if (con == currcon)		/* current console? */
-		return fb_get_cmap(cmap, kspc, controlfb_getcolreg, info);
-	if (fb_display[con].cmap.len)	/* non default colormap? */
-		fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0: 2);
-	else {
-		int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
-		fb_copy_cmap(fb_default_cmap(size), cmap, kspc ? 0 : 2);
-	}
 	return 0;
 }
 
