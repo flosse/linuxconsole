@@ -12,6 +12,7 @@ rm -fv arch/mips64/lib/kbd-no.c
 rm -fv arch/mips64/lib/kbd-std.c
 rm -fv arch/parisc/kernel/keyboard.c
 rm -fv arch/parisc/kernel/lasimap.map
+rm -fv arch/ppc/boot/kbd.c
 rm -fv drivers/acorn/char/keyb_arc.c
 rm -fv drivers/acorn/char/keyb_ps2.c
 rm -fv drivers/acorn/char/mouse_rpc.c
@@ -104,6 +105,7 @@ rm -fv drivers/video/tdfxfb.c
 rm -fv include/asm-m68k/adb_mouse.h
 rm -fv include/asm-m68k/atari_joystick.h
 rm -fv include/asm-m68k/mac_mouse.h
+rm -fv include/asm/keyboard.h
 rm -fv include/linux/adb_mouse.h
 rm -fv include/linux/kbd_ll.h
 rm -fv include/linux/logibusmouse.h
