@@ -61,7 +61,7 @@ struct mousedev_list {
 	struct mousedev *mousedev;
 	struct mousedev_list *next;
 	int dx, dy, dz, oldx, oldy;
-	char ps2[6];
+	signed char ps2[6];
 	unsigned long buttons;
 	unsigned char ready, buffer, bufsiz;
 	unsigned char mode, genseq, impseq;
