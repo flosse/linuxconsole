@@ -99,6 +99,14 @@ rm -fv drivers/video/fbcon-mac.c
 rm -fv drivers/video/fbcon-mfb.c
 rm -fv drivers/video/fbcon-vga-planes.c
 rm -fv drivers/video/fbcon-vga.c
+rm -fv drivers/video/font_6x11.c
+rm -fv drivers/video/font_8x16.c
+rm -fv drivers/video/font_8x8.c
+rm -fv drivers/video/font_acorn_8x8.c
+rm -fv drivers/video/font_pearl_8x8.c
+rm -fv drivers/video/font_sun12x22.c
+rm -fv drivers/video/font_sun8x16.c
+rm -fv drivers/video/fonts.c
 rm -fv drivers/video/atyfb.c
 rm -fv drivers/video/atyfb.h
 rm -fv drivers/video/tdfxfb.c
