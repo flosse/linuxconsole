@@ -873,7 +873,7 @@ static int vgacon_scroll(struct vc_data *vc, int lines)
                scr_memsetw(VGA_ADDR(vc, 0, 0), vc->vc_video_erase_char,
                                lines*vc->vc_cols*2);
 	}
-	return 1;
+	return 0;
 }
 
 static int vgacon_set_origin(struct vc_data *vc)
