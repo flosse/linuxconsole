@@ -183,7 +183,8 @@ if [ "$CONFIG_APUS" = "y" ]; then
   define_bool CONFIG_FB_CONSOLE y
   define_bool CONFIG_AMIGA y
   define_bool CONFIG_ZORRO y
-  define_bool CONFIG_AMIGAMOUSE y
+  define_bool CONFIG_INPUT y
+  define_bool CONFIG_INPUT_AMIMOUSE y	
   define_bool CONFIG_ABSTRACT_CONSOLE y
   define_bool CONFIG_FB y
   tristate 'Amiga builtin serial support' CONFIG_AMIGA_BUILTIN_SERIAL
@@ -295,6 +296,8 @@ if [ "$CONFIG_ALL_PPC" = "y" ]; then
 fi
 endmenu
 
+source drivers/usb/Config.in
+source drivers/input/Config.in
 source drivers/char/Config.in
 source fs/Config.in
 
@@ -316,8 +319,6 @@ if [ "$CONFIG_8260" = "y" ]; then
 source arch/ppc/8260_io/Config.in
 fi
 
-source drivers/usb/Config.in
-source drivers/input/Config.in
 source drivers/video/Config.in
 source drivers/media/Config.in
 

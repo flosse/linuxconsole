@@ -192,14 +192,16 @@ if [ "$CONFIG_NET" = "y" ]; then
    endmenu
 fi
 
+source drivers/input/Config.in
+
 mainmenu_option next_comment
 comment 'Character devices'
 
-bool 'Virtual terminal' CONFIG_VT
-if [ "$CONFIG_VT" = "y" ]; then
-   bool '  Support for console on virtual terminal' CONFIG_VT_CONSOLE
-   define_bool CONFIG_VT_EXTENDED y
-   define_bool CONFIG_INPUT y	
+if [ "$CONFIG_INPUT" = "y" ]; then
+   bool 'Virtual terminal' CONFIG_VT
+   if [ "$CONFIG_VT" = "y" ]; then
+      bool '  Support for console on virtual terminal' CONFIG_VT_CONSOLE
+   fi
 fi
 
 tristate 'Serial (8250, 16450, 16550 or compatible) support' CONFIG_SERIAL
@@ -242,7 +244,6 @@ if [ "$CONFIG_SOUND" != "n" ]; then
 fi
 endmenu
 
-source drivers/input/Config.in
 source drivers/video/Config.in
 
 mainmenu_option next_comment
