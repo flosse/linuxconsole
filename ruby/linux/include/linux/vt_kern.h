@@ -251,6 +251,7 @@ struct vt_struct {
 	int blank_interval;			/* How long before blanking */
 	int off_interval;			
 	struct timer_list timer;                /* Timer for VT blanking */
+	struct pm_dev *pm_con;			/* power management */
        /* This is a temporary buffer used to prepare a tty console write
 	* so that we can easily avoid touching user space while holding the
  	* console spinlock. It is shared by with vc_screen read/write tty calls.
