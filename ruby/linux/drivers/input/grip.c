@@ -39,7 +39,8 @@
 
 #define GRIP_MODE_GPP		1
 #define GRIP_MODE_BD		2
-#define GRIP_MODE_XT		9
+#define GRIP_MODE_XT		3
+#define GRIP_MODE_DC		4
 
 #define GRIP_LENGTH_GPP		24
 #define GRIP_STROBE_GPP		200	/* 200 us */
@@ -61,17 +62,21 @@ struct grip {
 };
 
 static int grip_btn_gpp[] = { BTN_START, BTN_SELECT, BTN_TR2, BTN_Y, 0, BTN_TL2, BTN_A, BTN_B, BTN_X, 0, BTN_TL, BTN_TR, -1 };
-static int grip_btn_xt[] = { BTN_TRIGGER, BTN_TOP, BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_SELECT, BTN_START, BTN_MODE, -1 };
 static int grip_btn_bd[] = { BTN_THUMB, BTN_THUMB2, BTN_TRIGGER, BTN_TOP, BTN_BASE, -1 };
+static int grip_btn_xt[] = { BTN_TRIGGER, BTN_THUMB, BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_SELECT, BTN_START, BTN_MODE, -1 };
+static int grip_btn_dc[] = { BTN_TRIGGER, BTN_THUMB, BTN_TOP, BTN_TOP2, BTN_BASE, BTN_BASE2, BTN_BASE3, BTN_BASE4, BTN_BASE5, -1 };
 
 static int grip_abs_gpp[] = { ABS_X, ABS_Y, -1 };
-static int grip_abs_xt[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_GAS, ABS_BRAKE, ABS_HAT0X, ABS_HAT0Y, ABS_HAT1X, ABS_HAT1Y, -1 };
 static int grip_abs_bd[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, -1 };
+static int grip_abs_xt[] = { ABS_X, ABS_Y, ABS_BRAKE, ABS_GAS, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, ABS_HAT1X, ABS_HAT1Y, -1 };
+static int grip_abs_dc[] = { ABS_X, ABS_Y, ABS_RX, ABS_RY, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, -1 };
 
-static char *grip_name[] = { [1] = "Gravis GamePad Pro", [2] = "Gravis Blackhawk Digital", [9] = "Gravis Xterminator" };
-static int *grip_abs[] = { [1] = grip_abs_gpp, [2] = grip_abs_bd, [9] = grip_abs_xt };
-static int *grip_btn[] = { [1] = grip_btn_gpp, [2] = grip_btn_bd, [9] = grip_btn_xt };
-static char grip_anx[] = { [1] = 0, [2] = 3, [9] = 5 };
+static char *grip_name[] = { NULL, "Gravis GamePad Pro", "Gravis Blackhawk Digital",
+				"Gravis Xterminator Digital", "Gravis Xterminator DualControl" };
+static int *grip_abs[] = { 0, grip_abs_gpp, grip_abs_bd, grip_abs_xt, grip_abs_dc };
+static int *grip_btn[] = { 0, grip_btn_gpp, grip_btn_bd, grip_btn_xt, grip_btn_dc };
+static char grip_anx[] = { 0, 0, 3, 5, 5 };
+static char grip_cen[] = { 0, 0, 2, 2, 4 };
 
 /*
  * grip_gpp_read_packet() reads a Gravis GamePad Pro packet.
@@ -204,28 +209,7 @@ static void grip_timer(unsigned long private)
 				for (j = 0; j < 12; j++)
 					if (grip_btn_gpp[j])
 						input_report_key(dev, grip_btn_gpp[j], (*data >> j) & 1);
-				break;
 
-			case GRIP_MODE_XT:
-
-				if (grip_xt_read_packet(grip->gameport, (i << 1) + 4, data)) {
-					grip->bads++;
-					break;
-				}
-
-				input_report_abs(dev, ABS_X,        (data[0] >> 2) & 0x3f);
-				input_report_abs(dev, ABS_Y,  63 - ((data[0] >> 8) & 0x3f));
-				input_report_abs(dev, ABS_THROTTLE, (data[1] >> 2) & 0x3f);
-				input_report_abs(dev, ABS_GAS,	    (data[1] >> 8) & 0x3f);
-				input_report_abs(dev, ABS_BRAKE,    (data[2] >> 8) & 0x3f);
-
-				input_report_abs(dev, ABS_HAT0X, ((data[2] >> 1) & 1) - ( data[2]       & 1));
-				input_report_abs(dev, ABS_HAT0Y, ((data[2] >> 2) & 1) - ((data[2] >> 3) & 1));
-				input_report_abs(dev, ABS_HAT1X, ((data[2] >> 5) & 1) - ((data[2] >> 4) & 1));
-				input_report_abs(dev, ABS_HAT1Y, ((data[2] >> 6) & 1) - ((data[2] >> 7) & 1));
-
-				for (j = 0; j < 11; j++)
-					input_report_key(dev, grip_btn_xt[j], (data[3] >> (j + 3)) & 1);
 				break;
 
 			case GRIP_MODE_BD:
@@ -246,6 +230,50 @@ static void grip_timer(unsigned long private)
 					input_report_key(dev, grip_btn_bd[j], (data[3] >> (j + 4)) & 1);
 
 				break;
+
+			case GRIP_MODE_XT:
+
+				if (grip_xt_read_packet(grip->gameport, (i << 1) + 4, data)) {
+					grip->bads++;
+					break;
+				}
+
+				input_report_abs(dev, ABS_X,        (data[0] >> 2) & 0x3f);
+				input_report_abs(dev, ABS_Y,  63 - ((data[0] >> 8) & 0x3f));
+				input_report_abs(dev, ABS_BRAKE,    (data[1] >> 2) & 0x3f);
+				input_report_abs(dev, ABS_GAS,	    (data[1] >> 8) & 0x3f);
+				input_report_abs(dev, ABS_THROTTLE, (data[2] >> 8) & 0x3f);
+
+				input_report_abs(dev, ABS_HAT0X, ((data[2] >> 1) & 1) - ( data[2]       & 1));
+				input_report_abs(dev, ABS_HAT0Y, ((data[2] >> 2) & 1) - ((data[2] >> 3) & 1));
+				input_report_abs(dev, ABS_HAT1X, ((data[2] >> 5) & 1) - ((data[2] >> 4) & 1));
+				input_report_abs(dev, ABS_HAT1Y, ((data[2] >> 6) & 1) - ((data[2] >> 7) & 1));
+
+				for (j = 0; j < 11; j++)
+					input_report_key(dev, grip_btn_xt[j], (data[3] >> (j + 3)) & 1);
+				break;
+
+			case GRIP_MODE_DC:
+
+				if (grip_xt_read_packet(grip->gameport, (i << 1) + 4, data)) {
+					grip->bads++;
+					break;
+				}
+
+				input_report_abs(dev, ABS_X,        (data[0] >> 2) & 0x3f);
+				input_report_abs(dev, ABS_Y,        (data[0] >> 8) & 0x3f);
+				input_report_abs(dev, ABS_RX,       (data[1] >> 2) & 0x3f);
+				input_report_abs(dev, ABS_RY,	    (data[1] >> 8) & 0x3f);
+				input_report_abs(dev, ABS_THROTTLE, (data[2] >> 8) & 0x3f);
+
+				input_report_abs(dev, ABS_HAT0X, ((data[2] >> 1) & 1) - ( data[2]       & 1));
+				input_report_abs(dev, ABS_HAT0Y, ((data[2] >> 2) & 1) - ((data[2] >> 3) & 1));
+
+				for (j = 0; j < 9; j++)
+					input_report_key(dev, grip_btn_dc[j], (data[3] >> (j + 3)) & 1);
+				break;
+
+
 		}
 	}
 
@@ -293,17 +321,18 @@ static void grip_connect(struct gameport *gameport, struct gameport_dev *dev)
 			continue;
 		}
 		if (!grip_xt_read_packet(gameport, (i << 1) + 4, data)) {
-			grip->mode[i] = (data[3] & 7) + 2;
+			if (!(data[3] & 7)) {
+				grip->mode[i] = GRIP_MODE_BD;
+				continue;
+			}
+			if (!(data[2] & 0xf0)) {
+				grip->mode[i] = GRIP_MODE_XT;
+				continue;
+			}
+			grip->mode[i] = GRIP_MODE_DC;
 			continue;
 		}
 	}
-
-	for (i = 0; i < 2; i++) 
-		if (grip->mode[i] && !grip_name[grip->mode[i]]) {
-			printk(KERN_WARNING "grip.c: Unknown joystick ID %d on gameport%d.%d\n",
-				grip->mode[i], gameport->number, i);
-			grip->mode[i] = 0;
-		}	
 
 	if (!grip->mode[0] && !grip->mode[1])
 		goto fail2;
@@ -328,14 +357,23 @@ static void grip_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 				set_bit(t, grip->dev[i].absbit);
 
-				if (j < grip_anx[grip->mode[i]]) {
-					grip->dev[i].absmin[t] = 1;
-					grip->dev[i].absmax[t] = 62;
-					grip->dev[i].absflat[t] = 1;
-				} else {
-					grip->dev[i].absmin[t] = -1;
-					grip->dev[i].absmax[t] = 1;
+				if (j < grip_cen[grip->mode[i]]) {
+					grip->dev[i].absmin[t] = 14;
+					grip->dev[i].absmax[t] = 52;
+					grip->dev[i].absfuzz[t] = 1;
+					grip->dev[i].absflat[t] = 2;
+					continue;
 				}
+
+				if (j < grip_anx[grip->mode[i]]) {
+					grip->dev[i].absmin[t] = 3;
+					grip->dev[i].absmax[t] = 57;
+					grip->dev[i].absfuzz[t] = 1;
+					continue;
+				}
+
+				grip->dev[i].absmin[t] = -1;
+				grip->dev[i].absmax[t] = 1;
 			}
 
 			for (j = 0; (t = grip_btn[grip->mode[i]][j]) >= 0; j++)
