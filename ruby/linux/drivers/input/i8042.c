@@ -403,11 +403,12 @@ static int __init i8042_controller_init(void)
 /*
  * Check the i/o region before we touch it.
  */
-
+#ifndef __i386__	
 	if (check_region(I8042_DATA_REG, 16)) {
 		printk(KERN_ERR "i8042.c: %#x port already in use!\n", I8042_DATA_REG);
 		return -1;
 	}
+#endif
 
 /*
  * Test the i8042. We need to know if it thinks it's working correctly
@@ -658,7 +659,13 @@ int __init i8042_init(void)
 	if (!i8042_noaux && !i8042_check_aux(&i8042_aux_values, &i8042_aux_port))
 		i8042_port_register(&i8042_aux_values, &i8042_aux_port);
 
+/* 
+ * On ix86 platforms touching the i8042 data register region can do really
+ * bad things. Because of this the region is always reserved on ix86 boxes.  
+ */
+#ifndef __i386__
 	request_region(I8042_DATA_REG, 16, "i8042");
+#endif
 	register_reboot_notifier(&i8042_notifier);
 	return 0;
 }
@@ -674,7 +681,9 @@ void __exit i8042_exit(void)
 		serio_unregister_port(&i8042_aux_port);
 
 	i8042_controller_cleanup();
+#ifndef __i386__
 	release_region(I8042_DATA_REG, 16);
+#endif
 }
 
 module_init(i8042_init);
