@@ -24,27 +24,6 @@
 
 struct display;
  
-struct display_switch {                                                
-    void (*setup)(struct display *p);
-    void (*bmove)(struct display *p, int sy, int sx, int dy, int dx,
-		  int height, int width);
-    /* for clear, conp may be NULL, which means use a blanking (black) color */
-    void (*clear)(struct vc_data *conp, struct display *p, int sy, int sx,
-		  int height, int width);
-    void (*putc)(struct vc_data *conp, struct display *p, int c, int yy,
-    		 int xx);
-    void (*putcs)(struct vc_data *conp, struct display *p, const unsigned short *s,
-		  int count, int yy, int xx);     
-    void (*revc)(struct display *p, int xx, int yy);
-    void (*cursor)(struct display *p, int mode, int xx, int yy);
-    int  (*set_font)(struct display *p, int width, int height);
-    void (*clear_margins)(struct vc_data *conp, struct display *p,
-			  int bottom_only);
-    unsigned int fontwidthmask;      /* 1 at (1 << (width - 1)) if width is supported */
-}; 
-
-extern struct display_switch fbcon_dummy;
-
    /*
     *    This is the interface between the low-level console driver and the
     *    low-level frame buffer device
@@ -54,17 +33,8 @@ struct display {
     /* Filled in by the frame buffer device */
     struct fb_var_screeninfo var;   /* variable infos. yoffset and vmode */
                                     /* are updated by fbcon.c */
-    char *screen_base;              /* pointer to top of virtual screen */    
-                                    /* (virtual address) */
-    int visual;
-    int type;                       /* see FB_TYPE_* */
-    int type_aux;                   /* Interleave for interleaved Planes */
-    u_short ypanstep;               /* zero if no hardware ypan */
-    u_short ywrapstep;              /* zero if no hardware ywrap */
-    u_long line_length;             /* length of a line in bytes */
     u_short can_soft_blank;         /* zero if no hardware blanking */
     u_short inverse;                /* != 0 text black on white as default */
-    struct display_switch *dispsw;  /* low level operations */
     void *dispsw_data;              /* optional dispsw helper data */
 
 #if 0
@@ -81,16 +51,10 @@ struct display {
     int bgcol;
     u_long next_line;               /* offset to one line below */
     u_long next_plane;              /* offset to next plane */
-    u_char *fontdata;               /* Font associated to this display */
-    unsigned short _fontheightlog;
-    unsigned short _fontwidthlog;
-    unsigned short _fontheight;
-    unsigned short _fontwidth;
     int userfont;                   /* != 0 if fontdata kmalloc()ed */
     u_short scrollmode;             /* Scroll Method */
     short yscroll;                  /* Hardware scrolling */
     unsigned char fgshift, bgshift;
-    unsigned short charmask;        /* 0xff or 0x1ff */
 };
 
     /*
@@ -100,15 +64,6 @@ struct display {
 struct fbvt_data {
 	/* frame buffer for this VT */
         struct fb_info *fb_info; 
-	/* Software scrollback */
-        int fbcon_softback_size;
-        unsigned long softback_buf, softback_curr;
-        unsigned long softback_in;
-        unsigned long softback_top, softback_end;
-        int softback_lines;
-        int scrollback_phys_max;
-        int scrollback_max;
-        int scrollback_current;
 	/* Cursor data */
         int cursor_drawn;
 	int vbl_cursor_cnt;
@@ -153,8 +108,8 @@ struct fbvt_data {
 	(((s) >> ((p)->fgshift)) & 0x0f)
 #define attr_bgcol(p,s)    \
 	(((s) >> ((p)->bgshift)) & 0x0f)
-#define	attr_bgcol_ec(p,conp) \
-	((conp) ? (((conp)->vc_video_erase_char >> ((p)->bgshift)) & 0x0f) : 0)
+#define	attr_bgcol_ec(p, vc) \
+	((vc) ? (((vc)->vc_video_erase_char >> ((p)->bgshift)) & 0x0f) : 0)
 
 /* Monochrome */
 #define attr_bold(p,s) \
@@ -204,44 +159,6 @@ struct fbvt_data {
  */
 /* Namespace consistency */
 #define SCROLL_YNOPARTIAL	__SCROLL_YNOPARTIAL
-
-
-#if defined(__sparc__)
-
-/* We map all of our framebuffers such that big-endian accesses
- * are what we want, so the following is sufficient.
- */
-
-#define fb_readb sbus_readb
-#define fb_readw sbus_readw
-#define fb_readl sbus_readl
-#define fb_writeb sbus_writeb
-#define fb_writew sbus_writew
-#define fb_writel sbus_writel
-#define fb_memset sbus_memset_io
-
-#elif defined(__i386__) || defined(__alpha__)
-
-#define fb_readb __raw_readb
-#define fb_readw __raw_readw
-#define fb_readl __raw_readl
-#define fb_writeb __raw_writeb
-#define fb_writew __raw_writew
-#define fb_writel __raw_writel
-#define fb_memset memset_io
-
-#else
-
-#define fb_readb(addr) (*(volatile u8 *) (addr))
-#define fb_readw(addr) (*(volatile u16 *) (addr))
-#define fb_readl(addr) (*(volatile u32 *) (addr))
-#define fb_writeb(b,addr) (*(volatile u8 *) (addr) = (b))
-#define fb_writew(b,addr) (*(volatile u16 *) (addr) = (b))
-#define fb_writel(b,addr) (*(volatile u32 *) (addr) = (b))
-#define fb_memset memset
-
-#endif
-
 
 extern void fbcon_redraw_clear(struct vc_data *, struct display *, int, int, int, int);
 extern void fbcon_redraw_bmove(struct vc_data *, int, int, int, int, int, int);
