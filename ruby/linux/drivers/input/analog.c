@@ -1,5 +1,5 @@
 /*
- *  analog.c  Version 2.0
+ * $Id$
  *
  *  Copyright (c) 1996-2000 Vojtech Pavlik
  *
