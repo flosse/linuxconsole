@@ -78,8 +78,8 @@ static void amikbd_interrupt(int irq, void *dummy, struct pt_regs *fp)
 	udelay(85);			/* wait until 85 us have expired */
 	ciaa.cra &= ~0x40;		/* switch CIA serial port to input mode */
 
-	scancode = scancode >> 1;	/* lowest bit is release bit */
-	down = scancode & 1;
+	down = scancode & 1;		/* lowest bit is release bit */
+	scancode = scancode >> 1;
 
 	if (scancode < 0x78) {		/* scancodes < 0x78 are keys */
 
