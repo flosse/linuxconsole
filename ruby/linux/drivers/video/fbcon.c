@@ -96,7 +96,7 @@
 #endif
 
 #include "fbcon.h"
-#include <video/font.h>
+#include "fonts/font.h"
 
 #ifdef FBCONDEBUG
 #  define DPRINTK(fmt, args...) printk(KERN_DEBUG "%s: " fmt, __FUNCTION__ , ## args)

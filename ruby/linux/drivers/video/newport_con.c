@@ -25,7 +25,7 @@
 #define INCLUDE_LINUX_LOGO_DATA
 #include <asm/linux_logo.h>
 
-#include <video/font.h>
+#include "fonts/font.h"
 
 #define LOGO_W		80
 #define LOGO_H		80
@@ -277,7 +277,7 @@ static const char * __init newport_startup(struct vt_struct *vt)
     p = npregs;
     p->cset.config = NPORT_CFG_GD0;
 
-    if(newport_wait()) {
+    if (newport_wait()) {
 	return NULL;
     }
 
@@ -410,22 +410,6 @@ static void newport_cursor(struct vc_data *vc, int mode)
     }
 }
 
-static int newport_switch(struct vc_data *vc)
-{
-    static int logo_drawn = 0;
-
-    topscan = 0;
-    npregs->cset.topscan = 0x3ff;
-
-    if (!logo_drawn) {
-	newport_show_logo();
-	logo_drawn = 1;
-	logo_active = 1;
-    }
-
-    return 1;
-}
-
 static int newport_blank(struct vc_data *c, int blank)
 {
     unsigned short treg;
@@ -445,11 +429,6 @@ static int newport_blank(struct vc_data *c, int blank)
 static int newport_font_op(struct vc_data *vc, struct console_font_op *f)
 {
     return -ENOSYS;
-}
-
-static int newport_set_palette(struct vc_data *vc, unsigned char *table)
-{
-    return -EINVAL;
 }
 
 static int newport_scrolldelta(struct vc_data *vc, int lines)
@@ -573,21 +552,15 @@ static int newport_dummy(struct vc_data *c)
 const struct consw newport_con = {
     con_startup:	newport_startup,
     con_init:		newport_init,
-    con_deinit:		DUMMY,
     con_clear:		newport_clear,
     con_putc:		newport_putc,
     con_putcs:		newport_putcs,
     con_cursor:		newport_cursor,
     con_scroll:		newport_scroll,
     con_bmove:		newport_bmove,
-    con_switch:		newport_switch,
     con_blank:		newport_blank,
     con_font_op:	newport_font_op,
-    con_resize:		DUMMY,
-    con_set_palette:	newport_set_palette,
     con_scrolldelta:	newport_scrolldelta,
-    con_set_origin:	DUMMY,
-    con_save_screen:	DUMMY,
 };
 
 int __init newport_module_init(void) 
@@ -598,18 +571,15 @@ int __init newport_module_init(void)
 
     vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
     if (!vt) return;
-    display_desc = create_vt(vt, &newport_con);
+    memset(vt, 0, sizeof(struct vt_struct));
+    vt->kmalloced = 1;
+    vt->vt_sw = &newport_con;			
+    display_desc = create_vt(vt, 1);
     if (!display_desc) {
             printk("Error loading SGI Newport Console driver\n");
 	    kfree(vt);
-            return;
+            return -ENODEV;
     }
-    i = vc_allocate(vt->vcs.first_vc);
-    if (i)  {
-            kfree(vt);
-            return;
-    }
-     
     printk("Loading SGI Newport Console Driver\n");
     return 0;
 }
