@@ -50,31 +50,30 @@ int fbgen_get_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 int fbgen_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 {
     int err, oldbpp;
-    void *par = NULL;	
 
-    if ((err = info->fbops->fb_check_var(var, par, info)))
-	return err;
+    if (info->var.xres != var->xres || info->var.yres != var->yres ||
+        info->var.xres_virtual != var->xres_virtual ||
+        info->var.yres_virtual != var->yres_virtual ||
+        info->var.bits_per_pixel != var->bits_per_pixel ||	
+	info->var.yoffset != var->yoffset) { 
 
-    if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
-	oldbpp = info->var.bits_per_pixel;
-	fb_display[con].var = info->var = *var;
-	if (info->var.xres != var->xres || info->var.yres != var->yres ||
-	    info->var.xres_virtual != var->xres_virtual ||
-	    info->var.yres_virtual != var->yres_virtual ||
-	    info->var.yoffset != var->yoffset || 
-	    oldbpp != var->bits_per_pixel) {
-	    info->fbops->fb_set_par(par, info); 
-	    fbgen_set_disp(con, info);
-	    info->par = par;		   
+	if ((err = info->fbops->fb_check_var(var, info)))
+		return err;
+
+    	if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
+		oldbpp = info->var.bits_per_pixel;
+		fb_display[con].var = info->var = *var;
+	    	info->fbops->fb_set_par(info); 
+	    	fbgen_set_disp(con, info);
  
-	    if (oldbpp != var->bits_per_pixel) {
-		if ((err = fb_set_cmap(&info->cmap, 1, info)))
-            		return err;
-      	    }
-	    fbcon_changevar(con);
+	    	if (oldbpp != var->bits_per_pixel) {
+			if ((err = fb_set_cmap(&info->cmap, 1, info)))
+            			return err;
+      	    	}
+	    	fbcon_changevar(con);
 	}
+	var->activate = 0;
     }
-    var->activate = 0;
     return 0;
 }
 
@@ -210,22 +209,21 @@ int fbgen_update_var(int con, struct fb_info *info)
 
 int fbgen_switch(int con, struct fb_info *info)
 {
-    struct display *prev = &fb_display[info->display_fg->vc_num];
+    struct display *prev = &fb_display[last_console];
     struct display *new = &fb_display[con];
 
-    info->display_fg = vc_data[con];	
-    /* Save current video mode and colormap */
-    memcpy(&prev->var, &prev->fb_info->var, sizeof(struct fb_var_screeninfo));
-    fb_copy_cmap(&prev->fb_info->cmap, &prev->cmap, 0);
-    /* First lets see if we are VT switching to a console driven by fbdev */
-    if (new->conp && new->fb_info) {
-          /*
-           * Install new video mode and colormap.
-           * Note: We might switch to a VT that's driver by a different video
-           * card.
-           */
-          fb_copy_cmap(&new->cmap, &new->fb_info->cmap, 0);
-          new->fb_info->fbops->fb_set_var(&new->var, con, new->fb_info);
-    }
+    /* We might of VT switch from a non fbdev device */	
+    if (prev->conp && prev->fb_info) {	
+    	/* Save current video mode and colormap */
+    	memcpy(&prev->var,&prev->fb_info->var,sizeof(struct fb_var_screeninfo));
+    	fb_copy_cmap(&prev->fb_info->cmap, &prev->cmap, 0);
+    }	     
+    /*
+     * Install new video mode and colormap.
+     */
+    new->fb_info->display_fg = vc_cons[con].d;
+    new->fb_info->display_fg->vc_num = con;
+    fb_copy_cmap(&new->cmap, &new->fb_info->cmap, 0);
+    new->fb_info->fbops->fb_set_var(&new->var, con, new->fb_info);
     return 0;
 }
