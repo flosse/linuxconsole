@@ -590,7 +590,7 @@ static void blank_screen(unsigned long private)
                 return;
 
         /* don't blank graphics */
-        if (vt->vc_mode != KD_TEXT) {
+        if (vt->fg_console->vc_mode != KD_TEXT) {
                 vt->vt_blanked = 1;
                 return;
         }
@@ -642,7 +642,7 @@ void unblank_screen(struct vt_struct *vt)
 
 void poke_blanked_console(struct vt_struct *vt)
 {
-        if (vt->vc_mode == KD_GRAPHICS)
+        if (vt->fg_console->vc_mode == KD_GRAPHICS)
                 return;
 	if (vt->vt_blanked) {
 		unblank_screen(vt);
@@ -859,7 +859,7 @@ int vc_disallocate(unsigned int currcons)
         struct vc_data *vc;
 
 	if (currcons >= MAX_NR_CONSOLES)
-		return;
+		return -ENXIO;
 	
 	for (vt = vt_cons; vt != NULL; vt = vt->next)  
 		for (pool = &vt->vcs; pool != NULL; pool = pool->next)  
@@ -878,6 +878,7 @@ found_pool:
                 kfree(vc);
             pool->vc_cons[currcons - pool->first_vc] = NULL;
         }
+	return 0;
 }                     
 
 /*

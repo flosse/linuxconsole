@@ -392,7 +392,7 @@ int con_font_op(struct vc_data *vc, struct console_font_op *op)
 	struct console_font_op old_op;
 	u8 *temp = NULL;
 
-	if (vc->display_fg->vc_mode != KD_TEXT)
+	if (vc->vc_mode != KD_TEXT)
 		return -EINVAL;
 
 	switch (op->op) {
@@ -722,9 +722,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		default:
 			return -EINVAL;
 		}
-		if (vc->display_fg->vc_mode == (unsigned char) arg)
+		if (vc->vc_mode == (unsigned char) arg)
 			return 0;
-		vc->display_fg->vc_mode = (unsigned char) arg;
+		vc->vc_mode = (unsigned char) arg;
 		if (vc->vc_num != vc->display_fg->fg_console->vc_num)
 			return 0;
 		/*
@@ -737,7 +737,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		return 0;
 
 	case KDGETMODE:
-		ucval = vc->display_fg->vc_mode;
+		ucval = vc->vc_mode;
 		goto setint;
 
 	case KDMAPDISP:
@@ -1330,7 +1330,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 
 void reset_vc(struct vc_data *vc)
 {
-	vc->display_fg->vc_mode = KD_TEXT;
+	vc->vc_mode = KD_TEXT;
 	vc->kbd_table.kbdmode = VC_XLATE;
 	vc->vt_mode.mode = VT_AUTO;
 	vc->vt_mode.waitv = 0;
@@ -1372,7 +1372,7 @@ inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
 		}	
 */	
 		set_palette(new_vc);
-                if (update && vt->vc_mode != KD_GRAPHICS) { 
+                if (update && new_vc->vc_mode != KD_GRAPHICS) { 
                         /* Update the screen contents */
                         do_update_region(new_vc, new_vc->vc_origin, 
 					 new_vc->vc_screenbuf_size/2);
@@ -1438,7 +1438,7 @@ void change_console(struct vc_data *new_vc, struct vc_data *old_vc)
 	/*
 	 * Ignore all switches in KD_GRAPHICS+VT_AUTO mode
 	 */
-	if (old_vc->display_fg->vc_mode == KD_GRAPHICS)
+	if (old_vc->vc_mode == KD_GRAPHICS)
 		return;
 
 	complete_change_console(new_vc, old_vc);
@@ -1458,7 +1458,7 @@ void complete_change_console(struct vc_data *new_vc, struct vc_data *old_vc)
 	 * KD_TEXT mode or vice versa, which means we need to blank or
 	 * unblank the screen later.
 	 */
-	old_vc_mode = old_vc->display_fg->vc_mode;
+	old_vc_mode = old_vc->vc_mode;
 	switch_screen(new_vc, old_vc);
 
 	/*
@@ -1489,9 +1489,9 @@ void complete_change_console(struct vc_data *new_vc, struct vc_data *old_vc)
 	/*
 	 * We do this here because the controlling process above may have
 	 * gone, and so there is now a new vc_mode
-	 */
-	if (old_vc_mode != new_vc->display_fg->vc_mode) {
-		if (new_vc->display_fg->vc_mode == KD_TEXT) {
+         */	
+	if (old_vc_mode != new_vc->vc_mode) {
+		if (new_vc->vc_mode == KD_TEXT) {
 			unblank_screen(new_vc->display_fg);
 		} else
 			do_blank_screen(new_vc);

@@ -2,6 +2,7 @@
 #define video_num_columns  (vc->vc_cols)
 #define video_num_lines (vc->vc_rows)
 #define video_size_row  (vc->vc_size_row)
+#define vcmode		(vc->vc_mode)
 #define can_do_color    (vc->vc_can_do_color)
 #define screenbuf	(vc->vc_screenbuf)
 #define screenbuf_size	(vc->vc_screenbuf_size)
@@ -67,7 +68,6 @@
 #define hi_font_mask	(vc->vc_hi_font_mask)
 
 #define softcursor_original (vc->display_fg->cursor_original)
-#define vcmode		(vc->display_fg->vc_mode)
 #define sw              (vc->display_fg->vt_sw)
 
 #define dectcem 	(vc->vc_dectcem)
