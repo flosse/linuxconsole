@@ -18,15 +18,15 @@
 #include <linux/major.h>
 #include <linux/reboot.h>
 #include <linux/sysrq.h>
-#include <linux/vt_kern.h>
 #include <linux/quotaops.h>
 #include <linux/smp_lock.h>
 #include <linux/module.h>
-
+#ifdef CONFIG_VT
+#include <linux/vt_kern.h>
+#endif
 #include <asm/ptrace.h>
 
 extern void wakeup_bdflush(int);
-extern void reset_vc(unsigned int);
 extern int console_loglevel;
 extern struct list_head super_blocks;
 
@@ -75,11 +75,11 @@ void handle_sysrq(int key, struct pt_regs *pt_regs,
 		}
 		break;
 #ifdef CONFIG_VT
-	case 'k':					    /* K -- SAK */
+	case 'k': 					    /* K -- SAK */
 		printk("SAK\n");
 		if (tty)
 			do_SAK(tty);
-		reset_vc(fg_console);
+		reset_vc(vc_cons[fg_console]);
 		break;
 #endif
 	case 'b':					    /* B -- boot immediately */
