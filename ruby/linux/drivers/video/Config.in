@@ -133,6 +133,7 @@ _MAVEN $CONFIG_FB_MATROX_I2C
 28
          bool '  3Dfx Banshee/Voodoo3 display support (EXPERIMENTAL)' CONFIG_FB_
 3DFX
+	 tristate '  SIS 630/540 display support (EXPERIMENTAL)' CONFIG_FB_SIS
       fi
    fi                          
    if [ "$ARCH" = "sparc" -o "$ARCH" = "sparc64" ]; then
@@ -167,6 +168,9 @@ _MAVEN $CONFIG_FB_MATROX_I2C
             tristate '    ATI Mach64 display support' CONFIG_FB_ATY
          fi
       fi
+   fi
+   if [ "$CONFIG_HD64461" = "y" ]; then
+      tristate '  HD64461 Frame Buffer support' CONFIG_FB_HIT
    fi
    if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
       tristate '  Virtual Frame Buffer support (ONLY FOR TESTING!)' CONFIG_FB_VI
@@ -254,7 +258,8 @@ ON_IPLAN2P16
               "$CONFIG_FB_IGA" = "m" -o "$CONFIG_FB_MATROX" = "m" -o \
               "$CONFIG_FB_CT65550" = "m" -o "$CONFIG_FB_PM2" = "m" -o \
               "$CONFIG_FB_P9100" = "m" -o "$CONFIG_FB_ATY128" = "m" -o \
-              "$CONFIG_FB_SGIVW" = "m" -o "$CONFIG_FB_CYBER2000" = "m" -o \
+              "$CONFIG_FB_RIVA" = "m" -o \	
+	      "$CONFIG_FB_SGIVW" = "m" -o "$CONFIG_FB_CYBER2000" = "m" -o \
               "$CONFIG_FB_SA1100" = "m" -o "$CONFIG_FB_SIS" = "m" ]; then
             define_tristate CONFIG_FBCON_CFB8 m
          fi
@@ -270,7 +275,7 @@ ON_IPLAN2P16
            "$CONFIG_FB_PM2" = "y" -o "$CONFIG_FB_SGIVW" = "y" -o \
            "$CONFIG_FB_RIVA" = "y" -o "$CONFIG_FB_ATY128" = "y" -o \
            "$CONFIG_FB_CYBER2000" = "y" -o "$CONFIG_FB_3DFX" = "y" -o \
-           "$CONFIG_FB_SIS" = "y" ]; then
+           "$CONFIG_FB_SIS" = "y" -o "$CONFIG_FB_SA1100" = "y" ]; then
          define_tristate CONFIG_FBCON_CFB16 y
       else
          if [ "$CONFIG_FB_ATARI" = "m" -o "$CONFIG_FB_ATY" = "m" -o \
@@ -282,7 +287,8 @@ ON_IPLAN2P16
               "$CONFIG_FB_VALKYRIE" = "m" -o "$CONFIG_FB_PLATINUM" = "m" -o \
               "$CONFIG_FB_CT65550" = "m" -o "$CONFIG_FB_MATROX" = "m" -o \
               "$CONFIG_FB_PM2" = "m" -o "$CONFIG_FB_SGIVW" = "m" -o \
-              "$CONFIG_FB_CYBER2000" = "m" -o "$CONFIG_FB_SIS" = "m" ]; then
+              "$CONFIG_FB_CYBER2000" = "m" -o "$CONFIG_FB_SIS" = "m" -o \
+	      "$CONFIG_FB_RIVA" = "m" -o "$CONFIG_FB_SA1100" = "m" ]; then
             define_tristate CONFIG_FBCON_CFB16 m
          fi
       fi
@@ -316,8 +322,8 @@ ON_IPLAN2P16
               "$CONFIG_FB_CONTROL" = "m" -o "$CONFIG_FB_CLGEN" = "m" -o \
               "$CONFIG_FB_TGA" = "m" -o "$CONFIG_FB_PLATINUM" = "m" -o \
               "$CONFIG_FB_MATROX" = "m" -o "$CONFIG_FB_PM2" = "m" -o \
-              "$CONFIG_FB_ATY128" = "m" -o \
-          "$CONFIG_FB_SGIVW" = "m" -o "$CONFIG_FB_SIS" = "m" ]; then
+              "$CONFIG_FB_RIVA" = "m" -o "$CONFIG_FB_ATY128" = "m" -o \
+              "$CONFIG_FB_SGIVW" = "m" -o "$CONFIG_FB_SIS" = "m" ]; then
             define_tristate CONFIG_FBCON_CFB32 m
          fi
       fi                                                    
