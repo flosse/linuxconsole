@@ -959,7 +959,7 @@ static int emulate_raw(struct tty_struct *tty, unsigned int keycode,
 
 #warning "Cannot generate rawmode keyboard for your architecture yet."
 
-void emulate_raw(struct tty_struct *tty,unsigned int code,unsigned char up_flag)
+static int emulate_raw(struct tty_struct *tty, unsigned int keycode, unsigned char up_flag)
 {
 	if (keycode > 127)
 		return -1;
