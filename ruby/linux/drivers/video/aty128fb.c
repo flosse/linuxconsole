@@ -269,9 +269,16 @@ struct aty128_ddafifo {
 
 /* register values for a specific mode */
 struct aty128fb_par {
+#ifdef CONFIG_MTRR
+    struct { int vram; int vram_valid; } mtrr;
+#endif
+    struct aty128_ddafifo fifo_reg;
     struct aty128_crtc crtc;
     struct aty128_pll pll;
-    struct aty128_ddafifo fifo_reg;
+#ifdef CONFIG_PCI
+    struct pci_dev *pdev;
+#endif
+    int chip_gen;
 };
 
 struct fb_info_aty128 {
@@ -279,14 +286,7 @@ struct fb_info_aty128 {
     struct fb_info_aty128 *next;
     struct aty128_constants constants;  /* PLL and others      */
     void *regbase;                      /* remapped mmio       */
-    int chip_gen;
     const struct aty128_meminfo *mem;   /* onboard mem info    */
-#ifdef CONFIG_PCI
-    struct pci_dev *pdev;
-#endif
-#ifdef CONFIG_MTRR
-    struct { int vram; int vram_valid; } mtrr;
-#endif
     int blitter_may_be_busy;
     int fifo_slots;                 /* free slots in FIFO (64 max) */
 };
@@ -321,8 +321,6 @@ static void aty128fbcon_blank(int blank, struct fb_info *fb);
      */
 static void aty128_set_dispsw(struct display *disp,
 			struct fb_info_aty128 *info, int bpp, int accel);
-static int aty128_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
-				u_int *transp, struct fb_info *info);
 static int aty128fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 				u_int transp, struct fb_info *info);
 static void do_install_cmap(int con, struct fb_info *info);
@@ -983,8 +981,9 @@ aty128_crtc_to_var(const struct aty128_crtc *crtc,
 }
 
 static void
-aty128_set_pll(struct aty128_pll *pll, const struct fb_info_aty128 *info)
+aty128_set_pll(struct aty128fb_par *par, const struct fb_info_aty128 *info)
 {
+    struct aty128_pll *pll = &par->pll; 
     u32 div3;
 
     unsigned char post_conv[] =	/* register values for post dividers */
@@ -1023,11 +1022,12 @@ aty128_set_pll(struct aty128_pll *pll, const struct fb_info_aty128 *info)
 
 
 static int
-aty128_var_to_pll(u32 period_in_ps, struct aty128_pll *pll,
+aty128_var_to_pll(u32 period_in_ps, struct aty128fb_par *par,
 			const struct fb_info_aty128 *info)
 {
     const struct aty128_constants c = info->constants;
     unsigned char post_dividers[] = {1,2,4,8,3,6,12};
+    struct aty128_pll *pll = &par->pll;
     u32 output_freq;
     u32 vclk;        /* in .01 MHz */
     int i;
@@ -1085,17 +1085,16 @@ aty128_set_fifo(const struct aty128_ddafifo *dsp,
 
 
 static int
-aty128_ddafifo(struct aty128_ddafifo *dsp,
-		const struct aty128_pll *pll,
-		u32 bpp,
-		const struct fb_info_aty128 *info)
+aty128_ddafifo(struct aty128fb_par *par, const struct fb_info_aty128 *info)
 {
     const struct aty128_meminfo *m = info->mem;
+    struct aty128_ddafifo *dsp = &par->fifo_reg;
+    const struct aty128_pll *pll = &par->pll;
     u32 xclk = info->constants.xclk;
     u32 fifo_width = info->constants.fifo_width;
     u32 fifo_depth = info->constants.fifo_depth;
     s32 x, b, p, ron, roff;
-    u32 n, d;
+    u32 n, d, bpp = par->crtc.bpp;
 
     /* 15bpp is really 16bpp */
     if (bpp == 15)
@@ -1174,7 +1173,7 @@ aty128_set_par(struct aty128fb_par *par,
     aty_st_8(CRTC_EXT_CNTL + 1, 4);	/* turn video off */
 
     aty128_set_crtc(&par->crtc, info);
-    aty128_set_pll(&par->pll, info);
+    aty128_set_pll(par, info);
     aty128_set_fifo(&par->fifo_reg, info);
 
     config = aty_ld_le32(CONFIG_CNTL) & ~3;
@@ -1228,10 +1227,10 @@ aty128_decode_var(struct fb_var_screeninfo *var, struct aty128fb_par *par,
     if ((err = aty128_var_to_crtc(var, &par->crtc, info)))
 	return err;
 
-    if ((err = aty128_var_to_pll(var->pixclock, &par->pll, info)))
+    if ((err = aty128_var_to_pll(var->pixclock, par, info)))
 	return err;
 
-    if ((err = aty128_ddafifo(&par->fifo_reg, &par->pll, par->crtc.bpp, info)))
+    if ((err = aty128_ddafifo(par, info)))
 	return err;
 
     return 0;
@@ -1495,7 +1494,7 @@ aty128fb_setup(char *options)
      */
 
 static int __init
-aty128_init(struct fb_info_aty128 *info, const char *name)
+aty128_init(struct fb_info_aty128 *info, struct pci_dev *pdev, const char *name)
 {
     struct fb_var_screeninfo var;
     u32 dac;
@@ -1510,9 +1509,9 @@ aty128_init(struct fb_info_aty128 *info, const char *name)
     chip_rev = (aty_ld_le32(CONFIG_CNTL) >> 16) & 0x1F;
 
     /* put a name with the face */
-    while (aci->name && info->pdev->device != aci->device) { aci++; }
+    while (aci->name && pdev->device != aci->device) { aci++; }
     video_card = (char *)aci->name;
-    info->chip_gen = aci->chip_gen;
+    default_par.chip_gen = aci->chip_gen;
 
     printk(KERN_INFO "aty128fb: %s [chip rev 0x%x] ", video_card, chip_rev);
 
@@ -1588,7 +1587,7 @@ aty128_init(struct fb_info_aty128 *info, const char *name)
 
 #ifdef CONFIG_PMAC_BACKLIGHT
     /* Could be extended to Rage128Pro LVDS output too */
-    if (info->chip_gen == rage_M3)
+    if (default_par.chip_gen == rage_M3)
     	register_backlight_controller(&aty128_backlight_controller, info, "ati");
 #endif /* CONFIG_PMAC_BACKLIGHT */
 
@@ -1682,7 +1681,7 @@ aty128_pci_register(struct pci_dev *pdev,
 	memset(info, 0, sizeof(struct fb_info_aty128));
 
 	/* Copy PCI device info into info->pdev */
-	info->pdev = pdev;
+	default_par.pdev = pdev;
 
 	info->fb_info.currcon = -1;
 
@@ -1727,14 +1726,14 @@ aty128_pci_register(struct pci_dev *pdev,
 	info->fb_info.pseudo_palette = &aty128fb_pseudo_palette;
 	aty128_timings(info);
 
-	if (!aty128_init(info, "PCI"))
+	if (!aty128_init(info, pdev, "PCI"))
 		goto err_out;
 
 #ifdef CONFIG_MTRR
 	if (mtrr) {
-		info->mtrr.vram = mtrr_add(info->fb_info.fix.smem_start,
+		default_par.mtrr.vram = mtrr_add(info->fb_info.fix.smem_start,
 				info->fb_info.fix.smem_len, MTRR_TYPE_WRCOMB, 1);
-		info->mtrr.vram_valid = 1;
+		default_par.mtrr.vram_valid = 1;
 		/* let there be speed */
 		printk(KERN_INFO "aty128fb: Rage128 MTRR set to ON\n");
 	}
@@ -1986,7 +1985,7 @@ aty128fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
     if ((par->crtc.bpp > 8) && (regno == 0)) {
         int i;
 
-        if (info->chip_gen == rage_M3)
+        if (par->chip_gen == rage_M3)
             aty_st_le32(DAC_CNTL, aty_ld_le32(DAC_CNTL) & ~DAC_PALETTE_ACCESS_CNTL);
 
         for (i=16; i<256; i++) {
@@ -1995,7 +1994,7 @@ aty128fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
             aty_st_le32(PALETTE_DATA, col);
         }
 
-        if (info->chip_gen == rage_M3) {
+        if (par->chip_gen == rage_M3) {
             aty_st_le32(DAC_CNTL, aty_ld_le32(DAC_CNTL) | DAC_PALETTE_ACCESS_CNTL);
 
             for (i=16; i<256; i++) {
@@ -2007,7 +2006,7 @@ aty128fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
     }
 
     /* initialize palette */
-    if (info->chip_gen == rage_M3)
+    if (par->chip_gen == rage_M3)
         aty_st_le32(DAC_CNTL, aty_ld_le32(DAC_CNTL) & ~DAC_PALETTE_ACCESS_CNTL);
 
     if (par->crtc.bpp == 16)
@@ -2016,7 +2015,7 @@ aty128fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
         aty_st_8(PALETTE_INDEX, regno);
     col = (red << 16) | (green << 8) | blue;
     aty_st_le32(PALETTE_DATA, col);
-    if (info->chip_gen == rage_M3) {
+    if (par->chip_gen == rage_M3) {
     	aty_st_le32(DAC_CNTL, aty_ld_le32(DAC_CNTL) | DAC_PALETTE_ACCESS_CNTL);
         if (par->crtc.bpp == 16)
             aty_st_8(PALETTE_INDEX, (regno << 3));
@@ -2403,6 +2402,7 @@ void __exit
 cleanup_module(void)
 {
     struct fb_info_aty128 *info = board_list;
+    struct aty128fb_par *par = info->fb_info.par;
 
     while (board_list) {
         info = board_list;
@@ -2410,20 +2410,19 @@ cleanup_module(void)
 
         unregister_framebuffer(&info->fb_info);
 #ifdef CONFIG_MTRR
-        if (info->mtrr.vram_valid)
-            mtrr_del(info->mtrr.vram, info->fb_info.fix.smem_start,
+        if (par->mtrr.vram_valid)
+            mtrr_del(par->mtrr.vram, info->fb_info.fix.smem_start,
                      info->fb_info.fix.smem_len);
 #endif /* CONFIG_MTRR */
         iounmap(info->regbase);
         iounmap(info->fb_info.screen_base);
 
-        release_mem_region(pci_resource_start(info->pdev, 0),
-                           pci_resource_len(info->pdev, 0));
-        release_mem_region(pci_resource_start(info->pdev, 1),
-                           pci_resource_len(info->pdev, 1));
-        release_mem_region(pci_resource_start(info->pdev, 2),
-                           pci_resource_len(info->pdev, 2));
-
+        release_mem_region(pci_resource_start(par->pdev, 0),
+                           pci_resource_len(par->pdev, 0));
+        release_mem_region(pci_resource_start(par->pdev, 1),
+                           pci_resource_len(par->pdev, 1));
+        release_mem_region(pci_resource_start(par->pdev, 2),
+                           pci_resource_len(par->pdev, 2));
         kfree(info);
     }
 }
