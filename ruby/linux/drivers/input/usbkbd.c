@@ -153,7 +153,7 @@ static void *usb_kbd_probe(struct usb_device *dev, unsigned int ifnum)
 	struct usb_interface_descriptor *interface;
 	struct usb_endpoint_descriptor *endpoint;
 	struct usb_kbd *kbd;
-	int i;
+	int i, pipe, maxp;
 
 	if (dev->descriptor.bNumConfigurations != 1) return NULL;
 	interface = dev->config[0].interface[ifnum].altsetting + 0;
@@ -166,6 +166,9 @@ static void *usb_kbd_probe(struct usb_device *dev, unsigned int ifnum)
 	endpoint = interface->endpoint + 0;
 	if (!(endpoint->bEndpointAddress & 0x80)) return NULL;
 	if ((endpoint->bmAttributes & 3) != 3) return NULL;
+
+	pipe = usb_rcvintpipe(dev, endpoint->bEndpointAddress);
+	maxp = usb_maxpacket(dev, pipe, usb_pipeout(pipe));
 
 	usb_set_protocol(dev, interface->bInterfaceNumber, 0);
 	usb_set_idle(dev, interface->bInterfaceNumber, 0, 0);
@@ -185,13 +188,8 @@ static void *usb_kbd_probe(struct usb_device *dev, unsigned int ifnum)
 	kbd->dev.open = usb_kbd_open;
 	kbd->dev.close = usb_kbd_close;
 
-	{
-		int pipe = usb_rcvintpipe(dev, endpoint->bEndpointAddress);
-		int maxp = usb_maxpacket(dev, pipe, usb_pipeout(pipe));
-
-		FILL_INT_URB(&kbd->irq, dev, pipe, kbd->new, maxp > 8 ? 8 : maxp,
-			usb_kbd_irq, kbd, endpoint->bInterval);
-	}
+	FILL_INT_URB(&kbd->irq, dev, pipe, kbd->new, maxp > 8 ? 8 : maxp,
+		usb_kbd_irq, kbd, endpoint->bInterval);
 
 	kbd->dr.requesttype = USB_TYPE_CLASS | USB_RECIP_INTERFACE;
 	kbd->dr.request = USB_REQ_SET_REPORT;

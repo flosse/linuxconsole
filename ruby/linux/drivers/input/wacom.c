@@ -1,5 +1,5 @@
 /*
- *  wacom.c  Version 0.5
+ *  wacom.c  Version 0.6
  *
  *  Copyright (c) 2000 Vojtech Pavlik		<vojtech@suse.cz>
  *  Copyright (c) 2000 Andreas Bach Aaen	<abach@stofanet.dk>
@@ -18,6 +18,7 @@
  *			relative mode, proximity.
  *	v0.5 (vp)  - Big cleanup, nifty features removed,
  * 			they belong in userspace
+ *	v0.6 (vp)  - Submit URB only when operating
  */
 
 /*
@@ -227,6 +228,28 @@ struct wacom_features wacom_features[] = {
 	{ NULL , 0 }
 };
 
+static int wacom_open(struct input_dev *dev)
+{
+	struct wacom *wacom = dev->private;
+
+	if (wacom->open++)
+		return 0;
+
+	 if (usb_submit_urb(&wacom->irq)) {
+		kfree(wacom);
+		return -EIO;
+	}
+	return 0;
+}
+
+static void wacom_close(struct input_dev *dev)
+{
+	struct wacom *wacom = dev->private;
+
+	if (!--wacom->open)
+		usb_unlink_urb(&wacom->irq);
+}
+
 static void *wacom_probe(struct usb_device *dev, unsigned int ifnum)
 {
 	struct usb_endpoint_descriptor *endpoint;
@@ -258,13 +281,12 @@ static void *wacom_probe(struct usb_device *dev, unsigned int ifnum)
 	wacom->dev.absmax[ABS_TILT_X] = 127;
 	wacom->dev.absmax[ABS_TILT_Y] = 127;
 
+	wacom->dev.private = wacom;
+	wacom->dev.open = wacom_open;
+	wacom->dev.close = wacom_close;
+
 	FILL_INT_URB(&wacom->irq, dev, usb_rcvintpipe(dev, endpoint->bEndpointAddress),
 		     wacom->data, wacom->features->pktlen, wacom->features->irq, wacom, endpoint->bInterval);
-
-	if (usb_submit_urb(&wacom->irq)) {
-		kfree(wacom);
-		return NULL;
-	}
 
 	input_register_device(&wacom->dev);
 

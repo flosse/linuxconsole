@@ -37,12 +37,11 @@
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 
-#define USBMOUSE_EXTRA
-
 struct usb_mouse {
 	signed char data[8];
 	struct input_dev dev;
 	struct urb irq;
+	int open;
 };
 
 static void usb_mouse_irq(struct urb *urb)
@@ -53,16 +52,37 @@ static void usb_mouse_irq(struct urb *urb)
 
 	if (urb->status) return;
 
-	input_report_key(dev, BTN_LEFT, !!(data[0] & 0x01));
-	input_report_key(dev, BTN_RIGHT, !!(data[0] & 0x02));
-	input_report_key(dev, BTN_MIDDLE, !!(data[0] & 0x04));
-	input_report_rel(dev, REL_X, data[1]);
-	input_report_rel(dev, REL_Y, data[2]);
-#ifdef USBMOUSE_EXTRA
-	input_report_key(dev, BTN_SIDE, !!(data[0] & 0x08));
-	input_report_key(dev, BTN_EXTRA, !!(data[0] & 0x10));
+	input_report_key(dev, BTN_LEFT,   data[0] & 0x01);
+	input_report_key(dev, BTN_RIGHT,  data[0] & 0x02);
+	input_report_key(dev, BTN_MIDDLE, data[0] & 0x04);
+	input_report_key(dev, BTN_SIDE,   data[0] & 0x08);
+	input_report_key(dev, BTN_EXTRA,  data[0] & 0x10);
+
+	input_report_rel(dev, REL_X,     data[1]);
+	input_report_rel(dev, REL_Y,     data[2]);
 	input_report_rel(dev, REL_WHEEL, data[3]);
-#endif
+}
+
+static int usb_mouse_open(struct input_dev *dev)
+{
+	struct usb_mouse *mouse = dev->private;
+
+	if (mouse->open++)
+		return 0;
+
+	 if (usb_submit_urb(&mouse->irq)) {
+		kfree(mouse);
+		return -EIO;
+	}
+	return 0;
+}
+
+static void usb_mouse_close(struct input_dev *dev)
+{
+	struct usb_mouse *mouse = dev->private;
+
+	if (!--mouse->open)
+		usb_unlink_urb(&mouse->irq);
 }
 
 static void *usb_mouse_probe(struct usb_device *dev, unsigned int ifnum)
@@ -70,6 +90,7 @@ static void *usb_mouse_probe(struct usb_device *dev, unsigned int ifnum)
 	struct usb_interface_descriptor *interface;
 	struct usb_endpoint_descriptor *endpoint;
 	struct usb_mouse *mouse;
+	int pipe, maxp;
 
 	if (dev->descriptor.bNumConfigurations != 1) return NULL;
 	interface = dev->config[0].interface[ifnum].altsetting + 0;
@@ -83,9 +104,9 @@ static void *usb_mouse_probe(struct usb_device *dev, unsigned int ifnum)
 	if (!(endpoint->bEndpointAddress & 0x80)) return NULL;
 	if ((endpoint->bmAttributes & 3) != 3) return NULL;
 
-#ifndef USBMOUSE_EXTRA
-	usb_set_protocol(dev, interface->bInterfaceNumber, 0);
-#endif
+	pipe = usb_rcvintpipe(dev, endpoint->bEndpointAddress);
+	maxp = usb_maxpacket(dev, pipe, usb_pipeout(pipe));
+
 	usb_set_idle(dev, interface->bInterfaceNumber, 0, 0);
 
 	if (!(mouse = kmalloc(sizeof(struct usb_mouse), GFP_KERNEL))) return NULL;
@@ -94,23 +115,15 @@ static void *usb_mouse_probe(struct usb_device *dev, unsigned int ifnum)
 	mouse->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_REL);
 	mouse->dev.keybit[LONG(BTN_MOUSE)] = BIT(BTN_LEFT) | BIT(BTN_RIGHT) | BIT(BTN_MIDDLE);
 	mouse->dev.relbit[0] = BIT(REL_X) | BIT(REL_Y);
-#ifdef USBMOUSE_EXTRA
 	mouse->dev.keybit[LONG(BTN_MOUSE)] |= BIT(BTN_SIDE) | BIT(BTN_EXTRA);
 	mouse->dev.relbit[0] |= BIT(REL_WHEEL);
-#endif
 
-	{
-		int pipe = usb_rcvintpipe(dev, endpoint->bEndpointAddress);
-		int maxp = usb_maxpacket(dev, pipe, usb_pipeout(pipe));
+	mouse->dev.private = mouse;
+	mouse->dev.open = usb_mouse_open;
+	mouse->dev.close = usb_mouse_close;
 
-		FILL_INT_URB(&mouse->irq, dev, pipe, mouse->data, maxp > 8 ? 8 : maxp,
-			usb_mouse_irq, mouse, endpoint->bInterval);
-	}
-
-	if (usb_submit_urb(&mouse->irq)) {
-		kfree(mouse);
-		return NULL;
-	}
+	FILL_INT_URB(&mouse->irq, dev, pipe, mouse->data, maxp > 8 ? 8 : maxp,
+		usb_mouse_irq, mouse, endpoint->bInterval);
 
 	input_register_device(&mouse->dev);
 
