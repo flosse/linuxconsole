@@ -130,15 +130,17 @@ void hide_cursor(struct vc_data *vc)
 	unsigned long flags;	
 
 	spin_lock_irqsave(&console_lock, flags);
+/*
 	if (visible_origin != origin) {
 		set_origin(vc);
 		do_update_region(vc, origin, screensize);
 	}
+*/
         if (cons_num == sel_cons)
                 clear_selection();
         if (softcursor_original != -1) {
                 scr_writew(softcursor_original,(u16 *) pos);
-                if (IS_VISIBLE && sw->con_putc)
+                if (IS_VISIBLE)
 			sw->con_putc(vc, softcursor_original, y, x);
                 softcursor_original = -1;
         }
@@ -444,7 +446,7 @@ void do_update_region(struct vc_data *vc, unsigned long start, int count)
         offset = (start - visible_origin) / 2;
         xx = offset % video_num_columns;
         yy = offset / video_num_columns;
-        
+       
 	for(;;) {
                 u16 attrib = scr_readw(p) & 0xff00;
                 int startx = xx;
@@ -1599,42 +1601,53 @@ static void clear_buffer_attributes(struct vc_data *vc)
  *      when a driver wants to take over some existing consoles
  *      and become default driver for newly opened ones.
  */
-
 void take_over_console(struct vt_struct *vt, const struct consw *csw)
 {
-        const char *desc;
+	struct vc_data *vc = vt->fg_console;
+	const char *desc;
 	int i;
 
+	/* First shutdown old console driver */
+	hide_cursor(vc);
+	
+	for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
+		vc = vt->vc_cons[i];
+		if (vc) sw->con_deinit(vc);
+	}
+
+	/* Test new hardware state */
         desc = csw->con_startup(vt, 0);
-        if (!desc) return;
-
-        for (i = 0; i <= MAX_NR_USER_CONSOLES; i++) {
+        if (!desc) {
+		/* Make sure the original driver state is restored to normal */
+		vt->vt_sw->con_startup(vt, 1);
+		return;
+	}
+	vt->vt_sw = csw;
+	
+	/* Set the VC states to the new default mode */
+        for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
                 int old_was_color;
-		struct vc_data *vc = vt->vc_cons[i];
+		vc = vt->vc_cons[i];
 
-                if (!vc || !sw)
-                        continue;
+                if (vc) {
+                	old_was_color = vc->vc_can_do_color;
+               		memcpy(vc, vt->default_mode, sizeof(struct vc_data));
+                	visual_init(vc);
+	        	update_attr(vc);
 
-                old_was_color = vc->vc_can_do_color;
-                sw->con_deinit(vc);
-                visual_init(vc);
-                update_attr(vc);
-
-                /* If the console changed between mono <-> color, then
-                 * the attributes in the screenbuf will be wrong.  The
-                 * following resets all attributes to something sane.
-                 */
-                if (old_was_color != vc->vc_can_do_color)
-                        clear_buffer_attributes(vc);
-
-                if (IS_VISIBLE)
-                        update_screen(vc);
-        }
-/*
-        printk("Console: switching to %s %s %dx%d\n", 
-                vc->vc_can_do_color ? "colour" : "mono",
-                desc, vc->vc_cols, vc->vc_rows);
-*/	
+                	/* If the console changed between mono <-> color, then
+                 	 * the attributes in the screenbuf will be wrong.  The
+                 	 * following resets all attributes to something sane.
+                 	 */
+                	if (old_was_color != vc->vc_can_do_color) 
+                        	clear_buffer_attributes(vc);
+        	}
+	}
+	vc = vt->fg_console; 
+	update_screen(vc);
+       	printk("Console: switching to %s %s %dx%d\n", 
+               	vc->vc_can_do_color ? "colour" : "mono",
+               	desc, vc->vc_cols, vc->vc_rows);
 }
 
 /* We can't register the console with devfs during con_init(), because it
