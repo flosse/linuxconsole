@@ -834,7 +834,16 @@ int __init video_setup(char *options)
 
     for (i = 0; i < NUM_FB_DRIVERS; i++) {
 	    j = strlen(fb_drivers[i].name);
-	    if (!strncmp(options, fb_drivers[i].name, j) &&
+	    /*
+	     * Find appropriate frame buffer driver by name.
+	     * 
+	     * Search for either a direct match or a match ignoring
+	     * the last two characters. This is to prevent some of
+	     * the confusion between the "mydriver" and "mydriverfb"
+	     * naming conventions.
+	     */
+	    if ((!strncmp(options, fb_drivers[i].name, j) ||
+	         !strncmp(options, fb_drivers[i].name, j-2)) &&
 		options[j] == ':') {
 		    if (!strcmp(options+j+1, "off"))
 			    fb_drivers[i].init = NULL;
