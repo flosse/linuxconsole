@@ -168,6 +168,7 @@ if [ "$CONFIG_FB" = "y" ]; then
          bool '    3Dfx Banshee/Voodoo3 display support (EXPERIMENTAL)' CONFIG_FB_3DFX
       	 bool '    3Dfx Voodoo Graphics (sst1) support (EXPERIMENTAL)' CONFIG_FB_VOODOO1	
       fi
+      tristate '  SIS acceleration (EXPERIMENTAL)' CONFIG_FB_SIS	
       if [ "$CONFIG_FB_SIS" != "n" ]; then
 	 bool '    SIS 630/540/730 support' CONFIG_FB_SIS_300
 	 bool '    SIS 315H/315 support' CONFIG_FB_SIS_315
