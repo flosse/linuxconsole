@@ -42,7 +42,6 @@
 #include <asm/io.h>
 #include <asm/vga.h>
 
-
 /* description of the hardware layout */
 
 static unsigned long	mda_vram_base;		/* Base of video memory */
@@ -578,7 +577,15 @@ void mda_console_init(void)
 void __init mda_console_init(void)
 #endif
 {
-	take_over_console(&mda_con, 1, 1, 0);
+	struct vt_struct *vt;
+	int i;
+
+	vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
+	if (!vt) return;	
+	create_vt(vt, &mda_con);
+	i = vc_allocate(vt->vcs.first_vc);
+        if (i)  return;
+	return;
 }
 
 #ifdef MODULE
@@ -586,13 +593,12 @@ void __init mda_console_init(void)
 int init_module(void)
 {
 	mda_console_init();
-
 	return 0;
 }
 
 void cleanup_module(void)
 {
-	give_up_console(&mda_con);
+	/* give_up_console(&mda_con); */
 }
 
 #endif
