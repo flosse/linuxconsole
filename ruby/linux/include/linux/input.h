@@ -522,9 +522,9 @@ struct ff_trigger {
 
 struct ff_shape {
 	__u16 attack_length;	/* Duration of attack (ms) */
-	__s16 attack_level;	/* Level at beginning of attack */
+	__u16 attack_level;	/* Level at beginning of attack */
 	__u16 fade_length;	/* Duration of fade (ms) */
-	__s16 fade_level;	/* Level at end of fade */
+	__u16 fade_level;	/* Level at end of fade */
 };
 
 /* FF_CONSTANT */
