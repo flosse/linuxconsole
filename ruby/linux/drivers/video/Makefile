@@ -20,7 +20,7 @@ export-objs    := fbmem.o fbcmap.o fbcon.o fbmon.o modedb.o \
 		  fbcon-iplan2p8.o fbcon-vga-planes.o fbcon-cfb16.o \
 		  fbcon-cfb2.o fbcon-cfb24.o fbcon-cfb32.o fbcon-cfb4.o \
 		  fbcon-cfb8.o fbcon-mac.o fbcon-mfb.o fbcon-vga8-planes.o \
-		  matrox/matroxfb.o cyber2000fb.o fbcon-hga.o
+		  matrox/matroxfb.o cyber2000fb.o fbcon-hga.o vga.o vgacon.o
 
 # Object file lists.
 obj-y          :=
@@ -33,7 +33,7 @@ obj-           :=
 obj-$(CONFIG_DUMMY_CONSOLE)       += dummycon.o
 obj-$(CONFIG_SGI_NEWPORT_CONSOLE) += newport_con.o
 obj-$(CONFIG_PROM_CONSOLE)        += promcon.o promcon_tbl.o
-obj-$(CONFIG_VGA_CONSOLE)         += vgacon.o
+obj-$(CONFIG_VGA_CONSOLE)         += vgacon.o vga.o
 obj-$(CONFIG_MDA_CONSOLE)         += mdacon.o
 obj-$(CONFIG_NVIDIA_CONSOLE)      += nvvgacon.o
 
@@ -77,7 +77,7 @@ obj-$(CONFIG_FB_CLGEN)            += clgenfb.o fbgen.o
 obj-$(CONFIG_FB_S3TRIO)           += S3triofb.o
 obj-$(CONFIG_FB_TGA)              += tgafb.o fbgen.o
 obj-$(CONFIG_FB_VESA)             += vesafb.o 
-obj-$(CONFIG_FB_VGA16)            += vga16fb.o fbcon-vga-planes.o fbcon-vgaplanes.o
+obj-$(CONFIG_FB_VGA16)            += vga16fb.o vga.o
 obj-$(CONFIG_FB_VIRGE)            += virgefb.o
 obj-$(CONFIG_FB_G364)             += g364fb.o
 obj-$(CONFIG_FB_FM2)              += fm2fb.o
@@ -134,6 +134,7 @@ obj-$(CONFIG_FBCON_IPLAN2P16)     += fbcon-iplan2p16.o
 obj-$(CONFIG_FBCON_MAC)           += fbcon-mac.o
 obj-$(CONFIG_FBCON_MFB)           += fbcon-mfb.o
 obj-$(CONFIG_FBCON_VGA)           += fbcon-vga.o
+obj-$(CONFIG_FBCON_VGA_PLANES)    += fbcon-vga-planes.o fbcon-vga8-planes.o
 obj-$(CONFIG_FBCON_HGA)           += fbcon-hga.o
 obj-$(CONFIG_FBCON_ACCEL)  	  += fbcon-accel.o
 

@@ -340,9 +340,15 @@ if [ "$CONFIG_FB" = "y" ]; then
       fi
       if [ "$CONFIG_FB_VGA16" = "y" ]; then
          define_tristate CONFIG_FBCON_VGA_PLANES y
+         define_tristate CONFIG_FBCON_VGA y
+         define_tristate CONFIG_FBCON_CFB4 y
+         define_tristate CONFIG_FBCON_CFB8 y
       else
          if [ "$CONFIG_FB_VGA16" = "m" ]; then
             define_tristate CONFIG_FBCON_VGA_PLANES m
+	    define_tristate CONFIG_FBCON_VGA m
+            define_tristate CONFIG_FBCON_CFB4 m
+            define_tristate CONFIG_FBCON_CFB8 m
          fi
       fi
       if [ "$CONFIG_FB_HGA" = "y" ]; then

@@ -14,15 +14,12 @@
 
 #include <linux/module.h>
 #include <linux/tty.h>
-#include <linux/console.h>
 #include <linux/string.h>
 #include <linux/fb.h>
 #include <linux/vt_buffer.h>
 
-#include <asm/io.h>
-
-#include <video/fbcon.h>
-#include <video/fbcon-vga-planes.h>
+#include "fbcon.h"
+#include "fbcon-vga-planes.h"
 #include "vga.h"
 
 #define GRAPHICS_ADDR_REG VGA_GFX_I	/* Graphics address register. */
