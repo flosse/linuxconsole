@@ -71,8 +71,7 @@ int fbgen_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 		if ((err = fb_set_cmap(&info->cmap, 1, info)))
             		return err;
       	    }
-	    if (info->changevar)
-                (*info->changevar)(con);	
+	    fbcon_changevar(con);
 	}
     }
     var->activate = 0;
