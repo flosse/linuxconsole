@@ -1,0 +1,10 @@
+#
+# I-Force driver configuration
+#
+
+dep_tristate 'I-Force devices' CONFIG_JOYSTICK_IFORCE $CONFIG_INPUT $CONFIG_INPUT_JOYSTICK
+
+if [ "$CONFIG_JOYSTICK_IFORCE" != "n" ]; then
+	dep_bool '  I-Force USB joysticks and wheels' CONFIG_JOYSTICK_IFORCE_USB $CONFIG_USB
+	dep_bool '  I-Force Serial joysticks and wheels' CONFIG_JOYSTICK_IFORCE_232 $CONFIG_SERIO
+fi

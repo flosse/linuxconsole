@@ -6,6 +6,8 @@
 
 O_TARGET	:= joydrv.o
 
+mod-subdirs	:= iforce
+
 # Each configuration option enables a list of files.
 
 obj-$(CONFIG_JOYSTICK_A3D)		+= a3d.o
@@ -31,6 +33,9 @@ obj-$(CONFIG_JOYSTICK_TURBOGRAFX)	+= turbografx.o
 obj-$(CONFIG_JOYSTICK_TWIDJOY)		+= twidjoy.o
 obj-$(CONFIG_JOYSTICK_WARRIOR)		+= warrior.o
 
+ifeq ($(CONFIG_JOYSTICK_IFORCE),y)
+	obj-y	+= iforce/iforcedrv.o
+endif
 subdir-$(CONFIG_JOYSTICK_IFORCE)	+= iforce
 
 # The global Rules.make.
