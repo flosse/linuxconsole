@@ -2,7 +2,8 @@
 # Font configuration
 #
 
-if [ "$CONFIG_FBCON_FONTS" = "y" ]; then
+bool '  Select compiled-in fonts' CONFIG_SELECT_FONTS
+if [ "$CONFIG_SELECT_FONTS" != "n" ]; then
    bool '    VGA 8x8 font' CONFIG_FONT_8x8
    bool '    VGA 8x16 font' CONFIG_FONT_8x16
    bool '    Sparc console 8x16 font' CONFIG_FONT_SUN8x16
@@ -27,4 +28,3 @@ else
       define_bool CONFIG_FONT_ACORN_8x8 y
    fi
 fi
-

@@ -17,10 +17,15 @@ mod-subdirs	:= aty fonts matrox riva sis tdfx
 
 obj-$(CONFIG_SGI_NEWPORT_CONSOLE) += newport_con.o
 obj-$(CONFIG_PROM_CONSOLE)        += promcon.o promcon_tbl.o
-obj-$(CONFIG_VGA_CONSOLE)         += vgacon.o vga.o fonts/fbcon_fonts.o
+obj-$(CONFIG_VGA_CONSOLE)         += vgacon.o vga.o
 obj-$(CONFIG_MDA_CONSOLE)         += mdacon.o
 obj-$(CONFIG_NVIDIA_CONSOLE)	  += nvvgacon.o
-obj-$(CONFIG_FRAMEBUFFER_CONSOLE) += fbcon.o fonts/fbcon_fonts.o
+obj-$(CONFIG_FRAMEBUFFER_CONSOLE) += fbcon.o
+
+subdir-$(CONFIG_FONTS)            += fonts 
+ifeq ($(CONFIG_FONTS),y)
+obj-y                             += fonts/fonts.o
+endif
 
 # Add fbmon.o back into obj-$(CONFIG_FB) in 2.5.x
 obj-$(CONFIG_FB)                  += fbmem.o fbcmap.o modedb.o fbgen.o fbmon.o
@@ -89,11 +94,6 @@ endif
 subdir-$(CONFIG_FB_ATY)           += aty
 ifeq ($(CONFIG_FB_ATY),y)
 obj-y                             += aty/atyfb.o
-endif
-
-subdir-$(CONFIG_FBCON_FONTS)      += fonts
-ifeq ($(CONFIG_FBCON_FONTS),y)
-obj-y                             += fonts/fonts.o
 endif
 
 obj-$(CONFIG_FB_SUN3)             += sun3fb.o

@@ -207,18 +207,12 @@ comment 'Console drivers'
    fi
    if [ "$CONFIG_SGI_IP22" = "y" ]; then
       tristate 'SGI Newport Console support' CONFIG_SGI_NEWPORT_CONSOLE
-      if [ "$CONFIG_SGI_NEWPORT_CONSOLE" = "y" ]; then
-         define_bool CONFIG_FONT_8x16 y
-      fi
    fi
    if [ "$CONFIG_PARISC" = "y" ]; then
       #bool 'IODC console' CONFIG_IODC_CONSOLE
       bool 'STI console' CONFIG_STI_CONSOLE
    fi
    bool 'VGA text console' CONFIG_VGA_CONSOLE
-   if [ "$CONFIG_VGA_CONSOLE" != "n" ]; then
-      define_bool CONFIG_FONT_8x16 y
-   fi	
    #  if [ "$CONFIG_PCI" = "y" -a "$CONFIG_VGA_CONSOLE" = "y" ]; then
    #    bool '   Allow VGA on any bus?' CONFIG_VGA_HOSE
    #    if [ "$CONFIG_VGA_HOSE" = "y" ]; then
@@ -238,9 +232,11 @@ comment 'Console drivers'
       bool 'Support for frame buffer console' CONFIG_FRAMEBUFFER_CONSOLE
       if [ "$CONFIG_FRAMEBUFFER_CONSOLE" = "y" ]; then
          define_bool CONFIG_PCI_CONSOLE y
-         bool '  Select compiled-in fonts' CONFIG_FBCON_FONTS
-         source fonts/Config.in
       fi
+   fi
+   if [ "$CONFIG_FRAMEBUFFER_CONSOLE" != "n" -o "$CONFIG_NEWPORT_CONSOLE" != "n" -o "$CONFIG_VGA_CONSOLE" = "y" ]; then
+      define_bool CONFIG_FONTS y	
+      source drivers/video/fonts/Config.in
    fi
 fi
 endmenu

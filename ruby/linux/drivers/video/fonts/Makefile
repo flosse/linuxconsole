@@ -3,6 +3,7 @@
 
 O_TARGET := fonts.o
 
+obj-$(CONFIG_FONTS)		  += fbcon_fonts.o
 obj-$(CONFIG_FONT_SUN8x16)        += font_sun8x16.o
 obj-$(CONFIG_FONT_SUN12x22)       += font_sun12x22.o
 obj-$(CONFIG_FONT_8x8)            += font_8x8.o
