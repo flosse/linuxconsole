@@ -104,7 +104,10 @@ static int __init amikbd_init(void)
 	int i;
 
 	if (!AMIGAHW_PRESENT(AMI_KEYBOARD))
-		return -EIO;
+	 	return -EIO;
+
+	if (!request_mem_region(CIAA_PHYSADDR-1+0xb00, 0x100, "amikeyb"))   
+		return -EBUSY;
 
 	amikbd_dev.evbit[0] = BIT(EV_KEY) | BIT(EV_REP);	
 	amikbd_dev.keycode = amikbd_keycode;
@@ -134,6 +137,7 @@ static void __exit amikbd_exit(void)
 {
 	input_unregister_device(&amikbd_dev);
 	free_irq(IRQ_AMIGA_CIAA_SP, amikbd_interrupt);
+	release_mem_region(CIAA_PHYSADDR-1+0xb00, 0x100);
 }
 
 module_init(amikbd_init);
