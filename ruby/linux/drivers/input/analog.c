@@ -281,9 +281,6 @@ static int analog_button_read(struct analog_port *port, char saitek, char chf)
 		i++;
 	}
 
-	if (saitek)
-		printk(KERN_DEBUG "analog.c: Saitek read: t:%d i:%d btn:%#x\n", t, i, port->buttons);
-
 	return -(!t || (i == 16));
 }
 
@@ -405,9 +402,7 @@ static void analog_name(struct analog *analog)
 	if (analog->mask & ANALOG_HAT_FCS)
 			strcat(analog->name, " FCS");
 	if (analog->mask & ANALOG_ANY_CHF)
-			strcat(analog->name, " CHF");
-	if (analog->mask & ANALOG_SAITEK)
-			strcat(analog->name, " Saitek");
+			strcat(analog->name, (analog->mask & ANALOG_SAITEK) ? " Saitek" : " CHF");
 
 	strcat(analog->name, (analog->mask & ANALOG_GAMEPAD) ? " gamepad": " joystick");
 }
@@ -418,7 +413,7 @@ static void analog_name(struct analog *analog)
 
 static void analog_init_device(struct analog_port *port, struct analog *analog, int index)
 {
-	int i, j, t, v, x, y, z;
+	int i, j, t, v, w, x, y, z;
 
 	analog_name(analog);
 
@@ -444,6 +439,7 @@ static void analog_init_device(struct analog_port *port, struct analog *analog, 
 			z = y - port->axes[i];
 			z = z > 0 ? z : -z;
 			v = (x >> 3);
+			w = (x >> 3);
 
 			set_bit(t, analog->dev.absbit);
 
@@ -451,14 +447,15 @@ static void analog_init_device(struct analog_port *port, struct analog *analog, 
 				x = y;
 
 			if (analog->mask & ANALOG_SAITEK) {
-				v = (x >> 2);
 				if (i == 2) x = port->axes[i];
+				v = x - (x >> 2);
+				w = (x >> 4);
 			}
 
 			analog->dev.absmax[t] = (x << 1) - v;
 			analog->dev.absmin[t] = v;
 			analog->dev.absfuzz[t] = port->fuzz;
-			analog->dev.absflat[t] = (x >> 3);
+			analog->dev.absflat[t] = w;
 
 			j++;
 		}
@@ -597,18 +594,15 @@ static int analog_init_port(struct gameport *gameport, struct gameport_dev *dev,
 		wait_ms(ANALOG_MAX_TIME);
 		t = gameport_time(gameport, ANALOG_MAX_TIME * 1000);
 		gameport_trigger(gameport);
-		while ((gameport_read(port->gameport) & port->mask) && t) { t--; u++; }
+		while ((gameport_read(port->gameport) & port->mask) && (u < t)) u++; 
 		udelay(ANALOG_SAITEK_DELAY);
 		t = gameport_time(gameport, ANALOG_SAITEK_TIME);
 		gameport_trigger(gameport);
-		while ((gameport_read(port->gameport) & port->mask) && t) { t--; v++; }
+		while ((gameport_read(port->gameport) & port->mask) && (v < t)) v++; 
 
-		printk(KERN_DEBUG "analog.c: Saitek detection: u:%d v:%d\n", u, v);
-		
-		t = (v < u / 2);
-
-		if (t && port->gameport->number < ANALOG_PORTS) {
-			analog_options[port->gameport->number] |= ANALOG_SAITEK;
+		if (v < (u >> 1) && port->gameport->number < ANALOG_PORTS) {
+			analog_options[port->gameport->number] |=
+				ANALOG_SAITEK | ANALOG_BTNS_CHF | ANALOG_HBTN_CHF | ANALOG_HAT1_CHF;
 			return 0;
 		}
 
@@ -683,7 +677,6 @@ struct analog_types analog_types[] = {
 	{ "none",	0x00000000 },
 	{ "auto",	0x000000ff },
 	{ "2btn",	0x0000003f },
-	{ "4btn",	0x000000ff },
 	{ "y-joy",	0x0cc00033 },
 	{ "y-pad",	0x8cc80033 },
 	{ "fcs",	0x000008f7 },
@@ -691,7 +684,6 @@ struct analog_types analog_types[] = {
 	{ "fullchf",	0x000007ff },
 	{ "gamepad",	0x000830f3 },
 	{ "gamepad8",	0x0008f0f3 },
-	{ "saitek",	0x000103ff },
 	{ NULL, 0 }
 };
 
