@@ -139,15 +139,17 @@ int __init fb_setup(char *options)
 			continue;
 		}
 
+#if 0
 		if (!strncmp(this_opt, "inverse", 7)) {
-			fb_invert_cmaps();
+			fb_invert_cmaps(info);
 #ifdef CONFIG_MTRR
 		} else if (!strncmp(this_opt, "nomtrr", 6)) {
-			fb_disable_mtrrs();
+			fb_disable_mtrrs(info);
 #endif
 		} else {
 			global_mode_option = this_opt;
 		}
+#endif
 	}
 	return 0;
 }
