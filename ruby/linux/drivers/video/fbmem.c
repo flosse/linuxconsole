@@ -537,7 +537,7 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 			return -EFAULT;
 		return i;
 	case FBIOBLANK:
-		if (fb->fb_blank == 0)
+		if (fb->fb_blank == NULL)
 			return -EINVAL;
 		return (*fb->fb_blank)(arg, info);
 	case FBIOPUT_COPYAREA:
