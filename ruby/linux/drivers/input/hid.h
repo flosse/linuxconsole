@@ -288,14 +288,6 @@ struct hid_control_fifo {
 	char buffer[HID_BUFFER_SIZE];
 };
 
-struct hid_iodev {
-	int minor;
-	void *private;						/* hiddev opaque device structure */
-	void (*read_report)(struct hid_device *, struct hid_report *);
-	void (*read_all_reports)(struct hid_device *);
-	void (*write_report)(struct hid_device *, struct hid_report *);
-};
-
 #define HID_CLAIMED_INPUT	1
 #define HID_CLAIMED_HIDDEV	2
 
@@ -322,7 +314,8 @@ struct hid_device {							/* device report descriptor */
 	unsigned quirks;						/* Various quirks the device can pull on us */
 
 	struct input_dev input;						/* The input structure */
-	struct hid_iodev hiddev;					/* The hiddev structure */
+	void *hiddev;							/* The hiddev structure */
+	int minor;							/* Hiddev minor number */
 
 	int open;							/* is the device open by anyone? */
 	char name[128];							/* Device name */
@@ -376,3 +369,5 @@ void hid_close(struct hid_device *);
 int hid_find_field(struct hid_device *, unsigned int, unsigned int, struct hid_field **);
 int hid_set_field(struct hid_field *, unsigned, __s32);
 void hid_write_report(struct hid_device *, struct hid_report *);
+void hid_read_report(struct hid_device *, struct hid_report *);
+void hid_init_reports(struct hid_device *hid);

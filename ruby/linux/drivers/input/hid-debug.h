@@ -231,7 +231,7 @@ static void hid_dump_device(struct hid_device *device) {
 }
 
 static void hid_dump_input(struct hid_usage *usage, __s32 value) {
-	printk("hidd: input ");
+	printk("hid-debug: input ");
 	resolv_usage(usage->hid);
 	printk(" = %d\n", value);
 }

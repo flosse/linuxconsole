@@ -146,9 +146,9 @@ hiddev_lookup_usage(struct hid_device *hid, struct hiddev_usage_ref *uref)
  * This is where hid.c calls into hiddev to pass an event that occurred over
  * the interrupt pipe
  */
-void hiddev_hid_event(void *private, unsigned int usage, int value)
+void hiddev_hid_event(struct hid_device *hid, unsigned int usage, int value)
 {
-	struct hiddev *hiddev = private;
+	struct hiddev *hiddev = hid->hiddev;
 	struct hiddev_list *list = hiddev->list;
 
 	while (list) {
@@ -173,15 +173,6 @@ static int hiddev_fasync(int fd, struct file *file, int on)
 	struct hiddev_list *list = file->private_data;
 	retval = fasync_helper(fd, file, on, &list->fasync);
 	return retval < 0 ? retval : 0;
-}
-
-/*
- * If there are no more readers, deregister interest in interrupt events
- */
-static void hiddev_close(struct hiddev *hiddev)
-{
-	struct hid_device *hid = hiddev->hid;
-	if (!--hid->open) usb_unlink_urb(&hid->urb);
 }
 
 /*
@@ -211,11 +202,10 @@ static int hiddev_release(struct inode * inode, struct file * file)
 	*listptr = (*listptr)->next;
 
 	if (!--list->hiddev->open) {
-		if (list->hiddev->exist) {
-			hiddev_close(list->hiddev);
-		} else {
+		if (list->hiddev->exist) 
+			hid_close(list->hiddev->hid);
+		else
 			hiddev_cleanup(list->hiddev);
-		}
 	}
 
 	kfree(list);
@@ -229,7 +219,6 @@ static int hiddev_release(struct inode * inode, struct file * file)
  */
 static int hiddev_open(struct inode * inode, struct file * file) {
 	struct hiddev_list *list;
-	struct hid_device *hid;
 
 	int i = MINOR(inode->i_rdev) - HIDDEV_MINOR_BASE;
 
@@ -247,13 +236,8 @@ static int hiddev_open(struct inode * inode, struct file * file) {
 	file->private_data = list;
 
 	if (!list->hiddev->open++)
-		if (list->hiddev->exist) {
-			hid = hiddev_table[i]->hid;
-			if (!hid->open++) {
-				hid->urb.dev = hid->dev;
-				if (usb_submit_urb(&hid->urb)) return -EIO;
-			}
-		}
+		if (list->hiddev->exist)
+			hid_open(hiddev_table[i]->hid);
 
 	return 0;
 }
@@ -403,7 +387,8 @@ static int hiddev_ioctl(struct inode *inode, struct file *file,
 		}
 
 	case HIDIOCINITREPORT:
-		(*hid->hiddev.read_all_reports)(hid);
+
+		hid_init_reports(hid);
 
 		return 0;
 
@@ -417,7 +402,7 @@ static int hiddev_ioctl(struct inode *inode, struct file *file,
 		if ((report = hiddev_lookup_report(hid, &rinfo)) == NULL)
 			return -EINVAL;
 
-		(*hid->hiddev.read_report)(hid, report);
+		hid_read_report(hid, report);
 
 		return 0;
 
@@ -431,7 +416,7 @@ static int hiddev_ioctl(struct inode *inode, struct file *file,
 		if ((report = hiddev_lookup_report(hid, &rinfo)) == NULL)
 			return -EINVAL;
 
-		(*hid->hiddev.write_report)(hid, report);
+		hid_write_report(hid, report);
 
 		return 0;
 
@@ -622,8 +607,8 @@ int hiddev_connect(struct hid_device *hid)
 				       minor + HIDDEV_MINOR_BASE,
 				       S_IFCHR | S_IRUGO | S_IWUSR,
 				       &hiddev_fops, NULL);
-	hid->hiddev.minor = minor;
-	hid->hiddev.private = hiddev;
+	hid->minor = minor;
+	hid->hiddev = hiddev;
 
 	return 0;
 }
@@ -632,14 +617,14 @@ int hiddev_connect(struct hid_device *hid)
  * This is where hid.c calls us to disconnect a hiddev device from the
  * corresponding hid device (usually because the usb device has disconnected)
  */
-void hiddev_disconnect(void *private)
+void hiddev_disconnect(struct hid_device *hid)
 {
-	struct hiddev *hiddev = private;
+	struct hiddev *hiddev = hid->hiddev;
 
 	hiddev->exist = 0;
 
 	if (hiddev->open) {
-		hiddev_close(hiddev);
+		hid_close(hiddev->hid);
 		wake_up_interruptible(&hiddev->wait);
 	} else {
 		hiddev_cleanup(hiddev);

@@ -1,5 +1,5 @@
 			  Linux Input drivers v1.0
-	       (c) 1999-2000 Vojtech Pavlik <vojtech@suse.cz>
+	       (c) 1999-2001 Vojtech Pavlik <vojtech@suse.cz>
 			     Sponsored by SuSE
 	    $Id$
 ----------------------------------------------------------------------------
@@ -22,7 +22,7 @@ Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
   Should you need to contact me, the author, you can do so either by e-mail
 - mail your message to <vojtech@suse.cz>, or by paper mail: Vojtech Pavlik,
-Ucitelska 1576, Prague 8, 182 00 Czech Republic
+Simunkova 1594, Prague 8, 182 00 Czech Republic
 
   For your convenience, the GNU General Public License version 2 is included
 in the package: See the file COPYING.
@@ -110,10 +110,9 @@ keyboards, trackballs and digitizers.
 LCDs and many other purposes.
 
  The monitor and speaker controls should be easy to add to the hid/input
-interface, but for the UPSs and LCDs it doesn't make much sense. The driver
-doesn't support these yet, and a new, non-event interface should be designed
-for them. If you have any of these devices (I don't), feel free to design
-something and if it's good, it'll get into the driver.
+interface, but for the UPSs and LCDs it doesn't make much sense. For this,
+the hiddev interface was designed. See Documentation/usb/hiddev.txt
+for more information about it.
 
   The usage of the hid.o module is very simple, it takes no parameters,
 detects everything automatically and when a HID device is inserted, it
@@ -145,16 +144,11 @@ PenPartner, that one is handled by the HID driver. Although the Intuos and
 Graphire tablets claim that they are HID tablets as well, they are not and
 thus need this specific driver.
 
-3.1.5 wmforce.c
+3.1.5 iforce.c
 ~~~~~~~~~~~~~~~
-  A driver for the Logitech WingMan Force joysticks, when connected via the
-USB port. It works quite well, but there is no force feedback support yet,
-because the interface to do that is a trade secret of Immersion Corp, and
-even Logitech can't disclose it.
-
-  Support for Logitech WingMan Force Wheel isn't present in this driver, but
-if someone has the device, and is willing to cooperate, it should be a
-matter of a couple days to add it.
+  A driver for I-Force joysticks and wheels, both over USB and RS232. 
+It includes ForceFeedback support now, even though Immersion Corp. considers
+the protocol a trade secret and won't disclose a word about it.
 
 3.2 Event handlers
 ~~~~~~~~~~~~~~~~~~
@@ -204,19 +198,17 @@ mouse and thus needs to be scaled accordingly. These values won't be used if
 you use a mouse only.
 
   Mousedev will generate either PS/2, ImPS/2 (Microsoft IntelliMouse) or
-GenPS/2 (Genius NetMouse/NetScroll) protocols, depending on what the program
+ExplorerPS/2 (IntelliMouse Explorer) protocols, depending on what the program
 reading the data wishes. You can set GPM and X to any of these. You'll need
-ImPS/2 if you want to make use of a wheel on a USB mouse and GenPS/2 if you
-want to use extra (up to 5) buttons. I'm not sure how much is GenPS/2 supported
-in X, though.
+ImPS/2 if you want to make use of a wheel on a USB mouse and ExplorerPS/2 if you
+want to use extra (up to 5) buttons. 
 
 3.2.3 joydev.c
 ~~~~~~~~~~~~~~
   Joydev implements v0.x and v1.x Linux joystick api, much like
-drivers/char/joystick/joystick.c. See joystick-api.txt in the Documentation
-subdirectory for details. Joydev does it on top of the input subsystem,
-though. As soon as any USB joystick is connected, it can be accessed in
-/dev/input on:
+drivers/char/joystick/joystick.c used to in earlier versions. See
+joystick-api.txt in the Documentation subdirectory for details.  As soon as
+any joystick is connected, it can be accessed in /dev/input on:
 
 	crw-r--r--   1 root     root      13,   0 Apr  1 10:50 js0
 	crw-r--r--   1 root     root      13,   1 Apr  1 10:50 js1
@@ -254,7 +246,6 @@ independent.
 You'll find both the latest HID driver and the complete Input driver there
 as well as information how to access the CVS repository for latest revisions
 of the drivers.
-
 
   There is also a mailing list for this:
 

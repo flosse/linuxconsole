@@ -737,7 +737,7 @@ static void hid_process_event(struct hid_device *hid, struct hid_field *field, s
 		hidinput_hid_event(hid, field, usage, value);
 #ifdef CONFIG_USB_HIDDEV
 	if (hid->claimed & HID_CLAIMED_HIDDEV)
-		hiddev_hid_event(hid->hiddev.private, usage->hid, value);
+		hiddev_hid_event(hid, usage->hid, value);
 #endif
 }
 
@@ -796,9 +796,9 @@ static void hid_input_field(struct hid_device *hid, struct hid_field *field, __u
 	memcpy(field->value, value, count * sizeof(__s32));
 }
 
-static int hid_input_report(u8 *data, int len, struct hid_device *hid)
+static int hid_input_report(int type, u8 *data, int len, struct hid_device *hid)
 {
-	struct hid_report_enum *report_enum = hid->report_enum + HID_INPUT_REPORT;
+	struct hid_report_enum *report_enum = hid->report_enum + type;
 	struct hid_report *report;
 	int n, size;
 
@@ -884,14 +884,14 @@ static void hid_irq(struct urb *urb)
 		return;
 	}
 
-	hid_input_report(urb->transfer_buffer, urb->actual_length, urb->context);
+	hid_input_report(HID_INPUT_REPORT, urb->transfer_buffer, urb->actual_length, urb->context);
 }
 
 /*
  * hid_read_report() reads in report values without waiting for an irq urb.
  */
 
-static void hid_read_report(struct hid_device *hid, struct hid_report *report)
+void hid_read_report(struct hid_device *hid, struct hid_report *report)
 {
 	int len = ((report->size - 1) >> 3) + 1 + hid->report_enum[report->type].numbered;
 	u8 data[len];
@@ -902,7 +902,7 @@ static void hid_read_report(struct hid_device *hid, struct hid_report *report)
 		return;
 	}
 
-	hid_input_report(data, len, hid);
+	hid_input_report(report->type, data, len, hid);
 }
 
 /*
@@ -1051,7 +1051,7 @@ void hid_close(struct hid_device *hid)
 /*
  * Initialize all readable reports
  */
-static void hid_init_reports(struct hid_device *hid)
+void hid_init_reports(struct hid_device *hid)
 {
 	int i;
 	struct hid_report *report;
@@ -1126,7 +1126,7 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 		}
 
 #ifdef DEBUG_DATA
-		printk(KERN_DEBUG __FILE__ ": report (size %u, read %d) = ", rsize, n);
+		printk(KERN_DEBUG __FILE__ ": report descriptor (size %u, read %d) = ", rsize, n);
 		for (n = 0; n < rsize; n++)
 			printk(" %02x", (unsigned) rdesc[n]);
 		printk("\n");
@@ -1232,7 +1232,7 @@ static void* hid_probe(struct usb_device *dev, unsigned int ifnum,
 	if (hid->claimed == (HID_CLAIMED_INPUT | HID_CLAIMED_HIDDEV))
 		printk(",");
 	if (hid->claimed & HID_CLAIMED_HIDDEV)
-		printk("hiddev%d", hid->hiddev.minor);
+		printk("hiddev%d", hid->minor);
 
 	c = "Device";
 	for (i = 0; i < hid->maxapplication; i++)

@@ -35,38 +35,6 @@ separately of ALSA modules. So, you canm use only one joystick driver
 without ALSA drivers. The ALSA drivers are not needed to compile or
 run this driver.
 
-How to install and compile this patch.
-
-Copy the .diff file to /usr/src or other place with linux sources. 
-The 2.4.0 serie is required; all early developed kernels have not been 
-tested to compatibility. Use the following command to apply this patch:
-
-patch -p1 < *.diff
-
-and recompile kernel with standard procedure like the following command set
-
-make menuconfig
-
-Be sure the input core have been included. Also you need to add analog 
-joystick support via gameport interface with cs461x driver.
-
-make dep
-make bzlilo
-make modules
-make modules_install
-
-The driver have not been tested in monolith kernel, but all needed routines 
-have been added in source code.
-
-There are no additional procedures required to make automatic loading
-via kmod. Only one important point - do not forget to load joydev module
-first. You can use the following commands to load the driver:
-
-modprobe joydev
-modprobe gameport
-modprobe analog
-modprobe cs461x
-
 There are no debug information print have been placed in source, and no
 specific options required to work this driver. The found chipset parameters
 are printed via printk(KERN_INFO "..."), see the /var/log/messages to
