@@ -1144,7 +1144,7 @@ static void pm3fb_encode_var(struct fb_var_screeninfo *var,
 
 	DASSERT((var != NULL), "fb_var_screeninfo* not NULL");
 	DASSERT((p != NULL), "pm3fb_par* not NULL");
-	DASSERT((info != NULL), "fb_info_gen* not NULL");
+	DASSERT((l_fb_info != NULL), "pm3fb_info* not NULL");
 
 	memset(var, 0, sizeof(struct fb_var_screeninfo));
 
@@ -2034,7 +2034,7 @@ static void pm3fb_mode_setup(char *mode, unsigned long board_num)
 			i++;
 */
 		int retval;
-		retval = fb_find_mode(&(l_fb_info->current_par->f_fb_info->var), &(l_fb_info->gen), mode, NULL, 0, NULL, 8);
+		retval = fb_find_mode(&(l_fb_info->current_par->f_fb_info->var), l_fb_info->current_par->f_fb_info, mode, NULL, 0, NULL, 8);
 		if (!retval || retval == 4)
 			current_par_valid[board_num] = 0;
 		else
