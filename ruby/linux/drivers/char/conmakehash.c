@@ -221,7 +221,7 @@ int main(int argc, char *argv[])
 \n\
 #include <linux/types.h>\n\
 \n\
-u16 dfont_num = %d;
+u16 dfont_num = %d;\n\
 \n\
 u8 dfont_unicount[%d] = \n\
 {\n\t", argv[1], fontlen, fontlen);
