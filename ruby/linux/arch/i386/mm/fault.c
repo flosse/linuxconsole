@@ -17,7 +17,7 @@
 #include <linux/smp_lock.h>
 #include <linux/interrupt.h>
 #include <linux/init.h>
-#include <linux/vt_kern.h>		/* For unblank_screen() */
+#include <linux/tty.h>
 
 #include <asm/system.h>
 #include <asm/uaccess.h>

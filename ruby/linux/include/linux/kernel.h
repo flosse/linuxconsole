@@ -96,6 +96,9 @@ static inline void console_verbose(void)
 extern void bust_spinlocks(int yes);
 extern int oops_in_progress;		/* If set, an oops, panic(), BUG() or die() is in progress */
 
+extern int tainted;
+extern const char *print_tainted(void);
+
 static inline void do_BUG(const char *file, int line)
 {
        bust_spinlocks(1);
