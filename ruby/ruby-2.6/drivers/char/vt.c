@@ -1779,8 +1779,8 @@ void vt_map_input(struct vt_struct *vt)
 {
 	if (vt->beeper) {
 		init_timer(&vt->beep);
-		vt->timer.data = (long) vt->beeper;
-		vt->timer.function = kd_nosound;
+		vt->beep.data = (long) vt->beeper;
+		vt->beep.function = kd_nosound;
 	}
 }	
 

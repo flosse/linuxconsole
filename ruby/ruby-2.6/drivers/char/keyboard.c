@@ -1164,6 +1164,7 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 	}	
 	else if (test_bit(EV_SND, dev->evbit) && admin_vt && !admin_vt->beeper) {
 		admin_vt->beeper = handle;
+		handle->private = admin_vt;
 		vt_map_input(admin_vt);
 	}	
 	return handle;
