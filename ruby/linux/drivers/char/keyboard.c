@@ -947,7 +947,7 @@ static struct input_handle *kbd_connect(struct input_handler *handler, struct in
 	for (i = KEY_RESERVED; i < BTN_MISC; i++) if (test_bit(i, dev->keybit)) break;
 	if (i == BTN_MISC) return NULL;
 
-	if (!(handle = kmalloc(sizeof(struct input_handle), GFP_KERNEL))) return -1;
+	if (!(handle = kmalloc(sizeof(struct input_handle), GFP_KERNEL))) return NULL;
 	memset(handle, 0, sizeof(struct input_handle));
 
 	handle->dev = dev;
