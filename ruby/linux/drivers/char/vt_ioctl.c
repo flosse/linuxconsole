@@ -382,99 +382,121 @@ do_kdgkb_ioctl(int cmd, struct kbsentry *user_kdgkb, int perm)
  *  structure so we wont have to convert the fontdata all the time.
  *  /Jes
  */                     
-
 #define max_font_size 65536
 
 int con_font_op(struct vc_data *vc, struct console_font_op *op)
 {
-	int size = max_font_size, set = 0;
+	int err = -EINVAL, size = max_font_size;
 	struct console_font_op old_op;
-	int err = -EINVAL;
-        u8 *temp = NULL;
+	u8 *temp = NULL;
 
-        if (vc->display_fg->vc_mode != KD_TEXT)
+	if (vc->display_fg->vc_mode != KD_TEXT)
 		return -EINVAL;
-        memcpy(&old_op, op, sizeof(old_op));
-        if (op->op == KD_FONT_OP_SET) {
-                if (!op->data || op->charcount > 512)
-                        return -EINVAL;
-		/* Need to guess font height [compat] */
-                if (!op->height) {      
-                        int h, i;
-                        u8 *charmap = op->data, tmp;              
-                        /* If from KDFONTOP ioctl, don't allow things 
-			   which can be done in userland,
-                           so that we can get rid of this soon */
-                        if (!(op->flags & KD_FONT_FLAG_OLD))
-                                return -EINVAL;
-                        for (h = 32; h > 0; h--)
-                                for (i = 0; i < op->charcount; i++) {
-                                        if (get_user(tmp, &charmap[32*i+h-1]))
-                                                return -EFAULT;
-                                        if (tmp)
-                                                goto nonzero;
-                                }
+	switch (op->op) {
+	case KD_FONT_OP_SET:
+		/* We need data from userland */
+		if (!op->data || !op->charcount)
+			return -EINVAL;
+		/* Need to guess font height [compat]. In the old days you
+		   could pass in console_font_op w/o a heigth and figure
+		   out the size. We recommend you pass in console_font_op
+		   with the height set.*/
+		if (!op->height) {      
+		  	int h, i;
+                       	u8 *charmap = op->data, tmp;              
+                       	/* If from KDFONTOP ioctl, don't allow things 
+		   	   which can be done in userland, so that we can
+                           get rid of this soon. Ha Ha. Not */
+                       	if (!(op->flags & KD_FONT_FLAG_OLD))
+                               	return -EINVAL;
+                       	for (h = 32; h > 0; h--)
+                               	for (i = 0; i < op->charcount; i++) {
+                                       	if (get_user(tmp, &charmap[32*i+h-1]))
+                                               	return -EFAULT;
+                                       	if (tmp)
+                                               	goto nonzero;
+                               	}
 			return -EINVAL;
                 nonzero:
-                        op->height = h;
+                       	op->height = h;
                 }
                 if (op->width > 32 || op->height > 32)
                 	return -EINVAL;        
                 size = (op->width+7)/8 * 32 * op->charcount;
                 if (size > max_font_size)
-                        return -ENOSPC;
-                set = 1;
-        } else if (op->op == KD_FONT_OP_GET)
-                set = 0;
-        else
-                return vc->display_fg->vt_sw->con_font_op(vc, op);
-        if (op->data) {
-                temp = kmalloc(size, GFP_KERNEL);
-                if (!temp)
-                        return -ENOMEM;
-                if (set && copy_from_user(temp, op->data, size)) {
-        		kfree(temp);                
-			return -EFAULT;
-                }
-                op->data = temp;
-        }                                                          
-
-        spin_lock_irq(&console_lock);
-        err = vc->display_fg->vt_sw->con_font_op(vc, op);
-        spin_unlock_irq(&console_lock);
-
-        op->data = old_op.data;
-        if (!err && !set) {
-                int c = (op->width+7)/8 * 32 * op->charcount;
-
-                if (op->data && op->charcount > old_op.charcount) {
+                       	return -ENOSPC;
+		/* Okay the font passed in doesn't do anything nasty. 
+		   Now we grab the font data from userland */
+		temp = kmalloc(size, GFP_KERNEL);
+		if (!temp)
+			return -ENOMEM;
+		if (copy_from_user(temp, op->data, size)) {
 			kfree(temp);
-                        return -ENOSPC;
+			return -EFAULT;
 		}
-                if (!(op->flags & KD_FONT_FLAG_OLD)) {
-                        if (op->width > old_op.width || 
-                            op->height > old_op.height) { 
-                                kfree(temp);
-				return -ENOSPC;
-			}
-                } else {
-                        if (op->width != 8) {
+		op->data = temp;
+		spin_lock_irq(&console_lock);
+		err = vc->display_fg->vt_sw->con_font_op(vc, op);
+		spin_unlock_irq(&console_lock);
+		if (!err)
+			vc->vc_font = op;
+		break;
+	case KD_FONT_OP_GET:
+		/* Save passed in console_font_op */
+		memcpy(&old_op, op, sizeof(old_op));
+		/* allocate space for font data */
+		if (op->data) {
+			temp = kmalloc(size, GFP_KERNEL);
+			if (!temp)
+				return -ENOMEM;
+			op->data = temp;
+		}
+		/* Get font data for present console */	
+		err = vc->display_fg->vt_sw->con_font_op(vc, op);
+		
+ 		/* point userland font data space back to passed in font_op */	
+		op->data = old_op.data;
+		if (!err) {
+			/* This data is from the current VC, not userland 
+			   we figure out how much memory the VC is using */
+			size = (op->width+7)/8 * 32 * op->charcount;
+		
+			/* Next we see if userland passed in space and 
+			   see if userland requested more chars than
+			   what the VC has */	
+               		if (op->data && op->charcount > old_op.charcount) {
 				kfree(temp);
-                                return -EIO;
+                       		return -ENOSPC;
 			}
-                        else if ((old_op.height && op->height > old_op.height) 
-					|| op->height > 32) {
-				kfree(temp);
-                                return -ENOSPC;                
-			}    
+               		if (!(op->flags & KD_FONT_FLAG_OLD)) {
+                       		if (op->height > old_op.height ||
+			    		op->width > old_op.width) { 
+					kfree(temp);
+					return -ENOSPC;
+				}
+               		} else if ((old_op.height && op->height > old_op.height)
+				  || op->height > 32) {
+					kfree(temp);
+                              		return -ENOSPC;                
+			}	    
                 }
-                if (!err && op->data && copy_to_user(op->data, temp, c)) {
+                if (!err && op->data && copy_to_user(op->data, temp, size)) {
 			kfree(temp);
                         return -EFAULT;
 		}		
-        }
-        return err;
-}                                
+		break;
+	case KD_FONT_OP_COPY:
+		vc->vc_font = vc->display_fg->fg_console->vc_font;
+		break;
+	case KD_FONT_OP_SET_DEFAULT:
+		vc->vc_font = vc->display_fg->default_mode->vc_font;	
+		err = vc->display_fg->vt_sw->con_font_op(vc, op);
+		break;
+	default:
+		return -EINVAL;
+	}
+	return err;
+}
 
 static inline int 
 do_fontx_ioctl(struct vc_data *vc, int cmd, struct consolefontdesc *user_cfd, 
@@ -497,7 +519,7 @@ do_fontx_ioctl(struct vc_data *vc, int cmd, struct consolefontdesc *user_cfd,
 		op.height = cfdarg.charheight;
 		op.charcount = cfdarg.charcount;
 		op.data = cfdarg.chardata;
-		return con_font_op(vc->display_fg->fg_console, &op);
+		return con_font_op(vc, &op);
 	case GIO_FONTX: {
 		op.op = KD_FONT_OP_GET;
 		op.flags = KD_FONT_FLAG_OLD;
@@ -505,7 +527,7 @@ do_fontx_ioctl(struct vc_data *vc, int cmd, struct consolefontdesc *user_cfd,
 		op.height = cfdarg.charheight;
 		op.charcount = cfdarg.charcount;
 		op.data = cfdarg.chardata;
-		i = con_font_op(vc->display_fg->fg_console, &op);
+		i = con_font_op(vc, &op);
 		if (i)
 			return i;
 		cfdarg.charheight = op.height;
@@ -1118,12 +1140,13 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		if (!perm)
 			return -EPERM;
 		op.op = KD_FONT_OP_SET;
-		op.flags = KD_FONT_FLAG_OLD | KD_FONT_FLAG_DONT_RECALC;	/* Compatibility */
+		/* Compatibility */
+		op.flags = KD_FONT_FLAG_OLD | KD_FONT_FLAG_DONT_RECALC;
 		op.width = 8;
 		op.height = 0;
 		op.charcount = 256;
 		op.data = (char *) arg;
-		return con_font_op(vc->display_fg->fg_console, &op);
+		return con_font_op(vc, &op);
 	}
 
 	case GIO_FONT: {
@@ -1134,7 +1157,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		op.height = 32;
 		op.charcount = 256;
 		op.data = (char *) arg;
-		return con_font_op(vc->display_fg->fg_console, &op);
+		return con_font_op(vc, &op);
 	}
 
 	case PIO_CMAP:
@@ -1152,31 +1175,24 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 
 	case PIO_FONTRESET:
 	{
+		struct console_font_op op;
+
 		if (!perm)
 			return -EPERM;
-
-#ifdef BROKEN_GRAPHICS_PROGRAMS
-		/* With BROKEN_GRAPHICS_PROGRAMS defined, the default
-		   font is not saved. */
-		return -ENOSYS;
-#else
-		{
-		struct console_font_op op;
 		op.op = KD_FONT_OP_SET_DEFAULT;
 		op.data = NULL;
-		i = con_font_op(vc->display_fg->fg_console, &op);
+		i = con_font_op(vc, &op);
 		if (i) return i;
-		con_set_default_unimap(vc->display_fg->fg_console);
+		con_set_default_unimap(vc);
 		return 0;
-		}
-#endif
 	}
 
 	case KDFONTOP: {
 		struct console_font_op op;
+	
 		if (copy_from_user(&op, (void *) arg, sizeof(op)))
 			return -EFAULT;
-		if (!perm && op.op != KD_FONT_OP_GET)
+		if (!perm)
 			return -EPERM;
 		i = con_font_op(vc, &op);
 		if (i) return i;
@@ -1331,9 +1347,12 @@ inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
                 set_origin(old_vc);               
 		
 		set_origin(new_vc);	
-		update = new_vc->display_fg->vt_sw->con_switch(new_vc); 
+		update = new_vc->display_fg->vt_sw->con_switch(new_vc);
+		/*
+		if (new_vc->vc_font.data != old_vc->vc_font.data)
+			new_vc->display_fg->vt_sw->con_font_op(new_vc, &new_vc->vc_font);
+		*/
 		set_palette(new_vc);
-	
                 if (update && new_vc->display_fg->vc_mode != KD_GRAPHICS) { 
                         /* Update the screen contents */
                         do_update_region(new_vc, new_vc->vc_origin, 
