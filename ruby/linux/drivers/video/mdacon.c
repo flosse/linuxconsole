@@ -577,16 +577,23 @@ void __init mda_console_init(void)
 	struct vc_data *vc;
         int i;
 
+	/* Allocate the memory we need for this VT */
         vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
         if (!vt) return;
-	vt->kmalloced = 1;
-	vt->vt_sw = &mda_con;
-	vc = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
-	vt->vcs.vc_cons[0] = vc;
-	if (!vc) {
+	vt->default_mode = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
+	if (!vt->default_mode) {
 		kfree(vt);
 		return;
 	}
+	vc = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
+	if (!vc) {
+		kfree(vt->default_mode);
+		kfree(vt);
+		return;
+	}
+	vt->kmalloc = 1;
+	vt->vt_sw = &mda_con;
+	vt->vcs.vc_cons[0] = vc;
 #ifdef MODULE
         display_desc = create_vt(vt, 1);
 #else
@@ -594,12 +601,13 @@ void __init mda_console_init(void)
 #endif
 	vc->vc_screenbuf = (long)kmalloc(vc->vc_screenbuf_size, GFP_KERNEL);
         if (!display_desc || !vc->vc_screenbuf) {
-		kfree(vc);
+		kfree(vt->vcs.vc_cons[0]);
+		kfree(vt->default_mode);
                 kfree(vt);
 		return;
         }
 	vc_init(vc, !vt->vt_sw->con_save_screen);			
-        printk("Console: mono %s %dx%d",display_desc,vc->vc_cols,vc->vc_rows);
+        printk("Console: mono %s %dx%d",display_desc, vc->vc_cols, vc->vc_rows);
         return;
 }
 
