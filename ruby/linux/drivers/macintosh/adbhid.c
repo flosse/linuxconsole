@@ -271,15 +271,37 @@ adbhid_buttons_input(unsigned char *data, int nb, struct pt_regs *regs, int auto
 	switch (adbhid[id]->original_handler_id) {
 	default:
 	case 0x02: /* Adjustable keyboard button device */
-		printk(KERN_INFO "Unhandled ADB_MISC event %02x, %02x, %02x, %02x\n",
-		       data[0], data[1], data[2], data[3]);
-		break;
+	  {
+		int down = (data[1] == (data[1] & 0xf));
+
+		switch (data[1] & 0x0f) {
+		case 0x0:	/* microphone */
+			input_report_key(&adbhid[id]->input, KEY_SOUND, down);
+			break;
+
+		case 0x1:	/* mute */
+			input_report_key(&adbhid[id]->input, KEY_MUTE, down);
+			break;
+
+		case 0x2:	/* volume decrease */
+			input_report_key(&adbhid[id]->input, KEY_VOLUMEDOWN, down);
+			break;
+
+		case 0x3:	/* volume increase */
+			input_report_key(&adbhid[id]->input, KEY_VOLUMEUP, down);
+			break;
+
+		default:
+			printk(KERN_INFO "Unhandled ADB_MISC event %02x, %02x, %02x, %02x\n",
+			       data[0], data[1], data[2], data[3]);
+			break;
+		}
+	  }
+	  break;
+
 	case 0x1f: /* Powerbook button device */
 	  {
 		int down = (data[1] == (data[1] & 0xf));
-#ifdef CONFIG_PMAC_BACKLIGHT
-		int backlight = get_backlight_level();
-#endif
 		/*
 		 * XXX: Where is the contrast control for the passive?
 		 *  -- Cort
@@ -287,44 +309,28 @@ adbhid_buttons_input(unsigned char *data, int nb, struct pt_regs *regs, int auto
 
 		switch (data[1] & 0x0f) {
 		case 0x8:	/* mute */
-			input_report_key(&adbhid[id]->input, KEY_MUTE,
-					 down);
+			input_report_key(&adbhid[id]->input, KEY_MUTE, down);
 			break;
 
 		case 0x7:	/* volume decrease */
-			input_report_key(&adbhid[id]->input, KEY_VOLUMEDOWN,
-					 down);
+			input_report_key(&adbhid[id]->input, KEY_VOLUMEDOWN, down);
 			break;
 
 		case 0x6:	/* volume increase */
-			input_report_key(&adbhid[id]->input, KEY_VOLUMEUP,
-					 down);
+			input_report_key(&adbhid[id]->input, KEY_VOLUMEUP, down);
 			break;
 
 		case 0xb:	/* eject */
-			input_report_key(&adbhid[id]->input, KEY_EJECTCD,
-					 down);
+			input_report_key(&adbhid[id]->input, KEY_EJECTCD, down);
 			break;
 
-#ifdef CONFIG_PMAC_BACKLIGHT
 		case 0xa:	/* brightness decrease */
-			if (!down || backlight < 0)
-				break;
-			if (backlight > BACKLIGHT_OFF)
-				set_backlight_level(backlight-1);
-			else
-				set_backlight_level(BACKLIGHT_OFF);
+			input_report_key(&adbhid[id]->input, KEY_BRIGHTNESSDOWN, down);
 			break;
 
 		case 0x9:	/* brightness increase */
-			if (!down || backlight < 0)
-				break;
-			if (backlight < BACKLIGHT_MAX)
-				set_backlight_level(backlight+1);
-			else 
-				set_backlight_level(BACKLIGHT_MAX);
+			input_report_key(&adbhid[id]->input, KEY_BRIGHTNESSUP, down);
 			break;
-#endif /* CONFIG_PMAC_BACKLIGHT */
 		}
 	  }
 	  break;
@@ -436,7 +442,7 @@ adbhid_input_register(int id, int default_id, int original_handler_id,
 		return;
 
 	memset(adbhid[id], 0, sizeof(struct adbhid));
-	sprintf(adbhid[id]->phys, "adb%d:%d.%02x/input0", id, default_id, original_handler_id);
+	sprintf(adbhid[id]->phys, "adb%d:%d.%02x/input", id, default_id, original_handler_id);
 
 	adbhid[id]->id = default_id;
 	adbhid[id]->original_handler_id = original_handler_id;
@@ -515,6 +521,11 @@ adbhid_input_register(int id, int default_id, int original_handler_id,
 		switch (original_handler_id) {
 		case 0x02: /* Adjustable keyboard button device */
 			sprintf(adbhid[id]->name, "ADB adjustable keyboard buttons");
+			adbhid[id]->input.evbit[0] = BIT(EV_KEY) | BIT(EV_REP);
+			set_bit(KEY_SOUND, adbhid[id]->input.keybit);
+			set_bit(KEY_MUTE, adbhid[id]->input.keybit);
+			set_bit(KEY_VOLUMEUP, adbhid[id]->input.keybit);
+			set_bit(KEY_VOLUMEDOWN, adbhid[id]->input.keybit);
 			break;
 		case 0x1f: /* Powerbook button device */
 			sprintf(adbhid[id]->name, "ADB Powerbook buttons");
@@ -522,6 +533,8 @@ adbhid_input_register(int id, int default_id, int original_handler_id,
 			set_bit(KEY_MUTE, adbhid[id]->input.keybit);
 			set_bit(KEY_VOLUMEUP, adbhid[id]->input.keybit);
 			set_bit(KEY_VOLUMEDOWN, adbhid[id]->input.keybit);
+			set_bit(KEY_BRIGHTNESSUP, adbhid[id]->input.keybit);
+			set_bit(KEY_BRIGHTNESSDOWN, adbhid[id]->input.keybit);
 			set_bit(KEY_EJECTCD, adbhid[id]->input.keybit);
 			break;
 		}
@@ -539,8 +552,8 @@ adbhid_input_register(int id, int default_id, int original_handler_id,
 
 	input_register_device(&adbhid[id]->input);
 
-	printk(KERN_INFO "input: %s on adb%d:%d.%02x\n",
-	       adbhid[id]->name, id, default_id, original_handler_id);
+	printk(KERN_INFO "input: %s on %s\n",
+	       adbhid[id]->name, adbhid[id]->phys);
 
 	if (default_id == ADB_KEYBOARD) {
 		/* HACK WARNING!! This should go away as soon there is an utility
