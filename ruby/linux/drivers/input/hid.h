@@ -267,8 +267,6 @@ struct hid_report {
 	struct hid_field *field[HID_MAX_FIELDS];	/* fields of the report */
 	unsigned maxfield;				/* maximum valid field index */
 	unsigned size;					/* size of the report (bits) */
-	unsigned idx;					/* where we're in data */
-	unsigned char *data;				/* data for multi-packet reports */
 	struct hid_device *device;			/* associated device */
 };
 

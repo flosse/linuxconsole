@@ -507,8 +507,6 @@ static void hid_free_report(struct hid_report *report)
 
 	for (n = 0; n < report->maxfield; n++)
 		kfree(report->field[n]);
-	if (report->data)
-		kfree(report->data);
 	kfree(report);
 }
 
@@ -832,44 +830,13 @@ static int hid_input_report(int type, u8 *data, int len, struct hid_device *hid)
 	size = ((report->size - 1) >> 3) + 1;
 
 	if (len < size) {
-
-		if (size <= 8) {
-			dbg("report %d is too short, (%d < %d)", report->id, len, size);
-			return -1;
-		}
-
-		/*
-		 * Some low-speed devices have large reports and maxpacketsize 8.
-		 * We buffer the data in that case and parse it when we got it all.
-		 * Works only for unnumbered reports. Doesn't make sense for numbered
-		 * reports anyway - then they don't need to be large.
-		 */
-
-		if (!report->data)
-			if (!(report->data = kmalloc(size, GFP_ATOMIC))) {
-				dbg("couldn't allocate report buffer");
-				return -1;
-			}
-
-		if (report->idx + len > size) {
-			dbg("report data buffer overflow");
-			report->idx = 0;
-			return -1;
-		}
-
-		memcpy(report->data + report->idx, data, len);
-		report->idx += len;
-
-		if (report->idx < size)
-			return 0;
-
-		data = report->data;
+		dbg("report %d is too short, (%d < %d)", report->id, len, size);
+		return -1;
 	}
 
 	for (n = 0; n < report->maxfield; n++)
 		hid_input_field(hid, report->field[n], data);
 
-	report->idx = 0;
 	return 0;
 }
 
@@ -1049,26 +1016,35 @@ void hid_close(struct hid_device *hid)
 }
 
 /*
- * Initialize all readable reports
+ * Initialize all reports
  */
+
 void hid_init_reports(struct hid_device *hid)
 {
-	int i;
-	struct hid_report *report;
 	struct hid_report_enum *report_enum;
+	struct hid_report *report;
 	struct list_head *list;
+	int len;
 
-	for (i = 0; i < HID_REPORT_TYPES; i++) {
-		if (i == HID_FEATURE_REPORT || i == HID_INPUT_REPORT) {
-			report_enum = hid->report_enum + i;
-			list = report_enum->report_list.next;
-			while (list != &report_enum->report_list) {
-				report = (struct hid_report *) list;
-				usb_set_idle(hid->dev, hid->ifnum, 0, report->id);
-				hid_read_report(hid, report);
-				list = list->next;
-			}
+	report_enum = hid->report_enum + HID_INPUT_REPORT;
+	list = report_enum->report_list.next;
+	while (list != &report_enum->report_list) {
+		report = (struct hid_report *) list;
+		len = ((report->size - 1) >> 3) + 1 + report_enum->numbered;
+		if (len > hid->urb.transfer_buffer_length) {
+			hid->urb.transfer_buffer_length = len < 32 ? len : 32;
 		}
+		usb_set_idle(hid->dev, hid->ifnum, 0, report->id);
+		hid_read_report(hid, report);
+		list = list->next;
+	}
+
+	report_enum = hid->report_enum + HID_FEATURE_REPORT;
+	list = report_enum->report_list.next;
+	while (list != &report_enum->report_list) {
+		report = (struct hid_report *) list;
+		hid_read_report(hid, report);
+		list = list->next;
 	}
 }
 
@@ -1141,7 +1117,7 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 	for (n = 0; n < interface->bNumEndpoints; n++) {
 
 		struct usb_endpoint_descriptor *endpoint = &interface->endpoint[n];
-		int pipe, maxp;
+		int pipe;
 
 		if ((endpoint->bmAttributes & 3) != 3)		/* Not an interrupt endpoint */
 			continue;
@@ -1150,9 +1126,8 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 			continue;
 
 		pipe = usb_rcvintpipe(dev, endpoint->bEndpointAddress);
-		maxp = usb_maxpacket(dev, pipe, usb_pipeout(pipe));
 
-		FILL_INT_URB(&hid->urb, dev, pipe, hid->buffer, maxp > 32 ? 32 : maxp, hid_irq, hid, endpoint->bInterval);
+		FILL_INT_URB(&hid->urb, dev, pipe, hid->buffer, 0, hid_irq, hid, endpoint->bInterval);
 
 		break;
 	}
