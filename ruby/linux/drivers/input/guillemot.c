@@ -43,8 +43,6 @@
 #define GUILLEMOT_MAX_LENGTH	17	/* 17 bytes */
 #define GUILLEMOT_REFRESH_TIME	HZ/50	/* 20 ms */
 
-#define GUILLEMOT_TYPE_PAD	1	/* Pad ??? */
-
 struct guillemot {
 	struct gameport *gameport;
 	struct input_dev dev;
@@ -60,7 +58,7 @@ static short guillemot_abs_pad[] =
 	{ ABS_X, ABS_Y, ABS_THROTTLE, ABS_RUDDER, -1 };
 
 static short guillemot_btn_pad[] =
-	{ BTN_TR, BTN_X, BTN_Y, BTN_Z, BTN_A, BTN_B, BTN_C, BTN_TL, BTN_TL2, BTN_TR2, BTN_MODE, BTN_SELECT, -1 };
+	{ BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_TL, BTN_TR, BTN_MODE, BTN_SELECT, -1 };
 
 static struct {
         int x;
