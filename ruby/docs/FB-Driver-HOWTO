@@ -75,7 +75,7 @@
   was impressed by it. Later I toke over it development and improved even 
   more. Much thanks goes to Fabrice for getting the ball rolling. This API is 
   a natural extension of the original API developed by Martin Schaller and 
-  now maintained by Geert Uytterhoeven (geert@linux-m68k.org). Thanks goes 
+  now maintained by Geert Uytterhoeven (geert@linux-m68k.org). Thanks
   to you and the many others who developed the Linux framebuffer system, 
   drivers and utilities. A great amount of thanks goes to Andreas Beck of 
   the GGI project for helping me write this document and teaching me about 
@@ -142,7 +142,7 @@
   2.  Framebuffer Card Technology
 
   This section gives a very cursory overview of graphics cards that have
-  accessable framebuffer technology, in order to help you understand the 
+  accessible framebuffer technology, in order to help you understand the 
   concepts used later in the document. If you are considering writing a
   driver for a video card please contact the manufacturer for documentation 
   on the card. Also please consider reading some books on video hardware in 
@@ -194,8 +194,8 @@
   otherwise it would leave a noticeable trace while moving, which would look 
   ugly. 
 
-  At 2, the HSYNC pulse ends. This point isn't of much interest, as you can
-  not tell, if the ray is already at the left edge. The only thing important
+  At 2, the HSYNC pulse ends. This point isn't of much interest, as you cannot
+  tell if the ray is already at the left edge. The only thing important
   about point 2 is, that the time between point 1 and 2 must be sufficiently
   high for the monitor to detect the HSYNC signal. Usually the HSYNC pulse can
   be made very small.
@@ -266,7 +266,7 @@
 
   Of course there are limits to this: If you go too far, you will produce
   pixels beyond the visiable area of the monitor which is useless, or
-  interfere with the retrace, what gives ugly stripes from the retracing
+  interfere with the retrace; that gives ugly stripes from the retracing
   CRT ray.
 
   Now let's shed some light on a few remaining terms:
@@ -288,7 +288,7 @@
   
   If you look at the fbdev driver you think yikes. Yes it's complex but not as
   much as you think. A side note about standard modes. It's a common 
-  misconception, that graphics cards cannot do anything but the VGA/VESA 
+  misconception that graphics cards cannot do anything but the VGA/VESA 
   induced "standard" modes like 640x480, 800x600, 1024x768, 1280x960, ...
   With most cards, about any resolution can be programmed, though many
   accelerators have been optimized for the abovementioned modes, so that it 
@@ -441,9 +441,9 @@
 
   3.3 Recipe for multisync monitors
 
-  a) determine the totals by calculating htotal = width*1.2 and 
+  a) Determine the totals by calculating htotal = width*1.2 and 
      vtotal = height*1.1 .
-  b) check, what limits the refresh by calculating vfreq2 = hfreqmax/vtotal.
+  b) Check what limits the refresh by calculating vfreq2 = hfreqmax/vtotal.
      If that exceeds vfreqmax, the limit is on the vfreq side, and we use
      vfre = vfreqmax and hfreq = vfreqmax*vtotal. If it doesn't, the mode is 
      limited by hfreq and we have to use vfreq = vfreq2.
@@ -527,17 +527,17 @@
 
   There exist an endless number of colors but colors have a special property. 
   If you take two colors and mix them together you get a different color. 
-  Their exist many models to represent colors but fbdev is based on what is 
-  know as the RGB color model. Out of all the colors their exist three colors 
+  There exist many models to represent colors but fbdev is based on what is 
+  known as the RGB color model. Out of all the colors there exist three colors 
   in this model which when mixed in different amounts can produce any color. 
-  These colors are know as primary colors. There does exist a physical limit 
+  These colors are known as primary colors. There does exist a physical limit 
   to mixing colors. If you take and mix red, green, and blue in equal amounts 
   you get gray. Now if you make each color component equally brighter the final
-  color will become white. Now their reachs a point where making each component
+  color will become white. Now there reaches a point where making each component
   brighter and brighter you will still end up with white. You can increase the
   intensity of a color component by any amount from some inital value up to 
   this physical limit. This is where the image depth comes in. As you know on 
-  most cards you can have a image depth from one bit to 32 bits. Image depth 
+  most cards you can have an image depth from one bit to 32 bits. Image depth 
   is independent of the mapping from the pixel to the color components. It 
   also is independent of the memory layout to pixel mapping. Note some cards 
   have a complex mapping from the pixel values to the color components (red, 
@@ -566,7 +566,7 @@
                               
   The way fbdev tells what this video memory to pixel mapping is, is with 
   the type field in fb_fix_screeninfo. Here I'm going to describe the 
-  FB_TYPE_PACKED_PIXELS layout since it is the most common. Here their exist 
+  FB_TYPE_PACKED_PIXELS layout since it is the most common. Here there exists 
   a direct mapping from video memory to pixel value. If you place a 5 in video 
   memory then the pixel value at that position will be 5. This is important 
   when you have memory mapped the video memory to userland. Next we consider 
@@ -575,7 +575,7 @@
   above diagram this mapping is independent from the mapping from video memory 
   to pixel value. This means a FB_TYPE_PLANES could have FB_VISUAL_MONO01 just 
   like FB_TYPE_PACKED_PIXELS can. To understand visuals we have to go back to
-  the first types of video hardware. In the begining their was just monochrome
+  the first types of video hardware. In the begining there was just monochrome
   monitors. Here we could only display 2 colors. The foreground and background
   color. Traditionally these colors are black and white but if you are old 
   enough you would remember the old green monitors. In fbdev API we define two
@@ -588,7 +588,7 @@
   colors needed. If your application needs a specific set of colors it would 
   switch the color maps and you would get the needed colors. Of course this 
   also switches the other colors in the applications. That was the trade off.
-  This became what was known as pseudocolor mode. In fbdev API their exist two
+  This became what was known as pseudocolor mode. In fbdev API there exist two
   types of pseudocolor mappings. A static one and a dynamic one. 
   FB_VISUAL_STATIC_PSEUDOCOLOR defines a video card that has a non programmable
   color map. What colors you get are what you are stuck with. The other type
@@ -598,13 +598,13 @@
   support 256 color intensity levels for each color component you would need a 
   color map of 16 million colors. So new mappings where developed in which
   specific fields of a pixel where directly proportional to the intensity of a 
-  color component. Two types of mappings where developed. One being truecolor 
-  and the other directcolor. In truecolor you can not change the mappings from
+  color component. Two types of mappings were developed. One being truecolor 
+  and the other directcolor. In truecolor you cannot change the mappings from
   the pixel value to color intensities. Setting a value of 64 to the red 
   component of the pixel will result in a red intensity of 64. How bright of a 
   red this is depends on the image depth. For directcolor you can control this.
   You could make a pixel value in the red field of 64 equal 128 for the 
-  intensity. Also some cards support a alpha value which is used in higher 
+  intensity. Also some cards support an alpha value which is used in higher 
   graphics which for fbdev is of little importance than it should always be 
   set to the highest value it can have. For most cards alpha shows up for 15 
   bit modes where each color compenent can have up to 32 intensity levels (2^5)
@@ -622,7 +622,7 @@
   you to make life much easier. In the older API the console code was heavily 
   linked to the framebuffer devices. The newer API has now moved nearly all 
   console handling code into fbcon itself. Now fbcon is a true wrapper around 
-  the video cards abilities. This allowed for massive code reduction and 
+  the video card's abilities. This allowed for massive code reduction and 
   easier driver developement. A good example of a framebuffer driver is vfb.
   The vfb driver is not a true framebuffer driver. All it does is map a chunk
   of memory to userspace. It's used for demonstration purposes and testing.
@@ -647,7 +647,7 @@
   the new API fb_monospecs prevents such things and if used correctly can
   prevent a monitor from being cooked. The final data structure is fb_info. 
   This defines the current state of the video card. Fb_info is only visible
-  from the kernel. Inside of fb_info their exist a fb_ops which is a collection
+  from the kernel. Inside of fb_info there exists a fb_ops which is a collection
   of needed functions to make fbdev and fbcon work. 
 
   4.2 Driver layout
@@ -659,23 +659,23 @@
   independent in behavior from video cards. First we define our three basic 
   data structures. For all the data structures I defined them static and 
   declare the default values. The reason I do this is that it's less memory 
-  intensive then allocate a piece of memory and filling in the default 
-  values. Note for drivers that support multihead of the same card then
+  intensive than allocating a piece of memory and filling in the default 
+  values. Note for drivers that support multihead on the same card
   the fb_info should be dynamically allocated for each card present. For
   fb_var_screeninfo and fb_fix_screeninfo they still are declared static 
   since all the cards can be set to the same mode. 
 
   4.3 Initialization and boot time parameter handling
 
-  Their are two functions that handle the video card at boot time. 
+  There are two functions that handle the video card at boot time. 
    
   int xxfb_init(void);
   int xxfb_setup(char*);
 
   In the example driver as with most drivers these functions are placed at 
-  the end of the driver. Both are very card specific. In oorder to link 
+  the end of the driver. Both are very card specific. In order to link 
   your driver directly into the kernel both of these functions you must add 
-  the above defination with extern in front to fbmem.c. Then add these 
+  the above definition with extern in front to fbmem.c. Then add these 
   functions to the following in fbmem.c 
   
   static struct {
@@ -711,11 +711,11 @@
   
   The xxxfb_init function sets the inital state of the video card. This 
   function has to consider bus and platform handling since today most cards 
-  can exist on many platforms. For bus types we have to deal with their are
+  can exist on many platforms. For bus types we have to deal with there are
   PCI, ISA, zorro. Also some platforms offer firmware that returns information
-  about the video card. In these case we often don't need to deal with the 
-  bus unless we need more control over the card. Lets look at Open Firmware
-  thats avaliable on PowerPCs. If you are going to use Open Firmware to 
+  about the video card. In these cases we often don't need to deal with the 
+  bus unless we need more control over the card. Let's look at Open Firmware
+  that's available on PowerPCs. If you are going to use Open Firmware to 
   initalize your card you need to add the following to offb.c.
 
   #ifdef CONFIG_FB_YOUR_CARD
@@ -741,18 +741,18 @@
   
   The first two functions xxfb_open and xxfb_release can be called from both
   fbcon and fbdev. In fact that's the use of the user flag. If user equals zero
-  then fbcon wants to access this device else it's a explicit open of the 
+  then fbcon wants to access this device else it's an explicit open of the 
   framebuffer device. This way you can handle the framebuffer device for the 
   console in a special way for a particular video card. For most drivers this 
   function just does a MOD_INC_USE_COUNT or MOD_DEC_USE_COUNT.
 
 
   
-  These are the function thats at the heart of mode setting. Their do exist a 
+  These are the functions at the heart of mode setting. There are a 
   few cards that don't support mode changing. For these we have this function 
   return a -EINVAL to let the user know he/she can't set the mode. Actually 
   set_var does more than just set modes. It can check them as well. In 
-  fb_var_screeninfo their exist a flag called activate. This flag can take on 
+  fb_var_screeninfo there is a flag called activate. This flag can take on 
   the the following values. FB_ACTIVATE_NOW,FB_ACTIVATE_NXTOPEN, and 
   FB_ACTIVATE_TEST. FB_ACTIVATE_TEST tells us if the hardware can handle what
   the user requested. FB_ACTIVATE_NXTOPEN sets the values wanted on the next 
@@ -766,7 +766,7 @@
     int line_length;
 
     /* Basic setup test. Here we look at what the user passed in that he/she 
-       wants. For example to test the fb_var_screeninfo field vmode like its 
+       wants. For example to test the fb_var_screeninfo field vmode like is 
        done in vfb.c. Here we see if the user has FB_VMODE_YWARP. Also we 
        should look to see if the user tried to pass in invalid values like 17 
        bpp (bits per pixel)  */
@@ -780,15 +780,15 @@
        memory a video card has varies from card to card. Also finding out how 
        much memory we have is done in xxxfb_init since this never changes 
        unless you add more memory to your card which requires a reboot of the 
-       machine anyway. You might have to do other tests depending on make of 
+       machine anyway. You might have to do other tests depending on the make of 
        your card. Note the par filed in fb_info. This is used to store card 
        specific data. This data can effect set_var. Also it is present to 
-       allow other possible drivers that could effect the framebuffer device 
-       such as a special driver for a accel engine or memory mapping the z 
+       allow other possible drivers that could affect the framebuffer device 
+       such as a special driver for an accel engine or memory mapping the z 
        buffer on a card */
       
     /* Summary. First look at any var fields to see if they are valid. Next 
-       test hardware with these fields without setting the hardware. A 
+       test hardware with these fields without setting the hardware. An 
        example of one is find what the line_lenght would be for the new 
        mode. Then test the following */
            
@@ -811,7 +811,7 @@
            /* Timings are okay. Next we see if we really want to change 
               this mode */
            if ((activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {    
-              /* Now lets program the clocks on this card. Here the code is 
+              /* Now let's program the clocks on this card. Here the code is 
                  very card specific. Remember to change any fields for fix in 
                  info that might be effected by the changing of the resolution.
                  */
@@ -820,7 +820,7 @@
               ...
        
            /* Now that we have dealt with the possible changing resolutions 
-              lets handle a possible change of bit depth. */
+              let's handle a possible change of bit depth. */
            if (info->var.bits_per_pixel != var->bits_per_pixel) {
                if ((err = fb_alloc_cmap(&info->cmap, 0, 0)))
                   return err;               
@@ -886,15 +886,15 @@
   The function xxxfb_setcolreg is used to set a single color register for a 
   video card. To use this properly you must understand colors which is 
   discribed above. This routine sets a color map entry. The regno passed into
-  the routine represents the color map index which is equal to the color thats
+  the routine represents the color map index which is equal to the color that's
   composed of the amount of red, green, blue, and even alpha that are also 
   passed into the function. For psuedocolor modes this color map index (regno)
   represents the pixel value. So if you place a pixel value of regno in video 
-  memory you get the color thats made of the red, green, blue that you passed 
-  into xxxfb_setcolreg. Now for truecolor and directcolor mode its a little 
+  memory you get the color that's made of the red, green, blue that you passed 
+  into xxxfb_setcolreg. Now for truecolor and directcolor mode it's a little 
   different. In this case we simulate a psuedo color map. The reason for this
   is the console system always has a color map which has 16 entries. In fb_info
-  their exist the pseudo_palette which gives a mapping from a non color map
+  there exists the pseudo_palette which gives a mapping from a non color map
   mode to a color map based system. The pseudo_palette always has 17 entries. 
   The first 16 for the console colors and the last one for the cursor. So if 
   we wanted to display the 4 entry in the color map of the console we would
@@ -935,51 +935,51 @@
   fb_ops function a NULL pointer. The sky is the limit for defining your ioctl
   calls.
 
-  Their exist a default memory map function for fbdev but sometimes it just 
+  There is a default memory map function for fbdev but sometimes it just 
   doesn't have the power you truly need. A good example of this is video
-  cards that work in sparc workstations need their own mmap functions because 
-  of the way sparcs handle memory is different from other platforms. This is
+  cards that work in sparc workstations. Those need their own mmap functions because 
+  sparcs handle memory differently from other platforms. This is
   true even for sparcs with PCI buses. 
 
   Now here is the next class of functions which are optional. The 
   xxxfb_accel_init and xxfb_accel_done. xxxfb_accel_init really depends on 
-  the card. It is intended to initial the engine or set the accel engine into 
+  the card. It is intended to initialize the engine or set the accel engine into 
   a state which you can use the acceleration engine. It also ensures that the 
   framebuffer is not accessed at the same time as the accel engine. This
-  can lock a system. Uusally their exist a bit to test to see if a accel 
-  engine is idle or the card generates a interrupt. For cards that used the 
-  old fb_rasterimg this function replaces it. Some cards have a seperate state 
-  for 3D and 2D. This function insures that the card goes into a 2D state.
-  Just in case a previous application set the accel engine into a 3D state 
+  can lock a system. Uusally there is a bit to test to see if an accel 
+  engine is idle or the card generates an interrupt. For cards that used the 
+  old fb_rasterimg this function replaces it. Some cards have a separate state 
+  for 3D and 2D. This function insures that the card goes into a 2D state,
+  just in case a previous application set the accel engine into a 3D state 
   or made the accel engine very unhappy. The next function that encomposses 
   this set is xxxfb_accel_done. This function sets the video card in a state
   such that you can write to the framebuffer again. You should provide both 
   functions if your driver uses even one hardware accelerated function. The
-  reason being is to ensure that the framebuffer is not accessed at the same
-  tome as the framebuffer.
+  reason is to ensure that the framebuffer is not accessed at the same
+  time as the framebuffer.
   
-  Final the third class of fb_op functions. Like the first they are required.
-  If your card does not support any of these acclerated functions their exist
+  Finally the third class of fb_op functions. Like the first they are required.
+  If your card does not support any of these accelerated functions there are
   default functions for packed pixel framebuffer formats. They are 
-  cfba_fillrect, cfba_copyarea, cfba_imgblit. If your supports some but not
+  cfba_fillrect, cfba_copyarea, cfba_imgblit. If you supports some but not
   all of the accels available you can still use some of these software emulated
-  accels. Each software emulated accel in store in a seperate file. Now lets
-  discribe each accel function. Before we discuss these functions we need to 
-  note not to draw in areas pass the video boundries. If it does you need to 
-  adjust the with and height of the ares to avoid this problem. The first 
-  function just  fills in rectangle starting at x1 and y1 of some width and 
+  accels. Each software emulated accel is stored in a seperate file. Now let's
+  describe each accel function. Before we discuss these functions we need to 
+  note not to draw in areas past the video boundries. If it does you need to 
+  adjust the width and height of the ares to avoid this problem. The first 
+  function just fills in a rectangle starting at x1 and y1 of some width and 
   height with a pixel value of packed pixel format. If the video memory mapping
   is not a direct mapping from the pixel value (not FB_TYPE_PACKED_PIXEL) you 
-  will have to do some translating. Their are two ways to fill in the 
+  will have to do some translating. There are two ways to fill in the 
   rectangle, FBA_ROP_COPY and FBA_ROP_XOR. FBA_ROP_XOR exclusive ors the pixel 
   value with the current pixel value. This allows things like quickly erasing
   a rectangular area. The other function just directly copies the data. The 
   next function is xxxfb_copyarea. It just copies one area of the framebuffer 
   at source x and source y of some width and height to some destination x and
-  y. The final function is xxxfb_imageblt. This function copies a image from
+  y. The final function is xxxfb_imageblt. This function copies an image from
   system memory to video memory. You can get really fancy here but this is
   fbdev which has the purpose of mode setting only. All the image blit 
-  function does is draw bitmaps, image made of a foregound and background 
+  function does is draw bitmaps, images made of a foregound and background 
   color, and a color image of the same color depth as the framebuffer. The 
   second part is used to draw the little penguins. The drawing of bitmaps is
   used to draw our fonts. That does it for the functions. Now you should be
