@@ -256,27 +256,18 @@ struct fb_ops {
     /* open/release and usage marking */
     int (*fb_open)(struct fb_info *info, int user);
     int (*fb_release)(struct fb_info *info, int user);
-    /* get non settable parameters */
-    int (*fb_get_fix)(struct fb_fix_screeninfo *fix, int con,
-		      struct fb_info *info); 
-    /* get settable parameters */
-    int (*fb_get_var)(struct fb_var_screeninfo *var, int con,
-		      struct fb_info *info);		
     /* set settable parameters */
-    int (*fb_set_var)(struct fb_var_screeninfo *var, int con,
-		      struct fb_info *info);		
-    /* get colormap */
-    int (*fb_get_cmap)(struct fb_cmap *cmap, int kspc, int con,
-		       struct fb_info *info);
-    /* set colormap */
-    int (*fb_set_cmap)(struct fb_cmap *cmap, int kspc, int con,
-		       struct fb_info *info);
+    int (*fb_set_var)(struct fb_var_screeninfo *var, struct fb_info *info); 
+    /* set a color register */
+    int (*fb_setcolreg)(u_int regno, u_int red, u_int green, u_int blue,
+                        u_int transp, struct fb_info *);
+    /* blank a display */
+    int (*fb_blank)(int blank, struct fb_info*);
     /* pan display */
-    int (*fb_pan_display)(struct fb_var_screeninfo *var, int con,
-			  struct fb_info *info);
+    int (*fb_pan_display)(struct fb_var_screeninfo *var, struct fb_info *info); 
     /* perform fb specific ioctl */
     int (*fb_ioctl)(struct inode *inode, struct file *file, unsigned int cmd,
-		    unsigned long arg, int con, struct fb_info *info);
+		    unsigned long arg, struct fb_info *info);
     /* perform fb specific mmap */
     int (*fb_mmap)(struct fb_info *info, struct file *file, struct vm_area_struct *vma);
     /* switch to/from raster image mode */
@@ -298,9 +289,7 @@ struct fb_info {
    struct fb_cmap cmap;                 /* Current cmap */
    struct fb_ops *fbops;
    char *screen_base;                   /* Virtual address */
-   struct display *disp;		/* initial display variable */
    struct vc_data *display_fg;		/* Console visible on this display */
-   char fontname[40];			/* default font name */
    devfs_handle_t devfs_handle;         /* Devfs handle for new name         */
    devfs_handle_t devfs_lhandle;        /* Devfs handle for compat. symlink  */
    int (*changevar)(int);		/* tell console var has changed */
@@ -308,9 +297,6 @@ struct fb_info {
 					/* tell fb to switch consoles */
    int (*updatevar)(int, struct fb_info*);
 					/* tell fb to update the vars */
-   void (*blank)(int, struct fb_info*);	/* tell fb to (un)blank the screen */
-					/* arg = 0: unblank */
-					/* arg > 0: VESA level (arg-1) */
    void *pseudo_palette;                /* Fake palette of 16 colors and 
 					   the cursor's color for non
                                            palette mode */
@@ -323,77 +309,6 @@ struct fb_info {
 #else
 #define FBINFO_FLAG_DEFAULT	0
 #endif
-
-    /*
-     *  This structure abstracts from the underlying hardware. It is not
-     *  mandatory but used by the `generic' frame buffer operations.
-     *  Read drivers/video/skeletonfb.c for more information.
-     */
-
-struct fbgen_hwswitch {
-    void (*detect)(void);
-    int (*encode_fix)(struct fb_fix_screeninfo *fix, const void *par,
-		      struct fb_info_gen *info);
-    int (*decode_var)(const struct fb_var_screeninfo *var, void *par,
-		      struct fb_info_gen *info);
-    int (*encode_var)(struct fb_var_screeninfo *var, const void *par,
-		      struct fb_info_gen *info);
-    void (*get_par)(void *par, struct fb_info_gen *info);
-    void (*set_par)(const void *par, struct fb_info_gen *info);
-    int (*getcolreg)(unsigned regno, unsigned *red, unsigned *green,
-		     unsigned *blue, unsigned *transp, struct fb_info *info);
-    int (*setcolreg)(unsigned regno, unsigned red, unsigned green,
-		     unsigned blue, unsigned transp, struct fb_info *info);
-    int (*pan_display)(const struct fb_var_screeninfo *var,
-		       struct fb_info_gen *info);
-    int (*blank)(int blank_mode, struct fb_info_gen *info);
-    void (*set_disp)(const void *par, struct display *disp,
-		     struct fb_info_gen *info);
-};
-
-struct fb_info_gen {
-    struct fb_info info;
-
-    /* Entries for a generic frame buffer device */
-    /* Yes, this starts looking like C++ */
-    u_int parsize;
-    struct fbgen_hwswitch *fbhw;
-
-   /* From here on everything is device dependent */
-};
-
-    /*
-     *  `Generic' versions of the frame buffer device operations
-     */
-
-extern int fbgen_get_fix(struct fb_fix_screeninfo *fix, int con,
-			 struct fb_info *info);
-extern int fbgen_get_var(struct fb_var_screeninfo *var, int con,
-			 struct fb_info *info);
-extern int fbgen_set_var(struct fb_var_screeninfo *var, int con,
-			 struct fb_info *info);
-extern int fbgen_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info);
-extern int fbgen_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info);
-extern int fbgen_pan_display(struct fb_var_screeninfo *var, int con,
-			     struct fb_info *info);
-extern int fbgen_ioctl(struct inode *inode, struct file *file,
-		       unsigned int cmd, unsigned long arg, int con,
-		       struct fb_info *info);
-
-    /*
-     *  Helper functions
-     */
-
-extern int fbgen_do_set_var(struct fb_var_screeninfo *var, int isactive,
-			    struct fb_info_gen *info);
-extern void fbgen_set_disp(int con, struct fb_info_gen *info);
-extern void fbgen_install_cmap(int con, struct fb_info_gen *info);
-extern int fbgen_update_var(int con, struct fb_info *info);
-extern int fbgen_switch(int con, struct fb_info *info);
-extern void fbgen_blank(int blank, struct fb_info *info);
-
 
 /* drivers/video/fbmem.c */
 extern int register_framebuffer(struct fb_info *fb_info);
@@ -411,14 +326,7 @@ extern int fbmon_dpms(const struct fb_info *fb_info);
 extern int fb_alloc_cmap(struct fb_cmap *cmap, int len, int transp);
 extern void fb_copy_cmap(struct fb_cmap *from, struct fb_cmap *to,
 			 int fsfromto);
-extern int fb_get_cmap(struct fb_cmap *cmap, int kspc,
-		       int (*getcolreg)(u_int, u_int *, u_int *, u_int *,
-					u_int *, struct fb_info *),
-		       struct fb_info *fb_info);
-extern int fb_set_cmap(struct fb_cmap *cmap, int kspc,
-		       int (*setcolreg)(u_int, u_int, u_int, u_int, u_int,
-					struct fb_info *),
-		       struct fb_info *fb_info);
+extern int fb_set_cmap(struct fb_cmap *cmap, int kspc, struct fb_info *info);
 extern struct fb_cmap *fb_default_cmap(int len);
 extern void fb_invert_cmaps(void);
 
@@ -438,12 +346,41 @@ struct fb_videomode {
     u32 vmode;
 };
 
+#ifdef MODULE
+static inline int fb_find_mode(struct fb_var_screeninfo *var,
+                               struct fb_info *info, const char *mode_option,
+                               const struct fb_videomode *db,
+                               unsigned int dbsize,
+                               const struct fb_videomode *default_mode,
+                               unsigned int default_bpp)
+{
+    extern int __fb_try_mode(struct fb_var_screeninfo *var,
+                             struct fb_info *info,
+                             const struct fb_videomode *mode,
+                             unsigned int bpp);
+    /*
+     *  FIXME: How to make the compiler optimize vga640x400 away if
+     *         default_mode is non-NULL?
+     */
+    static const struct fb_videomode vga640x400 = {
+        /* 640x400 @ 70 Hz, 31.5 kHz hsync */
+        NULL, 70, 640, 400, 39721, 40, 24, 39, 9, 96, 2,
+        0, FB_VMODE_NONINTERLACED
+    };
+    if (!default_mode)
+        default_mode = &vga640x400;
+    if (!default_bpp)
+        default_bpp = 8;
+    return __fb_try_mode(var, info, default_mode, default_bpp);
+}
+#else
 extern int __init fb_find_mode(struct fb_var_screeninfo *var,
 			       struct fb_info *info, const char *mode_option,
 			       const struct fb_videomode *db,
 			       unsigned int dbsize,
 			       const struct fb_videomode *default_mode,
 			       unsigned int default_bpp);
+#endif
 
 #endif /* __KERNEL__ */
 
