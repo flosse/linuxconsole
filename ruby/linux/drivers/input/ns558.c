@@ -363,7 +363,7 @@ void __exit ns558_exit(void)
 		}
 		
 		next = port->next;
-		kfree(port)
+		kfree(port);
 		port = next;
 	}
 }
