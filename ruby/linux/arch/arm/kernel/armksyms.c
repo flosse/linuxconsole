@@ -63,6 +63,7 @@ extern void __modsi3(void);
 extern void __muldi3(void);
 extern void __ucmpdi2(void);
 extern void __udivdi3(void);
+extern void __umoddi3(void);
 extern void __udivmoddi4(void);
 extern void __udivsi3(void);
 extern void __umodsi3(void);
@@ -83,7 +84,7 @@ extern void __do_softirq(void);
     __MODULE_STRING(sym);			\
  const struct module_symbol __ksymtab_##sym	\
   __attribute__((section("__ksymtab"))) =	\
-    { (unsigned long)&##orig, __kstrtab_##sym };
+    { (unsigned long)&orig, __kstrtab_##sym };
 
 /*
  * floating point math emulator support.
@@ -175,7 +176,7 @@ EXPORT_SYMBOL_NOVERS(strchr);
 EXPORT_SYMBOL_NOVERS(strlen);
 EXPORT_SYMBOL_NOVERS(strnlen);
 EXPORT_SYMBOL_NOVERS(strpbrk);
-EXPORT_SYMBOL_NOVERS(strtok);
+EXPORT_SYMBOL_NOVERS(strsep);
 EXPORT_SYMBOL_NOVERS(strrchr);
 EXPORT_SYMBOL_NOVERS(strstr);
 EXPORT_SYMBOL_NOVERS(memset);
@@ -222,6 +223,7 @@ EXPORT_SYMBOL_NOVERS(__modsi3);
 EXPORT_SYMBOL_NOVERS(__muldi3);
 EXPORT_SYMBOL_NOVERS(__ucmpdi2);
 EXPORT_SYMBOL_NOVERS(__udivdi3);
+EXPORT_SYMBOL_NOVERS(__umoddi3);
 EXPORT_SYMBOL_NOVERS(__udivmoddi4);
 EXPORT_SYMBOL_NOVERS(__udivsi3);
 EXPORT_SYMBOL_NOVERS(__umodsi3);

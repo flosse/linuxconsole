@@ -1,14 +1,13 @@
 /*
  * lib/bust_spinlocks.c
  *
- * Provides a minimal bust_spinlocks for architectures which don't have one 
- * of their own
+ * Provides a minimal bust_spinlocks for architectures which don't have one of their own.
  *
- * bust_spinlocks() clears any spinlocks which would prevent oops, die(),
- * BUG() and panic() information from reaching the user.
+ * bust_spinlocks() clears any spinlocks which would prevent oops, die(), BUG()
+ * and panic() information from reaching the user.
  */
+
 #include <linux/config.h>
-#include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/spinlock.h>
 #include <linux/tty.h>
@@ -21,23 +20,19 @@ void bust_spinlocks(int yes)
 	spin_lock_init(&timerlist_lock);
 	if (yes) {
 		oops_in_progress = 1;
-/*
-ifdef CONFIG_SMP
-		atomic_set(&global_irq_lock,0);
-#endif
-*/
 	} else {
 		int loglevel_save = console_loglevel;
+		
 		oops_in_progress = 0;
 		/*
 		 * OK, the message is on the console.  Now we call printk()
-		 * without oops_in_progress set so that printk() will give 
-		 * klogd and the blanked console a poke. Hold onto your hats...
+		 * without oops_in_progress set so that printk() will give klogd
+		 * and the blanked console a poke.  Hold onto your hats...
 		 */
-		console_loglevel = 15;  	/* NMI oopser may have shut the console up */
+		console_loglevel = 15;		/* NMI oopser may have shut the console up */
 		printk(" ");
 		console_loglevel = loglevel_save;
 	}
 }
 
-EXPORT_SYMBOL(bust_spinlocks);
+

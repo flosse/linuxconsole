@@ -60,6 +60,7 @@ extern int acornfb_init(void);
 extern int acornfb_setup(char*);
 extern int amifb_init(void);
 extern int amifb_setup(char*);
+extern int anakinfb_init(void);
 extern int atafb_init(void);
 extern int atafb_setup(char*);
 extern int macfb_init(void);
@@ -72,6 +73,7 @@ extern int pm3fb_init(void);
 extern int pm3fb_setup(char*);
 extern int clps711xfb_init(void);
 extern int cyber2000fb_init(void);
+extern int cyber2000fb_setup(char*);
 extern int retz3fb_init(void);
 extern int retz3fb_setup(char*);
 extern int clgenfb_init(void);
@@ -172,14 +174,17 @@ static struct {
 #ifdef CONFIG_FB_AMIGA
 	{ "amifb", amifb_init, amifb_setup },
 #endif
+#ifdef CONFIG_FB_ANAKIN
+	{ "anakinfb", anakinfb_init, NULL },
+#endif
 #ifdef CONFIG_FB_CLPS711X
-       { "clps711xfb", clps711xfb_init, NULL },
+	{ "clps711xfb", clps711xfb_init, NULL },
 #endif
 #ifdef CONFIG_FB_CYBER
 	{ "cyber", cyberfb_init, cyberfb_setup },
 #endif
 #ifdef CONFIG_FB_CYBER2000
-	{ "cyber2000", cyber2000fb_init, NULL },
+	{ "cyber2000", cyber2000fb_init, cyber2000fb_setup },
 #endif
 #ifdef CONFIG_FB_PM2
 	{ "pm2fb", pm2fb_init, pm2fb_setup },

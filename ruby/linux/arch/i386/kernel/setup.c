@@ -99,6 +99,8 @@
 #endif
 #include <linux/highmem.h>
 #include <linux/bootmem.h>
+#include <linux/pci.h>
+#include <linux/pci_ids.h>
 #include <linux/seq_file.h>
 #include <asm/processor.h>
 #include <asm/mtrr.h>
@@ -126,9 +128,6 @@ unsigned long mmu_cr4_features;
 /*
  * Bus types ..
  */
-#ifdef CONFIG_EISA
-int EISA_bus;
-#endif
 int MCA_bus;
 
 /* for MCA, but anyone else can use it if they want */
@@ -207,6 +206,10 @@ struct resource standard_io_resources[] = {
 	{ "dma2", 0xc0, 0xdf, IORESOURCE_BUSY },
 	{ "fpu", 0xf0, 0xff, IORESOURCE_BUSY }
 };
+#ifdef CONFIG_MELAN
+standard_io_resources[1] = { "pic1", 0x20, 0x21, IORESOURCE_BUSY };
+standard_io_resources[5] = { "pic2", 0xa0, 0xa1, IORESOURCE_BUSY };
+#endif
 
 #define STANDARD_IO_RESOURCES (sizeof(standard_io_resources)/sizeof(struct resource))
 
@@ -606,7 +609,7 @@ static void __init parse_mem_cmdline (char ** cmdline_p)
 				to--;
 			if (!memcmp(from+4, "nopentium", 9)) {
 				from += 9+4;
-				clear_bit(X86_FEATURE_PSE, &boot_cpu_data.x86_capability);
+				clear_bit(X86_FEATURE_PSE, boot_cpu_data.x86_capability);
 			} else if (!memcmp(from+4, "exactmap", 8)) {
 				from += 8+4;
 				e820.nr_map = 0;
@@ -907,7 +910,7 @@ void __init setup_arch(char **cmdline_p)
 	 * the bootmem allocator) but before get_smp_config (to allow parsing
 	 * of MADT).
 	 */
-	acpi_table_init(*cmdline_p);
+	acpi_boot_init(*cmdline_p);
 #endif
 #ifdef CONFIG_X86_LOCAL_APIC
 	/*
@@ -1106,7 +1109,7 @@ static int __init init_amd(struct cpuinfo_x86 *c)
 
 	/* Bit 31 in normal CPUID used for nonstandard 3DNow ID;
 	   3DNow is IDd by bit 31 in extended CPUID (1*32+31) anyway */
-	clear_bit(0*32+31, &c->x86_capability);
+	clear_bit(0*32+31, c->x86_capability);
 	
 	r = get_model_name(c);
 
@@ -1117,8 +1120,8 @@ static int __init init_amd(struct cpuinfo_x86 *c)
 			{
 				/* Based on AMD doc 20734R - June 2000 */
 				if ( c->x86_model == 0 ) {
-					clear_bit(X86_FEATURE_APIC, &c->x86_capability);
-					set_bit(X86_FEATURE_PGE, &c->x86_capability);
+					clear_bit(X86_FEATURE_APIC, c->x86_capability);
+					set_bit(X86_FEATURE_PGE, c->x86_capability);
 				}
 				break;
 			}
@@ -1198,7 +1201,7 @@ static int __init init_amd(struct cpuinfo_x86 *c)
 				/*  Set MTRR capability flag if appropriate */
 				if (c->x86_model == 13 || c->x86_model == 9 ||
 				   (c->x86_model == 8 && c->x86_mask >= 8))
-					set_bit(X86_FEATURE_K6_MTRR, &c->x86_capability);
+					set_bit(X86_FEATURE_K6_MTRR, c->x86_capability);
 				break;
 			}
 			break;
@@ -1211,12 +1214,12 @@ static int __init init_amd(struct cpuinfo_x86 *c)
 			 * here.
 			 */
 			if (c->x86_model == 6 || c->x86_model == 7) {
-				if (!test_bit(X86_FEATURE_XMM, &c->x86_capability)) {
+				if (!test_bit(X86_FEATURE_XMM, c->x86_capability)) {
 					printk(KERN_INFO "Enabling disabled K7/SSE Support.\n");
 					rdmsr(MSR_K7_HWCR, l, h);
 					l &= ~0x00008000;
 					wrmsr(MSR_K7_HWCR, l, h);
-					set_bit(X86_FEATURE_XMM, &c->x86_capability);
+					set_bit(X86_FEATURE_XMM, c->x86_capability);
 				}
 			}
 			break;
@@ -1228,7 +1231,7 @@ static int __init init_amd(struct cpuinfo_x86 *c)
 }
 
 /*
- * Read Cyrix DEVID registers (DIR) to get more detailed info. about the CPU
+ * Read NSC/Cyrix DEVID registers (DIR) to get more detailed info. about the CPU
  */
 static void __init do_cyrix_devid(unsigned char *dir0, unsigned char *dir1)
 {
@@ -1303,7 +1306,7 @@ extern void calibrate_delay(void) __init;
 static void __init check_cx686_slop(struct cpuinfo_x86 *c)
 {
 	unsigned long flags;
-	
+
 	if (Cx86_dir0_msb == 3) {
 		unsigned char ccr3, ccr5;
 
@@ -1313,7 +1316,7 @@ static void __init check_cx686_slop(struct cpuinfo_x86 *c)
 		ccr5 = getCx86(CX86_CCR5);
 		if (ccr5 & 2)
 			setCx86(CX86_CCR5, ccr5 & 0xfd);  /* reset SLOP */
-		setCx86(CX86_CCR3, ccr3);                 /* disable MAPEN */
+		setCx86(CX86_CCR3, ccr3);		  /* disable MAPEN */
 		local_irq_restore(flags);
 
 		if (ccr5 & 2) { /* possible wrong calibration done */
@@ -1324,6 +1327,7 @@ static void __init check_cx686_slop(struct cpuinfo_x86 *c)
 	}
 }
 
+
 static void __init init_cyrix(struct cpuinfo_x86 *c)
 {
 	unsigned char dir0, dir0_msn, dir0_lsn, dir1 = 0;
@@ -1332,12 +1336,12 @@ static void __init init_cyrix(struct cpuinfo_x86 *c)
 
 	/* Bit 31 in normal CPUID used for nonstandard 3DNow ID;
 	   3DNow is IDd by bit 31 in extended CPUID (1*32+31) anyway */
-	clear_bit(0*32+31, &c->x86_capability);
+	clear_bit(0*32+31, c->x86_capability);
 
 	/* Cyrix used bit 24 in extended (AMD) CPUID for Cyrix MMX extensions */
-	if ( test_bit(1*32+24, &c->x86_capability) ) {
-		clear_bit(1*32+24, &c->x86_capability);
-		set_bit(X86_FEATURE_CXMMX, &c->x86_capability);
+	if ( test_bit(1*32+24, c->x86_capability) ) {
+		clear_bit(1*32+24, c->x86_capability);
+		set_bit(X86_FEATURE_CXMMX, c->x86_capability);
 	}
 
 	do_cyrix_devid(&dir0, &dir1);
@@ -1384,23 +1388,18 @@ static void __init init_cyrix(struct cpuinfo_x86 *c)
 		} else             /* 686 */
 			p = Cx86_cb+1;
 		/* Emulate MTRRs using Cyrix's ARRs. */
-		set_bit(X86_FEATURE_CYRIX_ARR, &c->x86_capability);
+		set_bit(X86_FEATURE_CYRIX_ARR, c->x86_capability);
 		/* 6x86's contain this bug */
 		c->coma_bug = 1;
 		break;
 
 	case 4: /* MediaGX/GXm */
-		/*
-		 *	Life sometimes gets weiiiiiiiird if we use this
-		 *	on the MediaGX. So we turn it off for now. 
-		 */
-		
 #ifdef CONFIG_PCI
-		/* It isnt really a PCI quirk directly, but the cure is the
+		/* It isn't really a PCI quirk directly, but the cure is the
 		   same. The MediaGX has deep magic SMM stuff that handles the
 		   SB emulation. It thows away the fifo on disable_dma() which
 		   is wrong and ruins the audio. 
-                   
+
 		   Bug2: VSA1 has a wrap bug so that using maximum sized DMA 
 		   causes bad things. According to NatSemi VSA2 has another
 		   bug to do with 'hlt'. I've not seen any boards using VSA2
@@ -1415,15 +1414,26 @@ static void __init init_cyrix(struct cpuinfo_x86 *c)
 
 		/* GXm supports extended cpuid levels 'ala' AMD */
 		if (c->cpuid_level == 2) {
+			/* Enable Natsemi MMX extensions */
+			setCx86(CX86_CCR7, getCx86(CX86_CCR7) | 1);
+
 			get_model_name(c);  /* get CPU marketing name */
-			clear_bit(X86_FEATURE_TSC, c->x86_capability);
+			/*
+			 *  The 5510/5520 companion chips have a funky PIT
+			 *  that breaks the TSC synchronizing, so turn it off
+			 */
+			if(pci_find_device(PCI_VENDOR_ID_CYRIX, PCI_DEVICE_ID_CYRIX_5510, NULL) ||
+				pci_find_device(PCI_VENDOR_ID_CYRIX, PCI_DEVICE_ID_CYRIX_5520, NULL))
+				clear_bit(X86_FEATURE_TSC, c->x86_capability);
 			return;
 		}
 		else {  /* MediaGX */
 			Cx86_cb[2] = (dir0_lsn & 1) ? '3' : '4';
 			p = Cx86_cb+2;
 			c->x86_model = (dir1 & 0x20) ? 1 : 2;
-			clear_bit(X86_FEATURE_TSC, &c->x86_capability);
+#ifndef CONFIG_CS5520
+			clear_bit(X86_FEATURE_TSC, c->x86_capability);
+#endif
 		}
 		break;
 
@@ -1441,10 +1451,10 @@ static void __init init_cyrix(struct cpuinfo_x86 *c)
 		tmp = (!(dir0_lsn & 7) || dir0_lsn & 1) ? 2 : 0;
 		Cx86_cb[tmp] = cyrix_model_mult2[dir0_lsn & 7];
 		p = Cx86_cb+tmp;
-        	if (((dir1 & 0x0f) > 4) || ((dir1 & 0xf0) == 0x20))
+	 	if (((dir1 & 0x0f) > 4) || ((dir1 & 0xf0) == 0x20))
 			(c->x86_model)++;
 		/* Emulate MTRRs using Cyrix's ARRs. */
-		set_bit(X86_FEATURE_CYRIX_ARR, &c->x86_capability);
+		set_bit(X86_FEATURE_CYRIX_ARR, c->x86_capability);
 		break;
 
 	case 0xf:  /* Cyrix 486 without DEVID registers */
@@ -1743,7 +1753,7 @@ static void __init init_centaur(struct cpuinfo_x86 *c)
 
 	/* Bit 31 in normal CPUID used for nonstandard 3DNow ID;
 	   3DNow is IDd by bit 31 in extended CPUID (1*32+31) anyway */
-	clear_bit(0*32+31, &c->x86_capability);
+	clear_bit(0*32+31, c->x86_capability);
 
 	switch (c->x86) {
 
@@ -1754,7 +1764,7 @@ static void __init init_centaur(struct cpuinfo_x86 *c)
 				fcr_set=ECX8|DSMC|EDCTLB|EMMX|ERETSTK;
 				fcr_clr=DPDC;
 				printk(KERN_NOTICE "Disabling bugged TSC.\n");
-				clear_bit(X86_FEATURE_TSC, &c->x86_capability);
+				clear_bit(X86_FEATURE_TSC, c->x86_capability);
 #ifdef CONFIG_X86_OOSTORE
 				winchip_create_optimal_mcr();
 				/* Enable
@@ -1833,12 +1843,12 @@ static void __init init_centaur(struct cpuinfo_x86 *c)
 				printk(KERN_INFO "Centaur FCR is 0x%X\n",lo);
 			}
 			/* Emulate MTRRs using Centaur's MCR. */
-			set_bit(X86_FEATURE_CENTAUR_MCR, &c->x86_capability);
+			set_bit(X86_FEATURE_CENTAUR_MCR, c->x86_capability);
 			/* Report CX8 */
-			set_bit(X86_FEATURE_CX8, &c->x86_capability);
+			set_bit(X86_FEATURE_CX8, c->x86_capability);
 			/* Set 3DNow! on Winchip 2 and above. */
 			if (c->x86_model >=8)
-				set_bit(X86_FEATURE_3DNOW, &c->x86_capability);
+				set_bit(X86_FEATURE_3DNOW, c->x86_capability);
 			/* See if we can find out some more. */
 			if ( cpuid_eax(0x80000000) >= 0x80000005 ) {
 				/* Yes, we can. */
@@ -1856,8 +1866,8 @@ static void __init init_centaur(struct cpuinfo_x86 *c)
 					lo |= (1<<1 | 1<<7);	/* Report CX8 & enable PGE */
 					wrmsr (MSR_VIA_FCR, lo, hi);
 
-					set_bit(X86_FEATURE_CX8, &c->x86_capability);
-					set_bit(X86_FEATURE_3DNOW, &c->x86_capability);
+					set_bit(X86_FEATURE_CX8, c->x86_capability);
+					set_bit(X86_FEATURE_3DNOW, c->x86_capability);
 
 					get_model_name(c);
 					display_cacheinfo(c);
@@ -1951,7 +1961,7 @@ static void __init init_rise(struct cpuinfo_x86 *c)
 		"movl $0x2333313a, %%edx\n\t"
 		"cpuid\n\t" : : : "eax", "ebx", "ecx", "edx"
 	);
-	set_bit(X86_FEATURE_CX8, &c->x86_capability);
+	set_bit(X86_FEATURE_CX8, c->x86_capability);
 }
 
 
@@ -2084,7 +2094,7 @@ static void __init init_intel(struct cpuinfo_x86 *c)
 		}
 		if ( l1i || l1d )
 			printk(KERN_INFO "CPU: L1 I cache: %dK, L1 D cache: %dK\n",
-			       l1i, l1d);
+			      l1i, l1d);
 		if ( l2 )
 			printk(KERN_INFO "CPU: L2 cache: %dK\n", l2);
 		if ( l3 )
@@ -2101,7 +2111,7 @@ static void __init init_intel(struct cpuinfo_x86 *c)
 
 	/* SEP CPUID bug: Pentium Pro reports SEP but doesn't have it */
 	if ( c->x86 == 6 && c->x86_model < 3 && c->x86_mask < 3 )
-		clear_bit(X86_FEATURE_SEP, &c->x86_capability);
+		clear_bit(X86_FEATURE_SEP, c->x86_capability);
 	
 	/* Names for the Pentium II/Celeron processors 
 	   detectable only by also checking the cache size.
@@ -2131,7 +2141,7 @@ static void __init init_intel(struct cpuinfo_x86 *c)
 		strcpy(c->x86_model_id, p);
 	
 #ifdef CONFIG_SMP
-	if (test_bit(X86_FEATURE_HT, &c->x86_capability)) {
+	if (test_bit(X86_FEATURE_HT, c->x86_capability)) {
 		extern	int phys_proc_id[NR_CPUS];
 		
 		u32 	eax, ebx, ecx, edx;
@@ -2191,6 +2201,8 @@ void __init get_cpu_vendor(struct cpuinfo_x86 *c)
 		c->x86_vendor = X86_VENDOR_AMD;
 	else if (!strcmp(v, "CyrixInstead"))
 		c->x86_vendor = X86_VENDOR_CYRIX;
+	else if (!strcmp(v, "Geode by NSC"))
+		c->x86_vendor = X86_VENDOR_NSC;
 	else if (!strcmp(v, "UMC UMC UMC "))
 		c->x86_vendor = X86_VENDOR_UMC;
 	else if (!strcmp(v, "CentaurHauls"))
@@ -2298,7 +2310,7 @@ static int __init deep_magic_nexgen_probe(void)
 
 static void __init squash_the_stupid_serial_number(struct cpuinfo_x86 *c)
 {
-	if( test_bit(X86_FEATURE_PN, &c->x86_capability) &&
+	if( test_bit(X86_FEATURE_PN, c->x86_capability) &&
 	    disable_x86_serial_nr ) {
 		/* Disable processor serial number */
 		unsigned long lo,hi;
@@ -2306,7 +2318,7 @@ static void __init squash_the_stupid_serial_number(struct cpuinfo_x86 *c)
 		lo |= 0x200000;
 		wrmsr(MSR_IA32_BBL_CR_CTL,lo,hi);
 		printk(KERN_NOTICE "CPU serial number disabled.\n");
-		clear_bit(X86_FEATURE_PN, &c->x86_capability);
+		clear_bit(X86_FEATURE_PN, c->x86_capability);
 
 		/* Disabling the serial number may affect the cpuid level */
 		c->cpuid_level = cpuid_eax(0);
@@ -2472,8 +2484,9 @@ void __init identify_cpu(struct cpuinfo_x86 *c)
 
 		/* Intel-defined flags: level 0x00000001 */
 		if ( c->cpuid_level >= 0x00000001 ) {
-			cpuid(0x00000001, &tfms, &junk, &junk,
-			      &c->x86_capability[0]);
+			u32 capability;
+			cpuid(0x00000001, &tfms, &junk, &junk, &capability);
+			c->x86_capability[0] = capability;
 			c->x86 = (tfms >> 8) & 15;
 			c->x86_model = (tfms >> 4) & 15;
 			c->x86_mask = tfms & 15;
@@ -2499,7 +2512,7 @@ void __init identify_cpu(struct cpuinfo_x86 *c)
 		}
 	}
 
-	printk(KERN_DEBUG "CPU: Before vendor init, caps: %08x %08x %08x, vendor = %d\n",
+	printk(KERN_DEBUG "CPU: Before vendor init, caps: %08lx %08lx %08lx, vendor = %d\n",
 	       c->x86_capability[0],
 	       c->x86_capability[1],
 	       c->x86_capability[2],
@@ -2516,6 +2529,38 @@ void __init identify_cpu(struct cpuinfo_x86 *c)
 	 * indicate the features this CPU genuinely supports!
 	 */
 	switch ( c->x86_vendor ) {
+	case X86_VENDOR_AMD:
+		init_amd(c);
+		break;
+
+	case X86_VENDOR_CENTAUR:
+		init_centaur(c);
+		break;
+
+	case X86_VENDOR_CYRIX:
+		init_cyrix(c);
+		break;
+
+	case X86_VENDOR_INTEL:
+		init_intel(c);
+		break;
+
+	case X86_VENDOR_NEXGEN:
+		c->x86_cache_size = 256; /* A few had 1 MB... */
+		break;
+
+	case X86_VENDOR_NSC:
+        init_cyrix(c);
+		break;
+
+	case X86_VENDOR_RISE:
+		init_rise(c);
+		break;
+
+	case X86_VENDOR_TRANSMETA:
+		init_transmeta(c);
+		break;
+
 	case X86_VENDOR_UNKNOWN:
 	default:
 		/* Not much we can do here... */
@@ -2530,36 +2575,9 @@ void __init identify_cpu(struct cpuinfo_x86 *c)
 		}
 		break;
 
-	case X86_VENDOR_CYRIX:
-		init_cyrix(c);
-		break;
-
-	case X86_VENDOR_AMD:
-		init_amd(c);
-		break;
-
-	case X86_VENDOR_CENTAUR:
-		init_centaur(c);
-		break;
-
-	case X86_VENDOR_INTEL:
-		init_intel(c);
-		break;
-
-	case X86_VENDOR_NEXGEN:
-		c->x86_cache_size = 256; /* A few had 1 MB... */
-		break;
-
-	case X86_VENDOR_TRANSMETA:
-		init_transmeta(c);
-		break;
-
-	case X86_VENDOR_RISE:
-		init_rise(c);
-		break;
 	}
 
-	printk(KERN_DEBUG "CPU: After vendor init, caps: %08x %08x %08x %08x\n",
+	printk(KERN_DEBUG "CPU: After vendor init, caps: %08lx %08lx %08lx %08lx\n",
 	       c->x86_capability[0],
 	       c->x86_capability[1],
 	       c->x86_capability[2],
@@ -2573,13 +2591,13 @@ void __init identify_cpu(struct cpuinfo_x86 *c)
 	/* TSC disabled? */
 #ifndef CONFIG_X86_TSC
 	if ( tsc_disable )
-		clear_bit(X86_FEATURE_TSC, &c->x86_capability);
+		clear_bit(X86_FEATURE_TSC, c->x86_capability);
 #endif
 
 	/* FXSR disabled? */
 	if (disable_x86_fxsr) {
-		clear_bit(X86_FEATURE_FXSR, &c->x86_capability);
-		clear_bit(X86_FEATURE_XMM, &c->x86_capability);
+		clear_bit(X86_FEATURE_FXSR, c->x86_capability);
+		clear_bit(X86_FEATURE_XMM, c->x86_capability);
 	}
 
 	/* Disable the PN if appropriate */
@@ -2602,7 +2620,7 @@ void __init identify_cpu(struct cpuinfo_x86 *c)
 
 	/* Now the feature flags better reflect actual CPU features! */
 
-	printk(KERN_DEBUG "CPU:     After generic, caps: %08x %08x %08x %08x\n",
+	printk(KERN_DEBUG "CPU:     After generic, caps: %08lx %08lx %08lx %08lx\n",
 	       c->x86_capability[0],
 	       c->x86_capability[1],
 	       c->x86_capability[2],
@@ -2620,7 +2638,7 @@ void __init identify_cpu(struct cpuinfo_x86 *c)
 			boot_cpu_data.x86_capability[i] &= c->x86_capability[i];
 	}
 
-	printk(KERN_DEBUG "CPU:             Common caps: %08x %08x %08x %08x\n",
+	printk(KERN_DEBUG "CPU:             Common caps: %08lx %08lx %08lx %08lx\n",
 	       boot_cpu_data.x86_capability[0],
 	       boot_cpu_data.x86_capability[1],
 	       boot_cpu_data.x86_capability[2],
@@ -2634,14 +2652,15 @@ void __init dodgy_tsc(void)
 {
 	get_cpu_vendor(&boot_cpu_data);
 
-	if ( boot_cpu_data.x86_vendor == X86_VENDOR_CYRIX )
+	if (( boot_cpu_data.x86_vendor == X86_VENDOR_CYRIX ) ||
+	    ( boot_cpu_data.x86_vendor == X86_VENDOR_NSC   ))
 		init_cyrix(&boot_cpu_data);
 }
 
 
 /* These need to match <asm/processor.h> */
 static char *cpu_vendor_names[] __initdata = {
-	"Intel", "Cyrix", "AMD", "UMC", "NexGen", "Centaur", "Rise", "Transmeta" };
+	"Intel", "Cyrix", "AMD", "UMC", "NexGen", "Centaur", "Rise", "Transmeta", "NSC" };
 
 
 void __init print_cpu_info(struct cpuinfo_x86 *c)
@@ -2682,10 +2701,10 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 	 */
 	static char *x86_cap_flags[] = {
 		/* Intel-defined */
-	        "fpu", "vme", "de", "pse", "tsc", "msr", "pae", "mce",
-	        "cx8", "apic", NULL, "sep", "mtrr", "pge", "mca", "cmov",
-	        "pat", "pse36", "pn", "clflush", NULL, "dts", "acpi", "mmx",
-	        "fxsr", "sse", "sse2", "ss", "ht", "tm", "ia64", NULL,
+		"fpu", "vme", "de", "pse", "tsc", "msr", "pae", "mce",
+		"cx8", "apic", NULL, "sep", "mtrr", "pge", "mca", "cmov",
+		"pat", "pse36", "pn", "clflush", NULL, "dts", "acpi", "mmx",
+		"fxsr", "sse", "sse2", "ss", "ht", "tm", "ia64", NULL,
 
 		/* AMD-defined */
 		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
@@ -2729,7 +2748,7 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 	else
 		seq_printf(m, "stepping\t: unknown\n");
 
-	if ( test_bit(X86_FEATURE_TSC, &c->x86_capability) ) {
+	if ( test_bit(X86_FEATURE_TSC, c->x86_capability) ) {
 		seq_printf(m, "cpu MHz\t\t: %lu.%03lu\n",
 			cpu_khz / 1000, (cpu_khz % 1000));
 	}
@@ -2759,7 +2778,7 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 		     c->wp_works_ok ? "yes" : "no");
 
 	for ( i = 0 ; i < 32*NCAPINTS ; i++ )
-		if ( test_bit(i, &c->x86_capability) &&
+		if ( test_bit(i, c->x86_capability) &&
 		     x86_cap_flags[i] != NULL )
 			seq_printf(m, " %s", x86_cap_flags[i]);
 

@@ -144,6 +144,8 @@ endmenu
 
 source drivers/video/Config.in
 
+source drivers/input/Config.in
+
 if [ "$CONFIG_PPC_ISERIES" = "y" ]; then
 mainmenu_option next_comment
 comment 'iSeries device drivers'
@@ -183,7 +185,6 @@ if [ "$CONFIG_VIOCD" = "y" ]; then
    define_bool CONFIG_CD_NO_IDESCSI y
 fi
 
-source drivers/input/Config.in
 source drivers/char/Config.in
 source fs/Config.in
 

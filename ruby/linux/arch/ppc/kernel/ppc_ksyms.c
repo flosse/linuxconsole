@@ -78,6 +78,10 @@ extern unsigned char __res[];
 extern unsigned long ret_to_user_hook;
 extern unsigned long mm_ptov (unsigned long paddr);
 
+extern void *consistent_alloc(int gfp, size_t size, dma_addr_t *dma_handle);
+extern void consistent_free(void *vaddr);
+extern void consistent_sync(void *vaddr, size_t size, int direction);
+
 EXPORT_SYMBOL(clear_page);
 EXPORT_SYMBOL(do_signal);
 EXPORT_SYMBOL(do_syscall_trace);
@@ -122,7 +126,6 @@ EXPORT_SYMBOL(strncat);
 EXPORT_SYMBOL(strchr);
 EXPORT_SYMBOL(strrchr);
 EXPORT_SYMBOL(strpbrk);
-EXPORT_SYMBOL(strtok);
 EXPORT_SYMBOL(strstr);
 EXPORT_SYMBOL(strlen);
 EXPORT_SYMBOL(strnlen);
