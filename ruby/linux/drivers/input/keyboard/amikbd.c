@@ -44,7 +44,7 @@ MODULE_DESCRIPTION("Amiga keyboard driver");
 MODULE_LICENSE("GPL");
 
 static unsigned char amikbd_keycode[0x78] = {
-	  0,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 43,  0, 82,
+	 41,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 43,  0, 82,
 	 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,  0, 79, 80, 81,
 	 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,  0,  0, 75, 76, 77,
 	  0, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53,  0, 83, 71, 72, 73,
@@ -96,7 +96,7 @@ static void amikbd_interrupt(int irq, void *dummy, struct pt_regs *fp)
 		return;
 	}
 
-	printk(amikbd_messages[scancode]);	/* scancodes >= 0x78 are error codes */
+	printk(amikbd_messages[scancode - 0x78]);	/* scancodes >= 0x78 are error codes */
 }
 
 static int __init amikbd_init(void)
