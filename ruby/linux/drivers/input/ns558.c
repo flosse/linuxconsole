@@ -234,8 +234,9 @@ static struct pci_driver ns558_pci_driver;
  * CTL00c1 - SB AWE32 PnP
  * CTL00c3 - SB AWE64 PnP
  * CTL00f0 - SB16 PnP / Vibra 16x
- * CTL7001 - SB Vibra16C PnP
- * CSC0b35 - Crystal ** doesn't have compatibility ID **
+ * CTL7001 - SB Vibra16C PnP (no comp. ID)
+ * CTL7002 - SB AWE32 (no comp. ID)
+ * CSC0b35 - Crystal (no comp. ID)
  * TER1141 - Terratec AD1818
  * YMM0800 - Yamaha OPL3-SA3
  *
@@ -245,6 +246,7 @@ static struct pci_driver ns558_pci_driver;
 static struct pnp_devid {
 	unsigned int vendor, device;
 } pnp_devids[] = {
+	{ ISAPNP_VENDOR('C','T','L'), ISAPNP_DEVICE(0x7001) },
 	{ ISAPNP_VENDOR('C','T','L'), ISAPNP_DEVICE(0x7002) },
 	{ ISAPNP_VENDOR('C','S','C'), ISAPNP_DEVICE(0x0b35) },
 	{ ISAPNP_VENDOR('P','N','P'), ISAPNP_DEVICE(0xb02f) },
