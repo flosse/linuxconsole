@@ -500,7 +500,8 @@ static void analog_init_device(struct analog_port *port, struct analog *analog, 
 	else
 		printk(" [%s timer, %d %sHz clock, %d ns res]\n", TIME_NAME,
 		port->speed > 10000 ? (port->speed + 800) / 1000 : port->speed,
-		port->speed > 10000 ? "M" : "k", (port->loop * 1000000) / port->speed);
+		port->speed > 10000 ? "M" : "k", 
+		port->speed > 10000 ? (port->loop * 1000) / (port->speed / 1000)				    : (port->loop * 1000000) / port->speed);
 }
 
 /*
