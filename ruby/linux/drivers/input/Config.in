@@ -32,9 +32,9 @@ if [ "$CONFIG_INPUT" != "n" ]; then
       tristate '  Sun keyboard' CONFIG_INPUT_SUNKBD
       tristate '  PS/2 keyboards' CONFIG_INPUT_PS2SERIAL
       tristate '  Logitech WingMan Warrior joystick' CONFIG_INPUT_WARRIOR
-      tristate '  LogiCad3d Magellan/SpaceMouse 6dof controller' CONFIG_INPUT_MAGELLAN
-      tristate '  SpaceTec SpaceOrb/Avenger 6dof controller' CONFIG_INPUT_SPACEORB
-      tristate '  SpaceTec SpaceBall 4000 FLX 6dof controller' CONFIG_INPUT_SPACEBALL
+      tristate '  LogiCad3d Magellan/SpaceMouse 6dof controllers' CONFIG_INPUT_MAGELLAN
+      tristate '  SpaceTec SpaceOrb/Avenger 6dof controllers' CONFIG_INPUT_SPACEORB
+      tristate '  SpaceTec SpaceBall 2003/3003/4000 FLX 6dof controllers' CONFIG_INPUT_SPACEBALL
       tristate '  Gravis Stinger gamepad' CONFIG_INPUT_STINGER
       tristate '  I-Force joysticks/wheels' CONFIG_INPUT_IFORCE_232
       if [ "$CONFIG_INPUT_IFORCE_232" != "n" ]; then
