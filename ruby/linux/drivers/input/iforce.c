@@ -298,6 +298,7 @@ static void iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effe
 	case FF_SINE:		wave_code = 0x22; break;
 	case FF_SAW_UP:		wave_code = 0x23; break;
 	case FF_SAW_DOWN:	wave_code = 0x24; break;
+	default: 		wave_code = 0x20; break;
 	}
  
 	make_core(iforce, effect->id,

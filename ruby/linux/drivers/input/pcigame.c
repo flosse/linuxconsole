@@ -136,7 +136,6 @@ static int __devinit pcigame_probe(struct pci_dev *dev, const struct pci_device_
 	dev->driver_data = pcigame;
 
 	pcigame->gameport.private = pcigame;
-	pcigame->gameport.type = GAMEPORT_EXT;
 	pcigame->gameport.fuzz = 64;
 	
 	pcigame->gameport.read = pcigame_read;

@@ -251,7 +251,6 @@ int __init l4_init(void)
 			gameport->open = l4_open;
 			gameport->cooked_read = l4_cooked_read;
 			gameport->calibrate = l4_calibrate;
-			gameport->type = GAMEPORT_EXT;
 
 			if (!i && !j)
 				gameport->io = L4_PORT;

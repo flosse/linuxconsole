@@ -359,10 +359,10 @@ static int hidinput_input_event(struct input_dev *dev, unsigned int type, unsign
 	return 0;
 }
 
-static void hidinput_open(struct input_dev *dev)
+static int hidinput_open(struct input_dev *dev)
 {
 	struct hid_device *hid = dev->private;
-	hid_open(hid);
+	return hid_open(hid);
 }
 
 static void hidinput_close(struct input_dev *dev)

@@ -20,6 +20,14 @@ O_OBJS		:=
 export-objs	:= input.o serio.o gameport.o
 common-objs	:= input.o serio.o gameport.o
 
+# Multipart objects.
+
+hid-objs	:= hid-core.o hid-input.o
+
+ifeq ($(CONFIG_INPUT_HIDDEV),y)
+	hid-objs	+= hiddev.o
+endif
+
 # Object file lists.
 
 obj-y	:=
@@ -121,6 +129,11 @@ O_OBJS		:= $(filter-out $(export-objs), $(obj-y))
 OX_OBJS		:= $(filter     $(export-objs), $(obj-y))
 M_OBJS		:= $(sort $(filter-out $(export-objs), $(obj-m)))
 MX_OBJS		:= $(sort $(filter     $(export-objs), $(obj-m)))
+
+# Link rules for multi-part drivers.
+
+hid.o: $(hid-objs)
+	$(LD) -r -o $@ $(hid-objs)
 
 # The global Rules.make.
 

@@ -328,7 +328,6 @@ static void a3d_connect(struct gameport *gameport, struct gameport_dev *dev)
 		a3d->adc.close = a3d_adc_close;
 		a3d->adc.cooked_read = a3d_adc_cooked_read;
 		a3d->adc.fuzz = 1; 
-		a3d->adc.type = GAMEPORT_EXT; 
 
 		a3d_read(a3d, data);
 

@@ -36,7 +36,7 @@
 #include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/init.h>
-#include "input.h"
+#include <linux/input.h>
 #include <linux/smp_lock.h>
 
 struct evdev {
