@@ -18,6 +18,7 @@
 #include <linux/interrupt.h>
 #include <linux/init.h>
 #include <linux/tty.h>
+#include <linux/vt_kern.h>		/* For unblank_screen() */
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
@@ -25,6 +26,8 @@
 #include <asm/hardirq.h>
 
 extern void die(const char *,struct pt_regs *,long);
+
+extern int console_loglevel;
 
 /*
  * Ugly, ugly, but the goto's result in better assembly..
@@ -89,6 +92,42 @@ out_of_memory:
 		goto survive;
 	}
 	goto bad_area;
+}
+
+extern spinlock_t timerlist_lock;
+
+/*
+ * Unlock any spinlocks which will prevent us from getting the
+ * message out (timerlist_lock is acquired through the
+ * console unblank code)
+ */
+void bust_spinlocks(int yes)
+{
+	spin_lock_init(&timerlist_lock);
+	if (yes) {
+		oops_in_progress = 1;
+#ifdef CONFIG_SMP
+		global_irq_lock = 0;	/* Many serial drivers do __global_cli() */
+#endif
+	} else {
+		int loglevel_save = console_loglevel;
+		
+		oops_in_progress = 0;
+		/*
+		 * OK, the message is on the console.  Now we call printk()
+		 * without oops_in_progress set so that printk will give klogd
+		 * a poke.  Hold onto your hats...
+		 */
+		console_loglevel = 15;		/* NMI oopser may have shut the console up */
+		printk(" ");
+		console_loglevel = loglevel_save;
+	}
+}
+
+void do_BUG(const char *file, int line)
+{
+	bust_spinlocks(1);
+	printk("kernel BUG at %s:%d!\n", file, line);
 }
 
 asmlinkage void do_invalid_op(struct pt_regs *, unsigned long);
