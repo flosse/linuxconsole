@@ -213,10 +213,10 @@ static struct {
 	{ "Appian Jeronimo 2000 head 2", 0x1097, 0x3d32, 2, pm3fb_j2000_setup },
 	{ "Formac ProFormance 3", PCI_VENDOR_ID_3DLABS, 0x000a, 0, NULL }, /* Formac use 3DLabs ID */
 	{ "3DLabs Permedia3 Create!", PCI_VENDOR_ID_3DLABS, 0x0127, 0, NULL },
-	{ "3DLabx Oxygen VX1 PCI", PCI_VENDOR_ID_3DLABS, 0x0121, 0, NULL },
-	{ "3DLabx Oxygen VX1 AGP", PCI_VENDOR_ID_3DLABS, 0x0125, 0, NULL },
-	{ "3DLabx Oxygen VX1-16 AGP", PCI_VENDOR_ID_3DLABS, 0x0140, 0, NULL },
-	{ "3DLabx Oxygen VX1-1600SW PCI", PCI_VENDOR_ID_3DLABS, 0x0800, 0, NULL },
+	{ "3DLabs Oxygen VX1 PCI", PCI_VENDOR_ID_3DLABS, 0x0121, 0, NULL },
+	{ "3DLabs Oxygen VX1 AGP", PCI_VENDOR_ID_3DLABS, 0x0125, 0, NULL },
+	{ "3DLabs Oxygen VX1-16 AGP", PCI_VENDOR_ID_3DLABS, 0x0140, 0, NULL },
+	{ "3DLabs Oxygen VX1-1600SW PCI", PCI_VENDOR_ID_3DLABS, 0x0800, 0, NULL },
 	{ "\0", 0x0, 0x0, 0, NULL }
 };
 
