@@ -31,9 +31,12 @@
 #include <linux/init.h>
 #include <linux/usb.h>
 
-#define POWERMATE_VENDOR       0x077d    /* Griffin Technology, Inc. */
-#define POWERMATE_PRODUCT_NEW  0x0410    /* Griffin PowerMate */
-#define POWERMATE_PRODUCT_OLD  0x04AA    /* Griffin soundKnob */
+#define POWERMATE_VENDOR	0x077d	/* Griffin Technology, Inc. */
+#define POWERMATE_PRODUCT_NEW	0x0410	/* Griffin PowerMate */
+#define POWERMATE_PRODUCT_OLD	0x04AA	/* Griffin soundKnob */
+
+#define CONTOUR_VENDOR		0x05f3	/* Contour Design, Inc. */
+#define CONTOUR_JOG		0x0240	/* Jog and Shuttle */
 
 /* these are the command codes we send to the device */
 #define SET_STATIC_BRIGHTNESS  0x01
@@ -324,6 +327,7 @@ static void powermate_disconnect(struct usb_device *dev, void *ptr)
 static struct usb_device_id powermate_devices [] = {
 	{ USB_DEVICE(POWERMATE_VENDOR, POWERMATE_PRODUCT_NEW) },
 	{ USB_DEVICE(POWERMATE_VENDOR, POWERMATE_PRODUCT_OLD) },
+	{ USB_DEVICE(CONTOUR_VENDOR, CONTOUR_JOG) },
 	{ } /* Terminating entry */
 };
 
