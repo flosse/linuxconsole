@@ -113,7 +113,7 @@ struct fb_fix_screeninfo {
 	__u32 mmio_len;			/* Length of Memory Mapped I/O  */
 	__u32 accel;			/* Type of acceleration available */
 	__u16 api_version;		/* Tell us what api version we have */
-	__u16 reserved[3];		/* Reserved for future compatibility */
+	__u16 reserved[2];		/* Reserved for future compatibility */
 };
 
 /* Interpretation of offset for color fields: All offsets are from the right,
