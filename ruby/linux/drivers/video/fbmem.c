@@ -37,7 +37,6 @@
 #include <asm/pgtable.h>
 
 #include <linux/fb.h>
-#include "fbcon.h"
 
     /*
      *  Frame buffer device initialization and setup routines
@@ -314,7 +313,7 @@ fb_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 	struct fb_ops *fb = info->fbops;
 	struct fb_fix_screeninfo fix;
 
-	if (! fb || ! info->disp)
+	if (!fb)
 		return -ENODEV;
 
 	fb->fb_get_fix(&fix, info);
@@ -327,7 +326,7 @@ fb_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 	if (count) {
 	    char *base_addr;
 
-	    base_addr = info->disp->screen_base;
+	    base_addr = info->screen_base;
 	    count -= copy_to_user(buf, base_addr+p, count);
 	    if (!count)
 		return -EFAULT;
@@ -347,7 +346,7 @@ fb_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	struct fb_fix_screeninfo fix;
 	int err;
 
-	if (! fb || ! info->disp)
+	if (!fb)
 		return -ENODEV;
 
 	fb->fb_get_fix(&fix, info);
@@ -363,7 +362,7 @@ fb_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	if (count) {
 	    char *base_addr;
 
-	    base_addr = info->disp->screen_base;
+	    base_addr = info->screen_base;
 	    count -= copy_from_user(base_addr+p, buf, count);
 	    *ppos += count;
 	    err = -EFAULT;
@@ -641,9 +640,11 @@ static devfs_handle_t devfs_handle;
 int
 register_framebuffer(struct fb_info *fb_info)
 {
+/*
 	const char *display_desc = NULL;
         struct vt_struct *vt;
 	struct vc_data *vc;
+*/
 	char name_buf[8];
 	int i;
 
@@ -656,7 +657,7 @@ register_framebuffer(struct fb_info *fb_info)
 			break;
 	fb_info->node = MKDEV(FB_MAJOR, i);
 	registered_fb[i] = fb_info;
-
+/*
 	vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
         if (!vt) return -ENOMEM;
         display_desc = create_vt(vt, &fb_con);
@@ -672,8 +673,8 @@ register_framebuffer(struct fb_info *fb_info)
 	vt->last_console = vt->fg_console = vc = vt->vcs.vc_cons[0];
 	printk("Console: %s %s %dx%d", vc->vc_can_do_color ? "colour" : "mono",
                 display_desc, vc->vc_cols, vc->vc_rows);
-        /* take_over_console(vt, &fb_con); */
-
+        take_over_console(vt, &fb_con); 
+*/
 	sprintf (name_buf, "%d", i);
 	fb_info->devfs_handle =
 	    devfs_register (devfs_handle, name_buf, DEVFS_FL_DEFAULT,
