@@ -47,6 +47,7 @@ struct gameport {
 	void (*trigger)(struct gameport *);
 	unsigned char (*read)(struct gameport *);
 	int (*cooked_read)(struct gameport *, int *, int *);	
+	int (*calibrate)(struct gameport *, int *, int *); 
 	int (*open)(struct gameport *, int);
 	void (*close)(struct gameport *);
 
@@ -106,6 +107,14 @@ static __inline__ int gameport_cooked_read(struct gameport *gameport, int *axes,
 {
 	if (gameport->cooked_read)
 		return gameport->cooked_read(gameport, axes, buttons);
+	else
+		return -1;
+}
+
+static __inline__ int gameport_calibrate(struct gameport *gameport, int *axes, int *max)
+{
+	if (gameport->calibrate)
+		return gameport->calibrate(gameport, axes, max);
 	else
 		return -1;
 }
