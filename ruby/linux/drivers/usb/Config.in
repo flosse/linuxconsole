@@ -59,9 +59,10 @@ if [ "$CONFIG_USB" = "y" -o  "$CONFIG_USB" = "m" ]; then
          dep_tristate '  USB HIDBP Mouse (basic) support' CONFIG_USB_MOUSE $CONFIG_USB $CONFIG_INPUT
       fi
       dep_tristate '  Wacom Intuos/Graphire tablet support' CONFIG_USB_WACOM $CONFIG_USB $CONFIG_INPUT
-      dep_tristate '  Griffin Technology PowerMate support' CONFIG_USB_POWERMATE$CONFIG_USB $CONFIG_INPUT
+      dep_tristate '  Griffin Technology PowerMate support' CONFIG_USB_POWERMATE $CONFIG_USB $CONFIG_INPUT
       dep_mbool '  Force feedback support' CONFIG_HID_FF $CONFIG_USB_HID
-      dep_mbool '  Logitech RumblePad support' CONFIG_LOGITECH_RUMBLE $CONFIG_USB_HID $CONFIG_HID_FF			
+      dep_mbool '  Logitech RumblePad support' CONFIG_LOGITECH_RUMBLE $CONFIG_USB_HID $CONFIG_HID_FF
+      dep_mbool '  PID Devices' CONFIG_HID_PID $CONFIG_USB_HID $CONFIG_HID_FF
    fi
 
    comment 'USB Imaging devices'

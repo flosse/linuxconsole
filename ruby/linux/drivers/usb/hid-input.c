@@ -273,7 +273,57 @@ static void hidinput_configure_usage(struct hid_device *device, struct hid_field
 
 			usage->type = EV_KEY; bit = input->keybit; max = KEY_MAX;
 			break;
+			
+		case HID_UP_PID:
 
+			usage->type = EV_FF; bit = input->ffbit; max = FF_MAX;
+			
+			switch(usage->hid & HID_USAGE) {
+				case 0x26: set_bit(FF_CONSTANT, input->ffbit); break;
+				case 0x27: set_bit(FF_RAMP,     input->ffbit); break;
+				case 0x28: set_bit(FF_CUSTOM,   input->ffbit); break;
+				case 0x30: set_bit(FF_SQUARE,   input->ffbit);
+				           set_bit(FF_PERIODIC, input->ffbit); break;
+				case 0x31: set_bit(FF_SINE,     input->ffbit);
+				           set_bit(FF_PERIODIC, input->ffbit); break;
+				case 0x32: set_bit(FF_TRIANGLE, input->ffbit);
+				           set_bit(FF_PERIODIC, input->ffbit); break;
+				case 0x33: set_bit(FF_SAW_UP,   input->ffbit);
+				           set_bit(FF_PERIODIC, input->ffbit); break;
+				case 0x34: set_bit(FF_SAW_DOWN, input->ffbit);
+				           set_bit(FF_PERIODIC, input->ffbit); break;
+				case 0x40: set_bit(FF_SPRING,   input->ffbit); break;
+				case 0x41: set_bit(FF_DAMPER,   input->ffbit); break;
+				case 0x42: set_bit(FF_INERTIA , input->ffbit); break;
+				case 0x43: set_bit(FF_FRICTION, input->ffbit); break;
+				case 0x7e: usage->code = FF_GAIN;       break;
+				case 0x83:  /* Simultaneous Effects Max */
+					input->ff_effects_max = (field->value[0]);
+					break;
+				case 0x98:  /* Device Control */
+					usage->code = FF_AUTOCENTER;    break;
+				case 0xa4:  /* Safety Switch */
+					usage->code = BTN_DEAD;
+					bit = input->keybit;
+					usage->type = EV_KEY;
+					max = KEY_MAX;
+					break;
+//                             case 0x94: /* Effect Playing */
+//                                     usage->code = FF_STATUS_PLAYING;
+//                                     bit = input->ffbit;
+//                                     max = FF_STATUS_MAX;
+//                                     break;
+				case 0x9f: /* Device Paused */
+				case 0xa0: /* Actuators Enabled */
+#ifdef DEBUG
+					printk("Not telling the input API about ");
+					resolv_usage(usage->hid);
+					printk("\n");
+#endif
+					return;
+			}
+//AUG                  goto unknown;  //AUG
+			break;
 		default:
 		unknown:
 
@@ -363,6 +413,15 @@ void hidinput_hid_event(struct hid_device *hid, struct hid_field *field, struct 
 		int a = field->logical_minimum;
 		int b = field->logical_maximum;
 		input_event(input, EV_KEY, BTN_TOUCH, value > a + ((b - a) >> 3));
+	}
+
+	if (usage->hid == (HID_UP_PID | 0x83UL)) { /* Simultaneous Effects Max */
+		input->ff_effects_max = value;
+		return;
+	}
+	if (usage->hid == (HID_UP_PID | 0x7fUL)) {
+		printk("PID Pool Report\n");
+		return;
 	}
 
 	if((usage->type == EV_KEY) && (usage->code == 0)) /* Key 0 is "unassigned", not KEY_UKNOWN */

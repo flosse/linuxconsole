@@ -30,7 +30,15 @@ ifeq ($(CONFIG_USB_HIDDEV),y)
 	hid-objs	+= hiddev.o
 endif
 
+ifeq ($(CONFIG_HID_PID),y)
+	hid-objs	+= pid.o
+endif
+
 ifeq ($(CONFIG_LOGITECH_RUMBLE),y)
+	hid-objs	+= hid-lgff.o
+endif
+
+ifeq ($(CONFIG_HID_FF),y)
 	hid-objs	+= hid-ff.o
 endif
 

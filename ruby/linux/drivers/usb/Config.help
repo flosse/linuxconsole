@@ -117,6 +117,11 @@ CONFIG_LOGITECH_RUMBLE
   want to enable force feedback. Note: if you say N here, this device will
   still be supported, but without force feedback.
 
+CONFIG_HID_PID
+  Say Y yes if you have a PID-compliant joystick and wish to enable force
+  feedback for it. The Microsoft Sidewinder Force Feedback 2 is one such
+  device.
+
 CONFIG_USB_HIDDEV
   Say Y here if you want to support HID devices (from the USB
   specification standpoint) that aren't strictly user interface
