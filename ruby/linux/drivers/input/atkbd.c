@@ -398,6 +398,7 @@ static void atkbd_disconnect(struct serio *serio)
 static void atkbd_powerup(void *data)
 {
 	struct atkbd *atkbd = data;
+	mdelay(40); /* FIXME!!! Wait some nicer way */
 	serio_rescan(atkbd->serio);
 }
 

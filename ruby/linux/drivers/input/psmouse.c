@@ -524,6 +524,7 @@ static void psmouse_powerup(void *data)
 
 	if (psmouse->packet[0] == PSMOUSE_RET_BAT && (psmouse->pktcnt == 1 ||
 	   (psmouse->pktcnt == 2 && psmouse->packet[1] == 0x00))) {
+		mdelay(40); /* FIXME!!! Wait somw nicer way */
 		serio_rescan(psmouse->serio);
 	}
 }
