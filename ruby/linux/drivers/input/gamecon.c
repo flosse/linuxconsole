@@ -212,19 +212,22 @@ static void gc_multi_read_packet(struct gc *gc, int length, unsigned char *data)
  *	
  */
 
-#define GC_PSX_DELAY	60	/* 60 usec */
-#define GC_PSX_LENGTH	8	/* talk to the controller in bytes */
+#define GC_PSX_DELAY	60		/* 60 usec */
+#define GC_PSX_LENGTH	8		/* talk to the controller in bytes */
 
-#define GC_PSX_MOUSE	1	/* Mouse */
-#define GC_PSX_NEGCON	2	/* NegCon */
-#define GC_PSX_NORMAL	4	/* Digital / Analog or Rumble in Digital mode  */
-#define GC_PSX_ANALOG	5	/* Analog in Analog mode / Rumble in Green mode */
-#define GC_PSX_RUMBLE	7	/* Rumble in Red mode */
+#define GC_PSX_MOUSE	1		/* Mouse */
+#define GC_PSX_NEGCON	2		/* NegCon */
+#define GC_PSX_NORMAL	4		/* Digital / Analog or Rumble in Digital mode  */
+#define GC_PSX_ANALOG	5		/* Analog in Analog mode / Rumble in Green mode */
+#define GC_PSX_RUMBLE	7		/* Rumble in Red mode */
 
-#define GC_PSX_CLOCK	0x04	/* Pin 4 */
-#define GC_PSX_COMMAND	0x01	/* Pin 1 */
-#define GC_PSX_POWER	0xf8	/* Pins 5-9 */
-#define GC_PSX_SELECT	0x02	/* Pin 3 */
+#define GC_PSX_CLOCK	0x04		/* Pin 4 */
+#define GC_PSX_COMMAND	0x01		/* Pin 1 */
+#define GC_PSX_POWER	0xf8		/* Pins 5-9 */
+#define GC_PSX_SELECT	0x02		/* Pin 3 */
+
+#define GC_PSX_ID(x)	((x) >> 4)	/* High nibble is device type */
+#define GC_PSX_LEN(x)	((x) & 0xf)	/* Low nibble is length in words */
 
 static short gc_psx_abs[] = { ABS_X, ABS_Y, ABS_RX, ABS_RY, ABS_HAT0X, ABS_HAT0Y };
 static short gc_psx_btn[] = { BTN_TL, BTN_TR, BTN_TL2, BTN_TR2, BTN_A, BTN_B, BTN_X, BTN_Y,
@@ -237,17 +240,18 @@ static short gc_psx_btn[] = { BTN_TL, BTN_TR, BTN_TL2, BTN_TR2, BTN_A, BTN_B, BT
 
 static int gc_psx_command(struct gc *gc, int b)
 {
-	int i, cmd, ret = 0;
+	int i, cmd, data = 0;
 
 	for (i = 0; i < 8; i++, b >>= 1) {
 		cmd = (b & 1) ? GC_PSX_COMMAND : 0;
 		parport_write_data(gc->pd->port, cmd | GC_PSX_POWER);
 		udelay(GC_PSX_DELAY);
-		ret |= ((parport_read_status(gc->pd->port) ^ 0x80) & gc->pads[GC_PSX]) ? (1 << i) : 0;
+		if (parport_read_status(gc->pd->port) ^ 0x80) & gc->pads[GC_PSX])
+		data |= ((parport_read_status(gc->pd->port) ^ 0x80) & gc->pads[GC_PSX]) ? (1 << i) : 0;
 		parport_write_data(gc->pd->port, cmd | GC_PSX_CLOCK | GC_PSX_POWER);
 		udelay(GC_PSX_DELAY);
 	}
-	return ret;
+	return data;
 }
 
 /*
@@ -257,7 +261,7 @@ static int gc_psx_command(struct gc *gc, int b)
 
 static int gc_psx_read_packet(struct gc *gc, unsigned char *data)
 {
-	int i, ret;
+	int i, id;
 	unsigned long flags;
 
 	parport_write_data(gc->pd->port, GC_PSX_CLOCK | GC_PSX_SELECT | GC_PSX_POWER);	/* Select pad */
@@ -269,17 +273,17 @@ static int gc_psx_read_packet(struct gc *gc, unsigned char *data)
 	__cli();
 
 	gc_psx_command(gc, 0x01);							/* Access pad */
-	ret = gc_psx_command(gc, 0x42);							/* Get device id */
-	if (gc_psx_command(gc, 0) == 0x5a) {						/* okay? */
-		for (i = 0; i < (ret & 0xf) * 2; i++)
+	id = gc_psx_command(gc, 0x42);							/* Get device id */
+	if (gc_psx_command(gc, 0) == 0x5a) {						/* Okay? */
+		for (i = 0; i < GC_PSX_LEN(id) * 2; i++)
 			data[i] = gc_psx_command(gc, 0);
-	} else ret = -1;
+	} else id = 0;
 
 	__restore_flags(flags);
 
 	parport_write_data(gc->pd->port, GC_PSX_CLOCK | GC_PSX_SELECT | GC_PSX_POWER);
 
-	return (ret == -1) ? ret : (ret >> 4);
+	return GC_PSX_ID(id);
 }
 
 /*
@@ -320,8 +324,8 @@ static void gc_timer(unsigned long private)
 				input_report_abs(dev + i, ABS_X,  axes[0]);
 				input_report_abs(dev + i, ABS_Y, -axes[1]);
 
-				input_report_abs(dev + i, ABS_HAT0X, !!(s & data[7]) - !!(s & data[6]));
-				input_report_abs(dev + i, ABS_HAT0Y, !!(s & data[5]) - !!(s & data[4]));
+				input_report_abs(dev + i, ABS_HAT0X, !(s & data[6]) - !(s & data[7]));
+				input_report_abs(dev + i, ABS_HAT0Y, !(s & data[4]) - !(s & data[5]));
 
 				for (j = 0; j < 10; j++)
 					input_report_key(dev + i, gc_n64_btn[j], s & data[gc_n64_bytes[j]]);
@@ -342,8 +346,8 @@ static void gc_timer(unsigned long private)
 			s = gc_status_bit[i];
 
 			if (s & (gc->pads[GC_NES] | gc->pads[GC_SNES])) {
-				input_report_abs(dev + i, ABS_X, !!(s & data[7]) - !!(s & data[6]));
-				input_report_abs(dev + i, ABS_Y, !!(s & data[5]) - !!(s & data[4]));
+				input_report_abs(dev + i, ABS_X, ! - !(s & data[6]) - !(s & data[7]));
+				input_report_abs(dev + i, ABS_Y, ! - !(s & data[4]) - !(s & data[5]));
 			}
 
 			if (s & gc->pads[GC_NES])
@@ -369,8 +373,8 @@ static void gc_timer(unsigned long private)
 			s = gc_status_bit[i];
 
 			if (s & (gc->pads[GC_MULTI] | gc->pads[GC_MULTI2])) {
-				input_report_abs(dev + i, ABS_X, !!(s & data[3]) - !!(s & data[2]));
-				input_report_abs(dev + i, ABS_Y, !!(s & data[1]) - !!(s & data[0]));
+				input_report_abs(dev + i, ABS_X,  !(s & data[2]) - !(s & data[3]));
+				input_report_abs(dev + i, ABS_Y,  !(s & data[0]) - !(s & data[1]));
 				input_report_key(dev + i, BTN_TRIGGER, s & data[4]);
 			}
 
@@ -573,7 +577,7 @@ static struct gc __init *gc_probe(int *config)
 
 						break;
 
-					case -1:
+					case 0:
 						gc->pads[GC_PSX] &= ~gc_status_bit[i];
 						printk(KERN_ERR "gamecon.c: No PSX controller found.\n");
 						break;
