@@ -261,7 +261,7 @@ static void tmdc_connect(struct gameport *gameport, struct gameport_dev *dev)
 		models[m].joybtn = (data[TMDC_BYTE_DEF] & 0xf) << 3;
 	}
 
-	sprintf(tmdc->name, models[i].name, models[i].abs, models[i].joybtn, tmdc->mode);
+	sprintf(tmdc->name, models[m].name, models[m].abs, models[m].joybtn, tmdc->mode);
 
 	tmdc->dev.private = tmdc;
 	tmdc->dev.name = tmdc->name;
