@@ -52,6 +52,7 @@ struct tsdev {
 	int exist;
 	int open;
 	int minor;
+	char name[16];
 	wait_queue_head_t wait;
 	struct tsdev_list *list;
 	struct input_handle handle;
@@ -326,17 +327,19 @@ static struct input_handle *tsdev_connect(struct input_handler *handler, struct 
 	memset(tsdev, 0, sizeof(struct tsdev));
 	init_waitqueue_head(&tsdev->wait);
 
-	tsdev->exist = 1;
 	tsdev->minor = minor;
 	tsdev_table[minor] = tsdev;
+	sprintf(tsdev->name, "ts%d", minor); 
 
 	tsdev->handle.dev = dev;
+	tsdev->handle.name = tsdev->name;
 	tsdev->handle.handler = handler;
 	tsdev->handle.private = tsdev;
 
 	tsdev->devfs = input_register_minor("ts%d", minor, TSDEV_MINOR_BASE);
 
-	printk(KERN_INFO "ts%d: touchscreen device for input%d\n", minor, dev->number);
+	tsdev->exist = 1;
+
 	return &tsdev->handle;
 }
 
@@ -362,6 +365,7 @@ static struct input_handler tsdev_handler = {
 	disconnect:	tsdev_disconnect,
 	fops:		&tsdev_fops,
 	minor:		TSDEV_MINOR_BASE,
+	name:		"tsdev",
 };
 
 static int __init tsdev_init(void)

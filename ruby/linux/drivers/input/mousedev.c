@@ -52,6 +52,7 @@ struct mousedev {
 	int exist;
 	int open;
 	int minor;
+	char name[16];
 	wait_queue_head_t wait;
 	struct mousedev_list *list;
 	struct input_handle handle;
@@ -435,11 +436,12 @@ static struct input_handle *mousedev_connect(struct input_handler *handler, stru
 	memset(mousedev, 0, sizeof(struct mousedev));
 	init_waitqueue_head(&mousedev->wait);
 
-	mousedev->exist = 1;
 	mousedev->minor = minor;
 	mousedev_table[minor] = mousedev;
+	sprintf(mousedev->name, "mouse%d", minor);
 
 	mousedev->handle.dev = dev;
+	mousedev->handle.name = mousedev->name;
 	mousedev->handle.handler = handler;
 	mousedev->handle.private = mousedev;
 
@@ -448,7 +450,7 @@ static struct input_handle *mousedev_connect(struct input_handler *handler, stru
 	if (mousedev_mix.open)
 		input_open_device(&mousedev->handle);
 
-//	printk(KERN_INFO "mouse%d: PS/2 mouse device for input%d\n", minor, dev->number);
+	mousedev->exist = 1;
 
 	return &mousedev->handle;
 }
@@ -476,6 +478,7 @@ static struct input_handler mousedev_handler = {
 	disconnect:	mousedev_disconnect,
 	fops:		&mousedev_fops,
 	minor:		MOUSEDEV_MINOR_BASE,
+	name:		"mousedev",
 };
 
 static int __init mousedev_init(void)

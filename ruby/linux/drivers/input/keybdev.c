@@ -37,6 +37,8 @@
 #include <linux/module.h>
 #include <linux/kbd_kern.h>
 
+char keybdev_name[] = "keyboard";
+
 #if defined(CONFIG_X86) || defined(CONFIG_IA64) || defined(__alpha__) || \
     defined(__mips__) || defined(CONFIG_SPARC64) || defined(CONFIG_SUPERH) || \
     defined(CONFIG_PPC) || defined(__mc68000__)
@@ -193,11 +195,10 @@ static struct input_handle *keybdev_connect(struct input_handler *handler, struc
 	memset(handle, 0, sizeof(struct input_handle));
 
 	handle->dev = dev;
+	handle->name = keybdev_name;
 	handle->handler = handler;
 
 	input_open_device(handle);
-
-//	printk(KERN_INFO "keybdev.c: Adding keyboard: input%d\n", dev->number);
 
 	return handle;
 }
@@ -213,6 +214,7 @@ static struct input_handler keybdev_handler = {
 	event:		keybdev_event,
 	connect:	keybdev_connect,
 	disconnect:	keybdev_disconnect,
+	name:		"keybdev",
 };
 
 static int __init keybdev_init(void)

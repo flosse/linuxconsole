@@ -1,4 +1,4 @@
-*
+/*
  * $Id$
  *
  *  Copyright (c) 1999-2000 Vojtech Pavlik 
@@ -56,6 +56,7 @@ struct joydev {
 	int exist;
 	int open;
 	int minor;
+	char name[16];
 	struct input_handle handle;
 	wait_queue_head_t wait;
 	devfs_handle_t devfs;
@@ -437,11 +438,12 @@ static struct input_handle *joydev_connect(struct input_handler *handler, struct
 	joydev->minor = minor;
 	joydev_table[minor] = joydev;
 
+	sprintf(joydev->name, "js%d", minor);
+
 	joydev->handle.dev = dev;
+	joydev->handle.name = joydev->name;
 	joydev->handle.handler = handler;
 	joydev->handle.private = joydev;
-
-	joydev->exist = 1;
 
 	for (i = 0; i < ABS_MAX; i++)
 		if (test_bit(i, dev->absbit)) {
@@ -482,7 +484,7 @@ static struct input_handle *joydev_connect(struct input_handler *handler, struct
 
 	joydev->devfs = input_register_minor("js%d", minor, JOYDEV_MINOR_BASE);
 
-//	printk(KERN_INFO "js%d: Joystick device for input%d\n", minor, dev->number);
+	joydev->exist = 1;
 
 	return &joydev->handle;
 }
@@ -508,6 +510,7 @@ static struct input_handler joydev_handler = {
 	disconnect:	joydev_disconnect,
 	fops:		&joydev_fops,
 	minor:		JOYDEV_MINOR_BASE,
+	name:		"joydev",
 };
 
 static int __init joydev_init(void)

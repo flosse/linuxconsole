@@ -464,12 +464,21 @@ void input_unregister_minor(devfs_handle_t handle)
 }
 
 /*
+ * Input hotplugging interface - loading event handlers based on
+ * device bitfields.
+ */
+
+
+
+
+/*
  * ProcFS interface for the input drivers.
  */
 
 static int input_devices_info(char *buf, char **start, off_t pos, int count)
 {
 	struct input_dev *dev = input_dev;
+	struct input_handle *handle;
 
 	off_t at = 0;
 	int len, cnt = 0;
@@ -481,6 +490,18 @@ static int input_devices_info(char *buf, char **start, off_t pos, int count)
 
 		len += sprintf(buf + len, "N: Number=%d Name=\"%s\"\n",
 			dev->number, dev->name);
+
+		len += sprintf(buf + len, "D:");
+
+		handle = dev->handle;
+
+		while (handle) {
+			len += sprintf(buf + len, " %s", handle->name);
+			handle = handle->dnext;
+		}
+
+		len += sprintf(buf + len, "\n");
+		len += sprintf(buf + len, "\n");
 
 		at += len;
 
@@ -518,7 +539,7 @@ static int input_handlers_info(char *buf, char **start, off_t pos, int count)
 	while (handler) {
 
 		len = sprintf(buf, "N: Number=%d Minor=%d Name=\"%s\"\n",
-			i++, handler->minor, "XXX");
+			i++, handler->minor, handler->name);
 
 		at += len;
 

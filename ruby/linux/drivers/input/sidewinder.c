@@ -43,7 +43,7 @@
  * as well as break everything.
  */
 
-#undef SW_DEBUG
+#define SW_DEBUG
 
 #define SW_START	400	/* The time we wait for the first bit [400 us] */
 #define SW_STROBE	45	/* Max time per bit [45 us] */

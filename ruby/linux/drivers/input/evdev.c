@@ -44,6 +44,7 @@ struct evdev {
 	int open;
 	int open_for_write;
 	int minor;
+	char name[16];
 	struct input_handle handle;
 	wait_queue_head_t wait;
 	devfs_handle_t devfs;
@@ -361,16 +362,17 @@ static struct input_handle *evdev_connect(struct input_handler *handler, struct 
 
 	evdev->minor = minor;
 	evdev_table[minor] = evdev;
+	
+	sprintf(evdev->name, "event%d", minor);
 
 	evdev->handle.dev = dev;
+	evdev->handle.name = evdev->name;
 	evdev->handle.handler = handler;
 	evdev->handle.private = evdev;
 
-	evdev->exist = 1;
-
 	evdev->devfs = input_register_minor("event%d", minor, EVDEV_MINOR_BASE);
 
-//	printk(KERN_INFO "event%d: Event device for input%d\n", minor, dev->number);
+	evdev->exist = 1;
 
 	return &evdev->handle;
 }
@@ -397,6 +399,7 @@ static struct input_handler evdev_handler = {
 	disconnect:	evdev_disconnect,
 	fops:		&evdev_fops,
 	minor:		EVDEV_MINOR_BASE,
+	name:		"evdev",
 };
 
 static int __init evdev_init(void)
