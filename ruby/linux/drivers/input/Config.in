@@ -25,7 +25,7 @@ if [ "$CONFIG_INPUT" != "n" ]; then
    
    bool 'Serial port support' CONFIG_INPUT_SERIAL
    if [ "$CONFIG_INPUT_SERIAL" != "n" ]; then   
-      tristate '  Serial port input line discipline' CONFIG_INPUT_SERPORT
+      tristate '  Serial port input line discipline' CONFIG_INPUT_SERPORT_OLD
       tristate '  #Sun Zilog serial keyboard and mouse ports' CONFIG_INPUT_SUNZS
       comment 'Serial port input devices'
       tristate '  Serial mouse' CONFIG_INPUT_SERMOUSE

@@ -48,7 +48,7 @@ obj-$(CONFIG_INPUT_RPCKBD)	+= rpckbd.o serio.o
 #obj-$(CONFIG_INPUT_MIPSKBD)	+= mipskbd.o serio.o
 obj-$(CONFIG_INPUT_PARKBD)	+= parkbd.o serio.o
 
-obj-$(CONFIG_INPUT_SERPORT)	+= serport.o serio.o
+obj-$(CONFIG_INPUT_SERPORT_OLD)	+= serport_old.o serio.o
 
 obj-$(CONFIG_INPUT_NS558)	+= ns558.o gameport.o
 obj-$(CONFIG_INPUT_LIGHTNING)	+= lightning.o gameport.o
