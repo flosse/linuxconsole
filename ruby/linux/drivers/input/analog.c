@@ -558,17 +558,11 @@ static int analog_init_masks(struct analog_port *port)
 	return -!(analog[0].mask || analog[1].mask);	
 }
 
-static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
+static int analog_init_port(struct gameport *gameport, struct gameport_dev *dev, struct analog_port *port)
 {
-	struct analog_port *port;
 	int i, t;
 
-	if (!(port = kmalloc(sizeof(struct analog_port), GFP_KERNEL)))
-		return;
-	memset(port, 0, sizeof(struct analog_port));
-
 	gameport->private = port;
-
 	port->gameport = gameport;
 	init_timer(&port->timer);
 	port->timer.data = (long) port;
@@ -579,14 +573,14 @@ static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
 		analog_calibrate_timer(port);
 
 		gameport_trigger(gameport);
-		port->mask = gameport_read(gameport);
+		t = gameport_read(gameport);
 		wait_ms(ANALOG_MAX_TIME);
-		port->mask = (gameport_read(gameport) ^ port->mask) & port->mask & 0xf;
+		port->mask = (gameport_read(gameport) ^ t) & t & 0xf;
 		port->fuzz = 1 << ANALOG_FUZZ_FILTER;
 	
 		for (i = 0; i < ANALOG_INIT_RETRIES; i++) {
 			if (!analog_cooked_read(port)) break;
-			else wait_ms(ANALOG_MAX_TIME);
+			wait_ms(ANALOG_MAX_TIME);
 		}
 
 		wait_ms(ANALOG_MAX_TIME);
@@ -600,27 +594,43 @@ static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 		if (t && port->gameport->number < ANALOG_PORTS) {
 			analog_options[port->gameport->number] |= ANALOG_SAITEK;
-		} else {
-			gameport_close(gameport);
-			if (!gameport_open(gameport, dev, GAMEPORT_MODE_COOKED))
-				port->cooked = 1;
-			else
-				gameport_open(gameport, dev, GAMEPORT_MODE_RAW);
+			return 0;
 		}
-	} else {
-		if (gameport_open(gameport, dev, GAMEPORT_MODE_COOKED)) {
-			kfree(port);
-			return;
-		} else port->cooked = 1;
+
+		gameport_close(gameport);
 	}
 
-	if (port->cooked) {
+	if (!gameport_open(gameport, dev, GAMEPORT_MODE_COOKED)) {
+
 		for (i = 0; i < ANALOG_INIT_RETRIES; i++)
 			if (!gameport_cooked_read(gameport, port->axes, &port->buttons))
 				break;
 		for (i = 0; i < 4; i++)
 			if (port->axes[i] != -1) port->mask |= 1 << i;
+
 		port->fuzz = gameport->fuzz;
+		port->cooked = 1;
+		return 0;
+	}
+
+	if (!gameport_open(gameport, dev, GAMEPORT_MODE_RAW))
+		return 0;
+
+	return -1;
+}
+
+static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
+{
+	struct analog_port *port;
+	int i;
+
+	if (!(port = kmalloc(sizeof(struct analog_port), GFP_KERNEL)))
+		return;
+	memset(port, 0, sizeof(struct analog_port));
+
+	if (analog_init_port(gameport, dev, port)) {
+		kfree(port);
+		return;
 	}
 
 	if (analog_init_masks(port)) {
