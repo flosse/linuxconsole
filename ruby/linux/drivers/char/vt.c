@@ -687,8 +687,13 @@ static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
  *      Allocation, freeing and resizing of VTs.
  */
 
-void create_vt(struct vt_struct *vt, struct consw *vt_sw)
+const char *create_vt(struct vt_struct *vt, struct consw *vt_sw)
 {
+	const char *display_desc = NULL;
+
+	if (vt_sw)
+                display_desc = vt_sw->con_startup();
+        if (!display_desc) return NULL; 
 	vt->vt_sw = vt_sw;
 	vt->vt_dont_switch = 0;
         vt->scrollback_delta = 0;
@@ -706,6 +711,7 @@ void create_vt(struct vt_struct *vt, struct consw *vt_sw)
         vt->timer.function = blank_screen;
         vt->timer.expires = jiffies + vt->blank_interval;
         add_timer(&vt->timer);
+	return display_desc;
 }
 
 struct vc_data* find_vc(int currcons)
@@ -1413,7 +1419,6 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
         unsigned char c;
 	ushort cnt = 0;
         ushort myx;
-	int currcons = vt_cons->fg_console->vc_num;
 
         /* console busy or not yet initialized */
         if (!printable || test_and_set_bit(0, &printing))
@@ -1422,9 +1427,9 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
         pm_access(pm_con);
 
         if (kmsg_redirect && find_vc(kmsg_redirect-1))
-                currcons = kmsg_redirect -1;
+                co->index = kmsg_redirect - 1;
 
-	vc = find_vc(currcons);
+	vc = find_vc(co->index);
 
         /* read `x' only after setting currecons properly (otherwise
            the `x' macro will read the x of the foreground console). */
@@ -1432,7 +1437,6 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
 
 	if (!vc) {
 		/* impossible */
-                /* printk("vt_console_print: tty %d not allocated ??\n", currcons); */
                 goto quit;
         }
 
@@ -1499,7 +1503,9 @@ quit:
 
 static kdev_t vt_console_device(struct console *c)
 {
-        return MKDEV(TTY_MAJOR, c->index ? c->index : vt_cons->fg_console->vc_num + 1);
+	struct vc_data *vc = find_vc(c->index);
+
+        return MKDEV(TTY_MAJOR, vc->display_fg->fg_console->vc_num+1);
 }
 
 struct console vt_console_driver = {
@@ -1532,14 +1538,8 @@ DECLARE_TASKLET_DISABLED(console_tasklet, console_softint, 0);
 void __init vt_console_init(void)
 {
         const char *display_desc = NULL;
-        struct vt_struct *vt;
+	struct vt_struct *vt;
 	struct vc_data *vc;
-
-        if (conswitchp)
-                display_desc = conswitchp->con_startup();
-        if (!display_desc) {
-                return;
-        }
 
         memset(&console_driver, 0, sizeof(struct tty_driver));
         console_driver.magic = TTY_DRIVER_MAGIC;
@@ -1582,7 +1582,11 @@ void __init vt_console_init(void)
          */
 	vt = (struct vt_struct *) alloc_bootmem(sizeof(struct vt_struct));
 	vt->kmalloced = 0;
-	create_vt(vt, conswitchp);
+	display_desc = create_vt(vt, conswitchp);
+	if (!display_desc) { 
+		free_bootmem((unsigned long) vt, sizeof(struct vt_struct));
+		return;
+	}
 	vc = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
 	vt->last_console = vt->fg_console = vt->vcs.vc_cons[0] = vc; 
 	vc->vc_num = 0;
