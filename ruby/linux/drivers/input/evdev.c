@@ -72,8 +72,7 @@ static void evdev_event(struct input_handle *handle, unsigned int type, unsigned
 		list->buffer[list->head].value = value;
 		list->head = (list->head + 1) & (EVDEV_BUFFER_SIZE - 1);
 		
-		if (list->fasync)
-			kill_fasync(list->fasync, SIGIO, POLL_IN);
+		kill_fasync(&list->fasync, SIGIO, POLL_IN);
 
 		list = list->next;
 	}
@@ -111,7 +110,6 @@ static int evdev_release(struct inode * inode, struct file * file)
 
 	kfree(list);
 
-	MOD_DEC_USE_COUNT;
 	return 0;
 }
 
@@ -123,10 +121,7 @@ static int evdev_open(struct inode * inode, struct file * file)
 	if (i > EVDEV_MINORS || !evdev_table[i])
 		return -ENODEV;
 
-	MOD_INC_USE_COUNT;
-
 	if (!(list = kmalloc(sizeof(struct evdev_list), GFP_KERNEL))) {
-		MOD_DEC_USE_COUNT;
 		return -ENOMEM;
 	}
 	memset(list, 0, sizeof(struct evdev_list));
@@ -274,6 +269,7 @@ static int evdev_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 }
 
 static struct file_operations evdev_fops = {
+	owner:		THIS_MODULE,
 	read:		evdev_read,
 	write:		evdev_write,
 	poll:		evdev_poll,

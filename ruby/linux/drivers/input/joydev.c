@@ -141,8 +141,7 @@ static void joydev_event(struct input_handle *handle, unsigned int type, unsigne
 			if (list->tail == (list->head = (list->head + 1) & (JOYDEV_BUFFER_SIZE - 1)))
 				list->startup = 0;
 
-		if (list->fasync)
-			kill_fasync(list->fasync, SIGIO, POLL_IN);
+		kill_fasync(&list->fasync, SIGIO, POLL_IN);
 
 		list = list->next;
 	}
@@ -180,7 +179,6 @@ static int joydev_release(struct inode * inode, struct file * file)
 
 	kfree(list);
 
-	MOD_DEC_USE_COUNT;
 	return 0;
 }
 
@@ -192,10 +190,7 @@ static int joydev_open(struct inode *inode, struct file *file)
 	if (i > JOYDEV_MINORS || !joydev_table[i])
 		return -ENODEV;
 
-	MOD_INC_USE_COUNT;
-
 	if (!(list = kmalloc(sizeof(struct joydev_list), GFP_KERNEL))) {
-		MOD_DEC_USE_COUNT;
 		return -ENOMEM;
 	}
 	memset(list, 0, sizeof(struct joydev_list));
@@ -375,6 +370,7 @@ static int joydev_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 }
 
 static struct file_operations joydev_fops = {
+	owner:		THIS_MODULE,
 	read:		joydev_read,
 	write:		joydev_write,
 	poll:		joydev_poll,
