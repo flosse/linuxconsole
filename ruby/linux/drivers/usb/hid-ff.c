@@ -31,10 +31,14 @@
 #include <linux/sched.h>
 
 #undef DEBUG
-
 #include <linux/usb.h>
 
+#include <linux/circ_buf.h>
+
 #include "hid.h"
+
+/* Transmition state */
+#define XMIT_RUNNING 0
 
 /* Effect status */
 #define EFFECT_STARTED 0     /* Effect is going to play after some time
@@ -100,8 +104,13 @@ int hid_ff_init(struct hid_device* hid)
         && test_bit(EFFECT_USED, l->effects[i].flags) \
         && CHECK_OWNERSHIP(l->effects[i]))
 
-#define LGFF_BUFFER_SIZE 8
+#define LGFF_BUFFER_SIZE 64
 #define LGFF_EFFECTS 8
+
+struct lgff_magnitudes {
+	unsigned char left;
+	unsigned char right;
+};
 
 struct lgff_effect {
 	pid_t owner;
@@ -114,7 +123,13 @@ struct lgff_effect {
 struct hid_ff_logitech {
 	struct urb* urbffout;        /* Output URB used to send ff commands */
 	struct usb_ctrlrequest ffcr; /* ff commands use control URBs */
-	char buf[LGFF_BUFFER_SIZE];
+	char buf[8];
+
+	spinlock_t xmit_lock;
+	unsigned int xmit_head, xmit_tail;
+	struct lgff_magnitudes xmit_data[LGFF_BUFFER_SIZE];
+	long xmit_flags[1];
+
 	struct lgff_effect effects[LGFF_EFFECTS];
 	spinlock_t lock;             /* device-level lock. Having locks on
 					a per-effect basis could be nice, but
@@ -149,6 +164,10 @@ static int hid_lgff_init(struct hid_device* hid)
 	hid->ff_private = private;
 
 	spin_lock_init(&private->lock);
+	spin_lock_init(&private->xmit_lock);
+
+	private->buf[0] = 0x03;
+	private->buf[1] = 0x42;
 
 	/* Event and exit callbacks */
 	hid->ff_exit = hid_lgff_exit;
@@ -316,31 +335,28 @@ static int hid_lgff_upload_effect(struct input_dev* input,
 	return 0;
 }
 
-static void hid_lgff_make_rumble(struct hid_device* hid)
+static void hid_lgff_xmit(struct hid_device* hid)
 {
 	struct hid_ff_logitech *lgff = hid->ff_private;
-	char packet[] = {0x03, 0x42, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00};
 	int err;
-	int left = 0, right = 0;
-	int i;
+	int tail;
+	unsigned long flags;
 
-	dbg("in hid_make_rumble");
-	memcpy(lgff->buf, packet, 8);
+	spin_lock_irqsave(&lgff->xmit_lock, flags);
 
-
-	for (i=0; i<LGFF_EFFECTS; ++i) {
-		if (test_bit(EFFECT_USED, lgff->effects[i].flags)
-		    && test_bit(EFFECT_PLAYING, lgff->effects[i].flags)) {
-			left += lgff->effects[i].left;
-			right += lgff->effects[i].right;
-		}
+	tail = lgff->xmit_tail;
+	if (lgff->xmit_head == tail) {
+		clear_bit(XMIT_RUNNING, lgff->xmit_flags);
+		spin_unlock_irqrestore(&lgff->xmit_lock, flags);
+		return;
 	}
+	lgff->buf[3] = lgff->xmit_data[tail].left;
+	lgff->buf[4] = lgff->xmit_data[tail].right;
+	tail++; tail &= LGFF_BUFFER_SIZE -1;
+	lgff->xmit_tail = tail;
 
-	lgff->buf[3] = left > 0x7f ? 0x7f : left;
-	lgff->buf[4] = right > 0x7f ? 0x7f : right;
+	spin_unlock_irqrestore(&lgff->xmit_lock, flags);
 
-	/*FIXME: needs a queue. I should at least check if the urb is
-	  available */
 	lgff->urbffout->pipe = usb_sndctrlpipe(hid->dev, 0);
 	lgff->ffcr.bRequestType = USB_TYPE_CLASS | USB_DIR_OUT | USB_RECIP_INTERFACE;
 	lgff->urbffout->transfer_buffer_length = lgff->ffcr.wLength = 8;
@@ -353,7 +369,46 @@ static void hid_lgff_make_rumble(struct hid_device* hid)
 	
 	if ((err=usb_submit_urb(lgff->urbffout, GFP_ATOMIC)))
 		warn("usb_submit_urb returned %d", err);
-	dbg("rumble urb submited");
+}
+
+static void hid_lgff_make_rumble(struct hid_device* hid)
+{
+	struct hid_ff_logitech *lgff = hid->ff_private;
+	int left = 0, right = 0;
+	int i;
+	int head, tail;
+	unsigned long flags;
+
+	for (i=0; i<LGFF_EFFECTS; ++i) {
+		if (test_bit(EFFECT_USED, lgff->effects[i].flags)
+		    && test_bit(EFFECT_PLAYING, lgff->effects[i].flags)) {
+			left += lgff->effects[i].left;
+			right += lgff->effects[i].right;
+		}
+	}
+
+	spin_lock_irqsave(&lgff->xmit_lock, flags);
+
+	head = lgff->xmit_head;
+	tail = lgff->xmit_tail;	
+
+	if (CIRC_SPACE(head, tail, LGFF_BUFFER_SIZE) < 1) {
+		warn("not enough space in xmit buffer to send new packet\n");
+		spin_unlock_irqrestore(&lgff->xmit_lock, flags);
+		return;
+	}
+
+	lgff->xmit_data[head].left = left > 0x7f ? 0x7f : left;
+	lgff->xmit_data[head].right = right > 0x7f ? 0x7f : right;
+	head++; head &= LGFF_BUFFER_SIZE -1;
+	lgff->xmit_head = head;
+
+	if (test_and_set_bit(XMIT_RUNNING, lgff->xmit_flags))
+		spin_unlock_irqrestore(&lgff->xmit_lock, flags);
+	else {
+		spin_unlock_irqrestore(&lgff->xmit_lock, flags);
+		hid_lgff_xmit(hid);
+	}
 }
 
 static void hid_lgff_ctrl_out(struct urb *urb)
@@ -362,6 +417,8 @@ static void hid_lgff_ctrl_out(struct urb *urb)
 
 	if (urb->status)
 		warn("hid_irq_ffout status %d received", urb->status);
+
+	hid_lgff_xmit(hid);
 }
 
 /* Lock must be held by caller */
