@@ -8,6 +8,7 @@
  * BUG() and panic() information from reaching the user.
  */
 
+#include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/spinlock.h>
 #include <linux/tty.h>
