@@ -163,14 +163,10 @@ void fb_copy_cmap(struct fb_cmap *from, struct fb_cmap *to, int fsfromto)
      *  Get the colormap for a screen
      */
 
-int fb_get_cmap(struct fb_cmap *cmap, int kspc,
-    	    	int (*getcolreg)(u_int, u_int *, u_int *, u_int *, u_int *,
-				 struct fb_info *),
-		struct fb_info *info)
+int fb_get_cmap(struct fb_cmap *cmap, int kspc, struct fb_info *info)
 {
-    int i, start;
     u16 *red, *green, *blue, *transp;
-    u_int hred, hgreen, hblue, htransp;
+    int i, start;	
 
     red = cmap->red;
     green = cmap->green;
@@ -180,20 +176,20 @@ int fb_get_cmap(struct fb_cmap *cmap, int kspc,
     if (start < 0)
 	return -EINVAL;
     for (i = 0; i < cmap->len; i++) {
-	if (getcolreg(start++, &hred, &hgreen, &hblue, &htransp, info))
+	if (!&info->cmap)
 	    return 0;
 	if (kspc) {
-	    *red = hred;
-	    *green = hgreen;
-	    *blue = hblue;
+	    *red = info->cmap.red[i];
+	    *green = info->cmap.green[i];
+	    *blue = info->cmap.blue[i];
 	    if (transp)
-		*transp = htransp;
+		*transp = info->cmap.transp[i];
 	} else {
-	    put_user(hred, red);
-	    put_user(hgreen, green);
-	    put_user(hblue, blue);
+	    put_user(info->cmap.red[i], red);
+	    put_user(info->cmap.green[i], green);
+	    put_user(info->cmap.blue[i], blue);
 	    if (transp)
-		put_user(htransp, transp);
+		put_user(info->cmap.transp[i], transp);
 	}
 	red++;
 	green++;
