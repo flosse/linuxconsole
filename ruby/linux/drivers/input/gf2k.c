@@ -60,7 +60,7 @@
 static char gf2k_length[] = { 40, 40, 40, 40, 40, 40, 40, 40 };
 static char gf2k_hat_to_axis[][2] = {{ 0, 0}, { 0,-1}, { 1,-1}, { 1, 0}, { 1, 1}, { 0, 1}, {-1, 1}, {-1, 0}, {-1,-1}};
 
-static char *gf2k_names[] = {"", "Genius G-09D", "Genius F-30D", "Genius F-30", "Genius F-31D",
+static char *gf2k_names[] = {"", "Genius G-09D", "Genius F-30D", "Genius F-30", "Genius MaxFighter F-31D",
 				"Genius F-30-5", "Genius Flight2000 F-23", "Genius F-31"};
 static unsigned char gf2k_hats[] = { 0, 2, 0, 0, 2, 0, 2, 0 };
 static unsigned char gf2k_axes[] = { 0, 2, 0, 0, 4, 0, 4, 0 };
