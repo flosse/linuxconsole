@@ -28,7 +28,7 @@ typedef unsigned short unicode;
 void usage(char *argv0)
 {
   fprintf(stderr, "Usage: \n"
-         "        %s chartable [number of characters]\n", argv0);
+         "        %s chartable \n", argv0);
   exit(EX_USAGE);
 }
 
