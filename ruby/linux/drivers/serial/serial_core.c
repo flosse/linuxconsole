@@ -273,7 +273,7 @@ static inline u_int uart_calculate_quot(struct uart_info *info, u_int baud)
 	    ((info->flags & ASYNC_SPD_MASK) == ASYNC_SPD_CUST))
 		quot = info->state->custom_divisor;
 	else
-		quot = (info->port->uartclk / (16 * baud)) - 1;
+		quot = info->port->uartclk / (16 * baud);
 
 	return quot;
 }
@@ -1689,10 +1689,42 @@ uart_set_options(struct uart_port *port, struct console *co,
 	}
 
 	co->cflag = cflag;
-	quot = (port->uartclk / (16 * baud)) - 1;
+	quot = (port->uartclk / (16 * baud));
 	port->ops->change_speed(port, cflag, 0, quot);
 
 	return 0;
+}
+
+extern void ambauart_console_init(void);
+extern void anakin_console_init(void);
+extern void clps711xuart_console_init(void);
+extern void rs285_console_init(void);
+extern void sa1100_rs_console_init(void);
+extern void serial8250_console_init(void);
+
+/*
+ * Central "initialise all serial consoles" container.  Needs to be killed.
+ */
+void __init uart_console_init(void)
+{
+#ifdef CONFIG_SERIAL_AMBA_CONSOLE
+	ambauart_console_init();
+#endif
+#ifdef CONFIG_SERIAL_ANAKIN_CONSOLE
+	anakin_console_init();
+#endif
+#ifdef CONFIG_SERIAL_CLPS711X_CONSOLE
+	clps711xuart_console_init();
+#endif
+#ifdef CONFIG_SERIAL_21285_CONSOLE
+	rs285_console_init();
+#endif
+#ifdef CONFIG_SERIAL_SA1100_CONSOLE
+	sa1100_rs_console_init();
+#endif
+#ifdef CONFIG_SERIAL_8250_CONSOLE
+	serial8250_console_init();
+#endif
 }
 #endif /* CONFIG_SERIAL_CORE_CONSOLE */
 
@@ -2147,3 +2179,6 @@ static void __exit uart_exit(void)
 
 module_init(uart_init);
 module_exit(uart_exit);
+
+MODULE_DESCRIPTION("Serial driver core");
+MODULE_LICENSE("GPL");

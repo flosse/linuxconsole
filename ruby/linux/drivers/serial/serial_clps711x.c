@@ -676,3 +676,9 @@ static void __exit clps711xuart_exit(void)
 
 module_init(clps711xuart_init);
 module_exit(clps711xuart_exit);
+
+EXPORT_NO_SYMBOLS;
+
+MODULE_AUTHOR("Deep Blue Solutions Ltd");
+MODULE_DESCRIPTION("CLPS-711x generic serial driver");
+MODULE_LICENSE("GPL");

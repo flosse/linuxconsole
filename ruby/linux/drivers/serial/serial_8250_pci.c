@@ -1071,3 +1071,9 @@ static void __exit serial8250_pci_exit(void)
 
 module_init(serial8250_pci_init);
 module_exit(serial8250_pci_exit);
+
+EXPORT_NO_SYMBOLS;
+
+MODULE_LICENSE("GPL");
+MODULE_DESCRIPTION("Generic 8250/16x50 PCI serial probe module");
+MODULE_GENERIC_TABLE(pci, serial_pci_tbl);

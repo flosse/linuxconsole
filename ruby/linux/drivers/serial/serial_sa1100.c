@@ -434,6 +434,7 @@ static void sa1100_change_speed(struct uart_port *port, u_int cflag, u_int iflag
 	UART_PUT_UTCR0(port, utcr0);
 
 	/* set the baud rate */
+	quot -= 1;
 	UART_PUT_UTCR1(port, ((quot & 0xf00) >> 8));
 	UART_PUT_UTCR2(port, (quot & 0xff));
 
@@ -792,4 +793,10 @@ static void __exit sa1100_serial_exit(void)
 
 module_init(sa1100_serial_init);
 module_exit(sa1100_serial_exit);
+
+EXPORT_NO_SYMBOLS;
+
+MODULE_AUTHOR("Deep Blue Solutions Ltd");
+MODULE_DESCRIPTION("SA1100 generic serial port driver");
+MODULE_LICENSE("GPL");
 

@@ -76,8 +76,9 @@ static struct old_serial_port old_serial_port[] = {
 static struct tty_driver normal, callout;
 static struct tty_struct *serial8250_table[UART_NR];
 static struct termios *serial8250_termios[UART_NR], *serial8250_termios_locked[UART_NR];
-#ifdef SUPPORT_SYSRQ
+#ifdef CONFIG_SERIAL_8250_CONSOLE
 static struct console serial8250_console;
+static unsigned int lsr_break_flag;
 #endif
 static struct uart_info *IRQ_ports[NR_IRQS];
 
@@ -692,7 +693,7 @@ receive_chars(struct uart_info *info, int *status, struct pt_regs *regs)
 				 * may get masked by ignore_status_mask
 				 * or read_status_mask.
 				 */
-				uart_handle_break(info, &sercons);
+				uart_handle_break(info, &serial8250_console);
 			} else if (*status & UART_LSR_PE)
 				port->icount.parity++;
 			else if (*status & UART_LSR_FE)
@@ -706,7 +707,7 @@ receive_chars(struct uart_info *info, int *status, struct pt_regs *regs)
 			*status &= port->read_status_mask;
 
 #ifdef CONFIG_SERIAL_8250_CONSOLE
-			if (port->line == sercons.index) {
+			if (port->line == serial8250_console.index) {
 				/* Recover the break flag from console xmit */
 				*status |= lsr_break_flag;
 				lsr_break_flag = 0;
@@ -1651,6 +1652,8 @@ static int serial8250_console_read(struct uart_port *port, char *s, u_int count)
 }
 #endif
 
+#define BOTH_EMPTY (UART_LSR_TEMT | UART_LSR_THRE)
+
 /*
  *	Wait for transmitter & holding register to empty
  */
@@ -1880,3 +1883,7 @@ module_exit(serial8250_exit);
 
 EXPORT_SYMBOL(register_serial);
 EXPORT_SYMBOL(unregister_serial);
+
+MODULE_LICENSE("GPL");
+MODULE_DESCRIPTION("Generic 8250/16x50 serial driver");
+

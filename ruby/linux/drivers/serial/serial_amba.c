@@ -487,7 +487,7 @@ static void ambauart_change_speed(struct uart_port *port, u_int cflag, u_int ifl
 
 	/* first, disable everything */
 	save_flags(flags); cli();
-	old_cr = UART_GET_CR(port) &= ~AMBA_UARTCR_MSIE;
+	old_cr = UART_GET_CR(port) & ~AMBA_UARTCR_MSIE;
 
 	if ((port->flags & ASYNC_HARDPPS_CD) ||
 	    (cflag & CRTSCTS) || !(cflag & CLOCAL))
@@ -496,6 +496,7 @@ static void ambauart_change_speed(struct uart_port *port, u_int cflag, u_int ifl
 	UART_PUT_CR(port, 0);
 
 	/* Set baud rate */
+	quot -= 1;
 	UART_PUT_LCRM(port, ((quot & 0xf00) >> 8));
 	UART_PUT_LCRL(port, (quot & 0xff));
 
@@ -725,6 +726,7 @@ static int __init ambauart_console_setup(struct console *co, char *options)
 }
 
 static struct console amba_console = {
+	name:		"ttyAM",
 	write:		ambauart_console_write,
 #ifdef used_and_not_const_char_pointer
 	read:		ambauart_console_read,
@@ -780,3 +782,9 @@ static void __exit ambauart_exit(void)
 
 module_init(ambauart_init);
 module_exit(ambauart_exit);
+
+EXPORT_NO_SYMBOLS;
+
+MODULE_AUTHOR("ARM Ltd/Deep Blue Solutions Ltd");
+MODULE_DESCRIPTION("ARM AMBA serial port driver");
+MODULE_LICENSE("GPL");

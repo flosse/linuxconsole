@@ -563,3 +563,8 @@ void __init rs285_console_init(void)
 }
 
 #endif /* CONFIG_SERIAL_21285_CONSOLE */
+
+EXPORT_NO_SYMBOLS;
+
+MODULE_LICENSE("GPL");
+MODULE_DESCRIPTION("Intel Footbridge (21285) serial driver");
