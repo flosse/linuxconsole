@@ -1195,6 +1195,7 @@ void hid_init_reports(struct hid_device *hid)
 	struct hid_report_enum *report_enum;
 	struct hid_report *report;
 	struct list_head *list;
+	int len;
 
 	report_enum = hid->report_enum + HID_INPUT_REPORT;
 	list = report_enum->report_list.next;
@@ -1221,6 +1222,9 @@ void hid_init_reports(struct hid_device *hid)
 	list = report_enum->report_list.next;
 	while (list != &report_enum->report_list) {
 		report = (struct hid_report *) list;
+		len = ((report->size - 1) >> 3) + 1 + report_enum->numbered;
+		if (len > hid->urbin->transfer_buffer_length)
+			hid->urbin->transfer_buffer_length = len < HID_BUFFER_SIZE ? len : HID_BUFFER_SIZE;
 		usb_control_msg(hid->dev, usb_sndctrlpipe(hid->dev, 0),
 			0x0a, USB_TYPE_CLASS | USB_RECIP_INTERFACE, report->id,
 			hid->ifnum, NULL, 0, HZ * USB_CTRL_SET_TIMEOUT);
@@ -1320,7 +1324,7 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 				continue;
 			if (!(hid->urbout = usb_alloc_urb(0)))
 				goto fail;
-			pipe = usb_sndbulkpipe(dev, endpoint->bEndpointAddress); /* FIXME should we use sndint here? */
+			pipe = usb_sndbulkpipe(dev, endpoint->bEndpointAddress);
 			FILL_BULK_URB(hid->urbout, dev, pipe, hid->outbuf, 0, hid_irq_out, hid);
 		}
 	}
