@@ -53,6 +53,7 @@ static struct fb_fix_screeninfo vesafb_fix __initdata = {
 };
 
 static struct fb_info fb_info;
+static u32 pseudo_palette[17];
 
 static int             inverse   = 0;
 static int             mtrr      = 0;
@@ -140,8 +141,6 @@ static int vesafb_setcolreg(unsigned regno, unsigned red, unsigned green,
 	 *  (according to the entries in the `var' structure). Return
 	 *  != 0 for invalid regno.
 	 */
-	u32 pseudo_palette[17];
-	
 	if (regno >= info->cmap.len)
 		return 1;
 
@@ -153,13 +152,13 @@ static int vesafb_setcolreg(unsigned regno, unsigned red, unsigned green,
 		case 16:
 			if (info->var.red.offset == 10) {
 				/* 1:5:5:5 */
-				pseudo_palette[regno] =
+				((u16*) (info->pseudo_palette))[regno] =
 					((red   & 0xf800) >>  1) |
 					((green & 0xf800) >>  6) |
 					((blue  & 0xf800) >> 11);
 			} else {
 				/* 0:5:6:5 */
-				pseudo_palette[regno] =
+				((u16*) (info->pseudo_palette))[regno] =
 					((red   & 0xf800)      ) |
 					((green & 0xfc00) >>  5) |
 					((blue  & 0xf800) >> 11);
@@ -169,7 +168,7 @@ static int vesafb_setcolreg(unsigned regno, unsigned red, unsigned green,
 			red   >>= 8;
 			green >>= 8;
 			blue  >>= 8;
-			pseudo_palette[regno] =
+			((u32 *)(info->pseudo_palette))[regno] =
 				(red   << info->var.red.offset)   |
 				(green << info->var.green.offset) |
 				(blue  << info->var.blue.offset);
@@ -178,13 +177,12 @@ static int vesafb_setcolreg(unsigned regno, unsigned red, unsigned green,
 			red   >>= 8;
 			green >>= 8;
 			blue  >>= 8;
-			pseudo_palette[regno] =
+			((u32 *)(info->pseudo_palette))[regno] =
 				(red   << info->var.red.offset)   |
 				(green << info->var.green.offset) |
 				(blue  << info->var.blue.offset);
 			break;
 	}
-	info->pseudo_palette = pseudo_palette;
     	return 0;
 }
 
@@ -237,6 +235,8 @@ int __init vesafb_init(void)
 	if (screen_info.orig_video_isVGA != VIDEO_TYPE_VLFB)
 		return -ENXIO;
 
+	printk("It is a linear framebuffer\n");
+
 	video_base          = screen_info.lfb_base;
 	video_bpp           = screen_info.lfb_depth;
 	if (15 == video_bpp)
@@ -255,7 +255,9 @@ int __init vesafb_init(void)
 		return -EBUSY;
 	}
 
-        video_vbase = ioremap(video_base, video_size);
+	printk("Got requested region (framebuffer)\n");
+
+        fb_info.screen_base = video_vbase = ioremap(video_base, video_size);
 	if (!video_vbase) {
 		release_mem_region(video_base, video_size);
 		printk(KERN_ERR
@@ -374,6 +376,7 @@ int __init vesafb_init(void)
 	fb_info.var = vesafb_defined;
 	fb_info.fix = vesafb_fix;
 	fb_info.flags=FBINFO_FLAG_DEFAULT;
+	fb_info.pseudo_palette = pseudo_palette;
 
 	if (register_framebuffer(&fb_info)<0)
 		return -EINVAL;
