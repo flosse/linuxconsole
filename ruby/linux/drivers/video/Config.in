@@ -13,7 +13,7 @@ bool 'Support for frame buffer devices (EXPERIMENTAL)' CONFIG_FB
 if [ "$CONFIG_FB" = "y" ]; then
    mainmenu_option next_comment
    comment 'Frame-buffer support'
-   
+
    if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
       if [ "$CONFIG_PCI" = "y" ]; then
          tristate '  nVidia Riva support (EXPERIMENTAL)' CONFIG_FB_RIVA
@@ -31,8 +31,8 @@ if [ "$CONFIG_FB" = "y" ]; then
             fi
          fi
       fi
-   fi    
-      if [ "$CONFIG_ARCH_ACORN" = "y" ]; then
+   fi
+   if [ "$CONFIG_ARCH_ACORN" = "y" ]; then
       bool '  Acorn VIDC support' CONFIG_FB_ACORN
    fi
    if [ "$CONFIG_ARCH_NETWINDER" = "y" ]; then
@@ -46,7 +46,7 @@ if [ "$CONFIG_FB" = "y" ]; then
    fi
    if [ "$CONFIG_Q40" = "y" ]; then
       define_bool CONFIG_FB_Q40 y
-   fi
+   fi  
    if [ "$CONFIG_AMIGA" = "y" ]; then
       tristate '  Amiga native chipset support' CONFIG_FB_AMIGA
       if [ "$CONFIG_FB_AMIGA" != "n" ]; then
@@ -55,7 +55,7 @@ if [ "$CONFIG_FB" = "y" ]; then
          bool '    Amiga AGA chipset support' CONFIG_FB_AMIGA_AGA
       fi
    fi
-      if [ "$CONFIG_ZORRO" = "y" ]; then
+   if [ "$CONFIG_ZORRO" = "y" ]; then
       tristate '  Amiga CyberVision support' CONFIG_FB_CYBER
       if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
          bool '  Amiga CyberVision3D support (EXPERIMENTAL)' CONFIG_FB_VIRGE
@@ -77,13 +77,13 @@ if [ "$CONFIG_FB" = "y" ]; then
          bool '    IMS Twin Turbo display support' CONFIG_FB_IMSTT
          bool '    Chips 65550 display support' CONFIG_FB_CT65550
          bool '    S3 Trio display support' CONFIG_FB_S3TRIO
-      fi                                              
+      fi
       tristate '  VGA 16-color graphics console' CONFIG_FB_VGA16
    fi
    if [ "$CONFIG_MAC" = "y" ]; then
       define_bool CONFIG_FB_MAC y
       bool '  Apple "valkyrie" display support' CONFIG_FB_VALKYRIE
-#      bool '  Apple DAFB display support' CONFIG_FB_DAFB
+#     bool '  Apple DAFB display support' CONFIG_FB_DAFB
    fi
    if [ "$CONFIG_HP300" = "y" ]; then
       define_bool CONFIG_FB_HP300 y
@@ -97,7 +97,7 @@ if [ "$CONFIG_FB" = "y" ]; then
       tristate '  Hercules mono graphics console (EXPERIMENTAL)' CONFIG_FB_HGA
       define_bool CONFIG_VIDEO_SELECT y
    fi
-      if [ "$CONFIG_VISWS" = "y" ]; then
+   if [ "$CONFIG_VISWS" = "y" ]; then
       tristate '  SGI Visual Workstation framebuffer support' CONFIG_FB_SGIVW
       define_bool CONFIG_BUS_I2C y
    fi
@@ -126,9 +126,9 @@ if [ "$CONFIG_FB" = "y" ]; then
          tristate '  ATI Mach64 display support (EXPERIMENTAL)' CONFIG_FB_ATY
          tristate '  ATI Rage 128 display support (EXPERIMENTAL)' CONFIG_FB_ATY128
          tristate '  3Dfx Banshee/Voodoo3 display support (EXPERIMENTAL)' CONFIG_FB_3DFX
-	 tristate '  SIS 630/540 display support (EXPERIMENTAL)' CONFIG_FB_SIS
+         tristate '  SIS 630/540 display support (EXPERIMENTAL)' CONFIG_FB_SIS
       fi
-   fi                          
+   fi
    if [ "$ARCH" = "sparc" -o "$ARCH" = "sparc64" ]; then
       bool '  SBUS and UPA framebuffers' CONFIG_FB_SBUS
       if [ "$CONFIG_FB_SBUS" != "n" ]; then
@@ -145,7 +145,7 @@ if [ "$CONFIG_FB" = "y" ]; then
          fi
          bool '    Leo (ZX) support' CONFIG_FB_LEO
       fi
-   fi                                       
+   fi
    if [ "$ARCH" = "sparc" ]; then
       if [ "$CONFIG_PCI" != "n" ]; then
          bool '  PCI framebuffers' CONFIG_FB_PCI
@@ -167,7 +167,7 @@ if [ "$CONFIG_FB" = "y" ]; then
    fi
    if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
       tristate '  Virtual Frame Buffer support (ONLY FOR TESTING!)' CONFIG_FB_VIRTUAL
-   fi                                                                  
+   fi
 
    bool '  Advanced low level driver options' CONFIG_FBCON_ADVANCED
    if [ "$CONFIG_FBCON_ADVANCED" = "y" ]; then
@@ -183,10 +183,10 @@ if [ "$CONFIG_FB" = "y" ]; then
       tristate '    Atari interleaved bitplanes (2 planes) support' CONFIG_FBCON_IPLAN2P2
       tristate '    Atari interleaved bitplanes (4 planes) support' CONFIG_FBCON_IPLAN2P4
       tristate '    Atari interleaved bitplanes (8 planes) support' CONFIG_FBCON_IPLAN2P8
-#      tristate '    Atari interleaved bitplanes (16 planes) support' CONFIG_FBCON_IPLAN2P16
+      #tristate '    Atari interleaved bitplanes (16 planes) support' CONFIG_FBCON_IPLAN2P16
       tristate '    Mac variable bpp packed pixels support' CONFIG_FBCON_MAC
       tristate '    VGA 16-color planar support' CONFIG_FBCON_VGA_PLANES
-      tristate '    VGA characters/attributes support' CONFIG_FBCON_VGA      
+      tristate '    VGA characters/attributes support' CONFIG_FBCON_VGA
       tristate '    HGA monochrome support (EXPERIMENTAL)' CONFIG_FBCON_HGA
    else
       # Guess what we need
@@ -208,7 +208,7 @@ if [ "$CONFIG_FB" = "y" ]; then
       if [ "$CONFIG_FB_ACORN" = "y" -o "$CONFIG_FB_MAC" = "y" -o \
            "$CONFIG_FB_SA1100" = "y" -o "$CONFIG_FB_VIRTUAL" = "y" ]; then
          define_tristate CONFIG_FBCON_CFB2 y
-         define_tristate CONFIG_FBCON_CFB4 y               
+         define_tristate CONFIG_FBCON_CFB4 y
       else
          if [ "$CONFIG_FB_ACORN" = "m" -o "$CONFIG_FB_MAC" = "m" -o \
               "$CONFIG_FB_SA1100" = "m" -o "$CONFIG_FB_VIRTUAL" = "m" ]; then
@@ -228,13 +228,13 @@ if [ "$CONFIG_FB" = "y" ]; then
            "$CONFIG_FB_IGA" = "y" -o "$CONFIG_FB_MATROX" = "y" -o \
            "$CONFIG_FB_CT65550" = "y" -o "$CONFIG_FB_PM2" = "y" -o \
            "$CONFIG_FB_P9100" = "y" -o "$CONFIG_FB_ATY128" = "y" -o \
-           "$CONFIG_FB_RIVA" = "y" -o "$CONFIG_FB_3DFX" = "y" -o \ 
+           "$CONFIG_FB_RIVA" = "y" -o "$CONFIG_FB_3DFX" = "y" -o \
            "$CONFIG_FB_SGIVW" = "y" -o "$CONFIG_FB_CYBER2000" = "y" -o \
-           "$CONFIG_FB_SA1100" = "y" -o "$CONFIG_FB_SIS" = "y" ]; then 
-         define_tristate CONFIG_FBCON_CFB8 y
+           "$CONFIG_FB_SA1100" = "y" -o "$CONFIG_FB_SIS" = "y" ]; then
+         define_tristate CONFIG_FBCON_CFB8 y 
       else
-         if [ "$CONFIG_FB_ACORN" = "m" -o "$CONFIG_FB_ATARI" = "m" -o \
-              "$CONFIG_FB_ATY" = "m" -o "$CONFIG_FB_MAC" = "m" -o \
+	 if [ "$CONFIG_FB_ACORN" = "m" -o "$CONFIG_FB_ATARI" = "m" -o \
+	      "$CONFIG_FB_ATY" = "m" -o "$CONFIG_FB_MAC" = "m" -o \
               "$CONFIG_FB_OF" = "m" -o "$CONFIG_FB_TGA" = "m" -o \
               "$CONFIG_FB_VESA" = "m" -o "$CONFIG_FB_VIRTUAL" = "m" -o \
               "$CONFIG_FB_TCX" = "m" -o "$CONFIG_FB_CGTHREE" = "m" -o \
@@ -245,9 +245,9 @@ if [ "$CONFIG_FB" = "y" ]; then
               "$CONFIG_FB_IGA" = "m" -o "$CONFIG_FB_MATROX" = "m" -o \
               "$CONFIG_FB_CT65550" = "m" -o "$CONFIG_FB_PM2" = "m" -o \
               "$CONFIG_FB_P9100" = "m" -o "$CONFIG_FB_ATY128" = "m" -o \
-              "$CONFIG_FB_RIVA" = "m" -o -o "$CONFIG_FB_3DFX" = "m" -o \	
+	      "$CONFIG_FB_RIVA" = "m" -o "$CONFIG_FB_3DFX" = "m" -o \
 	      "$CONFIG_FB_SGIVW" = "m" -o "$CONFIG_FB_CYBER2000" = "m" -o \
-              "$CONFIG_FB_SA1100" = "m" -o "$CONFIG_FB_SIS" = "m" ]; then
+	      "$CONFIG_FB_SA1100" = "m" -o "$CONFIG_FB_SIS" = "m" ]; then
             define_tristate CONFIG_FBCON_CFB8 m
          fi
       fi
@@ -265,7 +265,7 @@ if [ "$CONFIG_FB" = "y" ]; then
            "$CONFIG_FB_SIS" = "y" -o "$CONFIG_FB_SA1100" = "y" ]; then
          define_tristate CONFIG_FBCON_CFB16 y
       else
-         if [ "$CONFIG_FB_ATARI" = "m" -o "$CONFIG_FB_ATY" = "m" -o \
+	 if [ "$CONFIG_FB_ATARI" = "m" -o "$CONFIG_FB_ATY" = "m" -o \
               "$CONFIG_FB_MAC" = "m" -o "$CONFIG_FB_VESA" = "m" -o \
               "$CONFIG_FB_VIRTUAL" = "m" -o "$CONFIG_FB_TBOX" = "m" -o \
               "$CONFIG_FB_Q40" = "m" -o "$CONFIG_FB_ATY128" = "m" -o \
@@ -275,25 +275,23 @@ if [ "$CONFIG_FB" = "y" ]; then
               "$CONFIG_FB_CT65550" = "m" -o "$CONFIG_FB_MATROX" = "m" -o \
               "$CONFIG_FB_PM2" = "m" -o "$CONFIG_FB_SGIVW" = "m" -o \
               "$CONFIG_FB_CYBER2000" = "m" -o "$CONFIG_FB_SIS" = "m" -o \
-	      "$CONFIG_FB_RIVA" = "m" -o "$CONFIG_FB_SA1100" = "m" ]; then
+              "$CONFIG_FB_RIVA" = "m" -o "$CONFIG_FB_SA1100" = "m" ]; then
             define_tristate CONFIG_FBCON_CFB16 m
          fi
       fi
       if [ "$CONFIG_FB_ATY" = "y" -o "$CONFIG_FB_VIRTUAL" = "y" -o \
            "$CONFIG_FB_CLGEN" = "y" -o "$CONFIG_FB_VESA" = "y" -o \
            "$CONFIG_FB_MATROX" = "y" -o "$CONFIG_FB_PM2" = "y" -o \
-           "$CONFIG_FB_ATY128" = "y" -o \
-           "$CONFIG_FB_CYBER2000" = "y" ]; then
+           "$CONFIG_FB_ATY128" = "y" -o "$CONFIG_FB_CYBER2000" = "y" ]; then 
          define_tristate CONFIG_FBCON_CFB24 y
       else
          if [ "$CONFIG_FB_ATY" = "m" -o "$CONFIG_FB_VIRTUAL" = "m" -o \
               "$CONFIG_FB_CLGEN" = "m" -o "$CONFIG_FB_VESA" = "m" -o \
               "$CONFIG_FB_MATROX" = "m" -o "$CONFIG_FB_PM2" = "m" -o \
-              "$CONFIG_FB_ATY128" = "m" -o \
-              "$CONFIG_FB_CYBER2000" = "m" ]; then
+              "$CONFIG_FB_ATY128" = "m" -o "$CONFIG_FB_CYBER2000" = "m" ]; then 
             define_tristate CONFIG_FBCON_CFB24 m
          fi
-      fi                                                                 
+      fi
       if [ "$CONFIG_FB_ATARI" = "y" -o "$CONFIG_FB_ATY" = "y" -o \
            "$CONFIG_FB_VESA" = "y" -o "$CONFIG_FB_VIRTUAL" = "y" -o \
            "$CONFIG_FB_CONTROL" = "y" -o "$CONFIG_FB_CLGEN" = "y" -o \
@@ -310,11 +308,11 @@ if [ "$CONFIG_FB" = "y" ]; then
               "$CONFIG_FB_TGA" = "m" -o "$CONFIG_FB_PLATINUM" = "m" -o \
               "$CONFIG_FB_MATROX" = "m" -o "$CONFIG_FB_PM2" = "m" -o \
               "$CONFIG_FB_RIVA" = "m" -o "$CONFIG_FB_ATY128" = "m" -o \
-	      "$CONFIG_FB_3DFX" = "m" -o \	
+              "$CONFIG_FB_3DFX" = "m" -o \
               "$CONFIG_FB_SGIVW" = "m" -o "$CONFIG_FB_SIS" = "m" ]; then
             define_tristate CONFIG_FBCON_CFB32 m
          fi
-      fi                                                    
+      fi
       if [ "$CONFIG_FB_AMIGA" = "y" ]; then
          define_tristate CONFIG_FBCON_AFB y
          define_tristate CONFIG_FBCON_ILBM y
@@ -336,7 +334,7 @@ if [ "$CONFIG_FB" = "y" ]; then
             define_tristate CONFIG_FBCON_IPLAN2P8 m
 #           define_tristate CONFIG_FBCON_IPLAN2P16 m
          fi
-      fi                                       
+      fi
       if [ "$CONFIG_FB_MAC" = "y" -o "$CONFIG_FB_VIRTUAL" = "y" ]; then
          define_tristate CONFIG_FBCON_MAC  y
       else
@@ -358,7 +356,7 @@ if [ "$CONFIG_FB" = "y" ]; then
             define_tristate CONFIG_FBCON_HGA m
          fi
       fi
-   fi                     
+   fi
    endmenu
 fi
 
@@ -396,10 +394,10 @@ comment 'Console drivers'
       bool 'Video mode selection support' CONFIG_VIDEO_SELECT
       tristate 'MDA text console (EXPERIMENTAL)' CONFIG_MDA_CONSOLE
    fi
-   if [ "$CONFIG_PCI" = "y" ]; then	
-      tristate 'NVIDIA hardware text console' CONFIG_NVIDIA_CONSOLE	
+   if [ "$CONFIG_PCI" = "y" ]; then
+      tristate 'NVIDIA hardware text console' CONFIG_NVIDIA_CONSOLE
    fi
-   if [ "$CONFIG_FB" = "y" ]; then
+      if [ "$CONFIG_FB" = "y" ]; then
       comment 'Support for frame buffer console'
       define_bool CONFIG_DUMMY_CONSOLE y
       define_bool CONFIG_PCI_CONSOLE y
@@ -415,7 +413,7 @@ comment 'Console drivers'
          bool '    Pearl (old m68k) console 8x8 font' CONFIG_FONT_PEARL_8x8
          bool '    Acorn console 8x8 font' CONFIG_FONT_ACORN_8x8
       else
-         define_bool CONFIG_FONT_8x8 y
+	 define_bool CONFIG_FONT_8x8 y
          define_bool CONFIG_FONT_8x16 y
          if [ "$CONFIG_MAC" = "y" ]; then
             if [ "$CONFIG_FBCON_FONTWIDTH8_ONLY" = "n" ]; then
@@ -429,6 +427,6 @@ comment 'Console drivers'
             define_bool CONFIG_FONT_ACORN_8x8 y
          fi
       fi
-   fi			
+   fi
 fi
 endmenu
