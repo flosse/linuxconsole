@@ -41,11 +41,11 @@
 
 void cfb_imageblit(struct fb_info *p, struct fb_image *image)
 {
-  unsigned long end_index, end_mask, mask, tmp;
-  int ppw, shift, shift_right, shift_left, x2, y2, q, n, i, j;
+  unsigned long end_index, end_mask, mask, tmp, fgx, bgx, eorx;
+  int ppw, shift, shift_right, shift_left, x2, y2, n, i, j, k;
   int linesize = p->fix.line_length;
   unsigned long *dst, *src = NULL;
-  u8 *dst1, *src1, *tmp2;
+  u8 *dst1, *src1;
   
   /* We could use hardware clipping but on many cards you get around hardware
      clipping by writing to framebuffer directly like we are doing here. */
@@ -64,17 +64,36 @@ void cfb_imageblit(struct fb_info *p, struct fb_image *image)
   ppw = BITS_PER_LONG/p->var.bits_per_pixel;
 
   src1 = image->data;	
+  
+  fgx = image->fg_color;
+ 
+  for (i = 0; i < ppw; i++) {
+    fgx <<= p->var.bits_per_pixel;
+    fgx |= image->fg_color;
+  }
+
+  bgx = image->bg_color;
+ 
+  for (i = 0; i < ppw; i++) {
+    bgx <<= p->var.bits_per_pixel;
+    bgx |= image->bg_color;
+  }
+  eorx = fgx ^ bgx;
+  tmp = (1 << p->var.bits_per_pixel) - 1;
 
   for (i = 0; i < image->height; i++) {
-	tmp2 = dst1;
-	for (j = 0; j < image->width; j++) {
-		if (test_bit(image->width - j, src1))
-			fb_writeb(image->fg_color, dst1);
-		else 
-			fb_writeb(image->bg_color, dst1);
-		dst1++;
+	dst = (unsigned long *) dst1; 
+	for (j = image->width; j > 0; j--) {
+		mask = 0;
+		for (k = 0; k < ppw; k++) {
+			if (test_bit(j-k, src1))
+				mask |= (tmp << (p->var.bits_per_pixel*k));
+		}
+		fb_writel((mask & eorx)^bgx, dst);
+		j -= (k-1);
+		dst++;
 	}
-	dst1 = tmp2 + p->fix.line_length;	
+	dst1 += p->fix.line_length;	
 	src1++;	
   }	
 }
