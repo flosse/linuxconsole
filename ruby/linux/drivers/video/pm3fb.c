@@ -40,6 +40,18 @@
 /* Driver name */
 static const char permedia3_name[16] = "Permedia3";
 
++/* memory timings */
+struct pm3fb_timings
+{
+	unsigned long caps;
+	unsigned long timings;
+	unsigned long control;
+	unsigned long refresh;
+	unsigned long powerdown;
+};
+#define PM3FB_UNKNOWN_TIMING_VALUE ((unsigned long)-1)
+#define PM3FB_UNKNOWN_TIMINGS { PM3FB_UNKNOWN_TIMING_VALUE, PM3FB_UNKNOWN_TIMING_VALUE, PM3FB_UNKNOWN_TIMING_VALUE, PM3FB_UNKNOWN_TIMING_VALUE, PM3FB_UNKNOWN_TIMING_VALUE }
+
 /* complement to the fb_info struct, no longer integrated with FBCON fb_info */
 struct pm3fb_info {
 	struct pm3fb_par *current_par; /* current HW parameter */
@@ -54,12 +66,7 @@ struct pm3fb_info {
 	unsigned char *pIOBase;	/* physical address of registers region, must be rg_base or rg_base+PM2_REGS_SIZE depending on the host endianness */
 	unsigned char *vIOBase;	/* address of registers after ioremap() */
 	u32 pseudo_palette[17];
-
-	unsigned long memcaps;
-	unsigned long memtimings;
-	unsigned long memcontrol;
-	unsigned long memrefresh;
-	unsigned long mempowerdown;
+	struct pm3fb_timings memt;
 };
 
 /* the fb_par struct, mandatory */
@@ -104,7 +111,7 @@ short noaccel[PM3_MAX_BOARD];
 char fontn[PM3_MAX_BOARD][PM3_FONTNAME_SIZE];
 short depth[PM3_MAX_BOARD];
 static char g_options[PM3_OPTIONS_SIZE] __initdata = "pm3fb:dummy";
-
+short printtimings;
 
 /* ********************* */
 /* ***** prototype ***** */
@@ -112,8 +119,9 @@ static char g_options[PM3_OPTIONS_SIZE] __initdata = "pm3fb:dummy";
 /* card-specific */
 static void pm3fb_j2000_setup(struct pm3fb_info *l_fb_info);
 /* permedia3-specific */
-static void pm3fb_preserve_memory_timings(struct pm3fb_info *l_fb_info);
+static int pm3fb_preserve_memory_timings(struct pm3fb_info *l_fb_info);
 static void pm3fb_write_memory_timings(struct pm3fb_info *l_fb_info);
+static void pm3fb_show_cur_timing(struct pm3fb_info *l_fb_info);
 static unsigned long pm3fb_read_dac_reg(struct pm3fb_info *l_fb_info,
 					unsigned long r);
 static unsigned long pm3fb_CalculateClock(struct pm3fb_info *l_fb_info, unsigned long reqclock,	/* In kHz units */
@@ -211,17 +219,22 @@ static struct {
 		u16 subdevice; /* subdevice of the card */
 		u8  func; /* function of the card to which the extra init apply */
 		void (*specific_setup)(struct pm3fb_info *l_fb_info); /* card/func specific setup, done before _any_ FB access */
+	struct pm3fb_timings memt; /* default timing for the board WARNING : might be *card* - specific */
 } cardbase[] = {
-	{ "Unknown Permedia3 board", 0xFFFF, 0xFFFF, 0xFF, NULL },
-	{ "Appian Jeronimo 2000 head 1", 0x1097, 0x3d32, 1, NULL },
-	{ "Appian Jeronimo 2000 head 2", 0x1097, 0x3d32, 2, pm3fb_j2000_setup },
-	{ "Formac ProFormance 3", PCI_VENDOR_ID_3DLABS, 0x000a, 0, NULL }, /* Formac use 3DLabs ID */
-	{ "3DLabs Permedia3 Create!", PCI_VENDOR_ID_3DLABS, 0x0127, 0, NULL },
-	{ "3DLabs Oxygen VX1 PCI", PCI_VENDOR_ID_3DLABS, 0x0121, 0, NULL },
-	{ "3DLabs Oxygen VX1 AGP", PCI_VENDOR_ID_3DLABS, 0x0125, 0, NULL },
-	{ "3DLabs Oxygen VX1-16 AGP", PCI_VENDOR_ID_3DLABS, 0x0140, 0, NULL },
-	{ "3DLabs Oxygen VX1-1600SW PCI", PCI_VENDOR_ID_3DLABS, 0x0800, 0, NULL },
-	{ "\0", 0x0, 0x0, 0, NULL }
+	{ "Unknown Permedia3 board", 0xFFFF, 0xFFFF, 0xFF, NULL, PM3FB_UNKNOWN_TIMINGS },
+	{ "Appian Jeronimo 2000 head 1", 0x1097, 0x3d32, 1, NULL, PM3FB_UNKNOWN_TIMINGS },
+	{ "Appian Jeronimo 2000 head 2", 0x1097, 0x3d32, 2, pm3fb_j2000_setup,
+	  {0x02e311B8, 0x07424905, 0x0c000003, 0x00000061, 0x00000000} /* also in pm3fb_j2000_setup */
+	},
+	{ "Formac ProFormance 3", PCI_VENDOR_ID_3DLABS, 0x000a, 0, NULL, /* Formac use 3DLabs ID ?!? */
+	  { 0x02e311b8, 0x06100205, 0x08000002, 0x00000079, 0x00000000} /* from the 16Mb ProFormance 3 */
+	},
+	{ "3DLabs Permedia3 Create!", PCI_VENDOR_ID_3DLABS, 0x0127, 0, NULL, PM3FB_UNKNOWN_TIMINGS },
+	{ "3DLabs Oxygen VX1 PCI", PCI_VENDOR_ID_3DLABS, 0x0121, 0, NULL, PM3FB_UNKNOWN_TIMINGS },
+	{ "3DLabs Oxygen VX1 AGP", PCI_VENDOR_ID_3DLABS, 0x0125, 0, NULL, PM3FB_UNKNOWN_TIMINGS },
+	{ "3DLabs Oxygen VX1-16 AGP", PCI_VENDOR_ID_3DLABS, 0x0140, 0, NULL, PM3FB_UNKNOWN_TIMINGS },
+	{ "3DLabs Oxygen VX1-1600SW PCI", PCI_VENDOR_ID_3DLABS, 0x0800, 0, NULL, PM3FB_UNKNOWN_TIMINGS },
+	{ "\0", 0x0, 0x0, 0, NULL, PM3FB_UNKNOWN_TIMINGS }
 };
 
 static void pm3fb_j2000_setup(struct pm3fb_info *l_fb_info)
@@ -231,11 +244,11 @@ static void pm3fb_j2000_setup(struct pm3fb_info *l_fb_info)
 	DTRACE;
 	
 	/* Memory timings for the Appian J2000 board. */
-	l_fb_info->memcaps = 0x02e311B8;
-	l_fb_info->memtimings = 0x07424905;
-	l_fb_info->memcontrol = 0x0c000003;
-	l_fb_info->memrefresh = 0x00000061;
-	l_fb_info->mempowerdown = 0x00000000;
+	l_fb_info->memt.caps = 0x02e311B8;
+	l_fb_info->memt.timings = 0x07424905;
+	l_fb_info->memt.control = 0x0c000003;
+	l_fb_info->memt.refresh = 0x00000061;
+	l_fb_info->memt.powerdown = 0x00000000;
 	
 	pm3fb_write_memory_timings(l_fb_info);
 }
@@ -244,13 +257,35 @@ static void pm3fb_j2000_setup(struct pm3fb_info *l_fb_info)
 /* ***** permedia3-specific function ***** */
 /* *************************************** */
 
-static void pm3fb_preserve_memory_timings(struct pm3fb_info *l_fb_info)
+static int pm3fb_preserve_memory_timings(struct pm3fb_info *l_fb_info)
 {
-	l_fb_info->memcaps = PM3_READ_REG(PM3LocalMemCaps);
-	l_fb_info->memtimings = PM3_READ_REG(PM3LocalMemTimings);
-	l_fb_info->memcontrol = PM3_READ_REG(PM3LocalMemControl);
-	l_fb_info->memrefresh = PM3_READ_REG(PM3LocalMemRefresh);
-	l_fb_info->mempowerdown = PM3_READ_REG(PM3LocalMemPowerDown);
+	l_fb_info->memt.caps = PM3_READ_REG(PM3LocalMemCaps);
+	l_fb_info->memt.timings = PM3_READ_REG(PM3LocalMemTimings);
+	l_fb_info->memt.control = PM3_READ_REG(PM3LocalMemControl);
+	l_fb_info->memt.refresh = PM3_READ_REG(PM3LocalMemRefresh);
+	l_fb_info->memt.powerdown = PM3_READ_REG(PM3LocalMemPowerDown);
+
+	if ((l_fb_info->memt.caps == PM3FB_UNKNOWN_TIMING_VALUE) ||
+	    (l_fb_info->memt.timings == PM3FB_UNKNOWN_TIMING_VALUE) ||
+	    (l_fb_info->memt.control == PM3FB_UNKNOWN_TIMING_VALUE) ||
+	    (l_fb_info->memt.refresh == PM3FB_UNKNOWN_TIMING_VALUE) ||
+	    (l_fb_info->memt.powerdown == PM3FB_UNKNOWN_TIMING_VALUE))
+	{
+		printk(KERN_ERR "pm3fb: invalid memory timings in permedia3 board #%ld\n", l_fb_info->board_num);
+		if ((cardbase[l_fb_info->board_type].memt.caps != PM3FB_UNKNOWN_TIMING_VALUE) &&
+		    (cardbase[l_fb_info->board_type].memt.timings != PM3FB_UNKNOWN_TIMING_VALUE) &&
+		    (cardbase[l_fb_info->board_type].memt.control != PM3FB_UNKNOWN_TIMING_VALUE) &&
+		    (cardbase[l_fb_info->board_type].memt.refresh != PM3FB_UNKNOWN_TIMING_VALUE) &&
+		    (cardbase[l_fb_info->board_type].memt.powerdown != PM3FB_UNKNOWN_TIMING_VALUE))
+		{
+			l_fb_info->memt = cardbase[l_fb_info->board_type].memt;
+			printk(KERN_WARNING "pm3fb: trying to use predefined memory timings for permedia3 board #%ld (%s)\n", l_fb_info->board_num, cardbase[l_fb_info->board_type].cardname);
+			pm3fb_write_memory_timings(l_fb_info);
+		}
+		else
+			return(1);
+	}
+	return(0);
 }
 
 static void pm3fb_write_memory_timings(struct pm3fb_info *l_fb_info)
@@ -258,11 +293,11 @@ static void pm3fb_write_memory_timings(struct pm3fb_info *l_fb_info)
 	unsigned char m, n, p;
 	unsigned long clockused;
 	
-	PM3_SLOW_WRITE_REG(PM3LocalMemCaps, l_fb_info->memcaps);
-	PM3_SLOW_WRITE_REG(PM3LocalMemTimings, l_fb_info->memtimings);
-	PM3_SLOW_WRITE_REG(PM3LocalMemControl, l_fb_info->memcontrol);
-	PM3_SLOW_WRITE_REG(PM3LocalMemRefresh, l_fb_info->memrefresh);
-	PM3_SLOW_WRITE_REG(PM3LocalMemPowerDown, l_fb_info->mempowerdown);
+	PM3_SLOW_WRITE_REG(PM3LocalMemCaps, l_fb_info->memt.caps);
+	PM3_SLOW_WRITE_REG(PM3LocalMemTimings, l_fb_info->memt.timings);
+	PM3_SLOW_WRITE_REG(PM3LocalMemControl, l_fb_info->memt.control);
+	PM3_SLOW_WRITE_REG(PM3LocalMemRefresh, l_fb_info->memt.refresh);
+	PM3_SLOW_WRITE_REG(PM3LocalMemPowerDown, l_fb_info->memt.powerdown);
 
 	clockused =
 	    pm3fb_CalculateClock(l_fb_info, 2 * 105000, PM3_REF_CLOCK, &m,
@@ -283,6 +318,33 @@ static void pm3fb_write_memory_timings(struct pm3fb_info *l_fb_info)
 			  PM3RD_SClkControl_STATE_RUN |
 			  PM3RD_SClkControl_SOURCE_PCLK |
 			  PM3RD_SClkControl_ENABLE);
+}
+
+static void pm3fb_show_cur_timing(struct pm3fb_info *l_fb_info)
+{
+	u16 subvendor, subdevice;
+
+	if ((!pci_read_config_word
+	     (l_fb_info->dev, PCI_SUBSYSTEM_VENDOR_ID, &subvendor))
+	    &&
+	    (!pci_read_config_word
+	     (l_fb_info->dev, PCI_SUBSYSTEM_ID, &subdevice))) {
+		/* well, nothing... */
+	} else {
+		subvendor = subdevice = (u16)-1;
+	}
+
+	printk(KERN_INFO "pm3fb: memory timings for board #%ld (subvendor: 0x%hx, subdevice: 0x%hx)\n", l_fb_info->board_num, subvendor, subdevice);
+	printk(KERN_INFO " PM3LocalMemCaps: 0x%08x\n",
+	       PM3_READ_REG(PM3LocalMemCaps));
+	printk(KERN_INFO " PM3LocalMemTimings: 0x%08x\n",
+	       PM3_READ_REG(PM3LocalMemTimings));
+	printk(KERN_INFO " PM3LocalMemControl: 0x%08x\n",
+	       PM3_READ_REG(PM3LocalMemControl));
+	printk(KERN_INFO " PM3LocalMemRefresh: 0x%08x\n",
+	       PM3_READ_REG(PM3LocalMemRefresh));
+	printk(KERN_INFO " PM3LocalMemPowerDown: 0x%08x\n",
+	       PM3_READ_REG(PM3LocalMemPowerDown));
 }
 
 static unsigned long pm3fb_read_dac_reg(struct pm3fb_info *l_fb_info,
@@ -588,7 +650,6 @@ static void pm3fb_write_mode(struct pm3fb_info *l_fb_info)
 	}
 
 	PM3_SHOW_CUR_MODE;
-	PM3_SHOW_CUR_TIMING;
 }
 
 static void pm3fb_read_mode(struct pm3fb_info *l_fb_info,
@@ -751,9 +812,13 @@ static unsigned long pm3fb_size_memory(struct pm3fb_info *l_fb_info)
 		       l_fb_info->board_num);
 	}
 
+	if (printtimings)
+		pm3fb_show_cur_timing(l_fb_info);
+	
 	/* card-specific setup is done, we preserve the final
            memory timing for future reference */
-	pm3fb_preserve_memory_timings(l_fb_info);
+	if (pm3fb_preserve_memory_timings(l_fb_info)) { /* memory timings were wrong ! oops.... */
+		return(0);
 	
 	tempBypass = PM3_READ_REG(PM3MemBypassWriteMask);
 
@@ -1006,7 +1071,6 @@ static void pm3fb_common_init(struct pm3fb_info *l_fb_info)
 			  PM3RD_CursorMode_CURSOR_DISABLE);
 
 	PM3_SHOW_CUR_MODE;
-	PM3_SHOW_CUR_TIMING;
 
 	pm3fb_write_mode(l_fb_info);
 
