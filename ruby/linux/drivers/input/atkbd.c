@@ -144,8 +144,6 @@ static void atkbd_interrupt(struct serio *serio, unsigned char data, unsigned in
 	printk(KERN_DEBUG "atkbd.c: Received %02x\n", data);
 #endif
 
-#error "Some keyboards use 0xfe as a scancode -> fix!"
-
 	if (!atkbd->ack)
 		switch (code) {
 			case ATKBD_RET_ACK:
