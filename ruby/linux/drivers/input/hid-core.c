@@ -986,8 +986,12 @@ static void hid_ctrl(struct urb *urb)
 
 	hid->ctrltail = (hid->ctrltail + 1) & (HID_CONTROL_FIFO_SIZE - 1);
 
-	if (hid->ctrlhead != hid->ctrltail)
+	if (hid->ctrlhead != hid->ctrltail) {
 		hid_submit_ctrl(hid);
+		return;
+	}
+
+	wake_up(&hid->wait);
 }
 
 void hid_submit_report(struct hid_device *hid, struct hid_report *report, unsigned char dir)
@@ -1038,7 +1042,7 @@ void hid_init_reports(struct hid_device *hid)
 	struct list_head *list;
 	int len, timeout = 10*HZ;
 
-	set_current_state(TASK_INTERRUPTIBLE);
+	set_current_state(TASK_UNINTERRUPTIBLE);
 	add_wait_queue(&hid->wait, &wait);
 
 	report_enum = hid->report_enum + HID_INPUT_REPORT;
