@@ -294,8 +294,8 @@ struct fb_copyarea {
 };
 
 struct fb_fillrect {
-	__u32 x1; /* screen-relative */
-	__u32 y1;
+	__u32 dx; /* screen-relative */
+	__u32 dy;
 	__u32 width;
 	__u32 height;
 	__u32 color;
@@ -305,8 +305,8 @@ struct fb_fillrect {
 struct fb_image {
 	__u32 width;			/* Size of image */
 	__u32 height;
-	__u16 x;			/* Where to place image */
-	__u16 y;
+	__u16 dx;			/* Where to place image */
+	__u16 dy;
 	__u32 fg_color;			/* Only used when a mono bitmap */
 	__u32 bg_color;
 	__u8  depth;			/* Dpeth of the image */
@@ -440,11 +440,9 @@ struct fb_info {
 extern int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info);
 extern int fb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info); 
 extern int fb_setup(char *options);
-extern void cfb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,
-                  	 unsigned int rows, unsigned long color, int rop); 
-extern void cfb_copyarea(struct fb_info *p, int sx, int sy, unsigned int width,
-                  	 unsigned int rows, int dx, int dy);
-extern void cfb_imageblit(struct fb_info *p, struct fb_image *image); 
+extern void cfb_fillrect(struct fb_info *info, struct fb_fillrect *rect); 
+extern void cfb_copyarea(struct fb_info *info, struct fb_copyarea *area); 
+extern void cfb_imageblit(struct fb_info *info, struct fb_image *image); 
 
     /*
      *  Helper functions

@@ -10,13 +10,17 @@
 #include <linux/mm.h>
 #include <linux/signal.h>
 #include <linux/init.h>
+#include <linux/kbd_ll.h>
 #include <linux/delay.h>
 #include <linux/random.h>
 #include <linux/poll.h>
+#include <linux/miscdevice.h>
 #include <linux/slab.h>
+#include <linux/kbd_kern.h>
 #include <linux/smp_lock.h>
 #include <linux/timer.h>
 
+#include <asm/keyboard.h>
 #include <asm/bitops.h>
 #include <asm/uaccess.h>
 #include <asm/irq.h>
@@ -308,7 +312,9 @@ static inline void handle_keyboard_event(unsigned char scancode)
 {
    if(scancode != (unsigned char)(KBD_NO_DATA))
    {
+#ifdef CONFIG_VT
       handle_scancode(scancode, !(scancode & KBD_KEYUP));
+#endif
       tasklet_schedule(&keyboard_tasklet);
    }
 }

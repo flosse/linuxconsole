@@ -20,7 +20,6 @@
 #include <linux/string.h>
 #include <linux/fb.h>
 #include <asm/types.h>
-#include <video/fbcon.h>
 
 void cfb_fillrect(struct fb_info *p, struct fb_fillrect *rect)  
 {

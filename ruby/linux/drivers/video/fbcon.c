@@ -316,25 +316,18 @@ static void fbcon_deinit(struct vc_data *vc)
 static void fbcon_clear(struct vc_data *vc,int sx,int sy, int width,int height)
 {
     struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
-    unsigned long color;
+    struct fb_fillrect rect;	
 
-    if (info->fix.visual == FB_VISUAL_PSEUDOCOLOR) 
-	color = attr_bgcol_ec(vc);
-    else {
-	if (info->var.bits_per_pixel > 16)
-		color = ((u32*)info->pseudo_palette)[attr_bgcol_ec(vc)];
-	else
-		color = ((u16*)info->pseudo_palette)[attr_bgcol_ec(vc)];
-    }
-    sx *= vc->vc_font.width;
-    sy *= vc->vc_font.height;
-    width *= vc->vc_font.width;
-    height *= vc->vc_font.height;		
+    rect.color = attr_bgcol_ec(vc);
+    rect.rop = ROP_COPY;	
+    rect.dx *= vc->vc_font.width;
+    rect.dy *= vc->vc_font.height;
+    rect.width *= vc->vc_font.width;
+    rect.height *= vc->vc_font.height;		
 
     DPRINTK("Calling clear screen with width %d, height %d at %d,%d\n", 
-	     width, height, sx, sy);
-
-    info->fbops->fb_fillrect(info, sx, sy, width, height, color, ROP_COPY);	
+	     rect.width, rect.height, rect.sx, rect.sy);
+    info->fbops->fb_fillrect(info, &rect);	
 }
 
 static void fbcon_putc(struct vc_data *vc, int c, int ypos, int xpos)
@@ -357,8 +350,8 @@ static void fbcon_putc(struct vc_data *vc, int c, int ypos, int xpos)
     	}
     }
 
-    image.x = xpos * vc->vc_font.width;
-    image.y = ypos * vc->vc_font.height;		 
+    image.dx = xpos * vc->vc_font.width;
+    image.dy = ypos * vc->vc_font.height;		 
     image.width = vc->vc_font.width;
     image.height = vc->vc_font.height;
     image.depth = 1;	
@@ -391,8 +384,8 @@ static void fbcon_putcs(struct vc_data *vc, const unsigned short *s,
 		image.bg_color = ((u16*)info->pseudo_palette)[attr_bgcol(vc,c)];
     	}
    }
-   image.x = xpos * vc->vc_font.width;
-   image.y = ypos * vc->vc_font.height;		 
+   image.dx = xpos * vc->vc_font.width;
+   image.dy = ypos * vc->vc_font.height;		 
    image.width = vc->vc_font.width;
    image.height = vc->vc_font.height;
    image.depth = 1;	
@@ -402,13 +395,14 @@ static void fbcon_putcs(struct vc_data *vc, const unsigned short *s,
 			(scr_readw(s) & charmask)*vc->vc_font.height*width;
 	s++;
     	info->fbops->fb_imageblit(info, &image);
-	image.x += vc->vc_font.width;
+	image.dx += vc->vc_font.width;
    }	
 }
 
 static void fbcon_cursor(struct vc_data *vc, int mode)
 {
     struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
+    struct fb_fillrect rect;
     struct fbcursor cursor;	
     int i;	
  
@@ -427,12 +421,13 @@ static void fbcon_cursor(struct vc_data *vc, int mode)
 			info->cursor.set = FB_CUR_SETCUR;
 			info->fbops->fb_cursor(info, &info->cursor);
 		} else {
-			unsigned int sx = vc->vc_x * vc->vc_font.width;
-			unsigned int sy = vc->vc_y * vc->vc_font.height; 
-			unsigned long color = -1;
-
-    			info->fbops->fb_fillrect(info, sx, sy,vc->vc_font.width,
-					vc->vc_font.height, color, ROP_XOR);	
+			rect.dx = vc->vc_x * vc->vc_font.width;
+			rect.dy = vc->vc_y * vc->vc_font.height;
+			rect.width = vc->vc_font.width;
+			rect.height = vc->vc_font.height; 
+			rect.color = -1;
+			rect.rop = ROP_XOR;
+    			info->fbops->fb_fillrect(info, &rect); 
 		}
             	break;
         case CM_MOVE:
@@ -446,12 +441,13 @@ static void fbcon_cursor(struct vc_data *vc, int mode)
 			info->cursor.hot.y = info->cursor.pos.y;
 			info->fbops->fb_cursor(info, &info->cursor); 
 		} else {
-			unsigned int sx = vc->vc_x * vc->vc_font.width;
-			unsigned int sy = vc->vc_y * vc->vc_font.height; 
-			unsigned long color = -1;
-
-    			info->fbops->fb_fillrect(info, sx, sy,vc->vc_font.width,
-					vc->vc_font.height, color, ROP_XOR);	
+			rect.dx = vc->vc_x * vc->vc_font.width;
+			rect.dy = vc->vc_y * vc->vc_font.height;
+			rect.width = vc->vc_font.width;
+			rect.height = vc->vc_font.height; 
+			rect.color = -1;
+			rect.rop = ROP_XOR;
+    			info->fbops->fb_fillrect(info, &rect); 
 		}
 		break;
 	case CM_CHANGE: {
@@ -504,12 +500,13 @@ static void fbcon_cursor(struct vc_data *vc, int mode)
 			cursor.mask = mask;
 			info->fbops->fb_cursor(info, &cursor); 
 		} else {
-			unsigned int sx = vc->vc_x * vc->vc_font.width;
-			unsigned int sy = vc->vc_y * vc->vc_font.height; 
-			unsigned long color = -1;
-
-    			info->fbops->fb_fillrect(info, sx, sy,vc->vc_font.width,
-					vc->vc_font.height, color, ROP_XOR);	
+			rect.dx = vc->vc_x * vc->vc_font.width;
+			rect.dy = vc->vc_y * vc->vc_font.height;
+			rect.width = vc->vc_font.width;
+			rect.height = vc->vc_font.height; 
+			rect.color = -1;
+			rect.rop = ROP_XOR;
+    			info->fbops->fb_fillrect(info, &rect); 
 		}
             	break;
         }
@@ -520,21 +517,23 @@ static int fbcon_scroll_region(struct vc_data *vc, int t, int b, int dir,
 				int count)
 {
     struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
-    unsigned int height = (b-t-count) * vc->vc_font.height;
-    unsigned int sy = 0, dy = 0;	 	
+    struct fb_copyarea area;
+   
+    area.sy = area.dy = area.sx = area.dx = 0;	 	
+    area.height = (b-t-count) * vc->vc_font.height;
+    area.width = info->var.xres; 	
 
     switch (dir) {
 	case SM_UP:
-		sy = (t + count) * vc->vc_font.height;
-		dy = t * vc->vc_font.height;
+		area.sy = (t + count) * vc->vc_font.height;
+		area.dy = t * vc->vc_font.height;
 		break;
 	case SM_DOWN:
-		sy = t * vc->vc_font.height; 
-		dy = (t + count) * vc->vc_font.height;
+		area.sy = t * vc->vc_font.height; 
+		area.dy = (t + count) * vc->vc_font.height;
 		break;
     }		
-
-    info->fbops->fb_copyarea(info, 0, sy, info->var.xres, height, 0, dy);
+    info->fbops->fb_copyarea(info, &area);
     return 0;
 }
 
@@ -542,16 +541,17 @@ static void fbcon_bmove(struct vc_data *vc, int sy, int sx, int dy, int dx,
 			int height, int width)
 {
     struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
-    
-    sx *= vc->vc_font.width;
-    sy *= vc->vc_font.height;
-    dx *= vc->vc_font.width;
-    dy *= vc->vc_font.height;
-    height *= vc->vc_font.height;
-    width *= vc->vc_font.width;		
+    struct fb_copyarea area;	   
+ 
+    area.sx *= vc->vc_font.width;
+    area.sy *= vc->vc_font.height;
+    area.dx *= vc->vc_font.width;
+    area.dy *= vc->vc_font.height;
+    area.height *= vc->vc_font.height;
+    area.width *= vc->vc_font.width;		
         	
-    DPRINTK("Calling bmove to move a region of width %d and height %d to go from %d,%d to %d,%d\n", width, height, sx, sy, dx, dy); 
-    info->fbops->fb_copyarea(info, sx, sy, width, height, dx, dy);
+    DPRINTK("Calling bmove to move a region of width %d and height %d to go from %d,%d to %d,%d\n", area.width, area.height, area.sx, area.sy,area.dx,area.dy); 
+    info->fbops->fb_copyarea(info, &area);
 }
 
 static int fbcon_blank(struct vc_data *vc, int blank)
@@ -562,10 +562,16 @@ static int fbcon_blank(struct vc_data *vc, int blank)
 	info->fbops->fb_blank(blank, info);
     } else {
 	if (info->var.accel_flags != FB_ACCEL_NONE) {
+		struct fb_fillrect rect;
 		unsigned long color = 0;		
 
-		info->fbops->fb_fillrect(info, 0, 0, info->var.xres, 
-					 info->var.yres, color, ROP_COPY);	
+		rect.dx = 0;
+		rect.dy = 0;
+		rect.width = info->var.xres;
+		rect.height = info->var.yres;
+		rect.color = color;
+		rect.rop = ROP_COPY;
+		info->fbops->fb_fillrect(info, &rect); 
 	} else {
 		if ((info->fix.visual == FB_VISUAL_PSEUDOCOLOR || 
             	    info->fix.visual == FB_VISUAL_DIRECTCOLOR) && blank) {
@@ -673,12 +679,19 @@ static int fbcon_scroll(struct vc_data *vc, int lines)
 
     /* Hardware panning support */
     if (fb_pan_display(&info->var, info)) {
+	struct fb_copyarea area;
 	/* 
 	 * Oops it failed to work. Time to do cleanup then use 
 	 * a copyarea.
    	 */ 
 	info->var.yoffset = orig_y;
-        info->fbops->fb_copyarea(info, 0, orig_y, info->var.xres, delta, 0, info->var.yoffset);
+	area.sx = 0;
+	area.sy = orig_y;
+	area.width = info->var.xres;
+	area.height = delta;
+	area.dx = 0;
+	area.dy = info->var.yoffset;
+        info->fbops->fb_copyarea(info, &area);
     }
     return 0;
 }

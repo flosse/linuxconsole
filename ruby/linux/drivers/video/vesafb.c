@@ -21,6 +21,7 @@
 #include <linux/init.h>
 
 #include <asm/io.h>
+#include <asm/mtrr.h>
 
 #define dac_reg	(0x3c8)
 #define dac_val	(0x3c9)
@@ -28,33 +29,24 @@
 /* --------------------------------------------------------------------- */
 
 static struct fb_var_screeninfo vesafb_defined = {
-	0,0,0,0,	/* W,H, W, H (virtual) load xres,xres_virtual*/
-	0,0,		/* virtual -> visible no offset */
-	8,		/* depth -> load bits_per_pixel */
-	0,		/* greyscale ? */
-	{0,0,0},	/* R */
-	{0,0,0},	/* G */
-	{0,0,0},	/* B */
-	{0,0,0},	/* transparency */
-	0,		/* standard pixel format */
-	FB_ACTIVATE_NOW,
-	-1,-1,
-	0,
-	0L,0L,0L,0L,0L,
-	0L,0L,0,	/* No sync info */
-	FB_VMODE_NONINTERLACED,
-	{0,0,0,0,0,0}
+	activate:	FB_ACTIVATE_NOW,
+	height:		-1,
+	width:		-1,
+	vmode:		FB_VMODE_NONINTERLACED,
 };
 
-static struct fb_fix_screeninfo vesafb_fix __initdata = {
-    "VESA VGA", (unsigned long) NULL, 0, FB_TYPE_PACKED_PIXELS, 0,
-    FB_VISUAL_PSEUDOCOLOR, 0, 0, 0, 0, (unsigned long) NULL, 0, FB_ACCEL_NONE
+static struct fb_fix_screeninfo vesafb_fix = {
+	id:	"VESA VGA",
+	type:	FB_TYPE_PACKED_PIXELS,
+	accel:	FB_ACCEL_NONE,
 };
 
 static struct fb_info fb_info;
 static u32 pseudo_palette[17];
 
 static int             inverse   = 0;
+static int             mtrr      = 0;
+
 static int             pmi_setpal = 0;	/* pmi for palette changes ??? */
 static int             ypan       = 0;  /* 0..nothing, 1..ypan, 2..ywrap */
 static unsigned short  *pmi_base  = 0;
@@ -63,7 +55,7 @@ static void            (*pmi_pal)(void);
 
 /* --------------------------------------------------------------------- */
 
-static int vesafb_pan_display(struct fb_var_screeninfo *var, 
+static int vesafb_pan_display(struct fb_var_screeninfo *var,
                               struct fb_info *info)
 {
 	int offset;
@@ -127,49 +119,49 @@ static int vesafb_setcolreg(unsigned regno, unsigned red, unsigned green,
 	 *  (according to the entries in the `var' structure). Return
 	 *  != 0 for invalid regno.
 	 */
+	
 	if (regno >= info->cmap.len)
 		return 1;
 
 	switch (info->var.bits_per_pixel) {
-		case 8:
-			vesa_setpalette(regno, red, green, blue);
-			break;
-		case 15:
-		case 16:
-			if (info->var.red.offset == 10) {
-				/* 1:5:5:5 */
-				((u16*) (info->pseudo_palette))[regno] =
+	case 8:
+		vesa_setpalette(regno,red,green,blue);
+		break;
+	case 16:
+		if (info->var.red.offset == 10) {
+			/* 1:5:5:5 */
+			((u32*) (info->pseudo_palette))[regno] =	
 					((red   & 0xf800) >>  1) |
 					((green & 0xf800) >>  6) |
 					((blue  & 0xf800) >> 11);
-			} else {
-				/* 0:5:6:5 */
-				((u16*) (info->pseudo_palette))[regno] =
+		} else {
+			/* 0:5:6:5 */
+			((u32*) (info->pseudo_palette))[regno] =	
 					((red   & 0xf800)      ) |
 					((green & 0xfc00) >>  5) |
 					((blue  & 0xf800) >> 11);
-			}
-			break;
-		case 24:
-			red   >>= 8;
-			green >>= 8;
-			blue  >>= 8;
-			((u32 *)(info->pseudo_palette))[regno] =
-				(red   << info->var.red.offset)   |
-				(green << info->var.green.offset) |
-				(blue  << info->var.blue.offset);
-			break;
-		case 32:
-			red   >>= 8;
-			green >>= 8;
-			blue  >>= 8;
-			((u32 *)(info->pseudo_palette))[regno] =
-				(red   << info->var.red.offset)   |
-				(green << info->var.green.offset) |
-				(blue  << info->var.blue.offset);
-			break;
-	}
-    	return 0;
+		}
+		break;
+	case 24:
+		red   >>= 8;
+		green >>= 8;
+		blue  >>= 8;
+		((u32 *)(info->pseudo_palette))[regno] =
+			(red   << info->var.red.offset)   |
+			(green << info->var.green.offset) |
+			(blue  << info->var.blue.offset);
+		break;
+	case 32:
+		red   >>= 8;
+		green >>= 8;
+		blue  >>= 8;
+		((u32 *)(info->pseudo_palette))[regno] =
+			(red   << info->var.red.offset)   |
+			(green << info->var.green.offset) |
+			(blue  << info->var.blue.offset);
+		break;
+    }
+    return 0;
 }
 
 static struct fb_ops vesafb_ops = {
@@ -187,8 +179,8 @@ int __init vesafb_setup(char *options)
 	
 	if (!options || !*options)
 		return 0;
-
-	while ((this_opt = strsep(&options, ",")) != NULL) {	
+	
+	while ((this_opt = strsep(&options, ",")) != NULL) {
 		if (!*this_opt) continue;
 		
 		if (! strcmp(this_opt, "inverse"))
@@ -209,51 +201,44 @@ int __init vesafb_setup(char *options)
 
 int __init vesafb_init(void)
 {
-	/* Mode */
-	int  video_width, video_height, video_height_virtual, video_bpp, i;
-	int  video_visual, video_linelength, video_cmap_len, video_size;
-	unsigned long video_base; /* physical addr */
-	char *video_vbase;        /* mapped */
+	int video_cmap_len;
+	int i;
 
 	if (screen_info.orig_video_isVGA != VIDEO_TYPE_VLFB)
 		return -ENXIO;
 
-	printk("It is a linear framebuffer\n");
-
-	video_base          = screen_info.lfb_base;
-	video_bpp           = screen_info.lfb_depth;
-	if (15 == video_bpp)
-		video_bpp = 16;
-	video_width         = screen_info.lfb_width;
-	video_height        = screen_info.lfb_height;
-	video_linelength    = screen_info.lfb_linelength;
-	video_size          = screen_info.lfb_size * 65536;
-	video_visual = (video_bpp == 8) ?
+	vesafb_fix.smem_start = screen_info.lfb_base;
+	vesafb_defined.bits_per_pixel = screen_info.lfb_depth;
+	if (15 == vesafb_defined.bits_per_pixel)
+		vesafb_defined.bits_per_pixel = 16;
+	vesafb_defined.xres = screen_info.lfb_width;
+	vesafb_defined.yres = screen_info.lfb_height;
+	vesafb_fix.line_length = screen_info.lfb_linelength;
+	vesafb_fix.smem_len = screen_info.lfb_size * 65536;
+	vesafb_fix.visual   = (vesafb_defined.bits_per_pixel == 8) ?
 		FB_VISUAL_PSEUDOCOLOR : FB_VISUAL_TRUECOLOR;
 
-	if (!request_mem_region(video_base, video_size, "vesafb")) {
+	if (!request_mem_region(vesafb_fix.smem_start, vesafb_fix.smem_len, "vesafb")) {
 		printk(KERN_WARNING
 		       "vesafb: abort, cannot reserve video memory at 0x%lx\n",
-			video_base);
+			vesafb_fix.smem_start);
 		/* We cannot make this fatal. Sometimes this comes from magic
-		   spaces our resource handlers simply don't know about */	
+		   spaces our resource handlers simply don't know about */
 	}
 
-	printk("Got requested region (framebuffer)\n");
-
-        fb_info.screen_base = video_vbase = ioremap(video_base, video_size);
-	if (!video_vbase) {
-		release_mem_region(video_base, video_size);
+        fb_info.screen_base = ioremap(vesafb_fix.smem_start, vesafb_fix.smem_len);
+	if (!fb_info.screen_base) {
+		release_mem_region(vesafb_fix.smem_start, vesafb_fix.smem_len);
 		printk(KERN_ERR
 		       "vesafb: abort, cannot ioremap video memory 0x%x @ 0x%lx\n",
-			video_size, video_base);
+			vesafb_fix.smem_len, vesafb_fix.smem_start);
 		return -EIO;
 	}
 
 	printk(KERN_INFO "vesafb: framebuffer at 0x%lx, mapped to 0x%p, size %dk\n",
-	       video_base, video_vbase, video_size/1024);
+	       vesafb_fix.smem_start, fb_info.screen_base, vesafb_fix.smem_len/1024);
 	printk(KERN_INFO "vesafb: mode is %dx%dx%d, linelength=%d, pages=%d\n",
-	       video_width, video_height, video_bpp, video_linelength, screen_info.pages);
+	       vesafb_defined.xres, vesafb_defined.yres, vesafb_defined.bits_per_pixel, vesafb_fix.line_length, screen_info.pages);
 
 	if (screen_info.vesapm_seg) {
 		printk(KERN_INFO "vesafb: protected mode interface info at %04x:%04x\n",
@@ -286,31 +271,27 @@ int __init vesafb_init(void)
 		}
 	}
 
-	vesafb_defined.xres=video_width;
-	vesafb_defined.yres=video_height;
-	vesafb_defined.xres_virtual=video_width;
-	vesafb_defined.yres_virtual=video_size / video_linelength;
-	vesafb_defined.bits_per_pixel=video_bpp;
-
-	if (ypan && vesafb_defined.yres_virtual > video_height) {
-		printk(KERN_INFO "vesafb: scrolling: %s using protected mode interface, yres_virtual=%d\n", (ypan > 1) ? "ywrap" : "ypan", vesafb_defined.yres_virtual);
+	vesafb_defined.xres_virtual = vesafb_defined.xres;
+	vesafb_defined.yres_virtual = vesafb_fix.smem_len / vesafb_fix.line_length;
+	if (ypan && vesafb_defined.yres_virtual > vesafb_defined.yres) {
+		printk(KERN_INFO "vesafb: scrolling: %s using protected mode interface, yres_virtual=%d\n",
+		       (ypan > 1) ? "ywrap" : "ypan",vesafb_defined.yres_virtual);
 	} else {
 		printk(KERN_INFO "vesafb: scrolling: redraw\n");
-		vesafb_defined.yres_virtual = video_height;
+		vesafb_defined.yres_virtual = vesafb_defined.yres;
 		ypan = 0;
 	}
-	video_height_virtual = vesafb_defined.yres_virtual;
-
+	
 	/* some dummy values for timing to make fbset happy */
-	vesafb_defined.pixclock     = 10000000 / video_width * 1000 / video_height;
-	vesafb_defined.left_margin  = (video_width / 8) & 0xf8;
+	vesafb_defined.pixclock     = 10000000 / vesafb_defined.xres * 1000 / vesafb_defined.yres;
+	vesafb_defined.left_margin  = (vesafb_defined.xres / 8) & 0xf8;
 	vesafb_defined.right_margin = 32;
 	vesafb_defined.upper_margin = 16;
 	vesafb_defined.lower_margin = 4;
-	vesafb_defined.hsync_len    = (video_width / 8) & 0xf8;
+	vesafb_defined.hsync_len    = (vesafb_defined.xres / 8) & 0xf8;
 	vesafb_defined.vsync_len    = 4;
 
-	if (video_bpp > 8) {
+	if (vesafb_defined.bits_per_pixel > 8) {
 		vesafb_defined.red.offset    = screen_info.red_pos;
 		vesafb_defined.red.length    = screen_info.red_size;
 		vesafb_defined.green.offset  = screen_info.green_pos;
@@ -337,29 +318,39 @@ int __init vesafb_init(void)
 		video_cmap_len = 256;
 	}
 
-	vesafb_fix.smem_start = video_base;
-        vesafb_fix.smem_len = video_size;
-        vesafb_fix.visual = video_visual;
-        vesafb_fix.ypanstep  = ypan     ? 1 : 0;
-        vesafb_fix.ywrapstep = (ypan>1) ? 1 : 0;
-        vesafb_fix.line_length = video_linelength;
+	vesafb_fix.ypanstep  = ypan     ? 1 : 0;
+	vesafb_fix.ywrapstep = (ypan>1) ? 1 : 0;
 
 	/* request failure does not faze us, as vgacon probably has this
 	 * region already (FIXME) */
 	request_region(0x3c0, 32, "vesafb");
 
-	fb_info.node = -1;
+	if (mtrr) {
+		int temp_size = vesafb_fix.smem_len;
+		/* Find the largest power-of-two */
+		while (temp_size & (temp_size - 1))
+                	temp_size &= (temp_size - 1);
+                        
+                /* Try and find a power of two to add */
+		while (temp_size && mtrr_add(vesafb_fix.smem_start, temp_size, MTRR_TYPE_WRCOMB, 1)==-EINVAL) {
+			temp_size >>= 1;
+		}
+	}
+	
+	fb_info.node = NODEV;
 	fb_info.fbops = &vesafb_ops;
 	fb_info.var = vesafb_defined;
 	fb_info.fix = vesafb_fix;
-	fb_info.flags=FBINFO_FLAG_DEFAULT;
 	fb_info.pseudo_palette = pseudo_palette;
+	fb_info.flags = FBINFO_FLAG_DEFAULT;
+
+	fb_alloc_cmap(&fb_info.cmap, video_cmap_len, 0);
 
 	if (register_framebuffer(&fb_info)<0)
 		return -EINVAL;
 
 	printk(KERN_INFO "fb%d: %s frame buffer device\n",
-	       GET_FB_IDX(fb_info.node), fb_info.fix.id);
+	       minor(fb_info.node), fb_info.fix.id);
 	return 0;
 }
 

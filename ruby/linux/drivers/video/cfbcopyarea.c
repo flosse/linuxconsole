@@ -26,7 +26,6 @@
 #include <linux/slab.h>
 #include <asm/types.h>
 #include <asm/io.h>
-#include <video/fbcon.h>
 
 void cfb_copyarea(struct fb_info *p, struct fb_copyarea *area) 
 {

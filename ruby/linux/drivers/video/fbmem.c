@@ -549,12 +549,11 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 		    ((fbca.dx + fbca.width) > info->var.xres) ||
 		    ((fbca.dy + fbca.height) > info->var.yres))
 			return(-EINVAL);
-		fb->fb_copyarea(info,
-				fbca.sx + info->var.xoffset,
-				fbca.sy + info->var.yoffset,
-				fbca.width, fbca.height,
-				fbca.dx + info->var.xoffset,
-				fbca.dy + info->var.yoffset);
+		fbca.sx += info->var.xoffset;
+		fbca.sy += info->var.yoffset;
+		fbca.dx += info->var.xoffset;
+		fbca.dy += info->var.yoffset;
+		fb->fb_copyarea(info, &fbca);
 		return(0);
 	}
 	case FBIOPUT_FILLRECT:
@@ -562,19 +561,16 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 		struct fb_fillrect fbfr;
 		if (copy_from_user(&fbfr, (void *) arg, sizeof(var)))
 			return -EFAULT;
-		if ((fbfr.x1 > info->var.xres) ||
-		    (fbfr.y1 > info->var.yres) ||
-		    ((fbfr.x1 + fbfr.width) > info->var.xres) ||
-		    ((fbfr.y1 + fbfr.height) > info->var.yres))
+		if ((fbfr.dx > info->var.xres) ||
+		    (fbfr.dy > info->var.yres) ||
+		    ((fbfr.dx + fbfr.width) > info->var.xres) ||
+		    ((fbfr.dy + fbfr.height) > info->var.yres))
 			return(-EINVAL);
 		if ((fbfr.rop != ROP_COPY) && (fbfr.rop != ROP_XOR))
 			return(-EINVAL);
-		fb->fb_fillrect(info,
-				fbfr.x1 + info->var.xoffset,
-				fbfr.y1 + info->var.yoffset,
-				fbfr.width, fbfr.height,
-				fbfr.color,
-				fbfr.rop);
+		fbfr.dx += info->var.xoffset;
+		fbfr.dy += info->var.yoffset;
+		fb->fb_fillrect(info, &fbfr);
 		return(0);
 	}
 
@@ -838,8 +834,8 @@ static void fbcon_show_logo(struct fb_info *info)
 
     for (x = 0; x < smp_num_cpus * (LOGO_W + 8) &&
          	x < info->var.xres - (LOGO_W + 8); x += (LOGO_W + 8)) {
-    	image.x = x;
-    	image.y = 0;		/* For now. We should add in wrap around */
+    	image.dx = x;
+    	image.dy = 0;		/* For now. We should add in wrap around */
 
     	if (info->fbops->fb_imageblit)
      		info->fbops->fb_imageblit(info, &image);
