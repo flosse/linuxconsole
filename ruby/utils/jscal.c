@@ -200,7 +200,7 @@ void print_info()
 
 void calibrate()
 {
-	int i, j, t;
+	int i, j, t, b;
 
 	for (i=0; i<MAX_AXES; i++) {
 		corr[i].type = JS_CORR_NONE;
@@ -212,7 +212,6 @@ void calibrate()
 		exit(1);
 	}
 
-#if 1
 	{
 
 		int i;
@@ -250,15 +249,16 @@ void calibrate()
 		puts("");
 
 	}
-#endif
 
+
+	b = js.buttons;
 
 	for (j = 0; j < axes; j++)
 	for (i = 0; i < NUM_POS; i++) {
-		while(js.buttons) wait_for_event(fd, &js);
+		while(b ^ js.buttons) wait_for_event(fd, &js);
 		printf("Move axis %d to %s position and push any button.\n", j,  pos_name[i]);
 
-		while (!js.buttons) {
+		while (!(b ^ js.buttons)) {
 			print_position(j, js.axis[j]);
 			wait_for_event(fd, &js);
 		}
@@ -270,7 +270,7 @@ void calibrate()
 
 		t = get_time();
 
-		while (get_time() < t + 2000 && js.buttons) {
+		while (get_time() < t + 2000 && (b ^ js.buttons)) {
 			if (js.axis[j] < corda[j].cmin[i]) corda[j].cmin[i] = js.axis[j];
 			if (js.axis[j] > corda[j].cmax[i]) corda[j].cmax[i] = js.axis[j];
 			wait_for_event(fd, &js);
