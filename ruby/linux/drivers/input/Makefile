@@ -116,6 +116,9 @@ obj-$(CONFIG_INPUT_IFORCE_USB)	+= iforce.o
 obj-$(CONFIG_INPUT_ADBHID)	+= adbhid.o
 obj-$(CONFIG_MAC_EMUMOUSEBTN)	+= mac_hid.o
 
+obj-$(CONFIG_MAPLE_KEYBOARD)	+= maple_keyb.o
+obj-$(CONFIG_MAPLE_MOUSE)	+= maplemouse.o
+
 obj-$(CONFIG_INPUT_KEYBDEV)	+= keybdev.o
 obj-$(CONFIG_INPUT_MOUSEDEV)	+= mousedev.o
 obj-$(CONFIG_INPUT_JOYDEV)	+= joydev.o
