@@ -324,7 +324,7 @@ static void nvvga_set_palette(struct vc_data *c, unsigned char *table)
 
 static int nvvgacon_set_palette(struct vc_data *c, unsigned char *table)
 {
-	if (nvvga_palette_blanked || !CON_IS_VISIBLE(c))
+	if (nvvga_palette_blanked || !IS_VISIBLE)
 		return -EINVAL;
 	nvvga_set_palette(c, table);
 	return 0;

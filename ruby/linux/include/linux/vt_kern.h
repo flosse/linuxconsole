@@ -48,9 +48,7 @@
  *      Low-Level Functions
  */
 
-#define IS_FG (cons_num == vc->display_fg->fg_console->vc_num)
-#define CON_IS_VISIBLE(vc) (vc->vc_num == vc->display_fg->fg_console->vc_num)
-#define IS_VISIBLE CON_IS_VISIBLE(vc)
+#define IS_VISIBLE (vc->vc_num == vc->display_fg->fg_console->vc_num)
 
 #ifdef VT_BUF_VRAM_ONLY
 #define DO_UPDATE 0
@@ -252,6 +250,12 @@ struct vt_struct {
 	int blank_mode;	       /* 0:none 1:suspendV 2:suspendH 3:powerdown */
 	int blank_interval;			/* How long before blanking */
 	int off_interval;			
+       /* This is a temporary buffer used to prepare a tty console write
+	* so that we can easily avoid touching user space while holding the
+ 	* console spinlock. It is shared by with vc_screen read/write tty calls.
+	*/
+	char con_buf[PAGE_SIZE];		
+	struct semaphore lock;  		/* Lock for con_buf 	 */
 	struct timer_list timer;		/* Timer for VT blanking */
 	struct consw	*vt_sw;			/* Display driver for VT */
 	struct input_handle *keyboard;		/* Keyboard attached */
@@ -307,7 +311,6 @@ void unblank_screen(struct vt_struct *vt);
 void poke_blanked_console(struct vt_struct *vt);
 
 struct tty_struct;
-inline void con_schedule_flip(struct tty_struct *t);
 void respond_string(const char * p, struct tty_struct * tty);	
 int tioclinux(struct tty_struct *tty, unsigned long arg);
 

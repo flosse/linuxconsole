@@ -644,7 +644,7 @@ static void fbcon_set_disp(int con, int init, int logo)
     if (!init) {
 	if (vc->vc_cols != nr_cols || vc->vc_rows != nr_rows)
 	    vc_resize(vc, nr_rows, nr_cols);
-	else if (CON_IS_VISIBLE(vc) && vc->display_fg->vc_mode == KD_TEXT) {
+	else if (IS_VISIBLE && vc->display_fg->vc_mode == KD_TEXT) {
 	    if (p->dispsw->clear_margins)
 		p->dispsw->clear_margins(vc, p, 0);
 	    update_screen(vc);
@@ -1521,7 +1521,7 @@ static int fbcon_do_set_font(struct vc_data *vc, struct console_font_op *op,
 	return -ENXIO;
     }
 
-    if (CON_IS_VISIBLE(vc) && softback_lines)
+    if (IS_VISIBLE && softback_lines)
 	fbcon_set_origin(vc);
 	
     resize = (w != fontwidth(p)) || (h != fontheight(p));
@@ -1609,7 +1609,7 @@ static int fbcon_do_set_font(struct vc_data *vc, struct console_font_op *op,
 		softback_top = 0;
     	    }
     	}
-    } else if (CON_IS_VISIBLE(vc) && vc->display_fg->vc_mode == KD_TEXT) {
+    } else if (IS_VISIBLE && vc->display_fg->vc_mode == KD_TEXT) {
 	if (p->dispsw->clear_margins)
 	    p->dispsw->clear_margins(vc, p, 0);
 	update_screen(vc);
