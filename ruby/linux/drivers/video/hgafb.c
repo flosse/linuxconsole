@@ -48,10 +48,6 @@
 #include "fbcon.h"
 #include "fbcon-hga.h"
 
-#ifdef CONFIG_MTRR
-  #include <asm/mtrr.h>
-#endif
-
 #ifdef MODULE
 
 #define INCLUDE_LINUX_LOGOBW
@@ -81,11 +77,6 @@ static unsigned long hga_vram_len;		/* Size of video memory */
 
 static int hga_mode = -1;			/* 0 = txt, 1 = gfx mode */
 static int inverse = 0;
-
-#ifdef CONFIG_MTRR
-static int enable_mtrr = 1;
-static int mtrr_handle;
-#endif
 
 static enum { TYPE_HERC, TYPE_HERCPLUS, TYPE_HERCCOLOR } hga_type;
 static char *hga_type_name;
@@ -730,15 +721,6 @@ int __init hgafb_init(void)
 	fb_info.pseudo_palette = NULL; /* ??? */
 	fb_info.par = NULL;
 
-#ifdef CONFIG_MTRR
-	if (enable_mtrr) {
-		mtrr_handle = mtrr_add(fb_info.fix.smem_start,
-				       fb_info.fix.smem_len,
-				       MTRR_TYPE_WRCOMB, 1);
-		printk("hgafb: MTRR turned on\n");
-	}
-#endif
-
         if (register_framebuffer(&fb_info) < 0)
                 return -EINVAL;
 
@@ -767,7 +749,7 @@ int __init hgafb_setup(char *options)
 			fb_invert_cmaps();
 #ifdef CONFIG_MTRR
 		} else if (!strcmp(this_opt, "nomtrr")) {
-			enable_mtrr = 0;
+			fb_disable_mtrrs();
 #endif
 		}
 	}
@@ -783,14 +765,6 @@ static void __exit hgafb_exit()
 {
 	hga_txt_mode();
 	hga_clear_screen();
-
-#ifdef CONFIG_MTRR
-	if (enable_mtrr) {
-		mtrr_del(mtrr_handle, fb_info.fix.smem_start,
-			 fb_info.fix.smem_len);
-		printk("hgafb: MTRR turned off\n");
-	}
-#endif
 
 	unregister_framebuffer(&fb_info);
 	if (release_io_ports) release_region(0x3b0, 12);

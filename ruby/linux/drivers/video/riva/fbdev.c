@@ -666,6 +666,12 @@ int __init rivafb_setup (char *options)
 			noaccel = 1;
 		}
 
+#ifdef CONFIG_MTRR
+		else if (!strncmp (this_opt, "nomtrr", 6)) {
+			fb_disable_mtrrs();
+		}
+#endif
+
 		else
 			mode_option = this_opt;
 	}
