@@ -38,8 +38,9 @@ if [ "$CONFIG_INPUT" != "n" ]; then
       tristate '  LogiCad3d Magellan/SpaceMouse 6dof controller' CONFIG_INPUT_MAGELLAN
       tristate '  SpaceTec SpaceOrb/Avenger 6dof controller' CONFIG_INPUT_SPACEORB
       tristate '  SpaceTec SpaceBall 4000 FLX 6dof controller' CONFIG_INPUT_SPACEBALL
-      tristate '  Gunze AHL-51S touchscreen' CONFIG_INPUT_GUNZE
+      tristate '  Gravis Stinger gamepad' CONFIG_INPUT_STINGER
       tristate '  I-Force joysticks/wheels' CONFIG_INPUT_IFORCE_232
+      tristate '  Gunze AHL-51S touchscreen' CONFIG_INPUT_GUNZE
    
    comment 'Gameport devices'
       tristate '  Analog joysticks and gamepads' CONFIG_INPUT_ANALOG

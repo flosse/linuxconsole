@@ -1,9 +1,13 @@
 /*
- *  inputattach.c  Version 0.1
+ * $Id$
  *
- *  Copyright (c) 1999 Vojtech Pavlik
+ *  Copyright (c) 1999-2000 Vojtech Pavlik
  *
- *  Input line discipline attach program
+ *  Sponsored by SuSE
+ */
+
+/*
+ * Input line discipline attach program
  */
 
 /*
@@ -106,20 +110,34 @@ int warrior_init(int fd)
 
 int spaceball_init(int fd)
 {
-        unsigned char c;
+	unsigned char c;
 
-        if (readchar(fd, &c, 4000) || c != 0x11 ||
-            readchar(fd, &c, 1000) || c != 0x0d ){
-                fprintf(stderr, "This doesn't look like a Spaceball 4000 FLX.\n");
-                return -1;
-            }
+	if (readchar(fd, &c, 4000) || c != 0x11 ||
+	    readchar(fd, &c, 1000) || c != 0x0d)
+		return -1;
 
-        sleep(2);                       /* Wait a few seconds for the Spaceball to initialize. */
+	sleep(2);				/* Wait a few seconds for the Spaceball to initialize. */
 
-        if (write(fd,"YS\rM\r",5)!=5)   /* Set linear sensitivity & enable axis events */
-                return -1;
+	if (write(fd,"YS\rM\r", 5) != 5)	/* Set linear sensitivity & enable axis events */
+		return -1;
 
-        return 0;
+	return 0;
+}
+
+int stinger_init(int fd)
+{
+	int i;
+	unsigned char c;
+	unsigned char *response = "\r\n0600520058C272";
+
+	if (write(fd, " E5E5", 5) != 5)		/* Enable command */
+		return -1; 
+
+	for (i = 0; i < 16; i++)		/* Check for Stinger */
+		if (readchar(fd, &c, 200) || (c != response[i])) 
+			return -1;
+
+	return 0;
 }
 
 int mzp_init(int fd)
@@ -163,6 +181,7 @@ struct input_types input_types[] = {
 { "--spaceball",	"-sbl",		B9600, CS8,			SERIO_SPACEBALL,0x00,	1,	spaceball_init },
 { "--magellan",		"-mag",		B9600, CS8 | CSTOPB | CRTSCTS,	SERIO_MAGELLAN,	0x00,	1,	magellan_init },
 { "--warrior",		"-war",		B1200, CS7 | CSTOPB,		SERIO_WARRIOR,	0x00,	1,	warrior_init },
+{ "--stinger",		"-sting",	B1200, CS8,			SERIO_STINGER,	0x00,	1,	stinger_init },
 { "--mousesystems",	"-msc",		B1200, CS8,			SERIO_MSC,	0x01,	1,	NULL },
 { "--sunmouse",		"-sun",		B1200, CS8,			SERIO_SUN,	0x01,	1,	NULL },
 { "--microsoft",	"-bare",	B1200, CS7,			SERIO_MS,	0x00,	1,	NULL },
@@ -170,7 +189,7 @@ struct input_types input_types[] = {
 { "--mouseman",		"-mman",	B1200, CS7,			SERIO_MP,	0x01,	1,	NULL },
 { "--intellimouse",	"-ms3",		B1200, CS7,			SERIO_MZ,	0x11,	1,	NULL },
 { "--mmwheel",		"-mmw",		B1200, CS7 | CSTOPB,		SERIO_MZP,	0x13,	1,	mzp_init },
-{ "--iforce",		"-ifor",       B38400, CS8 | CRTSCTS,		SERIO_IFORCE,	0x00,	0,	NULL },
+{ "--iforce",		"-ifor",	B38400, CS8 | CRTSCTS,		SERIO_IFORCE,	0x00,	0,	NULL },
 { "--dump",		"-dump",	B1200, CS7, 			0,		0x00,	0,	dump_init },
 { "", "", 0, 0 }
 
@@ -194,6 +213,7 @@ int main(int argc, char **argv)
 		puts("  --spaceball     -sbl   SpaceBall 2003 / 3003 / 4000 FLX");
                 puts("  --magellan      -mag   Magellan / SpaceMouse");
                 puts("  --warrior       -war   WingMan Warrior");
+		puts("  --stinger       -stng  Gravis Stinger");
 		puts("  --mousesystems  -msc   3-button Mouse Systems mice");
 		puts("  --sunmouse      -sun   3-button Sun mice");
 		puts("  --microsoft     -bare  2-button Microsoft mice");

@@ -303,9 +303,9 @@ supports:
 of up to two of these pads either chained together or using an Y-cable on a
 single gameport.
 
-GrIP MultiPort isn't supported yet. Gravis Stinger is a serial device and
-hopefully will be supported soon. Other Gravis joysticks are supported by
-the analog driver.
+GrIP MultiPort isn't supported yet. Gravis Stinger is a serial device and is
+supported by the stinger driver. Other Gravis joysticks are supported by the
+analog driver.
 
 3.5 FPGaming A3D and MadCatz A3D
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -340,7 +340,7 @@ module. This includes, but is not limited to:
 
   If you have one of these, contact me.
 
-  BSP devices are autodetected, and thus no parameters to the module
+  TMDC devices are autodetected, and thus no parameters to the module
 are needed. Up to two TMDC devices can be connected to one gameport, using
 an Y-cable.
 
@@ -480,7 +480,7 @@ and the /dev/input/jsX device should become useable.
 
 3.17 I-Force devices 
 ~~~~~~~~~~~~~~~~~~~~
-  All I-Force devices ale supported by the iforce.c module. This includes,
+  All I-Force devices are supported by the iforce.c module. This includes,
 but is not limited to:
 
 * Logitech WingMan Force
@@ -496,6 +496,16 @@ command. After that the I-Force device will be detected, and the
 
   In case you're using the device via the USB port, the inputattach command
 isn't needed.
+
+3.18 Gravis Stinger gamepad 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  The Gravis Stinger serial port gamepad, designed for use with laptop
+computers, is supported by the stinger.c module. To use it, attach the
+serial port to the driver using:
+
+        inputattach --stinger /dev/tty/x &
+
+where x is the number of the serial port.
 
 4. Troubleshooting
 ~~~~~~~~~~~~~~~~~~
@@ -578,6 +588,7 @@ to the joystick driver development:
 	Joe Krahn		<krahn@niehs.nih.gov>
 	David Kuder		<alphagod@penguinpowered.com>
 	Raymond Ingles		<sorceror@tir.com>
+	Mark Fletcher           <cmf@biochem.ucl.ac.uk>
 
   If you think you should be in this list and are not, it's possible that
 I forgot to include you - contact me and I'll correct the error. :)
