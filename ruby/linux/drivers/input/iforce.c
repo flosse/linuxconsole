@@ -74,7 +74,8 @@ MODULE_DESCRIPTION("USB/RS232 I-Force joysticks and wheels driver");
 #define CHECK_OWNERSHIP(i, iforce)	\
 	((i) < FF_EFFECTS_MAX && i >= 0 && \
 	test_bit(FF_CORE_IS_USED, (iforce)->core_effects[(i)].flags) && \
-	(iforce)->core_effects[(i)].owner == current->pid)
+	(current->pid == 0 || \
+	(iforce)->core_effects[(i)].owner == current->pid))
 
 struct iforce_core_effect {
 	/* Information about where modifiers are stored in the device's memory */
@@ -231,11 +232,11 @@ static void iforce_usb_xmit(struct iforce *iforce)
 	}
 	XMIT_INC(iforce->xmit.tail, n);
 
-	spin_unlock_irqrestore(&iforce->xmit_lock, flags);
-
 	if (n=usb_submit_urb(&iforce->out)) {
 		printk(KERN_WARNING "iforce.c: iforce_usb_xmit: usb_submit_urb failed %d\n", n);
 	}
+
+	spin_unlock_irqrestore(&iforce->xmit_lock, flags);
 }
 #endif
 
@@ -352,7 +353,7 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 #ifdef IFORCE_232
 		case IFORCE_232:
 		if (empty)
-			serio_write(iforce->serio, 0x2b);
+			iforce_serial_xmit(iforce);
 		break;
 #endif
 #ifdef IFORCE_USB
@@ -598,9 +599,9 @@ static int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned
 
 		default: /* Play or stop an effect */
 
-/*			if (!CHECK_OWNERSHIP(code, iforce)) {
+			if (!CHECK_OWNERSHIP(code, iforce)) {
 				return -1;
-			}*/
+			}
 			if (value > 0) {
 				set_bit(FF_CORE_SHOULD_PLAY, iforce->core_effects[code].flags);
 			}
