@@ -83,7 +83,7 @@ int main(int argc, char** argv)
 
 	/* download a constant effect */
 	effects[1].type = FF_CONSTANT;
-	effects[1].id = 0;
+	effects[1].id = -1;
 	effects[1].u.constant.level = 0x2000;	/* Strength : 25 % */
 	effects[1].u.constant.direction = 0x6000;	/* 135 degrees */
 	effects[1].u.constant.shape.attack_length = 0x100;
@@ -102,7 +102,7 @@ int main(int argc, char** argv)
 
 	/* download a periodic sinusoidal effect */
 	effects[0].type = FF_PERIODIC;
-	effects[0].id = 1;
+	effects[0].id = -1;
 	effects[0].u.periodic.waveform = FF_SINE;
 	effects[0].u.periodic.period = 0.1*0x100;	/* 0.1 second */
 	effects[0].u.periodic.magnitude = 0x4000;	/* 0.5 * Maximum magnitude */
@@ -125,7 +125,7 @@ int main(int argc, char** argv)
 
 	/* download an interactive spring effect */
 	effects[2].type = FF_SPRING;
-	effects[2].id = 2;
+	effects[2].id = -1;
 	effects[2].u.interactive.axis = FF_X;
 	effects[2].u.interactive.right_saturation = 0x7fff;
 	effects[2].u.interactive.left_saturation = 0x7fff;
@@ -145,7 +145,7 @@ int main(int argc, char** argv)
 
 	/* download an interactive damper effect */
 	effects[3].type = FF_FRICTION;
-	effects[3].id = 3;
+	effects[3].id = -1;
 	effects[3].u.interactive.axis = FF_X;
 	effects[3].u.interactive.right_saturation = 0x7fff;
 	effects[3].u.interactive.left_saturation = 0x7fff;
