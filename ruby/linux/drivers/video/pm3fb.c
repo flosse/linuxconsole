@@ -2250,7 +2250,7 @@ static void pm3fb_real_setup(char *options)
 			options = pm3fb_boardnum_setup(options + 5, &bn);
 			DPRINTK(2, "Setting mode for board #%ld\n", bn);
 			mode[bn] = kmalloc(1 + strlen(options), GFP_KERNEL);
-			memcpy(mode[bn], options);
+			strcpy(mode[bn], options);
 		} else if (!strncmp(options, "off:", 4)) {
 			options = pm3fb_boardnum_setup(options + 4, &bn);
 			DPRINTK(2, "Disabling board #%ld\n", bn);
