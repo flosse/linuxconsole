@@ -268,9 +268,9 @@ static void newport_get_revisions(void)
 }
 
 #ifdef MODULE
-static const char *newport_startup(void)
+static const char *newport_startup(struct vt_struct *vt)
 #else
-static const char * __init newport_startup(void)
+static const char * __init newport_startup(struct vt_struct *vt)
 #endif
 {
     struct newport_regs *p;
@@ -595,14 +595,27 @@ struct consw newport_con = {
 
 #ifdef MODULE
 
-int init_module(void) {
-    if (!newport_startup()) 
-       printk("Error loading SGI Newport Console driver\n");
-    else 
-       printk("Loading SGI Newport Console Driver\n");
+int init_module(void) 
+{
+    const char *display_desc = NULL;
+    struct vt_struct *vt;
+    int i;
 
-    take_over_console(&newport_con,0,MAX_NR_CONSOLES-1,1);
-
+    vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
+    if (!vt) return;
+    display_desc = create_vt(vt, &newport_con);
+    if (!display_desc) {
+            printk("Error loading SGI Newport Console driver\n");
+	    kfree(vt);
+            return;
+    }
+    i = vc_allocate(vt->vcs.first_vc);
+    if (i)  {
+            kfree(vt);
+            return;
+    }
+     
+    printk("Loading SGI Newport Console Driver\n");
     return 0;
 }
 
