@@ -69,7 +69,7 @@ if [ "$CONFIG_INPUT" != "n" ]; then
    if [ "$CONFIG_USB" != "n" ]; then	 
       comment 'USB devices'
          tristate '  USB Human Interface Device (HID)' CONFIG_INPUT_HID
-      	 if [ "$CONFIG_INPUT_HID" = "y" ]; then
+      	 if [ "$CONFIG_INPUT_HID" != "y" ]; then
             tristate '  USB HIDBP keyboard' CONFIG_INPUT_USBKBD
             tristate '  USB HIDBP mouse' CONFIG_INPUT_USBMOUSE
          fi
