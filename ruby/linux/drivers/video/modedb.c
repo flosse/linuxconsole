@@ -278,7 +278,7 @@ int __fb_try_mode(struct fb_var_screeninfo *var, struct fb_info *info,
     var->vsync_len = mode->vsync_len;
     var->sync = mode->sync;
     var->vmode = mode->vmode;
-    err = info->fbops->fb_set_var(var, info);
+    err = fb_set_var(var, info);
     var->activate &= ~FB_ACTIVATE_TEST;
     return !err;
 }
