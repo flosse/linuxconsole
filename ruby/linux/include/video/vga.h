@@ -447,7 +447,8 @@ static inline void vga_mm_wattr (caddr_t regbase, unsigned char reg, unsigned ch
 
 struct vga_hw_state {
         caddr_t regsbase;
-        u16 xres;
+        spinlock_t vga_lock;
+	u16 xres;
         u16 vxres;
         u16 right;
         u16 hslen;
@@ -489,7 +490,7 @@ extern int vga_check_mode(int xres, int right, int hslen, int left, int vxres,
 extern int vga_set_mode(struct vga_hw_state *state, int xoffset);
 extern void vga_vesa_blank(struct vga_hw_state *state, int mode);
 extern void vga_vesa_unblank(struct vga_hw_state *state);
-extern void vga_pal_blank(void);
+extern void vga_pal_blank(caddr_t reg);
 #endif /* __KERNEL__ */
 
 #endif /* __linux_video_vga_h__ */

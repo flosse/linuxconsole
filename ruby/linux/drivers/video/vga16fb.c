@@ -522,6 +522,7 @@ int __init vga16fb_init(void)
 	default_par.regsbase = NULL;
 	default_par.palette_blanked = 0;
 	default_par.vesa_blanked = 0;
+	spinlock_init(&default_par.vga_lock);
 
 	if (!ORIG_VIDEO_ISVGA) {
 		default_par.video_type = VIDEO_TYPE_EGAC;
@@ -542,10 +543,7 @@ int __init vga16fb_init(void)
 	vga16fb.fix = vga16fb_fix;
 	vga16fb.var = vga16fb_defined;
 	vga16fb.fbops = &vga16fb_ops;
-	vga16fb.flags=FBINFO_FLAG_DEFAULT;
-	err = fb_alloc_cmap(&vga16fb.cmap, 16, 0);
-	if (err)
-		return err;
+	vga16fb.flags = FBINFO_FLAG_DEFAULT;
 		
 	if (register_framebuffer(&vga16fb) < 0) {
 		iounmap(vga16fb.screen_base);
@@ -554,7 +552,6 @@ int __init vga16fb_init(void)
 
 	printk(KERN_INFO "fb%d: %s frame buffer device\n",
 	       GET_FB_IDX(vga16fb.node), vga16fb.fix.id);
-	
 	return 0;
 }
 
