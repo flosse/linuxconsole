@@ -89,7 +89,6 @@
 #include <asm/system.h>
 #include <asm/bitops.h>
 
-#include <linux/kbd_kern.h>
 #include <linux/vt_kern.h>
 #include <linux/selection.h>
 #include <linux/devfs_fs_kernel.h>
@@ -2294,6 +2293,7 @@ void __init tty_init(void)
 		panic("Couldn't register /dev/tty0 driver\n");
 
 	kbd_init();
+	console_map_init();
 	vcs_init();
 #endif
 #ifdef CONFIG_ESPSERIAL  /* init ESP before rs, so rs doesn't see the port */
