@@ -29,6 +29,7 @@
  */
 
 #include <linux/init.h>
+#include <linux/smp_lock.h>
 #include <linux/input.h>
 #include <linux/module.h>
 #include <linux/random.h>
