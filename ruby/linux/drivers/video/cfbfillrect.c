@@ -20,9 +20,9 @@
 #include <linux/string.h>
 #include <linux/fb.h>
 #include <asm/types.h>
+#include <video/fbcon.h>
 
-void cfb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,  
-		  unsigned int rows, unsigned long color, int rop) 
+void cfb_fillrect(struct fb_info *p, struct fb_fillrect *rect)  
 {
   unsigned long start_index, end_index, start_mask = 0, end_mask = 0;
   unsigned long height, ppw, fg;
@@ -31,22 +31,22 @@ void cfb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,
   unsigned long *dst;
   char *dst1;	
 
-  if (!width || !rows) return;	
+  if (!rect->width || !rect->height) return;	
  
   /* We could use hardware clipping but on many cards you get around hardware
      clipping by writing to framebuffer directly. */
-  x2 = x1 + width;
-  y2 = y1 + rows;
+  x2 = rect->dx + rect->width;
+  y2 = rect->dy + rect->height;
   x2 = x2 < p->var.xres_virtual ? x2 : p->var.xres_virtual;
   y2 = y2 < p->var.yres_virtual ? y2 : p->var.yres_virtual;
-  width = x2 - x1;
-  height = y2 - y1;
+  rect->width = x2 - rect->dx;
+  height = y2 - rect->dy;
 
   /* Size of the scanline in bytes */ 	
-  n = ((width * p->var.bits_per_pixel) >> 3);	
+  n = ((rect->width * p->var.bits_per_pixel) >> 3);	
   ppw = BITS_PER_LONG/p->var.bits_per_pixel;
 
-  dst1 = p->screen_base + y1 * linesize + ((x1 * p->var.bits_per_pixel) >> 3); 
+  dst1 = p->screen_base + rect->dy * linesize + ((rect->dx * p->var.bits_per_pixel) >> 3); 
   start_index = ((unsigned long) dst1 & (bpl-1));
   end_index = ((unsigned long)(dst1 + n) & (bpl-1));	
 
@@ -54,11 +54,11 @@ void cfb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,
  // printk("end_index is %ld\n", end_index);	
  // printk("width is %d\n", width);	
 
-  fg = color;
+  fg = rect->color;
   
   for (i = 0; i < ppw; i++) {
     fg <<= p->var.bits_per_pixel;
-    fg |= color;
+    fg |= rect->color;
   }
 
   if (start_index) {
@@ -89,7 +89,7 @@ void cfb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,
 //  printk("n is %d\n", n); 	
 
   if ((BITS_PER_LONG % p->var.bits_per_pixel) == 0) {
-    switch(rop) {
+    switch (rect->rop) {
     case ROP_COPY:        
       do {
 	/* Word align to increases performace :-) */
@@ -159,14 +159,14 @@ void cfb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,
     /* start_mask =& PFILL24(x1,fg);
        end_mask_or = end_mask & PFILL24(x1+width-1,fg); */
     
-    n = (width - start_index - end_index)/ppw;
+    n = (rect->width - start_index - end_index)/ppw;
     
-    switch(rop) {
+    switch (rect->rop) {
     case ROP_COPY:        
       do {
 	dst = (unsigned long *)dst1;
 	if (start_mask) *dst |= start_mask;
-	if ((start_index + width) > ppw) dst++;	
+	if ((start_index + rect->width) > ppw) dst++;	
 
 	/* XXX: slow */
 	for(i=0;i<n;i++) {
@@ -180,7 +180,7 @@ void cfb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,
       do {
 	dst = (unsigned long *)dst1;
 	if (start_mask) *dst ^= start_mask;
-	if ((start_mask + width) > ppw) dst++;	
+	if ((start_mask + rect->width) > ppw) dst++;	
 	
 	for(i=0;i<n;i++) {
 	  *dst++ ^= fg; /* PFILL24(fg,x1+i); */

@@ -26,9 +26,9 @@
 #include <linux/slab.h>
 #include <asm/types.h>
 #include <asm/io.h>
+#include <video/fbcon.h>
 
-void cfb_copyarea(struct fb_info *p, int sx, int sy, unsigned int width, 
-		   unsigned int rows, int dx, int dy)
+void cfb_copyarea(struct fb_info *p, struct fb_copyarea *area) 
 {
   unsigned long start_index, end_index, start_mask, end_mask, last,tmp, height;
   int x2, y2, n, j, lineincr, shift, shift_right, shift_left, old_dx,old_dy;
@@ -37,49 +37,49 @@ void cfb_copyarea(struct fb_info *p, int sx, int sy, unsigned int width,
   char *src1,*dst1;
  
   /* clip the destination */
-  old_dx=dx;
-  old_dy=dy;
+  old_dx = area->dx;
+  old_dy = area->dy;
   
   /* We could use hardware clipping but on many cards you get around hardware
      clipping by writing to framebuffer directly. */
-  x2 = dx + width;
-  y2 = dy + rows;
-  dx = dx > 0 ? dx : 0;
-  dy = dy > 0 ? dy : 0;
+  x2 = area->dx + area->width;
+  y2 = area->dy + area->height;
+  area->dx = area->dx > 0 ? area->dx : 0;
+  area->dy = area->dy > 0 ? area->dy : 0;
   x2 = x2 < p->var.xres_virtual ? x2 : p->var.xres_virtual;
   y2 = y2 < p->var.yres_virtual ? y2 : p->var.yres_virtual;
-  width = x2 - dx;
-  rows = y2 - dy;
+  area->width = x2 - area->dx;
+  area->height = y2 - area->dy;
   
   /* update sx1,sy1 */
-  sx += (dx - old_dx);
-  sy += (dy - old_dy);
+  area->sx += (area->dx - old_dx);
+  area->sy += (area->dy - old_dy);
   
-  height = rows;
+  height = area->height;
 
   /* the source must be completely inside the virtual screen */
-  if (sx < 0 || sy < 0 || (sx + width)  > p->var.xres_virtual ||
-      (sy + height) > p->var.yres_virtual) return;
+  if (area->sx < 0 || area->sy < 0 || (area->sx + area->width)  > p->var.xres_virtual ||
+      (area->sy + area->height) > p->var.yres_virtual) return;
   
-  if (dy < sy || (dy == sy && dx < sx)) {
+  if (area->dy < area->sy || (area->dy == area->sy && area->dx < area->sx)) {
     	/* start at the top */
-    	src1 = p->screen_base + sy * linesize + 
-      		((sx * p->var.bits_per_pixel) >> 3);
-    	dst1 = p->screen_base + dy * linesize +
-      		((dx * p->var.bits_per_pixel) >> 3);
+    	src1 = p->screen_base + area->sy * linesize + 
+      		((area->sx * p->var.bits_per_pixel) >> 3);
+    	dst1 = p->screen_base + area->dy * linesize +
+      		((area->dx * p->var.bits_per_pixel) >> 3);
     	lineincr = linesize;
   } else {
     	/* start at the bottom */
-    	src1 = p->screen_base + (sy + height - 1) * linesize + 
-      		(((sx + width - 1) * p->var.bits_per_pixel) >> 3); 
-    	dst1 = p->screen_base + (dy + height - 1) * linesize + 
-      		(((dx + width - 1) * p->var.bits_per_pixel) >> 3); 
+    	src1 = p->screen_base + (area->sy + area->height - 1) * linesize + 
+      		(((area->sx + area->width - 1) * p->var.bits_per_pixel) >> 3); 
+    	dst1 = p->screen_base + (area->dy + area->height - 1) * linesize + 
+      		(((area->dx + area->width - 1) * p->var.bits_per_pixel) >> 3); 
     	lineincr = -linesize;
   }
     
   if ((BITS_PER_LONG % p->var.bits_per_pixel) == 0) {
     	int ppw = BITS_PER_LONG/p->var.bits_per_pixel;
-	int n = ((width * p->var.bits_per_pixel) >> 3);   
+	int n = ((area->width * p->var.bits_per_pixel) >> 3);   
 
     	start_index = ((unsigned long) src1 & (bpl-1));
     	end_index = ((unsigned long) (src1 + n) & (bpl-1));

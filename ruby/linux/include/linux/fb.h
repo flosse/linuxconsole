@@ -338,13 +338,11 @@ struct fb_ops {
     /* pan display */
     int (*fb_pan_display)(struct fb_var_screeninfo *var, struct fb_info *info); 
     /* draws a rectangle */
-    void (*fb_fillrect)(struct fb_info *p, int x1, int y1, unsigned int width,
-                        unsigned int height, unsigned long color, int rop);
+    void (*fb_fillrect)(struct fb_info *info, struct fb_fillrect *rect);
     /* Copy data from area to another */	
-    void (*fb_copyarea)(struct fb_info *p, int sx, int sy, unsigned int width,
-                        unsigned int height, int dx, int dy);
+    void (*fb_copyarea)(struct fb_info *info, struct fb_copyarea *area); 
     /* Draws a image to the display */ 		 	
-    void (*fb_imageblit)(struct fb_info *p, struct fb_image *image);
+    void (*fb_imageblit)(struct fb_info *info, struct fb_image *image);
     /* perform polling on fb device */
     int (*fb_poll)(struct fb_info *info, poll_table *wait);	
     /* perform fb specific ioctl */

@@ -945,9 +945,8 @@ static int emulate_raw(struct vc_data *vc, unsigned int keycode, unsigned char u
 }
 #endif
 
-void kbd_keycode(void  *private, unsigned int keycode, int down)
+void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down)
 {
-	struct vt_struct *vt = (struct vt_struct *) private; 
 	struct vc_data *vc = vt->fg_console;
 	unsigned short keysym, *key_map;
 	unsigned char type, raw_mode;
@@ -1044,9 +1043,11 @@ void kbd_keycode(void  *private, unsigned int keycode, int down)
 static void kbd_event(struct input_handle *handle, unsigned int event_type, 
 		      unsigned int keycode, int down)
 {
-	if (event_type != EV_KEY) return;
-	if (handle->private)
-		kbd_keycode(handle->private, keycode, down);
+	struct vt_struct *vt = (struct vt_struct *) handle->private;
+
+	if ((event_type != EV_KEY) || !vt || !vt->fg_console->vc_kam)
+		return;
+	kbd_keycode(vt, keycode, down);
 	tasklet_schedule(&keyboard_tasklet);
 }
 
