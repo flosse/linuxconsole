@@ -683,16 +683,18 @@ const char *create_vt(struct vt_struct *vt, int init)
 	const char *display_desc = vt->vt_sw->con_startup(vt, init);
 
 	if (!display_desc) return NULL;	
-	vt->data_hook = NULL;
 	vt->vt_dont_switch = 0;
         vt->scrollback_delta = 0;
         vt->vt_blanked = 0;
         vt->blank_interval = 10*60*HZ;
         vt->off_interval = 0;
 	init_MUTEX(&vt->lock);
-	vt->keyboard = NULL;
-	vt->vcs.first_vc = current_vc;  
+	vt->default_mode->display_fg = vt;
+	vt->vcs.vc_cons[0] = vt->default_mode;
+	vt->vcs.first_vc = vt->vcs.vc_cons[0]->vc_num = current_vc;
+	vt->fg_console = vt->last_console = vt->vcs.vc_cons[0];
 	vt->vcs.next = NULL;
+	vt->keyboard = NULL;
         vt->next = vt_cons;
 	vt_cons = vt;
 	current_vc += MAX_NR_USER_CONSOLES;
@@ -1577,9 +1579,7 @@ void __init vt_console_init(void)
 		free_bootmem((unsigned long) vc, sizeof(struct vc_data));
 		return;
 	}
-	vt->last_console = vt->fg_console = vt->vcs.vc_cons[0] = vc; 
-	vc->vc_num = 0;
-        vc->display_fg = admin_vt = vt;
+        admin_vt = vt;
 	visual_init(vc);
         screenbuf = (unsigned short *) alloc_bootmem(screenbuf_size);
         vc_init(vc, !sw->con_save_screen); 
