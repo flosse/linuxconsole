@@ -21,6 +21,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *
+ *  $Id$
+ *
  */
 #include <linux/config.h>
 #include <linux/module.h>
@@ -70,10 +73,10 @@ static struct tty_driver normal, callout;
 static struct tty_struct *clps711x_table[UART_NR];
 static struct termios *clps711x_termios[UART_NR], *clps711x_termios_locked[UART_NR];
 
-#define UBRLCR(port)		((port)->base + UBRLCR1)
-#define UARTDR(port)		((port)->base + UARTDR1)
-#define SYSFLG(port)		((port)->base + SYSFLG1)
-#define SYSCON(port)		((port)->base + SYSCON1)
+#define UBRLCR(port)		((port)->iobase + UBRLCR1)
+#define UARTDR(port)		((port)->iobase + UARTDR1)
+#define SYSFLG(port)		((port)->iobase + SYSFLG1)
+#define SYSCON(port)		((port)->iobase + SYSCON1)
 
 #define TX_IRQ(port)		((port)->irq)
 #define RX_IRQ(port)		((port)->irq + 1)
@@ -308,11 +311,6 @@ static int clps711xuart_startup(struct uart_port *port, struct uart_info *info)
 	port->ops->set_mctrl(port, info->mctrl);
 
 	/*
-	 * initialise the old status of the modem signals
-	 */
-	port->old_status = 0;
-
-	/*
 	 * enable the port
 	 */
 	syscon = clps_readl(SYSCON(port));
@@ -419,14 +417,14 @@ static struct uart_ops clps711x_pops = {
 
 static struct uart_port clps711x_ports[UART_NR] = {
 	{
-		base:		0,
+		iobase:		0,
 		irq:		IRQ_UTXINT1, /* IRQ_URXINT1, IRQ_UMSINT */
 		uartclk:	3686400,
 		fifosize:	16,
 		ops:		&clps711x_pops,
 	},
 	{
-		base:		SYSCON2 - SYSCON1,
+		iobase:		SYSCON2 - SYSCON1,
 		irq:		IRQ_UTXINT2, /* IRQ_URXINT2 */
 		uartclk:	3686400,
 		fifosize:	16,
@@ -576,6 +574,7 @@ static int __init clps711xuart_console_setup(struct console *co, char *options)
 	int baud = 38400;
 	int bits = 8;
 	int parity = 'n';
+	int flow = 'n';
 
 	/*
 	 * Check whether an invalid uart number has been specified, and
@@ -585,11 +584,11 @@ static int __init clps711xuart_console_setup(struct console *co, char *options)
 	port = uart_get_console(clps711x_ports, UART_NR, co);
 
 	if (options)
-		uart_parse_options(options, &baud, &parity, &bits);
+		uart_parse_options(options, &baud, &parity, &bits, &flow);
 	else
 		clps711xuart_console_get_options(port, &baud, &parity, &bits);
 
-	return uart_set_options(port, co, baud, parity, bits);
+	return uart_set_options(port, co, baud, parity, bits, flow);
 }
 
 static struct console clps711x_console = {
@@ -614,7 +613,7 @@ void __init clps711xuart_console_init(void)
 #define CLPS711X_CONSOLE	NULL
 #endif
 
-static struct uart_register clps711x_reg = {
+static struct uart_driver clps711x_reg = {
 #ifdef CONFIG_DEVFS_FS
 	normal_name:		SERIAL_CLPS711X_NAME,
 	callout_name:		CALLOUT_CLPS711X_NAME,
@@ -641,12 +640,12 @@ static struct uart_register clps711x_reg = {
 
 static int __init clps711xuart_init(void)
 {
-	return uart_register_port(&clps711x_reg);
+	return uart_register_driver(&clps711x_reg);
 }
 
 static void __exit clps711xuart_exit(void)
 {
-	uart_unregister_port(&clps711x_reg);
+	uart_unregister_driver(&clps711x_reg);
 }
 
 module_init(clps711xuart_init);

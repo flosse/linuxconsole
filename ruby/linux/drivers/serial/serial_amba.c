@@ -22,6 +22,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
+ *  $Id$
  *
  * This is a generic driver for ARM AMBA-type serial ports.  They
  * have a lot of 16550-like features, but are not register compatable.
@@ -88,23 +89,26 @@ static struct console amba_console;
 /*
  * Access macros for the AMBA UARTs
  */
-#define UART_GET_INT_STATUS(p)	readb((p)->base + AMBA_UARTIIR)
-#define UART_PUT_ICR(p, c)	writel((c), (p)->base + AMBA_UARTICR)
-#define UART_GET_FR(p)		readb((p)->base + AMBA_UARTFR)
-#define UART_GET_CHAR(p)	readb((p)->base + AMBA_UARTDR)
-#define UART_PUT_CHAR(p, c)	writel((c), (p)->base + AMBA_UARTDR)
-#define UART_GET_RSR(p)		readb((p)->base + AMBA_UARTRSR)
-#define UART_GET_CR(p)		readb((p)->base + AMBA_UARTCR)
-#define UART_PUT_CR(p,c)	writel((c), (p)->base + AMBA_UARTCR)
-#define UART_GET_LCRL(p)	readb((p)->base + AMBA_UARTLCR_L)
-#define UART_PUT_LCRL(p,c)	writel((c), (p)->base + AMBA_UARTLCR_L)
-#define UART_GET_LCRM(p)	readb((p)->base + AMBA_UARTLCR_M)
-#define UART_PUT_LCRM(p,c)	writel((c), (p)->base + AMBA_UARTLCR_M)
-#define UART_GET_LCRH(p)	readb((p)->base + AMBA_UARTLCR_H)
-#define UART_PUT_LCRH(p,c)	writel((c), (p)->base + AMBA_UARTLCR_H)
+#define UART_GET_INT_STATUS(p)	readb((p)->membase + AMBA_UARTIIR)
+#define UART_PUT_ICR(p, c)	writel((c), (p)->membase + AMBA_UARTICR)
+#define UART_GET_FR(p)		readb((p)->membase + AMBA_UARTFR)
+#define UART_GET_CHAR(p)	readb((p)->membase + AMBA_UARTDR)
+#define UART_PUT_CHAR(p, c)	writel((c), (p)->membase + AMBA_UARTDR)
+#define UART_GET_RSR(p)		readb((p)->membase + AMBA_UARTRSR)
+#define UART_GET_CR(p)		readb((p)->membase + AMBA_UARTCR)
+#define UART_PUT_CR(p,c)	writel((c), (p)->membase + AMBA_UARTCR)
+#define UART_GET_LCRL(p)	readb((p)->membase + AMBA_UARTLCR_L)
+#define UART_PUT_LCRL(p,c)	writel((c), (p)->membase + AMBA_UARTLCR_L)
+#define UART_GET_LCRM(p)	readb((p)->membase + AMBA_UARTLCR_M)
+#define UART_PUT_LCRM(p,c)	writel((c), (p)->membase + AMBA_UARTLCR_M)
+#define UART_GET_LCRH(p)	readb((p)->membase + AMBA_UARTLCR_H)
+#define UART_PUT_LCRH(p,c)	writel((c), (p)->membase + AMBA_UARTLCR_H)
 #define UART_RX_DATA(s)		(((s) & AMBA_UARTFR_RXFE) == 0)
 #define UART_TX_READY(s)	(((s) & AMBA_UARTFR_TXFF) == 0)
 #define UART_TX_EMPTY(p)	((UART_GET_FR(p) & AMBA_UARTFR_TMSK) == 0)
+
+#define UART_DUMMY_RSR_RX	256
+#define UART_PORT_SIZE		64
 
 /*
  * On the Integrator platform, the port RTS and DTR are provided by
@@ -116,12 +120,17 @@ static struct console amba_console;
  * We encode this bit information into port->driver_priv using the
  * following macros.
  */
-#define PORT_CTRLS(dtrbit,rtsbit)	((1 << dtrbit) | (1 << (16 + rtsbit)))
-#define PORT_CTRLS_DTR(port)		((port)->driver_priv & 0xffff)
-#define PORT_CTRLS_RTS(port)		((port)->driver_priv >> 16)
+//#define PORT_CTRLS(dtrbit,rtsbit)	((1 << dtrbit) | (1 << (16 + rtsbit)))
+#define PORT_CTRLS_DTR(port)		(1 << (port)->unused[1])
+#define PORT_CTRLS_RTS(port)		(1 << (port)->unused[0])
 
 #define SC_CTRLC	(IO_ADDRESS(INTEGRATOR_SC_BASE) + INTEGRATOR_SC_CTRLC_OFFSET)
 #define SC_CTRLS	(IO_ADDRESS(INTEGRATOR_SC_BASE) + INTEGRATOR_SC_CTRLS_OFFSET)
+
+/*
+ * Our private driver data mappings.
+ */
+#define drv_old_status	driver_priv
 
 static void ambauart_stop_tx(struct uart_port *port, u_int from_tty)
 {
@@ -169,92 +178,77 @@ ambauart_rx_chars(struct uart_info *info)
 #endif
 {
 	struct tty_struct *tty = info->tty;
-	unsigned int status, ch, rsr, flg, ignored = 0;
+	unsigned int status, ch, rsr, max_count = 256;
 	struct uart_port *port = info->port;
 
 	status = UART_GET_FR(port);
-	while (UART_RX_DATA(status)) {
+	while (UART_RX_DATA(status) && max_count--) {
+		if (tty->flip.count >= TTY_FLIPBUF_SIZE) {
+			tty->flip.tqueue.routine((void *)tty);
+			if (tty->flip.count >= TTY_FLIPBUF_SIZE) {
+				printk(KERN_WARNING "TTY_DONT_FLIP set\n");
+				return;
+			}
+		}
+
 		ch = UART_GET_CHAR(port);
 
-		if (tty->flip.count >= TTY_FLIPBUF_SIZE)
-			goto ignore_char;
+		*tty->flip.char_buf_ptr = ch;
+		*tty->flip.flag_buf_ptr = TTY_NORMAL;
 		port->icount.rx++;
-
-		flg = TTY_NORMAL;
 
 		/*
 		 * Note that the error handling code is
 		 * out of the main execution path
 		 */
-		rsr = UART_GET_RSR(port);
-		if (rsr & AMBA_UARTRSR_ANY)
-			goto handle_error;
+		rsr = UART_GET_RSR(port) | UART_DUMMY_RSR_RX;
+		if (rsr & AMBA_UARTRSR_ANY) {
+			if (rsr & AMBA_UARTRSR_BE) {
+				rsr &= ~(AMBA_UARTRSR_FE | AMBA_UARTRSR_PE);
+				port->icount.brk++;
+				if (uart_handle_break(info, &amba_console))
+					goto ignore_char;
+			} else if (rsr & AMBA_UARTRSR_PE)
+				port->icount.parity++;
+			else if (rsr & AMBA_UARTRSR_FE)
+				port->icount.frame++;
+			if (rsr & AMBA_UARTRSR_OE)
+				port->icount.overrun++;
+
+			rsr &= port->read_status_mask;
+
+			if (rsr & AMBA_UARTRSR_BE)
+				*tty->flip.flag_buf_ptr = TTY_BREAK;
+			else if (rsr & AMBA_UARTRSR_PE)
+				*tty->flip.flag_buf_ptr = TTY_PARITY;
+			else if (rsr & AMBA_UARTRSR_FE)
+				*tty->flip.flag_buf_ptr = TTY_FRAME;
+		}
 
 		if (uart_handle_sysrq_char(info, ch, regs))
 			goto ignore_char;
 
-	error_return:
-		*tty->flip.flag_buf_ptr++ = flg;
-		*tty->flip.char_buf_ptr++ = ch;
-		tty->flip.count++;
+		if ((rsr & port->ignore_status_mask) == 0) {
+			tty->flip.flag_buf_ptr++;
+			tty->flip.char_buf_ptr++;
+			tty->flip.count++;
+		}
+		if ((rsr & AMBA_UARTRSR_OE) &&
+		    tty->flip.count < TTY_FLIPBUF_SIZE) {
+			/*
+			 * Overrun is special, since it's reported
+			 * immediately, and doesn't affect the current
+			 * character
+			 */
+			*tty->flip.char_buf_ptr++ = 0;
+			*tty->flip.flag_buf_ptr++ = TTY_OVERRUN;
+			tty->flip.count++;
+		}
 	ignore_char:
 		status = UART_GET_FR(port);
 	}
-out:
 	tty_flip_buffer_push(tty);
 	return;
-
-handle_error:
-	if (rsr & AMBA_UARTRSR_BE) {
-		rsr &= ~(AMBA_UARTRSR_FE | AMBA_UARTRSR_PE);
-		port->icount.brk++;
-
-#ifdef SUPPORT_SYSRQ
-		if (port->line == amba_console.index) {
-			if (!info->sysrq) {
-				info->sysrq = jiffies + HZ*5;
-				goto ignore_char;
-			}
-		}
-#endif
-	} else if (rsr & AMBA_UARTRSR_PE)
-		port->icount.parity++;
-	else if (rsr & AMBA_UARTRSR_FE)
-		port->icount.frame++;
-	if (rsr & AMBA_UARTRSR_OE)
-		port->icount.overrun++;
-
-	if (rsr & port->ignore_status_mask) {
-		if (++ignored > 100)
-			goto out;
-		goto ignore_char;
-	}
-	rsr &= port->read_status_mask;
-
-	if (rsr & AMBA_UARTRSR_BE)
-		flg = TTY_BREAK;
-	else if (rsr & AMBA_UARTRSR_PE)
-		flg = TTY_PARITY;
-	else if (rsr & AMBA_UARTRSR_FE)
-		flg = TTY_FRAME;
-
-	if (rsr & AMBA_UARTRSR_OE) {
-		/*
-		 * CHECK: does overrun affect the current character?
-		 * ASSUMPTION: it does not.
-		 */
-		*tty->flip.flag_buf_ptr++ = flg;
-		*tty->flip.char_buf_ptr++ = ch;
-		tty->flip.count++;
-		if (tty->flip.count >= TTY_FLIPBUF_SIZE)
-			goto ignore_char;
-		ch = 0;
-		flg = TTY_OVERRUN;
-	}
-#ifdef SUPPORT_SYSRQ
-	info->sysrq = 0;
-#endif
-	goto error_return;
 }
 
 static void ambauart_tx_chars(struct uart_info *info)
@@ -271,7 +265,7 @@ static void ambauart_tx_chars(struct uart_info *info)
 	if (info->xmit.head == info->xmit.tail
 	    || info->tty->stopped
 	    || info->tty->hw_stopped) {
-		ambauart_stop_tx(info->port, 0);
+		ambauart_stop_tx(port, 0);
 		return;
 	}
 
@@ -284,9 +278,8 @@ static void ambauart_tx_chars(struct uart_info *info)
 			break;
 	} while (--count > 0);
 
-	if (CIRC_CNT(info->xmit.head,
-		     info->xmit.tail,
-		     UART_XMIT_SIZE) < WAKEUP_CHARS)
+	if (CIRC_CNT(info->xmit.head, info->xmit.tail, UART_XMIT_SIZE) <
+			WAKEUP_CHARS)
 		uart_event(info, EVT_WRITE_WAKEUP);
 
 	if (info->xmit.head == info->xmit.tail)
@@ -295,15 +288,15 @@ static void ambauart_tx_chars(struct uart_info *info)
 
 static void ambauart_modem_status(struct uart_info *info)
 {
+	struct uart_port *port = info->port;
 	unsigned int status, delta;
-	struct uart_icount *icount = &info->port->icount;
 
-	UART_PUT_ICR(info->port, 0);
+	UART_PUT_ICR(port, 0);
 
-	status = UART_GET_FR(info->port) & AMBA_UARTFR_MODEM_ANY;
+	status = UART_GET_FR(port) & AMBA_UARTFR_MODEM_ANY;
 
-	delta = status ^ info->port->old_status;
-	info->port->old_status = status;
+	delta = status ^ info->drv_old_status;
+	info->drv_old_status = status;
 
 	if (!delta)
 		return;
@@ -312,26 +305,21 @@ static void ambauart_modem_status(struct uart_info *info)
 		uart_handle_dcd_change(info, status & AMBA_UARTFR_DCD);
 
 	if (delta & AMBA_UARTFR_DSR)
-		icount->dsr++;
+		port->icount.dsr++;
 
 	if (delta & AMBA_UARTFR_CTS)
 		uart_handle_cts_change(info, status & AMBA_UARTFR_CTS);
 
 	wake_up_interruptible(&info->delta_msr_wait);
-
 }
 
 static void ambauart_int(int irq, void *dev_id, struct pt_regs *regs)
 {
 	struct uart_info *info = dev_id;
-	unsigned int status, pass_counter = 0;
+	unsigned int status, pass_counter = AMBA_ISR_PASS_LIMIT;
 
 	status = UART_GET_INT_STATUS(info->port);
 	do {
-		/*
-		 * FIXME: what about clearing the interrupts?
-		 */
-
 		if (status & (AMBA_UARTIIR_RTIS | AMBA_UARTIIR_RIS))
 #ifdef SUPPORT_SYSRQ
 			ambauart_rx_chars(info, regs);
@@ -342,11 +330,13 @@ static void ambauart_int(int irq, void *dev_id, struct pt_regs *regs)
 			ambauart_tx_chars(info);
 		if (status & AMBA_UARTIIR_MIS)
 			ambauart_modem_status(info);
-		if (pass_counter++ > AMBA_ISR_PASS_LIMIT)
+
+		if (pass_counter-- == 0)
 			break;
 
 		status = UART_GET_INT_STATUS(info->port);
-	} while (status & (AMBA_UARTIIR_RTIS | AMBA_UARTIIR_RIS | AMBA_UARTIIR_TIS));
+	} while (status & (AMBA_UARTIIR_RTIS | AMBA_UARTIIR_RIS |
+			   AMBA_UARTIIR_TIS));
 }
 
 static u_int ambauart_tx_empty(struct uart_port *port)
@@ -414,7 +404,7 @@ static int ambauart_startup(struct uart_port *port, struct uart_info *info)
 	/*
 	 * initialise the old status of the modem signals
 	 */
-	port->old_status = UART_GET_FR(port) & AMBA_UARTFR_MODEM_ANY;
+	info->drv_old_status = UART_GET_FR(port) & AMBA_UARTFR_MODEM_ANY;
 
 	/*
 	 * Finally, enable interrupts
@@ -483,11 +473,17 @@ static void ambauart_change_speed(struct uart_port *port, u_int cflag, u_int ifl
 		port->ignore_status_mask |= AMBA_UARTRSR_BE;
 		/*
 		 * If we're ignoring parity and break indicators,
-		 * ignore overruns to (for real raw support).
+		 * ignore overruns too (for real raw support).
 		 */
 		if (iflag & IGNPAR)
 			port->ignore_status_mask |= AMBA_UARTRSR_OE;
 	}
+
+	/*
+	 * Ignore all characters if CREAD is not set.
+	 */
+	if ((cflag & CREAD) == 0)
+		port->ignore_status_mask |= UART_DUMMY_RSR_RX;
 
 	/* first, disable everything */
 	save_flags(flags); cli();
@@ -514,6 +510,49 @@ static void ambauart_change_speed(struct uart_port *port, u_int cflag, u_int ifl
 	restore_flags(flags);
 }
 
+/*
+ * Release the memory region(s) being used by 'port'
+ */
+static void ambauart_release_port(struct uart_port *port)
+{
+	release_mem_region(port->mapbase, UART_PORT_SIZE);
+}
+
+/*
+ * Request the memory region(s) being used by 'port'
+ */
+static int ambauart_request_port(struct uart_port *port)
+{
+	return request_mem_region(port->mapbase, UART_PORT_SIZE, "serial_amba")
+			!= NULL ? 0 : -EBUSY;
+}
+
+/*
+ * Configure/autoconfigure the port.
+ */
+static void ambauart_config_port(struct uart_port *port, int flags)
+{
+	if (flags & UART_CONFIG_TYPE) {
+		port->type = PORT_AMBA;
+		ambauart_request_port(port);
+	}
+}
+
+/*
+ * verify the new serial_struct (for TIOCSSERIAL).
+ */
+static int ambauart_verify_port(struct uart_port *port, struct serial_struct *ser)
+{
+	int ret = 0;
+	if (ser->type != PORT_UNKNOWN && ser->type != PORT_AMBA)
+		ret = -EINVAL;
+	if (ser->irq < 0 || ser->irq >= NR_IRQS)
+		ret = -EINVAL;
+	if (ser->baud_base < 9600)
+		ret = -EINVAL;
+	return ret;
+}
+
 static struct uart_ops amba_pops = {
 	tx_empty:	ambauart_tx_empty,
 	set_mctrl:	ambauart_set_mctrl,
@@ -526,24 +565,34 @@ static struct uart_ops amba_pops = {
 	startup:	ambauart_startup,
 	shutdown:	ambauart_shutdown,
 	change_speed:	ambauart_change_speed,
+	release_port:	ambauart_release_port,
+	request_port:	ambauart_request_port,
+	config_port:	ambauart_config_port,
+	verify_port:	ambauart_verify_port,
 };
 
 static struct uart_port amba_ports[UART_NR] = {
 	{
-		base:		IO_ADDRESS(INTEGRATOR_UART0_BASE),
+		membase:	(void *)IO_ADDRESS(INTEGRATOR_UART0_BASE),
+		mapbase:	INTEGRATOR_UART0_BASE,
+		iotype:		SERIAL_IO_MEM,
 		irq:		IRQ_UARTINT0,
 		uartclk:	14745600,
 		fifosize:	16,
-		driver_priv:	PORT_CTRLS(5, 4),
+		unused:		{ 4, 5 }, /*Udriver_priv:	PORT_CTRLS(5, 4), */
 		ops:		&amba_pops,
+		flags:		ASYNC_BOOT_AUTOCONF,
 	},
 	{
-		base:		IO_ADDRESS(INTEGRATOR_UART1_BASE),
+		membase:	(void *)IO_ADDRESS(INTEGRATOR_UART1_BASE),
+		mapbase:	INTEGRATOR_UART1_BASE,
+		iotype:		SERIAL_IO_MEM,
 		irq:		IRQ_UARTINT1,
 		uartclk:	14745600,
 		fifosize:	16,
-		driver_priv:	PORT_CTRLS(7, 6),
+		unused:		{ 6, 7 }, /*driver_priv:	PORT_CTRLS(7, 6), */
 		ops:		&amba_pops,
+		flags:		ASYNC_BOOT_AUTOCONF,
 	}
 };
 
@@ -658,6 +707,7 @@ static int __init ambauart_console_setup(struct console *co, char *options)
 	int baud = 38400;
 	int bits = 8;
 	int parity = 'n';
+	int flow = 'n';
 
 	/*
 	 * Check whether an invalid uart number has been specified, and
@@ -667,11 +717,11 @@ static int __init ambauart_console_setup(struct console *co, char *options)
 	port = uart_get_console(amba_ports, UART_NR, co);
 
 	if (options)
-		uart_parse_options(options, &baud, &parity, &bits);
+		uart_parse_options(options, &baud, &parity, &bits, &flow);
 	else
 		ambauart_console_get_options(port, &baud, &parity, &bits);
 
-	return uart_set_options(port, co, baud, parity, bits);
+	return uart_set_options(port, co, baud, parity, bits, flow);
 }
 
 static struct console amba_console = {
@@ -696,7 +746,7 @@ void __init ambauart_console_init(void)
 #define AMBA_CONSOLE	NULL
 #endif
 
-static struct uart_register amba_reg = {
+static struct uart_driver amba_reg = {
 	owner:			THIS_MODULE,
 	normal_major:		SERIAL_AMBA_MAJOR,
 #ifdef CONFIG_DEVFS_FS
@@ -720,12 +770,12 @@ static struct uart_register amba_reg = {
 
 static int __init ambauart_init(void)
 {
-	return uart_register_port(&amba_reg);
+	return uart_register_driver(&amba_reg);
 }
 
 static void __exit ambauart_exit(void)
 {
-	uart_unregister_port(&amba_reg);
+	uart_unregister_driver(&amba_reg);
 }
 
 module_init(ambauart_init);

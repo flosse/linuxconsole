@@ -9,9 +9,12 @@
 
 O_TARGET := uart.o
 
-export-objs	:= serial_tty.o
+export-objs	:= serial_core.o
 
-obj-$(CONFIG_UART)		+= serial_tty.o
+obj-$(CONFIG_UART)		+= serial_core.o
+obj-$(CONFIG_SERIAL_16550)	+= serial_8250.o
+obj-$(CONFIG_SERIAL_16550_PNP)	+= serial_8250_pnp.o
+obj-$(CONFIG_SERIAL_16550_PCI)	+= serial_8250_pci.o
 obj-$(CONFIG_SERIAL_AMBA) 	+= serial_amba.o
 obj-$(CONFIG_SERIAL_CLPS711X) 	+= serial_clps711x.o
 obj-$(CONFIG_SERIAL_ANAKIN) 	+= serial_anakin.o

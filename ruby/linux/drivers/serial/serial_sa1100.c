@@ -5,7 +5,6 @@
  *
  *  Based on drivers/char/serial.c, by Linus Torvalds, Theodore Ts'o.
  *
- *  Copyright 1999 ARM Limited
  *  Copyright (C) 2000 Deep Blue Solutions Ltd.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -21,6 +20,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *
+ *  $Id$
+ *
  */
 #include <linux/config.h>
 #include <linux/module.h>
@@ -74,21 +76,26 @@
 #define UTSR0_TO_SM(x)	((x))
 #define UTSR1_TO_SM(x)	((x) << 8)
 
-#define UART_GET_UTCR0(port)		__raw_readl((port)->base + UTCR0)
-#define UART_GET_UTCR1(port)		__raw_readl((port)->base + UTCR1)
-#define UART_GET_UTCR2(port)		__raw_readl((port)->base + UTCR2)
-#define UART_GET_UTCR3(port)		__raw_readl((port)->base + UTCR3)
-#define UART_GET_UTSR0(port)		__raw_readl((port)->base + UTSR0)
-#define UART_GET_UTSR1(port)		__raw_readl((port)->base + UTSR1)
-#define UART_GET_CHAR(port)		__raw_readl((port)->base + UTDR)
+#define UART_GET_UTCR0(port)		__raw_readl((port)->membase + UTCR0)
+#define UART_GET_UTCR1(port)		__raw_readl((port)->membase + UTCR1)
+#define UART_GET_UTCR2(port)		__raw_readl((port)->membase + UTCR2)
+#define UART_GET_UTCR3(port)		__raw_readl((port)->membase + UTCR3)
+#define UART_GET_UTSR0(port)		__raw_readl((port)->membase + UTSR0)
+#define UART_GET_UTSR1(port)		__raw_readl((port)->membase + UTSR1)
+#define UART_GET_CHAR(port)		__raw_readl((port)->membase + UTDR)
 
-#define UART_PUT_UTCR0(port,v)		__raw_writel((v),(port)->base + UTCR0)
-#define UART_PUT_UTCR1(port,v)		__raw_writel((v),(port)->base + UTCR1)
-#define UART_PUT_UTCR2(port,v)		__raw_writel((v),(port)->base + UTCR2)
-#define UART_PUT_UTCR3(port,v)		__raw_writel((v),(port)->base + UTCR3)
-#define UART_PUT_UTSR0(port,v)		__raw_writel((v),(port)->base + UTSR0)
-#define UART_PUT_UTSR1(port,v)		__raw_writel((v),(port)->base + UTSR1)
-#define UART_PUT_CHAR(port,v)		__raw_writel((v),(port)->base + UTDR)
+#define UART_PUT_UTCR0(port,v)		__raw_writel((v),(port)->membase + UTCR0)
+#define UART_PUT_UTCR1(port,v)		__raw_writel((v),(port)->membase + UTCR1)
+#define UART_PUT_UTCR2(port,v)		__raw_writel((v),(port)->membase + UTCR2)
+#define UART_PUT_UTCR3(port,v)		__raw_writel((v),(port)->membase + UTCR3)
+#define UART_PUT_UTSR0(port,v)		__raw_writel((v),(port)->membase + UTSR0)
+#define UART_PUT_UTSR1(port,v)		__raw_writel((v),(port)->membase + UTSR1)
+#define UART_PUT_CHAR(port,v)		__raw_writel((v),(port)->membase + UTDR)
+
+/*
+ * This is the size of our serial port register set.
+ */
+#define UART_PORT_SIZE	0x24
 
 static struct tty_driver normal, callout;
 static struct tty_struct *sa1100_table[NR_PORTS];
@@ -136,11 +143,7 @@ static void sa1100_enable_ms(struct uart_port *port)
 }
 
 static void
-#ifdef SUPPORT_SYSRQ
 sa1100_rx_chars(struct uart_info *info, struct pt_regs *regs)
-#else
-sa1100_rx_chars(struct uart_info *info)
-#endif
 {
 	struct tty_struct *tty = info->tty;
 	unsigned int status, ch, flg, ignored = 0;
@@ -266,11 +269,7 @@ static void sa1100_int(int irq, void *dev_id, struct pt_regs *regs)
 			/* Clear the receiver idle bit, if set */
 			if (status & UTSR0_RID)
 				UART_PUT_UTSR0(port, UTSR0_RID);
-#ifdef SUPPORT_SYSRQ
 			sa1100_rx_chars(info, regs);
-#else
-			sa1100_rx_chars(info);
-#endif
 		}
 
 		/* Clear the relevent break bits */
@@ -421,6 +420,57 @@ static void sa1100_change_speed(struct uart_port *port, u_int cflag, u_int iflag
 	UART_PUT_UTCR3(port, old_utcr3);
 }
 
+/*
+ * Release the memory region(s) being used by 'port'.
+ */
+static void sa1100_release_port(struct uart_port *port)
+{
+	release_mem_region(port->mapbase, UART_PORT_SIZE);
+}
+
+/*
+ * Request the memory region(s) being used by 'port'.
+ */
+static int sa1100_request_port(struct uart_port *port)
+{
+	return request_mem_region(port->mapbase, UART_PORT_SIZE,
+			"serial_sa1100") != NULL ? 0 : -EBUSY;
+}
+
+/*
+ * Configure/autoconfigure the port.
+ */
+static void sa1100_config_port(struct uart_port *port, int flags)
+{
+	if (flags & UART_CONFIG_TYPE && sa1100_request_port(port) == 0)
+		port->type = PORT_SA1100;
+}
+
+/*
+ * Verify the new serial_struct (for TIOCSSERIAL).
+ * The only change we allow are to the flags and type, and
+ * even then only between PORT_SA1100 and PORT_UNKNOWN
+ */
+static int sa1100_verify_port(struct uart_port *port, struct serial_struct *ser)
+{
+	int ret = 0;
+	if (ser->type != PORT_UNKNOWN && ser->type != PORT_SA1100)
+		ret = -EINVAL;
+	if (port->irq != ser->irq)
+		ret = -EINVAL;
+	if (ser->io_type != SERIAL_IO_MEM)
+		ret = -EINVAL;
+	if (port->uartclk / 16 != ser->baud_base)
+		ret = -EINVAL;
+	if ((void *)port->mapbase != ser->iomem_base)
+		ret = -EINVAL;
+	if (port->iobase != ser->port)
+		ret = -EINVAL;
+	if (ser->hub6 != 0)
+		ret = -EINVAL;
+	return ret;
+}
+
 static struct uart_ops sa1100_pops = {
 	tx_empty:	sa1100_tx_empty,
 	set_mctrl:	sa1100_set_mctrl,
@@ -433,6 +483,10 @@ static struct uart_ops sa1100_pops = {
 	startup:	sa1100_startup,
 	shutdown:	sa1100_shutdown,
 	change_speed:	sa1100_change_speed,
+	release_port:	sa1100_release_port,
+	request_port:	sa1100_request_port,
+	config_port:	sa1100_config_port,
+	verify_port:	sa1100_verify_port,
 };
 
 static struct uart_port sa1100_ports[NR_PORTS];
@@ -492,18 +546,27 @@ void __init sa1100_register_uart(int idx, int port)
 
 	switch (port) {
 	case 1:
-		sa1100_ports[idx].base = (unsigned long)&Ser1UTCR0;
-		sa1100_ports[idx].irq  = IRQ_Ser1UART;
+		sa1100_ports[idx].membase = (void *)&Ser1UTCR0;
+		sa1100_ports[idx].mapbase = _Ser1UTCR0;
+		sa1100_ports[idx].irq     = IRQ_Ser1UART;
+		sa1100_ports[idx].iotype  = SERIAL_IO_MEM;
+		sa1100_ports[idx].flags   = ASYNC_BOOT_AUTOCONF;
 		break;
 
 	case 2:
-		sa1100_ports[idx].base = (unsigned long)&Ser2UTCR0;
-		sa1100_ports[idx].irq  = IRQ_Ser2ICP;
+		sa1100_ports[idx].membase = (void *)&Ser2UTCR0;
+		sa1100_ports[idx].mapbase = _Ser2UTCR0;
+		sa1100_ports[idx].irq     = IRQ_Ser2ICP;
+		sa1100_ports[idx].iotype  = SERIAL_IO_MEM;
+		sa1100_ports[idx].flags   = ASYNC_BOOT_AUTOCONF;
 		break;
 
 	case 3:
-		sa1100_ports[idx].base = (unsigned long)&Ser3UTCR0;
-		sa1100_ports[idx].irq  = IRQ_Ser3UART;
+		sa1100_ports[idx].membase = (void *)&Ser3UTCR0;
+		sa1100_ports[idx].mapbase = _Ser3UTCR0;
+		sa1100_ports[idx].irq     = IRQ_Ser3UART;
+		sa1100_ports[idx].iotype  = SERIAL_IO_MEM;
+		sa1100_ports[idx].flags   = ASYNC_BOOT_AUTOCONF;
 		break;
 
 	default:
@@ -632,6 +695,7 @@ sa1100_console_setup(struct console *co, char *options)
 	int baud = CONFIG_SA1100_DEFAULT_BAUDRATE;
 	int bits = 8;
 	int parity = 'n';
+	int flow = 'n';
 
 	/*
 	 * Check whether an invalid uart number has been specified, and
@@ -641,11 +705,11 @@ sa1100_console_setup(struct console *co, char *options)
 	port = uart_get_console(sa1100_ports, NR_PORTS, co);
 
 	if (options)
-		uart_parse_options(options, &baud, &parity, &bits);
+		uart_parse_options(options, &baud, &parity, &bits, &flow);
 	else
 		sa1100_console_get_options(port, &baud, &parity, &bits);
 
-	return uart_set_options(port, co, baud, parity, bits);
+	return uart_set_options(port, co, baud, parity, bits, flow);
 }
 
 static struct console sa1100_console = {
@@ -669,7 +733,7 @@ void __init sa1100_rs_console_init(void)
 #define SA1100_CONSOLE	NULL
 #endif
 
-static struct uart_register sa1100_reg = {
+static struct uart_driver sa1100_reg = {
 	owner:			THIS_MODULE,
 	normal_major:		SERIAL_SA1100_MAJOR,
 #ifdef CONFIG_DEVFS_FS
@@ -694,12 +758,12 @@ static struct uart_register sa1100_reg = {
 static int __init sa1100_serial_init(void)
 {
 	sa1100_init_ports();
-	return uart_register_port(&sa1100_reg);
+	return uart_register_driver(&sa1100_reg);
 }
 
 static void __exit sa1100_serial_exit(void)
 {
-	uart_unregister_port(&sa1100_reg);
+	uart_unregister_driver(&sa1100_reg);
 }
 
 module_init(sa1100_serial_init);
