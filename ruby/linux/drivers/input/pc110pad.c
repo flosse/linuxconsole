@@ -54,7 +54,7 @@ static int pc110pad_data[3];
 static int pc110pad_count;
 static int pc110pad_used;
 
-static char pc110pad_name = "IBM PC110 TouchPad"
+static char *pc110pad_name = "IBM PC110 TouchPad";
 
 static void pc110pad_interrupt(int irq, void *ptr, struct pt_regs *regs)
 {
@@ -131,16 +131,16 @@ static int __init pc110pad_init(void)
 	pc110pad_dev.open = pc110pad_open;
         pc110pad_dev.close = pc110pad_close;
 
-	pc110pad->dev.name = pc110pad_name;
-	pc110pad->dev.idbus = BUS_ISA;
-	pc110pad->dev.idvendor = 0x0003;
-	pc110pad->dev.idproduct = 0x0001;
-	pc110pad->dev.version = 0x0100;
+	pc110pad_dev.name = pc110pad_name;
+	pc110pad_dev.idbus = BUS_ISA;
+	pc110pad_dev.idvendor = 0x0003;
+	pc110pad_dev.idproduct = 0x0001;
+	pc110pad_dev.idversion = 0x0100;
 
 	input_register_device(&pc110pad_dev);	
 
 	printk(KERN_INFO "input%d: %s at %#x irq %d\n",
-		pc110pad_dev.number, pc100pad_name, pc110pad_io, pc110pad_irq);
+		pc110pad_dev.number, pc110pad_name, pc110pad_io, pc110pad_irq);
 	
 	return 0;
 }

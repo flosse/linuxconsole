@@ -696,7 +696,7 @@ static void sw_connect(struct gameport *gameport, struct gameport_dev *dev)
 		sw->dev[i].idbus = BUS_GAMEPORT;
 		sw->dev[i].idvendor = GAMEPORT_ID_VENDOR_MICROSOFT;
 		sw->dev[i].idproduct = sw->type;
-		sw->dev[i].version = 0x0100;
+		sw->dev[i].idversion = 0x0100;
 
 		sw->dev[i].evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 

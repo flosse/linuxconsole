@@ -574,7 +574,7 @@ static void psmouse_connect(struct serio *serio, struct serio_dev *dev)
 	psmouse->dev.idbus = BUS_I8042;
 	psmouse->dev.idvendor = psmouse->type;
 	psmouse->dev.idproduct = 0x0002;
-	psmouse->dev.version = 0x0100;
+	psmouse->dev.idversion = 0x0100;
 
 	input_register_device(&psmouse->dev);
 	

@@ -54,7 +54,7 @@ static unsigned char xtkbd_keycode[256] = {
 	106
 };
 
-static char xtkbd_name = "XT Keyboard";
+static char *xtkbd_name = "XT Keyboard";
 
 struct xtkbd {
 	unsigned char keycode[256];
@@ -113,11 +113,11 @@ void xtkbd_connect(struct serio *serio, struct serio_dev *dev)
 		set_bit(xtkbd->keycode[i], xtkbd->dev.keybit);
 	clear_bit(0, xtkbd->dev.keybit);
 
-	a3d->dev.name = xtkbd_name;
-	a3d->dev.idbus = BUS_XTKBD;
-	a3d->dev.idvendor = 0x0001;
-	a3d->dev.idproduct = 0x0001;
-	a3d->dev.version = 0x0100;
+	xtkbd->dev.name = xtkbd_name;
+	xtkbd->dev.idbus = BUS_XTKBD;
+	xtkbd->dev.idvendor = 0x0001;
+	xtkbd->dev.idproduct = 0x0001;
+	xtkbd->dev.idversion = 0x0100;
 
 	input_register_device(&xtkbd->dev);
 

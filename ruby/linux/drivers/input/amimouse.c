@@ -127,7 +127,7 @@ static int __init amimouse_init(void)
 	amimouse_dev.idbus = BUS_AMIGA;
 	amimouse_dev.idvendor = 0x0001;
 	amimouse_dev.idproduct = 0x0002;
-	amimouse_dev.version = 0x0100;
+	amimouse_dev.idversion = 0x0100;
         
 	input_register_device(&amimouse_dev);
 

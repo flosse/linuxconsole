@@ -71,7 +71,6 @@ MODULE_PARM(logibm_irq, "i");
 
 static int logibm_irq = LOGIBM_IRQ;
 static int logibm_used = 0;
-static char logibm_name = "Logitech bus mouse";
 
 static void logibm_interrupt(int irq, void *dev_id, struct pt_regs *regs);
 
@@ -101,12 +100,12 @@ static struct input_dev logibm_dev = {
 	keybit: 	{ [LONG(BTN_LEFT)] = BIT(BTN_LEFT) | BIT(BTN_MIDDLE) | BIT(BTN_RIGHT) },
 	relbit:		{ BIT(REL_X) | BIT(REL_Y) },
 	open:		logibm_open,
-	close:		logibm_close
-	name:		logibm_name,
+	close:		logibm_close,
+	name:		"Logitech bus mouse",
 	idbus:		BUS_ISA,
 	idvendor:	0x0002,
 	idproduct:	0x0001,
-	version:	0x0100,
+	idversion:	0x0100,
 };
 
 static void logibm_interrupt(int irq, void *dev_id, struct pt_regs *regs)
@@ -165,8 +164,8 @@ static int __init logibm_init(void)
 
 	input_register_device(&logibm_dev);
 
-	printk(KERN_INFO "input%d: %s at %#x irq %d\n",
-		logibm_dev.number, logibm_name, LOGIBM_BASE, logibm_irq);
+	printk(KERN_INFO "input%d: Logitech bus mouse at %#x irq %d\n",
+		logibm_dev.number, LOGIBM_BASE, logibm_irq);
 
 	return 0;
 }

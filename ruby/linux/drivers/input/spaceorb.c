@@ -184,7 +184,7 @@ static void spaceorb_connect(struct serio *serio, struct serio_dev *dev)
 	spaceorb->dev.idbus = BUS_RS232;
 	spaceorb->dev.idvendor = SERIO_SPACEORB;
 	spaceorb->dev.idproduct = 0x0001;
-	spaceorb->dev.version = 0x0100;
+	spaceorb->dev.idversion = 0x0100;
 	
 	serio->private = spaceorb;
 

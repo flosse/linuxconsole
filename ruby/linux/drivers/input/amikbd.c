@@ -117,7 +117,7 @@ static int __init amikbd_init(void)
 	amikbd_dev.idbus = BUS_AMIGA;
 	amikbd_dev.idvendor = 0x0001;
 	amikbd_dev.idproduct = 0x0001;
-	amikbd_dev.version = 0x0100;
+	amikbd_dev.idversion = 0x0100;
 
 	input_register_device(&amikbd_dev);
 

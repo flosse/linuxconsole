@@ -267,7 +267,7 @@ static void sunkbd_connect(struct serio *serio, struct serio_dev *dev)
 	sunkbd->dev.idbus = BUS_RS232;
 	sunkbd->dev.idvendor = SERIO_SUNKBD;
 	sunkbd->dev.idproduct = sunkbd->type;
-	sunkbd->dev.version = 0x0100;
+	sunkbd->dev.idversion = 0x0100;
 
 	input_register_device(&sunkbd->dev);
 

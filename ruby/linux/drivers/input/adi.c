@@ -407,11 +407,11 @@ static void adi_init_input(struct adi *adi, struct adi_port *port)
 	adi->dev.open = adi_open;
 	adi->dev.close = adi_close;
 
-	a3d->dev.name = adi->name;
-	a3d->dev.idbus = BUS_GAMEPORT;
-	a3d->dev.idvendor = GAMEPORT_ID_VENDOR_LOGITECH;
-	a3d->dev.idproduct = adi->id;
-	a3d->dev.version = 0x0100;
+	adi->dev.name = adi->name;
+	adi->dev.idbus = BUS_GAMEPORT;
+	adi->dev.idvendor = GAMEPORT_ID_VENDOR_LOGITECH;
+	adi->dev.idproduct = adi->id;
+	adi->dev.idversion = 0x0100;
 
 	adi->dev.private = port;
 	adi->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);

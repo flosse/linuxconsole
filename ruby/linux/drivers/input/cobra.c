@@ -193,11 +193,11 @@ static void cobra_connect(struct gameport *gameport, struct gameport_dev *dev)
 			cobra->dev[i].open = cobra_open;
 			cobra->dev[i].close = cobra_close;
 
-			cobra->dev.name = cobra_name;
-			cobra->dev.idbus = BUS_GAMEPORT;
-			cobra->dev.idvendor = GAMEPORT_ID_VENDOR_CREATIVE;
-			cobra->dev.idproduct = 0x0008;
-			cobra->dev.version = 0x0100;
+			cobra->dev[i].name = cobra_name;
+			cobra->dev[i].idbus = BUS_GAMEPORT;
+			cobra->dev[i].idvendor = GAMEPORT_ID_VENDOR_CREATIVE;
+			cobra->dev[i].idproduct = 0x0008;
+			cobra->dev[i].idversion = 0x0100;
 		
 			cobra->dev[i].evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 			cobra->dev[i].absbit[0] = BIT(ABS_X) | BIT(ABS_Y);
@@ -210,7 +210,7 @@ static void cobra_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 			input_register_device(cobra->dev + i);
 			printk(KERN_INFO "input%d: %s on gameport%d.%d\n",
-				cobra_name, cobra->dev[i].number, gameport->number, i);
+				cobra->dev[i].number, cobra_name, gameport->number, i);
 		}
 
 

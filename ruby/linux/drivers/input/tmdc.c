@@ -272,7 +272,7 @@ static void tmdc_connect(struct gameport *gameport, struct gameport_dev *dev)
 	tmdc->dev.idbus = BUS_GAMEPORT;
 	tmdc->dev.idvendor = GAMEPORT_ID_VENDOR_THRUSTMASTER;
 	tmdc->dev.idproduct = models[m].id;
-	tmdc->dev.version = 0x0100;
+	tmdc->dev.idversion = 0x0100;
 
 	tmdc->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 

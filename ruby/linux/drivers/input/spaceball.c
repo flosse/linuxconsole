@@ -47,7 +47,7 @@
 
 #define JS_SBALL_MAX_LENGTH	128
 static int spaceball_axes[] = { ABS_X, ABS_Y, ABS_Z, ABS_RX, ABS_RY, ABS_RZ };
-static chat spaceball_name = "SpaceTec SpaceBall 4000 FLX"; 
+static char *spaceball_name = "SpaceTec SpaceBall 4000 FLX"; 
 
 /*
  * Per-Ball data.
@@ -187,10 +187,10 @@ static void spaceball_connect(struct serio *serio, struct serio_dev *dev)
 	spaceball->dev.private = spaceball;
 
 	spaceball->dev.name = spaceball_name;
-	spaceball->dev.idbus = BUS_SERIO;
+	spaceball->dev.idbus = BUS_RS232;
 	spaceball->dev.idvendor = SERIO_SPACEBALL;
 	spaceball->dev.idproduct = 0x0001;
-	spaceball->dev.version = 0x0100;
+	spaceball->dev.idversion = 0x0100;
 	
 	serio->private = spaceball;
 

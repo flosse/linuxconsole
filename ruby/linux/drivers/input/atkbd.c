@@ -432,8 +432,8 @@ static void atkbd_connect(struct serio *serio, struct serio_dev *dev)
 	atkbd->dev.name = atkbd->name;
 	atkbd->dev.idbus = BUS_I8042;
 	atkbd->dev.idvendor = 0x0001;
-	atkbd->dev.idproduct = atkbd->mode;
-	atkbd->dev.version = 0x0100;
+	atkbd->dev.idproduct = atkbd->set;
+	atkbd->dev.idversion = 0x0100;
 
 	atkbd->tq.routine = atkbd_powerup;
 	atkbd->tq.data = atkbd;

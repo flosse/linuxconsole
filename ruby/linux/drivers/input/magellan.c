@@ -45,7 +45,7 @@
 
 static int magellan_buttons[] = { BTN_0, BTN_1, BTN_2, BTN_3, BTN_4, BTN_5, BTN_6, BTN_7, BTN_8};
 static int magellan_axes[] = { ABS_X, ABS_Y, ABS_Z, ABS_RX, ABS_RY, ABS_RZ};
-static char magellan_name = "LogiCad3D Magellan";
+static char *magellan_name = "LogiCad3D Magellan";
 
 /*
  * Per-Magellan data.
@@ -170,7 +170,7 @@ static void magellan_connect(struct serio *serio, struct serio_dev *dev)
 	magellan->dev.idbus = BUS_RS232;
 	magellan->dev.idvendor = SERIO_MAGELLAN;
 	magellan->dev.idproduct = 0x0001;
-	magellan->dev.version = 0x0100;
+	magellan->dev.idversion = 0x0100;
 	
 	serio->private = magellan;
 

@@ -131,7 +131,7 @@ static void gunze_connect(struct serio *serio, struct serio_dev *dev)
 	gunze->dev.idbus = BUS_RS232;
 	gunze->dev.idvendor = SERIO_GUNZE;
 	gunze->dev.idproduct = 0x0051;
-	gunze->dev.version = 0x0100;
+	gunze->dev.idversion = 0x0100;
 
 	if (serio_open(serio, dev)) {
 		kfree(gunze);

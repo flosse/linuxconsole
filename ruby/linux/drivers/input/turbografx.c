@@ -173,11 +173,11 @@ static struct tgfx __init *tgfx_probe(int *config)
 			tgfx->dev[i].open = tgfx_open;
 			tgfx->dev[i].close = tgfx_close;
 
-			tgfx->dev.name = tgfx_name;
-			tgfx->dev.idbus = BUS_PARPORT;
-			tgfx->dev.idvendor = 0x0003;
-			tgfx->dev.idproduct = config[i+1];
-			tgfx->dev.version = 0x0100;
+			tgfx->dev[i].name = tgfx_name;
+			tgfx->dev[i].idbus = BUS_PARPORT;
+			tgfx->dev[i].idvendor = 0x0003;
+			tgfx->dev[i].idproduct = config[i+1];
+			tgfx->dev[i].idversion = 0x0100;
 
 			tgfx->dev[i].evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 			tgfx->dev[i].absbit[0] = BIT(ABS_X) | BIT(ABS_Y);
