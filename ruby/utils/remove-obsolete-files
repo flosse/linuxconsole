@@ -48,6 +48,8 @@ rm -fv drivers/char/joystick/tmdc.c
 rm -fv drivers/char/joystick/turbografx.c
 rm -fv drivers/char/joystick/warrior.c
 rm -fv drivers/char/joystick/iforce.c
+rm -fv drivers/char/joystick/stinger.c
+rm -fv drivers/char/joystick/cs461x.c
 rm -fv drivers/char/logibusmouse.c
 rm -fv drivers/char/msbusmouse.c
 rm -fv drivers/char/pc110pad.c
