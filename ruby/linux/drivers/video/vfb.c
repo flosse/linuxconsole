@@ -75,8 +75,8 @@ static struct fb_var_screeninfo vfb_default __initdata = {
     /* 640x480, 8 bpp */
     640, 480, 640, 480, 0, 0, 8, 0,
     {0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
-    0, 0, -1, -1, 0, 20000, 64, 64, 32, 32, 64, 2,
-    0, FB_VMODE_NONINTERLACED
+    0, FB_ACTIVATE_TEST, -1, -1, 0, 
+    20000, 64, 64, 32, 32, 64, 2, 0, FB_VMODE_NONINTERLACED
 };
 
 static struct fb_fix_screeninfo vfb_fix __initdata = {
@@ -419,7 +419,6 @@ int __init vfb_init(void)
     memset(videomemory, 0, videomemorysize);
  
     fb_info.screen_base = videomemory;
-    strcpy(fb_info.modename, vfb_fix.id);
     fb_info.node = -1;
     fb_info.fbops = &vfb_ops;
 
