@@ -395,10 +395,10 @@ static void analog_name(struct analog *analog)
 		sprintf(analog->name, "%s %d-hat",
 			analog->name, hweight16(analog->mask & ANALOG_HATS_ALL));
 
-	if (analog->mask & ANALOG_HAT_FCS) strcat(analog->name, " FCS");
-	if (analog->mask & ANALOG_ANY_CHF) strcat(analog->name, " CHF");
-	if (analog->mask & ANALOG_SAITEK)  strcat(analog->name, " Saitek");
-	
+	if (analog->mask & ANALOG_HAT_FCS)
+			strcat(analog->name, " FCS");
+	if (analog->mask & ANALOG_ANY_CHF)
+			strcat(analog->name, (analog->mask & ANALOG_SAITEK) ? " Saitek" : " CHF");
 	strcat(analog->name, (analog->mask & ANALOG_GAMEPAD) ? " gamepad": " joystick");
 }
 
