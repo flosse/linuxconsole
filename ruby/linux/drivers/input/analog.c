@@ -7,8 +7,7 @@
  */
 
 /*
- * This is a module for the Linux joystick driver, supporting
- * up to two analog (or CHF/FCS) joysticks on a single joystick port.
+ * Analog joystick and gamepad driver for Linux.
  */
 
 /*
@@ -67,7 +66,8 @@ MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 #define ANALOG_MAX_TIME		3000	/* 3 ms */
 #define ANALOG_LOOP_TIME	2000	/* 2 t */
 #define ANALOG_REFRESH_TIME	HZ/100	/* 10 ms */
-#define ANALOG_AXIS_TIME	2	/* 20 ms */
+#define ANALOG_AXIS_TIME	2	/* 2 * refresh - 20 ms */
+#define ANALOG_RESOLUTION	8	/* 8 bits */
 
 #define ANALOG_MAX_NAME_LENGTH  128
 
@@ -80,9 +80,9 @@ static struct {
 #define ANALOG_AXES	0
 #define ANALOG_HATS	4
 
-static int analog_hats[] = { ANALOG_HAT1_CHF, ANALOG_HAT2_CHF, ANALOG_ANY_CHF };
-static int analog_axes[] = { ABS_X, ABS_Y, ABS_RUDDER, ABS_THROTTLE,
-			     ABS_HAT0X, ABS_HAT0Y, ABS_HAT1X, ABS_HAT1Y, ABS_HAT2X, ABS_HAT2Y };
+static int analog_exts[] = { ANALOG_HAT1_CHF, ANALOG_HAT2_CHF, ANALOG_ANY_CHF };
+static int analog_axes[] = { ABS_X, ABS_Y, ABS_RUDDER, ABS_THROTTLE }
+static int analog_hats[] = { ABS_HAT0X, ABS_HAT0Y, ABS_HAT1X, ABS_HAT1Y, ABS_HAT2X, ABS_HAT2Y };
 static int analog_buttons[] = { BTN_TRIGGER, BTN_THUMB, BTN_TOP, BTN_TOP2, BTN_BASE, BTN_BASE2,
 				BTN_TL, BTN_TR, BTN_TL2, BTN_TR2 };
 
@@ -145,7 +145,7 @@ static unsigned long analog_faketime = 0;
 static void analog_decode(struct analog *analog, int *axes, int *initial, unsigned char buttons)
 {
 	struct input_dev *dev = &analog->dev;
-	int i, j, k;
+	int j, k;
 	int hat[3] = {0, 0, 0};
 
 	if (analog->mask & ANALOG_ANY_CHF)
@@ -166,8 +166,7 @@ static void analog_decode(struct analog *analog, int *axes, int *initial, unsign
 			case 0xc: hat[1] = 4; break;
 		}
 
-	k = ANALOG_BUTTONS;
-	for (j = 0; j < 6; j++)
+	for (j = k = 0; j < 6; j++)
 		if (analog->mask & (0x10 << j))
 			input_report_key(dev, analog_buttons[k++], (buttons >> j) & 1);
 
@@ -187,16 +186,14 @@ static void analog_decode(struct analog *analog, int *axes, int *initial, unsign
 				break;
 			}
 
-	k = ANALOG_AXES;
-	for (j = 0; j < 4; j++)
+	for (j = k = 0; j < 4; j++)
 		if (analog->mask & (1 << j))
 			input_report_abs(dev, analog_axes[k++], axes[j]);
 
-	k = ANALOG_HATS;
-	for (i = 0; i < 3; i++)
-		if (analog->mask & analog_hats[i]) {
-			input_report_abs(dev, analog_axes[k++], analog_hat_to_axis[hat[i]].x);
-			input_report_abs(dev, analog_axes[k++], analog_hat_to_axis[hat[i]].y);
+	for (j = k = 0; j < 3; j++)
+		jf (analog->mask & analog_exts[j]) {
+			jnput_report_abs(dev, analog_hats[k++], analog_hat_to_axjs[hat[j]].x);
+			jnput_report_abs(dev, analog_hats[k++], analog_hat_to_axjs[hat[j]].y);
 		}
 }
 
@@ -245,7 +242,7 @@ static int analog_cooked_read(struct analog_port *port)
 		this |= data[i];
 		for (j = 0; j < 4; j++)
 			if (data[i] & (1 << j))
-				port->axes[j] = (DELTA(start, time[i]) << 8) / port->speed;
+				port->axes[j] = (DELTA(start, time[i]) << ANALOG_RESOLUTION) / port->speed;
 	}
 
 	return -(this != port->mask);
@@ -272,7 +269,7 @@ static void analog_timer(unsigned long data)
 		if (!port->axtime--) {
 			port->bads -= analog_cooked_read(port);
 			port->reads++;
-			port->axtime = 2;
+			port->axtime = ANALOG_AXIS_TIME;
 		}
 		analog_button_read(port);
 	}
