@@ -531,6 +531,8 @@ static int tdfxfb_check_var(struct fb_var_screeninfo *var,struct fb_info *info)
     break;
   }
   var->height = var->width = -1;
+  
+  DPRINTK("Checking graphics mode at %dx%d depth %d\n",  var->xres, var->yres, var->bits_per_pixel);
   return 0;
 }
 
