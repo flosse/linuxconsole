@@ -40,7 +40,7 @@ static void evbug_event(struct input_handle *handle, unsigned int type, unsigned
 	printk(KERN_DEBUG "evbug.c: Event. Dev: input%d, Type: %d, Code: %d, Value: %d\n", handle->dev->number, type, code, value);
 }
 
-static struct input_handle *evbug_connect(struct input_handler *handler, struct input_dev *dev)
+static struct input_handle *evbug_connect(struct input_handler *handler, struct input_dev *dev, struct input_device_id *id)
 {
 	struct input_handle *handle;
 
@@ -66,11 +66,20 @@ static void evbug_disconnect(struct input_handle *handle)
 
 	kfree(handle);
 }
+
+static struct input_device_id evbug_ids[] = {
+	{ driver_info: 1 },	/* Matches all devices */
+	{ },			/* Terminating zero entry */
+};
+
+MODULE_DEVICE_TABLE(input, evbug_ids);
 	
 static struct input_handler evbug_handler = {
 	event:		evbug_event,
 	connect:	evbug_connect,
 	disconnect:	evbug_disconnect,
+	name:		"evbug",
+	id_table:	evbug_ids,
 };
 
 int __init evbug_init(void)
