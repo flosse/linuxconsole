@@ -66,7 +66,15 @@ NULL, NULL, NULL, "BtnDead",
 "BtnA", "BtnB", "BtnC", "BtnX", "BtnY", "BtnZ", "BtnTL", "BtnTR", "BtnTL2", "BtnTR2", "BtnSelect", "BtnStart", "BtnMode",
 "BtnThumbL", "BtnThumbR", NULL,
 "ToolPen", "ToolRubber", "ToolBrush", "ToolPencil", "ToolAirbrush", "ToolFinger", "ToolMouse", "ToolLens", NULL, NULL,
-"Touch", "Stylus", "Stylus2" };
+"Touch", "Stylus", "Stylus2", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 
+"Ok", "Select", "Goto", "Clear", "Power2", "Option", "Info", "Time", "Vendor",
+"Archive", "Program", "Channel", "Favorites", "EPG", "PVR", "MHP", "Language",
+"Title", "Subtitle", "Angle", "Zoom", "Mode", "Keyboard", "Screen", "PC", "TV",
+"TV2", "VCR", "VCR2", "Sat", "Sat2", "CD", "Tape", "Radio", "Tuner", "Player", 
+"Text", "DVD", "Aux", "MP3", "Audio", "Video", "Directory", "List", "Memo",
+"Calendar", "Red", "Green", "Yellow", "Blue", "ChannelUp", "ChannelDown", 
+"First", "Last", "AB", "Play", "Restart", "Slow", "Shuffle", "FastForward", 
+"Previous", "Next", "Digits", "Teen", "Twen", "Break" };
 
 char *absval[5] = { "Value", "Min  ", "Max  ", "Fuzz ", "Flat " };
 char *relatives[REL_MAX + 1] = { "X", "Y", "Z", NULL, NULL, NULL, "HWheel", "Dial", "Wheel" };
