@@ -585,7 +585,7 @@ int con_set_cmap(struct vc_data *vc, unsigned char *arg)
                 get_user(blue[i], arg++);
         }
         for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
-		struct vc_data *tmp = vt->vcs.vc_cons[i];
+		struct vc_data *tmp = vt->vc_cons[i];
                 if (tmp) {
                 	for (j = k = 0; j < 16; j++) {
                                 tmp->vc_palette[k++] = red[j];
@@ -930,7 +930,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 			return i;
 		put_user(vc->display_fg->fg_console->vc_num, &vtstat->v_active);
 		for (i = 0,mask = 0; i < MAX_NR_USER_CONSOLES; ++i,mask <<= 1) {
-			tmp = find_vc(i + vc->display_fg->vcs.first_vc);
+			tmp = find_vc(i + vc->display_fg->first_vc);
 			if (tmp && VT_IS_IN_USE(tmp))
 				state |= mask;
 		}
@@ -942,7 +942,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	 */
 	case VT_OPENQRY:
 	{
-		int j = vc->display_fg->vcs.first_vc;	
+		int j = vc->display_fg->first_vc;	
 		struct vc_data *tmp;
 
 		for (i = 0; i < MAX_NR_USER_CONSOLES; ++i,j++) {
@@ -1068,7 +1068,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		    	/* disallocate all unused consoles for a VT, 
 		       	   but leave the foreground VC */
 		    	for (i=0; i < MAX_NR_USER_CONSOLES; i++) {
-		      		tmp = find_vc(i + vt->vcs.first_vc);
+		      		tmp = find_vc(i + vt->first_vc);
 		      		if (tmp && (vt->fg_console->vc_num != tmp->vc_num) && !VT_BUSY(tmp)) 
 					vc_disallocate(tmp->vc_num);
 		    	}	
@@ -1094,7 +1094,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		get_user(cc, &vtsizes->v_cols);
 
 		for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
-			struct vc_data *tmp = vc->display_fg->vcs.vc_cons[i];
+			struct vc_data *tmp = vc->display_fg->vc_cons[i];
 			vc_resize(tmp, ll, cc);
 		}
 		return 0;
@@ -1140,7 +1140,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		  vc->vc_font.height = clin;
 	
 		for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
-                        struct vc_data *tmp = vc->display_fg->vcs.vc_cons[i];
+                        struct vc_data *tmp = vc->display_fg->vc_cons[i];
                         vc_resize(tmp, ll, cc);
                 }
 		return 0;
