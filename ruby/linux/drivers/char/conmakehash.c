@@ -20,14 +20,15 @@
 #include <string.h>
 #include <ctype.h>
 
-#define MAX_FONTLEN 256
+#define MAX_FONTLEN 65536 
+int fontlen;
 
 typedef unsigned short unicode;
 
 void usage(char *argv0)
 {
   fprintf(stderr, "Usage: \n"
-         "        %s chartable [hashsize] [hashstep] [maxhashlevel]\n", argv0);
+         "        %s chartable [number of characters]\n", argv0);
   exit(EX_USAGE);
 }
 
@@ -45,16 +46,15 @@ int getunicode(char **p0)
   return strtol(p+2,0,16);
 }
 
-unicode unitable[MAX_FONTLEN][255];
-				/* Massive overkill, but who cares? */
+/* Massive overkill, but who cares? */
+unicode unitable[MAX_FONTLEN][64];
 int unicount[MAX_FONTLEN];
 
 void addpair(int fp, int un)
 {
   int i;
 
-  if ( un <= 0xfffe )
-    {
+  if ( un <= 0xfffe ) {
       /* Check it isn't a duplicate */
 
       for ( i = 0 ; i < unicount[fp] ; i++ )
@@ -62,60 +62,45 @@ void addpair(int fp, int un)
 	  return;
 
       /* Add to list */
-
-      if ( unicount[fp] > 254 )
-	{
-	  fprintf(stderr, "ERROR: Only 255 unicodes/glyph permitted!\n");
+      if ( unicount[fp] > fontlen-1 ) {
+	  fprintf(stderr, "ERROR: Only %d unicodes/glyph permitted!\n", fontlen-1);
 	  exit(EX_DATAERR);
-	}
+      }
 
       unitable[fp][unicount[fp]] = un;
       unicount[fp]++;
     }
-
-  /* otherwise: ignore */
+    /* otherwise: ignore */
 }
 
 int main(int argc, char *argv[])
 {
-  FILE *ctbl;
-  char *tblname;
-  char buffer[65536];
-  int fontlen;
-  int i, nuni, nent;
+  char *p, *p1, *tblname;
   int fp0, fp1, un0, un1;
-  char *p, *p1;
+  char buffer[65536];
+  int i, j, nuni, nent;
+  FILE *ctbl;
 
-  if ( argc < 2 || argc > 5 )
+  if ( argc != 2 )
     usage(argv[0]);
 
-  if ( !strcmp(argv[1],"-") )
-    {
+  if ( !strcmp(argv[1],"-")) {
       ctbl = stdin;
       tblname = "stdin";
-    }
-  else
-    {
+  } else {
       ctbl = fopen(tblname = argv[1], "r");
-      if ( !ctbl )
-	{
+      if ( !ctbl ) {
 	  perror(tblname);
 	  exit(EX_NOINPUT);
-	}
-    }
-
-  /* For now we assume the default font is always 256 characters. */    
-  fontlen = 256;
-
-  /* Initialize table */
-
+      }
+  }
+  /* For now we assume the default font is always MAX_FONTLEN characters. */
+  fontlen = MAX_FONTLEN; 
   for ( i = 0 ; i < fontlen ; i++ )
     unicount[i] = 0;
 
   /* Now we come to the tricky part.  Parse the input table. */
-
-  while ( fgets(buffer, sizeof(buffer), ctbl) != NULL )
-    {
+  while ( fgets(buffer, sizeof(buffer), ctbl) != NULL ) {
       if ( (p = strchr(buffer, '\n')) != NULL )
 	*p = '\0';
       else
@@ -140,111 +125,92 @@ int main(int argc, char *argv[])
 	continue;	/* skip comment or blank line */
 
       fp0 = strtol(p, &p1, 0);
-      if (p1 == p)
-	{
+      if (p1 == p) {
 	  fprintf(stderr, "Bad input line: %s\n", buffer);
 	  exit(EX_DATAERR);
-        }
+      }
       p = p1;
 
       while (*p == ' ' || *p == '\t')
 	p++;
-      if (*p == '-')
-	{
+      if (*p == '-') {
 	  p++;
 	  fp1 = strtol(p, &p1, 0);
-	  if (p1 == p)
-	    {
+	  if (p1 == p) {
 	      fprintf(stderr, "Bad input line: %s\n", buffer);
 	      exit(EX_DATAERR);
-	    }
+	  }
 	  p = p1;
-        }
-      else
+      } else 
 	fp1 = 0;
 
-      if ( fp0 < 0 || fp0 >= fontlen )
-	{
+      if ( fp0 < 0 || fp0 >= fontlen ) {
 	    fprintf(stderr,
 		    "%s: Glyph number (0x%x) larger than font length\n",
 		    tblname, fp0);
 	    exit(EX_DATAERR);
-	}
-      if ( fp1 && (fp1 < fp0 || fp1 >= fontlen) )
-	{
+      }
+      if ( fp1 && (fp1 < fp0 || fp1 >= fontlen) ) {
 	    fprintf(stderr,
 		    "%s: Bad end of range (0x%x)\n",
 		    tblname, fp1);
 	    exit(EX_DATAERR);
-	}
+      }
 
-      if (fp1)
-	{
+      if (fp1) {
 	  /* we have a range; expect the word "idem" or a Unicode range of the
 	     same length */
 	  while (*p == ' ' || *p == '\t')
 	    p++;
-	  if (!strncmp(p, "idem", 4))
-	    {
+	  if (!strncmp(p, "idem", 4)) {
 	      for (i=fp0; i<=fp1; i++)
 		addpair(i,i);
 	      p += 4;
-	    }
-	  else
-	    {
+	  } else {
 	      un0 = getunicode(&p);
 	      while (*p == ' ' || *p == '\t')
 		p++;
-	      if (*p != '-')
-		{
-		  fprintf(stderr,
-"%s: Corresponding to a range of font positions, there should be a Unicode range\n",
-			  tblname);
+	      if (*p != '-') {
+		  fprintf(stderr, "%s: Corresponding to a range of font positions, there should be a Unicode range\n", tblname);
 		  exit(EX_DATAERR);
-	        }
+	      }
 	      p++;
 	      un1 = getunicode(&p);
-	      if (un0 < 0 || un1 < 0)
-		{
-		  fprintf(stderr,
-"%s: Bad Unicode range corresponding to font position range 0x%x-0x%x\n",
-			  tblname, fp0, fp1);
+	      if (un0 < 0 || un1 < 0) {
+		  fprintf(stderr, "%s: Bad Unicode range corresponding to font position range 0x%x-0x%x\n", tblname, fp0, fp1);
 		  exit(EX_DATAERR);
-	        }
-	      if (un1 - un0 != fp1 - fp0)
-		{
-		  fprintf(stderr,
-"%s: Unicode range U+%x-U+%x not of the same length as font position range 0x%x-0x%x\n",
-			  tblname, un0, un1, fp0, fp1);
+	      }
+	      if (un1 - un0 != fp1 - fp0) {
+		  fprintf(stderr, "%s: Unicode range U+%x-U+%x not of the same length as font position range 0x%x-0x%x\n", tblname, un0, un1, fp0, fp1);
 		  exit(EX_DATAERR);
-	        }
+	      }
 	      for(i=fp0; i<=fp1; i++)
 		addpair(i,un0-fp0+i);
-	    }
-        }
-      else
-	{
-	    /* no range; expect a list of unicode values for a single font position */
-
+	  } 
+      } else { 
+	  /* no range; expect a list of unicode values for a single 
+	   * font position 
+	   */
 	    while ( (un0 = getunicode(&p)) >= 0 )
 	      addpair(fp0, un0);
-	}
+      }
       while (*p == ' ' || *p == '\t')
 	p++;
       if (*p && *p != '#')
 	fprintf(stderr, "%s: trailing junk (%s) ignored\n", tblname, p);
-    }
+  }
 
   /* Okay, we hit EOF, now output hash table */
-  
   fclose(ctbl);
-  
 
   /* Compute total size of Unicode list */
-  nuni = 0;
-  for ( i = 0 ; i < fontlen ; i++ )
+  nuni = fontlen = 0;
+  for ( i = 0 ; i < MAX_FONTLEN ; i++ ) {
+    if (unicount[i])
+	fontlen++;
     nuni += unicount[i];
-  
+  }
+
   printf("\
 /*\n\
  * Do not edit this file; it was automatically generated by\n\
@@ -260,17 +226,19 @@ u16 dfont_num = %d;
 u8 dfont_unicount[%d] = \n\
 {\n\t", argv[1], fontlen, fontlen);
 
-  for ( i = 0 ; i < fontlen ; i++ )
-    {
-      printf("%3d", unicount[i]);
-      if ( i == fontlen-1 )
-        printf("\n};\n");
-      else if ( i % 8 == 7 )
-        printf(",\n\t");
-      else
-        printf(", ");
-    }
-  
+  for ( i = 0, j = 0 ; i < MAX_FONTLEN ; i++ ) {
+      if ( unicount[i]) {
+        printf("%3d", unicount[i]);
+        if ( j == fontlen-1 )
+          printf("\n};\n");
+        else if ( j % 8 == 7 )
+          printf(",\n\t");
+        else 
+	  printf(", ");	
+	j++;
+      }
+  }
+ 
   printf("\nu16 dfont_unitable[%d] = \n{\n\t", nuni);
   
   fp0 = 0;
