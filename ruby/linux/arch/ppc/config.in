@@ -98,7 +98,11 @@ bool 'High memory support (experimental)' CONFIG_HIGHMEM
 bool 'Mac-on-Linux support' CONFIG_MOL
 
 define_bool CONFIG_ISA n
+define_bool CONFIG_EISA n
 define_bool CONFIG_SBUS n
+
+# Yes MCA RS/6000s exist but Linux-PPC does not currently support any
+define_bool CONFIG_MCA n
 
 if [ "$CONFIG_APUS" = "y" -o "$CONFIG_4xx" = "y" -o \
      "$CONFIG_8260" = "y" ]; then
@@ -278,9 +282,6 @@ if [ "$CONFIG_SOUND" != "n" ]; then
   source drivers/sound/dmasound/Config.in
   source drivers/sound/Config.in
 fi
-
-source drivers/media/Config.in
-
 endmenu
 
 if [ "$CONFIG_8xx" = "y" ]; then
@@ -293,6 +294,7 @@ fi
 
 source drivers/usb/Config.in
 source drivers/input/Config.in
+source drivers/media/Config.in
 source drivers/video/Config.in
 
 mainmenu_option next_comment

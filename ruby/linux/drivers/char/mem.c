@@ -139,9 +139,12 @@ static inline pgprot_t pgprot_noncached(pgprot_t _prot)
 #elif defined(__powerpc__)
 	prot |= _PAGE_NO_CACHE | _PAGE_GUARDED;
 #elif defined(__mc68000__)
+#ifdef SUN3_PAGE_NOCACHE
 	if (MMU_IS_SUN3)
 		prot |= SUN3_PAGE_NOCACHE;
-	else if (MMU_IS_851 || MMU_IS_030)
+	else
+#endif
+	if (MMU_IS_851 || MMU_IS_030)
 		prot |= _PAGE_NOCACHE030;
 	/* Use no-cache mode, serialized */
 	else if (MMU_IS_040 || MMU_IS_060)
@@ -194,6 +197,9 @@ static int mmap_mem(struct file * file, struct vm_area_struct * vma)
 	 */
 	if (noncached_address(offset) || (file->f_flags & O_SYNC))
 		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+
+	/* Don't try to swap out physical pages.. */
+	vma->vm_flags |= VM_RESERVED;
 
 	/*
 	 * Don't dump addresses that are not real memory to a core file.
@@ -432,7 +438,7 @@ out:
 static int mmap_zero(struct file * file, struct vm_area_struct * vma)
 {
 	if (vma->vm_flags & VM_SHARED)
-		return map_zero_setup(vma);
+		return shmem_zero_setup(vma);
 	if (zeromap_page_range(vma->vm_start, vma->vm_end - vma->vm_start, vma->vm_page_prot))
 		return -EAGAIN;
 	return 0;

@@ -57,12 +57,16 @@ fi
 
 if [ "$CONFIG_ISA" != "y" ]; then
    define_bool CONFIG_ISA n
+   define_bool CONFIG_EISA n
+else
+   define_bool COFNIG_EISA y		
 fi
 
 if [ "$CONFIG_PCI" != "y" ]; then
    define_bool CONFIG_PCI n
 fi
 
+define_bool CONFIG_MCA n
 define_bool CONFIG_SBUS n
 
 mainmenu_option next_comment

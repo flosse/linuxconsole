@@ -475,7 +475,7 @@ static int __init copy_e820_map(struct e820entry * biosmap, int nr_map)
 			if (start < 0x100000ULL && end > 0xA0000ULL) {
 				if (start < 0xA0000ULL)
 					add_memory_region(start, 0xA0000ULL-start, type);
-				if (end < 0x100000ULL)
+				if (end <= 0x100000ULL)
 					continue;
 				start = 0x100000ULL;
 				size = end - start;
@@ -516,7 +516,7 @@ void __init setup_memory_region(void)
 
 		e820.nr_map = 0;
 		add_memory_region(0, LOWMEMSIZE(), E820_RAM);
-		add_memory_region(HIGH_MEMORY, mem_size << 10, E820_RAM);
+		add_memory_region(HIGH_MEMORY, (mem_size << 10) - HIGH_MEMORY, E820_RAM);
   	}
 	printk("BIOS-provided physical RAM map:\n");
 	print_memory_map(who);
@@ -1139,7 +1139,7 @@ static void __init check_cx686_slop(struct cpuinfo_x86 *c)
 		if (ccr5 & 2) { /* possible wrong calibration done */
 			printk(KERN_INFO "Recalibrating delay loop with SLOP bit reset\n");
 			calibrate_delay();
-			c->loops_per_sec = loops_per_sec;
+			c->loops_per_jiffy = loops_per_jiffy;
 		}
 	}
 }
@@ -1543,7 +1543,7 @@ static void __init init_intel(struct cpuinfo_x86 *c)
 						/* L1 D cache */
 						l1d += 16;
 						break;
-					default:
+					default:;
 						/* TLB, or unknown */
 					}
 					break;
@@ -1874,7 +1874,7 @@ void __init identify_cpu(struct cpuinfo_x86 *c)
 	int junk, i;
 	u32 xlvl, tfms;
 
-	c->loops_per_sec = loops_per_sec;
+	c->loops_per_jiffy = loops_per_jiffy;
 	c->x86_cache_size = -1;
 	c->x86_vendor = X86_VENDOR_UNKNOWN;
 	c->cpuid_level = -1;	/* CPUID not detected */
@@ -2178,8 +2178,8 @@ int get_cpuinfo(char * buffer)
 				p += sprintf(p, " %s", x86_cap_flags[i]);
 
 		p += sprintf(p, "\nbogomips\t: %lu.%02lu\n\n",
-			(c->loops_per_sec+2500)/500000,
-			((c->loops_per_sec+2500)/5000) % 100);
+			     c->loops_per_jiffy/(500000/HZ),
+			     (c->loops_per_jiffy/(5000/HZ)) % 100);
 	}
 	return p - buffer;
 }

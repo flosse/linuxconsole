@@ -33,11 +33,12 @@ bool 'Support for SNI RM200 PCI' CONFIG_SNI_RM200_PCI
 #
 unset CONFIG_ARC32
 unset CONFIG_ISA
+unset CONFIG_EISA
 unset CONFIG_PCI
 unset CONFIG_MIPS_JAZZ
 unset CONFIG_VIDEO_G364
-unset CONFIG_PC_KEYB
 
+define_bool CONFIG_MCA n
 define_bool CONFIG_SBUS n
 
 if [ "$CONFIG_ALGOR_P4032" = "y" ]; then
@@ -50,16 +51,13 @@ if [ "$CONFIG_MIPS_MAGNUM_4000" = "y" -o \
    define_bool CONFIG_FB y
    define_bool CONFIG_FB_G364 y	
    define_bool CONFIG_MIPS_JAZZ y
-   define_bool CONFIG_PC_KEYB y
 fi
 if [ "$CONFIG_ACER_PICA_61" = "y" ]; then
    define_bool CONFIG_ARC32 y
    define_bool CONFIG_ISA y
    define_bool CONFIG_MIPS_JAZZ y
-   define_bool CONFIG_PC_KEYB y
 fi
 if [ "$CONFIG_COBALT_MICRO_SERVER" = "y" ]; then
-   define_bool CONFIG_ISA n
    define_bool CONFIG_COBALT_27 y
    define_bool CONFIG_COBALT_LCD y
    define_bool CONFIG_COBALT_SERIAL y
@@ -67,14 +65,12 @@ if [ "$CONFIG_COBALT_MICRO_SERVER" = "y" ]; then
 fi
 if [ "$CONFIG_SGI_IP22" = "y" ]; then
    define_bool CONFIG_ARC32 y
-   define_bool CONFIG_PC_KEYB y
    define_bool CONFIG_SGI y
 fi
 if [ "$CONFIG_SNI_RM200_PCI" = "y" ]; then
    define_bool CONFIG_ARC32 y
    define_bool CONFIG_PCI y
    define_bool CONFIG_ISA y
-   define_bool CONFIG_PC_KEYB y
 fi
 if [ "$CONFIG_DDB5074" = "y" ]; then
    define_bool CONFIG_ISA y
@@ -83,6 +79,9 @@ fi
 
 if [ "$CONFIG_ISA" != "y" ]; then
    define_bool CONFIG_ISA n
+   define_bool CONFIG_EISA n
+else
+   define_bool CONFIG_EISA y		
 fi
 
 if [ "$CONFIG_PCI" != "y" ]; then
