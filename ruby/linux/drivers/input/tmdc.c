@@ -132,6 +132,8 @@ static int tmdc_read_packet(struct gameport *gameport, unsigned char *data)
 
 	__restore_flags(flags);
 
+	printk(KERN_DEBUG "tmdc.c: error %d, i %d, t %d\n", error, i, t);
+
 	return -(i != TMDC_MAX_LENGTH);
 }
 
@@ -246,10 +248,14 @@ static void tmdc_connect(struct gameport *gameport, struct gameport_dev *dev)
 	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW))
 		goto fail1;
 
-	if (tmdc_read_packet(gameport, data))
+	if (tmdc_read_packet(gameport, data)) {
+		printk(KERN_DEBUG "tmdc.c: failed packet read.\n");
 		goto fail2;
+	}
 
 	tmdc->mode = data[TMDC_BYTE_ID];
+
+	printk(KERN_DEBUG "tmdc.c: id=%d\n", tmdc->mode);
 
 	if (!tmdc->mode)
 		goto fail2;
