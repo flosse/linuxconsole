@@ -87,7 +87,6 @@ static unsigned long   vga_vram_base;		/* Base of video memory */
 static unsigned long   vga_vram_end;		/* End of video memory */
 static u16             vga_video_port_reg;	/* Video register select port */
 static u16             vga_video_port_val;	/* Video register value port */
-static int	       vga_can_do_color = 0;	/* Do we support colors? */
 static unsigned char   vga_hardscroll_enabled;
 #ifdef CONFIG_IA64_SOFTSDV_HACKS
 /*
@@ -274,12 +273,12 @@ int vga_do_font_op(char *arg, int set, int ch512)
                    512-char: disable intensity bit */
 
                 /* clear address flip-flop */
-                vga_io_r(vga_can_do_color ? VGA_IS1_RC : VGA_IS1_RM);
+                vga_io_r(vc->vc_can_do_color ? VGA_IS1_RC : VGA_IS1_RM);
                 /* color plane enable register */
                 vga_io_wattr(VGA_ATC_PLANE_ENABLE, ch512 ? 0x07 : 0x0f);
                 /* Wilton (1987) mentions the following; I don't know what
                    it means, but it works, and it appears necessary */
-                vga_io_r(vga_can_do_color ? VGA_IS1_RC : VGA_IS1_RM);
+                vga_io_r(vc->vc_can_do_color ? VGA_IS1_RC : VGA_IS1_RM);
                 vga_io_wattr(VGA_AR_ENABLE_DISPLAY, 0);
                 vga_io_w(VGA_ATT_W, VGA_AR_ENABLE_DISPLAY);
         }
@@ -336,7 +335,7 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 		}
 	} else {
 		/* If not, it is color. */
-		vga_can_do_color = 1;
+		vt->default_mode->vc_can_do_color = 1;
 		vga_vram_base = 0xb8000;
 		vga_video_port_reg = 0x3d4;
 		vga_video_port_val = 0x3d5;
@@ -474,10 +473,6 @@ static void vgacon_init(struct vc_data *vc)
 {
 	unsigned long p;
 
-        vc->vc_cols = vc->display_fg->default_mode->vc_cols;
-	vc->vc_rows = vc->display_fg->default_mode->vc_rows;
-	vc->vc_font = vc->display_fg->default_mode->vc_font;		
-	vc->vc_can_do_color = vga_can_do_color;
 	vc->vc_complement_mask = 0x7700;
 	p = *vc->vc_uni_pagedir_loc;
 	if (vc->vc_uni_pagedir_loc == &vc->vc_uni_pagedir ||
@@ -506,15 +501,15 @@ static void vgacon_deinit(struct vc_data *c)
 	con_set_default_unimap(c);
 }
 
-static u8 vgacon_build_attr(struct vc_data *c, u8 color, u8 intensity, u8 blink, u8 underline, u8 reverse)
+static u8 vgacon_build_attr(struct vc_data *vc, u8 color, u8 intensity, u8 blink, u8 underline, u8 reverse)
 {
 	u8 attr = color;
 
-	if (vga_can_do_color) {
+	if (vc->vc_can_do_color) {
 		if (underline)
-			attr = (attr & 0xf0) | c->vc_ulcolor;
+			attr = (attr & 0xf0) | vc->vc_ulcolor;
 		else if (intensity == 0)
-			attr = (attr & 0xf0) | c->vc_halfcolor;
+			attr = (attr & 0xf0) | vc->vc_halfcolor;
 	}
 	if (reverse)
 		attr = ((attr) & 0x88) | ((((attr) >> 4) | ((attr) << 4)) & 0x77);
@@ -522,7 +517,7 @@ static u8 vgacon_build_attr(struct vc_data *c, u8 color, u8 intensity, u8 blink,
 		attr ^= 0x80;
 	if (intensity == 2)
 		attr ^= 0x08;
-	if (!vga_can_do_color) {
+	if (!vc->vc_can_do_color) {
 		if (underline)
 			attr = (attr & 0xf8) | 0x01;
 		else if (intensity == 0)
@@ -531,13 +526,11 @@ static u8 vgacon_build_attr(struct vc_data *c, u8 color, u8 intensity, u8 blink,
 	return attr;
 }
 
-static void vgacon_invert_region(struct vc_data *c, u16 *p, int count)
+static void vgacon_invert_region(struct vc_data *vc, u16 *p, int count)
 {
-	int col = vga_can_do_color;
-
 	while (count--) {
 		u16 a = scr_readw(p);
-		if (col)
+		if (vc->vc_can_do_color)
 			a = ((a) & 0x88ff) | (((a) & 0x7000) >> 4) | (((a) & 0x0700) << 4);
 		else
 			a ^= ((a & 0x0700) == 0x0100) ? 0x7000 : 0x7700;
