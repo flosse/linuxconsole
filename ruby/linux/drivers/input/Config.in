@@ -43,8 +43,9 @@ if [ "$CONFIG_INPUT" != "n" ]; then
       tristate '  Creative Labs Blaster Cobra gamepad' CONFIG_INPUT_COBRA
       tristate ' *Genius Flight2000 Digital joysticks and gamepads' CONFIG_INPUT_GF2K
       tristate ' *Gravis GrIP joysticks and gamepads' CONFIG_INPUT_GRIP
-      tristate ' *ThrustMaster DirectConnects joysticks and gamepads' CONFIG_INPUT_TMDC
+      tristate ' *InterAct HammerHead/FX gamepad' CONFIG_INPUT_INTERACT
       tristate ' *Microsoft SideWinder digital joysticks and gamepads' CONFIG_INPUT_SIDEWINDER
+      tristate ' *ThrustMaster DirectConnects joysticks and gamepads' CONFIG_INPUT_TMDC
    
    comment 'Bus devices'
       tristate '  InPort/MS/ATIXL busmouse' CONFIG_INPUT_INPORT
