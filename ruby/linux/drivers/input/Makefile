@@ -62,6 +62,7 @@ obj-$(CONFIG_INPUT_PSMOUSE)	+= psmouse.o serio.o
 obj-$(CONFIG_INPUT_NEWTON)	+= newtonkbd.o serio.o
 
 obj-$(CONFIG_INPUT_SERMOUSE)	+= sermouse.o serio.o
+obj-$(CONFIG_INPUT_PS2SERIAL)	+= ps2serkbd.o serio.o
 obj-$(CONFIG_INPUT_SUNKBD)	+= sunkbd.o serio.o
 obj-$(CONFIG_INPUT_WARRIOR)	+= warrior.o serio.o
 obj-$(CONFIG_INPUT_MAGELLAN)	+= magellan.o serio.o
