@@ -151,6 +151,7 @@ static struct usb_device_id iforce_usb_ids [] = {
 	{ USB_DEVICE(0x05ef, 0x8884) },		/* AVB Mag Turbo Force */
 	{ USB_DEVICE(0x05ef, 0x8888) },		/* AVB Top Shot FFB Racing Wheel */
 	{ USB_DEVICE(0x06f8, 0x0001) },		/* Guillemot Race Leader Force Feedback */
+	{ USB_DEVICE(0x06f8, 0x0004) },		/* Guillemot Force Feedback Racing Wheel */
 	{ }					/* Terminating entry */
 };
 
