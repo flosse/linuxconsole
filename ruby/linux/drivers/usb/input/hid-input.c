@@ -299,6 +299,9 @@ static void hidinput_configure_usage(struct hid_device *device, struct hid_field
 				case 0x7e: usage->code = FF_GAIN;       break;
 				case 0x83:  /* Simultaneous Effects Max */
 					input->ff_effects_max = (field->value[0]);
+#ifdef DEBUG
+					printk("Maximum Effects - %d",input->ff_effects_max);
+#endif
 					break;
 				case 0x98:  /* Device Control */
 					usage->code = FF_AUTOCENTER;    break;
@@ -307,6 +310,9 @@ static void hidinput_configure_usage(struct hid_device *device, struct hid_field
 					bit = input->keybit;
 					usage->type = EV_KEY;
 					max = KEY_MAX;
+#ifdef DEBUG
+					printk("Safety Switch Report\n");
+#endif
 					break;
 //                             case 0x94: /* Effect Playing */
 //                                     usage->code = FF_STATUS_PLAYING;
@@ -326,6 +332,10 @@ static void hidinput_configure_usage(struct hid_device *device, struct hid_field
 			break;
 		default:
 		unknown:
+#ifdef DEBUG
+// Temporary!!
+			resolv_usage(usage->hid);
+#endif
 
 			if (field->report_size == 1) {
 
@@ -417,6 +427,7 @@ void hidinput_hid_event(struct hid_device *hid, struct hid_field *field, struct 
 
 	if (usage->hid == (HID_UP_PID | 0x83UL)) { /* Simultaneous Effects Max */
 		input->ff_effects_max = value;
+		printk("Maximum Effects - %d",input->ff_effects_max);
 		return;
 	}
 	if (usage->hid == (HID_UP_PID | 0x7fUL)) {
