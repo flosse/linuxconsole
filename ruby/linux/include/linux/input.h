@@ -649,6 +649,8 @@ struct input_dev {
 	unsigned int repeat_key;
 	struct timer_list timer;
 
+	struct pm_dev *pm_dev;
+
 	int abs[ABS_MAX + 1];
 	int rep[REP_MAX + 1];
 
