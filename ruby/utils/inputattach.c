@@ -144,7 +144,6 @@ struct input_types input_types[] = {
 { "--mouseman",		"-mman",	B1200, CS7,			SERIO_MP,	0x01,	1,	NULL },
 { "--intellimouse",	"-ms3",		B1200, CS7,			SERIO_MZ,	0x11,	1,	NULL },
 { "--mmwheel",		"-mmw",		B1200, CS7 | CSTOPB,		SERIO_MZP,	0x13,	1,	mzp_init },
-{ "--wmforce",		"-wmf",		B38400, CS8 | CRTSCTS,		SERIO_WMFORCE,	0x00,	0,	NULL },
 { "--iforce",		"-ifor",	B38400, CS8 | CRTSCTS,		SERIO_IFORCE,	0x00,	0,	NULL },
 { "--dump",		"-dump",	B38400, CS8 | CRTSCTS,		0,		0x00,	0,	dump_init },
 { "", "", 0, 0 }
@@ -175,7 +174,7 @@ int main(int argc, char **argv)
 		puts("  --mouseman      -mman  3-button Logitech and Genius mice");
 		puts("  --intellimouse  -ms3   Microsoft IntelliMouse");
 		puts("  --mmwheel       -mmw   Logitech mice with 4-5 buttons or wheel");
-		puts("  --wmforce       -wmf   Logitech WingMan Force");
+		puts("  --iforce        -ifor  I-Force joysticks and wheels");
                 puts("");
                 return 1;
         }
