@@ -63,8 +63,8 @@
 #define s_complement_mask (vc_cons[currcons]->vc_s_complement_mask)
 #define hi_font_mask	(vc_cons[currcons]->vc_hi_font_mask)
 
-#define vcmode		(vt_cons->vc_mode)
-#define sw              (vt_cons->sw)
+#define vcmode		(vc_cons[currcons]->display_fg->vc_mode)
+#define sw              (vc_cons[currcons]->display_fg->sw)
 
 #define dectcem 	(vc_cons[currcons]->vc_dectcem)
 #define decscl		(vc_cons[currcons]->vc_decscl)
