@@ -59,14 +59,15 @@ static struct termios *console_termios_locked[MAX_NR_CONSOLES];
 
 static void vt_flush_chars(struct tty_struct *tty);
 
-static int printable;               	/* Is console ready for printing? */
+struct vt_struct *admin_vt;		/* Administrative VT */
 static int current_vc;			/* Which /dev/vc/X to allocate next */
-struct vt_struct *admin_vt;		/* VT of /dev/console */
 
-/*
- * kmsg_redirect is the virtual console for kernel messages,
- */
-int kmsg_redirect;
+#ifdef CONFIG_VT_CONSOLE
+struct console vt_console_driver;
+static int kmsg_redirect; 		/* kmsg_redirect is the VC for printk*/ 
+static int printable;           	/* Is console ready for printing? */
+#endif
+struct tty_driver vt_driver;
 
 /* 
  * the default colour table, for VGA+ colour systems 
@@ -604,7 +605,6 @@ inline int resize_screen(struct vc_data *vc, int cols, int rows)
 /*
  *      Screen blanking
  */
-
 static void powerdown_screen(unsigned long private)
 {
 	struct vt_struct *vt = (struct vt_struct *) private;
@@ -801,7 +801,13 @@ const char *create_vt(struct vt_struct *vt, int init)
 	vt->want_vc = vt->fg_console = vt->last_console = vt->vc_cons[0];
 	vt->keyboard = NULL;
 	current_vc += MAX_NR_USER_CONSOLES;
-
+#ifdef CONFIG_VT_CONSOLE
+	if (!admin_vt) {
+		vt_console_driver.lock = vt_driver.tty_lock;
+		register_console(&vt_console_driver);
+        	printable = 1;
+	}
+#endif
         init_timer(&vt->timer);
         vt->timer.data = (long) vt;
         vt->timer.function = blank_screen;
@@ -1229,63 +1235,6 @@ out:
 }
 
 /*
- *      Handling of Linux-specific VC ioctls
- */
-
-int tioclinux(struct tty_struct *tty, unsigned long arg)
-{
-	struct vc_data *vc = (struct vc_data *) tty->driver_data;
-        char type, data;
-
-        if (tty->driver.type != TTY_DRIVER_TYPE_CONSOLE)
-                return -EINVAL;
-        if (current->tty != tty && !suser())
-                return -EPERM;
-        if (get_user(type, (char *)arg))
-                return -EFAULT;
-        switch (type)
-        {
-                case 2:
-                        return set_selection(arg, tty, 1);
-                case 3:
-                        return paste_selection(tty);
-                case 4:
-                        unblank_screen(vc->display_fg);
-                        return 0;
-                case 5:
-                        return sel_loadlut(arg);
-                case 6:
-
-        /*
-         * Make it possible to react to Shift+Mousebutton.
-         * Note that 'shift_state' is an undocumented
-         * kernel-internal variable; programs not closely
-         * related to the kernel should not use this.
-         */
-                        data = shift_state;
-                        return __put_user(data, (char *) arg);
-                case 7:
-                        data = mouse_reporting(tty);
-                        return __put_user(data, (char *) arg);
-                case 10:
-    			if (get_user(data, (char *)arg+1))
-				return -EFAULT;
-    			vc->display_fg->blank_mode = (data < 4) ? data : 0;
-			return 0;
-                case 11:        /* set kmsg redirect */
-                        if (!suser())
-                                return -EPERM;
-                        if (get_user(data, (char *)arg+1))
-                                        return -EFAULT;
-                        kmsg_redirect = data;
-                        return 0;
-                case 12:        /* get fg_console */
-                        return vc->display_fg->fg_console->vc_num; 
-        }
-        return -EINVAL;
-}
-
-/*
  *      /dev/ttyN handling
  */
 
@@ -1519,12 +1468,70 @@ struct console vt_console_driver = {
 #endif
 
 /*
+ *      Handling of Linux-specific VC ioctls
+ */
+int tioclinux(struct tty_struct *tty, unsigned long arg)
+{
+	struct vc_data *vc = (struct vc_data *) tty->driver_data;
+        char type, data;
+
+        if (tty->driver.type != TTY_DRIVER_TYPE_CONSOLE)
+                return -EINVAL;
+        if (current->tty != tty && !suser())
+                return -EPERM;
+        if (get_user(type, (char *)arg))
+                return -EFAULT;
+        switch (type)
+        {
+                case 2:
+                        return set_selection(arg, tty, 1);
+                case 3:
+                        return paste_selection(tty);
+                case 4:
+                        unblank_screen(vc->display_fg);
+                        return 0;
+                case 5:
+                        return sel_loadlut(arg);
+                case 6:
+
+        /*
+         * Make it possible to react to Shift+Mousebutton.
+         * Note that 'shift_state' is an undocumented
+         * kernel-internal variable; programs not closely
+         * related to the kernel should not use this.
+         */
+                        data = shift_state;
+                        return __put_user(data, (char *) arg);
+                case 7:
+                        data = mouse_reporting(tty);
+                        return __put_user(data, (char *) arg);
+                case 10:
+    			if (get_user(data, (char *)arg+1))
+				return -EFAULT;
+    			vc->display_fg->blank_mode = (data < 4) ? data : 0;
+			return 0;
+                case 11:        /* set kmsg redirect */
+#ifdef CONFIG_VT_CONSOLE
+                        if (!suser())
+                                return -EPERM;
+                        if (get_user(data, (char *)arg+1))
+                                        return -EFAULT;
+                        kmsg_redirect = data;
+                        return 0;
+#else
+			retrun -EINVAL;
+#endif
+                case 12:        /* get fg_console */
+                        return vc->display_fg->fg_console->vc_num; 
+        }
+        return -EINVAL;
+}
+
+/*
  * This routine initializes console interrupts, and does nothing
  * else. If you want the screen to clear, call tty_write with
  * the appropriate escape-sequence.
  */
-
-struct tty_driver vt_driver;
 static int console_refcount;
 
 void __init vt_console_init(void)
@@ -1598,16 +1605,9 @@ void __init vt_console_init(void)
         gotoxy(vc, x, y);
         vte_ed(vc, 0);
         update_screen(vc);
-        printk("Console: %s %s %dx%d",
+        printk("Console: %s %s %dx%d\n",
                 can_do_color ? "colour" : "mono",
                 display_desc, video_num_columns, video_num_lines);
-        printable = 1;
-        printk("\n");
-
-#ifdef CONFIG_VT_CONSOLE
-        vt_console_driver.lock = vt_driver.tty_lock;
-	register_console(&vt_console_driver);
-#endif
         tasklet_enable(&vt->vt_tasklet);
         tasklet_schedule(&vt->vt_tasklet);
 }
