@@ -13,7 +13,7 @@
  * Fixed SMP synchronization, 08/08/99, Manfred Spraul 
  *     manfreds@colorfullife.com
  * Rewrote bits to get rid of console_lock
- *     01Mar01 Andrew Morton <andrewm@uow.edu.au>
+ *	01Mar01 Andrew Morton <andrewm@uow.edu.au>
  */
 
 #include <linux/mm.h>
@@ -27,7 +27,7 @@
 
 #include <asm/uaccess.h>
 
-#define LOG_BUF_LEN	(16384)		/* This must be a power of two */
+#define LOG_BUF_LEN	(16384)			/* This must be a power of two */
 #define LOG_BUF_MASK	(LOG_BUF_LEN-1)
 
 /* printk's without a loglevel use this.. */
@@ -44,14 +44,13 @@ int console_loglevel = DEFAULT_CONSOLE_LOGLEVEL;
 int default_message_loglevel = DEFAULT_MESSAGE_LOGLEVEL;
 int minimum_console_loglevel = MINIMUM_CONSOLE_LOGLEVEL;
 int default_console_loglevel = DEFAULT_CONSOLE_LOGLEVEL;
+
 int oops_in_progress;
 
 /*
- * console_sem protects the console_drivers list, and also
- * provides serialisation for access to the entire console
- * driver system.
+ * console_lock protects the console_drivers list
  */
-static DECLARE_MUTEX(console_sem);
+static spinlock_t console_lock = SPIN_LOCK_UNLOCKED;
 struct console *console_drivers;
 
 /*
@@ -68,14 +67,10 @@ static char log_buf[LOG_BUF_LEN];
  * The indices into log_buf are not constrained to LOG_BUF_LEN - they
  * must be masked before subscripting
  */
-static unsigned long log_start;  /* Index into log_buf: next char to be read
-				    			syslog() */
-static unsigned long con_start;  /* Index into log_buf: next char to be sent 
-							to consoles */
-static unsigned long log_end;    /* Index into log_buf: most recently written
-							char + 1 */
-static unsigned long logged_chars; /* Number of chars produced since last 
-				      read+clear operation */
+static unsigned long log_start;			/* Index into log_buf: next char to be read by syslog() */
+static unsigned long con_start;			/* Index into log_buf: next char to be sent to consoles */
+static unsigned long log_end;			/* Index into log_buf: most-recently-written-char + 1 */
+static unsigned long logged_chars;		/* Number of chars produced since last read+clear operation */
 
 struct console_cmdline console_cmdline[MAX_CMDLINECONSOLES];
 static int preferred_console = -1;
@@ -147,7 +142,7 @@ __setup("console=", console_setup);
  * 	6 -- Disable printk's to console
  * 	7 -- Enable printk's to console
  *	8 -- Set level of messages printed to console
- *	9 -- Return the number of unread characters in the log buffer
+ *	9 -- Return number of unread characters in the log buffer
  */
 int do_syslog(int type, char * buf, int len)
 {
@@ -171,7 +166,7 @@ int do_syslog(int type, char * buf, int len)
 		error = verify_area(VERIFY_WRITE,buf,len);
 		if (error)
 			goto out;
-		error = wait_event_interruptible(log_wait,(log_start-log_end));
+		error = wait_event_interruptible(log_wait, (log_start - log_end));
 		if (error)
 			goto out;
 		i = 0;
@@ -267,7 +262,7 @@ int do_syslog(int type, char * buf, int len)
 		spin_lock_irq(&logbuf_lock);
 		error = log_end - log_start;
 		spin_unlock_irq(&logbuf_lock);
-		break;	
+		break;
 	default:
 		error = -EINVAL;
 		break;
@@ -302,18 +297,17 @@ static void __call_console_drivers(struct console *con, unsigned long start, uns
 /*
  * Write out chars from start to end - 1 inclusive
  */
-static void _call_console_drivers(struct console *con, unsigned long start,
-				  unsigned long end, int msg_log_level)
+static void _call_console_drivers(struct console *con, unsigned long start, unsigned long end, int msg_log_level)
 {
-	if (msg_log_level<console_loglevel && con && start != end){
+	if (msg_log_level < console_loglevel && con && start != end) {
 		if ((start & LOG_BUF_MASK) > (end & LOG_BUF_MASK)) {
-                       	/* wrapped write */
-                       	__call_console_drivers(con, start & LOG_BUF_MASK, LOG_BUF_LEN);
-                       	__call_console_drivers(con, 0, end & LOG_BUF_MASK);
-               	} else {
-                       	__call_console_drivers(con, start, end);
-               	}
-       	}
+			/* wrapped write */
+			__call_console_drivers(con, start & LOG_BUF_MASK, LOG_BUF_LEN);
+			__call_console_drivers(con, 0, end & LOG_BUF_MASK);
+		} else {
+			__call_console_drivers(con, start, end);
+		}
+	}
 }
 
 /*
@@ -321,50 +315,47 @@ static void _call_console_drivers(struct console *con, unsigned long start,
  * log_buf[start] to log_buf[end - 1].
  * The console_sem must be held.
  */
-static void call_console_drivers(struct console *con, unsigned long start,
- 				 unsigned long end)
+static void call_console_drivers(struct console *con, unsigned long start, unsigned long end)
 {
 	unsigned long cur_index, start_print;
-       	static int msg_level = -1;
+	static int msg_level = -1;
 
-       	if (((long)(start - end)) > 0)
-        	BUG();
+	if (((long)(start - end)) > 0)
+		BUG();
 
 	cur_index = start;
-       	start_print = start;
-       	while (cur_index != end) {
-        	if (msg_level < 0 &&
-                       ((end - cur_index) >= 3) &&
-                       LOG_BUF(cur_index + 0) == '<' &&
-                       LOG_BUF(cur_index + 1) >= '0' &&
-                       LOG_BUF(cur_index + 1) <= '7' &&
-                       LOG_BUF(cur_index + 2) == '>') {
-                       	msg_level = LOG_BUF(cur_index + 1) - '0';
-                       	cur_index += 3;
-                       	start_print = cur_index;
-               	}
-               	while (cur_index != end) {
-                       	char c = LOG_BUF(cur_index);
-                       	cur_index++;
+	start_print = start;
+	while (cur_index != end) {
+		if (	msg_level < 0 &&
+			((end - cur_index) > 2) &&
+			LOG_BUF(cur_index + 0) == '<' &&
+			LOG_BUF(cur_index + 1) >= '0' &&
+			LOG_BUF(cur_index + 1) <= '7' &&
+			LOG_BUF(cur_index + 2) == '>')
+		{
+			msg_level = LOG_BUF(cur_index + 1) - '0';
+			cur_index += 3;
+			start_print = cur_index;
+		}
+		while (cur_index != end) {
+			char c = LOG_BUF(cur_index);
+			cur_index++;
 
-                       	if (c == '\n') {
+			if (c == '\n') {
 				if (msg_level < 0) {
-                                	/*
-                                         * printk() has already given us 
-					 * loglevel tages in the buffer.
-                                         * This code is here in case the
-                                         * log buffer has wrapped right 
-					 * around and scribbled on those
-                                         * tags.
-                                         */
-                                       	msg_level = default_message_loglevel;
-                               	}
-                        	_call_console_drivers(con, start_print, 
-						      cur_index, msg_level); 
-                               	msg_level = -1;
-                               	start_print = cur_index;
-                               	break;
-                       	}
+					/*
+					 * printk() has already given us loglevel tags in
+					 * the buffer.  This code is here in case the
+					 * log buffer has wrapped right round and scribbled
+					 * on those tags
+					 */
+					msg_level = default_message_loglevel;
+				}
+				_call_console_drivers(con, start_print, cur_index, msg_level);
+				msg_level = -1;
+				start_print = cur_index;
+				break;
+			}
 		}
 	}
 	_call_console_drivers(con, start_print, end, msg_level);
@@ -373,100 +364,116 @@ static void call_console_drivers(struct console *con, unsigned long start,
 static void emit_log_char(char c)
 {
 	LOG_BUF(log_end) = c;
-       	log_end++;
-       	if (log_end - log_start > LOG_BUF_LEN)
-         	log_start = log_end - LOG_BUF_LEN;
+	log_end++;
+	if (log_end - log_start > LOG_BUF_LEN)
+		log_start = log_end - LOG_BUF_LEN;
 	if (log_end - con_start > LOG_BUF_LEN)
-               	con_start = log_end - LOG_BUF_LEN;
-       	if (logged_chars < LOG_BUF_LEN)
-         	logged_chars++;
+		con_start = log_end - LOG_BUF_LEN;
+	if (logged_chars < LOG_BUF_LEN)
+		logged_chars++;
 }
 
+/*
+ * This is printk.  It can be called from any context.  We want it to work.
+ * 
+ * We try to grab the console_sem.  If we succeed, it's easy - we log the output and
+ * call the console drivers.  If we fail to get the semaphore we place the output
+ * into the log buffer and return.  The current holder of the console_sem will
+ * notice the new output in release_console_sem() and will send it to the
+ * consoles before releasing the semaphore.
+ *
+ * One effect of this deferred printing is that code which calls printk() and
+ * then changes console_loglevel may break. This is because console_loglevel
+ * is inspected when the actual printing occurs.
+ */
 asmlinkage int printk(const char *fmt, ...)
 {
 	static struct {
-              	char buf[1024];
-               	unsigned long semi_random;
+               	char buf[1024];
+                unsigned long semi_random;
         } printk_buf;
-	static int log_level_unknown = 1;
-	struct tty_driver *driver;
-	unsigned long sr_copy;
-	unsigned long flags;
-	struct console *con;
-	int printed_len;
-	va_list args;
+       	static int log_level_unknown = 1;
+       	struct tty_driver *driver;
+       	unsigned long sr_copy;
+        unsigned long flags;
+       	struct console *con;
+        int printed_len;
+       	va_list args;
         char *p;
 
 	if (oops_in_progress) {
 		/* If a crash is occurring, make sure we can't deadlock */
 		spin_lock_init(&logbuf_lock);
-		/* And make sure that we print immediately */
+		spin_lock_init(&console_lock);
 	}
 
 	/* This stops the holder of console_sem just where we want him */
 	spin_lock_irqsave(&logbuf_lock, flags);
+
 	/* Emit the output into the temporary buffer */
 	printk_buf.semi_random += jiffies;
 	sr_copy = printk_buf.semi_random;
 	va_start(args, fmt);
-	printed_len = vsprintf(printk_buf.buf, fmt, args);
+	printed_len = vsnprintf(printk_buf.buf, sizeof(printk_buf.buf), fmt, args);
 	va_end(args);
-		
-        if (sr_copy != printk_buf.semi_random)
+
+	if (sr_copy != printk_buf.semi_random)
 		panic("buffer overrun in printk()");
 
-        /*
-         * Copy the output into log_buf.  If the caller didn't provide
-         * appropriate log level tags, we insert them here
-         */
+	/*
+	 * Copy the output into log_buf.  If the caller didn't provide
+	 * appropriate log level tags, we insert them here
+	 */
 	for (p = printk_buf.buf; *p; p++) {
-        	if (log_level_unknown) {
-                	if (p[0] != '<' || p[1] < '0' || p[1] > '7' || p[2] != '>') {
+		if (log_level_unknown) {
+			if (p[0] != '<' || p[1] < '0' || p[1] > '7' || p[2] != '>') {
 				emit_log_char('<');
-                                emit_log_char(default_message_loglevel + '0');
-                                emit_log_char('>');
-                        }
-                        log_level_unknown = 0;
-		}	
-                emit_log_char(*p);
-                if (*p == '\n')
+				emit_log_char(default_message_loglevel + '0');
+				emit_log_char('>');
+			}
+			log_level_unknown = 0;
+		}
+		emit_log_char(*p);
+		if (*p == '\n')
 			log_level_unknown = 1;
 	}
 	spin_unlock_irqrestore(&logbuf_lock, flags);
 
-        for (con = console_drivers; con; con = con->next) {
-                if ((con->flags & CON_ENABLED) && con->write) {
+	spin_lock(&console_lock);
+	for (con = console_drivers; con; con = con->next) {
+		/*
+	 	 * We own the drivers list.  We can drop the lock and 
+		 * let release_console_sem() print the text
+		 */
+		if ((con->flags & CON_ENABLED) && con->write) {
 			driver = get_tty_driver(con->device(con));
-			if (driver && !down_trylock(&driver->tty_lock)) 
+			if (driver && !down_trylock(&driver->tty_lock)) {
+				driver->may_schedule = 0;
 				release_console_sem(con->device(con));
+			}
 		}
 	}
+	spin_unlock(&console_lock);
 	return printed_len;
 }
 EXPORT_SYMBOL(printk);
-
-void console_print(const char *s)
-{
-	printk(KERN_EMERG "%s", s);
-}
-EXPORT_SYMBOL(console_print);
 
 /**
  * acquire_console_sem - lock the console system for exclusive use.
  *
  * Acquires a semaphore which guarantees that the caller has
- * exclusive access to the console display being drawn to. 
+ * exclusive access to a console system.
  *
  * Can sleep, returns nothing.
  */
 void acquire_console_sem(kdev_t device)
 {
 	struct tty_driver *driver = get_tty_driver(device);
-	
+
 	if (in_interrupt())
-        	BUG();
-       	down(&driver->tty_lock);
-       	//console_may_schedule = 1;
+		BUG();
+	down(&driver->tty_lock);
+	driver->may_schedule = 1;
 }
 EXPORT_SYMBOL(acquire_console_sem);
 
@@ -488,34 +495,59 @@ void release_console_sem(kdev_t device)
 {
 	struct tty_driver *driver = get_tty_driver(device);
 	unsigned long _con_start, _log_end;
-        unsigned long must_wake_klogd = 0;
+	unsigned long must_wake_klogd = 0;
 	unsigned long flags;
 	struct console *con;
 
 	if (driver->flags & TTY_DRIVER_CONSOLE) {
-		/* Look for new messages */      
+		spin_lock(&console_lock);
+		/* Look for new messages */
 		for (con = console_drivers; con; con = con->next) {
 			if (con->device(con) == device)
 				break;
-		}		 	
-	
-		for ( ; ; ) {
-       			spin_lock_irqsave(&logbuf_lock, flags);
-            		must_wake_klogd |= log_start - log_end;
-               		if (con_start == log_end)
-                       		break;	/* Nothing to print */
-               		_con_start = con_start;
-             		_log_end = log_end;
-               		con_start = log_end;	/* Flush */
-               		spin_unlock_irqrestore(&logbuf_lock, flags);
-               		call_console_drivers(con, _con_start, _log_end);
 		}
-       		spin_unlock_irqrestore(&logbuf_lock, flags);
-       		if (must_wake_klogd && !oops_in_progress)
-        		wake_up_interruptible(&log_wait);
+		spin_unlock(&console_lock);
+
+		for ( ; ; ) {
+			spin_lock_irqsave(&logbuf_lock, flags);
+			must_wake_klogd |= log_start - log_end;
+			if (con_start == log_end)
+				break;  /* Nothing to print */
+			_con_start = con_start;
+			_log_end = log_end;
+			con_start = log_end;    /* Flush */
+			spin_unlock_irqrestore(&logbuf_lock, flags);
+			call_console_drivers(con, _con_start, _log_end);
+		}
+		spin_unlock_irqrestore(&logbuf_lock, flags);
+		if (must_wake_klogd && !oops_in_progress)
+			wake_up_interruptible(&log_wait);
 	}
-       	up(&driver->tty_lock);
+	driver->may_schedule = 0;
+	up(&driver->tty_lock);
 }
+
+/** console_conditional_schedule - yield the CPU if required
+ *
+ * If the console code is currently allowed to sleep, and
+ * if this CPU should yield the CPU to another task, do
+ * so here.
+ *
+ * Must be called within acquire_console_sem().
+ */
+void console_conditional_schedule(struct tty_driver *driver)
+{
+	if (driver->may_schedule && current->need_resched) {
+		set_current_state(TASK_RUNNING);
+		schedule();
+	}
+}
+
+void console_print(const char *s)
+{
+	printk(KERN_EMERG "%s", s);
+}
+EXPORT_SYMBOL(console_print);
 
 /*
  * The console driver calls this routine during kernel initialization
@@ -523,7 +555,7 @@ void release_console_sem(kdev_t device)
  * print any messages that were printed by the kernel before the
  * console driver was initialized.
  */
-void register_console(struct console *console)
+void register_console(struct console * console)
 {
 	struct tty_driver *driver;
 	unsigned long flags;
@@ -573,7 +605,7 @@ void register_console(struct console *console)
 	 *	Put this console in the list - keep the
 	 *	preferred driver at the head of the list.
 	 */
-	down(&console_sem);
+	spin_lock(&console_lock);
 	if ((console->flags & CON_CONSDEV) || console_drivers == NULL) {
 		console->next = console_drivers;
 		console_drivers = console;
@@ -581,17 +613,18 @@ void register_console(struct console *console)
 		console->next = console_drivers->next;
 		console_drivers->next = console;
 	}
-	driver = get_tty_driver(console->device(console));
-	if (driver) {
-		init_MUTEX(&driver->tty_lock);
-		driver->flags |= TTY_DRIVER_CONSOLE;
-	}
-	up(&console_sem);
-	if (console->flags & CON_PRINTBUFFER) { 
+       	spin_unlock(&console_lock);
+
+       	driver = get_tty_driver(console->device(console));
+       	if (driver) {
+               	init_MUTEX(&driver->tty_lock);
+               	driver->flags |= TTY_DRIVER_CONSOLE;
+       	}
+
+	if (console->flags & CON_PRINTBUFFER) {
 		/*
-                 * release_cosole_sem() will print out the buffered 
-		 * messages for us.
-                 */
+		 * release_console_sem() will print out the buffered messages for us.
+		 */
 		spin_lock_irqsave(&logbuf_lock, flags);
 		con_start = log_start;
 		spin_unlock_irqrestore(&logbuf_lock, flags);
@@ -600,15 +633,16 @@ void register_console(struct console *console)
 }
 EXPORT_SYMBOL(register_console);
 
-int unregister_console(struct console *console)
+int unregister_console(struct console * console)
 {
 	struct tty_driver *driver = get_tty_driver(console->device(console));
         struct console *a,*b;
 	int res = 1;
 
-	down(&console_sem);
 	if (driver)
 		release_console_sem(console->device(console));
+
+	spin_lock(&console_lock);
 	if (console_drivers == console) {
 		console_drivers=console->next;
 		res = 0;
@@ -629,14 +663,16 @@ int unregister_console(struct console *console)
 	 */
 	if (console_drivers == NULL)
 		preferred_console = -1;
-	up(&console_sem);
+		
+	spin_unlock(&console_lock);
 	return res;
 }
 EXPORT_SYMBOL(unregister_console);
 	
-/*
- * Write a message to a certain tty, not just the console. This is used for
- * messages that need to be redirected to a specific tty.
+/**
+ * tty_write_message - write a message to a certain tty, not just the console.
+ *
+ * This is used for messages that need to be redirected to a specific tty.
  * We don't put it into the syslog queue right now maybe in the future if
  * really needed.
  */
