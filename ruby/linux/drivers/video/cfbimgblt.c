@@ -43,12 +43,12 @@
 
 void cfb_imageblit(struct fb_info *p, struct fb_image *image)
 {
-	int ppw, shift, shift_right, shift_left, x2, y2, n, i, j, k, l = 7;
+	int pad, ppw, shift, shift_right, shift_left, x2, y2, n, i, j, k, l = 7;
 	unsigned long tmp = ~0 << (BITS_PER_LONG - p->var.bits_per_pixel);
-	unsigned long fgx, bgx, fgcolor, bgcolor, eorx;
+	unsigned long fgx, bgx, fgcolor, bgcolor, eorx;	
 	unsigned long end_index, end_mask, mask;
 	unsigned long *dst = NULL;
-	u8 *dst1, src;
+	u8 *dst1, *src;
 
 	/* 
 	 * We could use hardware clipping but on many cards you get around hardware
@@ -60,58 +60,53 @@ void cfb_imageblit(struct fb_info *p, struct fb_image *image)
 	image->dy = image->dy > 0 ? image->dy : 0;
 	x2 = x2 < p->var.xres_virtual ? x2 : p->var.xres_virtual;
 	y2 = y2 < p->var.yres_virtual ? y2 : p->var.yres_virtual;
-	image->width = x2 - image->dx;
+	image->width  = x2 - image->dx;
 	image->height = y2 - image->dy;
+  
+	dst1 = p->screen_base + image->dy * p->fix.line_length + 
+		((image->dx * p->var.bits_per_pixel) >> 3);
+  
+	ppw = BITS_PER_LONG/p->var.bits_per_pixel;
 
-	dst1 = p->screen_base + image->dy * p->fix.line_length +
-	    ((image->dx * p->var.bits_per_pixel) >> 3);
-
-	ppw = BITS_PER_LONG / p->var.bits_per_pixel;
-
-	src = image->data;
-
-	n = ((image->width + 7) >> 3);
-	pad = n - image->width;
+	src = image->data;	
 
 	if (image->depth == 1) {
+
 		if (p->fix.visual == FB_VISUAL_TRUECOLOR) {
-			fgx = fgcolor =
-		    		((u32 *) (p->pseudo_palette))[image->fg_color];
-			bgx = bgcolor =
-		    		((u32 *) (p->pseudo_palette))[image->bg_color];
+			fgx = fgcolor = ((u32 *)(p->pseudo_palette))[image->fg_color];
+			bgx = bgcolor = ((u32 *)(p->pseudo_palette))[image->bg_color];
 		} else {
 			fgx = fgcolor = image->fg_color;
 			bgx = bgcolor = image->bg_color;
-		}
-
-		for (i = 0; i < ppw - 1; i++) {
+		}	
+ 
+		for (i = 0; i < ppw-1; i++) {
 			fgx <<= p->var.bits_per_pixel;
 			bgx <<= p->var.bits_per_pixel;
 			fgx |= fgcolor;
 			bgx |= bgcolor;
 		}
 		eorx = fgx ^ bgx;
+		n = ((image->width + 7) >> 3);
+		pad = (n << 3) - image->width;
 
 		for (i = 0; i < image->height; i++) {
 			dst = (unsigned long *) dst1;
-
-			if (ppw >= image->width) {
-				for (j = image->width / ppw; j > 0; j--) {
-					mask = 0;
-
-					for (k = ppw; k > 0; k--) {
-						if (test_bit(l, src))
-							mask |= (tmp >> (p->var.bits_per_pixel * (k - 1)));
-						l--;
-						if (l < 0) { l = 7; src++; }
-					}
-					fb_writel((mask & eorx) ^ bgx, dst);
-					dst++;
+		
+			for (j = image->width/ppw; j > 0; j--) {
+				mask = 0;
+		
+				for (k = ppw; k > 0; k--) {	
+					if (test_bit(l, src))
+						mask |= (tmp >> (p->var.bits_per_pixel*(k-1)));
+					l--;
+					if (l < 0) { l = 7; src++; }
 				}
-				l = -pad;
-				if (l < 0) { l = 7; src++; }
-				dst1 += p->fix.line_length;
+				fb_writel((mask & eorx)^bgx, dst);
+				dst++;
 			}
-		}
+			l =- pad;		
+			dst1 += p->fix.line_length;	
+		}	
 	}
 }
