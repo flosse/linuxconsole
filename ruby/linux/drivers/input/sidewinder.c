@@ -700,8 +700,9 @@ static void sw_connect(struct gameport *gameport, struct gameport_dev *dev)
 			set_bit(code, sw->dev[i].absbit);
 			sw->dev[i].absmax[code] = (1 << bits) - 1;
 			sw->dev[i].absmin[code] = (bits == 1) ? -1 : 0;
-			sw->dev[i].absflat[code] = (bits >= 5) ? (1 << (bits - 5)) : 0;
 			sw->dev[i].absfuzz[code] = ((bits >> 1) >= 2) ? (1 << ((bits >> 1) - 2)) : 0;
+			if (code != ABS_THROTTLE)
+				sw->dev[i].absflat[code] = (bits >= 5) ? (1 << (bits - 5)) : 0;
 		}
 
 		for (j = 0; (code = sw_btn[sw->type][j]); j++)

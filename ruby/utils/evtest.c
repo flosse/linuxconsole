@@ -28,6 +28,7 @@
 
 #include <linux/input.h>
 
+#include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -63,6 +64,7 @@ NULL, NULL, NULL,
 "ToolPen", "ToolRubber", "ToolBrush", "ToolPencil", "ToolAirbrush", "ToolFinger", "ToolMouse", "ToolLens", NULL, NULL,
 "Touch", "Stylus", "Stylus2" };
 
+char *absval[5] = { "Value", "Min  ", "Max  ", "Fuzz ", "Flat " };
 char *relatives[REL_MAX + 1] = { "X", "Y", "Z", NULL, NULL, NULL, "HWheel", "Dial", "Wheel" };
 char *absolutes[ABS_MAX + 1] = { "X", "Y", "Z", "Rx", "Ry", "Rz", "Throttle", "Rudder", NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 NULL, "Hat0X", "Hat0Y", "Hat1X", "Hat1Y", "Hat2X", "Hat2Y", "Hat3X", "Hat 3Y", "Pressure", "Distance", "XTilt", "YTilt"};
@@ -73,10 +75,22 @@ char *sounds[SND_MAX + 1] = { "Bell", "Click" };
 char **names[EV_MAX + 1] = { events, keys, relatives, absolutes, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 NULL, NULL, leds, sounds, repeats };
 
+#define BITS_PER_LONG (sizeof(long) * 8)
+#define NBITS(x) ((((x)-1)/BITS_PER_LONG)+1)
+#define OFF(x)  ((x)%BITS_PER_LONG)
+#define BIT(x)  (1UL<<OFF(x))
+#define LONG(x) ((x)/BITS_PER_LONG)
+#define test_bit(bit, array)	((array[LONG(bit)] >> OFF(bit)) & 1)
+
 int main (int argc, char **argv)
 {
-	int fd, rd, i;
+	int fd, rd, i, j, k;
 	struct input_event ev[64];
+	int version;
+	unsigned short id[4];
+	unsigned long bit[EV_MAX][NBITS(KEY_MAX)];
+	char name[256] = "Unknown";
+	int abs[5];
 
 	if (argc < 2) {
 		printf ("Usage: evtest /dev/inputX\n");
@@ -84,15 +98,42 @@ int main (int argc, char **argv)
 		exit (1);
 	}
 
-#if 0
-	for (i = 0; i < KEY_MAX; i++)
-		printf("%d - %s\n", i, keys[i]);
-#endif
-
 	if ((fd = open(argv[argc - 1], O_RDONLY)) < 0) {
 		perror("evtest");
 		exit(1);
 	}
+
+	ioctl(fd, EVIOCGVERSION, &version);
+	printf("Input driver version is %d.%d.%d\n",
+		version >> 16, (version >> 8) & 0xff, version & 0xff);
+
+	ioctl(fd, EVIOCGID, id);
+	printf("Input device ID: bus 0x%x vendor 0x%x product 0x%x version 0x%x\n",
+		id[ID_BUS], id[ID_VENDOR], id[ID_PRODUCT], id[ID_VERSION]);
+
+	ioctl(fd, EVIOCGNAME(sizeof(name)), name);
+	printf("Input device name: \"%s\"\n", name);
+
+	memset(bit, 0, sizeof(bit));
+	ioctl(fd, EVIOCGBIT(0, EV_MAX), bit[0]);
+	printf("Supported events:\n");
+
+	for (i = 0; i < EV_MAX; i++)
+		if (test_bit(i, bit[0])) {
+			printf("  Event type %d (%s)\n", i, events[i] ? events[i] : "?");
+			ioctl(fd, EVIOCGBIT(i, KEY_MAX), bit[i]);
+			for (j = 0; j < KEY_MAX; j++) 
+				if (test_bit(j, bit[i])) {
+					printf("    Event code %d (%s)\n", j, names[i] ? (names[i][j] ? names[i][j] : "?") : "?");
+					if (i == EV_ABS) {
+						ioctl(fd, EVIOCGABS(j), abs);
+						for (k = 0; k < 5; k++)
+							if ((k < 3) || abs[k])
+								printf("      %s %6d\n", absval[k], abs[k]);
+					}
+				}
+		}
+		
 
 	printf("Testing ... (interrupt to exit)\n");
 

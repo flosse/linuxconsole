@@ -250,7 +250,7 @@ static int i8042_open(struct serio *port)
  * Allocate the interrupt
  */
 
-	if (request_irq(values->irq, i8042_interrupt, 0, values->name, NULL)) {
+	if (request_irq(values->irq, i8042_interrupt, 0, "i8042", NULL)) {
 		printk(KERN_ERR "i8042.c: Can't get irq %d for %s\n", values->irq, values->name);
 		return -1;
 	}

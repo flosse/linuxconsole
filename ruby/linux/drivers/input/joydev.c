@@ -53,7 +53,6 @@ struct joydev {
 	int used;
 	int open;
 	int minor;
-	char name[32];
 	struct input_handle handle;
 	wait_queue_head_t wait;
 	devfs_handle_t devfs;
@@ -322,6 +321,8 @@ static int joydev_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 {
 	struct joydev_list *list = file->private_data;
 	struct joydev *joydev = list->joydev;
+	struct input_dev *dev = joydev->handle.dev;
+
 
 	switch (cmd) {
 
@@ -360,9 +361,11 @@ static int joydev_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 						sizeof(struct js_corr) * joydev->nabs) ? -EFAULT : 0;
 		default:
 			if ((cmd & ~(_IOC_SIZEMASK << _IOC_SIZESHIFT)) == JSIOCGNAME(0)) {
-				int len = strlen(joydev->name) + 1;
+				int len;
+				if (!dev->name) return 0;
+				len = strlen(dev->name) + 1;
 				if (len > _IOC_SIZE(cmd)) len = _IOC_SIZE(cmd);
-				if (copy_to_user((char *) arg, joydev->name, len)) return -EFAULT;
+				if (copy_to_user((char *) arg, dev->name, len)) return -EFAULT;
 				return len;
 			}
 	}
@@ -400,8 +403,6 @@ static struct input_handle *joydev_connect(struct input_handler *handler, struct
 	memset(joydev, 0, sizeof(struct joydev));
 
 	init_waitqueue_head(&joydev->wait);
-
-	sprintf(joydev->name, "joydev%d", joydev->minor);
 
 	joydev->minor = minor;
 	joydev_table[minor] = joydev;

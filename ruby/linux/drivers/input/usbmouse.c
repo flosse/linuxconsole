@@ -39,6 +39,7 @@ MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 
 struct usb_mouse {
 	signed char data[8];
+	char name[128];
 	struct input_dev dev;
 	struct urb irq;
 	int open;
@@ -90,6 +91,7 @@ static void *usb_mouse_probe(struct usb_device *dev, unsigned int ifnum)
 	struct usb_endpoint_descriptor *endpoint;
 	struct usb_mouse *mouse;
 	int pipe, maxp;
+	char *buf;
 
 	if (dev->descriptor.bNumConfigurations != 1) return NULL;
 	interface = dev->config[0].interface[ifnum].altsetting + 0;
@@ -121,12 +123,37 @@ static void *usb_mouse_probe(struct usb_device *dev, unsigned int ifnum)
 	mouse->dev.open = usb_mouse_open;
 	mouse->dev.close = usb_mouse_close;
 
+	mouse->dev.name = mouse->name;
+	mouse->dev.idbus = BUS_USB;
+	mouse->dev.idvendor = dev->descriptor.idVendor;
+	mouse->dev.idproduct = dev->descriptor.idProduct;
+	mouse->dev.idversion = dev->descriptor.bcdDevice;
+
+	if (!(buf = kmalloc(63, GFP_KERNEL))) {
+		kfree(mouse);
+		return NULL;
+	}
+
+	if (dev->descriptor.iManufacturer &&
+		usb_string(dev, dev->descriptor.iManufacturer, buf, 63) > 0)
+			strcat(mouse->name, buf);
+	if (dev->descriptor.iProduct &&
+		usb_string(dev, dev->descriptor.iProduct, buf, 63) > 0)
+			sprintf(mouse->name, "%s %s", mouse->name, buf);
+
+	if (!strlen(mouse->name))
+		sprintf(mouse->name, "USB HIDBP Mouse %04x:%04x",
+			mouse->dev.idvendor, mouse->dev.idproduct);
+
+	kfree(buf);
+
 	FILL_INT_URB(&mouse->irq, dev, pipe, mouse->data, maxp > 8 ? 8 : maxp,
 		usb_mouse_irq, mouse, endpoint->bInterval);
 
 	input_register_device(&mouse->dev);
 
-	printk(KERN_INFO "input%d: USB HIDBP mouse\n", mouse->dev.number);
+	printk(KERN_INFO "input%d: %s on usb%d:%d.%d\n",
+		 mouse->dev.number, mouse->name, dev->bus->busnum, dev->devnum, ifnum);
 
 	return mouse;
 }

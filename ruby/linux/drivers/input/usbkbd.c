@@ -63,6 +63,7 @@ struct usb_kbd {
 	struct urb irq, led;
 	devrequest dr;
 	unsigned char leds;
+	char name[128];
 	int open;
 };
 
@@ -153,6 +154,7 @@ static void *usb_kbd_probe(struct usb_device *dev, unsigned int ifnum)
 	struct usb_endpoint_descriptor *endpoint;
 	struct usb_kbd *kbd;
 	int i, pipe, maxp;
+	char *buf;
 
 	if (dev->descriptor.bNumConfigurations != 1) return NULL;
 	interface = dev->config[0].interface[ifnum].altsetting + 0;
@@ -196,12 +198,37 @@ static void *usb_kbd_probe(struct usb_device *dev, unsigned int ifnum)
 	kbd->dr.index = interface->bInterfaceNumber;
 	kbd->dr.length = 1;
 
+	kbd->dev.name = kbd->name;
+	kbd->dev.idbus = BUS_USB;
+	kbd->dev.idvendor = dev->descriptor.idVendor;
+	kbd->dev.idproduct = dev->descriptor.idProduct;
+	kbd->dev.idversion = dev->descriptor.bcdDevice;
+
+	if (!(buf = kmalloc(63, GFP_KERNEL))) {
+		kfree(kbd);
+		return NULL;
+	}
+
+	if (dev->descriptor.iManufacturer &&
+		usb_string(dev, dev->descriptor.iManufacturer, buf, 63) > 0)
+			strcat(kbd->name, buf);
+	if (dev->descriptor.iProduct &&
+		usb_string(dev, dev->descriptor.iProduct, buf, 63) > 0)
+			sprintf(kbd->name, "%s %s", kbd->name, buf);
+
+	if (!strlen(kbd->name))
+		sprintf(kbd->name, "USB HIDBP Keyboard %04x:%04x",
+			kbd->dev.idvendor, kbd->dev.idproduct);
+
+	kfree(buf);
+
 	FILL_CONTROL_URB(&kbd->led, dev, usb_sndctrlpipe(dev, 0),
 		(void*) &kbd->dr, &kbd->leds, 1, usb_kbd_led, kbd);
 			
 	input_register_device(&kbd->dev);
 
-	printk(KERN_INFO "input%d: USB HIDBP keyboard\n", kbd->dev.number);
+	printk(KERN_INFO "input%d: %s on on usb%d:%d.%d\n",
+		 kbd->dev.number, kbd->name, dev->bus->busnum, dev->devnum, ifnum);
 
 	return kbd;
 }

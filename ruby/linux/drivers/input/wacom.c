@@ -216,17 +216,17 @@ static void wacom_intuos_irq(struct urb *urb)
 #define WACOM_INTUOS_TOOLS	(BIT(BTN_TOOL_BRUSH) | BIT(BTN_TOOL_PENCIL) | BIT(BTN_TOOL_AIRBRUSH) | BIT(BTN_TOOL_LENS))
 
 struct wacom_features wacom_features[] = {
-	{ "Graphire",     0x10,  8, 10206,  7422,  511, 32, wacom_graphire_irq,
+	{ "Wacom Graphire",     0x10,  8, 10206,  7422,  511, 32, wacom_graphire_irq,
 		BIT(EV_REL), 0, BIT(REL_WHEEL), BIT(BTN_LEFT) | BIT(BTN_RIGHT) | BIT(BTN_MIDDLE), 0 },
-	{ "Intuos 4x5",   0x20, 10, 12700, 10360, 1023, 15, wacom_intuos_irq,
+	{ "Wacom Intuos 4x5",   0x20, 10, 12700, 10360, 1023, 15, wacom_intuos_irq,
 		0, BIT(ABS_TILT_X) | BIT(ABS_TILT_Y), 0, 0, WACOM_INTUOS_TOOLS },
-	{ "Intuos 6x8",   0x21, 10, 20320, 15040, 1023, 15, wacom_intuos_irq,
+	{ "Wacom Intuos 6x8",   0x21, 10, 20320, 15040, 1023, 15, wacom_intuos_irq,
 		0, BIT(ABS_TILT_X) | BIT(ABS_TILT_Y), 0, 0, WACOM_INTUOS_TOOLS },
-	{ "Intuos 9x12",  0x22, 10, 30480, 23060, 1023, 15, wacom_intuos_irq,
+	{ "Wacom Intuos 9x12",  0x22, 10, 30480, 23060, 1023, 15, wacom_intuos_irq,
 		0, BIT(ABS_TILT_X) | BIT(ABS_TILT_Y), 0, 0, WACOM_INTUOS_TOOLS },
-	{ "Intuos 12x12", 0x23, 10, 30480, 30480, 1023, 15, wacom_intuos_irq,
+	{ "Wacom Intuos 12x12", 0x23, 10, 30480, 30480, 1023, 15, wacom_intuos_irq,
 		0, BIT(ABS_TILT_X) | BIT(ABS_TILT_Y), 0, 0, WACOM_INTUOS_TOOLS },
-	{ "Intuos 12x18", 0x24, 10, 47720, 30480, 1023, 15, wacom_intuos_irq,
+	{ "Wacom Intuos 12x18", 0x24, 10, 47720, 30480, 1023, 15, wacom_intuos_irq,
 		0, BIT(ABS_TILT_X) | BIT(ABS_TILT_Y), 0, 0, WACOM_INTUOS_TOOLS },
 	{ NULL , 0 }
 };
@@ -287,12 +287,19 @@ static void *wacom_probe(struct usb_device *dev, unsigned int ifnum)
 	wacom->dev.open = wacom_open;
 	wacom->dev.close = wacom_close;
 
+	wacom->dev.name = wacom->features->name;
+	wacom->dev.idbus = BUS_USB;
+	wacom->dev.idvendor = dev->descriptor.idVendor;
+	wacom->dev.idproduct = dev->descriptor.idProduct;
+	wacom->dev.idversion = dev->descriptor.bcdDevice;
+
 	FILL_INT_URB(&wacom->irq, dev, usb_rcvintpipe(dev, endpoint->bEndpointAddress),
 		     wacom->data, wacom->features->pktlen, wacom->features->irq, wacom, endpoint->bInterval);
 
 	input_register_device(&wacom->dev);
 
-	printk(KERN_INFO "input%d: Wacom %s on usb%d\n", wacom->dev.number, wacom->features->name, dev->devnum);
+	printk(KERN_INFO "input%d: %s on usb%d:%d.%d\n",
+		 wacom->dev.number, wacom->features->name, dev->bus->busnum, dev->devnum, ifnum);
 
 	return wacom;
 }

@@ -294,6 +294,7 @@ struct hid_device {							/* device report descriptor */
 	struct input_dev input;						/* input device structure */
 	int open;							/* is the device open by input? */
 	int quirks;							/* Various nasty tricks the device can pull on us */
+	char name[128];							/* Device name */
 };
 
 #define HID_GLOBAL_STACK_SIZE 4

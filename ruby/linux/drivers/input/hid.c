@@ -80,6 +80,9 @@ static struct {
 	__s32 y;
 }  hid_hat_to_axis[] = {{ 0,-1}, { 1,-1}, { 1, 0}, { 1, 1}, { 0, 1}, {-1, 1}, {-1, 0}, {-1,-1}, { 0, 0}};
 
+static char *hid_types[] = {"Device", "Pointer", "Mouse", "Device", "Joystick",
+				"Gamepad", "Keyboard", "Keypad", "Multi-Axis Controller"};
+
 /*
  * Register a new report for a device.
  */
@@ -1336,7 +1339,7 @@ struct hid_blacklist {
 	{ 0, 0 }
 };
 
-static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
+static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum, char *name)
 {
 	struct usb_interface_descriptor *interface = dev->actconfig->interface[ifnum].altsetting + 0;
 	struct hid_descriptor *hdesc;
@@ -1423,6 +1426,20 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 	hid->dr.index = hid->ifnum;
 	hid->dr.length = 1;
 
+	hid->input.name = hid->name;
+	hid->input.idbus = BUS_USB;
+	hid->input.idvendor = dev->descriptor.idVendor;
+	hid->input.idproduct = dev->descriptor.idProduct;
+	hid->input.idversion = dev->descriptor.bcdDevice;
+
+	if (strlen(name)) 
+		strcpy(hid->name, name);
+	else
+		sprintf(hid->name, "USB HID %s %04x:%04x",
+			((hid->application >= 0x00010000) && (hid->application <= 0x00010008)) ?
+			hid_types[hid->application & 0xffff] : "Device",
+			hid->input.idvendor, hid->input.idproduct);
+
 	FILL_CONTROL_URB(&hid->urbout, dev, usb_sndctrlpipe(dev, 0),
 		(void*) &hid->dr, hid->bufout, 1, hid_ctrl, hid);
 
@@ -1434,13 +1451,27 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 
 static void* hid_probe(struct usb_device *dev, unsigned int ifnum)
 {
-	char *hid_name[] = {"Device", "Pointer", "Mouse", "Device", "Joystick",
-				"Gamepad", "Keyboard", "Keypad", "Multi-Axis Controller"};
 	struct hid_device *hid;
+	char name[128];
+	char *buf;
 
 	dbg("HID probe called for ifnum %d", ifnum);
 
-	if (!(hid = usb_hid_configure(dev, ifnum)))
+	name[0] = 0;
+
+	if (!(buf = kmalloc(63, GFP_KERNEL)))
+		return NULL;
+
+	if (dev->descriptor.iManufacturer &&
+		usb_string(dev, dev->descriptor.iManufacturer, buf, 63) > 0)
+			strcat(name, buf);
+	if (dev->descriptor.iProduct &&
+		usb_string(dev, dev->descriptor.iProduct, buf, 63) > 0)
+			sprintf(name, "%s %s", name, buf);
+
+	kfree(buf);
+
+	if (!(hid = usb_hid_configure(dev, ifnum, name)))
 		return NULL;
 
 	hid_dump_device(hid);
@@ -1448,10 +1479,18 @@ static void* hid_probe(struct usb_device *dev, unsigned int ifnum)
 	hid_init_input(hid);
 	input_register_device(&hid->input);
 
-	printk(KERN_INFO "input%d: USB HID v%x.%02x %s\n",
-		hid->input.number, hid->version >> 8, hid->version & 0xff,
+	printk(KERN_INFO "input%d: USB HID v%x.%02x %s",
+		hid->input.number,
+		hid->version >> 8, hid->version & 0xff,
 		((hid->application >= 0x00010000) && (hid->application <= 0x00010008)) ?
-			hid_name[hid->application & 0xffff] : "device");
+		hid_types[hid->application & 0xffff] : "Device");
+
+	if (strlen(name))
+		printk(" [%s]", name);
+	else
+		printk(" [%04x:%04x]", hid->input.idvendor, hid->input.idproduct);
+	
+	printk(" on usb%d:%d.%d\n", dev->bus->busnum, dev->devnum, ifnum);
 
 	return hid;
 }

@@ -33,6 +33,7 @@
 #include <linux/time.h>
 #else
 #include <sys/time.h>
+#include <sys/ioctl.h>
 #endif
 
 /*
@@ -56,17 +57,17 @@ struct input_event {
  * IOCTLs (0x00 - 0x7f)
  */
 
-#define EVIOCGVERSION		_IOR('E', 0x01, __u32)                  /* get driver version */
+#define EVIOCGVERSION		_IOR('E', 0x01, int)                    /* get driver version */
 #define EVIOCGID		_IOR('E', 0x02, short[4])		/* get device ID */
 #define EVIOCGREP		_IOR('E', 0x03, int[2])			/* get repeat settings */
 #define EVIOCSREP		_IOW('E', 0x03, int[2])			/* get repeat settings */
 #define EVIOCGKEYCODE		_IOR('E', 0x04, int[2])			/* get keycode */
 #define EVIOCSKEYCODE		_IOW('E', 0x04, int[2])			/* set keycode */
 #define EVIOCGKEY		_IOR('E', 0x05, int[2])			/* get key value */
-#define EVIOCGABSLIM(num)	_IOR('E', 0x10, int[5])			/* get abs event limits */ 
-#define EVIOCGABS(num)		_IOR('E', 0x11, int[2])			/* get abs value */
-#define EVIOCGNAME(len)		_IOC(_IOC_READ, 'E', 0x18, len)		/* get device name */
+#define EVIOCGNAME(len)		_IOC(_IOC_READ, 'E', 0x06, len)		/* get device name */
+
 #define EVIOCGBIT(ev,len)	_IOC(_IOC_READ, 'E', 0x20 + ev, len)	/* get event bits */
+#define EVIOCGABS(abs)		_IOR('E', 0x40 + abs, int[5])		/* get abs value/limits */ 
 
 /*
  * Event types
@@ -403,8 +404,13 @@ struct input_event {
 #define SND_MAX			0x07
 
 /*
- * Bus IDs.
+ * IDs.
  */
+
+#define ID_BUS			0
+#define ID_VENDOR		1
+#define ID_PRODUCT		2
+#define ID_VERSION		3
 
 #define BUS_PCI			0x01
 #define BUS_ISAPNP		0x02
@@ -438,7 +444,7 @@ struct input_dev {
 	unsigned short idbus;
 	unsigned short idvendor;
 	unsigned short idproduct;
-	unsigned short idtype;
+	unsigned short idversion;
 
 	unsigned long evbit[NBITS(EV_MAX)];
 	unsigned long keybit[NBITS(KEY_MAX)];

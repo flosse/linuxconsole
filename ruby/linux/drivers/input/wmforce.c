@@ -52,6 +52,8 @@ static struct {
         __s32 y;
 } wmforce_hat_to_axis[16] = {{ 0,-1}, { 1,-1}, { 1, 0}, { 1, 1}, { 0, 1}, {-1, 1}, {-1, 0}, {-1,-1}};
 
+static char *wmforce_name = "Logitech WingMan Force";
+
 static void wmforce_irq(struct urb *urb)
 {
 	struct wmforce *wmforce = urb->context;
@@ -142,12 +144,19 @@ static void *wmforce_probe(struct usb_device *dev, unsigned int ifnum)
 	wmforce->dev.open = wmforce_open;
 	wmforce->dev.close = wmforce_close;
 
+	wmforce->dev.name = wmforce_name;
+	wmforce->dev.idbus = BUS_USB;
+	wmforce->dev.idvendor = dev->descriptor.idVendor;
+	wmforce->dev.idproduct = dev->descriptor.idProduct;
+	wmforce->dev.idversion = dev->descriptor.bcdDevice;
+
 	FILL_INT_URB(&wmforce->irq, dev, usb_rcvintpipe(dev, endpoint->bEndpointAddress),
 			wmforce->data, 8, wmforce_irq, wmforce, endpoint->bInterval);
 
 	input_register_device(&wmforce->dev);
 
-	printk(KERN_INFO "input%d: Logitech WingMan Force USB\n", wmforce->dev.number);
+	printk(KERN_INFO "input%d: %s on usb%d:%d.%d\n",
+		 wmforce->dev.number, wmforce_name, dev->bus->busnum, dev->devnum, ifnum);
 
 	return wmforce;
 }
