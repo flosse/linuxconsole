@@ -48,6 +48,8 @@ static int js[24] = { -1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0 };
  * Times, feature definitions.
  */
 
+#define ANALOG_RUDDER		0x04
+#define ANALOG_THROTTLE		0x08
 #define ANALOG_AXES_STD		0x0f
 #define ANALOG_BUTTONS_STD	0xf0
 
@@ -85,8 +87,8 @@ static struct {
 
 static int analog_axes[] = { ABS_X, ABS_Y, ABS_RUDDER, ABS_THROTTLE };
 static int analog_hats[] = { ABS_HAT0X, ABS_HAT0Y, ABS_HAT1X, ABS_HAT1Y, ABS_HAT2X, ABS_HAT2Y };
-static int analog_exts[] = { ANALOG_HAT1_CHF, ANALOG_HAT2_CHF, ANALOG_ANY_CHF };
-static int analog_pad_btn[] = { BTN_A, BTN_B, BTN_X, BTN_Y, BTN_TL2, BTN_TR2, BTN_C, BTN_Z };
+static int analog_exts[] = { ANALOG_HAT1_CHF, ANALOG_HAT2_CHF, ANALOG_HAT_FCS };
+static int analog_pad_btn[] = { BTN_A, BTN_B, BTN_C, BTN_X, BTN_TL2, BTN_TR2, BTN_Y, BTN_Z, BTN_TL, BTN_TR };
 static int analog_joy_btn[] = { BTN_TRIGGER, BTN_THUMB, BTN_TOP, BTN_TOP2, BTN_BASE, BTN_BASE2,
 				BTN_BASE3, BTN_BASE4, BTN_BASE5, BTN_THUMB2 };
 
@@ -328,7 +330,7 @@ static void analog_calibrate_timer(struct analog_port *port)
 	GET_TIME(t3);
 	restore_flags(flags);
 
-	port->speed = DELTA(t2, t1) - DELTA(t3, t2);
+	port->speed = DELTA(t1, t2) - DELTA(t2, t3);
 
 	tx = 1 << 30;
 
@@ -340,7 +342,7 @@ static void analog_calibrate_timer(struct analog_port *port)
 		GET_TIME(t3);
 		restore_flags(flags);
 		udelay(i);
-		if ((t = DELTA(t2,t1) - DELTA(t3,t2)) < tx) tx = t;
+		if ((t = DELTA(t1, t2) - DELTA(t2, t3)) < tx) tx = t;
 	}
 
         port->loop = (ANALOG_LOOP_TIME * tx) / 50000;
@@ -354,9 +356,9 @@ static void analog_calibrate_timer(struct analog_port *port)
 static void analog_name(struct analog *analog)
 {
 
-	sprintf(analog->name, "Analog %d-axis %d-button",
+	sprintf(analog->name, "Analog %#x %d-axis %d-button", analog->mask,
 		hweight8(analog->mask & 0x0f),
-		hweight8(analog->mask & 0xf0) + (analog->mask & ANALOG_BTNS_CHF) * 2 +
+		hweight8(analog->mask & 0xf0) + !!(analog->mask & ANALOG_BTNS_CHF) * 2 +
 		       hweight16(analog->mask & ANALOG_BTNS_GAMEPAD));
 
 	if (analog->mask & ANALOG_HATS_ALL)
@@ -390,7 +392,7 @@ static void analog_init_device(struct analog_port *port, struct analog *analog)
 	analog->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 	
 	for (i = j = 0; i < 4; i++)
-		if ((analog->mask >> i) & 1) {
+		if (analog->mask & (1 << i)) {
 			
 			t = analog_axes[j];
 			x = port->axes[i];
@@ -408,19 +410,19 @@ static void analog_init_device(struct analog_port *port, struct analog *analog)
 			j++;
 		}
 
-	for (i = 0; i < 3; i++) 
-		if (analog->mask & analog_exts[i])
-			for (j = 0; j < 2; j++) {
-				t = analog_hats[i * 2 + j];
+	for (i = j = 0; i < 3; i++) 
+		if (analog->mask & analog_exts[i]) 
+			for (x = 0; x < 2; x++) {
+				t = analog_hats[j++];
+				printk("Adding hat: %d\n", t);
 				set_bit(t, analog->dev.absbit);
 				analog->dev.absmax[t] = 1;
 				analog->dev.absmin[t] = -1;
 			}
 
 	for (i = j = 0; i < 4; i++)
-		if (analog->mask & (1 << i)) {
+		if (analog->mask & (0x10 << i))
 			set_bit(analog->buttons[j++], analog->dev.keybit);
-		}
 
 	if (analog->mask & ANALOG_BTNS_CHF) {
 		set_bit(analog->buttons[j++], analog->dev.keybit);
@@ -470,26 +472,32 @@ static int analog_init_masks(struct analog_port *port)
 	analog[0].buttons = analog_joy_btn;
 
 	for (i = 0; i < 24; i += 3)
-		for (j = 0; j < 2; j++)
-			if (js[i] == port->gameport->number) {
+		if (js[i] == port->gameport->number)
+			for (j = 0; j < 2; j++) {
 				analog[j].mask = js[i + j + 1];
 				analog[j].buttons = (analog[j].mask & ANALOG_BTNS_GAMEPAD)
 						  ? analog_pad_btn : analog_joy_btn;
 				break;
 			}
 
+	printk("A: %#x\n", analog[0].mask);
+
 	analog[0].mask &= ~(ANALOG_AXES_STD | ANALOG_HAT_FCS | ANALOG_BTNS_GAMEPAD)
-			| port->mask | ((port->mask & 0x80) << 4)
-			| ((port->mask & 0xc0) << 6) | ((port->mask & 0xc0) << 8);
+			| port->mask | ((port->mask << 8) & ANALOG_HAT_FCS)
+			| ((port->mask << 10) & ANALOG_BTNS_TLR) | ((port->mask << 12) & ANALOG_BTNS_TLR2);
+	printk("B: %#x\n", analog[0].mask);
 
-	analog[0].mask &= ~(ANALOG_AXES_STD | ANALOG_BTNS_GAMEPAD)
-			| ~((analog[0].mask & ANALOG_HAT_FCS) >> 4)
-			| ~((analog[0].mask & ANALOG_HAT_FCS) << 2)
-			| ~((analog[0].mask & ANALOG_HAT_FCS) << 4);
+	analog[0].mask &= ~(ANALOG_THROTTLE | ANALOG_BTN_TR | ANALOG_BTN_TR2)
+			| ((~analog[0].mask & ANALOG_HAT_FCS) >> 8)
+			| ((~analog[0].mask & ANALOG_HAT_FCS) << 2)
+			| ((~analog[0].mask & ANALOG_HAT_FCS) << 4);
+	printk("C: %#x\n", analog[0].mask);
 
-	analog[0].mask &= ~ANALOG_AXES_STD
-			| ~(((analog[0].mask & ANALOG_BTNS_TLR ) >> 6)
-			|   ((analog[0].mask & ANALOG_BTNS_TLR2) >> 8));
+	analog[0].mask &= ~(ANALOG_THROTTLE | ANALOG_RUDDER)
+			| (((~analog[0].mask & ANALOG_BTNS_TLR ) >> 10)
+			&  ((~analog[0].mask & ANALOG_BTNS_TLR2) >> 12));
+
+	printk("D: %#x\n", analog[0].mask);
 
 	analog[1].mask &= (analog[0].mask & ANALOG_EXTENSIONS) ? 0 
 			: ((ANALOG_BUTTONS_STD | mask) & ~analog[0].mask);
@@ -557,7 +565,7 @@ static void analog_disconnect(struct gameport *gameport)
 			input_unregister_device(&port->analog[i].dev);
 	gameport_close(gameport);
 	printk(KERN_INFO "analog: %d out of %d reads (%d%%) failed\n",
-		port->bads, port->reads, port->bads * 100 / port->reads);
+		port->bads, port->reads, port->reads ? (port->bads * 100 / port->reads) : 0);
 	kfree(port);
 }
 
