@@ -49,6 +49,7 @@
 
 #define TMDC_MODE_M3DI		1
 #define TMDC_MODE_3DRP		3
+#define TMDC_MODE_FM		8
 #define TMDC_MODE_FGP		163
 
 #define TMDC_BYTE_ID		10
@@ -192,6 +193,15 @@ static void tmdc_timer(unsigned long private)
 
 					break;
 
+				case TMDC_MODE_FM:
+
+					for (i = 0; i < 8; i++)
+						input_report_key(dev, tmdc_btn_joy[i],
+							(data[j][tmdc_byte_d[0]] >> (i + 0)) & 1);
+					for (i = 0; i < 2; i++)
+						input_report_key(dev, tmdc_btn_joy[i + 8],
+							(data[j][tmdc_byte_d[1]] >> (i + 6)) & 1);
+
 				default:
 
 					for (i = 0; i < ((data[j][TMDC_BYTE_DEF] & 0xf) << 3) && i < TMDC_BTN_JOY; i++)
@@ -239,7 +249,7 @@ static void tmdc_connect(struct gameport *gameport, struct gameport_dev *dev)
 		char padbtn;
 	} models[] = {	{   1, "ThrustMaster Millenium 3D Inceptor",	  6, 0, 6,  0 },
 			{   3, "ThrustMaster Rage 3D Gamepad",		  2, 0, 0, 10 },
-			{   8, "ThrustMaster FragMaster',		  3, 0, 0, 10 },
+			{   8, "ThrustMaster FragMaster',		  4, 0, 0, 10 },
 			{ 163, "Thrustmaster Fusion GamePad",		  2, 0, 0, 10 },
 			{   0, "Unknown %d-axis, %d-button TM device %d", 0, 0, 0,  0 }};
 	unsigned char data[2][TMDC_MAX_LENGTH];
