@@ -49,7 +49,7 @@ int readchar(int fd, unsigned char *c, int timeout)
 {
 	struct timeval tv;
 	fd_set set;
-
+	
 	tv.tv_sec = 0;
 	tv.tv_usec = timeout * 1000;
 
@@ -61,6 +61,15 @@ int readchar(int fd, unsigned char *c, int timeout)
 	read(fd, c, 1);
 
 	return 0;
+}
+
+int waitchar(int fd, unsigned char c, int timeout)
+{
+	unsigned char b = 0;
+
+	while (readchar(fd, &b, timeout) || b != c);
+
+	return -(b != c);
 }
 
 void setline(int fd, int flags, int speed)
@@ -109,18 +118,29 @@ int warrior_init(int fd)
 	return 0;
 }
 
+int spaceball_cmd(int fd, char *c)
+{
+	int i;
+	for (i = 0; c[i]; i++)
+		write(fd, c + i, 1);
+	write(fd, "\r", 1);
+	if (waitchar(fd, 0x0d, 4000))
+		return -1;
+
+	return 0;
+}
+
 int spaceball_init(int fd)
 {
-	unsigned char c;
-
-	if (readchar(fd, &c, 4000) || c != 0x11 ||
-	    readchar(fd, &c, 1000) || c != 0x0d)
-		return -1;
-
-	sleep(2);				/* Wait a few seconds for the Spaceball to initialize. */
-
-	if (write(fd,"YS\rM\r", 5) != 5)	/* Set linear sensitivity & enable axis events */
-		return -1;
+	if (	waitchar(fd, 0x11, 4000)   ||
+		waitchar(fd, 0x0d, 1000)   ||
+		waitchar(fd, 0x0d, 4000)   ||
+		waitchar(fd, 0x0d, 4000)   ||
+		spaceball_cmd(fd, "YS")    ||
+		spaceball_cmd(fd, "P@A@A") ||
+		spaceball_cmd(fd, "FT@")   ||
+		spaceball_cmd(fd, "MSS"))
+			return -1;
 
 	return 0;
 }

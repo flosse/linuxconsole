@@ -46,9 +46,9 @@
 
 #define SPACEORB_MAX_LENGTH	64
 
-static int spaceorb_buttons[] = { BTN_TL, BTN_TR, BTN_Y, BTN_X, BTN_B, BTN_A, BTN_MODE};
-static int spaceorb_axes[] = { ABS_X, ABS_Y, ABS_Z, ABS_RX, ABS_RY, ABS_RZ};
-static char *spaceorb_name = "SpaceTec SpaceOrb 360";
+static int spaceorb_buttons[] = { BTN_TL, BTN_TR, BTN_Y, BTN_X, BTN_B, BTN_A };
+static int spaceorb_axes[] = { ABS_X, ABS_Y, ABS_Z, ABS_RX, ABS_RY, ABS_RZ };
+static char *spaceorb_name = "SpaceTec SpaceOrb 360 / Avenger";
 
 /*
  * Per-Orb data.
@@ -103,7 +103,7 @@ static void spaceorb_process_packet(struct spaceorb *spaceorb)
 			axes[5] = ((data[9] & 0x3f) << 4) | (data[10] >> 3);
 			for (i = 0; i < 6; i++)
 				input_report_abs(dev, spaceorb_axes[i], axes[i] - ((axes[i] & 0x200) ? 1024 : 0));
-			for (i = 0; i < 8; i++)
+			for (i = 0; i < 6; i++)
 				input_report_key(dev, spaceorb_buttons[i], (data[1] >> i) & 1);
 			break;
 
@@ -167,8 +167,8 @@ static void spaceorb_connect(struct serio *serio, struct serio_dev *dev)
 
 	spaceorb->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);	
 
-	for (i = 0; i < 7; i++)
-		set_bit(spaceorb_buttons[i], &spaceorb->dev.keybit);
+	for (i = 0; i < 6; i++)
+		set_bit(spaceorb_buttons[i], spaceorb->dev.keybit);
 
 	for (i = 0; i < 6; i++) {
 		t = spaceorb_axes[i];

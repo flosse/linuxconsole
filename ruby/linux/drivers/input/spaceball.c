@@ -11,7 +11,7 @@
  */
 
 /*
- * SpaceTec SpaceBall 4000 FLX driver for Linux
+ * SpaceTec SpaceBall 2003/3003/4000 FLX driver for Linux
  */
 
 /*
@@ -45,9 +45,11 @@
  * Constants.
  */
 
-#define JS_SBALL_MAX_LENGTH	128
+#define SPACEBALL_MAX_LENGTH	128
 static int spaceball_axes[] = { ABS_X, ABS_Z, ABS_Y, ABS_RX, ABS_RZ, ABS_RY };
-static char *spaceball_name = "SpaceTec SpaceBall 4000 FLX"; 
+static int spaceball_buttons[] = { BTN_1, BTN_2, BTN_3, BTN_4, BTN_5, BTN_6, BTN_7, BTN_8, BTN_9,
+					BTN_A, BTN_B, BTN_C, BTN_MODE };
+static char *spaceball_name = "SpaceTec SpaceBall 2003/3003/4000 FLX"; 
 
 /*
  * Per-Ball data.
@@ -58,7 +60,7 @@ struct spaceball {
 	struct serio *serio;
 	int idx;
 	int escape;
-	unsigned char data[JS_SBALL_MAX_LENGTH];
+	unsigned char data[SPACEBALL_MAX_LENGTH];
 };
 
 /*
@@ -78,30 +80,50 @@ static void spaceball_process_packet(struct spaceball* spaceball)
 
 	switch (spaceball->data[0]) {
 
-		case '@':					/* Reset packet */
-			spaceball->data[spaceball->idx - 1] = 0;
-			for (i = 1; i < spaceball->idx && spaceball->data[i] == ' '; i++);
-			printk(KERN_INFO "input%d: %s [%s] on serio%d\n",
-				spaceball->dev.number, spaceball_name, spaceball->data + i, spaceball->serio->number);
-			break;
-
 		case 'D':					/* Ball data */
 			if (spaceball->idx != 15) return;
-			for (i = 0; i < 6; i++) {
+			for (i = 0; i < 6; i++)
 				input_report_abs(dev, spaceball_axes[i], 
 					(__s16)((data[2 * i + 3] << 8) | data[2 * i + 2]));
-			}
 			break;
 
-		case '.':				/* Button data, part2 */
+		case 'K':					/* Button data */
 			if (spaceball->idx != 3) return;
-			input_report_key(dev, BTN_0,  data[2] & 1);
-			input_report_key(dev, BTN_1, data[2] & 2);
+			input_report_key(dev, BTN_1, (data[2] & 0x01) || (data[2] & 0x20));
+			input_report_key(dev, BTN_2, data[2] & 0x02);
+			input_report_key(dev, BTN_3, data[2] & 0x04);
+			input_report_key(dev, BTN_4, data[2] & 0x08);
+			input_report_key(dev, BTN_5, data[1] & 0x01);
+			input_report_key(dev, BTN_6, data[1] & 0x02);
+			input_report_key(dev, BTN_7, data[1] & 0x04);
+			input_report_key(dev, BTN_8, data[1] & 0x10);
 			break;
 
-		case '?':				/* Error packet */
+		case '.':					/* Advanced button data */
+			if (spaceball->idx != 3) return;
+			input_report_key(dev, BTN_1, data[2] & 0x01);
+			input_report_key(dev, BTN_2, data[2] & 0x02);
+			input_report_key(dev, BTN_3, data[2] & 0x04);
+			input_report_key(dev, BTN_4, data[2] & 0x08);
+			input_report_key(dev, BTN_5, data[2] & 0x10);
+			input_report_key(dev, BTN_6, data[2] & 0x20);
+			input_report_key(dev, BTN_7, data[2] & 0x80);
+			input_report_key(dev, BTN_8, data[1] & 0x01);
+			input_report_key(dev, BTN_9, data[1] & 0x02);
+			input_report_key(dev, BTN_A, data[1] & 0x04);
+			input_report_key(dev, BTN_B, data[1] & 0x08);
+			input_report_key(dev, BTN_C, data[1] & 0x10);
+			input_report_key(dev, BTN_MODE, data[1] & 0x20);
+			break;
+
+		case 'E':					/* Device error */
 			spaceball->data[spaceball->idx - 1] = 0;
 			printk(KERN_ERR "spaceball: Device error. [%s]\n", spaceball->data + 1);
+			break;
+
+		case '?':					/* Bad command packet */
+			spaceball->data[spaceball->idx - 1] = 0;
+			printk(KERN_ERR "spaceball: Bad command. [%s]\n", spaceball->data + 1);
 			break;
 	}
 }
@@ -140,7 +162,7 @@ static void spaceball_interrupt(struct serio *serio, unsigned char data, unsigne
 				spaceball->escape = 0;
 				printk(KERN_WARNING "spaceball.c: Unknown escaped character: %#x (%c)\n", data, data);
 			}
-			if (spaceball->idx < JS_SBALL_MAX_LENGTH)
+			if (spaceball->idx < SPACEBALL_MAX_LENGTH)
 				spaceball->data[spaceball->idx++] = data;
 			return;
 	}
@@ -179,6 +201,11 @@ static void spaceball_connect(struct serio *serio, struct serio_dev *dev)
 	spaceball->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);	
 	spaceball->dev.keybit[LONG(BTN_0)] = BIT(BTN_0) | BIT(BTN_1);
 
+	for (i = 0; i < 13; i++) {
+		printk(KERN_DEBUG "%d\n", spaceball_buttons[i]);
+		set_bit(spaceball_buttons[i], spaceball->dev.keybit);
+	}
+
 	for (i = 0; i < 6; i++) {
 		t = spaceball_axes[i];
 		set_bit(t, spaceball->dev.absbit);
@@ -205,6 +232,9 @@ static void spaceball_connect(struct serio *serio, struct serio_dev *dev)
 	}
 
 	input_register_device(&spaceball->dev);
+
+	printk(KERN_INFO "input%d: %s on serio%d\n",
+		spaceball->dev.number, spaceball_name, serio->number);
 }
 
 /*
