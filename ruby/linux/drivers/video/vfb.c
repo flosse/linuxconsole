@@ -87,7 +87,7 @@ static int vfb_check_var(struct fb_var_screeninfo *var,
 static int vfb_set_par(struct fb_info *info);
 static int vfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 			 u_int transp, struct fb_info *info);
-static int vfb_pan_display(struct fb_var_screeninfo *var,
+static int vfb_pan_display(struct fb_var_screeninfo *var, int con,
 			   struct fb_info *info);
 static int vfb_mmap(struct fb_info *info, struct file *file,
 		    struct vm_area_struct *vma);
@@ -437,6 +437,8 @@ int __init vfb_init(void)
 	fb_info.fix = vfb_fix;
 	fb_info.pseudo_palette = &vfb_pseudo_palette;
 	fb_info.flags = FBINFO_FLAG_DEFAULT;
+
+	fb_alloc_cmap(&fb_info.cmap, 256, 0);
 
 	if (register_framebuffer(&fb_info) < 0) {
 		vfree(videomemory);

@@ -39,7 +39,7 @@ static struct fb_fix_screeninfo q40fb_fix __initdata = {
 	type:		FB_TYPE_PACKED_PIXELS,
 	visual:		FB_VISUAL_TRUECOLOR,
 	line_length:	1024*2,
-	accel_flags:	FB_ACCEL_NONE,
+	accel:		FB_ACCEL_NONE,
 };
 
 static struct fb_var_screeninfo q40fb_var __initdata = {
@@ -82,14 +82,14 @@ static int q40fb_setcolreg(unsigned regno, unsigned red, unsigned green,
      *  Return != 0 for invalid regno.
      */
   
-    red >>=11;
-    green >>=11;
-    blue >>=10;
+    red>>=11;
+    green>>=11;
+    blue>>=10;
 
     if (regno < 16) {
-	info->pseudo_palette[regno] = ((red & 31) <<6) |
-	                              ((green & 31) << 11) |
-	                         	(blue & 63);
+	((u16 *)info->pseudo_palette)[regno] = ((red & 31) <<6) |
+					       ((green & 31) << 11) |
+					       (blue & 63);
     }
     return 0;
 }
@@ -110,6 +110,8 @@ int q40fb_init(void)
 	fb_info.pseudo_palette = pseudo_palette;	
    	fb_info.screen_base = (char *) q40fb_fix.smem_start;
 
+	fb_alloc_cmap(&fb_info.cmap, 16, 0);
+	
 	master_outb(3, DISPLAY_CONTROL_REG);
 
 	if (register_framebuffer(&fb_info) < 0) {

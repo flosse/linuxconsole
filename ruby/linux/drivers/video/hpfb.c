@@ -47,6 +47,7 @@ static struct fb_fix_screeninfo hpfb_fix __initdata = {
 	visual:		FB_VISUAL_PSEUDOCOLOR,
 	line_length:	1024,
 	accel:		FB_ACCEL_NONE,
+};
 
 static struct fb_var_screeninfo hpfb_defined = {
 	xres:		1024,
@@ -154,7 +155,9 @@ int __init hpfb_init_one(unsigned long base)
 	fb_info.flags = FBINFO_FLAG_DEFAULT;
 	fb_info.var   = hpfb_defined;
 	fb_info.fix   = hpfb_fix;
-	fb_info.screen_base = hpfb_fix.smem_start;
+	fb_info.screen_base = (char *)hpfb_fix.smem_start;	// FIXME
+
+	fb_alloc_cmap(&fb_info.cmap, 256, 0);
 
 	if (register_framebuffer(&fb_info) < 0)
 		return 1;

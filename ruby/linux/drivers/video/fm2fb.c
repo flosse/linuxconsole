@@ -127,6 +127,8 @@
 
 static volatile unsigned char *fm2fb_reg;
 
+#define arraysize(x)	(sizeof(x)/sizeof(*(x)))
+
 static struct fb_info fb_info;
 static u32 pseudo_palette[17];
 
@@ -171,6 +173,11 @@ static int fm2fb_blank(int blank, struct fb_info *info);
 
 static struct fb_ops fm2fb_ops = {
 	owner:		THIS_MODULE,
+	fb_get_fix:	gen_get_fix,
+	fb_get_var:	gen_get_var,
+	fb_set_var:	gen_set_var,
+	fb_get_cmap:	gen_get_cmap,
+	fb_set_cmap:	gen_set_cmap,
 	fb_setcolreg:	fm2fb_setcolreg,
 	fb_blank:	fm2fb_blank,	
 	fb_fillrect:	cfb_fillrect,
@@ -188,8 +195,9 @@ static int fm2fb_blank(int blank, struct fb_info *info)
 	if (!blank)
 		t |= FRAMEMASTER_ENABLE | FRAMEMASTER_NOLACE;
 	fm2fb_reg[0] = t;
+	return 0;
 }
-    
+
     /*
      *  Set a single color register. The values supplied are already
      *  rounded down to the hardware's capabilities (according to the
@@ -262,6 +270,8 @@ int __init fm2fb_init(void)
 		fb_info.pseudo_palette = pseudo_palette;
 		fb_info.fix = fb_fix;
 		fb_info.flags = FBINFO_FLAG_DEFAULT;
+
+		fb_alloc_cmap(&fb_info.cmap, 16, 0);
 
 		if (register_framebuffer(&fb_info) < 0)
 			return -EINVAL;
