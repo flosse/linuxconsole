@@ -205,8 +205,8 @@ static void vte_cht(struct vc_data *vc, int vpar)
  */
 void vte_ed(struct vc_data *vc, int vpar)
 {
-        unsigned int count;
-        unsigned short * start;
+	unsigned short *start;
+	unsigned int count;
 
         switch (vpar) {
                 case 0: /* erase from cursor to end of display */
@@ -1909,6 +1909,7 @@ attribute */
                 switch (c) {
                 case '0':       /* DEC Special graphics */
                         G0_charset = GRAF_MAP;
+			break;
 #if 0
                 case '>':       /* DEC Technical */
                         G0_charset = DEC_TECH_MAP;
