@@ -561,24 +561,6 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 #endif /* !sparc32 */
 }
 
-#if 1 /* to go away in 2.5.0 */
-int GET_FB_IDX(kdev_t rdev)
-{
-    int fbidx = MINOR(rdev);
-    if (fbidx >= 32) {
-	int newfbidx = fbidx >> 5;
-	static int warned;
-	if (!(warned & (1<<newfbidx))) {
-	    warned |= 1<<newfbidx;
-	    printk("Warning: Remapping obsolete /dev/fb* minor %d to %d\n",
-		   fbidx, newfbidx);
-	}
-	fbidx = newfbidx;
-    }
-    return fbidx;
-}
-#endif
-
 static int
 fb_open(struct inode *inode, struct file *file)
 {
@@ -782,6 +764,3 @@ EXPORT_SYMBOL(register_framebuffer);
 EXPORT_SYMBOL(unregister_framebuffer);
 EXPORT_SYMBOL(registered_fb);
 EXPORT_SYMBOL(num_registered_fb);
-#if 1 /* to go away in 2.5.0 */
-EXPORT_SYMBOL(GET_FB_IDX);
-#endif
