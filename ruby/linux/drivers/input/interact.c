@@ -1,60 +1,49 @@
 /*
- *  joy-hammerheadfx.c  Version 1.0
+ *  interact.c  Version 0.1
  *
- *  Copyright (c) 2000 Toby Deshane
- *  Copyright (c) 1996-1999 Vojtech Pavlik
+ *  Copyright (c) 2000 Vojtech Pavlik
  *
- *  Basic source skeleton borrowed from the Amiga joystick driver.
+ *  Based on the work of:
+ *	Toby Deshane
  *
  *  Sponsored by SuSE
  */
 
 /*
- * This is a module for the Linux joystick driver, supporting
- * the Hammerhead/FX controller from InterAct.
+ * InterAct HammerHead/FX gamepad driver for Linux
  */
 
 /*
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or 
+ * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- * 
+ *
  * Should you need to contact me, the author, you can do so either by
  * e-mail - mail your message to <vojtech@suse.cz>, or by paper mail:
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
  */
+ */
 
-#include <asm/io.h>
-#include <asm/param.h>
-#include <asm/system.h>
 #include <linux/config.h>
 #include <linux/delay.h>
-#include <linux/errno.h>
-#include <linux/ioport.h>
-#include <linux/joystick.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/sched.h>
-#include <linux/string.h>
 #include <linux/init.h>
+#include <linux/gameport.h>
+#include <linux/input.h>
 
-static struct js_port* js_hh_port __initdata = NULL;
-
-MODULE_AUTHOR("Toby Deshane <hac@digivill.net>");
-//MODULE_PARM(js_hh, "1-2i");
 
 #define NUM_CLOCKS 32
-#define JS_PORT 0x201
 
 typedef struct
 {
@@ -98,7 +87,6 @@ typedef union
   unsigned long value; // unsigned long should be 4 bytes
 } data2;
 
-//static int __initdata js_hh[] = { 0, 0 };
 struct
 {
   unsigned char id1, id2;
@@ -109,28 +97,11 @@ struct
   unsigned char x2, y2;
 } js_status;
 
-
 /*
- * revbits() reverses the order of bits in a byte
+ * interact_read() reads and Hammerhead/FX joystick data.
  */
 
-inline unsigned char revbits(unsigned char b)
-{
-  int x;
-  unsigned char a = 0;
-
-  for (x = 7; x >= 0; x--)
-     {
-       a |= b & (1 << x) ? (1<< (7-x)):0;
-     }
-  return a;
-}
-
-/*
- * js_hh_read() reads and Hammerhead/FX joystick data.
- */
-
-static int js_hh_read(void *info, int **axes, int **buttons)
+static int interact_read(void *info, int **axes, int **buttons)
 {
   unsigned long flags;
   unsigned char c;         // used for clock tick counting, and gen purpose
@@ -198,32 +169,13 @@ static int js_hh_read(void *info, int **axes, int **buttons)
   return 0;
 }
 
-/*
- * js_hh_open() is a callback from the file open routine.
- */
-
-static int js_hh_open(struct js_dev *jd)
-{
-  MOD_INC_USE_COUNT;
-  return 0;
-}
 
 /*
- * js_hh_close() is a callback from the file release routine.
- */
-
-static int js_hh_close(struct js_dev *jd)
-{
-  MOD_DEC_USE_COUNT;
-  return 0;
-}
-
-/*
- * js_hh_init_corr() initializes correction values of
+ * interact_init_corr() initializes correction values of
  * Hammerhead/FX joysticks.
  */
 
-static void __init js_hh_init_corr(struct js_corr **corr)
+static void __init interact_init_corr(struct js_corr **corr)
 {
   int i;
 
@@ -248,65 +200,15 @@ static void __init js_hh_init_corr(struct js_corr **corr)
      }
 }
 
-#ifndef MODULE
-/*
-int __init js_hh_setup(SETUP_PARAM)
-{
-  int i;
-  SETUP_PARSE(2);
-  for (i = 0; i <= ints[0] && i < 2; i++) js_hh[i] = ints[i+1];
-  return 1;
-}
-__setup("js_hh=", js_hh_setup);
-*/
-#endif
-
-#ifdef MODULE
-int init_module(void)
-#else
-int __init js_hh_init(void)
-#endif
-{
-  int i;
-
-  js_hh_port = js_register_port(js_hh_port,
-                                &i,
-                                1,
-                                sizeof(int),
-                                js_hh_read);
+  interact_port = js_register_port(interact_port, &i, 1, sizeof(int), interact_read);
 
   if (check_region(JS_PORT, 1)) return -ENODEV;
   request_region(JS_PORT, 1, "joystick (Hammerhead/FX)");
 
   printk(KERN_INFO "js%d: Hammerhead/FX gamepad driver loaded\n",
-                   js_register_device(js_hh_port, // port
-                                      0,          // number
-                                      6,          // axes
-                                      12,         // buttons
-                                      "Hammerhead/FX", // name
-                                      js_hh_open,
-                                      js_hh_close));
-  js_hh_init_corr(js_hh_port->corr);
-  if (js_hh_port) return 0;
+                   js_register_device(interact_port, 0, 6, 12, "Hammerhead/FX" interact_open, interact_close));
+  interact_init_corr(interact_port->corr);
+  if (interact_port) return 0;
 
-#ifdef MODULE
-  printk(KERN_WARNING "joy-hammerheadfx: drrrrrrrr...\n");
-#endif
   return -ENODEV;
 }
-
-#ifdef MODULE
-void cleanup_module(void)
-{
-  while (js_hh_port)
-    {
-      if (js_hh_port->devs[0])
-        {
-          js_unregister_device(js_hh_port->devs[0]);
-        }
-      release_region(JS_PORT, 1);
-      js_hh_port = js_unregister_port(js_hh_port);
-    }
-  printk(KERN_INFO "Hammerhead/FX driver removed.\n");
-}
-#endif
