@@ -62,7 +62,7 @@ int fbgen_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 
     	if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
 		oldbpp = info->var.bits_per_pixel;
-		fb_display[con].var = info->var = *var;
+		fb_display[info->display_fg->vc_num].var = info->var = *var;
 	    	info->fbops->fb_set_par(info); 
 	    	fbgen_set_disp(con, info);
  
@@ -175,6 +175,7 @@ void fbgen_set_disp(int con, struct fb_info *info)
     else
 	display = info->disp;	/* used during initialization */
 
+    display->screen_base = info->screen_base;	
     display->visual = info->fix.visual;
     display->type = info->fix.type;
     display->type_aux = info->fix.type_aux;
@@ -186,6 +187,50 @@ void fbgen_set_disp(int con, struct fb_info *info)
 	display->can_soft_blank = 1;
     else
 	display->can_soft_blank = 0;
+
+    switch (info->var.bits_per_pixel) {
+#ifdef FBCON_HAS_MFB
+	case 1:
+            display->dispsw = &fbcon_mfb;
+            break;
+#endif
+#ifdef FBCON_HAS_CFB2
+        case 2:
+            display->dispsw = &fbcon_cfb2;
+            break;
+#endif
+#ifdef FBCON_HAS_CFB4
+        case 4:
+            display->dispsw = &fbcon_cfb4;
+            break;
+#endif
+#ifdef FBCON_HAS_CFB8
+        case 8:
+            display->dispsw = &fbcon_cfb8;
+            break;
+#endif
+#ifdef FBCON_HAS_CFB16
+        case 16:
+            display->dispsw = &fbcon_cfb16;
+            display->dispsw_data = info->pseudo_palette;
+            break;
+#endif
+#ifdef FBCON_HAS_CFB24
+        case 24:
+            display->dispsw = &fbcon_cfb24;
+            display->dispsw_data = info->pseudo_palette;
+            break;
+#endif
+#ifdef FBCON_HAS_CFB32
+        case 32:
+            display->dispsw = &fbcon_cfb32;
+            display->dispsw_data = info->pseudo_palette;
+            break;
+#endif
+        default:
+            display->dispsw = &fbcon_dummy;
+            break;
+        }
 }
 
     /*
