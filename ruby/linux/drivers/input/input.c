@@ -263,11 +263,13 @@ static void input_link_handle(struct input_handle *handle)
  *
  *     Returns nothing.
  */
-#define input_find_and_remove(type, initval, targ, next) { \
-       type **ptr;                                        \
-       for (ptr = &initval; *ptr; ptr = &((*ptr)->next))  \
-               if (*ptr == targ) break;                   \
-       if (*ptr && (*ptr)->next) *ptr = (*ptr)->next;   }
+#define input_find_and_remove(type, initval, targ, next)		\
+	do {								\
+		type **ptr;						\
+		for (ptr = &initval; *ptr; ptr = &((*ptr)->next))	\
+			if (*ptr == targ) break;			\
+		if (*ptr) *ptr = (*ptr)->next;				\
+	} while (0)
 
 static void input_unlink_handle(struct input_handle *handle)
 {
@@ -347,6 +349,12 @@ static struct input_device_id *input_match_device(struct input_device_id *id, st
 		scratch++; \
 	} while (0)
 
+#define SPRINTF_BIT_A2(bit, name, max, ev) \
+	do { \
+		if (test_bit(ev, dev->evbit)) \
+			SPRINTF_BIT_A(bit, name, max); \
+	} while (0)
+
 static void input_call_hotplug(char *verb, struct input_dev *dev)
 {
 	char *argv[3], **envp, *buf, *scratch;
@@ -356,22 +364,18 @@ static void input_call_hotplug(char *verb, struct input_dev *dev)
 		printk(KERN_ERR "input.c: calling hotplug a hotplug agent defined\n");
 		return;
 	}
-
 	if (in_interrupt()) {
 		printk(KERN_ERR "input.c: calling hotplug from interrupt\n");
 		return; 
 	}
-
 	if (!current->fs->root) {
 		printk(KERN_WARNING "input.c: calling hotplug without valid filesystem\n");
 		return; 
 	}
-
 	if (!(envp = (char **) kmalloc(20 * sizeof(char *), GFP_KERNEL))) {
 		printk(KERN_ERR "input.c: not enough memory allocating hotplug environment\n");
 		return;
 	}
-
 	if (!(buf = kmalloc(1024, GFP_KERNEL))) {
 		kfree (envp);
 		printk(KERN_ERR "input.c: not enough memory allocating hotplug environment\n");
@@ -394,21 +398,20 @@ static void input_call_hotplug(char *verb, struct input_dev *dev)
 	scratch += sprintf(scratch, "PRODUCT=%x/%x/%x/%x",
 		dev->idbus, dev->idvendor, dev->idproduct, dev->idversion) + 1; 
 
+	envp[i++] = scratch;
+	scratch += sprintf(scratch, "NAME=%s", dev->name ? dev->name : "N/A") + 1; 
+
+	envp[i++] = scratch;
+	scratch += sprintf(scratch, "PHYS=%s", dev->phys ? dev->phys : "N/A") + 1; 
+
 	SPRINTF_BIT_A(evbit, "EV=", EV_MAX);
-	if (test_bit(EV_KEY, dev->evbit))
-		SPRINTF_BIT_A(keybit, "KEY=", KEY_MAX);
-	if (test_bit(EV_REL, dev->evbit))
-		SPRINTF_BIT_A(relbit, "REL=", REL_MAX);
-	if (test_bit(EV_ABS, dev->evbit))
-		SPRINTF_BIT_A(absbit, "ABS=", ABS_MAX);
-	if (test_bit(EV_MSC, dev->evbit))
-		SPRINTF_BIT_A(mscbit, "MSC=", MSC_MAX);
-	if (test_bit(EV_LED, dev->evbit))
-		SPRINTF_BIT_A(ledbit, "LED=", LED_MAX);
-	if (test_bit(EV_SND, dev->evbit))
-		SPRINTF_BIT_A(sndbit, "SND=", SND_MAX);
-	if (test_bit(EV_FF,  dev->evbit))
-		SPRINTF_BIT_A(ffbit,  "FF=",  FF_MAX);
+	SPRINTF_BIT_A2(keybit, "KEY=", KEY_MAX, EV_KEY);
+	SPRINTF_BIT_A2(relbit, "REL=", REL_MAX, EV_REL);
+	SPRINTF_BIT_A2(absbit, "ABS=", ABS_MAX, EV_ABS);
+	SPRINTF_BIT_A2(mscbit, "MSC=", MSC_MAX, EV_MSC);
+	SPRINTF_BIT_A2(ledbit, "LED=", LED_MAX, EV_LED);
+	SPRINTF_BIT_A2(sndbit, "SND=", SND_MAX, EV_SND);
+	SPRINTF_BIT_A2(ffbit,  "FF=",  FF_MAX, EV_FF);
 
 	envp[i++] = 0;
 
@@ -692,6 +695,12 @@ void input_unregister_minor(devfs_handle_t handle)
 		len += sprintf(buf + len, "\n"); \
 	} while (0)
 
+#define SPRINTF_BIT_B2(bit, name, max, ev) \
+	do { \
+		if (test_bit(ev, dev->evbit)) \
+			SPRINTF_BIT_B(bit, name, max); \
+	} while (0)
+
 
 static unsigned int input_devices_poll(struct file *file, poll_table *wait)
 {
@@ -715,35 +724,27 @@ static int input_devices_read(char *buf, char **start, off_t pos, int count, int
 		len = sprintf(buf, "I: Bus=%04x Vendor=%04x Product=%04x Version=%04x\n",
 			dev->idbus, dev->idvendor, dev->idproduct, dev->idversion);
 
-		len += sprintf(buf + len, "N: Number=%d Name=\"%s\"\n",
-			dev->number, dev->name);
-
+		len += sprintf(buf + len, "N: Number=%d Name=\"%s\"\n", dev->number, dev->name ? dev->name : "N/A");
+		len += sprintf(buf + len, "P: Phys=%s\n", dev->phys ? dev->phys : "N/A");
 		len += sprintf(buf + len, "D: Drivers=");
 
 		handle = dev->handle;
 
 		while (handle) {
-			len += sprintf(buf + len, " %s", handle->name);
+			len += sprintf(buf + len, "%s ", handle->name);
 			handle = handle->dnext;
 		}
 
 		len += sprintf(buf + len, "\n");
 
 		SPRINTF_BIT_B(evbit, "EV=", EV_MAX);
-		if (test_bit(EV_KEY, dev->evbit))
-			SPRINTF_BIT_B(keybit, "KEY=", KEY_MAX);
-		if (test_bit(EV_REL, dev->evbit))
-			SPRINTF_BIT_B(relbit, "REL=", REL_MAX);
-		if (test_bit(EV_ABS, dev->evbit))
-			SPRINTF_BIT_B(absbit, "ABS=", ABS_MAX);
-		if (test_bit(EV_MSC, dev->evbit))
-			SPRINTF_BIT_B(mscbit, "MSC=", MSC_MAX);
-		if (test_bit(EV_LED, dev->evbit))
-			SPRINTF_BIT_B(ledbit, "LED=", LED_MAX);
-		if (test_bit(EV_SND, dev->evbit))
-			SPRINTF_BIT_B(sndbit, "SND=", SND_MAX);
-		if (test_bit(EV_FF,  dev->evbit))
-			SPRINTF_BIT_B(ffbit,  "FF=",  FF_MAX);
+		SPRINTF_BIT_B2(keybit, "KEY=", KEY_MAX, EV_KEY);
+		SPRINTF_BIT_B2(relbit, "REL=", REL_MAX, EV_REL);
+		SPRINTF_BIT_B2(absbit, "ABS=", ABS_MAX, EV_ABS);
+		SPRINTF_BIT_B2(mscbit, "MSC=", MSC_MAX, EV_MSC);
+		SPRINTF_BIT_B2(ledbit, "LED=", LED_MAX, EV_LED);
+		SPRINTF_BIT_B2(sndbit, "SND=", SND_MAX, EV_SND);
+		SPRINTF_BIT_B2(ffbit,  "FF=",  FF_MAX, EV_FF);
 
 		len += sprintf(buf + len, "\n");
 
@@ -753,16 +754,9 @@ static int input_devices_read(char *buf, char **start, off_t pos, int count, int
 			if (!*start) {
 				*start = buf + (pos - (at - len));
 				cnt = at - pos;
-			} else {
-				cnt += len;
-			}
+			} else  cnt += len;
 			buf += len;
 			if (cnt >= count)
-				/*
-				 * proc_file_read() gives us 1KB of slack so it's OK if the
-				 * above printfs write a little beyond the buffer end (we
-				 * never write more than 1KB beyond the buffer end).
-				 */
 				break;
 		}
 
@@ -779,7 +773,7 @@ static int input_handlers_read(char *buf, char **start, off_t pos, int count, in
 	struct input_handler *handler = input_handler;
 
 	off_t at = 0;
-	int len, cnt = 0;
+	int len = 0, cnt = 0;
 	int i = 0;
 
 	while (handler) {
@@ -797,16 +791,9 @@ static int input_handlers_read(char *buf, char **start, off_t pos, int count, in
 			if (!*start) {
 				*start = buf + (pos - (at - len));
 				cnt = at - pos;
-			} else {
-				cnt += len;
-			}
+			} else  cnt += len;
 			buf += len;
 			if (cnt >= count)
-				/*
-				 * proc_file_read() gives us 1KB of slack so it's OK if the
-				 * above printfs write a little beyond the buffer end (we
-				 * never write more than 1KB beyond the buffer end).
-				 */
 				break;
 		}
 

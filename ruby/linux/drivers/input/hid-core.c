@@ -1093,6 +1093,40 @@ struct hid_blacklist {
 	{ 0, 0 }
 };
 
+static int usb_make_path(struct usb_device *dev, char *buf, int maxlen)
+{
+	struct usb_device *pdev = dev->parent;
+	char *tmp, *port;
+	int i;
+
+	if (!(port = kmalloc(maxlen, GFP_KERNEL)))
+                return -1;
+	if (!(tmp = kmalloc(maxlen, GFP_KERNEL)))
+                return -1;
+
+	*port = 0;
+
+	while (pdev) {
+
+		for (i = 0; i < pdev->maxchild; i++)
+			if (pdev->children[i] == dev)
+				break;
+
+		if (pdev->children[i] != dev)
+				return -1;
+
+		strcpy(tmp, port);
+		snprintf(port, maxlen, strlen(port) ? "%d-%s" : "%d", i + 1, tmp);
+
+		dev = pdev;
+		pdev = dev->parent;
+	}
+
+	snprintf(buf, maxlen, "usb%d:%s", dev->bus->busnum, port);
+
+	return 0;
+}
+
 static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 {
 	struct usb_interface_descriptor *interface = dev->actconfig->interface[ifnum].altsetting + 0;
@@ -1181,23 +1215,16 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 	if (usb_string(dev, dev->descriptor.iManufacturer, buf, 63) > 0) {
 		strcat(hid->name, buf);
 		if (usb_string(dev, dev->descriptor.iProduct, buf, 63) > 0)
-			sprintf(hid->name, "%s %s", hid->name, buf);
+			snprintf(hid->name, 128, "%s %s", hid->name, buf);
 	} else
 		sprintf(hid->name, "%04x:%04x", dev->descriptor.idVendor, dev->descriptor.idProduct);
+
+	usb_make_path(dev, buf, 63);
+	snprintf(hid->phys, 128, "%s.%d", buf, ifnum);
 
 	kfree(buf);
 
 	FILL_CONTROL_URB(&hid->urbctrl, dev, 0, (void*) &hid->dr, hid->ctrlbuf, 1, hid_ctrl, hid);
-
-/*
- * Some devices don't like this and crash. I don't know of any devices
- * needing this, so it is disabled for now.
- */
-
-#if 0
-	if (interface->bInterfaceSubClass == 1)
-		usb_set_protocol(dev, hid->ifnum, 1);
-#endif
 
 	return hid;
 }
@@ -1239,9 +1266,8 @@ static void* hid_probe(struct usb_device *dev, unsigned int ifnum,
 			break;
 		}
 
-	printk(": USB HID v%x.%02x %s [%s] on usb%d:%d.%d\n",
-		hid->version >> 8, hid->version & 0xff, c, hid->name,
-		dev->bus->busnum, dev->devnum, ifnum);
+	printk(": USB HID v%x.%02x %s [%s] on %s\n",
+		hid->version >> 8, hid->version & 0xff, c, hid->name, hid->phys);
 
 	return hid;
 }
