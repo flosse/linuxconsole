@@ -21,6 +21,7 @@
  *
  * 27-05-97: Added support for the Magic SysRq Key (Martin Mares)
  * 30-07-98: Dead keys redone, aeb@cwi.nl.
+ * 03-04-00: Rewritten to use the input subsystem for input. (Vojtech Pavlik)
  */
 
 #include <linux/config.h>
@@ -953,13 +954,13 @@ static struct input_handle *kbd_connect(struct input_handler *handler, struct in
 	handle->dev = dev;
 	handle->handler = handler;
 	input_open_device(handle);
-	printk("keyboard.c: Adding keyboard: input%d\n", dev->number);
+	printk(KERN_INFO "keyboard.c: Adding keyboard: input%d\n", dev->number);
 	return handle;
 }
 
 static void kbd_disconnect(struct input_handle *handle)
 {
-	printk("keyboard.c: Removing keyboard: input%d\n", handle->dev->number);
+	printk(KERN_INFO "keyboard.c: Removing keyboard: input%d\n", handle->dev->number);
 	input_close_device(handle);
 	kfree(handle);
 }
