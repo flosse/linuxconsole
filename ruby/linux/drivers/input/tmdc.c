@@ -92,9 +92,8 @@ struct tmdc {
 static int tmdc_read_packet(struct gameport *gameport, unsigned char data[2][TMDC_MAX_LENGTH])
 {
 	unsigned char u, v, w, x;
-	unsigned int t[2], p;
 	unsigned long flags;
-	int i[2], j[2], k;
+	int i[2], j[2], t[2], p, k;
 
 printk("1\n");
 
