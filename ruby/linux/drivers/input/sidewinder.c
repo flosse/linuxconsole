@@ -56,7 +56,7 @@
 #define SW_LENGTH	512	/* Max number of bits in a packet */
 #define SW_REFRESH	HZ/50	/* Time to wait between updates of joystick data [20 ms] */
 
-#ifdef JS_SW_DEBUG
+#ifdef SW_DEBUG
 #define dbg(format, arg...) printk(KERN_DEBUG __FILE__ ": " format "\n" , ## arg)
 #else
 #define dbg(format, arg...) do {} while (0)
@@ -195,7 +195,7 @@ static int sw_read_packet(struct gameport *gameport, unsigned char *buf, int len
 #ifdef SW_DEBUG
 	{
 		int j;
-		dbg("Read %d triplets. [", i);
+		printk(KERN_DEBUG "sidewinder.c: Read %d triplets. [", i);
 		for (j = 0; j < i; j++) printk("%d", buf[j]);
 		printk("]\n");
 	}
@@ -507,7 +507,7 @@ static void sw_print_packet(char *name, int length, unsigned char *buf, char bit
 {
 	int i;
 
-	printk("sidewinder.c: %s packet, %d bits. [", name, length);
+	printk(KERN_INFO "sidewinder.c: %s packet, %d bits. [", name, length);
 	for (i = (((length + 3) >> 2) - 1); i >= 0; i--)
 		printk("%x", (int)sw_get_bits(buf, i << 2, 4, bits));
 	printk("]\n");
@@ -579,7 +579,7 @@ static void sw_connect(struct gameport *gameport, struct gameport_dev *dev)
 	sw->timer.data = (long) sw;
 	sw->timer.function = sw_timer;
 
-	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW));
+	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW))
 		goto fail1;
 
 	i = sw_read_packet(gameport, buf, SW_LENGTH, 0);		/* Read normal packet */
