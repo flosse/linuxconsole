@@ -347,14 +347,10 @@ struct fbgen_hwswitch {
 		      struct fb_info *info);
     int (*decode_var)(const struct fb_var_screeninfo *var, void *par,
 		      struct fb_info *info);
-    int (*fb_check_var)(const struct fb_var_screeninfo *var, void *par,
-                     struct fb_info *info);
     int (*encode_var)(struct fb_var_screeninfo *var, const void *par,
 		      struct fb_info *info);
     void (*get_par)(void *par, struct fb_info *info);
     void (*set_par)(const void *par, struct fb_info *info);
-    int (*getcolreg)(unsigned regno, unsigned *red, unsigned *green,
-		     unsigned *blue, unsigned *transp, struct fb_info *info);
     int (*pan_display)(const struct fb_var_screeninfo *var,
 		       struct fb_info *info);
     void (*set_disp)(const void *par, struct display *disp,
