@@ -407,7 +407,7 @@ void __init add_memory_region(unsigned long start,
 
 #define E820_DEBUG	1
 
-static __init void print_e820_map (void)
+static void __init print_e820_map(void)
 {
 	int i;
 
