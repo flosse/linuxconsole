@@ -251,8 +251,6 @@ struct aty128_crtc {
     u32 v_total, v_sync_strt_wid;
     u32 pitch;
     u32 offset, offset_cntl;
-    u32 xoffset, yoffset;
-    u32 vxres, vyres;
     u32 bpp;
 };
 
@@ -301,35 +299,27 @@ static struct aty128fb_par default_par;
     /*
      *  Interface used by the world
      */
-
+int aty128fb_init(void);
 int aty128fb_setup(char *options);
 
+static int aty128fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info);
 static int aty128fb_set_var(struct fb_var_screeninfo *var, int con,
 		       struct fb_info *info);
+static int aty128fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+				u_int transp, struct fb_info *info);
 static int aty128fb_pan_display(struct fb_var_screeninfo *var, int con,
 			   struct fb_info *fb);
-
-    /*
-     *  Interface to the low level console driver
-     */
-
-int aty128fb_init(void);
-static void aty128fbcon_blank(int blank, struct fb_info *fb);
+static void aty128fb_blank(int blank, struct fb_info *fb);
 
     /*
      *  Internal routines
      */
 static void aty128_set_dispsw(struct display *disp,
 			struct fb_info_aty128 *info, int bpp, int accel);
-static int aty128fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-				u_int transp, struct fb_info *info);
 static void do_install_cmap(int con, struct fb_info *info);
-static int aty128_encode_var(struct fb_var_screeninfo *var,
-                             const struct aty128fb_par *par,
-                             const struct fb_info_aty128 *info);
 static int aty128_decode_var(struct fb_var_screeninfo *var,
                              struct aty128fb_par *par,
-                             const struct fb_info_aty128 *info);
+                             struct fb_info_aty128 *info);
 static int aty128_pci_register(struct pci_dev *pdev,
                                const struct aty128_chip_info *aci);
 static struct fb_info_aty128 *aty128_board_list_add(struct fb_info_aty128
@@ -715,7 +705,6 @@ bpp_to_depth(u32 bpp)
     return -EINVAL;
 }
 
-
     /*
      * CRTC programming
      */
@@ -747,8 +736,7 @@ aty128_var_to_crtc(const struct fb_var_screeninfo *var,
 			struct aty128_crtc *crtc,
 			const struct fb_info_aty128 *info)
 {
-    u32 xres, yres, vxres, vyres, xoffset, yoffset, bpp;
-    u32 left, right, upper, lower, hslen, vslen, sync, vmode;
+    u32 bpp;
     u32 h_total, h_disp, h_sync_strt, h_sync_wid, h_sync_pol;
     u32 v_total, v_disp, v_sync_strt, v_sync_wid, v_sync_pol, c_sync;
     u32 depth, bytpp;
@@ -756,36 +744,7 @@ aty128_var_to_crtc(const struct fb_var_screeninfo *var,
     u8 mode_bytpp[7] = { 0, 0, 1, 2, 2, 3, 4 };
 
     /* input */
-    xres = var->xres;
-    yres = var->yres;
-    vxres   = var->xres_virtual;
-    vyres   = var->yres_virtual;
-    xoffset = var->xoffset;
-    yoffset = var->yoffset;
     bpp   = var->bits_per_pixel;
-    left  = var->left_margin;
-    right = var->right_margin;
-    upper = var->upper_margin;
-    lower = var->lower_margin;
-    hslen = var->hsync_len;
-    vslen = var->vsync_len;
-    sync  = var->sync;
-    vmode = var->vmode;
-
-    /* check for mode eligibility
-     * accept only non interlaced modes */
-    if ((vmode & FB_VMODE_MASK) != FB_VMODE_NONINTERLACED)
-	return -EINVAL;
-
-    /* convert (and round up) and validate */
-    xres = (xres + 7) & ~7;
-    xoffset = (xoffset + 7) & ~7;
-
-    if (vxres < xres + xoffset)
-	vxres = xres + xoffset;
-
-    if (vyres < yres + yoffset)
-	vyres = yres + yoffset;
 
     /* convert bpp into ATI register depth */
     depth = bpp_to_depth(bpp);
@@ -800,16 +759,16 @@ aty128_var_to_crtc(const struct fb_var_screeninfo *var,
     bytpp = mode_bytpp[depth];
 
     /* make sure there is enough video ram for the mode */
-    if ((u32)(vxres * vyres * bytpp) > info->fb_info.fix.smem_len) {
+    if ((u32)(var->xres_virtual * var->yres_virtual * bytpp) > info->fb_info.fix.smem_len) {
         printk(KERN_ERR "aty128fb: Not enough memory for mode\n");
         return -EINVAL;
     }
 
-    h_disp = (xres >> 3) - 1;
-    h_total = (((xres + right + hslen + left) >> 3) - 1) & 0xFFFFL;
+    h_disp = (var->xres >> 3) - 1;
+    h_total = (((var->xres + var->right_margin + var->hsync_len + var->left_margin) >> 3) - 1) & 0xFFFFL;
 
-    v_disp = yres - 1;
-    v_total = (yres + upper + vslen + lower - 1) & 0xFFFFL;
+    v_disp = var->yres - 1;
+    v_total = (var->yres + var->upper_margin + var->vsync_len + var->lower_margin - 1) & 0xFFFFL;
 
     /* check to make sure h_total and v_total are in range */
     if (((h_total >> 3) - 1) > 0x1ff || (v_total - 1) > 0x7FF) {
@@ -817,26 +776,26 @@ aty128_var_to_crtc(const struct fb_var_screeninfo *var,
         return -EINVAL;
     }
 
-    h_sync_wid = (hslen + 7) >> 3;
+    h_sync_wid = (var->hsync_len + 7) >> 3;
     if (h_sync_wid == 0)
 	h_sync_wid = 1;
     else if (h_sync_wid > 0x3f)        /* 0x3f = max hwidth */
 	h_sync_wid = 0x3f;
 
-    h_sync_strt = h_disp + (right >> 3);
+    h_sync_strt = h_disp + (var->right_margin >> 3);
 
-    v_sync_wid = vslen;
+    v_sync_wid = var->vsync_len;
     if (v_sync_wid == 0)
 	v_sync_wid = 1;
     else if (v_sync_wid > 0x1f)        /* 0x1f = max vwidth */
 	v_sync_wid = 0x1f;
     
-    v_sync_strt = v_disp + lower;
+    v_sync_strt = v_disp + var->lower_margin;
 
-    h_sync_pol = sync & FB_SYNC_HOR_HIGH_ACT ? 0 : 1;
-    v_sync_pol = sync & FB_SYNC_VERT_HIGH_ACT ? 0 : 1;
+    h_sync_pol = var->sync & FB_SYNC_HOR_HIGH_ACT ? 0 : 1;
+    v_sync_pol = var->sync & FB_SYNC_VERT_HIGH_ACT ? 0 : 1;
     
-    c_sync = sync & FB_SYNC_COMP_HIGH_ACT ? (1 << 4) : 0;
+    c_sync = var->sync & FB_SYNC_COMP_HIGH_ACT ? (1 << 4) : 0;
 
     crtc->gen_cntl = 0x3000000L | c_sync | (depth << 8);
 
@@ -848,137 +807,14 @@ aty128_var_to_crtc(const struct fb_var_screeninfo *var,
     crtc->v_sync_strt_wid = v_sync_strt | (v_sync_wid << 16) |
                 (v_sync_pol << 23);
 
-    crtc->pitch = vxres >> 3;
+    crtc->pitch = var->xres_virtual >> 3;
 
     crtc->offset = 0;
     crtc->offset_cntl = 0;
-
-    crtc->vxres = vxres;
-    crtc->vyres = vyres;
-    crtc->xoffset = xoffset;
-    crtc->yoffset = yoffset;
     crtc->bpp = bpp;
-
     return 0;
 }
 
-
-static int
-aty128_bpp_to_var(int pix_width, struct fb_var_screeninfo *var)
-{
-
-    /* fill in pixel info */
-    switch (pix_width) {
-    case CRTC_PIX_WIDTH_8BPP:
-        var->bits_per_pixel = 8;
-	var->red.offset = 0;
-	var->red.length = 8;
-	var->green.offset = 0;
-	var->green.length = 8;
-	var->blue.offset = 0;
-	var->blue.length = 8;
-	var->transp.offset = 0;
-	var->transp.length = 0;
-	break;
-    case CRTC_PIX_WIDTH_15BPP:
-    case CRTC_PIX_WIDTH_16BPP:
-	var->bits_per_pixel = 16;
-	var->red.offset = 10;
-	var->red.length = 5;
-	var->green.offset = 5;
-	var->green.length = 5;
-	var->blue.offset = 0;
-	var->blue.length = 5;
-	var->transp.offset = 0;
-	var->transp.length = 0;
-	break;
-    case CRTC_PIX_WIDTH_24BPP:
-        var->bits_per_pixel = 24;
-        var->red.offset = 16;
-        var->red.length = 8;
-        var->green.offset = 8;
-        var->green.length = 8;
-        var->blue.offset = 0;
-        var->blue.length = 8;
-        var->transp.offset = 0;
-        var->transp.length = 0;
-        break;
-    case CRTC_PIX_WIDTH_32BPP:
-        var->bits_per_pixel = 32;
-	var->red.offset = 16;
-	var->red.length = 8;
-	var->green.offset = 8;
-	var->green.length = 8;
-	var->blue.offset = 0;
-	var->blue.length = 8;
-	var->transp.offset = 24;
-	var->transp.length = 8;
-	break;
-    default:
-        printk(KERN_ERR "aty128fb: Invalid pixel width\n");
-        return -EINVAL;
-    }
-
-    return 0;
-}
-
-
-static int
-aty128_crtc_to_var(const struct aty128_crtc *crtc,
-			struct fb_var_screeninfo *var)
-{
-    u32 xres, yres, left, right, upper, lower, hslen, vslen, sync;
-    u32 h_total, h_disp, h_sync_strt, h_sync_dly, h_sync_wid, h_sync_pol;
-    u32 v_total, v_disp, v_sync_strt, v_sync_wid, v_sync_pol, c_sync;
-    u32 pix_width;
-
-    /* fun with masking */
-    h_total     = crtc->h_total & 0x1ff;
-    h_disp      = (crtc->h_total >> 16) & 0xff;
-    h_sync_strt = (crtc->h_sync_strt_wid >> 3) & 0x1ff;
-    h_sync_dly  = crtc->h_sync_strt_wid & 0x7;
-    h_sync_wid  = (crtc->h_sync_strt_wid >> 16) & 0x3f;
-    h_sync_pol  = (crtc->h_sync_strt_wid >> 23) & 0x1;
-    v_total     = crtc->v_total & 0x7ff;
-    v_disp      = (crtc->v_total >> 16) & 0x7ff;
-    v_sync_strt = crtc->v_sync_strt_wid & 0x7ff;
-    v_sync_wid  = (crtc->v_sync_strt_wid >> 16) & 0x1f;
-    v_sync_pol  = (crtc->v_sync_strt_wid >> 23) & 0x1;
-    c_sync      = crtc->gen_cntl & CRTC_CSYNC_EN ? 1 : 0;
-    pix_width   = crtc->gen_cntl & CRTC_PIX_WIDTH_MASK;
-
-    /* do conversions */
-    xres  = (h_disp + 1) << 3;
-    yres  = v_disp + 1;
-    left  = ((h_total - h_sync_strt - h_sync_wid) << 3) - h_sync_dly;
-    right = ((h_sync_strt - h_disp) << 3) + h_sync_dly;
-    hslen = h_sync_wid << 3;
-    upper = v_total - v_sync_strt - v_sync_wid;
-    lower = v_sync_strt - v_disp;
-    vslen = v_sync_wid;
-    sync  = (h_sync_pol ? 0 : FB_SYNC_HOR_HIGH_ACT) |
-            (v_sync_pol ? 0 : FB_SYNC_VERT_HIGH_ACT) |
-            (c_sync ? FB_SYNC_COMP_HIGH_ACT : 0);
-
-    aty128_bpp_to_var(pix_width, var);
-
-    var->xres = xres;
-    var->yres = yres;
-    var->xres_virtual = crtc->vxres;
-    var->yres_virtual = crtc->vyres;
-    var->xoffset = crtc->xoffset;
-    var->yoffset = crtc->yoffset;
-    var->left_margin  = left;
-    var->right_margin = right;
-    var->upper_margin = upper;
-    var->lower_margin = lower;
-    var->hsync_len = hslen;
-    var->vsync_len = vslen;
-    var->sync  = sync;
-    var->vmode = FB_VMODE_NONINTERLACED;
-
-    return 0;
-}
 
 static void
 aty128_set_pll(struct aty128fb_par *par, const struct fb_info_aty128 *info)
@@ -1023,7 +859,7 @@ aty128_set_pll(struct aty128fb_par *par, const struct fb_info_aty128 *info)
 
 static int
 aty128_var_to_pll(u32 period_in_ps, struct aty128fb_par *par,
-			const struct fb_info_aty128 *info)
+			struct fb_info_aty128 *info)
 {
     const struct aty128_constants c = info->constants;
     unsigned char post_dividers[] = {1,2,4,8,3,6,12};
@@ -1056,21 +892,12 @@ aty128_var_to_pll(u32 period_in_ps, struct aty128fb_par *par,
     pll->feedback_divider = round_div(n, d);
     pll->vclk = vclk;
 
+    info->fb_info.var.pixclock = 100000000 / pll->vclk;
+
     DBG("post %d feedback %d vlck %d output %d ref_divider %d "
 			"vclk_per: %d\n", pll->post_divider,
 			pll->feedback_divider, vclk, output_freq,
 			c.ref_divider, period_in_ps);
-
-    return 0;
-}
-
-
-static int
-aty128_pll_to_var(const struct aty128_pll *pll, struct fb_var_screeninfo *var,
-		const struct fb_info_aty128 *info)
-{
-    var->pixclock = 100000000 / pll->vclk;
-
     return 0;
 }
 
@@ -1141,6 +968,97 @@ aty128_ddafifo(struct aty128fb_par *par, const struct fb_info_aty128 *info)
     return 0;
 }
 
+static int 
+aty128fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info) 
+{
+    /* basic (in)sanity checks */
+    if (!var->xres)
+        var->xres = 1;
+    if (!var->yres)
+        var->yres = 1;
+    if (var->xres > var->xres_virtual)
+        var->xres_virtual = var->xres;
+    if (var->yres > var->yres_virtual)
+        var->yres_virtual = var->yres;
+
+    switch (var->bits_per_pixel) {
+        case 0 ... 8:
+            var->bits_per_pixel = 8;
+	    var->red.offset = 0;
+	    var->red.length = 8;
+	    var->green.offset = 0;
+	    var->green.length = 8;
+	    var->blue.offset = 0;
+	    var->blue.length = 8;
+	    var->transp.offset = 0;
+	    var->transp.length = 0;
+            break;
+        case 9 ... 16:
+	    var->bits_per_pixel = 16;
+	    var->red.offset = 10;
+	    var->red.length = 5;
+	    var->green.offset = 5;
+	    var->green.length = 5;
+	    var->blue.offset = 0;
+	    var->blue.length = 5;
+	    var->transp.offset = 0;
+	    var->transp.length = 0;
+            break;
+        case 17 ... 24:
+            var->bits_per_pixel = 24;
+            var->red.offset = 16;
+            var->red.length = 8;
+            var->green.offset = 8;
+            var->green.length = 8;
+            var->blue.offset = 0;
+            var->blue.length = 8;
+            var->transp.offset = 0;
+            var->transp.length = 0;
+            break;
+        case 25 ... 32:
+            var->bits_per_pixel = 32;
+	    var->red.offset = 16;
+	    var->red.length = 8;
+	    var->green.offset = 8;
+	    var->green.length = 8;
+	    var->blue.offset = 0;
+	    var->blue.length = 8;
+	    var->transp.offset = 24;
+	    var->transp.length = 8;
+	    break;
+    	default:
+       	    printk(KERN_ERR "aty128fb: Invalid pixel width\n");
+            return -EINVAL;
+    }
+    
+    /* check for mode eligibility
+     * accept only non interlaced modes */
+    if ((var->vmode & FB_VMODE_MASK) != FB_VMODE_NONINTERLACED)
+	return -EINVAL;
+  
+    /* convert (and round up) and validate */
+    var->xres = (var->xres + 7) & ~7;
+    var->xoffset = (var->xoffset + 7) & ~7;
+
+    if (var->xres_virtual < var->xres + var->xoffset)
+	var->xres_virtual = var->xres + var->xoffset;
+
+    if (var->yres_virtual < var->yres + var->yoffset)
+	var->yres_virtual = var->yres + var->yoffset;
+
+    var->red.msb_right = 0;
+    var->green.msb_right = 0;
+    var->blue.msb_right = 0;
+    var->transp.msb_right = 0;
+
+    var->nonstd = 0;
+    var->activate = 0;
+
+    var->height = -1;
+    var->width = -1;
+    var->accel_flags = FB_ACCELF_TEXT;
+    return 0;	
+}
 
 /*
  * This actually sets the video mode.
@@ -1199,8 +1117,7 @@ aty128_set_par(struct aty128fb_par *par,
 	display_info.height = ((par->crtc.v_total >> 16) & 0x7ff) + 1;
 	display_info.width = (((par->crtc.h_total >> 16) & 0xff) + 1) << 3;
 	display_info.depth = par->crtc.bpp;
-	display_info.pitch = (par->crtc.vxres * par->crtc.bpp) >> 3;
-        aty128_encode_var(&var, par, info);
+	display_info.pitch = (info->fb_info.var.xres_virtual * par->crtc.bpp) >> 3;
 	if (mac_var_to_vmode(&var, &vmode, &cmode))
 	    display_info.mode = 0;
 	else
@@ -1220,7 +1137,7 @@ aty128_set_par(struct aty128fb_par *par,
 
 static int
 aty128_decode_var(struct fb_var_screeninfo *var, struct aty128fb_par *par,
-			const struct fb_info_aty128 *info)
+			struct fb_info_aty128 *info)
 {
     int err;
 
@@ -1235,34 +1152,6 @@ aty128_decode_var(struct fb_var_screeninfo *var, struct aty128fb_par *par,
 
     return 0;
 }
-
-
-static int
-aty128_encode_var(struct fb_var_screeninfo *var,
-			const struct aty128fb_par *par,
-			const struct fb_info_aty128 *info)
-{
-    int err;
-
-    if ((err = aty128_crtc_to_var(&par->crtc, var)))
-	return err;
-
-    if ((err = aty128_pll_to_var(&par->pll, var, info)))
-	return err;
-
-    var->red.msb_right = 0;
-    var->green.msb_right = 0;
-    var->blue.msb_right = 0;
-    var->transp.msb_right = 0;
-
-    var->nonstd = 0;
-    var->activate = 0;
-
-    var->height = -1;
-    var->width = -1;
-    var->accel_flags = FB_ACCELF_TEXT;
-    return 0;
-}           
 
     /*
      *  Set the User Defined Part of the Display
@@ -1279,37 +1168,10 @@ aty128fb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *fb)
 
     display = (con >= 0) ? &fb_display[con] : fb->disp;
 
-    /* basic (in)sanity checks */
-    if (!var->xres)
-        var->xres = 1;
-    if (!var->yres)
-        var->yres = 1;
-    if (var->xres > var->xres_virtual)
-        var->xres_virtual = var->xres;
-    if (var->yres > var->yres_virtual)
-        var->yres_virtual = var->yres;
-
-    switch (var->bits_per_pixel) {
-        case 0 ... 8:
-            var->bits_per_pixel = 8;
-            break;
-        case 9 ... 16:
-            var->bits_per_pixel = 16;
-            break;
-        case 17 ... 24:
-            var->bits_per_pixel = 24;
-            break;
-        case 25 ... 32:
-            var->bits_per_pixel = 32;
-            break;
-        default:
-            return -EINVAL;
-    }
-
+    aty128fb_check_var(var, &info->fb_info);
+    
     if ((err = aty128_decode_var(var, &par, info)))
 	return err;
-
-    aty128_encode_var(var, &par, info);
 
     if ((var->activate & FB_ACTIVATE_MASK) != FB_ACTIVATE_NOW)
 	return 0;
@@ -1325,7 +1187,7 @@ aty128fb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *fb)
 	oldvxres != var->xres_virtual || oldvyres != var->yres_virtual ||
 	oldbpp != var->bits_per_pixel || oldaccel != var->accel_flags) {
 
-    	info->fb_info.fix.line_length = (par.crtc.vxres * par.crtc.bpp) >> 3;
+    	info->fb_info.fix.line_length = (var->xres_virtual * par.crtc.bpp) >> 3;
     	info->fb_info.fix.visual      = par.crtc.bpp <= 8 ? FB_VISUAL_PSEUDOCOLOR : FB_VISUAL_DIRECTCOLOR;
 
         display->screen_base = info->fb_info.screen_base;
@@ -1348,6 +1210,7 @@ aty128fb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *fb)
 
 	if (info->fb_info.changevar)
 	    (*info->fb_info.changevar)(con);
+    	info->fb_info.par = &par;
     }
 
     if (!info->fb_info.display_fg || info->fb_info.display_fg->vc_num == con)
@@ -1418,13 +1281,13 @@ aty128fb_pan_display(struct fb_var_screeninfo *var, int con,
     xoffset = (var->xoffset +7) & ~7;
     yoffset = var->yoffset;
 
-    if (xoffset+xres > par->crtc.vxres || yoffset+yres > par->crtc.vyres)
+    if (xoffset+xres > info->fb_info.var.xres_virtual || yoffset+yres > info->fb_info.var.yres_virtual)
         return -EINVAL;
 
-    par->crtc.xoffset = xoffset;
-    par->crtc.yoffset = yoffset;
+    info->fb_info.var.xoffset = xoffset;
+    info->fb_info.var.yoffset = yoffset;
 
-    offset = ((yoffset * par->crtc.vxres + xoffset) * par->crtc.bpp) >> 6;
+    offset = ((yoffset * info->fb_info.var.xres_virtual + xoffset) * par->crtc.bpp) >> 6;
 
     aty_st_le32(CRTC_OFFSET, offset);
 
@@ -1529,7 +1392,7 @@ aty128_init(struct fb_info_aty128 *info, struct pci_dev *pdev, const char *name)
     info->fb_info.changevar  = NULL;
     info->fb_info.switch_con = &fbgen_switch;
     info->fb_info.updatevar  = NULL;
-    info->fb_info.blank = &aty128fbcon_blank;
+    info->fb_info.blank = &aty128fb_blank;
     info->fb_info.flags = FBINFO_FLAG_DEFAULT;
 
     var = default_var;
@@ -1932,7 +1795,7 @@ aty128_timings(struct fb_info_aty128 *info)
      *  Blank the display.
      */
 static void
-aty128fbcon_blank(int blank, struct fb_info *fb)
+aty128fb_blank(int blank, struct fb_info *fb)
 {
     struct fb_info_aty128 *info = (struct fb_info_aty128 *)fb;
     u8 state = 0;
@@ -2048,7 +1911,6 @@ aty128fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 	}
     return 0;
 }
-
 
 static void
 do_install_cmap(int con, struct fb_info *info)
@@ -2393,7 +2255,6 @@ init_module(void)
         printk(KERN_INFO "aty128fb: Parameter NOMTRR set\n");
     }
 #endif
-    
     aty128fb_init();
     return 0;
 }
