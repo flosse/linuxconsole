@@ -953,8 +953,11 @@ static int vgacon_scrolldelta(struct vc_data *c, int lines)
 
 static int vgacon_set_origin(struct vc_data *c)
 {
-	if (vga_is_gfx ||	/* We don't play origin tricks in graphic modes */
-	    (console_blanked && !vga_palette_blanked))	/* Nor we write to blanked screens */
+	/* 
+	 * We don't play origin tricks in graphic modes,
+	 * Nor we write to blanked screens 
+	 */
+	if (vga_is_gfx || (c->display_fg->vt_blanked && !vga_palette_blanked))	
 		return 0;
 	c->vc_origin = c->vc_visible_origin = vga_vram_base;
 	vga_set_mem_top(c);
