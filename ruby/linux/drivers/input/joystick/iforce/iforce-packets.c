@@ -238,25 +238,25 @@ int iforce_get_id_packet(struct iforce *iforce, char *packet)
 		case IFORCE_USB:
 
 			iforce->cr.bRequest = packet[0];
-			iforce->ctrl.dev = iforce->usbdev;
+			iforce->ctrl->dev = iforce->usbdev;
 
 			set_current_state(TASK_INTERRUPTIBLE);
 			add_wait_queue(&iforce->wait, &wait);
 
-			if (usb_submit_urb(&iforce->ctrl, GFP_KERNEL)) {
+			if (usb_submit_urb(iforce->ctrl, GFP_KERNEL)) {
 				set_current_state(TASK_RUNNING);
 				remove_wait_queue(&iforce->wait, &wait);
 				return -1;
 			}
 
-			while (timeout && iforce->ctrl.status == -EINPROGRESS)
+			while (timeout && iforce->ctrl->status == -EINPROGRESS)
 				timeout = schedule_timeout(timeout);
 
 			set_current_state(TASK_RUNNING);
 			remove_wait_queue(&iforce->wait, &wait);
 
 			if (!timeout) {
-				usb_unlink_urb(&iforce->ctrl);
+				usb_unlink_urb(iforce->ctrl);
 				return -1;
 			}
 

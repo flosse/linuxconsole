@@ -230,8 +230,8 @@ static int iforce_open(struct input_dev *dev)
 	switch (iforce->bus) {
 #ifdef IFORCE_USB
 		case IFORCE_USB:
-			iforce->irq.dev = iforce->usbdev;
-			if (usb_submit_urb(&iforce->irq, GFP_KERNEL))
+			iforce->irq->dev = iforce->usbdev;
+			if (usb_submit_urb(iforce->irq, GFP_KERNEL))
 				return -EIO;
 			break;
 #endif
@@ -277,7 +277,7 @@ static void iforce_release(struct input_dev *dev)
 	switch (iforce->bus) {
 #ifdef IFORCE_USB
 		case IFORCE_USB:
-			usb_unlink_urb(&iforce->irq);
+			usb_unlink_urb(iforce->irq);
 
 			/* The device was unplugged before the file
 			 * was released */

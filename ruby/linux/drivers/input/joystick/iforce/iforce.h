@@ -136,7 +136,7 @@ struct iforce {
 #endif
 #ifdef IFORCE_USB
 	struct usb_device *usbdev;	/* USB transfer */
-	struct urb irq, out, ctrl;	/*TODO: Use pointers and usb_alloc_urb */
+	struct urb *irq, *out, *ctrl;
 	struct usb_ctrlrequest cr;
 #endif
 	spinlock_t xmit_lock;

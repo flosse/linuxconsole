@@ -1,4 +1,4 @@
-/*
+ /*
  * $Id$
  *
  *  Copyright (c) 2000-2002 Vojtech Pavlik <vojtech@ucw.cz>
@@ -42,29 +42,29 @@ void iforce_usb_xmit(struct iforce *iforce)
 		return;
 	}
 
-	((char *)iforce->out.transfer_buffer)[0] = iforce->xmit.buf[iforce->xmit.tail];
+	((char *)iforce->out->transfer_buffer)[0] = iforce->xmit.buf[iforce->xmit.tail];
 	XMIT_INC(iforce->xmit.tail, 1);
 	n = iforce->xmit.buf[iforce->xmit.tail];
 	XMIT_INC(iforce->xmit.tail, 1);
 
-	iforce->out.transfer_buffer_length = n + 1;
-	iforce->out.dev = iforce->usbdev;
+	iforce->out->transfer_buffer_length = n + 1;
+	iforce->out->dev = iforce->usbdev;
 
 	/* Copy rest of data then */
 	c = CIRC_CNT_TO_END(iforce->xmit.head, iforce->xmit.tail, XMIT_SIZE);
 	if (n < c) c=n;
 
-	memcpy(iforce->out.transfer_buffer + 1,
+	memcpy(iforce->out->transfer_buffer + 1,
 	       &iforce->xmit.buf[iforce->xmit.tail],
 	       c);
 	if (n != c) {
-		memcpy(iforce->out.transfer_buffer + 1 + c,
+		memcpy(iforce->out->transfer_buffer + 1 + c,
 		       &iforce->xmit.buf[0],
 		       n-c);
 	}
 	XMIT_INC(iforce->xmit.tail, n);
 
-	if ( (n=usb_submit_urb(&iforce->out, GFP_ATOMIC)) ) {
+	if ( (n=usb_submit_urb(iforce->out, GFP_ATOMIC)) ) {
 		printk(KERN_WARNING "iforce-usb.c: iforce_usb_xmit: usb_submit_urb failed %d\n", n);
 	}
 
@@ -112,8 +112,22 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	epirq = dev->config[0].interface[ifnum].altsetting[0].endpoint + 0;
 	epout = dev->config[0].interface[ifnum].altsetting[0].endpoint + 1;
 
-	if (!(iforce = kmalloc(sizeof(struct iforce) + 32, GFP_KERNEL))) return NULL;
+	if (!(iforce = kmalloc(sizeof(struct iforce) + 32, GFP_KERNEL)))
+		goto fail;
+
 	memset(iforce, 0, sizeof(struct iforce));
+
+	if (!(iforce->irq = usb_alloc_urb(0, GFP_KERNEL))) {
+		goto fail;
+	}
+
+	if (!(iforce->out = usb_alloc_urb(0, GFP_KERNEL))) {
+		goto fail;
+	}
+
+	if (!(iforce->ctrl = usb_alloc_urb(0, GFP_KERNEL))) {
+		goto fail;
+	}
 
 	iforce->bus = IFORCE_USB;
 	iforce->usbdev = dev;
@@ -122,29 +136,40 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	iforce->cr.wIndex = 0;
 	iforce->cr.wLength = 16;
 
-	usb_fill_int_urb(&iforce->irq, dev, usb_rcvintpipe(dev, epirq->bEndpointAddress),
+	usb_fill_int_urb(iforce->irq, dev, usb_rcvintpipe(dev, epirq->bEndpointAddress),
 			iforce->data, 16, iforce_usb_irq, iforce, epirq->bInterval);
 
-	usb_fill_bulk_urb(&iforce->out, dev, usb_sndbulkpipe(dev, epout->bEndpointAddress),
+	usb_fill_bulk_urb(iforce->out, dev, usb_sndbulkpipe(dev, epout->bEndpointAddress),
 			iforce + 1, 32, iforce_usb_out, iforce);
 
-	usb_fill_control_urb(&iforce->ctrl, dev, usb_rcvctrlpipe(dev, 0),
+	usb_fill_control_urb(iforce->ctrl, dev, usb_rcvctrlpipe(dev, 0),
 			(void*) &iforce->cr, iforce->edata, 16, iforce_usb_ctrl, iforce);
 
-	if (iforce_init_device(iforce)) {
-		kfree(iforce);
-		return NULL;
-	}
+	if (iforce_init_device(iforce)) goto fail;
 
 	return iforce;
+
+fail:
+	if (iforce) {
+		if (iforce->irq) usb_free_urb(iforce->irq);
+		if (iforce->out) usb_free_urb(iforce->out);
+		if (iforce->ctrl) usb_free_urb(iforce->ctrl);
+		kfree(iforce);
+	}
+
+	return NULL;
 }
 
 /* Called by iforce_delete() */
 void iforce_usb_delete(struct iforce* iforce)
 {
-	usb_unlink_urb(&iforce->irq);
-	usb_unlink_urb(&iforce->out);
-	usb_unlink_urb(&iforce->ctrl);
+	usb_unlink_urb(iforce->irq);
+	usb_unlink_urb(iforce->out);
+	usb_unlink_urb(iforce->ctrl);
+
+	usb_free_urb(iforce->irq);
+	usb_free_urb(iforce->out);
+	usb_free_urb(iforce->ctrl);
 }
 
 static void iforce_usb_disconnect(struct usb_device *dev, void *ptr)
