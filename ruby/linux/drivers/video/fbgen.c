@@ -48,31 +48,6 @@ int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
 }
 
     /*
-     *  Blank the screen
-     */
-
-void fbgen_blank(int blank, struct fb_info *info)
-{
-    struct fb_cmap cmap;
-    u16 black[16];
-
-    if (info->fbops->fb_blank && !info->fbops->fb_blank(blank, info))
-        return;
-    if (blank) {
-        memset(black, 0, 16*sizeof(u16));
-        cmap.red = black;
-        cmap.green = black;
-        cmap.blue = black;
-        cmap.transp = NULL;
-        cmap.start = 0;
-        cmap.len = 16;
-        fb_set_cmap(&cmap, 1, info);
-        return;
-    }
-    return;
-}
-
-    /*
      *  Pan or Wrap the Display
      *
      *  This call looks only at xoffset, yoffset and the FB_VMODE_YWRAP flag
