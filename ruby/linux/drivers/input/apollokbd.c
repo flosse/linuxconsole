@@ -4,7 +4,6 @@
 #include <linux/keyboard.h>
 #include <linux/delay.h>
 #include <linux/timer.h>
-#include <linux/kd.h>
 #include <linux/random.h>
 #include <linux/kernel.h>
 #include <linux/module.h>

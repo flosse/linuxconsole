@@ -21,8 +21,6 @@
 #include <linux/random.h>
 #include <linux/ctype.h>
 #include <linux/init.h>
-#include <linux/kbd_ll.h>
-#include <linux/kbd_kern.h>
 #include <linux/delay.h>
 
 #include <asm/bitops.h>

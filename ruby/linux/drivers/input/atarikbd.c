@@ -20,10 +20,8 @@
 #include <linux/keyboard.h>
 #include <linux/delay.h>
 #include <linux/timer.h>
-#include <linux/kd.h>
 #include <linux/random.h>
 #include <linux/init.h>
-#include <linux/kbd_ll.h>
 
 #include <asm/atariints.h>
 #include <asm/atarihw.h>

@@ -20,8 +20,6 @@
 #include <linux/errno.h>
 #include <linux/random.h>
 #include <linux/miscdevice.h>
-#include <linux/kbd_ll.h>
-#include <linux/kbd_kern.h>
 #include <linux/delay.h>
 #include <linux/init.h>
 

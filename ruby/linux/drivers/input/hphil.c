@@ -11,7 +11,6 @@
 #include <linux/sched.h>
 #include <linux/init.h>
 #include <linux/keyboard.h>
-#include <linux/kbd_ll.h>
 #include <asm/io.h>
 #include <asm/hwtest.h>
 #include <asm/ptrace.h>

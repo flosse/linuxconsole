@@ -29,12 +29,10 @@
  */
 
 #include <linux/config.h>
-#include <linux/kbd_ll.h>
 #include <linux/input.h>
 #include <linux/slab.h>
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/kbd_kern.h>
 
 #if defined(CONFIG_X86) || defined(CONFIG_IA64) || defined(__alpha__) || defined(__mips__)
 
