@@ -229,7 +229,7 @@ static void psmouse_interrupt(struct serio *serio, unsigned char data, unsigned 
 
 static int psmouse_sendbyte(struct psmouse *psmouse, unsigned char byte)
 {
-	int timeout = 1000; /* 10 msec */
+	int timeout = 10000; /* 100 msec */
 	psmouse->ack = 0;
 	psmouse->acking = 1;
 
@@ -246,7 +246,7 @@ static int psmouse_sendbyte(struct psmouse *psmouse, unsigned char byte)
 
 static int psmouse_command(struct psmouse *psmouse, unsigned char *param, int command)
 {
-	int timeout = 100000; /* 100 msec */
+	int timeout = 500000; /* 500 msec */
 	int send = (command >> 12) & 0xf;
 	int receive = (command >> 8) & 0xf;
 	int i;

@@ -203,7 +203,7 @@ static void atkbd_interrupt(struct serio *serio, unsigned char data, unsigned in
 
 static int atkbd_sendbyte(struct atkbd *atkbd, unsigned char byte)
 {
-	int timeout = 1000; /* 10 msec */
+	int timeout = 10000; /* 100 msec */
 	atkbd->ack = 0;
 
 #ifdef ATKBD_DEBUG
@@ -222,7 +222,7 @@ static int atkbd_sendbyte(struct atkbd *atkbd, unsigned char byte)
 
 static int atkbd_command(struct atkbd *atkbd, unsigned char *param, int command)
 {
-	int timeout = 10000; /* 100 msec */
+	int timeout = 50000; /* 500 msec */
 	int send = (command >> 12) & 0xf;
 	int receive = (command >> 8) & 0xf;
 	int i;
@@ -258,7 +258,7 @@ static int atkbd_event(struct input_dev *dev, unsigned int type, unsigned int co
 	struct atkbd *atkbd = dev->private;
 	char param[2];
 
-	if (!serio->write)
+	if (!atkbd->serio->write)
 		return -1;
 
 	switch (type) {

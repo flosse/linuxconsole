@@ -492,6 +492,9 @@ static int __init i8042_controller_init(void)
 	if (i8042_direct)
 		i8042_ctr &= ~I8042_CTR_XLATE;
 
+	if (~i8042_ctr & I8042_CTR_XLATE)
+		i8042_direct = 1;
+
 /*
  * Write CTR back.
  */
