@@ -82,13 +82,12 @@ static int vesa_off_interval = 0;
 
 /*
  * fg_console is the current virtual console,
- * last_console is the last used one,
  * want_console is the console we want to switch to,
  * kmsg_redirect is the console for kernel messages,
  */
-int fg_console = 0;
-int want_console = -1;
+struct vc_data *want_console = NULL;
 int kmsg_redirect = 0;
+int fg_console = 0;
 
 /* 
  * the default colour table, for VGA+ colour systems 
@@ -665,12 +664,12 @@ void unblank_screen(void)
         set_cursor(vc);
 }
 
-void poke_blanked_console(void)
+void poke_blanked_console(struct vt_struct *vt)
 {
         timer_active &= ~(1<<BLANK_TIMER);
-        if (vt_cons->vc_mode == KD_GRAPHICS)
+        if (vt->vc_mode == KD_GRAPHICS)
                 return;
-        if (vt_cons->vt_blanked) {
+        if (vt->vt_blanked) {
                 timer_table[BLANK_TIMER].fn = unblank_screen;
                 timer_table[BLANK_TIMER].expires = jiffies;     /* Now */
                 timer_active |= 1<<BLANK_TIMER;
@@ -1715,7 +1714,7 @@ static void setterm_command(struct vc_data *vc)
                         break;
                 case 9: /* set blanking interval */
                         blankinterval = ((par[1] < 60) ? par[1] : 60) * 60 * HZ;
-                        poke_blanked_console();
+                        poke_blanked_console(vc->display_fg);
                         break;
                 case 10: /* set bell frequency in Hz */
                         if (npar >= 1)
@@ -1732,10 +1731,10 @@ static void setterm_command(struct vc_data *vc)
                         break;
                 case 12: /* bring specified console to the front */
                         if (par[1] >= 1 && vc_cons_allocated(par[1]-1))
-                                set_console(par[1] - 1);
+                                set_console(vc->display_fg->vcs.vc_cons[par[1] - 1]);
                         break;
                 case 13: /* unblank the screen */
-                        poke_blanked_console();
+                        poke_blanked_console(vc->display_fg);
                         break;
                 case 14: /* set vesa powerdown interval */
                         vesa_off_interval = ((par[1] < 60) ? par[1] : 60) * 60 * HZ;
@@ -3217,21 +3216,21 @@ static void console_softint(unsigned long ignored)
 
         spin_lock_irq(&console_lock);
 
-        if (want_console >= 0) {
-                if (want_console != fg_console && vc_cons_allocated(want_console)) {
+        if (want_console) {
+                if (want_console->vc_num != fg_console && vc_cons_allocated(want_console->vc_num)) {
                         hide_cursor(vt_cons->vcs.vc_cons[fg_console]);
 			/* New console, old console */
-                        change_console(vt_cons->vcs.vc_cons[want_console],
+                        change_console(want_console,
 				       vt_cons->vcs.vc_cons[fg_console]);
                         /* we only changed when the console had already
                            been allocated - a new console is not created
                            in an interrupt routine */
                 }
-                want_console = -1;
+                want_console = NULL;
         }
         if (do_poke_blanked_console) { /* do not unblank for a LED change */
                 do_poke_blanked_console = 0;
-                poke_blanked_console();
+                poke_blanked_console(want_console->display_fg);
         }
         if (scrollback_delta) {
 		struct vc_data *vc = vt_cons->vcs.vc_cons[fg_console];
@@ -3523,7 +3522,7 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
                 }
         }
         set_cursor(vc);
-        poke_blanked_console();
+        poke_blanked_console(vc->display_fg);
 
 quit:
         clear_bit(0, &printing);

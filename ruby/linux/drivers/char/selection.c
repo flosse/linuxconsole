@@ -31,8 +31,6 @@
 /* Don't take this from <ctype.h>: 011-015 on the screen aren't spaces */
 #define isspace(c)	((c) == ' ')
 
-extern void poke_blanked_console(void);
-
 /* Variables for selection control. */
 /* Use a dynamic buffer, instead of static (Dec 1994) */
        int sel_cons = 0;		/* must not be disallocated */
@@ -131,7 +129,7 @@ int set_selection(const unsigned long arg, struct tty_struct *tty, int user)
 	int i, ps, pe;
 
 	unblank_screen();
-	poke_blanked_console();
+	poke_blanked_console(vc->display_fg);
 
 	{ unsigned short *args, xs, ys, xe, ye;
 
@@ -305,7 +303,7 @@ int paste_selection(struct tty_struct *tty)
 	int	pasted = 0, count;
 	DECLARE_WAITQUEUE(wait, current);
 
-	poke_blanked_console();
+	poke_blanked_console(vc->display_fg);
 	add_wait_queue(&vc->paste_wait, &wait);
 	while (sel_buffer && sel_buffer_lth > pasted) {
 		set_current_state(TASK_INTERRUPTIBLE);
