@@ -133,9 +133,9 @@ static struct input_handler kbd_handler;
 static unsigned long key_down[256/BITS_PER_LONG];
 static unsigned char shift_down[NR_SHIFT];	/* shift state counters.. */
 static int dead_key_next;
-static int npadch = -1;				/* -1 or number assembled on pad */
+static int npadch = -1;			/* -1 or number assembled on pad */
 static unsigned char diacr;
-static char rep;				/* flag telling character repeat */
+static char rep;			/* flag telling character repeat */
 pm_callback pm_kbd_request_override = NULL;
 typedef void (pm_kbd_func) (void);
 static struct pm_dev *pm_kbd;
@@ -156,7 +156,6 @@ static void put_queue(struct vc_data *vc, int ch)
 {
 	struct tty_struct *tty = vc->vc_tty;
 
-	wake_up(&keypress_wait);
 	if (tty) {
 		tty_insert_flip_char(tty, ch, 0);
 		tty_schedule_flip(tty);
@@ -167,11 +166,13 @@ static void puts_queue(struct vc_data *vc, char *cp)
 {
 	struct tty_struct *tty = vc->vc_tty;
 
-	wake_up(&keypress_wait);
 	if (!tty)
 		return;
-	while (*cp)
-		tty_insert_flip_char(tty, *cp++, 0);
+
+	while (*cp) {
+		tty_insert_flip_char(tty, *cp, 0);
+		cp++;
+	}
 	tty_schedule_flip(tty);
 }
 
@@ -225,6 +226,7 @@ static void applkey(struct vc_data *vc, int key, char mode)
 void to_utf8(struct vc_data *vc, ushort c)
 {
 	if (c < 0x80)
+		/* 0*******  */
 		put_queue(vc, c);
 	else if (c < 0x800) {
 		/* 110***** 10****** */
@@ -240,25 +242,26 @@ void to_utf8(struct vc_data *vc, ushort c)
 
 void put_unicode(struct vc_data *vc, u16 uc)
 {
-  if (vc->kbd_table.kbdmode == VC_UNICODE)
-    to_utf8(vc, uc);
-  else if ((uc & ~0x9f) == 0 || uc == 127)
-    /* Don't translate control chars */
-    put_queue(vc, uc);
-  else {
-    unsigned char c;
-    c = inverse_translate(vc->display_fg->fg_console->vc_translate, uc);
-    if (c) put_queue(vc, c);
-  }
+	if (vc->kbd_table.kbdmode == VC_UNICODE)
+    		to_utf8(vc, uc);
+  	else if ((uc & ~0x9f) == 0 || uc == 127)
+    		/* Don't translate control chars */
+    		put_queue(vc, uc);
+  	else {
+    		unsigned char c;
+
+    		c = inverse_translate(vc->vc_translate, uc);
+    		if (c) put_queue(vc, c);
+  	}
 }
 
 static void put_8bit(struct vc_data *vc, u8 c)
 {
-  if (vc->kbd_table.kbdmode != VC_UNICODE ||
-      c < 32 || c == 127) /* Don't translate control chars */
-    put_queue(vc, c);
-  else
-      to_utf8(vc, get_acm(vc->display_fg->fg_console->vc_translate)[c]);
+	/* Don't translate control chars */
+	if (vc->kbd_table.kbdmode != VC_UNICODE || c < 32 || c == 127)
+    		put_queue(vc, c);
+	else
+      		to_utf8(vc, get_acm(vc->vc_translate)[c]);
 }
 
 /*
@@ -273,14 +276,14 @@ void compute_shiftstate(void)
 	shift_state = 0;
 	memset(shift_down, 0, sizeof(shift_down));
 
-	for(i = 0; i < SIZE(key_down); i++) {
+	for (i = 0; i < SIZE(key_down); i++) {
 
 		if (!key_down[i])
 			continue;
 
 		k = i*BITS_PER_LONG;
 
-		for(j = 0; j < BITS_PER_LONG; j++, k++) {
+		for (j = 0; j < BITS_PER_LONG; j++, k++) {
 
 			if (!test_bit(k, key_down))
 				continue;
@@ -370,7 +373,6 @@ static void fn_hold(struct vc_data *vc)
 	 * these routines are also activated by ^S/^Q.
 	 * (And SCROLLOCK can also be set by the ioctl KDSKBLED.)
 	 */
-
 	if (tty->stopped)
 		start_tty(tty);
 	else
@@ -386,9 +388,11 @@ static void fn_num(struct vc_data *vc)
 }
 
 /*
- * NumLock code version unaffected by application keypad mode
+ * Bind this to Shift-NumLock if you work in application keypad mode
+ * but want to be able to change the NumLock flag.
+ * Bind this to NumLock if you prefer that the NumLock key always
+ * changes the NumLock flag.
  */
-
 static void fn_bare_num(struct vc_data *vc)
 {
 	if (!rep)
@@ -529,8 +533,7 @@ static void k_spec(struct vc_data *vc, unsigned char value, char up_flag)
 	fn_handler[value](vc);
 }
 
-static void k_lowercase(struct vc_data *vc, unsigned char value, 
-			char up_flag)
+static void k_lowercase(struct vc_data *vc, unsigned char value, char up_flag) 
 {
 	printk(KERN_ERR "keyboard.c: k_lowercase was called - impossible\n");
 }
@@ -650,7 +653,7 @@ static void k_pad(struct vc_data *vc, unsigned char value, char up_flag)
 				k_fn(vc, KVAL(K_PGUP), 0);
 				return;
 			case KVAL(K_P5):
-				applkey(vc,'G', vc_kbd_mode(&vc->kbd_table, 
+				applkey(vc, 'G', vc_kbd_mode(&vc->kbd_table, 
 					VC_APPLIC));
 				return;
 		}
@@ -670,7 +673,6 @@ static void k_shift(struct vc_data *vc, unsigned char value, char up_flag)
 	 * Mimic typewriter:
 	 * a CapsShift key acts like Shift but undoes CapsLock
 	 */
-
 	if (value == KVAL(K_CAPSSHIFT)) {
 		value = KVAL(K_SHIFT);
 		if (!up_flag)
@@ -706,6 +708,7 @@ static void k_meta(struct vc_data *vc, unsigned char value, char up_flag)
 {
 	if (up_flag)
 		return;
+
 	if (vc_kbd_mode(&vc->kbd_table, VC_META)) {
 		put_queue(vc, '\033');
 		put_queue(vc, value);
@@ -739,27 +742,30 @@ static void k_lock(struct vc_data *vc, unsigned char value, char up_flag)
 {
 	if (up_flag || rep)
 		return;
+
 	if (value >= NR_LOCK) {
                 /* Change the lock state and
                    set the CapsLock LED to the new state */
                 unsigned char mask;
 
                 mask = 1 << (value -= NR_LOCK);
-                if ((vc->kbd_table.lockstate ^= mask) & mask)
-                        set_vc_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
+                if ((kbd->lockstate ^= mask) & mask)
+                        set_vc_kbd_led(kbd, VC_CAPSLOCK);
                 else
-                        clr_vc_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
+                        clr_vc_kbd_led(kbd, VC_CAPSLOCK);
         } else {
                 /* Just change the lock state */
-		chg_vc_kbd_lock(&vc->kbd_table, value);
+		chg_vc_kbd_lock(kbd, value);
 	}
 }
 
 static void k_slock(struct vc_data *vc, unsigned char value, char up_flag)
 {
 	k_shift(vc, value, up_flag);
+
 	if (up_flag || rep)
 		return;
+
 	chg_vc_kbd_slock(&vc->kbd_table, value);
 	/* try to make Alt, oops, AltGr and such work */
 	if (!key_maps[vc->kbd_table.lockstate ^ vc->kbd_table.slockstate]) {
