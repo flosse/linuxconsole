@@ -30,12 +30,14 @@
 #include <linux/input.h>
 #include <linux/sched.h>
 
-#undef DEBUG
+#define DEBUG
 #include <linux/usb.h>
 
 #include <linux/circ_buf.h>
 
 #include "hid.h"
+
+#define RUN_AT(t) (jiffies + (t))
 
 /* Transmition state */
 #define XMIT_RUNNING 0
@@ -113,14 +115,21 @@ struct lgff_magnitudes {
 };
 
 struct lgff_effect {
+	int id;
+	struct hid_ff_logitech* lgff;
+
 	pid_t owner;
 	unsigned char left;        /* Magnitude of vibration for left motor */
 	unsigned char right;       /* Magnitude of vibration for right motor */
 	struct ff_replay replay;
+	unsigned int count;        /* Number of times to play */
+	struct timer_list timer;
 	unsigned long flags[1];
 };
 
 struct hid_ff_logitech {
+	struct hid_device* hid;
+
 	struct urb* urbffout;        /* Output URB used to send ff commands */
 	struct usb_ctrlrequest ffcr; /* ff commands use control URBs */
 	char buf[8];
@@ -136,7 +145,6 @@ struct hid_ff_logitech {
 					isn't really necessary */
 };
 
-
 static void hid_lgff_ctrl_out(struct urb *urb);
 static void hid_lgff_exit(struct hid_device* hid);
 static int hid_lgff_event(struct hid_device *hid, struct input_dev *input,
@@ -149,10 +157,13 @@ static int hid_lgff_upload_effect(struct input_dev *input,
 static int hid_lgff_erase(struct input_dev *input, int id);
 static void hid_lgff_ctrl_playback(struct hid_device* hid, struct lgff_effect*,
 				   int play);
+static void hid_lgff_timer(unsigned long timer_data);
+
 
 static int hid_lgff_init(struct hid_device* hid)
 {
 	struct hid_ff_logitech *private;
+	int i;
 
 	/* Private data */
 	hid->ff_private = kmalloc(sizeof(struct hid_ff_logitech), GFP_KERNEL);
@@ -163,11 +174,23 @@ static int hid_lgff_init(struct hid_device* hid)
 
 	hid->ff_private = private;
 
+	private->hid = hid;
 	spin_lock_init(&private->lock);
 	spin_lock_init(&private->xmit_lock);
 
 	private->buf[0] = 0x03;
 	private->buf[1] = 0x42;
+
+	for (i=0; i<LGFF_EFFECTS; ++i) {
+		struct lgff_effect* effect = &private->effects[i];
+		struct timer_list* timer = &effect->timer;
+
+		init_timer(timer);
+		effect->id = i;
+		effect->lgff = private;
+		timer->data = (unsigned long)effect;
+		timer->function = hid_lgff_timer;
+	}
 
 	/* Event and exit callbacks */
 	hid->ff_exit = hid_lgff_exit;
@@ -213,14 +236,47 @@ static int hid_lgff_event(struct hid_device *hid, struct input_dev* input,
 	struct lgff_effect *effect = lgff->effects + code;
 	unsigned long flags;
 
-	if (type != EV_FF) return -EINVAL;
-	
-	if (!LGFF_CHECK_OWNERSHIP(code, lgff)) return -EACCES;
-
-	if (value < 0) return -EINVAL;
+	if (type != EV_FF)                     return -EINVAL;
+       	if (!LGFF_CHECK_OWNERSHIP(code, lgff)) return -EACCES;
+	if (value < 0)                         return -EINVAL;
 
 	spin_lock_irqsave(&lgff->lock, flags);
-	hid_lgff_ctrl_playback(hid, effect, value);
+	
+	if (value > 0) {
+		if (test_bit(EFFECT_STARTED, effect->flags)) {
+			spin_unlock_irqrestore(&lgff->lock, flags);
+			return -EBUSY;
+		}
+		if (test_bit(EFFECT_PLAYING, effect->flags)) {
+			spin_unlock_irqrestore(&lgff->lock, flags);
+			return -EBUSY;
+		}
+
+		effect->count = value;
+
+		if (effect->replay.delay) {
+			set_bit(EFFECT_STARTED, effect->flags);
+			effect->timer.expires = RUN_AT(effect->replay.delay * HZ / 1000);
+		} else {
+			hid_lgff_ctrl_playback(hid, effect, value);
+			effect->timer.expires = RUN_AT(effect->replay.length * HZ / 1000);
+		}
+
+		add_timer(&effect->timer);
+	}
+	else { /* value == 0 */
+		if (test_and_clear_bit(EFFECT_STARTED, effect->flags)) {
+			del_timer(&effect->timer);
+
+		} else if (test_and_clear_bit(EFFECT_PLAYING, effect->flags)) {
+			del_timer(&effect->timer);
+			hid_lgff_ctrl_playback(hid, effect, value);
+		}
+
+		if (test_bit(EFFECT_PLAYING, effect->flags))
+			warn("Effect %d still playing", code);
+	}
+
 	spin_unlock_irqrestore(&lgff->lock, flags);
 
 	return 0;
@@ -244,7 +300,7 @@ static int hid_lgff_flush(struct input_dev *dev, struct file *file)
 		     && test_bit(EFFECT_USED, lgff->effects[i].flags)) {
 			
 			if (hid_lgff_erase(dev, i))
-				warn("erase effect %d failed\n", i);
+				warn("erase effect %d failed", i);
 		}
 
 	}
@@ -393,7 +449,7 @@ static void hid_lgff_make_rumble(struct hid_device* hid)
 	tail = lgff->xmit_tail;	
 
 	if (CIRC_SPACE(head, tail, LGFF_BUFFER_SIZE) < 1) {
-		warn("not enough space in xmit buffer to send new packet\n");
+		warn("not enough space in xmit buffer to send new packet");
 		spin_unlock_irqrestore(&lgff->xmit_lock, flags);
 		return;
 	}
@@ -433,6 +489,55 @@ static void hid_lgff_ctrl_playback(struct hid_device *hid,
 		clear_bit(EFFECT_PLAYING, effect->flags);
 		hid_lgff_make_rumble(hid);
 	}
+}
+
+static void hid_lgff_timer(unsigned long timer_data)
+{
+	struct lgff_effect *effect = (struct lgff_effect*) timer_data;
+	struct hid_ff_logitech* lgff = effect->lgff;
+	int id = effect->id;
+
+	unsigned long flags;
+
+	dbg("in hid_lgff_timer");
+
+	if (id < 0 || id >= LGFF_EFFECTS) {
+		warn("Bad effect id %d", id);
+		return;
+	}
+
+	effect = lgff->effects + id;
+
+	spin_lock_irqsave(&lgff->lock, flags);
+
+	if (!test_bit(EFFECT_USED, effect->flags)) {
+		warn("Unused effect id %d", id);
+
+	} else if (test_bit(EFFECT_STARTED, effect->flags)) {
+		clear_bit(EFFECT_STARTED, effect->flags);
+		set_bit(EFFECT_PLAYING, effect->flags);
+		hid_lgff_ctrl_playback(lgff->hid, effect, 1);
+		effect->timer.expires = RUN_AT(effect->replay.length * HZ / 1000);
+		add_timer(&effect->timer);
+
+		dbg("Effect %d starts playing", id);
+	} else if (test_bit(EFFECT_PLAYING, effect->flags)) {
+		clear_bit(EFFECT_PLAYING, effect->flags);
+		hid_lgff_ctrl_playback(lgff->hid, effect, 0);
+		if (--effect->count > 0) {
+			/*TODO: check that replay.delay is non-null */
+			set_bit(EFFECT_STARTED, effect->flags);
+			effect->timer.expires = RUN_AT(effect->replay.delay * HZ / 1000);
+			add_timer(&effect->timer);
+			dbg("Effect %d restarted", id);
+		} else {
+			dbg("Effect %d stopped", id);
+		}
+	} else {
+		warn("Effect %d is not started nor playing", id);
+	}
+
+	spin_unlock_irqrestore(&lgff->lock, flags);
 }
 
 #endif /* CONFIG_LOGITECH_RUMBLE */
