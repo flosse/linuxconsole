@@ -1,0 +1,137 @@
+<!doctype HTML public "-//W3O//DTD W3 HTML 3.2//EN">
+<HTML>
+<HEAD>
+<link rev=made href=mailto:esr@snark.thyrsus.com>
+<meta name="description" content="Home page of the Linux Console Project">
+<meta name="keywords" content="linux, console, ANSI, ECMA-48"> 
+<TITLE>The Linux Console Project</TITLE>
+</HEAD>
+<BODY>
+<H1 ALIGN=CENTER>The Linux Console Project</H1>
+
+<center>
+Powered by:<br>
+<A href="http://sourceforge.net"> 
+<IMG src="http://sourceforge.net/sflogo.php?group_id=3063&type=1"
+width="88" height="31" border="0" alt="SourceForge"></A> 
+</center>
+<p>
+
+<H1>Charter and Objectives:</H1>
+
+Our charter is to clean up and properly maintain the Linux console
+driver.  There has been scattered work on the console going on for
+some time.  This project will try to pull it all together into a
+coherent architecture from which we can generate clean patches 
+for Linus and the core kernel team.<p>
+
+Right now the console has a couple of problems:
+
+<ol>
+<li>The built-in ANSI X3.64/ECMA-48 terminal emulation is incomplete
+    and in some respects incorrect.<p>
+
+<li>Terminal emulation is much too intertwined with the lower 
+    levels of the console implementation (e.g. fbdev). Eventually
+    terminal emulations should be loadable modules.<p>
+</ol>
+
+There's demand for many features that have not yet been implemented.
+These include:
+
+<ul>
+<li> Multi-head operation -- console instances running on multiple
+     (possibly dissimilar) video cards.
+<li> A scrollback buffer implemented in the console itself.
+<li> Support for different fonts, keymaps, and textmodes per VC.
+<li> Better Unicode support.
+</ul>
+
+<H1>Deliverables:</H1>
+
+This project aims to deliver three things:<p>
+<ol>
+<li>
+Sapphire: console.c and man page patches for 2.0.x and 2.2.x to fix
+ANSI conformance in the terminal emulation.  These need to go to Alan
+Cox for merging into the stable tree.<p>
+
+<li>
+Emerald: console.c and man page patches for 2.3.x to fix ANSI conformance in
+the terminal emulation.  These need to go to Linus for inclusion
+before 2.4.<p>
+
+<li>
+Ruby: A line of patches for 2.4.x that implements the heavy stuff; fbdev
+refactoring, multihead, scrollback, etc.  These can't go in until 2.5.x.<p>
+</ol>
+
+<H1>Project Status:</H1>
+
+Development is moving fast.  We already have candidate Sapphire and
+Emerald patches that work.  We expect to be able to ship Sapphire and Emerald,
+with full documentation, before the end of March 2000.<p>
+
+<H1>People:</H1>
+
+<dl>
+<dt> <a href="mailto:jsimmons@linux-fbdev.org">James Simmons</a>
+<dd> Project admin on SourceForge. The release master.  
+     Doing fbdev refactoring, multihead support.<p>
+
+<dt><a href="mailto:dominik.kubla@uni-mainz.de">Dominik Kubla</a> 
+<dd> Doing ANSI/ECMA-48 terminal emulation coding.<p>
+
+<dt><a href="mailto:esr@thyrsus.com">Eric S. Raymond</a>
+<dd>Project webmaster, co-admin, and documentation person.  Interested
+    in terminfo and ANSI conformance. (Eric maintains the master 
+    terminfo file.)<p>
+
+<dt><a href="vojtech@suse.cz">Vojtech Pavlik</a>
+<dd>Interested in input device refactoring.
+</dl>
+
+<H1>Related Resources:</H1>
+
+<ul>
+<li>Our <a
+href="http://sourceforge.net/project/?group_id=3063">SourceForge page</a>.<p>
+
+<li>Dominik Kubla's
+<a href="http://www-klinik.uni-mainz.de/staff/kubla/Linux/">emulation patches</a>;
+these will probably be the basis of our first two deliverables.<p>
+
+<li>Vojtech Pavlik's <a
+href="http://www.suse.cz/development/input/">input drivers</a>, a
+previous effort in this direction which we hope to integrate.<p>
+
+<li>
+EvStack, another previous attempt associated with the GGI project.
+There is a <a href="http://zhrodague.net/~jmcc/ggi/EvStack">home
+site</a>; you can also browse some <a
+href="http://zhrodague.net/~jmcc/ggi/EvStack/paper/">documentation</a>
+describing their architecture and approach.<p>
+
+<li>Steffen Seeger tells us that his
+<a href="http://kgi.sourceforge.net">KGI implementation</a>
+tries to carry forward some of the EvStack ideas while being `less 
+invasive'.<p>
+
+<li><a href="mailto:Andries.Brouwer@cwi.nl">Andries Brouwer</a>
+maintains the Linux kernel keyboard support and kbd tools.<p>
+
+<li>The <a href="http://www.tuxedo.org/~esr/terminfo">terminfo/termcap</a>
+home page.<p>
+
+<li>The <a href="http://vt100.net">VT Terminal Information</a> site.
+These people have the VT220 reference manual online.<p>
+
+<li>The 
+<a href="ftp://ftp.clark.net/pub/dickey/vttest/vttest.tar.gz">vttest</a>
+program tests an emulations's conformance to a VT100.<p>
+</ul>
+
+<HR>
+<ADDRESS>Eric S. Raymond <A HREF="mailto:esr@thyrsus.com">&lt;esr@thyrsus.com&gt;</A></ADDRESS>
+</BODY>
+</HTML>
