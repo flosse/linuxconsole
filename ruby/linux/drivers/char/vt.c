@@ -103,13 +103,10 @@ void respond_string(const char * p, struct tty_struct * tty)
  */
 int (*console_blank_hook)(int) = NULL;
 
-static struct pm_dev *pm_con = NULL;
-
 /* keyboard macros */
 #define set_kbd(kbd_table, x) set_vc_kbd_mode(kbd_table, x)
 #define clr_kbd(kbd_table, x) clr_vc_kbd_mode(kbd_table, x)
 #define is_kbd(kbd_table, x) vc_kbd_mode(kbd_table, x)
-
 
 /*
  * Console cursor handling
@@ -660,14 +657,18 @@ void poke_blanked_console(struct vt_struct *vt)
  */
 static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
 {
-	  switch (rqst) {
- 		case PM_RESUME:
-                        /* unblank_screen(); */
-                        break;
-  		case PM_SUSPEND:
-                        /* blank_screen(); */
-                        break;
-  	}
+	struct vt_struct *vt = dev->data;
+	
+	if (vt) {	
+		switch (rqst) {
+ 			case PM_RESUME:
+                        	unblank_screen(vt);
+                        	break;
+  			case PM_SUSPEND:
+                        	blank_screen(vt);
+                        	break;
+  		}
+	}
         return 0;
 }
 
@@ -822,10 +823,12 @@ int vc_allocate(unsigned int currcons)
 	    	vt->last_console = vt->fg_console = vc;
 	
 	    pool->vc_cons[currcons - pool->first_vc] = vc;		
-	 /*	
-            if (!pm_con) 
-            	pm_con = pm_register(PM_SYS_DEV, PM_SYS_VGA, pm_con_request);
-	  */
+	 	
+            if (!vt->pm_con) { 
+            	vt->pm_con = pm_register(PM_SYS_DEV,PM_SYS_VGA,pm_con_request);	
+		if (vt->pm_con)
+			vt->pm_con->data = vt;			
+	    }	
         }
         return 0;
 }
@@ -1305,9 +1308,10 @@ static void con_close(struct tty_struct *tty, struct file * filp)
 static int con_write(struct tty_struct * tty, int from_user,
                      const unsigned char *buf, int count)
 {
-        int     retval;
+        struct vc_data *vc = (struct vc_data *) tty->driver_data;
+	int     retval;
 
-        /* pm_access(pm_con); */
+        pm_access(vc->display_fg->pm_con);
         retval = do_con_write(tty, from_user, buf, count);
         con_flush_chars(tty);
 
@@ -1316,7 +1320,9 @@ static int con_write(struct tty_struct * tty, int from_user,
 
 static void con_put_char(struct tty_struct *tty, unsigned char ch)
 {
-        /* pm_access(pm_con); */
+	struct vc_data *vc = (struct vc_data *) tty->driver_data;
+
+        pm_access(vc->display_fg->pm_con);
         do_con_write(tty, 0, &ch, 1);
 }
 
@@ -1332,7 +1338,7 @@ static void con_flush_chars(struct tty_struct *tty)
         struct vc_data *vc = (struct vc_data *)tty->driver_data;
         unsigned long flags;
 
-        /* pm_access(pm_con); */
+        pm_access(vc->display_fg->pm_con);
         spin_lock_irqsave(&console_lock, flags);
         set_cursor(vc);
         spin_unlock_irqrestore(&console_lock, flags);
@@ -1405,8 +1411,6 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
         if (!printable || test_and_set_bit(0, &printing))
                 return;
 
-        /* pm_access(pm_con); */
-
         if (kmsg_redirect) {
 		vc = find_vc(kmsg_redirect-1);
 		if (vc)
@@ -1416,6 +1420,8 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
 			goto quit;
 	}
 
+	pm_access(vc->display_fg->pm_con);
+	
         /* read `x' only after setting co->index properly (otherwise
            the `x' macro will read the x of the foreground console). */
         myx = x;
