@@ -266,30 +266,22 @@ static void gf2k_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 	gf2k_trigger_seq(gameport, gf2k_seq_reset);
 
-	wait_ms(80);
+	wait_ms(GF2K_TIMEOUT);
 
 	gf2k_trigger_seq(gameport, gf2k_seq_digital);
 
-	wait_ms(80);
+	wait_ms(GF2K_TIMEOUT);
 
 	i = gf2k_read_packet(gameport, GF2K_LENGTH, data);
 	gf2k_print_packet("ID", i*3, data);
 
 	gf2k->id = GB(7,2,0) | GB(3,3,2) | GB(0,3,5);
-	
 	printk(KERN_DEBUG "gf2k.c: id:%d\n", gf2k->id);
 
-	wait_ms(4);
+	gf2k->id = 6; /*** DEBUG ***/
 
 	i = gf2k_read_packet(gameport, GF2K_LENGTH, data);
 	gf2k_print_packet("Data", i*3, data);
-
-	wait_ms(4);
-
-	i = gf2k_read_packet(gameport, GF2K_LENGTH, data);
-	gf2k_print_packet("Data", i*3, data);
-
-	wait_ms(4);
 
 	if (!gf2k->id || gf2k->id > GF2K_ID_MAX)
 		goto fail2;
@@ -314,10 +306,10 @@ static void gf2k_connect(struct gameport *gameport, struct gameport_dev *dev)
 		gf2k->dev.absmax[ABS_HAT0X + i] = 1;
 	}
 
-	for (i = 0; i < gf2k_joys[i]; i++)
+	for (i = 0; i < gf2k_joys[gf2k->id]; i++)
 		set_bit(gf2k_btn_joy[i], gf2k->dev.keybit);
 
-	for (i = 0; i < gf2k_pads[i]; i++)
+	for (i = 0; i < gf2k_pads[gf2k->id]; i++)
 		set_bit(gf2k_btn_pad[i], gf2k->dev.keybit);
 
 	input_register_device(&gf2k->dev);
