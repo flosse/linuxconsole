@@ -2244,7 +2244,7 @@ void __init tty_init(void)
 		panic("Couldn't register /dev/tty0 driver\n");
 
 	kbd_init();
-	console_map_init(vt_cons);
+	console_map_init();
 	vcs_init();
 #endif
 #ifdef CONFIG_ESPSERIAL  /* init ESP before rs, so rs doesn't see the port */
