@@ -69,7 +69,7 @@
 #include <linux/highmem.h>
 #include <linux/bootmem.h>
 #include <asm/processor.h>
-#include <linux/console.h>
+#include <linux/vt_kern.h>
 #include <asm/uaccess.h>
 #include <asm/system.h>
 #include <asm/io.h>
