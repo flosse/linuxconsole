@@ -11,7 +11,7 @@ O_TARGET := uart.o
 
 export-objs	:= serial_core.o
 
-obj-$(CONFIG_UART)		+= serial_core.o
+obj-$(CONFIG_UART)		+= serial_core.o serial_tty.o
 obj-$(CONFIG_SERIAL_AMBA) 	+= serial_amba.o
 obj-$(CONFIG_SERIAL_CLPS711X) 	+= serial_clps711x.o
 obj-$(CONFIG_SERIAL_ANAKIN) 	+= serial_anakin.o
