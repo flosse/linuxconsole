@@ -1,7 +1,7 @@
 /*
  *  linux/drivers/video/vfb.c -- Virtual frame buffer device
  *
- *      Copyright (C) 1999 James Simmons
+ *      Copyright (C) 2002 James Simmons
  *
  *	Copyright (C) 1997 Geert Uytterhoeven
  *
@@ -24,6 +24,8 @@
 #include <linux/fb.h>
 #include <linux/init.h>
 
+#include <linux/fbcon.h>
+
     /*
      *  RAM we reserve for the frame buffer. This defines the maximum screen
      *  size
@@ -33,7 +35,7 @@
 
 #define VIDEOMEMSIZE	(1*1024*1024)	/* 1 MB */
 
-static void* videomemory;
+static void *videomemory;
 static u_long videomemorysize = VIDEOMEMSIZE;
 MODULE_PARM(videomemorysize, "l");
 static const char *mode_option __initdata = NULL;
@@ -42,16 +44,35 @@ static struct fb_info fb_info;
 static u32 vfb_pseudo_palette[17];
 
 static struct fb_var_screeninfo vfb_default __initdata = {
-    /* 640x480, 8 bpp */
-    640, 480, 640, 480, 0, 0, 8, 0,
-    {0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
-    0, FB_ACTIVATE_TEST, -1, -1, 0, 
-    20000, 64, 64, 32, 32, 64, 2, 0, FB_VMODE_NONINTERLACED
+	xres:		640,
+	yres:		480,
+	xres_virtual:	640,
+	yres_virtual:	480,
+	bits_per_pixel:	8,
+	red:		{ 0, 8, 0 },
+      	green:		{ 0, 8, 0 },
+      	blue:		{ 0, 8, 0 },
+      	activate:	FB_ACTIVATE_TEST,
+      	height:		-1,
+      	width:		-1,
+      	pixclock:	20000,
+      	left_margin:	64,
+      	right_margin:	64,
+      	upper_margin:	32,
+      	lower_margin:	32,
+      	hsync_len:	64,
+      	vsync_len:	2,
+      	vmode:		FB_VMODE_NONINTERLACED,
 };
 
 static struct fb_fix_screeninfo vfb_fix __initdata = {
-    "Virtual FB", (unsigned long) NULL, 0, FB_TYPE_PACKED_PIXELS, 0,
-    FB_VISUAL_PSEUDOCOLOR, 1, 1, 1, 0, (unsigned long) NULL, 0, FB_ACCEL_NONE
+	id:		"Virtual FB",
+	type:		FB_TYPE_PACKED_PIXELS,
+	visual:		FB_VISUAL_PSEUDOCOLOR,
+	xpanstep:	1,
+	ypanstep:	1,
+	ywrapstep:	1,
+	accel:		FB_ACCEL_NONE,
 };
 
 static int vfb_enable __initdata = 0;	/* disabled by default */
@@ -61,25 +82,27 @@ MODULE_PARM(vfb_enable, "i");
      *  Interface used by the world
      */
 int vfb_init(void);
-int vfb_setup(char*);
+int vfb_setup(char *);
 
-static int vfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info); 
+static int vfb_check_var(struct fb_var_screeninfo *var,
+			 struct fb_info *info);
 static int vfb_set_par(struct fb_info *info);
 static int vfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-                         u_int transp, struct fb_info *info);
-static int vfb_pan_display(struct fb_var_screeninfo *var,struct fb_info *info); 
+			 u_int transp, struct fb_info *info);
+static int vfb_pan_display(struct fb_var_screeninfo *var,
+			   struct fb_info *info);
 static int vfb_mmap(struct fb_info *info, struct file *file,
-                    struct vm_area_struct *vma);
+		    struct vm_area_struct *vma);
 
 static struct fb_ops vfb_ops = {
-    fb_check_var:	vfb_check_var, 
-    fb_set_par:		vfb_set_par, 
-    fb_setcolreg:	vfb_setcolreg,
-    fb_pan_display:	vfb_pan_display, 
-    fb_fillrect:	cfb_fillrect,
-    fb_copyarea:	cfb_copyarea,
-    fb_imageblit:	cfb_imageblit,	
-    fb_mmap:		vfb_mmap,
+	fb_check_var:	vfb_check_var,
+	fb_set_par:	vfb_set_par,
+	fb_setcolreg:	vfb_setcolreg,
+	fb_pan_display:	vfb_pan_display,
+	fb_fillrect:	cfb_fillrect,
+	fb_copyarea:	cfb_copyarea,
+	fb_imageblit:	cfb_imageblit,
+	fb_mmap:	vfb_mmap,
 };
 
     /*
@@ -88,12 +111,12 @@ static struct fb_ops vfb_ops = {
 
 static u_long get_line_length(int xres_virtual, int bpp)
 {
-    u_long length;
+	u_long length;
 
-    length = xres_virtual*bpp;
-    length = (length+31)&~31;
-    length >>= 3;
-    return(length);
+	length = xres_virtual * bpp;
+	length = (length + 31) & ~31;
+	length >>= 3;
+	return (length);
 }
 
     /*
@@ -104,122 +127,124 @@ static u_long get_line_length(int xres_virtual, int bpp)
      *  data from it to check this var. 
      */
 
-static int vfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info) 
+static int vfb_check_var(struct fb_var_screeninfo *var,
+			 struct fb_info *info)
 {
-    u_long line_length;
+	u_long line_length;
 
-    /*
-     *  FB_VMODE_CONUPDATE and FB_VMODE_SMOOTH_XPAN are equal!
-     *  as FB_VMODE_SMOOTH_XPAN is only used internally
-     */
+	/*
+	 *  FB_VMODE_CONUPDATE and FB_VMODE_SMOOTH_XPAN are equal!
+	 *  as FB_VMODE_SMOOTH_XPAN is only used internally
+	 */
 
-    if (var->vmode & FB_VMODE_CONUPDATE) {
-	var->vmode |= FB_VMODE_YWRAP;
-	var->xoffset = info->var.xoffset;
-	var->yoffset = info->var.yoffset;
-    }
+	if (var->vmode & FB_VMODE_CONUPDATE) {
+		var->vmode |= FB_VMODE_YWRAP;
+		var->xoffset = info->var.xoffset;
+		var->yoffset = info->var.yoffset;
+	}
 
-    /*
-     *  Some very basic checks
-     */
-    if (!var->xres)
-	var->xres = 1;
-    if (!var->yres)
-	var->yres = 1;
-    if (var->xres > var->xres_virtual)
-	var->xres_virtual = var->xres;
-    if (var->yres > var->yres_virtual)
-	var->yres_virtual = var->yres;
-    if (var->bits_per_pixel <= 1)
-	var->bits_per_pixel = 1;
-    else if (var->bits_per_pixel <= 8)
-	var->bits_per_pixel = 8;
-    else if (var->bits_per_pixel <= 16)
-	var->bits_per_pixel = 16;
-    else if (var->bits_per_pixel <= 24)
-	var->bits_per_pixel = 24;
-    else if (var->bits_per_pixel <= 32)
-	var->bits_per_pixel = 32;
-    else
-	return -EINVAL;
+	/*
+	 *  Some very basic checks
+	 */
+	if (!var->xres)
+		var->xres = 1;
+	if (!var->yres)
+		var->yres = 1;
+	if (var->xres > var->xres_virtual)
+		var->xres_virtual = var->xres;
+	if (var->yres > var->yres_virtual)
+		var->yres_virtual = var->yres;
+	if (var->bits_per_pixel <= 1)
+		var->bits_per_pixel = 1;
+	else if (var->bits_per_pixel <= 8)
+		var->bits_per_pixel = 8;
+	else if (var->bits_per_pixel <= 16)
+		var->bits_per_pixel = 16;
+	else if (var->bits_per_pixel <= 24)
+		var->bits_per_pixel = 24;
+	else if (var->bits_per_pixel <= 32)
+		var->bits_per_pixel = 32;
+	else
+		return -EINVAL;
 
-    if (var->xres_virtual < var->xoffset + var->xres)
-        var->xres_virtual = var->xoffset + var->xres;
-    if (var->yres_virtual < var->yoffset + var->yres)
-       var->yres_virtual = var->yoffset + var->yres;
+	if (var->xres_virtual < var->xoffset + var->xres)
+		var->xres_virtual = var->xoffset + var->xres;
+	if (var->yres_virtual < var->yoffset + var->yres)
+		var->yres_virtual = var->yoffset + var->yres;
 
-    /*
-     *  Memory limit
-     */
-    line_length = get_line_length(var->xres_virtual, var->bits_per_pixel);
-    if (line_length*var->yres_virtual > videomemorysize)
-	return -ENOMEM;
+	/*
+	 *  Memory limit
+	 */
+	line_length =
+	    get_line_length(var->xres_virtual, var->bits_per_pixel);
+	if (line_length * var->yres_virtual > videomemorysize)
+		return -ENOMEM;
 
-    /*
-     * Now that we checked it we alter var. The reason being is that the video
-     * mode passed in might not work but slight changes to it might make it 
-     * work. This way we let the user know what is acceptable.
-     */
-    switch (var->bits_per_pixel) {
-       case 1:
-       case 8:
-           var->red.offset = 0;
-           var->red.length = 8;
-           var->green.offset = 0;
-           var->green.length = 8;
-           var->blue.offset = 0;
-           var->blue.length = 8;
-           var->transp.offset = 0;
-           var->transp.length = 0;
-           break;
-       case 16:        /* RGBA 5551 */
-           if (var->transp.length) {
-               var->red.offset = 0;
-               var->red.length = 5;
-               var->green.offset = 5;
-               var->green.length = 5;
-               var->blue.offset = 10;
-               var->blue.length = 5;
-               var->transp.offset = 15;
-               var->transp.length = 1;
-           } else {    /* RGB 565 */
-               var->red.offset = 0;
-               var->red.length = 5;
-               var->green.offset = 5;
-               var->green.length = 6;
-               var->blue.offset = 11;
-               var->blue.length = 5;
-               var->transp.offset = 0;
-               var->transp.length = 0;
-           }
-           break;
-       case 24:        /* RGB 888 */
-           var->red.offset = 0;
-           var->red.length = 8;
-           var->green.offset = 8;
-           var->green.length = 8;
-           var->blue.offset = 16;
-           var->blue.length = 8;
-           var->transp.offset = 0;
-           var->transp.length = 0;
-           break;
-       case 32:        /* RGBA 8888 */
-           var->red.offset = 0;
-           var->red.length = 8;
-           var->green.offset = 8;
-           var->green.length = 8;
-           var->blue.offset = 16;
-           var->blue.length = 8;
-           var->transp.offset = 24;
-           var->transp.length = 8;
-           break;
-    }
-    var->red.msb_right = 0;
-    var->green.msb_right = 0;
-    var->blue.msb_right = 0;
-    var->transp.msb_right = 0;
+	/*
+	 * Now that we checked it we alter var. The reason being is that the video
+	 * mode passed in might not work but slight changes to it might make it 
+	 * work. This way we let the user know what is acceptable.
+	 */
+	switch (var->bits_per_pixel) {
+	case 1:
+	case 8:
+		var->red.offset = 0;
+		var->red.length = 8;
+		var->green.offset = 0;
+		var->green.length = 8;
+		var->blue.offset = 0;
+		var->blue.length = 8;
+		var->transp.offset = 0;
+		var->transp.length = 0;
+		break;
+	case 16:		/* RGBA 5551 */
+		if (var->transp.length) {
+			var->red.offset = 0;
+			var->red.length = 5;
+			var->green.offset = 5;
+			var->green.length = 5;
+			var->blue.offset = 10;
+			var->blue.length = 5;
+			var->transp.offset = 15;
+			var->transp.length = 1;
+		} else {	/* RGB 565 */
+			var->red.offset = 0;
+			var->red.length = 5;
+			var->green.offset = 5;
+			var->green.length = 6;
+			var->blue.offset = 11;
+			var->blue.length = 5;
+			var->transp.offset = 0;
+			var->transp.length = 0;
+		}
+		break;
+	case 24:		/* RGB 888 */
+		var->red.offset = 0;
+		var->red.length = 8;
+		var->green.offset = 8;
+		var->green.length = 8;
+		var->blue.offset = 16;
+		var->blue.length = 8;
+		var->transp.offset = 0;
+		var->transp.length = 0;
+		break;
+	case 32:		/* RGBA 8888 */
+		var->red.offset = 0;
+		var->red.length = 8;
+		var->green.offset = 8;
+		var->green.length = 8;
+		var->blue.offset = 16;
+		var->blue.length = 8;
+		var->transp.offset = 24;
+		var->transp.length = 8;
+		break;
+	}
+	var->red.msb_right = 0;
+	var->green.msb_right = 0;
+	var->blue.msb_right = 0;
+	var->transp.msb_right = 0;
 
-    return 0;
+	return 0;
 }
 
 /* This routine actually sets the video mode. It's in here where we
@@ -229,10 +254,10 @@ static int vfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 static int vfb_set_par(struct fb_info *info)
 {
 	info->fix.line_length = get_line_length(info->var.xres_virtual,
-                                                info->var.bits_per_pixel);
+						info->var.bits_per_pixel);
 	return 0;
 }
-	
+
     /*
      *  Set a single color register. The values supplied are already
      *  rounded down to the hardware's capabilities (according to the
@@ -240,84 +265,85 @@ static int vfb_set_par(struct fb_info *info)
      */
 
 static int vfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-                         u_int transp, struct fb_info *info)
+			 u_int transp, struct fb_info *info)
 {
-    if (regno >= 256)  /* no. of hw registers */
-       return 1;
-    /*
-     * Program hardware... do anything you want with transp
-     */
+	if (regno >= 256)	/* no. of hw registers */
+		return 1;
+	/*
+	 * Program hardware... do anything you want with transp
+	 */
 
-    /* grayscale works only partially under directcolor */    
-    if (info->var.grayscale) { 
-       /* grayscale = 0.30*R + 0.59*G + 0.11*B */
-       red = green = blue = (red * 77 + green * 151 + blue * 28) >> 8;
-    }	
-    
-    /* Directcolor:
-     *   var->{color}.offset contains start of bitfield
-     *   var->{color}.length contains length of bitfield
-     *   {hardwarespecific} contains width of RAMDAC
-     *   cmap[X] is programmed to (X << red.offset) | (X << green.offset) | (X << blue.offset)
-     *   RAMDAC[X] is programmed to (red, green, blue)
-     * 
-     * Pseudocolor:
-     *    uses offset = 0 && length = RAMDAC register width.
-     *    var->{color}.offset is 0
-     *    var->{color}.length contains widht of DAC
-     *    cmap is not used
-     *    RAMDAC[X] is programmed to (red, green, blue)
-     * Truecolor:
-     *    does not use DAC. Usually 3 are present.
-     *    var->{color}.offset contains start of bitfield
-     *    var->{color}.length contains length of bitfield
-     *    cmap is programmed to (red << red.offset) | (green << green.offset) |
-     *                      (blue << blue.offset) | (transp << transp.offset)
-     *    RAMDAC does not exist
-     */
+	/* grayscale works only partially under directcolor */
+	if (info->var.grayscale) {
+		/* grayscale = 0.30*R + 0.59*G + 0.11*B */
+		red = green = blue =
+		    (red * 77 + green * 151 + blue * 28) >> 8;
+	}
+
+	/* Directcolor:
+	 *   var->{color}.offset contains start of bitfield
+	 *   var->{color}.length contains length of bitfield
+	 *   {hardwarespecific} contains width of RAMDAC
+	 *   cmap[X] is programmed to (X << red.offset) | (X << green.offset) | (X << blue.offset)
+	 *   RAMDAC[X] is programmed to (red, green, blue)
+	 * 
+	 * Pseudocolor:
+	 *    uses offset = 0 && length = RAMDAC register width.
+	 *    var->{color}.offset is 0
+	 *    var->{color}.length contains widht of DAC
+	 *    cmap is not used
+	 *    RAMDAC[X] is programmed to (red, green, blue)
+	 * Truecolor:
+	 *    does not use DAC. Usually 3 are present.
+	 *    var->{color}.offset contains start of bitfield
+	 *    var->{color}.length contains length of bitfield
+	 *    cmap is programmed to (red << red.offset) | (green << green.offset) |
+	 *                      (blue << blue.offset) | (transp << transp.offset)
+	 *    RAMDAC does not exist
+	 */
 #define CNVT_TOHW(val,width) ((((val)<<(width))+0x7FFF-(val))>>16)
-    switch (info->fix.visual) {
-       case FB_VISUAL_TRUECOLOR:
-       case FB_VISUAL_PSEUDOCOLOR:
-               red = CNVT_TOHW(red, info->var.red.length);
-               green = CNVT_TOHW(green, info->var.green.length);
-               blue = CNVT_TOHW(blue, info->var.blue.length);
-               transp = CNVT_TOHW(transp, info->var.transp.length);
-               break;
-       case FB_VISUAL_DIRECTCOLOR:
-               red = CNVT_TOHW(red, 8);        /* expect 8 bit DAC */
-               green = CNVT_TOHW(green, 8);
-               blue = CNVT_TOHW(blue, 8);
-	       /* hey, there is bug in transp handling... */
-               transp = CNVT_TOHW(transp, 8);
-               break;
-    }
+	switch (info->fix.visual) {
+	case FB_VISUAL_TRUECOLOR:
+	case FB_VISUAL_PSEUDOCOLOR:
+		red = CNVT_TOHW(red, info->var.red.length);
+		green = CNVT_TOHW(green, info->var.green.length);
+		blue = CNVT_TOHW(blue, info->var.blue.length);
+		transp = CNVT_TOHW(transp, info->var.transp.length);
+		break;
+	case FB_VISUAL_DIRECTCOLOR:
+		red = CNVT_TOHW(red, 8);	/* expect 8 bit DAC */
+		green = CNVT_TOHW(green, 8);
+		blue = CNVT_TOHW(blue, 8);
+		/* hey, there is bug in transp handling... */
+		transp = CNVT_TOHW(transp, 8);
+		break;
+	}
 #undef CNVT_TOHW
-    /* Truecolor has hardware independent palette */
-    if (info->fix.visual == FB_VISUAL_TRUECOLOR) {
-       u32 v;
+	/* Truecolor has hardware independent palette */
+	if (info->fix.visual == FB_VISUAL_TRUECOLOR) {
+		u32 v;
 
-       if (regno >= 16)
-           return 1;
+		if (regno >= 16)
+			return 1;
 
-       v = (red << info->var.red.offset) |
-           (green << info->var.green.offset) |
-           (blue << info->var.blue.offset) |
-           (transp << info->var.transp.offset);
-       switch (info->var.bits_per_pixel) {
+		v = (red << info->var.red.offset) |
+		    (green << info->var.green.offset) |
+		    (blue << info->var.blue.offset) |
+		    (transp << info->var.transp.offset);
+		switch (info->var.bits_per_pixel) {
 		case 8:
 			break;
 		case 16:
-           		((u16*)(info->pseudo_palette))[regno] = v;
+			((u16 *) (info->pseudo_palette))[regno] = v;
 			break;
 		case 24:
 		case 32:
-           		((u32*)(info->pseudo_palette))[regno] = v;
+			((u32 *) (info->pseudo_palette))[regno] = v;
 			break;
-       }
-       return 0;
-    }
-    return 0;
+		}
+		return 0;
+	}
+	return 0;
 }
 
     /*
@@ -326,24 +352,26 @@ static int vfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
      *  This call looks only at xoffset, yoffset and the FB_VMODE_YWRAP flag
      */
 
-static int vfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info) 
+static int vfb_pan_display(struct fb_var_screeninfo *var,
+			   struct fb_info *info)
 {
-    if (var->vmode & FB_VMODE_YWRAP) {
-	if (var->yoffset < 0 || var->yoffset >= info->var.yres_virtual ||
-	    var->xoffset)
-	    return -EINVAL;
-    } else {
-	if (var->xoffset + var->xres > info->var.xres_virtual ||
-            var->yoffset + var->yres > info->var.yres_virtual)
-            return -EINVAL;
-    }
-    info->var.xoffset = var->xoffset;
-    info->var.yoffset = var->yoffset;
-    if (var->vmode & FB_VMODE_YWRAP)
-	info->var.vmode |= FB_VMODE_YWRAP;
-    else
-	info->var.vmode &= ~FB_VMODE_YWRAP;
-    return 0;
+	if (var->vmode & FB_VMODE_YWRAP) {
+		if (var->yoffset < 0
+		    || var->yoffset >= info->var.yres_virtual
+		    || var->xoffset)
+			return -EINVAL;
+	} else {
+		if (var->xoffset + var->xres > info->var.xres_virtual ||
+		    var->yoffset + var->yres > info->var.yres_virtual)
+			return -EINVAL;
+	}
+	info->var.xoffset = var->xoffset;
+	info->var.yoffset = var->yoffset;
+	if (var->vmode & FB_VMODE_YWRAP)
+		info->var.vmode |= FB_VMODE_YWRAP;
+	else
+		info->var.vmode &= ~FB_VMODE_YWRAP;
+	return 0;
 }
 
     /*
@@ -351,27 +379,27 @@ static int vfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
      */
 
 static int vfb_mmap(struct fb_info *info, struct file *file,
-                    struct vm_area_struct *vma)
+		    struct vm_area_struct *vma)
 {
-    return -EINVAL;	
+	return -EINVAL;
 }
 
 int __init vfb_setup(char *options)
 {
-    char *this_opt;
+	char *this_opt;
 
-    vfb_enable = 1;
+	vfb_enable = 1;
 
-    if (!options || !*options)
+	if (!options || !*options)
+		return 1;
+
+	while ((this_opt = strsep(&options, ",")) != NULL) {
+		if (!*this_opt)
+			continue;
+		if (!strncmp(this_opt, "disable", 7))
+			vfb_enable = 0;
+	}
 	return 1;
-
-    while ((this_opt = strsep(&options, ",")) != NULL) {	
-    	if (!*this_opt)
-	    continue;
-	if (!strncmp(this_opt, "disable", 7))
-	    vfb_enable = 0;	    
-    }
-    return 1;
 }
 
     /*
@@ -380,57 +408,59 @@ int __init vfb_setup(char *options)
 
 int __init vfb_init(void)
 {
-    int retval;	
+	int retval;
 
-    if (!vfb_enable)
-	return -ENXIO;
+	if (!vfb_enable)
+		return -ENXIO;
 
-    /*
-     * For real video cards we use ioremap.
-     */
-    if (!(videomemory = vmalloc(videomemorysize))) 
-	return -ENOMEM;
- 
-    /*
-     * VFB must clear memory to prevent kernel info
-     * leakage into userspace
-     * VGA-based drivers MUST NOT clear memory if
-     * they want to be able to take over vgacon
-     */
-    memset(videomemory, 0, videomemorysize);
- 
-    fb_info.screen_base = videomemory;
-    fb_info.node = -1;
-    fb_info.fbops = &vfb_ops;
+	/*
+	 * For real video cards we use ioremap.
+	 */
+	if (!(videomemory = vmalloc(videomemorysize)))
+		return -ENOMEM;
 
-    retval = fb_find_mode(&fb_info.var, &fb_info, mode_option,
-            			NULL, 0, NULL, 8);
+	/*
+	 * VFB must clear memory to prevent kernel info
+	 * leakage into userspace
+	 * VGA-based drivers MUST NOT clear memory if
+	 * they want to be able to take over vgacon
+	 */
+	memset(videomemory, 0, videomemorysize);
 
-    if (!retval || (retval == 4))
-    	fb_info.var = vfb_default;
-    fb_info.fix = vfb_fix;
-    fb_info.pseudo_palette = &vfb_pseudo_palette;	
-    fb_info.flags = FBINFO_FLAG_DEFAULT;
-  
-    if (register_framebuffer(&fb_info) < 0) {
-	vfree(videomemory);
-	return -EINVAL;
-    }
+	fb_info.screen_base = videomemory;
+	fb_info.node = -1;
+	fb_info.fbops = &vfb_ops;
 
-    printk(KERN_INFO "fb%d: Virtual frame buffer device, using %ldK of video memory\n", GET_FB_IDX(fb_info.node), videomemorysize>>10);
-    return 0;
+	retval = fb_find_mode(&fb_info.var, &fb_info, mode_option,
+			      NULL, 0, NULL, 8);
+
+	if (!retval || (retval == 4))
+		fb_info.var = vfb_default;
+	fb_info.fix = vfb_fix;
+	fb_info.pseudo_palette = &vfb_pseudo_palette;
+	fb_info.flags = FBINFO_FLAG_DEFAULT;
+
+	if (register_framebuffer(&fb_info) < 0) {
+		vfree(videomemory);
+		return -EINVAL;
+	}
+
+	printk(KERN_INFO
+	       "fb%d: Virtual frame buffer device, using %ldK of video memory\n",
+	       GET_FB_IDX(fb_info.node), videomemorysize >> 10);
+	return 0;
 }
 
 #ifdef MODULE
 
 static void __exit vfb_cleanup(void)
 {
-    unregister_framebuffer(&fb_info);
-    vfree(videomemory);
+	unregister_framebuffer(&fb_info);
+	vfree(videomemory);
 }
 
 module_init(vfb_init);
 module_exit(vfb_cleanup);
 
 MODULE_LICENSE("GPL");
-#endif /* MODULE */
+#endif				/* MODULE */
