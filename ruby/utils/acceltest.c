@@ -37,7 +37,8 @@ main(int argc, char **argv)
 	char fbdevice[256];
 	int fbnum = 0, opnu = 0, sx = 128, sy = 128, wi = 64, he = 64, color = 0xFFFFFFFF, nsx, nsy, count = 0;
 	unsigned char *fb_mem = NULL;
-	int fb_mem_offset = 0;
+	int fb_mem_offset = 0, fbd, r;
+	char *tmpoptarg;
 	struct fb_var_screeninfo fb_var;
 	struct fb_fix_screeninfo fb_fix;
 	struct fb_fillrect fbfr;
