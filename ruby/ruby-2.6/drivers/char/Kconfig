@@ -66,7 +66,7 @@ config VT_CONSOLE
 
 config HW_CONSOLE
 	bool
-	depends on VT && !S390 && !USERMODE
+	depends on VT && !S390 && !UML
 	default y
 
 config SERIAL_NONSTANDARD
@@ -155,25 +155,8 @@ config DIGIEPCA
 	  you have a card like this, say Y here and read the file
 	  <file:Documentation/digiepca.txt>.
 
-	  NOTE: There is another, separate driver for the Digiboard PC boards:
-	  "Digiboard PC/Xx Support" below. You should (and can) only select
-	  one of the two drivers.
-
 	  To compile this driver as a module, choose M here: the
 	  module will be called epca.
-
-config DIGI
-	tristate "Digiboard PC/Xx Support"
-	depends on SERIAL_NONSTANDARD && DIGIEPCA=n && BROKEN_ON_SMP
-	help
-	  This is a driver for the Digiboard PC/Xe, PC/Xi, and PC/Xeve cards
-	  that give you many serial ports. You would need something like this
-	  to connect more than two modems to your Linux box, for instance in
-	  order to become a dial-in server. If you have a card like that, say
-	  Y here and read the file <file:Documentation/digiboard.txt>.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called pcxx.
 
 config ESPSERIAL
 	tristate "Hayes ESP serial port support"
@@ -199,7 +182,7 @@ config MOXA_INTELLIO
 
 config MOXA_SMARTIO
 	tristate "Moxa SmartIO support"
-	depends on SERIAL_NONSTANDARD && BROKEN_ON_SMP
+	depends on SERIAL_NONSTANDARD
 	help
 	  Say Y here if you have a Moxa SmartIO multiport serial card.
 
@@ -210,7 +193,7 @@ config MOXA_SMARTIO
 
 config ISI
 	tristate "Multi-Tech multiport card support (EXPERIMENTAL)"
-	depends on SERIAL_NONSTANDARD && PCI && EXPERIMENTAL && BROKEN_ON_SMP && m
+	depends on SERIAL_NONSTANDARD
 	help
 	  This is a driver for the Multi-Tech cards which provide several
 	  serial ports.  The driver is experimental and can currently only be
@@ -271,7 +254,7 @@ config RISCOM8
 
 config SPECIALIX
 	tristate "Specialix IO8+ card support"
-	depends on SERIAL_NONSTANDARD && BROKEN_ON_SMP
+	depends on SERIAL_NONSTANDARD
 	help
 	  This is a driver for the Specialix IO8+ multiport card (both the
 	  ISA and the PCI version) which gives you many serial ports. You
@@ -354,22 +337,6 @@ config ISTALLION
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called istallion.
-
-config SERIAL_TX3912
-	bool "TX3912/PR31700 serial port support"
-	depends on SERIAL_NONSTANDARD && MIPS && BROKEN_ON_SMP
-	help
-	  The TX3912 is a Toshiba RISC processor based o the MIPS 3900 core;
-	  see <http://www.toshiba.com/taec/components/Generic/risc/tx3912.htm>.
-	  Say Y here to enable kernel support for the on-board serial port.
-
-config SERIAL_TX3912_CONSOLE
-	bool "Console on TX3912/PR31700 serial port"
-	depends on SERIAL_TX3912
-	help
-	  The TX3912 is a Toshiba RISC processor based o the MIPS 3900 core;
-	  see <http://www.toshiba.com/taec/components/Generic/risc/tx3912.htm>.
-	  Say Y here to direct console I/O to the on-board serial port.
 
 config AU1000_UART
 	bool "Enable Au1000 UART Support"
@@ -485,6 +452,7 @@ config LEGACY_PTYS
 config LEGACY_PTY_COUNT
 	int "Maximum number of legacy PTY in use"
 	depends on LEGACY_PTYS
+	range 1 256
 	default "256"
 	---help---
 	  The maximum number of legacy PTYs that can be used at any one time.
@@ -787,6 +755,27 @@ config EFI_RTC
 	bool "EFI Real Time Clock Services"
 	depends on IA64
 
+config DS1302
+	tristate "DS1302 RTC support"
+	depends on M32R && (PLAT_M32700UT || PLAT_OPSPUT)
+	help
+	  If you say Y here and create a character special file /dev/rtc with
+	  major number 121 and minor number 0 using mknod ("man mknod"), you
+	  will get access to the real time clock (or hardware clock) built
+	  into your computer.
+
+config S3C2410_RTC
+	bool "S3C2410 RTC Driver"
+	depends on ARCH_S3C2410
+	help
+	  RTC (Realtime Clock) driver for the clock inbuilt into the
+	  Samsung S3C2410. This can provide periodic interrupt rates
+	  from 1Hz to 64Hz for user programs, and wakeup from Alarm.
+
+config RTC_VR41XX
+	tristate "NEC VR4100 series Real Time Clock Support"
+	depends on CPU_VR41XX
+
 config COBALT_LCD
 	bool "Support for Cobalt LCD"
 	depends on MIPS_COBALT
@@ -833,7 +822,7 @@ config APPLICOM
 
 config SONYPI
 	tristate "Sony Vaio Programmable I/O Control Device support (EXPERIMENTAL)"
-	depends on EXPERIMENTAL && X86 && PCI && !64BIT
+	depends on EXPERIMENTAL && X86 && PCI && INPUT && !64BIT
 	---help---
 	  This driver enables access to the Sony Programmable I/O Control
 	  Device which can be found in many (all ?) Sony Vaio laptops.
@@ -843,6 +832,10 @@ config SONYPI
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called sonypi.
+
+config TANBAC_TB0219
+	tristate "TANBAC TB0219 base board support"
+	depends TANBAC_TB0229
 
 
 menu "Ftape, the floppy tape device driver"
@@ -995,6 +988,8 @@ config MMTIMER
 	help
 	  The mmtimer device allows direct userspace access to the
 	  Altix system timer.
+
+source "drivers/char/tpm/Kconfig"
 
 endmenu
 
