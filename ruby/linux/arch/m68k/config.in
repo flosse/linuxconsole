@@ -161,9 +161,7 @@ if [ "$CONFIG_NET" = "y" ]; then
    source net/Config.in
 fi
 
-if [ "$CONFIG_MAC" = "y" ]; then
-   source drivers/input/Config.in
-fi
+source drivers/input/Config.in
 
 mainmenu_option next_comment
 comment 'ATA/IDE/MFM/RLL support'
@@ -372,8 +370,8 @@ if [ "$CONFIG_SERIAL_EXTENDED" = "y" ]; then
    bool '    Support the Bell Technologies HUB6 card' CONFIG_HUB6
 fi
 
-if [ "$CONFIG_VME" = "n" ]; then
-   define_bool CONFIG_VT y
+if [ "$CONFIG_VME" = "n" -a "$CONFIG_INPUT" = "y" ]; then
+   bool 'Virtual terminal' CONFIG_VT	
    if [ "$CONFIG_VT" = "y" ]; then
       bool 'Support for console on virtual terminal' CONFIG_VT_CONSOLE
    fi
@@ -383,18 +381,6 @@ if [ "$CONFIG_ATARI" = "y" ]; then
    define_bool CONFIG_NVRAM y
 fi
 
-if [ "$CONFIG_AMIGA" = "y" ]; then
-   tristate 'Amiga mouse support' CONFIG_AMIGAMOUSE
-   if [ "$CONFIG_AMIGAMOUSE" != "n" ]; then
-      define_bool CONFIG_BUSMOUSE y
-   fi
-fi
-if [ "$CONFIG_ATARI" = "y" ]; then
-   tristate 'Atari mouse support' CONFIG_ATARIMOUSE
-   if [ "$CONFIG_ATARIMOUSE" != "n" ]; then
-      define_bool CONFIG_BUSMOUSE y
-   fi
-fi
 if [ "$CONFIG_ATARI" = "y" ]; then
    tristate 'Atari MFP serial support' CONFIG_ATARI_MFPSER
    tristate 'Atari SCC serial support' CONFIG_ATARI_SCC
@@ -433,14 +419,6 @@ if [ "$CONFIG_MAC" = "y" ]; then
       bool '   Include IOP (IIfx/Quadra 9x0) ADB driver' CONFIG_ADB_IOP
       bool '   Include PMU (Powerbook) ADB driver' CONFIG_ADB_PMU68K
    fi
-   dep_bool '   Use input layer for ADB devices' CONFIG_INPUT_ADBHID $CONFIG_INPUT
-   if [ "$CONFIG_INPUT_ADBHID" = "y" ]; then
-      define_bool CONFIG_MAC_HID y
-      bool '     Support for ADB raw keycodes' CONFIG_MAC_ADBKEYCODES
-      bool '     Support for mouse button 2+3 emulation' CONFIG_MAC_EMUMOUSEBTN
-   else
-      bool '   Support for ADB keyboard (old driver)' CONFIG_ADB_KEYBOARD
-   fi
 fi
 if [ "$CONFIG_HP300" = "y" -a "$CONFIG_DIO" = "y" ]; then
    tristate 'HP DCA serial support' CONFIG_HPDCA
@@ -450,11 +428,6 @@ if [ "$CONFIG_SUN3" = "y" -o "$CONFIG_SUN3X" = "y" ]; then
    bool 'Sun3/3x builtin serial support' CONFIG_SUN3X_ZS
 else
    define_bool CONFIG_SUN3X_ZS n
-fi
-dep_bool '  Sun keyboard support' CONFIG_SUN_KEYBOARD $CONFIG_SUN3X_ZS
-dep_bool '  Sun mouse support' CONFIG_SUN_MOUSE $CONFIG_SUN3X_ZS
-if [ "$CONFIG_SUN_MOUSE" = "y" ]; then
-   define_bool CONFIG_BUSMOUSE y
 fi
 if [ "$CONFIG_SUN3X_ZS" = "y" ]; then
    define_bool CONFIG_SBUS y
@@ -531,7 +504,6 @@ endmenu
 source fs/Config.in
 
 source drivers/video/Config.in
-source drivers/input/Config.in
 
 mainmenu_option next_comment
 comment 'Kernel hacking'
