@@ -135,7 +135,7 @@ Query the product id (2 bytes)
 
 **** Other features ****
 QUERY = 43 ('C') - sends back 'C' and 0 bytes
-QUERY = 45 ('E') - sends back 2 bytes (00 01)
+QUERY = 45 ('E') - sends back 2 bytes (00 00 or 00 01)
 QUERY = 4f ('O') - sends back 'O' and 0 bytes
 QUERY = 56 ('V'ersion) - sends back 3 bytes (02 03 00 or 02 04 00 or 02 05 00)
 
@@ -143,22 +143,29 @@ QUERY = 56 ('V'ersion) - sends back 3 bytes (02 03 00 or 02 04 00 or 02 05 00)
 
 **** Setting a default spring ****
 OP=  40
-LEN= 02
+LEN= 2 or 3
 00 Command type:
    Val 03 Set the strength of the spring
    Val 04 Enable or disable the spring 
 01 Strength of the spring if 00 = Val 03
    Enable (Val 01) or disable (00) the default spring if 00 = Val 04
+02 ???
 
+**** ???? ****
 OP=  42
-???
-42 01 05 and 42 01 04 enable force feedback
-42 01 01 disables it.
+LEN= 1
+00 FF enable/disable?
+   Val 01 Disables force feedback
+   Val 04 Enables force feedback
+   Val 05 Enables force feedback
 
 **** Setting overall gain ****
 OP=  43
 LEN= 1
-00 Gain: Val 00 = 0%, Val 80 = 100%
+00 Gain
+   Val 00 = 0%
+   Val 40 = 50%
+   Val 80 = 100%
 
 ** Parameters' memory **
 
@@ -170,7 +177,7 @@ is the amount of memory apparently needed for every set of parameters:
  - attack and fade : 0e
  - interactive : 08
 
-** Appendix: How to study the protocole ? **
+** Appendix: How to study the protocol ? **
 
 1. Generate effects using the force editor provided with the DirectX SDK, or use Immersion Studio (freely available at their web site in the developer section: www.immersion.com)
 2. Start a soft spying RS232 or USB (depending on where you connected your joystick/wheel). I used ComPortSpy from fCoder (alpha version!)
