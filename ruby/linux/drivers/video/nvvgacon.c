@@ -72,7 +72,7 @@ static void nvvgacon_clear(struct vc_data *c, int y, int x,
 
 //static unsigned long nvvgacon_uni_pagedir[2];
 
-struct consw nvvga_con;
+const struct consw nvvga_con;
 
 /* Description of the hardware situation */
 static char *nvvga_vram_base;		/*  */
@@ -760,7 +760,7 @@ static void nvvgacon_bmove(struct vc_data *vc, int sy, int sx,
 /*
  *  The console `switch' structure for the VGA based console
  */
-struct consw nvvga_con = {
+const struct consw nvvga_con = {
 	con_startup:		nvvgacon_startup,
 	con_init:		nvvgacon_init,
 	con_deinit:		nvvgacon_deinit,
@@ -863,7 +863,7 @@ int init_module(void)
 
 void cleanup_module(void)
 {
-	/* give_up_console(&nvvga_con); */
+	/* release_vt(&nvvga_vt); */
 }
 
 #endif
