@@ -1030,10 +1030,14 @@ void hid_close(struct hid_device *hid)
 
 void hid_init_reports(struct hid_device *hid)
 {
+	DECLARE_WAITQUEUE(wait, current);
 	struct hid_report_enum *report_enum;
 	struct hid_report *report;
 	struct list_head *list;
-	int len;
+	int len, timeout = 10*HZ;
+
+	set_current_state(TASK_INTERRUPTIBLE);
+	add_wait_queue(&hid->wait, &wait);
 
 	report_enum = hid->report_enum + HID_INPUT_REPORT;
 	list = report_enum->report_list.next;
@@ -1055,6 +1059,15 @@ void hid_init_reports(struct hid_device *hid)
 		hid_submit_report(hid, report, USB_DIR_IN);
 		list = list->next;
 	}
+
+	while (timeout && (hid->ctrlhead != hid->ctrltail))
+		timeout = schedule_timeout(timeout);
+
+	set_current_state(TASK_RUNNING);
+	remove_wait_queue(&hid->wait, &wait);
+
+	if (!timeout)
+		dbg("timeout waiting for ctrl queue to clear");
 }
 
 #define USB_VENDOR_ID_WACOM		0x056a
@@ -1146,6 +1159,8 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 		hid_free_device(hid);
 		return NULL;
 	}
+
+	init_waitqueue_head(&hid->wait);
 
 	hid->version = hdesc->bcdHID;
 	hid->country = hdesc->bCountryCode;

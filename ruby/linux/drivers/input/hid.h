@@ -317,6 +317,8 @@ struct hid_device {							/* device report descriptor */
 	void *hiddev;							/* The hiddev structure */
 	int minor;							/* Hiddev minor number */
 
+	wait_queue_head_t wait;						/* For sleeping */
+
 	int open;							/* is the device open by anyone? */
 	char name[128];							/* Device name */
 };
