@@ -20,23 +20,17 @@ define_bool CONFIG_VT_CONSOLE y
 bool 'Symmetric multi-processing support (does not work on sun4/sun4c)' CONFIG_SMP
 
 # Global things across all Sun machines.
-define_bool CONFIG_ISA n
-define_bool CONFIG_PCMCIA n
 define_bool CONFIG_SBUS y
 define_bool CONFIG_SBUSCHAR y
-define_bool CONFIG_BUSMOUSE y
-define_bool CONFIG_SUN_MOUSE y
 define_bool CONFIG_SERIAL y
 define_bool CONFIG_SUN_SERIAL y
 define_bool CONFIG_SERIAL_CONSOLE y
-define_bool CONFIG_SUN_KEYBOARD y
 define_bool CONFIG_SUN_CONSOLE y
 define_bool CONFIG_SUN_AUXIO y
 define_bool CONFIG_SUN_IO y
 
 bool 'Support for SUN4 machines (disables SUN4[CDM] support)' CONFIG_SUN4
 if [ "$CONFIG_SUN4" != "y" ]; then
-   bool 'Support for PCI and PS/2 keyboard/mouse' CONFIG_PCI
    source drivers/pci/Config.in
 else
    define_bool CONFIG_PCI n
@@ -234,8 +228,6 @@ comment 'Watchdog'
 
 tristate 'Software watchdog' CONFIG_SOFT_WATCHDOG
 endmenu
-
-source drivers/input/Config.in
 
 mainmenu_option next_comment
 comment 'Kernel hacking'
