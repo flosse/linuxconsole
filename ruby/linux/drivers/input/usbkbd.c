@@ -242,7 +242,7 @@ static void *usb_kbd_probe(struct usb_device *dev, unsigned int ifnum,
 			
 	input_register_device(&kbd->dev);
 
-	printk(KERN_INFO "input%d: %s on on usb%d:%d.%d\n",
+	printk(KERN_INFO "input%d: %s on usb%d:%d.%d\n",
 		 kbd->dev.number, kbd->name, dev->bus->busnum, dev->devnum, ifnum);
 
 	return kbd;
