@@ -426,7 +426,7 @@ static void analog_init_device(struct analog_port *port, struct analog *analog, 
 	
 			set_bit(t, analog->dev.absbit);
 
-			if ((i == 2 || i == 3) && (t == ABS_THROTTLE || t == ABS_RUDDER)) {
+			if ((i == 2 || i == 3) && (j == 2 || j == 3)) {
 				x = (port->axes[0] + port->axes[1]) >> 1;
 				y = 0;
 			}
