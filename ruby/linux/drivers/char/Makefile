@@ -41,7 +41,7 @@ export-objs     :=	vt.o i2c-old.o keyboard.o sysrq.o \
 			tty_io.o bttv.o cpia.o
 
 KEYMAP   =defkeymap.o
-KEYBD    =pc_keyb.o
+KEYBD    =
 CONSOLE  =vt.o
 SERIAL   =serial.o
 
