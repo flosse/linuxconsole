@@ -66,7 +66,8 @@ struct vc_data {
 	unsigned long   vc_origin;              /* [!] Start of real screen */
         unsigned long   vc_scr_end;             /* [!] End of real screen */
         unsigned long   vc_visible_origin;      /* [!] Top of visible window */
-        unsigned int    vc_top, vc_bottom;      /* Scrolling region */
+        unsigned int 	vc_scrollback;		/* [!] Scrollback size */
+	unsigned int    vc_top, vc_bottom;      /* Scrolling region */
 	unsigned short  *vc_screenbuf;          /* In-memory character/attribute buffer */
         unsigned int    vc_screenbuf_size;
         unsigned char   vc_attr;                /* Current attributes */
