@@ -18,6 +18,32 @@
 
 #include <asm/io.h>
 
+
+    /*                                  
+     *  `switch' for the Low Level Operations
+     */
+ 
+struct display_switch {                                                
+    void (*setup)(struct display *p);
+    void (*bmove)(struct display *p, int sy, int sx, int dy, int dx,
+		  int height, int width);
+    /* for clear, conp may be NULL, which means use a blanking (black) color */
+    void (*clear)(struct vc_data *conp, struct display *p, int sy, int sx,
+		  int height, int width);
+    void (*putc)(struct vc_data *conp, struct display *p, int c, int yy,
+    		 int xx);
+    void (*putcs)(struct vc_data *conp, struct display *p, const unsigned short *s,
+		  int count, int yy, int xx);     
+    void (*revc)(struct display *p, int xx, int yy);
+    void (*cursor)(struct display *p, int mode, int xx, int yy);
+    int  (*set_font)(struct display *p, int width, int height);
+    void (*clear_margins)(struct vc_data *conp, struct display *p,
+			  int bottom_only);
+    unsigned int fontwidthmask;      /* 1 at (1 << (width - 1)) if width is supported */
+}; 
+
+extern struct display_switch fbcon_dummy;
+
    /*
     *    This is the interface between the low-level console driver and the
     *    low-level frame buffer device
@@ -31,6 +57,12 @@ struct display {
     struct fb_cmap cmap;            /* colormap */
     char *screen_base;              /* pointer to top of virtual screen */    
                                     /* (virtual address) */
+    int visual;
+    int type;                       /* see FB_TYPE_* */
+    int type_aux;                   /* Interleave for interleaved Planes */
+    u_short ypanstep;               /* zero if no hardware ypan */
+    u_short ywrapstep;              /* zero if no hardware ywrap */
+    u_long line_length;             /* length of a line in bytes */
     u_short can_soft_blank;         /* zero if no hardware blanking */
     u_short inverse;                /* != 0 text black on white as default */
     struct display_switch *dispsw;  /* low level operations */
@@ -65,39 +97,14 @@ struct display {
     unsigned short charmask;        /* 0xff or 0x1ff */
 };
 
-    /*
-     *  `switch' for the Low Level Operations
-     */
-
-struct display_switch {
-    void (*setup)(struct display *p);
-    void (*bmove)(struct display *p, int sy, int sx, int dy, int dx,
-                  int height, int width);
-    /* for clear, conp may be NULL, which means use a blanking (black) color */
-    void (*clear)(struct vc_data *conp, struct display *p, int sy, int sx,
-                  int height, int width);
-    void (*putc)(struct vc_data *conp, struct display *p, int c, int yy,
-                 int xx);
-    void (*putcs)(struct vc_data *conp, struct display *p, const unsigned short
-*s,
-                  int count, int yy, int xx);
-    void (*revc)(struct display *p, int xx, int yy);
-    void (*cursor)(struct display *p, int mode, int xx, int yy);
-    int  (*set_font)(struct display *p, int width, int height);
-    void (*clear_margins)(struct vc_data *conp, struct display *p,
-                          int bottom_only);
-    unsigned int fontwidthmask;      /* 1 at (1 << (width - 1)) if width is supported */
-};
-
-extern struct display_switch fbcon_dummy;
-
 /* drivers/video/fbcon.c */
 extern struct display fb_display[MAX_NR_CONSOLES];
+extern static int fbcon_changevar(int con);
 extern char con2fb_map[MAX_NR_CONSOLES];
+extern int PROC_CONSOLE(const struct fb_info *info);
 extern void set_con2fb_map(int unit, int newidx);
 extern int set_all_vcs(int fbidx, struct fb_ops *fb,
 		       struct fb_var_screeninfo *var, struct fb_info *info);
-extern int fbcon_changevar(int con);
 
 #define fontheight(p) ((p)->_fontheight)
 #define fontheightlog(p) ((p)->_fontheightlog)
@@ -184,6 +191,43 @@ extern int fbcon_changevar(int con);
  */
 /* Namespace consistency */
 #define SCROLL_YNOPARTIAL	__SCROLL_YNOPARTIAL
+
+
+#if defined(__sparc__)
+
+/* We map all of our framebuffers such that big-endian accesses
+ * are what we want, so the following is sufficient.
+ */
+
+#define fb_readb sbus_readb
+#define fb_readw sbus_readw
+#define fb_readl sbus_readl
+#define fb_writeb sbus_writeb
+#define fb_writew sbus_writew
+#define fb_writel sbus_writel
+#define fb_memset sbus_memset_io
+
+#elif defined(__i386__) || defined(__alpha__)
+
+#define fb_readb __raw_readb
+#define fb_readw __raw_readw
+#define fb_readl __raw_readl
+#define fb_writeb __raw_writeb
+#define fb_writew __raw_writew
+#define fb_writel __raw_writel
+#define fb_memset memset_io
+
+#else
+
+#define fb_readb(addr) (*(volatile u8 *) (addr))
+#define fb_readw(addr) (*(volatile u16 *) (addr))
+#define fb_readl(addr) (*(volatile u32 *) (addr))
+#define fb_writeb(b,addr) (*(volatile u8 *) (addr) = (b))
+#define fb_writew(b,addr) (*(volatile u16 *) (addr) = (b))
+#define fb_writel(b,addr) (*(volatile u32 *) (addr) = (b))
+#define fb_memset memset
+
+#endif
 
 
 extern void fbcon_redraw_bmove(struct display *, int, int, int, int, int, int);
@@ -483,17 +527,68 @@ static __inline__ void *fb_memmove(char *dst, const char *src, size_t size)
 
 static __inline__ void *fb_memclear_small(void *s, size_t count)
 {
-    return(memset(s, 0, count));
+    char *xs = (char *) s;
+
+    while (count--)
+	fb_writeb(0, xs++);
+
+    return s;
 }
 
 static __inline__ void *fb_memclear(void *s, size_t count)
 {
-    return(memset(s, 0, count));
+    unsigned long xs = (unsigned long) s;
+
+    if (count < 8)
+	goto rest;
+
+    if (xs & 1) {
+	fb_writeb(0, xs++);
+	count--;
+    }
+    if (xs & 2) {
+	fb_writew(0, xs);
+	xs += 2;
+	count -= 2;
+    }
+    while (count > 3) {
+	fb_writel(0, xs);
+	xs += 4;
+	count -= 4;
+    }
+rest:
+    while (count--)
+	fb_writeb(0, xs++);
+
+    return s;
 }
 
 static __inline__ void *fb_memset255(void *s, size_t count)
 {
-    return(memset(s, 255, count));
+    unsigned long xs = (unsigned long) s;
+
+    if (count < 8)
+	goto rest;
+
+    if (xs & 1) {
+	fb_writeb(0xff, xs++);
+	count--;
+    }
+    if (xs & 2) {
+	fb_writew(0xffff, xs);
+	xs += 2;
+	count -= 2;
+    }
+    while (count > 3) {
+	fb_writel(0xffffffff, xs);
+	xs += 4;
+	count -= 4;
+    }
+rest:
+    while (count--)
+	fb_writeb(0xff, xs++);
+
+    return s;
 }
 
 #if defined(__i386__)
@@ -547,7 +642,7 @@ static __inline__ void *fb_memmove(char *dst, const char *src, size_t size)
     return dst;
 }
 
-#else /* !i386 */
+#else /* !__i386__ */
 
     /*
      *  Anyone who'd like to write asm functions for other CPUs?
@@ -556,53 +651,130 @@ static __inline__ void *fb_memmove(char *dst, const char *src, size_t size)
 
 static __inline__ void *fb_memmove(void *d, const void *s, size_t count)
 {
-    return(memmove(d, s, count));
+    unsigned long dst, src;
+
+    if (d < s) {
+	dst = (unsigned long) d;
+	src = (unsigned long) s;
+
+	if ((count < 8) || ((dst ^ src) & 3))
+	    goto restup;
+
+	if (dst & 1) {
+	    fb_writeb(fb_readb(src++), dst++);
+	    count--;
+	}
+	if (dst & 2) {
+	    fb_writew(fb_readw(src), dst);
+	    src += 2;
+	    dst += 2;
+	    count -= 2;
+	}
+	while (count > 3) {
+	    fb_writel(fb_readl(src), dst);
+	    src += 4;
+	    dst += 4;
+	    count -= 4;
+	}
+
+    restup:
+	while (count--)
+	    fb_writeb(fb_readb(src++), dst++);
+    } else {
+	dst = (unsigned long) d + count - 1;
+	src = (unsigned long) s + count - 1;
+
+	if ((count < 8) || ((dst ^ src) & 3))
+	    goto restdown;
+
+	if (dst & 1) {
+	    fb_writeb(fb_readb(src--), dst--);
+	    count--;
+	}
+	if (dst & 2) {
+	    fb_writew(fb_readw(src), dst);
+	    src -= 2;
+	    dst -= 2;
+	    count -= 2;
+	}
+	while (count > 3) {
+	    fb_writel(fb_readl(src), dst);
+	    src -= 4;
+	    dst -= 4;
+	    count -= 4;
+	}
+
+    restdown:
+	while (count--)
+	    fb_writeb(fb_readb(src--), dst--);
+    }
+
+    return d;
 }
 
-static __inline__ void fast_memmove(char *dst, const char *src, size_t size)
+static __inline__ void fast_memmove(char *d, const char *s, size_t count)
 {
-    memmove(dst, src, size);
+    unsigned long dst, src;
+
+    if (d < s) {
+	dst = (unsigned long) d;
+	src = (unsigned long) s;
+
+	if ((count < 8) || ((dst ^ src) & 3))
+	    goto restup;
+
+	if (dst & 1) {
+	    fb_writeb(fb_readb(src++), dst++);
+	    count--;
+	}
+	if (dst & 2) {
+	    fb_writew(fb_readw(src), dst);
+	    src += 2;
+	    dst += 2;
+	    count -= 2;
+	}
+	while (count > 3) {
+	    fb_writel(fb_readl(src), dst);
+	    src += 4;
+	    dst += 4;
+	    count -= 4;
+	}
+
+    restup:
+	while (count--)
+	    fb_writeb(fb_readb(src++), dst++);
+    } else {
+	dst = (unsigned long) d + count - 1;
+	src = (unsigned long) s + count - 1;
+
+	if ((count < 8) || ((dst ^ src) & 3))
+	    goto restdown;
+
+	if (dst & 1) {
+	    fb_writeb(fb_readb(src--), dst--);
+	    count--;
+	}
+	if (dst & 2) {
+	    fb_writew(fb_readw(src), dst);
+	    src -= 2;
+	    dst -= 2;
+	    count -= 2;
+	}
+	while (count > 3) {
+	    fb_writel(fb_readl(src), dst);
+	    src -= 4;
+	    dst -= 4;
+	    count -= 4;
+	}
+
+    restdown:
+	while (count--)
+	    fb_writeb(fb_readb(src--), dst--);
+    }
 }
 
-#endif /* !i386 */
+#endif /* !__i386__ */
 
-#endif
-
-
-#if defined(__sparc__)
-
-/* We map all of our framebuffers such that big-endian accesses
- * are what we want, so the following is sufficient.
- */
-
-#define fb_readb sbus_readb
-#define fb_readw sbus_readw
-#define fb_readl sbus_readl
-#define fb_writeb sbus_writeb
-#define fb_writew sbus_writew
-#define fb_writel sbus_writel
-#define fb_memset sbus_memset_io
-
-#elif defined(__i386__) || defined(__alpha__)
-
-#define fb_readb __raw_readb
-#define fb_readw __raw_readw
-#define fb_readl __raw_readl
-#define fb_writeb __raw_writeb
-#define fb_writew __raw_writew
-#define fb_writel __raw_writel
-#define fb_memset memset_io
-
-#else
-
-#define fb_readb(addr) (*(volatile u8 *) (addr))
-#define fb_readw(addr) (*(volatile u16 *) (addr))
-#define fb_readl(addr) (*(volatile u32 *) (addr))
-#define fb_writeb(b,addr) (*(volatile u8 *) (addr) = (b))
-#define fb_writew(b,addr) (*(volatile u16 *) (addr) = (b))
-#define fb_writel(b,addr) (*(volatile u32 *) (addr) = (b))
-#define fb_memset memset
-
-#endif
+#endif /* !__mc68000__ */
 
 #endif /* _VIDEO_FBCON_H */
