@@ -89,6 +89,12 @@ static inline void console_verbose(void)
 extern void bust_spinlocks(int yes);
 extern int oops_in_progress;
 
+static inline void do_BUG(const char *file, int line)
+{
+       bust_spinlocks(1);
+       printk("kernel BUG at %s:%d!\n", file, line);
+}
+
 #if DEBUG
 #define pr_debug(fmt,arg...) \
 	printk(KERN_DEBUG fmt,##arg)

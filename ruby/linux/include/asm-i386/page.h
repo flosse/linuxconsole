@@ -86,7 +86,6 @@ typedef struct { unsigned long pgprot; } pgprot_t;
  * Tell the user there is some problem. Beep too, so we can
  * see^H^H^Hhear bugs in early bootup as well!
  */
-extern void do_BUG(const char *file, int line);
 #define BUG() do { \
 	do_BUG(__FILE__, __LINE__); \
 	__asm__ __volatile__(".byte 0x0f,0x0b"); \
