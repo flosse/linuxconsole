@@ -1,6 +1,6 @@
 /*
  * Tests the force feedback driver
- * Copyright 2001 Johann Deneux <deneux@ifrance.com>
+ * Copyright 2001-2002 Johann Deneux <deneux@ifrance.com>
  */
 
 /*
@@ -81,8 +81,9 @@ int main(int argc, char** argv)
 
 	printf("Axes query: ");
 
-	if (test_bit(FF_ABS(ABS_X), features)) printf("Axis X ");
-	if (test_bit(FF_ABS(ABS_Y), features)) printf("Axis Y ");
+	if (test_bit(ABS_X, features)) printf("Axis X ");
+	if (test_bit(ABS_Y, features)) printf("Axis Y ");
+	if (test_bit(ABS_WHEEL, features)) printf("Wheel ");
 
 	printf("\nEffects: ");
 
@@ -106,10 +107,10 @@ int main(int argc, char** argv)
 	effects[1].id = -1;
 	effects[1].u.constant.level = 0x2000;	/* Strength : 25 % */
 	effects[1].direction = 0x6000;	/* 135 degrees */
-	effects[1].u.constant.shape.attack_length = 0x100;
-	effects[1].u.constant.shape.attack_level = 0;
-	effects[1].u.constant.shape.fade_length = 0x100;
-	effects[1].u.constant.shape.fade_level = 0;
+	effects[1].u.constant.envelope.attack_length = 0x100;
+	effects[1].u.constant.envelope.attack_level = 0;
+	effects[1].u.constant.envelope.fade_length = 0x100;
+	effects[1].u.constant.envelope.fade_level = 0;
 	effects[1].trigger.button = 0;
 	effects[1].trigger.interval = 0;
 	effects[1].replay.length = 0x1400;  /* 20 seconds */
@@ -129,10 +130,10 @@ int main(int argc, char** argv)
 	effects[0].u.periodic.offset = 0;
 	effects[0].u.periodic.phase = 0;
 	effects[0].direction = 0x4000;	/* Along X axis */
-	effects[0].u.periodic.shape.attack_length = 0x100;
-	effects[0].u.periodic.shape.attack_level = 0;
-	effects[0].u.periodic.shape.fade_length = 0x100;
-	effects[0].u.periodic.shape.fade_level = 0;
+	effects[0].u.periodic.envelope.attack_length = 0x100;
+	effects[0].u.periodic.envelope.attack_level = 0;
+	effects[0].u.periodic.envelope.fade_length = 0x100;
+	effects[0].u.periodic.envelope.fade_level = 0;
 	effects[0].trigger.button = 0;
 	effects[0].trigger.interval = 0;
 	effects[0].replay.length = 0x1400;  /* 20 seconds */
@@ -143,16 +144,16 @@ int main(int argc, char** argv)
 		exit(1);
 	}
 
-	/* download an interactive spring effect */
+	/* download an condition spring effect */
 	effects[2].type = FF_SPRING;
 	effects[2].id = -1;
-	effects[2].u.interactive.axis = ABS_X;
-	effects[2].u.interactive.right_saturation = 0x7fff;
-	effects[2].u.interactive.left_saturation = 0x7fff;
-	effects[2].u.interactive.right_coeff = 0x2000;
-	effects[2].u.interactive.left_coeff = 0x2000;
-	effects[2].u.interactive.deadband = 0x0;
-	effects[2].u.interactive.center = 0x0;
+	effects[2].u.condition[0].right_saturation = 0x7fff;
+	effects[2].u.condition[0].left_saturation = 0x7fff;
+	effects[2].u.condition[0].right_coeff = 0x2000;
+	effects[2].u.condition[0].left_coeff = 0x2000;
+	effects[2].u.condition[0].deadband = 0x0;
+	effects[2].u.condition[0].center = 0x0;
+	effects[2].u.condition[1] = effects[2].u.condition[0];
 	effects[2].trigger.button = 0;
 	effects[2].trigger.interval = 0;
 	effects[2].replay.length = 0x1400;  /* 20 seconds */
@@ -163,16 +164,16 @@ int main(int argc, char** argv)
 		exit(1);
 	}
 
-	/* download an interactive damper effect */
-	effects[3].type = FF_FRICTION;
+	/* download an condition damper effect */
+	effects[3].type = FF_SPRING;
 	effects[3].id = -1;
-	effects[3].u.interactive.axis = ABS_X;
-	effects[3].u.interactive.right_saturation = 0x7fff;
-	effects[3].u.interactive.left_saturation = 0x7fff;
-	effects[3].u.interactive.right_coeff = 0x2000;
-	effects[3].u.interactive.left_coeff = 0x2000;
-	effects[3].u.interactive.deadband = 0x0;
-	effects[3].u.interactive.center = 0x0;
+	effects[3].u.condition[0].right_saturation = 0x7fff;
+	effects[3].u.condition[0].left_saturation = 0x7fff;
+	effects[3].u.condition[0].right_coeff = 0x2000;
+	effects[3].u.condition[0].left_coeff = 0x2000;
+	effects[3].u.condition[0].deadband = 0x0;
+	effects[3].u.condition[0].center = 0x0;
+	effects[3].u.condition[1] = effects[3].u.condition[0];
 	effects[3].trigger.button = 0;
 	effects[3].trigger.interval = 0;
 	effects[3].replay.length = 0x1400;  /* 20 seconds */
