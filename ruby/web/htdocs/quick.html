@@ -69,15 +69,14 @@ cvs -z3 update ruby<br>
 <h2>Patching</h2>
 <p>
 
-To compile and use the files you download, you first have to get a 2.4
+To compile and use the files you download, you first have to get a 2.5
 kernel to use the drivers with. You can get it from
 <code><a href="ftp://ftp.kernel.org/pub/linux/kernel/v2.4/">ftp.kernel.org</a></code>.
 <p>
 
 <code>
-wget ftp://ftp.kernel.org/pub/linux/kernel/v2.4/linux-2.4.13.tar.bz2<br>
-mv linux linux-old<br>
-tar xIvf linux-2.4.13.tar.bz2<br>
+wget ftp://ftp.kernel.org/pub/linux/kernel/v2.5/linux-2.5.27.tar.bz2<br>
+tar xjvf linux-2.5.27.tar.bz2<br>
 </code>
 <p>
 
@@ -87,9 +86,9 @@ it, and clean files not used anymore:
 
 <code>
 cd ruby/linux<br>
-cp -avP * ../../linux/<br>
-cd ../../linux<br>
-sh ../ruby/utils/remove-unused-files<br>
+cp -avP * ../../linux-2.5.27/<br>
+cd ../../linux-2.5.27<br>
+sh ../ruby/utils/remove-obsolete-files<br>
 </code>
 <p>
 
@@ -123,6 +122,7 @@ and we have:
 USB support  ---&gt;<br>
 Input device support  ---&gt;<br>
 Character devices  ---&gt;<br>
+Graphics support  ---&gt;<br>
 </code>
 <p>          
 
@@ -141,7 +141,7 @@ The Serial Driver menu selects the new experimental serial drivers based on
 Russel King's code from the ARM tree. We have taken this code to make it less
 and less TTY dependent. This menu comes before the input and char menus since
 alot of things are effected by this. If you select the new serial drivers you 
-can't select the old drivers. This prevents clashs. If you decided to try out
+can't select the old drivers. This prevents clashes. If you decided to try out
 the new serial drivers you will see:
 <p>
 
@@ -152,6 +152,7 @@ the new serial drivers you will see:
 
 If you enable it for the ix86 platform you will see:
 <p>
+<i>In 2.5.27, these options are still under "Character Devices"</i><p>
 
 <code>
 &nbsp;&nbsp; Serial port support<br>
@@ -178,7 +179,7 @@ advance 16550 types devices. Enabling extended options you will end up seeing:
 <p>    
 
 Now you have finished the serial configuration if you decided to give it a
-try we go onto configuring your Input Drivers. This part is a little tricky.
+try we go on to configuring your Input Drivers. This part is a little tricky.
 You have to select quite a bunch of options to have your system operate 
 correctly. For a most usual setup with a PS/2 mouse and a AT keyboard you 
 need to select:
@@ -186,12 +187,16 @@ need to select:
 
 <code>
 Input device support  ---&gt;<br>
-&nbsp;&nbsp;Input device support<br>
-&nbsp;&nbsp;i8042 aux+kbd controller<br> 
-&nbsp;&nbsp;AT and PS/2 keyboards<br>
-&nbsp;&nbsp;PS/2 mouse<br>
+&nbsp;&nbsp;Input core support<br>
+&nbsp;&nbsp;Keyboard Interface<br> 
 &nbsp;&nbsp;Mouse interface<br>
 &nbsp;&nbsp;Event interface<br>
+&nbsp;&nbsp;Serial i/o support  ---&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;i8042 PC Keyboard controller<br>
+&nbsp;&nbsp;Keyboards  ---&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;AT keyboard support<br>
+&nbsp;&nbsp;Mice  ---&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;PS/2 mouse<br>
 </code>
 <p>
 
@@ -201,7 +206,7 @@ chip varies. So the input api was designed to be modular for this. This
 allows us to use the same PS/2 keybaord driver on different platforms. It 
 is the underlying driver for the chipset that could vary. For example I can
 use the same PS/2 keyboard for my intel box as well as for the iPAQ I have. 
-I have a special adaptor that allows me to plug in my PS/2 keyboard into a 
+I have a special adapter that allows me to plug in my PS/2 keyboard into an 
 iPAQ.
 <p>
   
@@ -211,14 +216,12 @@ For a setup with an USB mouse and keyboard you'd use:
 <code>
 USB support  ---&gt;<br>
 &nbsp;&nbsp;Support for USB<br>
-&nbsp;&nbsp;Preliminary USB device filesystem<br>
-&nbsp;&nbsp;UHCI (Intel PIIX4, VIA, ...) support<br>
-&nbsp;&nbsp;OHCI (Compaq, iMacs, OPTi, SiS, ALi, ...) support<br>
+&nbsp;&nbsp;USB device filesystem<br>
+&nbsp;&nbsp;OHCI support<br>
+&nbsp;&nbsp;UHCI (most Intel and VIA) support<br>
 Input device support  ---&gt;<br>
-&nbsp;&nbsp;Input device support<br>
-&nbsp;&nbsp;USB Human Interface Device<br>
-&nbsp;&nbsp;Mouse interface<br>
-&nbsp;&nbsp;Event interface<br>
+&nbsp;&nbsp;USB Human Interface Device (full HID) support<br>
+&nbsp;&nbsp;&nbsp;&nbsp;HID input layer support<br>
 </code>
 <p>
 
@@ -236,10 +239,12 @@ For serial mice you need:
 
 <code>
 Input device support  ---&gt;<br>
-&nbsp;&nbsp;Serial port input line discipline<br>
-&nbsp;&nbsp;Serial mouse<br>
 &nbsp;&nbsp;Mouse interface<br>
 &nbsp;&nbsp;Event interface<br> 
+&nbsp;&nbsp;Serial i/o support<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Serial port input line discipline<br>
+&nbsp;&nbsp;Mice<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Serial mouse<br>
 </code>
 <p>
 
@@ -261,9 +266,9 @@ To get an analog joystick working, you add:
 
 <code>
 Input device support  ---&gt<br>
-&nbsp;&nbsp;ns558 gameports<br>
-&nbsp;&nbsp;Analog joysticks and gamepads<br>
 &nbsp;&nbsp;Joystick interface<br>
+&nbsp;&nbsp;Gameport support<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Classic ISA and PnP gameport support<br>
 </code>
 <p>
 
@@ -315,7 +320,7 @@ If you don't see:
 This just means you will use the new serial drivers instead. Select the other
 devices you need in the character menu and then we can go onto the Video menu.
 
-When you enter the video menu you will see either:
+When you enter the Graphics support menu you will see either:
 <p>
 
 <code>
@@ -356,8 +361,8 @@ lilo<br>
 </code>
 <p>
 
-Then, to keep a working system after you boot with the new kernel, you also
-need to change a couple nodes in /dev:
+If you're not using devfs, you also need to change a few nodes in
+/dev to keep a working system after you boot with the new kernel:
 <p>
 
 <code>
