@@ -1002,6 +1002,8 @@ static int iforce_init_device(struct iforce *iforce)
 	for (i = 0; iforce->type->ff[i] >= 0; i++)
 		set_bit(iforce->type->ff[i], iforce->dev.ffbit);
 
+	/* Only one process is allowed to open us for writing */
+	iforce->dev.only_one_writer = 1;
 /*
  * Register input device.
  */
