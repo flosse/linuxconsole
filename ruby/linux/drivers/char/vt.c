@@ -42,8 +42,6 @@
 
 #include "console_macros.h"
 
-const struct consw *conswitchp;
-
 /* A bitmap for codes <32. A bit of 1 indicates that the code
  * corresponding to that bit number invokes some special action
  * (such as cursor movement) and should not be displayed as a
@@ -680,9 +678,9 @@ static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
  *      Allocation, freeing and resizing of VTs.
  */
 
-const char *create_vt(struct vt_struct *vt)
+const char *create_vt(struct vt_struct *vt, int init)
 {
-	const char *display_desc = vt->vt_sw->con_startup(vt);
+	const char *display_desc = vt->vt_sw->con_startup(vt, init);
 
 	if (!display_desc) return NULL;	
 	vt->data_hook = NULL;
@@ -728,7 +726,7 @@ struct vc_data* find_vc(int currcons)
 	return pool->vc_cons[currcons - pool->first_vc];	
 }
 
-static void visual_init(struct vc_data *vc, int init)
+static void visual_init(struct vc_data *vc)
 {
     /* ++Geert: sw->con_init determines console size */
     vc->vc_uni_pagedir_loc = &vc->vc_uni_pagedir;
@@ -736,7 +734,7 @@ static void visual_init(struct vc_data *vc, int init)
     hi_font_mask = 0;
     complement_mask = 0;
     can_do_color = 0;
-    sw->con_init(vc, init);
+    sw->con_init(vc);
     if (!complement_mask)
         complement_mask = can_do_color ? 0x7700 : 0x0800;
     s_complement_mask = complement_mask;
@@ -802,7 +800,7 @@ int vc_allocate(unsigned int currcons)
             vc = (struct vc_data *)p;
 	    vc->vc_num = currcons;	
             vc->display_fg = vt;
-            visual_init(vc, 1);
+            visual_init(vc);
             if (!*vc->vc_uni_pagedir_loc)
                 con_set_default_unimap(vc);
             q = (long)kmalloc(screenbuf_size, GFP_KERNEL);
@@ -1566,7 +1564,7 @@ void __init vt_console_init(void)
 #elif defined(CONFIG_DUMMY_CONSOLE)
 	vt->vt_sw = &dummy_con;
 #endif
-	display_desc = create_vt(vt);
+	display_desc = create_vt(vt, 1);
 	if (!display_desc) { 
 		free_bootmem((unsigned long) vt, sizeof(struct vt_struct));
 		return;
@@ -1575,7 +1573,7 @@ void __init vt_console_init(void)
 	vt->last_console = vt->fg_console = vt->vcs.vc_cons[0] = vc; 
 	vc->vc_num = 0;
         vc->display_fg = admin_vt = vt;
-	visual_init(vc, 1);
+	visual_init(vc);
         screenbuf = (unsigned short *) alloc_bootmem(screenbuf_size);
         vc_init(vc, !sw->con_save_screen); 
         
@@ -1622,7 +1620,7 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
         const char *desc;
 	int i;
 
-        desc = csw->con_startup(vt);
+        desc = csw->con_startup(vt, 0);
         if (!desc) return;
 
         for (i = 0; i <= MAX_NR_USER_CONSOLES; i++) {
@@ -1636,7 +1634,7 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
                         save_screen(vc);
                 old_was_color = vc->vc_can_do_color;
                 sw->con_deinit(vc);
-                visual_init(vc, 0);
+                visual_init(vc);
                 update_attr(vc);
 
                 /* If the console changed between mono <-> color, then
