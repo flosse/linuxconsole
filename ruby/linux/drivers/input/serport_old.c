@@ -38,11 +38,16 @@
 #include <linux/init.h>
 #include <linux/serio.h>
 #include <linux/tty.h>
+#include <linux/circ_buf.h>
+
+#define XMIT_SIZE 128
 
 struct serport {
 	struct tty_struct *tty;
 	wait_queue_head_t wait;
 	struct serio serio;
+	struct circ_buf xmit;
+	char xmit_data[XMIT_SIZE];
 };
 
 /*
@@ -64,6 +69,35 @@ static void serport_serio_close(struct serio *serio)
 {
 	struct serport *serport = serio->driver;
 	wake_up_interruptible(&serport->wait);
+}
+
+static int serport_serio_async_write(struct serio *serio, unsigned char *data, int len)
+{
+	int i;
+	struct serport *sp = (struct serport *)serio->driver;
+
+	/* Check if there is enough room to write the message */
+	if (CIRC_SPACE(sp->xmit.head, sp->xmit.tail, XMIT_SIZE) < len) {
+		return -EAGAIN;
+	}
+
+	/* Store the data in the circular buffer */
+	for (i=0; i<len; ++i) {
+		sp->xmit.buf[sp->xmit.head] = data[i];
+		sp->xmit.head++;
+		sp->xmit.head &= (XMIT_SIZE -1);
+	}
+
+	/* If necessary, send the first character. The serial driver will then
+	 * call serport_ldisc_write_wakeup when it finishes sending the first
+	 * byte */
+	if (!test_and_set_bit(TTY_DO_WRITE_WAKEUP, &((struct serport*)serio->driver)->tty->flags)) {
+		serio->write(serio, sp->xmit.buf[sp->xmit.tail]);
+		sp->xmit.tail++;
+		sp->xmit.tail &= XMIT_SIZE -1;
+	}
+
+	return len;
 }
 
 /*
@@ -88,7 +122,10 @@ static int serport_ldisc_open(struct tty_struct *tty)
 	serport->tty = tty;
 	tty->disc_data = serport;
 
+	serport->xmit.buf = serport->xmit_data;
+
 	serport->serio.type = SERIO_RS232;
+	serport->serio.async_write = serport_serio_async_write;
 	serport->serio.write = serport_serio_write;
 	serport->serio.open = serport_serio_open;
 	serport->serio.close = serport_serio_close;
@@ -187,6 +224,25 @@ static int serport_ldisc_ioctl(struct tty_struct * tty, struct file * file, unsi
 	return -EINVAL;
 }
 
+static void serport_ldisc_write_wakeup(struct tty_struct * tty)
+{
+	struct serport *sp = (struct serport *) tty->disc_data;
+
+	printk(KERN_DEBUG "wakeup!\n");
+
+	if (sp->xmit.head != sp->xmit.tail) {
+		int n = CIRC_CNT(sp->xmit.head, sp->xmit.tail, XMIT_SIZE);
+		n = sp->tty->driver.write(sp->tty, 0, &sp->xmit.buf[sp->xmit.tail], n);
+		if (n<0) {
+			printk(KERN_WARNING "serport: tty.driver->write failed in write_wakeup\n");
+		}
+		sp->xmit.tail+=n;
+		sp->xmit.tail &= XMIT_SIZE -1;
+	}
+	if (sp->xmit.head == sp->xmit.tail)
+		clear_bit(TTY_DO_WRITE_WAKEUP, &tty->flags);
+}
+
 /*
  * The line discipline structure.
  */
@@ -199,6 +255,7 @@ static struct tty_ldisc serport_ldisc = {
 	ioctl:		serport_ldisc_ioctl,
 	receive_buf:	serport_ldisc_receive,
 	receive_room:	serport_ldisc_room,
+	write_wakeup:	serport_ldisc_write_wakeup
 };
 
 /*
