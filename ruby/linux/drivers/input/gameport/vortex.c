@@ -117,7 +117,7 @@ static int __devinit vortex_probe(struct pci_dev *dev, const struct pci_device_i
 	vortex->dev = dev;
 	sprintf(vortex->phys, "pci%s/gameport0", dev->slot_name);
 
-	dev->driver_data = vortex;
+	pci_set_drvdata(dev, vortex);
 
 	vortex->gameport.driver = vortex;
 	vortex->gameport.fuzz = 64;
@@ -153,7 +153,7 @@ static int __devinit vortex_probe(struct pci_dev *dev, const struct pci_device_i
 
 static void __devexit vortex_remove(struct pci_dev *dev)
 {
-	struct vortex *vortex = dev->driver_data;
+	struct vortex *vortex = pci_get_drvdata(dev);
 	gameport_unregister_port(&vortex->gameport);
 	iounmap(vortex->base);
 	kfree(vortex);

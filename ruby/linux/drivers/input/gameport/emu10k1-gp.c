@@ -60,21 +60,21 @@ MODULE_DEVICE_TABLE(pci, emu_tbl);
 
 static int __devinit emu_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
-	int ioemu, iolen;
+	int ioport, iolen;
 	struct emu *emu;
         
 	if (pci_enable_device(pdev))
 		return -EBUSY;
 
-	ioemu = pci_resource_start(pdev, 0);
+	ioport = pci_resource_start(pdev, 0);
 	iolen = pci_resource_len(pdev, 0);
 
-	if (!request_region(ioemu, iolen, "emu10k1-gp"))
+	if (!request_region(ioport, iolen, "emu10k1-gp"))
 		return -EBUSY;
 
 	if (!(emu = kmalloc(sizeof(struct emu), GFP_KERNEL))) {
 		printk(KERN_ERR "emu10k1-gp: Memory allocation failed.\n");
-		release_region(ioemu, iolen);
+		release_region(ioport, iolen);
 		return -ENOMEM;
 	}
 	memset(emu, 0, sizeof(struct emu));
@@ -84,14 +84,14 @@ static int __devinit emu_probe(struct pci_dev *pdev, const struct pci_device_id 
 	emu->size = iolen;
 	emu->dev = pdev;
 
-	emu->gameport.io = ioemu;
+	emu->gameport.io = ioport;
 	emu->gameport.name = pdev->name;
 	emu->gameport.phys = emu->phys;
 	emu->gameport.idbus = BUS_PCI;
 	emu->gameport.idvendor = pdev->vendor;
 	emu->gameport.idproduct = pdev->device;
 
-	pdev->driver_data = emu;
+	pci_set_drvdata(pdev, emu);
 
 	gameport_register_port(&emu->gameport);
 
@@ -103,7 +103,7 @@ static int __devinit emu_probe(struct pci_dev *pdev, const struct pci_device_id 
 
 static void __devexit emu_remove(struct pci_dev *pdev)
 {
-	struct emu *emu = (void *)pdev->driver_data;
+	struct emu *emu = pci_get_drvdata(pdev);
 	gameport_unregister_port(&emu->gameport);
 	release_region(emu->gameport.io, emu->size);
 	kfree(emu);
