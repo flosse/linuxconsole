@@ -114,6 +114,8 @@ struct termios tty_std_termios = {	/* for the benefit of tty drivers  */
 	.c_cc = INIT_C_CC
 };
 
+EXPORT_SYMBOL(tty_std_termios);
+
 LIST_HEAD(tty_drivers);			/* linked list of tty drivers */
 struct tty_ldisc ldiscs[NR_LDISCS];	/* line disc dispatch table	*/
 
@@ -418,8 +420,6 @@ void do_tty_hangup(void *data)
 		redirect = NULL;
 	}
 	spin_unlock(&redirect_lock);
-	if (f)
-		fput(f);
 	
 	check_tty_count(tty, "do_tty_hangup");
 	file_list_lock();
@@ -507,6 +507,8 @@ void do_tty_hangup(void *data)
 	} else if (tty->driver->hangup)
 		(tty->driver->hangup)(tty);
 	unlock_kernel();
+	if (f)
+		fput(f);
 }
 
 void tty_hangup(struct tty_struct * tty)
@@ -2040,6 +2042,8 @@ void tty_flip_buffer_push(struct tty_struct *tty)
 		schedule_delayed_work(&tty->flip.work, 1);
 }
 
+EXPORT_SYMBOL(tty_flip_buffer_push);
+
 /*
  * This subroutine initializes a tty structure.
  */
@@ -2319,6 +2323,8 @@ int tty_register_driver(struct tty_driver *driver)
 	return 0;
 }
 
+EXPORT_SYMBOL(tty_register_driver);
+
 /*
  * Called by a tty driver to unregister itself.
  */
@@ -2365,6 +2371,7 @@ int tty_unregister_driver(struct tty_driver *driver)
 	return 0;
 }
 
+EXPORT_SYMBOL(tty_unregister_driver);
 
 /*
  * Initialize the console device. This is called *early*, so
