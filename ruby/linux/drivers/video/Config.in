@@ -215,12 +215,10 @@ comment 'Console drivers'
       #bool 'IODC console' CONFIG_IODC_CONSOLE
       bool 'STI console' CONFIG_STI_CONSOLE
    fi
-   if [ "$ARCH" = "arm" -a "$CONFIG_ARCH_ACORN" != "y" -a "$CONFIG_ARCH_EBSA110" != "y" ]; then
-      bool 'VGA text console' CONFIG_VGA_CONSOLE
-   fi
-   if [ "$ARCH" = "mips" -a "$CONFIG_SGI_IP22" != "y" -a "$CONFIG_DECSTATION" != "y" ]; then
-      bool 'VGA text console' CONFIG_VGA_CONSOLE
-   fi
+   bool 'VGA text console' CONFIG_VGA_CONSOLE
+   if [ "$CONFIG_VGA_CONSOLE" != "n" ]; then
+      define_bool CONFIG_FONT_8x16 y
+   fi	
    #  if [ "$CONFIG_PCI" = "y" -a "$CONFIG_VGA_CONSOLE" = "y" ]; then
    #    bool '   Allow VGA on any bus?' CONFIG_VGA_HOSE
    #    if [ "$CONFIG_VGA_HOSE" = "y" ]; then

@@ -17,7 +17,7 @@ mod-subdirs	:= matrox
 
 obj-$(CONFIG_SGI_NEWPORT_CONSOLE) += newport_con.o
 obj-$(CONFIG_PROM_CONSOLE)        += promcon.o promcon_tbl.o
-obj-$(CONFIG_VGA_CONSOLE)         += vgacon.o vga.o
+obj-$(CONFIG_VGA_CONSOLE)         += vgacon.o vga.o fonts.o
 obj-$(CONFIG_MDA_CONSOLE)         += mdacon.o
 obj-$(CONFIG_NVIDIA_CONSOLE)	  += nvvgacon.o
 obj-$(CONFIG_FRAMEBUFFER_CONSOLE) += fbcon.o fonts.o
