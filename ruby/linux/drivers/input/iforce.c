@@ -60,9 +60,10 @@ MODULE_DESCRIPTION("USB/RS232 I-Force joysticks and wheels driver");
 #if defined(CONFIG_INPUT_IFORCE_USB) || defined(CONFIG_INPUT_IFORCE_USB_MODULE)
 #define IFORCE_USB
 #endif
-
-/*TODO: use configuration */
+#ifdef CONFIG_INPUT_IFORCE_FF
 #define IFORCE_FF
+#endif
+
 
 #define FF_EFFECTS_MAX	32
 
