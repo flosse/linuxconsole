@@ -89,6 +89,7 @@ struct input_event {
 #define EV_REP			0x14
 #define EV_FF			0x15
 #define EV_PWR			0x16
+#define EV_FF_STATUS		0x17
 #define EV_MAX			0x1f
 
 /*
@@ -431,7 +432,7 @@ struct input_event {
 #define ABS_TILT_Y		0x1b
 #define ABS_VOLUME              0x20
 #define ABS_MISC		0x28
-#define ABS_MAX			0x2f
+#define ABS_MAX			0x3f
 
 /*
  * Misc events
@@ -493,6 +494,13 @@ struct input_event {
 #define BUS_AMIGA		0x16
 #define BUS_ADB			0x17
 #define BUS_I2C			0x18
+
+/*
+ * Values describing the status of an effect
+ */
+#define FF_STATUS_STOPPED	0x00
+#define FF_STATUS_PLAYING	0x01
+#define FF_STATUS_MAX		0x01
 
 /*
  * Structures used in ioctls to upload effects to a device
@@ -792,6 +800,7 @@ void input_event(struct input_dev *dev, unsigned int type, unsigned int code, in
 #define input_report_rel(a,b,c) input_event(a, EV_REL, b, c)
 #define input_report_abs(a,b,c) input_event(a, EV_ABS, b, c)
 #define input_report_ff(a,b,c)  input_event(a, EV_FF, b, c)
+#define input_report_ff_status(a,b,c)	input_event(a, EV_FF_STATUS, b, c)
 
 #endif
 #endif
