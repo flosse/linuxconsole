@@ -196,16 +196,18 @@ static void hid_dump_field(struct hid_field *field, int n) {
 	printk(")\n");
 }
 
-void hid_dump_device(struct hid_device *device) {
+static void hid_dump_device(struct hid_device *device) {
 	struct hid_report_enum *report_enum;
 	struct hid_report *report;
 	struct list_head *list;
 	unsigned i,k;
 	static char *table[] = {"INPUT", "OUTPUT", "FEATURE"};
 	
-	printk("Application(");
-	resolv_usage(device->application);
-	printk(")\n");
+	for (i = 0; i < device->maxapplication; i++) {
+		printk("Application(");
+		resolv_usage(device->application[i]);
+		printk(")\n");
+	}
 
 	for (i = 0; i < HID_REPORT_TYPES; i++) {
 		report_enum = device->report_enum + i;
@@ -228,7 +230,7 @@ void hid_dump_device(struct hid_device *device) {
 	}
 }
 
-void hid_dump_input(struct hid_usage *usage, __s32 value) {
+static void hid_dump_input(struct hid_usage *usage, __s32 value) {
 	printk("hidd: input ");
 	resolv_usage(usage->hid);
 	printk(" = %d\n", value);

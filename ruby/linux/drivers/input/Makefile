@@ -140,5 +140,3 @@ include $(TOPDIR)/Rules.make
 
 hid.o: $(hid-objs)
 	$(LD) -r -o $@ $(hid-objs)
-
-

@@ -38,11 +38,13 @@
 #include <linux/mm.h>
 #include <linux/smp_lock.h>
 #include <linux/spinlock.h>
+#include <asm/unaligned.h>
+#include <linux/input.h>
+
 #undef DEBUG
 #undef DEBUG_DATA
+
 #include <linux/usb.h>
-#include <linux/input.h>
-#include <asm/unaligned.h>
 
 #include "hid.h"
 #ifdef CONFIG_INPUT_HIDDEV
@@ -497,6 +499,8 @@ static void hid_free_report(struct hid_report *report)
 
 	for (n = 0; n < report->maxfield; n++)
 		kfree(report->field[n]);
+	if (report->data)
+		kfree(report->data);
 	kfree(report);
 }
 
@@ -786,7 +790,7 @@ static int hid_input_report(u8 *data, int len, struct hid_device *hid)
 {
 	struct hid_report_enum *report_enum = hid->report_enum + HID_INPUT_REPORT;
 	struct hid_report *report;
-	int n;
+	int n, size;
 
 	if (!len) {
 		dbg("empty report");
@@ -794,10 +798,7 @@ static int hid_input_report(u8 *data, int len, struct hid_device *hid)
 	}
 
 #ifdef DEBUG_DATA
-	printk(KERN_DEBUG __FILE__ ": report (size %u) (%snumbered) = ", len, report_enum->numbered ? "" : "un");
-	for (n = 0; n < len; n++)
-		printk(" %02x", data[n]);
-	printk("\n");
+	printk(KERN_DEBUG __FILE__ ": report (size %u) (%snumbered)\n", len, report_enum->numbered ? "" : "un");
 #endif
 
 	n = 0;				/* Normally report number is 0 */
@@ -818,17 +819,48 @@ static int hid_input_report(u8 *data, int len, struct hid_device *hid)
 		return -1;
 	}
 
-	if (len < ((report->size - 1) >> 3) + 1) {
-		dbg("report %d is too short, (%d < %d)", report->id, len, ((report->size - 1) >> 3) + 1);
-		return -1;
+	size = ((report->size - 1) >> 3) + 1;
+
+	if (len < size) {
+
+		if (size <= 8) {
+			dbg("report %d is too short, (%d < %d)", report->id, len, size);
+			return -1;
+		}
+
+		/*
+		 * Some low-speed devices have large reports and maxpacketsize 8.
+		 * We buffer the data in that case and parse it when we got it all.
+		 * Works only for unnumbered reports.
+		 */
+
+		if (!report->data) 
+			if (!(report->data = kmalloc(size, GFP_ATOMIC))) {
+				dbg("couldn't allocate report buffer");
+				return -1;
+			}
+
+		if (report->idx + len > size) {
+			dbg("report data buffer overflow");
+			report->idx = 0;
+			return -1;
+		}
+
+		memcpy(report->data + report->idx, data, len);
+		report->idx += len;
+
+		if (report->idx < size)
+			return 0;
+
+		data = report->data;
 	}
 
 	for (n = 0; n < report->maxfield; n++)
 		hid_input_field(hid, report->field[n], data);
 
+	report->idx = 0;
 	return 0;
 }
-
 
 /*
  * Interrupt input handler.

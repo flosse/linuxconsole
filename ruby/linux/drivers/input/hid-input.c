@@ -35,6 +35,9 @@
 
 #include <linux/input.h>
 #include <linux/usb.h>
+
+#undef DEBUG
+
 #include "hid.h"
 
 #define unk	KEY_UNKNOWN
