@@ -222,6 +222,7 @@ struct vt_struct {
 	struct semaphore lock;  		/* Lock for con_buf 	 */
 	void *data_hook;			/* Hook for driver data */
 	const struct consw *vt_sw;		/* Display driver for VT */
+	const struct consw *cache_sw;		/* Save consw when KD_GRAPHIC */
 	struct vc_data *default_mode;	 	/* Default mode */
 	struct tasklet_struct vt_tasklet;	/* VT tasklet */
 	struct input_handle *keyboard;		/* Keyboard attached */
