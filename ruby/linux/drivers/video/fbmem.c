@@ -299,7 +299,7 @@ static int fbmem_read_proc(char *buf, char **start, off_t offset,
 		if (*fi)
 			clen += sprintf(buf + clen, "%d %s\n",
 				        GET_FB_IDX((*fi)->node),
-				        (*fi)->modename);
+				        (*fi)->fix.id);
 	*start = buf + offset;
 	if (clen > offset)
 		clen -= offset;
