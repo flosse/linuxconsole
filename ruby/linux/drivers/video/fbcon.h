@@ -105,7 +105,7 @@ struct fbvt_data {
 
 /* Color */
 #define attr_fgcol(vc, s)    \
-	(((s) >> (vc->vc_font.charcount > 256 ? 8 : 9)) & 0x0f)
+	(((s) >> (vc->vc_font.charcount > 256 ? 9 : 8)) & 0x0f)
 #define attr_bgcol(vc, s)    \
 	(((s) >> (vc->vc_font.charcount > 256 ? 12 : 13)) & 0x0f)
 #define	attr_bgcol_ec(vc) \
