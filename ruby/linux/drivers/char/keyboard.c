@@ -1063,9 +1063,13 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 
 	for (i = KEY_RESERVED; i < BTN_MISC; i++)
 		if (test_bit(i, dev->keybit)) break;
-	if (i == BTN_MISC) return NULL;
 
-	if (!(handle = kmalloc(sizeof(struct input_handle), GFP_KERNEL))) return NULL;
+	if ((i == BTN_MISC) || !test_bit(EV_SND, dev->evbit)) 
+		return NULL;
+
+	if (!(handle = kmalloc(sizeof(struct input_handle), GFP_KERNEL))) 
+		return NULL;
+
 	memset(handle, 0, sizeof(struct input_handle));
 
 	while (vt) {
@@ -1101,7 +1105,7 @@ static void kbd_disconnect(struct input_handle *handle)
 static struct input_device_id kbd_ids[] = {
 	{
                 flags: INPUT_DEVICE_ID_MATCH_EVBIT,
-                evbit: { BIT(EV_KEY) },
+                evbit: { BIT(EV_KEY) | BIT(EV_SND) },
         },
 	{ },    /* Terminating entry */
 };
