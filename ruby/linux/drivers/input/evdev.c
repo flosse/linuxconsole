@@ -343,7 +343,7 @@ static struct file_operations evdev_fops = {
 	flush:		evdev_flush
 };
 
-static struct input_handle *evdev_connect(struct input_handler *handler, struct input_dev *dev)
+static struct input_handle *evdev_connect(struct input_handler *handler, struct input_dev *dev, struct input_device_id *id)
 {
 	struct evdev *evdev;
 	int minor;
@@ -393,6 +393,13 @@ static void evdev_disconnect(struct input_handle *handle)
 	}
 }
 
+static struct input_device_id evdev_ids[] = {
+	{ driver_info: 1 },	/* Matches all devices */
+	{ },			/* Terminating zero entry */
+};
+
+MODULE_DEVICE_TABLE(input, evdev_ids);
+
 static struct input_handler evdev_handler = {
 	event:		evdev_event,
 	connect:	evdev_connect,
@@ -400,6 +407,7 @@ static struct input_handler evdev_handler = {
 	fops:		&evdev_fops,
 	minor:		EVDEV_MINOR_BASE,
 	name:		"evdev",
+	id_table:	evdev_ids,
 };
 
 static int __init evdev_init(void)

@@ -412,13 +412,12 @@ static struct file_operations joydev_fops = {
 	fasync:		joydev_fasync,
 };
 
-static struct input_handle *joydev_connect(struct input_handler *handler, struct input_dev *dev)
+static struct input_handle *joydev_connect(struct input_handler *handler, struct input_dev *dev, struct input_device_id *id)
 {
 	struct joydev *joydev;
 	int i, j, minor;
 
-	if (!(test_bit(EV_KEY, dev->evbit) && test_bit(EV_ABS, dev->evbit) &&
-	     (test_bit(ABS_X, dev->absbit) || test_bit(ABS_Y, dev->absbit)
+	if (!((test_bit(ABS_X, dev->absbit) || test_bit(ABS_Y, dev->absbit)
 		|| test_bit(ABS_WHEEL, dev->absbit)) &&
 	     (test_bit(BTN_TRIGGER, dev->keybit) || test_bit(BTN_A, dev->keybit)
 		|| test_bit(BTN_1, dev->keybit)))) return NULL; 
@@ -504,6 +503,16 @@ static void joydev_disconnect(struct input_handle *handle)
 	}
 }
 
+static struct input_device_id joydev_ids[] = {
+	{
+		flags: INPUT_DEVICE_ID_MATCH_EVBIT,
+		evbit: { BIT(EV_KEY) | BIT(EV_ABS) },
+	},	
+	{ }, 	/* Terminating entry */
+};
+
+MODULE_DEVICE_TABLE(input, joydev_ids);
+
 static struct input_handler joydev_handler = {
 	event:		joydev_event,
 	connect:	joydev_connect,
@@ -511,6 +520,7 @@ static struct input_handler joydev_handler = {
 	fops:		&joydev_fops,
 	minor:		JOYDEV_MINOR_BASE,
 	name:		"joydev",
+	id_table:	joydev_ids,
 };
 
 static int __init joydev_init(void)

@@ -315,13 +315,6 @@ static struct input_handle *tsdev_connect(struct input_handler *handler, struct 
                 return NULL;
         }
 
-	if (!test_bit(EV_KEY, dev->evbit) || ((!test_bit(BTN_TOUCH,dev->keybit)) && (!test_bit(BTN_MOUSE, dev->keybit))))
-		return NULL;
-
-	if ((!test_bit(EV_REL, dev->evbit) || !test_bit(REL_X, dev->relbit)) &&
-	    (!test_bit(EV_ABS, dev->evbit) || !test_bit(ABS_X, dev->absbit)))
-		return NULL;
-
 	if (!(tsdev = kmalloc(sizeof(struct tsdev), GFP_KERNEL)))
 		return NULL;
 	memset(tsdev, 0, sizeof(struct tsdev));
@@ -358,6 +351,26 @@ static void tsdev_disconnect(struct input_handle *handle)
 		kfree(tsdev);
 	}
 }
+
+static struct input_device_id tsdev_ids[] = {
+	{
+		flags: INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT | INPUT_DEVICE_ID_MATCH_RELBIT,
+		evbit: { BIT(EV_KEY) | BIT(EV_REL) },
+		keybit: { [LONG(BTN_LEFT)] = BIT(BTN_LEFT) },
+		relbit: { BIT(REL_X) | BIT(REL_Y) },
+	},	/* A mouse like device, at least one button, two relative axes */
+
+	{
+		flags: INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT | INPUT_DEVICE_ID_MATCH_ABSBIT,
+		evbit: { BIT(EV_KEY) | BIT(EV_ABS) },
+		keybit: { [LONG(BTN_TOUCH)] = BIT(BTN_TOUCH) },
+		absbit: { BIT(ABS_X) | BIT(ABS_Y) },
+	},	/* A tablet like device, at least touch detection, two absolute axes */
+
+	{ }, 	/* Terminating entry */
+};
+
+MODULE_DEVICE_TABLE(input, tsdev_ids);
 	
 static struct input_handler tsdev_handler = {
 	event:		tsdev_event,
@@ -366,6 +379,7 @@ static struct input_handler tsdev_handler = {
 	fops:		&tsdev_fops,
 	minor:		TSDEV_MINOR_BASE,
 	name:		"tsdev",
+	id_table:	tsdev_ids,
 };
 
 static int __init tsdev_init(void)

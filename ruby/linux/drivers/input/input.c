@@ -270,6 +270,49 @@ static void input_unlink_handle(struct input_handle *handle)
         input_find_and_remove(struct input_handle, handle->handler->handle, handle, hnext);
 }
 
+#define MATCH_BIT(bit, max) \
+		for (i = 0; i < NBITS(max); i++) \
+			if ((id->bit[i] & dev->bit[i]) != id->bit[i]) \
+				break; \
+		if (i != NBITS(max)) \
+			continue;
+
+static struct input_device_id *input_match_device(struct input_device_id *id, struct input_dev *dev)
+{
+	int i;
+
+	for (; id->flags || id->driver_info; id++) {
+
+		if (id->flags & INPUT_DEVICE_ID_MATCH_BUS)
+			if (id->idbus != dev->idbus)
+				continue;
+
+		if (id->flags & INPUT_DEVICE_ID_MATCH_VENDOR)
+			if (id->idvendor != dev->idvendor)
+				continue;
+	
+		if (id->flags & INPUT_DEVICE_ID_MATCH_PRODUCT)
+			if (id->idproduct != dev->idproduct)
+				continue;
+		
+		if (id->flags & INPUT_DEVICE_ID_MATCH_BUS)
+			if (id->idversion != dev->idversion)
+				continue;
+
+		MATCH_BIT(evbit,  EV_MAX);
+		MATCH_BIT(keybit, KEY_MAX);
+		MATCH_BIT(relbit, REL_MAX);
+		MATCH_BIT(absbit, ABS_MAX);
+		MATCH_BIT(mscbit, MSC_MAX);
+		MATCH_BIT(ledbit, LED_MAX);
+		MATCH_BIT(sndbit, SND_MAX);
+		MATCH_BIT(ffbit,  FF_MAX);
+
+		return id;
+	}
+
+	return NULL;
+}
 
 /*
  * Input hotplugging interface - loading event handlers based on
@@ -295,7 +338,7 @@ static void input_unlink_handle(struct input_handle *handle)
 		for (j = 0; j < NBITS(max); j++) \
 			scratch += sprintf(scratch, "%ld", dev->bit[j]); \
 		scratch++; \
-	} while (0);
+	} while (0)
 
 static void input_call_hotplug(char *verb, struct input_dev *dev)
 {
@@ -383,6 +426,7 @@ void input_register_device(struct input_dev *dev)
 {
 	struct input_handler *handler = input_handler;
 	struct input_handle *handle;
+	struct input_device_id *id;
 
 /*
  * Initialize repeat timer to default values.
@@ -415,8 +459,9 @@ void input_register_device(struct input_dev *dev)
  */
 
 	while (handler) {
-		if ((handle = handler->connect(handler, dev)))
-			input_link_handle(handle);
+		if ((id = input_match_device(handler->id_table, dev)))
+			if ((handle = handler->connect(handler, dev, id)))
+				input_link_handle(handle);
 		handler = handler->next;
 	}
 
@@ -477,7 +522,7 @@ void input_register_handler(struct input_handler *handler)
 {
 	struct input_dev *dev = input_dev;
 	struct input_handle *handle;
-
+	struct input_device_id *id;
 	if (!handler) return;
 
 /*
@@ -499,8 +544,9 @@ void input_register_handler(struct input_handler *handler)
  */
 
 	while (dev) {
-		if ((handle = handler->connect(handler, dev)))
-			input_link_handle(handle);
+		if ((id = input_match_device(handler->id_table, dev)))
+			if ((handle = handler->connect(handler, dev, id)))
+				input_link_handle(handle);
 		dev = dev->next;
 	}
 }
@@ -653,7 +699,7 @@ static int input_handlers_info(char *buf, char **start, off_t pos, int count)
 
 	while (handler) {
 
-		len = sprintf(buf, "N: Number=%d Minor=%d Name=\"%s\"\n",
+		len = sprintf(buf, "N: Number=%d Minor=%d Name=%s\n",
 			i++, handler->minor, handler->name);
 
 		at += len;

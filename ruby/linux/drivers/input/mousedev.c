@@ -412,18 +412,10 @@ struct file_operations mousedev_fops = {
 	fasync:		mousedev_fasync,
 };
 
-static struct input_handle *mousedev_connect(struct input_handler *handler, struct input_dev *dev)
+static struct input_handle *mousedev_connect(struct input_handler *handler, struct input_dev *dev, struct input_device_id *id)
 {
 	struct mousedev *mousedev;
 	int minor = 0;
-
-	if (!test_bit(EV_KEY, dev->evbit) ||
-	   (!test_bit(BTN_LEFT, dev->keybit) && !test_bit(BTN_TOUCH, dev->keybit)))
-		return NULL;
-
-	if ((!test_bit(EV_REL, dev->evbit) || !test_bit(REL_X, dev->relbit)) &&
-	    (!test_bit(EV_ABS, dev->evbit) || !test_bit(ABS_X, dev->absbit)))
-		return NULL;
 
 	for (minor = 0; minor < MOUSEDEV_MINORS && mousedev_table[minor]; minor++);
 	if (minor == MOUSEDEV_MINORS) {
@@ -471,6 +463,26 @@ static void mousedev_disconnect(struct input_handle *handle)
 		kfree(mousedev);
 	}
 }
+
+static struct input_device_id mousedev_ids[] = {
+	{
+		flags: INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT | INPUT_DEVICE_ID_MATCH_RELBIT,
+		evbit: { BIT(EV_KEY) | BIT(EV_REL) },
+		keybit: { [LONG(BTN_LEFT)] = BIT(BTN_LEFT) },
+		relbit: { BIT(REL_X) | BIT(REL_Y) },
+	},	/* A mouse like device, at least one button, two relative axes */
+
+	{
+		flags: INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT | INPUT_DEVICE_ID_MATCH_ABSBIT,
+		evbit: { BIT(EV_KEY) | BIT(EV_ABS) },
+		keybit: { [LONG(BTN_TOUCH)] = BIT(BTN_TOUCH) },
+		absbit: { BIT(ABS_X) | BIT(ABS_Y) },
+	},	/* A tablet like device, at least touch detection, two absolute axes */
+
+	{ }, 	/* Terminating entry */
+};
+
+MODULE_DEVICE_TABLE(input, mousedev_ids);
 	
 static struct input_handler mousedev_handler = {
 	event:		mousedev_event,
@@ -479,6 +491,7 @@ static struct input_handler mousedev_handler = {
 	fops:		&mousedev_fops,
 	minor:		MOUSEDEV_MINOR_BASE,
 	name:		"mousedev",
+	id_table:	mousedev_ids,
 };
 
 static int __init mousedev_init(void)
