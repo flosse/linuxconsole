@@ -72,7 +72,7 @@ main(int argc, char **argv)
 			break;
 		case 'c':
 			color = atoi(optarg);
-			break
+			break;
 		default:
 			fprintf(stderr, "Warning: Unknown option \"%c\"\n", opnu);
 		}
