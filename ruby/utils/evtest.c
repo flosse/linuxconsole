@@ -34,7 +34,7 @@
 #include <stdio.h>
 
 char *events[EV_MAX + 1] = { "Reset", "Key", "Relative", "Absolute", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-NULL, NULL, NULL, "LED", "Sound", NULL, "Repeat" };
+NULL, NULL, NULL, "LED", "Sound", NULL, "Repeat", "ForceFeedback" };
 char *keys[KEY_MAX + 1] = { "Reserved", "Esc", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "Minus", "Equal", "Backspace",
 "Tab", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "LeftBrace", "RightBrace", "Enter", "LeftControl", "A", "S", "D", "F", "G",
 "H", "J", "K", "L", "Semicolon", "Apostrophe", "Grave", "LeftShift", "BackSlash", "Z", "X", "C", "V", "B", "N", "M", "Comma", "Dot",
@@ -62,9 +62,9 @@ NULL, NULL,  NULL, NULL, NULL, NULL,
 NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 "Trigger", "ThumbBtn", "ThumbBtn2", "TopBtn", "TopBtn2", "PinkieBtn",
 "BaseBtn", "BaseBtn2", "BaseBtn3", "BaseBtn4", "BaseBtn5", "BaseBtn6",
-NULL, NULL, NULL, NULL,
+NULL, NULL, NULL, "BtnDead",
 "BtnA", "BtnB", "BtnC", "BtnX", "BtnY", "BtnZ", "BtnTL", "BtnTR", "BtnTL2", "BtnTR2", "BtnSelect", "BtnStart", "BtnMode",
-NULL, NULL, NULL,
+"BtnThumbL", "BtnThumbR", NULL,
 "ToolPen", "ToolRubber", "ToolBrush", "ToolPencil", "ToolAirbrush", "ToolFinger", "ToolMouse", "ToolLens", NULL, NULL,
 "Touch", "Stylus", "Stylus2" };
 
@@ -76,9 +76,28 @@ NULL, NULL, NULL, NULL, NULL,
 char *leds[LED_MAX + 1] = { "NumLock", "CapsLock", "ScrollLock", "Compose", "Kana", "Sleep", "Suspend", "Mute" };
 char *repeats[REP_MAX + 1] = { "Delay", "Period" };
 char *sounds[SND_MAX + 1] = { "Bell", "Click" };
+char *forces[FF_MAX + 1] = {"Btn0", "Btn1", "Btn2", "Btn3", "Btn4", "Btn5", "Btn6", "Btn7", "Btn8", "Btn9",
+NULL, NULL,  NULL, NULL, NULL, NULL,
+"LeftBtn", "RightBtn", "MiddleBtn", "SideBtn", "ExtraBtn", "ForwardBtn", "BackBtn",
+NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+"Trigger", "ThumbBtn", "ThumbBtn2", "TopBtn", "TopBtn2", "PinkieBtn",
+"BaseBtn", "BaseBtn2", "BaseBtn3", "BaseBtn4", "BaseBtn5", "BaseBtn6",
+NULL, NULL, NULL, NULL,
+"BtnA", "BtnB", "BtnC", "BtnX", "BtnY", "BtnZ", "BtnTL", "BtnTR", "BtnTL2", "BtnTR2", "BtnSelect", "BtnStart", "BtnMode",
+"BtnThumbL", "BtnThumbR", NULL,
+
+ "X", "Y", "Z", "Rx", "Ry", "Rz", "Throttle", "Rudder", "Wheel", "Gas", "Brake",
+NULL, NULL, NULL, NULL, NULL,
+
+"Rumble", "PeriodicForce", "ConstantForce", "Spring", "Friction", NULL, NULL, NULL,
+
+"SquareWave", "TriangleWave", "SineWave", "SawUpWave", "SawDownWave", "CustomWave", NULL, NULL,
+
+"Gain", "AutoCenter" };
+
 
 char **names[EV_MAX + 1] = { events, keys, relatives, absolutes, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-NULL, NULL, leds, sounds, repeats };
+NULL, NULL, leds, sounds, NULL, repeats, forces };
 
 #define BITS_PER_LONG (sizeof(long) * 8)
 #define NBITS(x) ((((x)-1)/BITS_PER_LONG)+1)
