@@ -1076,7 +1076,7 @@ static void tdfxfb_imageblit(struct fb_info *info, struct fb_image *pixmap)
   	srcfmt = 0x400000;
    } else {
    	banshee_make_room(6 + ((size + 3) >> 2));
-	srcfmt = 0xBEEFDEAD;
+	srcfmt = stride | ((bpp+((bpp==8) ? 0 : 8)) << 13) | 0x400000;
    }	
 
    tdfx_outl(SRCXY,     0);
