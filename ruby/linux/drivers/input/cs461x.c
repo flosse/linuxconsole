@@ -17,6 +17,7 @@
 #include <linux/pci.h>
 
 MODULE_AUTHOR("Victor Krapivin <vik@belcaf.minsk.by>");
+MODULE_LICENSE("GPL");
 
 /*
 	These options are experimental
@@ -133,7 +134,6 @@ static union ba1_t {
         } name;
         unsigned int *idx[4];
 } ba1;
-
 
 static void cs461x_poke(unsigned long reg, unsigned int val)
 {

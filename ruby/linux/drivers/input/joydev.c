@@ -46,6 +46,7 @@
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
 MODULE_DESCRIPTION("Joystick device interfaces");
+MODULE_SUPPORTED_DEVICE("input/js");
 MODULE_LICENSE("GPL");
 
 #define JOYDEV_MINOR_BASE	0
@@ -86,12 +87,6 @@ struct joydev_list {
 };
 
 static struct joydev *joydev_table[JOYDEV_MINORS];
-
-MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
-MODULE_DESCRIPTION("Joystick device driver");
-MODULE_SUPPORTED_DEVICE("input/js");
-
-
 
 static int joydev_correct(int value, struct js_corr *corr)
 {

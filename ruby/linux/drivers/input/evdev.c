@@ -95,8 +95,6 @@ static int evdev_fasync(int fd, struct file *file, int on)
 
 static int evdev_flush(struct file * file)
 {
-	printk(KERN_DEBUG "evdev flush\n");
-
 	return input_flush_device(&((struct evdev_list*)file->private_data)->evdev->handle, file);
 }
 
@@ -104,8 +102,6 @@ static int evdev_release(struct inode * inode, struct file * file)
 {
 	struct evdev_list *list = file->private_data;
 	struct evdev_list **listptr;
-
-	printk(KERN_DEBUG "evdev release\n");
 
 	lock_kernel();
 	listptr = &list->evdev->list;

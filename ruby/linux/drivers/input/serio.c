@@ -127,5 +127,3 @@ void serio_close(struct serio *serio)
 	serio->close(serio);
 	serio->dev = NULL;
 }
-
-
