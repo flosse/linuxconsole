@@ -35,7 +35,6 @@
 #include <asm/vc_ioctl.h>
 #endif /* CONFIG_FB_COMPAT_XPMAC */
 
-char vt_dont_switch = 0;
 extern struct tty_driver console_driver;
 
 #define VT_IS_IN_USE(i)	(console_driver.table[i] && console_driver.table[i]->count)
@@ -1169,12 +1168,12 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	case VT_LOCKSWITCH:
 		if (!suser())
 		   return -EPERM;
-		vt_dont_switch = 1;
+		vc->display_fg->vt_dont_switch = 1;
 		return 0;
 	case VT_UNLOCKSWITCH:
 		if (!suser())
 		   return -EPERM;
-		vt_dont_switch = 0;
+		vc->display_fg->vt_dont_switch = 0;
 		return 0;
 #ifdef CONFIG_FB_COMPAT_XPMAC
 	case VC_GETMODE:
@@ -1334,9 +1333,6 @@ void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
  */
 void change_console(struct vc_data *new_vc, struct vc_data *old_vc)
 {
-	if (vt_dont_switch)
-		return;
-
 	/*
 	 * If this vt is in process mode, then we need to handshake with
 	 * that process before switching. Essentially, we store where that
@@ -1352,8 +1348,7 @@ void change_console(struct vc_data *new_vc, struct vc_data *old_vc)
 	 * the user waits just the right amount of time :-) and revert the
 	 * vt to auto control.
 	 */
-	if (old_vc->vt_mode.mode == VT_PROCESS)
-	{
+	if (old_vc->vt_mode.mode == VT_PROCESS) {
 		/*
 		 * Send the signal as privileged - kill_proc() will
 		 * tell us if the process has gone or something else
