@@ -10,6 +10,11 @@ if [ "$CONFIG_INPUT" != "n" ]; then
    bool 'PS/2 port support' CONFIG_INPUT_PS2
    if [ "$CONFIG_INPUT_PS2" != "n" ]; then		
       tristate '  i8042 aux+kbd controller' CONFIG_INPUT_I8042
+      if [ "$CONFIG_INPUT_I8042" != "n" ]; then
+         hex '    Register Base Address' CONFIG_I8042_REG_BASE 60
+	 int '	  PS/2 Keyboard IRQ' CONFIG_I8042_KBD_IRQ 1
+	 int '	  PS/2 AUX IRQ' CONFIG_I8042_AUX_IRQ 12	   
+      fi
       tristate '  ct82c710 aux controller' CONFIG_INPUT_CT82C710
       tristate '  Q40 kbd controller' CONFIG_INPUT_Q40KBD
       tristate '  #Sun Ultra/AX, JavaStation 8042 kbd controller' CONFIG_INPUT_SUN8042
