@@ -3,7 +3,7 @@
  *
  *  Copyright (c) 2001 "Crazy" James Simmons jsimmons@transvirtual.com 
  *
- *  Sponsored by SuSE, Transvirtual Technology. 
+ *  Sponsored by Transvirtual Technology. 
  * 
  *  Derived from the code in h3600_ts.[ch] by Charles Flynn  
  */

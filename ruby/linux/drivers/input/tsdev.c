@@ -5,7 +5,7 @@
  *
  *  Input driver to Touchscreen device driver module.
  *
- *  Sponsored by SuSE, Transvirtual Technology
+ *  Sponsored by Transvirtual Technology
  */
 
 /*

@@ -1,11 +1,9 @@
 /*
  * $Id$
  *
- *  Copyright (c) 1999-2000 Vojtech Pavlik
+ *  Copyright (c) 1999-2001 Vojtech Pavlik
  *
  *  The input layer module itself
- *
- *  Sponsored by SuSE
  */
 
 /*

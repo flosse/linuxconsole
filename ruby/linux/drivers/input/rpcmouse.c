@@ -1,12 +1,10 @@
 /*
  * $Id$
  *
- *  Copyright (c) 2000 Vojtech Pavlik
+ *  Copyright (c) 2000-2001 Vojtech Pavlik
  *
  *  Based on the work of:
  *      Russel King
- *
- *  Sponsored by SuSE
  */
 
 /*

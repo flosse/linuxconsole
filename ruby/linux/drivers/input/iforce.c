@@ -5,8 +5,6 @@
  *  Copyright (c) 2001 Johann Deneux <deneux@ifrance.com>
  *
  *  USB/RS232 I-Force joysticks and wheels.
- *
- *  Sponsored by SuSE
  */
 
 /*

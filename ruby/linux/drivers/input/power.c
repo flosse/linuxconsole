@@ -5,7 +5,7 @@
  *
  *  Input driver Power Management.
  *
- *  Sponsored by SuSE, Transvirtual Technology.
+ *  Sponsored by Transvirtual Technology.
  */
 
 /*

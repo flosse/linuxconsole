@@ -4,11 +4,10 @@
  *  derived from CVS-ID "stinger.c,v 1.5 2001/05/29 12:57:18 vojtech Exp"
  *
  *  Copyright (c) 2001 Arndt Schoenewald
- *  Copyright (c) 2000 Vojtech Pavlik
+ *  Copyright (c) 2000-2001 Vojtech Pavlik
  *  Copyright (c) 2000 Mark Fletcher
  *
  *  Sponsored by Quelltext AG (http://www.quelltext-ag.de), Dortmund, Germany
- *  Sponsored by SuSE
  */
 
 /*

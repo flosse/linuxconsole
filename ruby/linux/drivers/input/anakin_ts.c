@@ -3,7 +3,7 @@
  *
  *  Copyright (c) 2001 "Crazy" James Simmons jsimmons@transvirtual.com
  *
- *  Sponsored by SuSE, Transvirtual Technology.
+ *  Sponsored by Transvirtual Technology.
  *
  *  Based on work by :	Tak-Shing Chan <chan@aleph1.co.uk> 	
  *

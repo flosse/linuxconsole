@@ -2,8 +2,6 @@
  * $Id$
  *
  *  Copyright (c) 1998-2001 Vojtech Pavlik
- *
- *  Sponsored by SuSE
  */
 
 /*

@@ -1,11 +1,9 @@
 /*
  * $Id$
  *
- *  Copyright (c) 1999-2000 Vojtech Pavlik
+ *  Copyright (c) 1999-2001 Vojtech Pavlik
  *
  *  Input driver to ImExPS/2 device driver module.
- *
- *  Sponsored by SuSE
  */
 
 /*

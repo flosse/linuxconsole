@@ -5,8 +5,6 @@
  *
  *  Based on the work of:
  *	Raymond Ingles
- *
- *  Sponsored by SuSE
  */
 
 /*

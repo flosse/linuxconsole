@@ -5,8 +5,6 @@
  *  (c) 2000-2001 Vojtech Pavlik	<vojtech@suse.cz>
  *
  *  Some debug stuff for the HID parser.
- *
- *  Sponsored by SuSE
  */
 
 /*

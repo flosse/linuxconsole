@@ -5,8 +5,6 @@
  *  Copyright (c) 2000-2001 Vojtech Pavlik
  *
  *  USB HID support for Linux
- *
- *  Sponsored by SuSE
  */
 
 /*

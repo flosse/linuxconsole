@@ -1,12 +1,10 @@
 /*
  * $Id$
  *
- *  Copyright (c) 1999 Vojtech Pavlik
+ *  Copyright (c) 1999-2001 Vojtech Pavlik
  *
  *  Based on the work of:
  *	Andree Borrmann		Mats Sjövall
- *
- *  Sponsored by SuSE
  */
 
 /*

@@ -1,9 +1,7 @@
 /*
  * $Id$
  *
- *  Copyright (c) 2000 Vojtech Pavlik
- *
- *  Sponsored by SuSE
+ *  Copyright (c) 2001 Vojtech Pavlik
  */
 
 /*

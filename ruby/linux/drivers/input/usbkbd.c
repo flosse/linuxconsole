@@ -4,8 +4,6 @@
  *  Copyright (c) 1999-2001 Vojtech Pavlik
  *
  *  USB HIDBP Keyboard support
- *
- *  Sponsored by SuSE
  */
 
 /*

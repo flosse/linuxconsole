@@ -4,9 +4,7 @@
 /*
  * $Id$
  *
- * Copyright (C) 1999 Vojtech Pavlik
- *
- * Sponsored by SuSE
+ * Copyright (C) 1999-2001 Vojtech Pavlik
  */
 
 /*

@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- *  Copyright (c) 1999-2000 Vojtech Pavlik
+ *  Copyright (c) 1999-2001 Vojtech Pavlik
  *
  *  Based on the work of:
  *	James Banks		Matthew Dillon
@@ -9,8 +9,6 @@
  *	Linus Torvalds		Johan Myreen
  *	Cliff Matthews		Philip Blundell
  *	Russell King
- *
- *  Sponsored by SuSE
  */
 
 /*

@@ -1,12 +1,10 @@
 /*
  * $Id$
  *
- *  Copyright (c) 2000 Vojtech Pavlik
+ *  Copyright (c) 2001 Vojtech Pavlik
  *
  *  Based on the work of:
  *	Toby Deshane
- *
- *  Sponsored by SuSE
  */
 
 /*

@@ -11,8 +11,6 @@
  *
  *  USB Wacom Graphire and Wacom Intuos tablet support
  *
- *  Sponsored by SuSE
- *
  *  ChangeLog:
  *      v0.1 (vp)  - Initial release
  *      v0.2 (aba) - Support for all buttons / combinations

@@ -1,12 +1,10 @@
 /*
  * $Id$
  *
- *  Copyright (c) 1999-2000 Vojtech Pavlik 
+ *  Copyright (c) 1999-2001 Vojtech Pavlik 
  *  Copyright (c) 1999 Colin Van Dyke 
  *
  *  Joystick device driver for the input driver suite.
- *
- *  Sponsored by SuSE and Intel
  */
 
 /*

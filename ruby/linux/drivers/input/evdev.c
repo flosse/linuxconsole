@@ -4,8 +4,6 @@
  *  Copyright (c) 1999-2001 Vojtech Pavlik
  *
  *  Event char devices, giving access to raw input device events.
- *
- *  Sponsored by SuSE
  */
 
 /*
