@@ -302,8 +302,10 @@ void scroll_region_up(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
         s = (unsigned short *) (origin + video_size_row*(t+nr));
         scr_memcpyw(d, s, (b-t-nr) * video_size_row);
         scr_memsetw(d + (b-t-nr) * video_num_columns, video_erase_char, video_size_row*nr);
-	if (IS_VISIBLE)
+	if (IS_VISIBLE) {
 		sw->con_scroll_region(vc, t, b, SM_UP, nr);
+		sw->con_clear(vc, 0, b-nr, video_num_columns, nr); 
+	}
 }
 
 void scroll_region_down(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
@@ -319,8 +321,10 @@ void scroll_region_down(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
         step = video_num_columns * nr;
         scr_memmovew(s + step, s, (b-t-nr)*video_size_row);
         scr_memsetw(s, video_erase_char, 2*step);
-	if (IS_VISIBLE)
+	if (IS_VISIBLE) {
 		sw->con_scroll_region(vc, t, b, SM_DOWN, nr);
+		sw->con_clear(vc, 0, t, video_num_columns, nr); 
+	}
 }
 
 /*
@@ -447,11 +451,11 @@ void set_origin(struct vc_data *vc)
 		sw->con_set_origin(vc);
 }
 
-inline void clear_region(struct vc_data *vc,int sx,int sy,int height,int width) 
+inline void clear_region(struct vc_data *vc,int sx,int sy,int width,int height) 
 {
 	/* Clears the video memory, not the screen buffer */
         if (IS_VISIBLE && sw->con_clear)
-                return sw->con_clear(vc, x, y, height, width);
+                return sw->con_clear(vc, sx, sy, width, height);
 }
 
 void do_update_region(struct vc_data *vc, unsigned long start, int count)
