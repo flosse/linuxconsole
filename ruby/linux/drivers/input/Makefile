@@ -24,7 +24,7 @@ common-objs	:= input.o serio.o gameport.o
 
 hid-objs	:= hid-core.o hid-input.o
 
-ifeq ($(CONFIG_INPUT_HIDDEV),y)
+ifeq ($(CONFIG_USB_HIDDEV),y)
 	hid-objs	+= hiddev.o
 endif
 
