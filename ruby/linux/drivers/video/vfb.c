@@ -103,8 +103,11 @@ static u_long get_line_length(int xres_virtual, int bpp)
 {
     u_long length;
 
+    /* Calculate number of bits per display line */	
     length = xres_virtual * bpp;
+    /* Round up to a multiple of 32 */	
     length = (length+31)&~31;
+    /* Convert number of bits to number of bytes */	
     length >>= 3;
     return(length);
 }
