@@ -230,14 +230,13 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 		case BUS_USB: {
 
 			DECLARE_WAITQUEUE(wait, current);
-			int status, timeout = HZ * 10; /* 10 seconds */
+			int status, timeout = HZ; /* 1 second */
 
 			memcpy(iforce->out.transfer_buffer + 1, data, LO(cmd));
 			((char*)iforce->out.transfer_buffer)[0] = HI(cmd);
-			iforce->out.transfer_buffer_length = LO(cmd) + 1;
+			iforce->out.transfer_buffer_length = LO(cmd) + 2;
 			iforce->out.dev = iforce->usbdev;
 
-			init_waitqueue_head(&iforce->wait); 	
 			set_current_state(TASK_INTERRUPTIBLE);
 			add_wait_queue(&iforce->wait, &wait);
 
@@ -708,7 +707,7 @@ static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char 
 		case 0x01:	/* joystick position data */
 		case 0x03:	/* wheel position data */
 
-			if (!iforce->init_done & FF_INIT_DEV_TYPE) {
+			if (~iforce->init_done & FF_INIT_DEV_TYPE) {
 				iforce->type = HI(cmd);
 				iforce->init_done |= FF_INIT_DEV_TYPE;
 				iforce_wake(iforce);
@@ -816,14 +815,29 @@ static void iforce_close(struct input_dev *dev)
 static void iforce_init_device(struct iforce *iforce)
 {
 	DECLARE_WAITQUEUE(wait, current);
-	int i, timeout = HZ * 10; /* 10 seconds */
+	int i, timeout = HZ; /* 1 second */
+
+	iforce->dev.private = iforce;
+	iforce->dev.open = iforce_open;
+	iforce->dev.close = iforce_close;
+	iforce->dev.event = iforce_input_event;
+	iforce->dev.upload_effect = iforce_upload_effect;
+	iforce->dev.erase_effect = iforce_erase_effect;
+
+	iforce->device_memory.name = "I-Force device effect memory";
+	iforce->device_memory.start = 0;
+	iforce->device_memory.end = 0;
+	iforce->device_memory.flags = IORESOURCE_MEM;
+	iforce->device_memory.parent = NULL;
+	iforce->device_memory.child = NULL;
+	iforce->device_memory.sibling = NULL;
 
 	init_waitqueue_head(&iforce->wait);
+	iforce_open(&iforce->dev);
 
 	for (i = 0; ff_init_data[i].cmd; i++)
 		send_packet(iforce, ff_init_data[i].cmd, ff_init_data[i].data);
 
-	init_waitqueue_head(&iforce->wait); 	
 	set_current_state(TASK_INTERRUPTIBLE);
 	add_wait_queue(&iforce->wait, &wait);
 
@@ -832,9 +846,10 @@ static void iforce_init_device(struct iforce *iforce)
 
 	set_current_state(TASK_RUNNING);
 	remove_wait_queue(&iforce->wait, &wait);
+	iforce_close(&iforce->dev);
 
 	if (!timeout) {
-		printk(KERN_WARNING "iforce.c: Init timeout\n");
+		printk(KERN_WARNING "iforce.c: Init timeout %#lx\n", iforce->init_done);
 		if (~iforce->init_done & FF_INIT_N_EFFECTS) iforce->n_effects_max = 10;
 		if (~iforce->init_done & FF_INIT_DEV_TYPE)  iforce->type = 1;
 		if (~iforce->init_done & FF_INIT_RAMSIZE)   iforce->device_memory.end = 200;
@@ -876,21 +891,6 @@ static void iforce_init_device(struct iforce *iforce)
 		iforce->dev.absmax[i] =  1;
 		iforce->dev.absmin[i] = -1;
 	}
-
-	iforce->dev.private = iforce;
-	iforce->dev.open = iforce_open;
-	iforce->dev.close = iforce_close;
-	iforce->dev.event = iforce_input_event;
-	iforce->dev.upload_effect = iforce_upload_effect;
-	iforce->dev.erase_effect = iforce_erase_effect;
-
-	iforce->device_memory.name = "I-Force device effect memory";
-	iforce->device_memory.start = 0;
-	iforce->device_memory.end = 0;
-	iforce->device_memory.flags = IORESOURCE_MEM;
-	iforce->device_memory.parent = NULL;
-	iforce->device_memory.child = NULL;
-	iforce->device_memory.sibling = NULL;
 
 	input_register_device(&iforce->dev);
 }
