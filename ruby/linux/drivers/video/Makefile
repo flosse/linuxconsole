@@ -37,6 +37,7 @@ endif
 obj-$(CONFIG_FB_ACORN)            += acornfb.o
 obj-$(CONFIG_FB_AMIGA)            += amifb.o
 obj-$(CONFIG_FB_PM2)              += pm2fb.o fbgen.o
+obj-$(CONFIG_FB_PM3)              += pm3fb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 obj-$(CONFIG_FB_APOLLO)           += dnfb.o
 obj-$(CONFIG_FB_Q40)              += q40fb.o
 obj-$(CONFIG_FB_ATARI)            += atafb.o

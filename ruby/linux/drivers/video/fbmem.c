@@ -64,6 +64,8 @@ extern int cyberfb_init(void);
 extern int cyberfb_setup(char*);
 extern int pm2fb_init(void);
 extern int pm2fb_setup(char*);
+extern int pm3fb_init(void);
+extern int pm3fb_setup(char*);
 extern int clps711xfb_init(void);
 extern int cyber2000fb_init(void);
 extern int retz3fb_init(void);
@@ -172,6 +174,9 @@ static struct {
 #endif
 #ifdef CONFIG_FB_PM2
 	{ "pm2fb", pm2fb_init, pm2fb_setup },
+#endif
+#ifdef CONFIG_FB_PM3
+        { "pm3fb", pm3fb_init, pm3fb_setup },
 #endif
 #ifdef CONFIG_FB_CLGEN
 	{ "clgen", clgenfb_init, clgenfb_setup },

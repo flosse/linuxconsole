@@ -94,6 +94,7 @@
 #define FB_ACCEL_IGS_CYBER2010	34	/* CyberPro 2010		*/
 #define FB_ACCEL_IGS_CYBER5000	35	/* CyberPro 5000		*/
 #define FB_ACCEL_SIS_GLAMOUR    36	/* SiS 300/630/540              */
+#define FB_ACCEL_3DLABS_PERMEDIA3 37    /* 3DLabs Permedia 3            */
 
 struct fb_fix_screeninfo {
 	char id[16];			/* identification string eg "TT Builtin" */
