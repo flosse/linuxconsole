@@ -315,7 +315,7 @@ void vga_vesa_blank(struct vga_hw_state *state, int mode)
 	 	spin_lock_irqsave(&state->vga_lock, flags);	
 		state->SeqCtrlIndex = vga_r(regs, VGA_SEQ_I);
 		state->CrtCtrlIndex = vga_r(regs, VGA_CRT_IC);	
-	 	spin_unlock_irqrestore(&vga_lock, flags);	
+	 	spin_unlock_irqrestore(&state->vga_lock, flags);	
 
 		state->HorizontalTotal = vga_rcrt(regs, 0x00); 
 		state->HorizDisplayEnd = vga_rcrt(regs, 0x01);
