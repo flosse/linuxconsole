@@ -392,6 +392,7 @@ int con_font_op(struct vc_data *vc, struct console_font_op *op)
 
 	if (vc->display_fg->vc_mode != KD_TEXT)
 		return -EINVAL;
+
 	switch (op->op) {
 	case KD_FONT_OP_SET:
 		/* We need data from userland */
@@ -1332,9 +1333,11 @@ void reset_vc(struct vc_data *vc)
 
 inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
 {
+	struct vt_struct *vt = new_vc->display_fg;
+
         if (!new_vc) {
                 /* strange ... */
-                /* printk("redraw_screen: tty %d not allocated ??\n", new_console+1); */
+                printk("redraw_screen: tty %d not allocated ??\n", new_vc->vc_num);
                 return;
         }
 
@@ -1342,18 +1345,19 @@ inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
         if (old_vc->vc_num != new_vc->vc_num) {
 		int update;
 	
-		old_vc->display_fg->fg_console = new_vc;
+		vt->fg_console = new_vc;
                	save_screen(old_vc);
                 set_origin(old_vc);               
 		
 		set_origin(new_vc);	
-		update = new_vc->display_fg->vt_sw->con_switch(new_vc);
-		/*
-		if (new_vc->vc_font.data != old_vc->vc_font.data)
-			new_vc->display_fg->vt_sw->con_font_op(new_vc, &new_vc->vc_font);
-		*/
+		update = vt->vt_sw->con_switch(new_vc);
+	
+		if (memcmp(&new_vc->vc_font, &old_vc->vc_font, 
+		    sizeof(struct console_font_op))) {
+			vt->vt_sw->con_font_op(new_vc, &new_vc->vc_font);
+		}	
 		set_palette(new_vc);
-                if (update && new_vc->display_fg->vc_mode != KD_GRAPHICS) { 
+                if (update && vt->vc_mode != KD_GRAPHICS) { 
                         /* Update the screen contents */
                         do_update_region(new_vc, new_vc->vc_origin, 
 					 new_vc->vc_screenbuf_size/2);
