@@ -29,7 +29,7 @@
 
 #define TSDEV_MINOR_BASE 	32
 #define TSDEV_MINORS		32
-#define TSDEV_MIX		31
+#define TSDEV_BUFFER_SIZE	64
 
 #include <linux/slab.h>
 #include <linux/poll.h>
@@ -39,6 +39,7 @@
 #include <linux/config.h>
 #include <linux/smp_lock.h>
 #include <linux/random.h>
+#include <linux/time.h>
 
 #ifndef CONFIG_INPUT_TSDEV_SCREEN_X
 #define CONFIG_INPUT_TSDEV_SCREEN_X	1024
@@ -46,14 +47,6 @@
 #ifndef CONFIG_INPUT_TSDEV_SCREEN_Y
 #define CONFIG_INPUT_TSDEV_SCREEN_Y	768
 #endif
-
-/* From Compaq's Touch Screen Specification version 0.2 (draft) */
-typedef struct {
-    short pressure;
-    short x;
-    short y;
-    short millisecs;
-} TS_EVENT;
 
 struct tsdev {
 	int exist;
@@ -65,31 +58,43 @@ struct tsdev {
 	devfs_handle_t devfs;
 };
 
+/* From Compaq's Touch Screen Specification version 0.2 (draft) */
+typedef struct {
+    short pressure;
+    short x;
+    short y;
+    short millisecs;
+} TS_EVENT;
+
 struct tsdev_list {
 	struct fasync_struct *fasync;
-	struct tsdev *tsdev;
 	struct tsdev_list *next;
-	int dx, dy, oldx, oldy;
-	signed char ps2[6];
-	unsigned long buttons;
-	unsigned char ready, buffer, bufsiz;
-	unsigned char mode;
+	struct tsdev *tsdev;
+	int head, tail;
+	int oldx, oldy;
+	TS_EVENT event[TSDEV_BUFFER_SIZE];
 };
-
-#define TSDEV_SEQ_LEN	6
 
 static struct input_handler tsdev_handler;
 
 static struct tsdev *tsdev_table[TSDEV_MINORS];
-static struct tsdev tsdev_mix;
 
 static int xres = CONFIG_INPUT_TSDEV_SCREEN_X;
 static int yres = CONFIG_INPUT_TSDEV_SCREEN_Y;
 
+static int tsdev_fasync(int fd, struct file *file, int on)
+{
+	struct tsdev_list *list = file->private_data;
+	int retval;
+
+	retval = fasync_helper(fd, file, on, &list->fasync);
+	return retval < 0 ? retval : 0;
+}
+
 static int tsdev_open(struct inode * inode, struct file * file)
 {
-	struct tsdev_list *list;
 	int i = MINOR(inode->i_rdev) - TSDEV_MINOR_BASE;
+	struct tsdev_list *list;
 
 	if (i >= TSDEV_MINORS || !tsdev_table[i])
 		return -ENODEV;
@@ -103,22 +108,9 @@ static int tsdev_open(struct inode * inode, struct file * file)
 	tsdev_table[i]->list = list;
 	file->private_data = list;
 
-	if (!list->tsdev->open++) {
-		if (list->tsdev->minor == TSDEV_MIX) {
-			struct input_handle *handle = tsdev_handler.handle;
-			while (handle) {
-				struct tsdev *tsdev = handle->private;
-				if (!tsdev->open)
-					if (tsdev->exist)	
-						input_open_device(handle);
-				handle = handle->hnext;
-			}
-		} else {
-			if (!tsdev_mix.open)
-				if (list->tsdev->exist)	
-					input_open_device(&list->tsdev->handle);
-		}
-	}
+	if (!list->tsdev->open++)
+		if (list->tsdev->exist)	
+			input_open_device(&list->tsdev->handle);
 	return 0;
 }
 
@@ -136,31 +128,12 @@ static int tsdev_release(struct inode * inode, struct file * file)
 	*listptr = (*listptr)->next;
 
 	if (!--list->tsdev->open) {
-		if (list->tsdev->minor == TSDEV_MIX) {
-			struct input_handle *handle = tsdev_handler.handle;
-			while (handle) {
-				struct tsdev *tsdev = handle->private;
-				if (!tsdev->open) {
-					if (tsdev->exist) {
-						input_close_device(&tsdev->handle);
-					} else {
-						input_unregister_minor(tsdev->devfs);
-						tsdev_table[tsdev->minor] = NULL;
-						kfree(tsdev);
-					}
-				}
-				handle = handle->hnext;
-			}
+		if (list->tsdev->exist) {
+			input_close_device(&list->tsdev->handle);
 		} else {
-			if (!tsdev_mix.open) {
-				if (list->tsdev->exist) {
-					input_close_device(&list->tsdev->handle);
-				} else {
-					input_unregister_minor(list->tsdev->devfs);
-					tsdev_table[list->tsdev->minor] = NULL;
-					kfree(list->tsdev);
-				}
-			}
+			input_unregister_minor(list->tsdev->devfs);
+			tsdev_table[list->tsdev->minor] = NULL;
+			kfree(list->tsdev);
 		}
 	}
 	kfree(list);
@@ -174,13 +147,15 @@ static ssize_t tsdev_read(struct file * file, char * buffer, size_t count, loff_
 	struct tsdev_list *list = file->private_data;
 	int retval = 0;
 
-	if (!list->ready && !list->buffer) {
-
+	if (list->head == list->tail) {
 		add_wait_queue(&list->tsdev->wait, &wait);
 		current->state = TASK_INTERRUPTIBLE;
 
-		while (!list->ready) {
-
+		while (list->head == list->tail) {
+			if (!list->tsdev->exist) {
+                                retval = -ENODEV;
+                                break;
+                        }
 			if (file->f_flags & O_NONBLOCK) {
 				retval = -EAGAIN;
 				break;
@@ -198,18 +173,13 @@ static ssize_t tsdev_read(struct file * file, char * buffer, size_t count, loff_
 	if (retval)
 		return retval;
 
-	if (!list->buffer)
-		tsdev_packet();
-
-	if (count > list->buffer)
-		count = list->buffer;
-
-	if (copy_to_user(buffer,list->ps2 + list->bufsiz - list->buffer, count))
-		return -EFAULT;
-	
-	list->buffer -= count;
-
-	return count;	
+	while (list->head != list->tail && retval+sizeof(TS_EVENT) <= count) {
+        	if (copy_to_user(buffer + retval, list->event + list->tail,
+                         sizeof(TS_EVENT))) return -EFAULT;
+                list->tail = (list->tail + 1) & (TSDEV_BUFFER_SIZE - 1);
+                retval += sizeof(TS_EVENT);
+        }
+	return retval;	
 }
 
 /* No kernel lock - fine */
@@ -218,18 +188,30 @@ static unsigned int tsdev_poll(struct file *file, poll_table *wait)
 	struct tsdev_list *list = file->private_data;
 	
 	poll_wait(file, &list->tsdev->wait, wait);
-	if (list->ready || list->buffer)
+	if (list->head != list->tail)
 		return POLLIN | POLLRDNORM;
 	return 0;
 }
 
-static int tsdev_fasync(int fd, struct file *file, int on)
+static int tsdev_ioctl(struct inode *inode, struct file *file,unsigned int cmd,
+			unsigned long arg)
 {
+/*
 	struct tsdev_list *list = file->private_data;
-	int retval;
-
-	retval = fasync_helper(fd, file, on, &list->fasync);
-	return retval < 0 ? retval : 0;
+        struct tsdev *evdev = list->tsdev;
+        struct input_dev *dev = tsdev->handle.dev;
+        int retval;
+	
+	switch (cmd) {
+		case HHEHE:
+			return 0;
+		case hjff:
+			return 0;
+		default:
+			return 0;
+	}
+*/
+	return -EINVAL;
 }
 
 struct file_operations tsdev_fops = {
@@ -239,95 +221,92 @@ struct file_operations tsdev_fops = {
 	read:		tsdev_read,
 	poll:		tsdev_poll,
 	fasync:		tsdev_fasync,
+	ioctl:		tsdev_ioctl,	
 };
 
 static void tsdev_event(struct input_handle *handle, unsigned int type, unsigned int code, int value)
 {
-	struct tsdev *tsdevs[3] = { handle->private, &tsdev_mix, NULL };
-	struct tsdev **tsdev = tsdevs;
-	struct tsdev_list *list;
-	int index, size;
+	struct tsdev *tsdev = handle->private;
+	struct tsdev_list *list = tsdev->list;
+	struct timeval time;
+	int size;
 
 	/* Yes it is not a mouse but it is great for the entropy pool */
 	add_mouse_randomness((type << 4) ^ code ^ (code >> 4) ^ value);
 
-	while (*tsdev) {
-		list = (*tsdev)->list;
-		while (list) {
-			switch (type) {
-				case EV_ABS:
-					if (test_bit(BTN_TRIGGER, handle->dev->keybit))
+	while (list) {
+		switch (type) {
+			case EV_ABS:
+				switch (code) {
+					case ABS_X:	
+						size = handle->dev->absmax[ABS_X] - handle->dev->absmin[ABS_X];
+						list->event[list->head].x += (value * xres - list->oldx) / size;
+						list->oldx += list->event[list->head].x * size;
 						break;
-					switch (code) {
-						case ABS_X:	
-							size = handle->dev->absmax[ABS_X] - handle->dev->absmin[ABS_X];
-							list->dx += (value * xres - list->oldx) / size;
-							list->oldx += list->dx * size;
-							break;
-						case ABS_Y:
-							size = handle->dev->absmax[ABS_Y] - handle->dev->absmin[ABS_Y];
-							list->dy -= (value * yres - list->oldy) / size;
-							list->oldy -= list->dy * size;
-							break;
-					}
-					break;
+					case ABS_Y:
+						size = handle->dev->absmax[ABS_Y] - handle->dev->absmin[ABS_Y];
+						list->event[list->head].y -= (value * yres - list->oldy) / size;
+						list->oldy -= list->event[list->head].y * size;
+						break;
+					case ABS_PRESSURE:
+						size = handle->dev->absmax[ABS_PRESSURE] - handle->dev->absmin[ABS_PRESSURE];
+						list->event[list->head].pressure = (value / size);
+						break;
+				}
+				break;
 
-				case EV_REL:
-					switch (code) {
-						case REL_X:	
-							list->dx += value; 
-							break;
-						case REL_Y:	
-							list->dy -= value; 
-							break;
-					}
-					break;
+			case EV_REL:
+				switch (code) {
+					case REL_X:	
+						list->event[list->head].x += value; 
+						break;
+					case REL_Y:	
+						list->event[list->head].y -= value; 
+						break;
+				}
+				break;
 
-				case EV_KEY:
-					switch (code) {
-						case BTN_TOUCH:
-							index = 0; 
-							break;
-						default: 
-							return;
-					}
+			case EV_KEY:
+				if (code == BTN_TOUCH) {
 					switch (value) {
-						case 0: clear_bit(index, &list->buttons); break;
-						case 1: set_bit(index, &list->buttons); break;
-						case 2: return;
-					}
-					break;
-			}
-			list->ready = 1;
-
-			kill_fasync(&list->fasync, SIGIO, POLL_IN);
-
-			list = list->next;
+                                               	case 0: 
+							list->event[list->head].pressure = 0;
+							break;
+                                               	case 1: 
+							break;
+		                                case 2: 
+							return;
+                                       	}
+				} else 
+					return;
+				break;
 		}
-		wake_up_interruptible(&((*tsdev)->wait));
-		tsdev++;
+		get_fast_time(&time);
+		list->event[list->head].millisecs = time.tv_usec/100;		
+		list->head = (list->head + 1) & (TSDEV_BUFFER_SIZE - 1);
+		kill_fasync(&list->fasync, SIGIO, POLL_IN);
+		list = list->next;
 	}
+	wake_up_interruptible(&tsdev->wait);
 }
-
 
 static struct input_handle *tsdev_connect(struct input_handler *handler, struct input_dev *dev)
 {
 	struct tsdev *tsdev;
-	int minor = 0;
+	int minor;
 
-	if (!test_bit(EV_KEY, dev->evbit) ||
-	   (!test_bit(BTN_LEFT, dev->keybit) && !test_bit(BTN_TOUCH, dev->keybit)))
+	for (minor = 0; minor < TSDEV_MINORS && tsdev_table[minor]; minor++);
+        if (minor == TSDEV_MINORS) {
+                printk(KERN_ERR "tsdev: You have way to many touchscreens\n");
+                return NULL;
+        }
+
+	if (!test_bit(EV_KEY, dev->evbit) || (!test_bit(BTN_TOUCH,dev->keybit)))
 		return NULL;
 
 	if ((!test_bit(EV_REL, dev->evbit) || !test_bit(REL_X, dev->relbit)) &&
 	    (!test_bit(EV_ABS, dev->evbit) || !test_bit(ABS_X, dev->absbit)))
 		return NULL;
-
-	for (minor = 0; minor < TSDEV_MINORS && tsdev_table[minor]; minor++);
-	if (minor == TSDEV_MINORS) {
-		printk(KERN_ERR "tsdev: no more free tsdev devices\n");
-		return NULL;
-	}
 
 	if (!(tsdev = kmalloc(sizeof(struct tsdev), GFP_KERNEL)))
 		return NULL;
@@ -342,12 +321,9 @@ static struct input_handle *tsdev_connect(struct input_handler *handler, struct 
 	tsdev->handle.handler = handler;
 	tsdev->handle.private = tsdev;
 
-	tsdev->devfs = input_register_minor("ts", minor, TSDEV_MINOR_BASE);
+	tsdev->devfs = input_register_minor("ts%d", minor, TSDEV_MINOR_BASE);
 
-	if (tsdev_mix.open)
-		input_open_device(&tsdev->handle);
-
-	printk(KERN_INFO "ts: touchscreen device for input%d\n", dev->number);
+	printk(KERN_INFO "ts%d: touchscreen device for input%d\n", minor, dev->number);
 	return &tsdev->handle;
 }
 
@@ -359,9 +335,8 @@ static void tsdev_disconnect(struct input_handle *handle)
 
 	if (tsdev->open) {
 		input_close_device(handle);
+		wake_up_interruptible(&tsdev->wait);
 	} else {
-		if (tsdev_mix.open)
-			input_close_device(handle);
 		input_unregister_minor(tsdev->devfs);
 		tsdev_table[tsdev->minor] = NULL;
 		kfree(tsdev);
@@ -379,20 +354,12 @@ static struct input_handler tsdev_handler = {
 static int __init tsdev_init(void)
 {
 	input_register_handler(&tsdev_handler);
-
-	memset(&tsdev_mix, 0, sizeof(struct tsdev));
-	init_waitqueue_head(&tsdev_mix.wait);
-	tsdev_table[TSDEV_MIX] = &tsdev_mix;
-	tsdev_mix.exist = 1;
-	tsdev_mix.minor = TSDEV_MIX;
-	tsdev_mix.devfs = input_register_minor("ts", TSDEV_MIX, TSDEV_MINOR_BASE);
 	printk(KERN_INFO "ts: Backwards compatiable touchscreen device\n");
 	return 0;
 }
 
 static void __exit tsdev_exit(void)
 {
-	input_unregister_minor(tsdev_mix.devfs);
 	input_unregister_handler(&tsdev_handler);
 }
 
