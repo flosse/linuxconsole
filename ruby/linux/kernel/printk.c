@@ -332,7 +332,7 @@ static void call_console_drivers(unsigned long start, unsigned long end)
        	start_print = start;
        	while (cur_index != end) {
         	if (msg_level < 0 &&
-                       ((end - cur_index) > 3) &&
+                       ((end - cur_index) >= 3) &&
                        LOG_BUF(cur_index + 0) == '<' &&
                        LOG_BUF(cur_index + 1) >= '0' &&
                        LOG_BUF(cur_index + 1) <= '7' &&
