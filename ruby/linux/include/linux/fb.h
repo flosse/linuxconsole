@@ -18,7 +18,7 @@
 #define FBIOGETCMAP		0x4604
 #define FBIOPUTCMAP		0x4605
 #define FBIOPAN_DISPLAY		0x4606
-#define FBIO_CURSOR     	_IOWR('F', 0x08, struct fbcursor)
+#define FBIO_CURSOR            _IOWR('F', 0x08, struct fbcursor)
 /* 0x4607-0x460B are defined below */
 /* #define FBIOGET_MONITORSPEC	0x460C */
 /* #define FBIOPUT_MONITORSPEC	0x460D */
@@ -31,8 +31,9 @@
 #define FBIO_FREE               0x4614
 #define FBIOGET_GLYPH           0x4615
 #define FBIOGET_HWCINFO         0x4616
-#define FBIOPUT_MODEINFO	0x4617
-#define FBIOGET_DISPINFO	0x4618
+#define FBIOPUT_MODEINFO        0x4617
+#define FBIOGET_DISPINFO        0x4618
+
 
 #define FB_TYPE_PACKED_PIXELS		0	/* Packed Pixels	*/
 #define FB_TYPE_PLANES			1	/* Non interleaved planes */
@@ -94,8 +95,8 @@
 #define FB_ACCEL_IGS_CYBER2010	34	/* CyberPro 2010		*/
 #define FB_ACCEL_IGS_CYBER5000	35	/* CyberPro 5000		*/
 #define FB_ACCEL_SIS_GLAMOUR    36	/* SiS 300/630/540              */
-#define FB_ACCEL_3DLABS_PERMEDIA3 37    /* 3DLabs Permedia 3            */
-
+#define FB_ACCEL_3DLABS_PERMEDIA3 37	/* 3Dlabs Permedia 3		*/
+#define FB_ACCEL_ATI_RADEON	38	/* ATI Radeon family		*/
 
 #define FB_ACCEL_NEOMAGIC_NM2070 90	/* NeoMagic NM2070              */
 #define FB_ACCEL_NEOMAGIC_NM2090 91	/* NeoMagic NM2090              */
@@ -124,8 +125,7 @@ struct fb_fix_screeninfo {
 					/* (physical address) */
 	__u32 mmio_len;			/* Length of Memory Mapped I/O  */
 	__u32 accel;			/* Type of acceleration available */
-	__u16 api_version;		/* Tell us what api version we have */
-	__u16 reserved[2];		/* Reserved for future compatibility */
+	__u16 reserved[3];		/* Reserved for future compatibility */
 };
 
 /* Interpretation of offset for color fields: All offsets are from the right,
@@ -222,6 +222,16 @@ struct fb_cmap {
 	__u16 *transp;			/* transparency, can be NULL */
 };
 
+struct fb_index {
+	__u32 len;                      /* number of entries */
+	__u32 *entry;                   /* "pseudopalette" color index entries */
+};
+
+struct fb_con2fbmap {
+	__u32 console;
+	__u32 framebuffer;
+};
+
 /* VESA Blanking Levels */
 #define VESA_NO_BLANKING        0
 #define VESA_VSYNC_SUSPEND      1
@@ -263,38 +273,44 @@ struct fb_vblank {
 #define FB_CUR_SETHOT   0x04
 #define FB_CUR_SETCMAP  0x08
 #define FB_CUR_SETSHAPE 0x10
-#define FB_CUR_SETALL   0x1F
+#define FB_CUR_SETDEST	0x20
+#define FB_CUR_SETSIZE	0x40
+#define FB_CUR_SETALL   0xFF
 
-struct fbcurpos {		
-        __u16 x, y;
+struct fbcurpos {
+	__u16 x, y;
 };
 
 struct fbcursor {
-        __u16 set;              /* what to set */
-        __u16 enable;           /* cursor on/off */
-        struct fbcurpos pos;    /* cursor position */
-        struct fbcurpos hot;    /* cursor hot spot */
-        struct fb_cmap cmap;    /* color map info */
-        struct fbcurpos size;   /* cursor bit map size */
-        char *image;            /* cursor image bits */
-        char *mask;             /* cursor mask bits */
+	__u16 set;		/* what to set */
+	__u16 enable;		/* cursor on/off */
+	__u8 rop;		/* bitop operation */
+	__u8 depth;		/* color depth of image */		
+	struct fbcurpos pos;	/* cursor position */
+	struct fbcurpos hot;	/* cursor hot spot */
+	struct fbcurpos size;	/* cursor bit map size */
+	struct fb_cmap cmap;	/* color map info */
+	struct fb_index *index;		
+	char *image;		/* cursor image bits */
+	char *mask;		/* cursor mask bits */
+	char *dest;		/* destination */
 };
 
-/* Userland HW accel */
+/* Internal HW accel */
 #define ROP_COPY 0
 #define ROP_XOR  1
 
 struct fb_copyarea {
-	__u32 sx; /* screen-relative */
+	__u32 sx;	/* screen-relative */
 	__u32 sy;
-	__u32 width;
-	__u32 height;
 	__u32 dx;
 	__u32 dy;
+	__u32 width;
+	__u32 height;
 };
 
 struct fb_fillrect {
-	__u32 dx; /* screen-relative */
+	__u32 dx;	/* screen-relative */
 	__u32 dy;
 	__u32 width;
 	__u32 height;
@@ -303,18 +319,15 @@ struct fb_fillrect {
 };
 
 struct fb_image {
-	__u32 width;			/* Size of image */
+	__u32 dx;	/* Where to place image */
+	__u32 dy;
+	__u32 width;	/* Size of image */
 	__u32 height;
-	__u16 dx;			/* Where to place image */
-	__u16 dy;
-	__u32 fg_color;			/* Only used when a mono bitmap */
+	__u32 fg_color;	/* Only used when a mono bitmap */
 	__u32 bg_color;
-	__u8  depth;			/* Dpeth of the image */
-	char  *data;			/* Pointer to image data */
-}; 
-
-#define FBIOPUT_COPYAREA        _IOR('F', 0x19, struct fb_copyarea)
-#define FBIOPUT_FILLRECT        _IOR('F', 0x20, struct fb_fillrect)
+	__u8  depth;	/* Depth of the image */
+	char  *data;	/* Pointer to image data */
+};
 
 #ifdef __KERNEL__
 
@@ -336,28 +349,33 @@ struct fb_ops {
     struct module *owner;
     int (*fb_open)(struct fb_info *info, int user);
     int (*fb_release)(struct fb_info *info, int user);
+    /* For framebuffers with strange non linear layouts */	
+    ssize_t (*fb_read)(struct file *file, char *buf, size_t count, loff_t *ppos);
+    ssize_t (*fb_write)(struct file *file, const char *buf, size_t count, loff_t *ppos);	
     /* checks var and creates a par based on it */
     int (*fb_check_var)(struct fb_var_screeninfo *var, struct fb_info *info);
     /* set the video mode according to par */
     int (*fb_set_par)(struct fb_info *info);
-    /* cursor control */
-    int (*fb_cursor)(struct fb_info *info, struct fbcursor *cursor);		
     /* set color register */
     int (*fb_setcolreg)(unsigned regno, unsigned red, unsigned green,
                         unsigned blue, unsigned transp, struct fb_info *info);
     /* blank display */
     int (*fb_blank)(int blank, struct fb_info *info);
     /* pan display */
-    int (*fb_pan_display)(struct fb_var_screeninfo *var, struct fb_info *info); 
+    int (*fb_pan_display)(struct fb_var_screeninfo *var, struct fb_info *info);
     /* draws a rectangle */
-    void (*fb_fillrect)(struct fb_info *info, struct fb_fillrect *rect);
-    /* Copy data from area to another */	
-    void (*fb_copyarea)(struct fb_info *info, struct fb_copyarea *area); 
-    /* Draws a image to the display */ 		 	
+    void (*fb_fillrect)(struct fb_info *info, struct fb_fillrect *rect); 
+    /* Copy data from area to another */
+    void (*fb_copyarea)(struct fb_info *info, struct fb_copyarea *region); 
+    /* Draws a image to the display */
     void (*fb_imageblit)(struct fb_info *info, struct fb_image *image);
+    /* Draws cursor */
+    int (*fb_cursor)(struct fb_info *info, struct fbcursor *cursor);
     /* perform polling on fb device */
-    int (*fb_poll)(struct fb_info *info, poll_table *wait);	
-    /* perform fb specific ioctl */
+    int (*fb_poll)(struct fb_info *info, poll_table *wait);
+    /* wait for blit idle, optional */
+    void (*fb_sync)(struct fb_info *info);		
+    /* perform fb specific ioctl (optional) */
     int (*fb_ioctl)(struct inode *inode, struct file *file, unsigned int cmd,
 		    unsigned long arg, struct fb_info *info);
     /* perform fb specific mmap */
@@ -372,21 +390,17 @@ struct fb_info {
    struct fb_var_screeninfo var;        /* Current var */
    struct fb_fix_screeninfo fix;        /* Current fix */
    struct fb_monspecs monspecs;         /* Current Monitor specs */
-   struct fbcursor cursor;		/* Current cursor */
+   struct fbcursor cursor;		/* Current cursor */	
    struct fb_cmap cmap;                 /* Current cmap */
    struct fb_ops *fbops;
-   struct pm_dev *pm_fb;
    char *screen_base;                   /* Virtual address */
-   wait_queue_head_t wait;		/* Sync methof for fbdev */
+   struct vc_data *display_fg;		/* Console visible on this display */
+   int currcon;				/* Current VC. */	
    devfs_handle_t devfs_handle;         /* Devfs handle for new name         */
    devfs_handle_t devfs_lhandle;        /* Devfs handle for compat. symlink  */
    void *pseudo_palette;                /* Fake palette of 16 colors and 
 					   the cursor's color for non
                                            palette mode */
-#ifdef CONFIG_MTRR
-   int enable_mtrr;			/* Turn MTRR on */	
-   int mtrr_handle;			/* MTRR handle */
-#endif
    /* From here on everything is device dependent */
    void *par;	
 };
@@ -411,7 +425,7 @@ struct fb_info {
 #define fb_writel sbus_writel
 #define fb_memset sbus_memset_io
 
-#elif defined(__i386__) || defined(__alpha__)
+#elif defined(__i386__) || defined(__alpha__) || defined(__x86_64__) || defined(__hppa__)
 
 #define fb_readb __raw_readb
 #define fb_readw __raw_readw
@@ -437,16 +451,13 @@ struct fb_info {
      *  `Generic' versions of the frame buffer device operations
      */
 
-extern int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info);
+extern int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info); 
 extern int fb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info); 
-extern int fb_setup(char *options);
+extern int fb_blank(int blank, struct fb_info *info);
+extern int cfb_cursor(struct fb_info *info, struct fbcursor *cursor);
 extern void cfb_fillrect(struct fb_info *info, struct fb_fillrect *rect); 
 extern void cfb_copyarea(struct fb_info *info, struct fb_copyarea *area); 
-extern void cfb_imageblit(struct fb_info *info, struct fb_image *image); 
-
-    /*
-     *  Helper functions
-     */
+extern void cfb_imageblit(struct fb_info *info, struct fb_image *image);
 
 /* drivers/video/fbmem.c */
 extern int register_framebuffer(struct fb_info *fb_info);
@@ -454,10 +465,6 @@ extern int unregister_framebuffer(struct fb_info *fb_info);
 
 extern int num_registered_fb;
 extern struct fb_info *registered_fb[FB_MAX];
-
-#ifdef CONFIG_MTRR
-extern void fb_disable_mtrrs(struct fb_info *fb_info);
-#endif
 
 /* drivers/video/fbmon.c */
 extern int fbmon_valid_timings(u_int pixclock, u_int htotal, u_int vtotal,
@@ -469,8 +476,7 @@ extern int fb_alloc_cmap(struct fb_cmap *cmap, int len, int transp);
 extern void fb_dealloc_cmap(struct fb_cmap *cmap);
 extern void fb_copy_cmap(struct fb_cmap *from, struct fb_cmap *to,
 			 int fsfromto);
-extern int fb_get_cmap(struct fb_cmap *cmap, int kspc,struct fb_info *fb_info);
-extern int fb_set_cmap(struct fb_cmap *cmap, int kspc,struct fb_info *fb_info);
+extern int fb_set_cmap(struct fb_cmap *cmap, int kspc, struct fb_info *fb_info);
 extern struct fb_cmap *fb_default_cmap(int len);
 extern void fb_invert_cmaps(void);
 
@@ -527,12 +533,5 @@ extern int __init fb_find_mode(struct fb_var_screeninfo *var,
 #endif
 
 #endif /* __KERNEL__ */
-
-#if 1
-
-#define FBCMD_GET_CURRENTPAR	0xDEAD0005
-#define FBCMD_SET_CURRENTPAR	0xDEAD8005
-
-#endif
 
 #endif /* _LINUX_FB_H */
