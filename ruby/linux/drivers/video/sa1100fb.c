@@ -1057,7 +1057,6 @@ static int sa1100fb_set_par(struct fb_info *info)
 	u_long palette_mem_size;
 
 	par->palette_size = info->var.bits_per_pixel == 8 ? 256 : 16;
-
 	palette_mem_size = par->palette_size * sizeof(u16);
 
 	DPRINTK("palette_mem_size = 0x%08lx\n", (u_long) palette_mem_size);
@@ -1114,6 +1113,10 @@ static int sa1100fb_set_par(struct fb_info *info)
 			break;
 	}
 	info->screen_base = par->screen_cpu;
+	/*
+	 * Ok, enable the LCD controller
+	 */
+	set_ctrlr_state(par, C_ENABLE);
 	return 0;
 }
 
@@ -1911,14 +1914,8 @@ int __init sa1100fb_init(void)
 	cpufreq_register_notifier(&par->clockchg);
 #endif
 
-	/*
-	 * Ok, now enable the LCD controller
-	 */
-	set_ctrlr_state(par, C_ENABLE);
-
 	/* This driver cannot be unloaded at the moment */
 	MOD_INC_USE_COUNT;
-
 	return 0;
 
 failed:
