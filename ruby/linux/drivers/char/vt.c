@@ -59,10 +59,6 @@ extern void mda_console_init(void);
 #define MIN(a,b)        ((a) < (b) ? (a) : (b))
 #endif
 
-static struct tty_struct *console_table[MAX_NR_CONSOLES];
-static struct termios *console_termios[MAX_NR_CONSOLES];
-static struct termios *console_termios_locked[MAX_NR_CONSOLES];
-
 static unsigned int current_vc;		/* Which /dev/vc/X to allocate next */
 struct vt_struct *admin_vt;		/* Administrative VT */
 struct vt_struct *vt_cons;		/* Head to link list of VTs */
@@ -72,7 +68,6 @@ struct console vt_console_driver;
 static int kmsg_redirect; 		/* kmsg_redirect is the VC for printk*/ 
 static int printable;           	/* Is console ready for printing? */
 #endif
-struct tty_driver vt_driver;
 
 /* 
  * the default colour table, for VGA+ colour systems 
@@ -1538,16 +1533,20 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
  * else. If you want the screen to clear, call tty_write with
  * the appropriate escape-sequence.
  */
+static struct tty_struct *console_table[MAX_NR_CONSOLES];
+static struct termios *console_termios[MAX_NR_CONSOLES];
+static struct termios *console_termios_locked[MAX_NR_CONSOLES];
 static int console_refcount;
+struct tty_driver vt_driver;
 
 void __init vt_console_init(void)
 {
         memset(&vt_driver, 0, sizeof(struct tty_driver));
         vt_driver.magic = TTY_DRIVER_MAGIC;
         vt_driver.name = "vc/%d";
-        vt_driver.name_base = 0;
+        vt_driver.name_base = current_vc;
         vt_driver.major = TTY_MAJOR;
-        vt_driver.minor_start = 0;
+        vt_driver.minor_start = current_vc;
         vt_driver.num = MAX_NR_CONSOLES;
         vt_driver.type = TTY_DRIVER_TYPE_CONSOLE;
         vt_driver.init_termios = tty_std_termios;
