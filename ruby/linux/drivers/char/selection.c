@@ -46,12 +46,12 @@ static char *sel_buffer = NULL;
 
 /* set reverse video on characters s-e of console with selection. */
 inline static void highlight(const int s, const int e) {
-	invert_screen(vc_cons[sel_cons], s, e-s+2, 1);
+	invert_screen(vt_cons->vcs.vc_cons[sel_cons], s, e-s+2, 1);
 }
 
 /* use complementary color to show the pointer */
 inline static void highlight_pointer(const int where) {
-	complement_pos(vc_cons[sel_cons], where);
+	complement_pos(vt_cons->vcs.vc_cons[sel_cons], where);
 }
 
 /* used by selection */
@@ -66,7 +66,7 @@ u16 screen_glyph(struct vc_data *vc, int offset)
 
 static unsigned char sel_pos(int n)
 {
-	return inverse_translate(vc_cons[sel_cons], screen_glyph(vc_cons[sel_cons], n));
+	return inverse_translate(vt_cons->vcs.vc_cons[sel_cons], screen_glyph(vt_cons->vcs.vc_cons[sel_cons], n));
 }
 
 /* 
@@ -125,10 +125,10 @@ static inline unsigned short limit(const unsigned short v, const unsigned short 
 /* set the current selection. Invoked by ioctl() or by kernel code. */
 int set_selection(const unsigned long arg, struct tty_struct *tty, int user)
 {
+	struct vc_data *vc = (struct vc_data *) tty->driver_data;
 	int sel_mode, new_sel_start, new_sel_end, spc;
 	char *bp, *obp;
 	int i, ps, pe;
-	unsigned int currcons = fg_console;
 
 	unblank_screen();
 	poke_blanked_console();
@@ -167,7 +167,7 @@ int set_selection(const unsigned long arg, struct tty_struct *tty, int user)
 	      return 0;
 	  }
 
-	  if (mouse_reporting() && (sel_mode & 16)) {
+	  if (mouse_reporting(tty) && (sel_mode & 16)) {
 	      mouse_report(tty, sel_mode & 15, xs, ys);
 	      return 0;
 	  }

@@ -83,14 +83,16 @@ static int vcs_size(struct inode *inode)
 	struct vc_data *vc = NULL;
 	int size;	
 
-	if (currcons == 0)
+	if (currcons == 0) {
 		currcons = fg_console;
-	else
+		vc = vc->display_fg->vcs.vc_cons[currcons];
+	} else {
 		currcons--;
+	}
 	if (!vc_cons_allocated(currcons))
 		return -ENXIO;
 
-	vc = vc_cons[currcons];
+	vc = vt_cons->vcs.vc_cons[currcons];
 	
 	size = video_num_lines * video_num_columns;
 
@@ -133,7 +135,6 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 {
 	struct inode *inode = file->f_dentry->d_inode;
 	unsigned int currcons = MINOR(inode->i_rdev);
-	struct vc_data *vc;
 	long pos = *ppos;
 	long viewed, attr, read;
 	int col, maxcol;
@@ -151,16 +152,16 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 	currcons = (currcons & 127);
 	if (currcons == 0) {
 		currcons = fg_console;
+		vc = vt_cons->vcs.vc_cons[currcons];
 		viewed = 1;
 	} else {
 		currcons--;
+		vc = vt_cons->vcs.vc_cons[currcons];
 		viewed = 0;
 	}
 	ret = -ENXIO;
 	if (!vc_cons_allocated(currcons))
 		goto unlock_out;
-
-	vc = vc_cons[currcons];
 
 	ret = -EINVAL;
 	if (pos < 0)
@@ -331,7 +332,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	if (!vc_cons_allocated(currcons))
 		goto unlock_out;
 
-	vc = vc_cons[currcons];
+	vc = vt_cons->vcs.vc_cons[currcons];
 
 	size = vcs_size(inode);
 	ret = -EINVAL;
@@ -486,6 +487,7 @@ static int
 vcs_open(struct inode *inode, struct file *filp)
 {
 	unsigned int currcons = (MINOR(inode->i_rdev) & 127);
+
 	if(currcons && !vc_cons_allocated(currcons-1))
 		return -ENXIO;
 	return 0;
