@@ -120,8 +120,6 @@ void gameport_rescan(struct gameport *gameport)
 
 void gameport_register_port(struct gameport *gameport)
 {
-	MOD_INC_USE_COUNT;
-
 	gameport->number = gameport_number++;
 	gameport->next = gameport_list;	
 	gameport_list = gameport;
@@ -142,15 +140,11 @@ void gameport_unregister_port(struct gameport *gameport)
 		gameport->dev->disconnect(gameport);
 
 	gameport_number--;
-
-	MOD_DEC_USE_COUNT;
 }
 
 void gameport_register_device(struct gameport_dev *dev)
 {
 	struct gameport *gameport = gameport_list;
-
-	MOD_INC_USE_COUNT;
 
 	dev->next = gameport_dev;	
 	gameport_dev = dev;
@@ -176,8 +170,6 @@ void gameport_unregister_device(struct gameport_dev *dev)
 		gameport_find_dev(gameport);
 		gameport = gameport->next;
 	}
-
-	MOD_DEC_USE_COUNT;
 }
 
 int gameport_open(struct gameport *gameport, struct gameport_dev *dev, int mode)
@@ -190,15 +182,16 @@ int gameport_open(struct gameport *gameport, struct gameport_dev *dev, int mode)
 			return -1;
 	}
 
+	if (gameport->dev)
+		return -1;
+
 	gameport->dev = dev;
-	MOD_INC_USE_COUNT;
 	
 	return 0;
 }
 
 void gameport_close(struct gameport *gameport)
 {
-	MOD_DEC_USE_COUNT;
 	gameport->dev = NULL;
 	if (gameport->close) gameport->close(gameport);
 }
