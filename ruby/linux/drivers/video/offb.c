@@ -79,7 +79,6 @@ static void offb_init_fb(const char *name, const char *full_name, int width,
 static struct fb_ops offb_ops = {
 	owner:		THIS_MODULE,
 	fb_check_var:	offb_check_var,
-	fb_set_par:	offb_set_par,
 	fb_setcolreg:	offb_setcolreg,
 	fb_blank:	offb_blank,
 	fb_fillrect:	cfb_fillrect,
