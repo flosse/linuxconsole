@@ -66,11 +66,11 @@ extern int default_red[];
 extern int default_grn[];
 extern int default_blu[];      
 
-extern struct vc_data *want_console;
+extern struct vc_data *want_vc;
                          
 extern inline void set_console(struct vc_data *vc)
 {
-	want_console = vc;
+	want_vc = vc;
         tasklet_schedule(&console_tasklet);
 }
  
@@ -246,6 +246,8 @@ struct vc_pool {
 extern struct vt_struct {
 	unsigned char	vc_mode;		/* KD_TEXT, ... */
         struct vc_data 	*last_console;     	/* VC we last switched from */
+	int scrollback_delta;			
+	char		vt_dont_switch;		/* VC switching flag */
 	char            vt_blanked;             /* Is this display blanked */
 	struct consw	*sw;			/* Display driver for VT */
 	struct vc_pool  vcs;			 
