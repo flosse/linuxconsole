@@ -143,8 +143,6 @@ static int l4_getcal(int port, int *cal)
 
 	result = 0;
 
-	printk(KERN_INFO "l4: getcal: %d %d %d %d\n", cal[0], cal[1], cal[2], cal[3]);
-
 fail:	outb(L4_SELECT_ANALOG, L4_PORT);
 	return result;
 }
@@ -176,8 +174,6 @@ static int l4_setcal(int port, int *cal)
 
 	result = 0;
 
-	printk(KERN_INFO "l4: setcal: %d %d %d %d\n", cal[0], cal[1], cal[2], cal[3]);
-
 fail:	outb(L4_SELECT_ANALOG, L4_PORT);
 	return result;
 }
@@ -197,7 +193,7 @@ static int l4_calibrate(struct gameport *gameport, int *axes, int *max)
 		return -1;
 
 	for (i = 0; i < 4; i++) {
-		t = (max[i] * cal[i]) / 100;
+		t = (max[i] * cal[i]) / 200;
 		t = (t < 1) ? 1 : ((t > 255) ? 255 : t);
 		axes[i] = (axes[i] < 0) ? -1 : (axes[i] * cal[i]) / t;
 		axes[i] = (axes[i] > 252) ? 252 : axes[i];
