@@ -1,5 +1,5 @@
 Force feedback for Linux.
-By Johann Deneux <deneux@esil.univ-mrs.fr> on 2001/04/22.
+By Johann Deneux <deneux@ifrance.com> on 2001/04/22.
 
 ----------------------------------------------------------------------------
 
@@ -41,10 +41,11 @@ You then need to insert the modules into the following order:
 % modprobe serport
 % modprobe iforce
 % modprobe evdev
-% ./inputattach -ifor $2 &
+% ./inputattach -ifor $2 &	# Only for serial
 For convenience, you may use the shell script named "ff" available from
 the cvs tree of the Linux Console Project at sourceforge. You can also
 retrieve it from http://www.esil.univ-mrs.fr/~jdeneux/projects/ff/.
+If you are using USB, you don't need the inputattach step.
 
 Please check that you have all the /dev/input entries needed:
 cd /dev
@@ -80,15 +81,22 @@ and write() on /dev/input/eventXX.
 #include <linux/input.h>
 #include <sys/ioctl.h>
 
-int ioctl(int file_descriptor, int request, unsigned long *axes);
+int ioctl(int file_descriptor, int request, unsigned long *features);
 
 "request" must be EVIOCGBIT(EV_FF, sizeof(unsigned long))
 
-Axes able to render effects are returned in the long pointed by axes. They are
-represented as a bitfield:
-  - bit 0 stands for the X axis
-  - bit 1 stands for the Y axis
-Normally, wheels only have the X axis, while joystick have both X and Y.
+Returns the features supported by the device. features is a bitfield with the
+following bits:
+- FF_X		has an X axis (should allways be the case)
+- FF_Y		has an Y axis (usually not the case for wheels)
+- FF_CONSTANT	can render constant force effects
+- FF_PERIODIC	can render periodic effects (sine, ramp, square...)
+- FF_SPRING	can simulate the presence of a spring
+- FF_FRICTION	can simulate friction (aka drag, damper effect...)
+- FF_RUMBLE	rumble effects (normally the only effect supported by rumble
+		pads)
+- 8 bits from FF_N_EFFECTS_0 containing the number of effects that can be
+		simultaneously played.
 
 3.2 Uploading effects to the device
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -104,10 +112,14 @@ uploaded, but not played.
 The content of effect may be modified. In particular, its field "id" is set
 to the unique id assigned by the driver. This data is required for performing
 some operations (removing an effect, controlling the playback).
+See <linux/input.h> for a description of the ff_effect stuct.
 
 3.3 Removing an effect from the device
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 int ioctl(int fd, EVIOCRMFF, effect.id);
+
+This makes room for new effects in the device's memory. Please note this won't
+stop the effect if it was playing.
 
 3.4 Controlling the playback of effects
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -136,3 +148,33 @@ Control of playing is done with write(). Below is an example:
 	stop.value = 0;
 	
 	write(fd, (const void*) &play, sizeof(stop));
+
+3.5 Setting the gain
+~~~~~~~~~~~~~~~~~~~~
+Not all devices have the same strength. Therefore, users should set a gain
+factor depending on how strong they want effects to be. This setting is
+persistent accross access to the driver, so you should not care about it if
+you are writing games, as another utility probably already set this for you.
+
+int ioctl(int fd, EVIOCSGAIN, unsigned short gain);
+
+Values for gain range from 0 (0%) to 0xFFFF (100%).
+
+3.6 Enabling/Disabling autocenter
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The autocenter feature quite disturbs the rendering of effects in my opinion,
+and I think it should be an effect, which computation depends on the game
+type. But you can enable it if you want.
+
+int ioctl(int fd, EVIOCSAUTOCENTER, unsigned short strength);
+
+Possible values for strength range from 0 (no autocenter) to 0xFFFF (strongest
+spring possible).
+
+3.7 Dynamic update of an effect
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+This consists in changing some parameters of an effect while it's playing. The
+driver currently does not support that. You still have the brute-force method,
+which consists in erasing the effect and uploading the updated version. It
+actually works pretty well. You don't need to stop-and-start the effect.
+
