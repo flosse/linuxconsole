@@ -12,7 +12,6 @@
  */
 
 #include <linux/module.h>
-#include <linux/console.h>
 #include <linux/tty.h>
 #include <linux/sched.h>
 #include <linux/mm.h>
@@ -25,13 +24,14 @@
 #include <linux/consolemap.h>
 #include <linux/selection.h>
 #include <linux/tiocl.h>
+#include <linux/console.h>
 
 /* Don't take this from <ctype.h>: 011-015 on the screen aren't spaces */
 #define isspace(c)	((c) == ' ')
 
 /* Variables for selection control. */
 /* Use a dynamic buffer, instead of static (Dec 1994) */
-       int sel_cons;		/* must not be disallocated */
+struct vc_data *sel_cons;		/* must not be disallocated */
 static volatile int sel_start = -1; 	/* cleared by clear_selection */
 static int sel_end;
 static int sel_buffer_lth;
@@ -41,9 +41,9 @@ static char *sel_buffer;
    from interrupt (via scrollback/front) */
 
 /* set reverse video on characters s-e of console with selection. */
-inline static void
-highlight(const int s, const int e) {
-	invert_screen(find_vc(sel_cons), s, e-s+2, 1);
+static inline void highlight(const int s, const int e)
+{
+	invert_screen(sel_cons, s, e-s+2, 1);
 }
 
 u16 screen_glyph(struct vc_data *vc, int offset)
@@ -56,16 +56,16 @@ u16 screen_glyph(struct vc_data *vc, int offset)
 	return c;
 }
 
-
 /* use complementary color to show the pointer */
-inline static void
-highlight_pointer(const int where) {
-	complement_pos(find_vc(sel_cons), where);
+static inline void highlight_pointer(const int where)
+{
+	complement_pos(sel_cons, where);
 }
 
-static unsigned char sel_pos(int n)
+static unsigned char
+sel_pos(int n)
 {
-	return inverse_translate(find_vc(sel_cons), screen_glyph(find_vc(sel_cons), n));
+	return inverse_translate(sel_cons, screen_glyph(sel_cons, n));
 }
 
 /* 
@@ -130,7 +130,7 @@ int set_selection(const struct tiocl_selection __user *sel, struct tty_struct *t
 
 	{ unsigned short xs, ys, xe, ye;
 
-	  if (verify_area(VERIFY_READ, sel, sizeof(*sel)))
+	  if (!access_ok(VERIFY_READ, sel, sizeof(*sel)))
 		return -EFAULT;
 	  __get_user(xs, &sel->xs);
 	  __get_user(ys, &sel->ys);
@@ -164,9 +164,9 @@ int set_selection(const struct tiocl_selection __user *sel, struct tty_struct *t
 		pe = tmp;
 	}
 
-	if (sel_cons != vc->display_fg->fg_console->vc_num) {
+	if (sel_cons != vc->display_fg->fg_console) {
 		clear_selection();
-		sel_cons = vc->display_fg->fg_console->vc_num;
+		sel_cons = vc->display_fg->fg_console;
 	}
 
 	switch (sel_mode)
@@ -285,14 +285,14 @@ int set_selection(const struct tiocl_selection __user *sel, struct tty_struct *t
  */
 int paste_selection(struct tty_struct *tty)
 {
-	struct vc_data *vc = (struct vc_data *) tty->driver_data;
+	struct	vc_data *vc = (struct vc_data *) tty->driver_data;
+	struct	tty_ldisc *ld;
 	int	pasted = 0, count;
-	struct  tty_ldisc *ld;
 	DECLARE_WAITQUEUE(wait, current);
 
-        acquire_console_sem();
+	acquire_console_sem();
 	poke_blanked_console(vc->display_fg);
-        release_console_sem();
+	release_console_sem();
 
 	ld = tty_ldisc_ref_wait(tty);
 	
@@ -305,15 +305,11 @@ int paste_selection(struct tty_struct *tty)
 		}
 		count = sel_buffer_lth - pasted;
 		count = min(count, tty->ldisc.receive_room(tty));
-		tty->ldisc.receive_buf(tty, sel_buffer + pasted, 0, count);
+		tty->ldisc.receive_buf(tty, sel_buffer + pasted, NULL, count);
 		pasted += count;
 	}
 	remove_wait_queue(&vc->paste_wait, &wait);
 	set_current_state(TASK_RUNNING);
-
 	tty_ldisc_deref(ld);
 	return 0;
 }
-
-EXPORT_SYMBOL(set_selection);
-EXPORT_SYMBOL(paste_selection);
