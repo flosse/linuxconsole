@@ -1127,6 +1127,13 @@ static void tdfxfb_hwcursor_init(struct fb_info *info)
 static int __devinit tdfxfb_probe(struct pci_dev *pdev,
                                   const struct pci_device_id *id)
 {
+      int err;
+
+      if ((err = pci_enable_device(pdev))) {
+		printk(KERN_WARNING "tdfxfb: Can't enable pdev: %d\n", err);
+		return err;
+      }
+
       /* Configure the default fb_fix_screeninfo first */
       memset(&fb_info, 0, sizeof(fb_info));
       fb_info.par = &default_par;
@@ -1152,13 +1159,32 @@ static int __devinit tdfxfb_probe(struct pci_dev *pdev,
 	printk("fb: Can't remap %s register area.\n", tdfx_fix.id);
 	return -ENXIO;
       }
-      
+    
+      if (!request_mem_region(pci_resource_start(pdev, 0),
+			      pci_resource_len(pdev, 0),
+			      "tdfx regbase")) {
+	printk(KERN_WARNING "tdfxfb: Can't reserve regbase\n");
+	iounmap(default_par.regbase_virt);
+	return -ENXIO;
+      } 
+
       tdfx_fix.smem_start = pci_resource_start(pdev, 1);
       if(!(tdfx_fix.smem_len = do_lfb_size(pdev->device))) {
 	iounmap(default_par.regbase_virt);
 	printk("fb: Can't count %s memory.\n", tdfx_fix.id);
 	return -ENXIO;
       }
+
+      if (!request_mem_region(pci_resource_start(pdev, 1),
+			      pci_resource_len(pdev, 1),
+			      "tdfx smem")) {
+	printk(KERN_WARNING "tdfxfb: Can't reserve smem\n");
+	release_mem_region(pci_resource_start(pdev, 0),
+			   pci_resource_len(pdev, 0));
+	iounmap(default_par.regbase_virt);
+	return -ENXIO;
+      }
+
       fb_info.screen_base = ioremap_nocache(tdfx_fix.smem_start, 
 						    tdfx_fix.smem_len);
       if(!fb_info.screen_base) {
@@ -1169,6 +1195,19 @@ static int __devinit tdfxfb_probe(struct pci_dev *pdev,
 
       default_par.iobase = pci_resource_start(pdev, 2);
       
+      if (!request_region(pci_resource_start(pdev, 2),
+			  pci_resource_len(pdev, 2),
+			  "tdfx iobase")) {
+	printk(KERN_WARNING "tdfxfb: Can't reserve iobase\n");
+	release_mem_region(pci_resource_start(pdev, 1),
+			   pci_resource_len(pdev, 1));
+	release_mem_region(pci_resource_start(pdev, 0),
+			   pci_resource_len(pdev, 0));
+	iounmap(default_par.regbase_virt);
+	iounmap(fb_info.screen_base);
+	return -ENXIO;
+      }
+
       printk("fb: %s memory = %dK\n", tdfx_fix.id, tdfx_fix.smem_len >> 10);
 
       /* clear framebuffer memory */
@@ -1202,8 +1241,6 @@ static int __devinit tdfxfb_probe(struct pci_dev *pdev,
 	return -ENXIO;
       }
 
-      printk("fb%d: %s frame buffer device\n", GET_FB_IDX(fb_info.node), 
-	     fb_info.fix.id);
       return 0; 
 }
 
@@ -1224,6 +1261,14 @@ static void __devexit tdfxfb_remove(struct pci_dev *pdev)
 	//del_timer_sync(&par->hwcursor.timer);
 	iounmap(par->regbase_virt);
 	iounmap(fb_info.screen_base);
+
+	/* Clean up after reserved regions */
+	release_region(pci_resource_start(pdev, 2),
+		       pci_resource_len(pdev, 2));
+	release_mem_region(pci_resource_start(pdev, 1),
+			   pci_resource_len(pdev, 1));
+	release_mem_region(pci_resource_start(pdev, 0),
+			   pci_resource_len(pdev, 0));
 }
 
 int __init tdfxfb_init(void)
