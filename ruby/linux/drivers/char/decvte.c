@@ -208,28 +208,23 @@ void vte_ed(struct vc_data *vc, int vpar)
                 case 0: /* erase from cursor to end of display */
                         count = (scr_end-pos)>>1;
                         start = (unsigned short *) pos;
-                        if (DO_UPDATE) {
-                                /* do in two stages */
-                                sw->con_clear(vc, y, x, 1,video_num_columns-x);
-                                sw->con_clear(vc, y+1, 0, video_num_lines-y-1, 
-				      	      video_num_columns);
-                        }
+                        /* do in two stages */
+                        clear_region(vc, y, x, 1,video_num_columns-x);
+                        clear_region(vc, y+1, 0, video_num_lines-y-1, 
+				     video_num_columns);
                         break;
                 case 1: /* erase from start to cursor */
                         count = ((pos-origin)>>1)+1;
                         start = (unsigned short *) origin;
-                        if (DO_UPDATE) {
-                                /* do in two stages */
-                                sw->con_clear(vc, 0, 0, y, video_num_columns); 
-                                sw->con_clear(vc, y, 0, 1, x + 1);
-                        }
+                        /* do in two stages */
+                        clear_region(vc, 0, 0, y, video_num_columns); 
+                        clear_region(vc, y, 0, 1, x + 1);
                         break;
                 case 2: /* erase whole display */
                         count = video_num_columns * video_num_lines;
                         start = (unsigned short *) origin;
-                        if (DO_UPDATE)
-                                sw->con_clear(vc, 0, 0, video_num_lines, 
-					      video_num_columns);
+                        clear_region(vc, 0, 0, video_num_lines, 
+				     video_num_columns); 
                         break;
                 default:
                         return;
@@ -250,20 +245,17 @@ static void vte_el(struct vc_data *vc, int vpar)
                 case 0: /* erase from cursor to end of line */
                         count = video_num_columns-x;
                         start = (unsigned short *) pos;
-                        if (DO_UPDATE)
-                                sw->con_clear(vc, y, x, 1,video_num_columns-x); 
+                        clear_region(vc, y, x, 1, video_num_columns-x); 
 	                break;
                 case 1: /* erase from start of line to cursor */
                         start = (unsigned short *) (pos - (x<<1));
                         count = x+1;
-                        if (DO_UPDATE)
-                                sw->con_clear(vc, y, 0, 1, x + 1); 
+                        clear_region(vc, y, 0, 1, x + 1); 
                         break;
                 case 2: /* erase whole line */
                         start = (unsigned short *) (pos - (x<<1));
                         count = video_num_columns;
-                        if (DO_UPDATE)
-                                sw->con_clear(vc, y, 0, 1, video_num_columns); 
+                        clear_region(vc, y, 0, 1, video_num_columns); 
                         break;
                 default:
                         return;
@@ -286,8 +278,7 @@ static void vte_ech(struct vc_data *vc, int vpar)
         count = (vpar > video_num_columns-x) ? (video_num_columns-x) : vpar;
 
         scr_memsetw((unsigned short *) pos, video_erase_char, 2 * count);
-        if (DO_UPDATE)
-                sw->con_clear(vc, y, x, 1, count);
+        clear_region(vc, y, x, 1, count);
         need_wrap = 0;
 }
 
