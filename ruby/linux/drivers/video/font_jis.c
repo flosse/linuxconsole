@@ -1,5 +1,5 @@
 /*
- * linux/video/encode_big5.c
+ * linux/drivers/video/font_jis.c
  *
  * Copyright (C) 1999		Christopher Li, Jim Chen
  *				GNU/Linux Research Center
@@ -14,6 +14,7 @@
 
 #include <linux/module.h>
 #include <linux/fb_doublebyte.h>
+#include <linux/init.h>
 #include "jis16.h"
 #define min1 0xa1
 #define max1 0xf9
@@ -47,14 +48,18 @@ struct double_byte db_gb =
 	font_jis16
 };
 
-int init_module(void)
+int __init jis_init(void)
 {
 	if (doublebyte_default) return 1;
 	doublebyte_default = &db_gb;
 	return 0;
 }
 
-void cleanup_module(void)
+void __exit jis_exit(void)
 {
 	doublebyte_default = (void*) 0;
 }	
+
+module_init(jis_init);
+module_exit(jis_exit);
+

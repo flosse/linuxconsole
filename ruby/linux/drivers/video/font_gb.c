@@ -1,5 +1,5 @@
 /*
- * linux/video/encode_gb.c
+ * linux/drivers/video/font_gb.c
  *
  * Copyright (C) 1999		Christopher Li, Jim Chen
  *				GNU/Linux Research Center
@@ -14,6 +14,7 @@
 
 #include <linux/module.h>
 #include <linux/fb_doublebyte.h>
+#include <linux/init.h>
 #include "font_gb16.h"
 #define min1 0xa1
 #define max1 0xfe
@@ -37,14 +38,18 @@ struct double_byte db_gb =
 	font_gb16
 };
 
-int init_module(void)
+int __init gb_init(void)
 {
 	if (doublebyte_default) return 1;
 	doublebyte_default = &db_gb;
 	return 0;
 }
 
-void cleanup_module(void)
+void __exit gb_exit(void)
 {
 	doublebyte_default = (void*) 0;
 }	
+
+module_init(gb_init);
+module_exit(gb_exit);
+

@@ -32,6 +32,7 @@
 
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/config.h>
 #include <linux/errno.h>
 #include <linux/spinlock.h>
 #include <linux/string.h>
@@ -46,6 +47,10 @@
 #include <asm/vga.h>
 #include "fbcon.h"
 #include "fbcon-hga.h"
+
+#ifdef CONFIG_MTRR
+  #include <asm/mtrr.h>
+#endif
 
 #ifdef MODULE
 
@@ -75,6 +80,12 @@ static unsigned long hga_vram_len;		/* Size of video memory */
 #define HGA_GFX			1
 
 static int hga_mode = -1;			/* 0 = txt, 1 = gfx mode */
+static int inverse = 0;
+
+#ifdef CONFIG_MTRR
+static int enable_mtrr = 1;
+static int mtrr_handle;
+#endif
 
 static enum { TYPE_HERC, TYPE_HERCPLUS, TYPE_HERCCOLOR } hga_type;
 static char *hga_type_name;
@@ -688,7 +699,7 @@ int __init hgafb_init(void)
 	disp.ywrapstep = hga_fix.ywrapstep;
 	disp.line_length = hga_fix.line_length;
 	disp.can_soft_blank = 1;
-	disp.inverse = 0;
+	disp.inverse = inverse;
 #ifdef FBCON_HAS_HGA
 	disp.dispsw = &fbcon_hga;
 #else
@@ -719,6 +730,15 @@ int __init hgafb_init(void)
 	fb_info.pseudo_palette = NULL; /* ??? */
 	fb_info.par = NULL;
 
+#ifdef CONFIG_MTRR
+	if (enable_mtrr) {
+		mtrr_handle = mtrr_add(fb_info.fix.smem_start,
+				       fb_info.fix.smem_len,
+				       MTRR_TYPE_WRCOMB, 1);
+		printk("hgafb: MTRR turned on\n");
+	}
+#endif
+
         if (register_framebuffer(&fb_info) < 0)
                 return -EINVAL;
 
@@ -732,20 +752,9 @@ int __init hgafb_init(void)
 	 *  Setup
 	 */
 
-#ifndef MODULE
 int __init hgafb_setup(char *options)
 {
-	/* 
-	 * Parse user speficied options
-	 * `video=hga:font:VGA8x16' or
-	 * `video=hga:font:SUN8x16' recommended
-	 * Other supported fonts: VGA8x8, Acorn8x8, PEARL8x8
-	 * More different fonts can be used with the `setfont' utility.
-	 */
-
 	char *this_opt;
-
-	fb_info.fontname[0] = '\0';
 
 	if (!options || !*options)
 		return 0;
@@ -753,29 +762,40 @@ int __init hgafb_setup(char *options)
 	while (this_opt = strsep(&options, ",")) {
 		if (!*this_opt)
 			continue;
-		if (!strncmp(this_opt, "font:", 5))
-			strcpy(fb_info.fontname, this_opt+5);
+		if (!strcmp(this_opt, "inverse")) {
+			inverse = 1;
+			fb_invert_cmaps();
+#ifdef CONFIG_MTRR
+		} else if (!strcmp(this_opt, "nomtrr")) {
+			enable_mtrr = 0;
+#endif
+		}
 	}
 	return 0;
 }
-#endif /* !MODULE */
 
 
 	/*
 	 * Cleanup
 	 */
 
-#ifdef MODULE
-static void hgafb_cleanup(struct fb_info *info)
+static void __exit hgafb_exit()
 {
 	hga_txt_mode();
 	hga_clear_screen();
-	unregister_framebuffer(info);
+
+#ifdef CONFIG_MTRR
+	if (enable_mtrr) {
+		mtrr_del(mtrr_handle, fb_info.fix.smem_start,
+			 fb_info.fix.smem_len);
+		printk("hgafb: MTRR turned off\n");
+	}
+#endif
+
+	unregister_framebuffer(&fb_info);
 	if (release_io_ports) release_region(0x3b0, 12);
 	if (release_io_port) release_region(0x3bf, 1);
 }
-#endif /* MODULE */
-
 
 
 /* -------------------------------------------------------------------------
@@ -784,21 +804,8 @@ static void hgafb_cleanup(struct fb_info *info)
  *
  * ------------------------------------------------------------------------- */
 
-#ifdef MODULE
-int init_module(void)
-{
-	if (font)
-		strncpy(fb_info.fontname, font, sizeof(fb_info.fontname)-1);
-	else
-		fb_info.fontname[0] = '\0';
-
-	return hgafb_init();
-}
-
-void cleanup_module(void)
-{
-	hgafb_cleanup(&fb_info);
-}
+module_init(hgafb_init);
+module_exit(hgafb_exit);
 
 MODULE_AUTHOR("Ferenc Bakonyi (fero@drama.obuda.kando.hu)");
 MODULE_DESCRIPTION("FBDev driver for Hercules Graphics Adaptor");
