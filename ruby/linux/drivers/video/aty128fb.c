@@ -69,7 +69,7 @@
 #include <asm/mtrr.h>
 #endif
 
-#include "aty128.h"
+#include <video/aty128.h>
 
 /* Debug flag */
 #undef DEBUG
