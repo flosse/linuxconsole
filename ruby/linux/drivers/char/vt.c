@@ -76,7 +76,6 @@ static void con_flush_chars(struct tty_struct *tty);
 static int printable = 0;               /* Is console ready for printing? */
 
 int do_poke_blanked_console = 0;
-int console_blanked = 0;
 
 static int vesa_blank_mode = 0; /* 0:none 1:suspendV 2:suspendH 3:powerdown */
 static int blankinterval = 10*60*HZ;
@@ -121,20 +120,6 @@ DECLARE_TASK_QUEUE(con_task_queue);
  */
 int (*console_blank_hook)(int) = NULL;
 
-/*
- *      Low-Level Functions
- */
-
-#define IS_FG (cons_num == fg_console)
-#define IS_VISIBLE CON_IS_VISIBLE(vc_cons[currcons])
-
-#ifdef VT_BUF_VRAM_ONLY
-#define DO_UPDATE 0
-#else
-#define DO_UPDATE IS_VISIBLE
-#endif
-
-static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data);
 static struct pm_dev *pm_con = NULL;
 
 /*
@@ -175,7 +160,7 @@ void set_cursor(struct vc_data *vc)
 {
     int currcons = vc->vc_num;  	
 
-    if (!IS_FG || console_blanked || vcmode == KD_GRAPHICS)
+    if (!IS_FG || vc->display_fg->vt_blanked || vcmode == KD_GRAPHICS)
         return;
     if (dectcem) {
         if (currcons == sel_cons)
@@ -234,6 +219,8 @@ static void gotoxay(struct vc_data *vc, int new_x, int new_y)
 
 void set_palette(struct vc_data *vc)
 {
+	int currcons = vc->vc_num;
+
         if (vcmode != KD_GRAPHICS)
                 sw->con_set_palette(vc, color_table);
 }
@@ -448,11 +435,13 @@ void set_origin(struct vc_data *vc)
 
 inline void save_screen(struct vc_data *vc)
 {
+	int currcons = vc->vc_num;
+
         if (sw->con_save_screen)
                 sw->con_save_screen(vc);
 }
 
-static void do_update_region(struct vc_data *vc, unsigned long start, int count)
+void do_update_region(struct vc_data *vc, unsigned long start, int count)
 {
 #ifndef VT_BUF_VRAM_ONLY
 	int currcons = vc->vc_num;
@@ -593,50 +582,25 @@ void complement_pos(struct vc_data *vc, int offset)
  *      Redrawing of screen
  */
 
-void redraw_screen(int new_console, int is_switch)
+void update_screen(struct vc_data *vc)
 {
-        int redraw = 1;
-        int currcons, old_console;
+	int currcons = vc->vc_num;
 
-        if (!vc_cons_allocated(new_console)) {
+        if (!vc_cons_allocated(cons_num)) {
                 /* strange ... */
-                /* printk("redraw_screen: tty %d not allocated ??\n", new_console+1); */
+                /* printk("redraw_screen: tty %d not allocated ??\n", cons_num+1); */
                 return;
         }
 
-        if (is_switch) {
-                currcons = fg_console;
-                hide_cursor(vc_cons[currcons]);
-                if (fg_console != new_console) {
-                        old_console = fg_console;
-                        fg_console = new_console;
-                        currcons = old_console;
-                        if (!IS_VISIBLE) {
-                                save_screen(vc_cons[currcons]);
-                                set_origin(vc_cons[currcons]);
-                        }
-                        currcons = new_console;
-                        if (old_console == new_console)
-                                redraw = 0;
-                }
-        } else {
-                currcons = new_console;
-                hide_cursor(vc_cons[currcons]);
+        hide_cursor(vc);
+	set_origin(vc);
+        if (sw->con_switch(vc) && vcmode != KD_GRAPHICS) {
+       	 	/* Change the palette after a VT switch. */
+        	sw->con_set_palette(vc, color_table);
+        	/* Update the screen contents */
+        	do_update_region(vc, origin, screenbuf_size/2);
         }
-
-        if (redraw) {
-                if (sw->con_switch(vc_cons[currcons]) && vcmode != KD_GRAPHICS)
-                        /* Change the palette after a VT switch. */
-                        set_origin(vc_cons[currcons]);
-                        sw->con_set_palette(vc_cons[currcons], color_table);
-                        /* Update the screen contents */
-                        do_update_region(vc_cons[currcons], origin, screenbuf_size/2);
-        }
-        set_cursor(vc_cons[currcons]);
-        if (is_switch) {
-                set_leds();
-                compute_shiftstate();
-        }
+        set_cursor(vc);
 }
 
 /*
@@ -653,6 +617,7 @@ static void set_vesa_blanking(unsigned long arg)
 static void vesa_powerdown(void)
 {
     struct vc_data *vc = vc_cons[fg_console];
+    int currcons = fg_console;	
     /*
      *  Power down if currently suspended (1 or 2),
      *  suspend if currently blanked (0),
@@ -684,12 +649,12 @@ static void blank_screen(void)
         struct vc_data *vc = vc_cons[currcons];
         int i;
 
-        if (console_blanked)
+        if (vc->display_fg->vt_blanked)
                 return;
 
         /* don't blank graphics */
         if (vcmode != KD_TEXT) {
-                console_blanked = fg_console + 1;
+                vc->display_fg->vt_blanked = 1;
                 return;
         }
 
@@ -706,7 +671,7 @@ static void blank_screen(void)
         save_screen(vc);
         /* In case we need to reset origin, blanking hook returns 1 */
         i = sw->con_blank(vc_cons[currcons], 1);
-        console_blanked = fg_console + 1;        
+        vc->display_fg->vt_blanked = 1;        
         if (i)
                 set_origin(vc);
 
@@ -720,7 +685,7 @@ void unblank_screen(void)
 {
         int currcons;
 
-        if (!console_blanked)
+        if (!vt_cons->vt_blanked)
                 return;
         if (!vc_cons_allocated(fg_console)) {
                 /* impossible */
@@ -734,12 +699,12 @@ void unblank_screen(void)
         }
 
         currcons = fg_console;
-        console_blanked = 0;
+        vt_cons->vt_blanked = 0;
         if (console_blank_hook)
                 console_blank_hook(0);
         if (sw->con_blank(vc_cons[currcons], 0))
                 /* Low-level driver cannot restore -> do it ourselves */
-                update_screen(fg_console);
+                update_screen(vc_cons[fg_console]);
         set_cursor(vc_cons[fg_console]);
 }
 
@@ -748,7 +713,7 @@ void poke_blanked_console(void)
         timer_active &= ~(1<<BLANK_TIMER);
         if (vt_cons->vc_mode == KD_GRAPHICS)
                 return;
-        if (console_blanked) {
+        if (vt_cons->vt_blanked) {
                 timer_table[BLANK_TIMER].fn = unblank_screen;
                 timer_table[BLANK_TIMER].expires = jiffies;     /* Now */
                 timer_active |= 1<<BLANK_TIMER;
@@ -961,7 +926,7 @@ int vc_resize(unsigned int lines, unsigned int cols,
                 }
 
                 if (IS_VISIBLE)
-                        update_screen(currcons);
+                        update_screen(vc_cons[currcons]);
         }
 
         return 0;
@@ -3347,7 +3312,8 @@ static void console_softint(unsigned long ignored)
         if (want_console >= 0) {
                 if (want_console != fg_console && vc_cons_allocated(want_console)) {
                         hide_cursor(vc_cons[fg_console]);
-                        change_console(want_console);
+			/* New console, old console */
+                        change_console(vc_cons[want_console],vc_cons[fg_console]);
                         /* we only changed when the console had already
                            been allocated - a new console is not created
                            in an interrupt routine */
@@ -3748,6 +3714,7 @@ void __init vt_console_init(void)
         for (currcons = 0; currcons < MIN_NR_CONSOLES; currcons++) {
                 vt_cons = (struct vt_struct *)
                                 alloc_bootmem(sizeof(struct vt_struct));
+		vt_cons->vt_blanked = 0;
 		vc = vc_cons[currcons] = (struct vc_data *)
                                 alloc_bootmem(sizeof(struct vc_data));
 		vc->vc_num = currcons;
@@ -3763,7 +3730,7 @@ void __init vt_console_init(void)
         save_screen(vc);
         gotoxy(vc, x, y);
         vte_ed(vc, 0);
-        update_screen(fg_console);
+        update_screen(vc_cons[fg_console]);
         printk("Console: %s %s %dx%d",
                 can_do_color ? "colour" : "mono",
                 display_desc, video_num_columns, video_num_lines);
@@ -3779,8 +3746,10 @@ void __init vt_console_init(void)
 
 #ifndef VT_SINGLE_DRIVER
 
-static void clear_buffer_attributes(int currcons)
+static void clear_buffer_attributes(struct vc_data *vc)
 {
+	int currcons = vc->vc_num;
+
         unsigned short *p = (unsigned short *) origin;
         int count = screenbuf_size/2;
         int mask = hi_font_mask | 0xff;
@@ -3826,10 +3795,10 @@ void take_over_console(struct consw *csw, int first, int last, int deflt)
                  * following resets all attributes to something sane.
                  */
                 if (old_was_color != vc_cons[i]->vc_can_do_color)
-                        clear_buffer_attributes(i);
+                        clear_buffer_attributes(vc_cons[i]);
 
                 if (IS_VISIBLE)
-                        update_screen(i);
+                        update_screen(vc_cons[i]);
         }
         printk("Console: switching ");
         if (!deflt)
