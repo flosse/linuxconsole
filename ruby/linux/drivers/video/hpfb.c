@@ -1,9 +1,6 @@
 /*
  *	HP300 Topcat framebuffer support (derived from macfb of all things)
  *	Phil Blundell <philb@gnu.org> 1998
- * 
- * Should this be moved to drivers/dio/video/ ? -- Peter Maydell
- * No! -- Jes
  */
 
 #include <linux/module.h>
@@ -66,13 +63,9 @@ static struct fb_var_screeninfo hpfb_defined = {
 	{0,0,0,0,0,0}
 };
 
-static int hpfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
-{
-	return -EINVAL;
-}
-
 /*
- * Set the palette.  This may not work on all boards but only experimentation will tell.
+ * Set the palette.  This may not work on all boards but only experimentation 
+ * will tell.
  * XXX Doesn't work at all.
  */
 static int hpfb_setcolreg(unsigned regno, unsigned red, unsigned green,
@@ -91,27 +84,25 @@ static int hpfb_setcolreg(unsigned regno, unsigned red, unsigned green,
 	return 0;
 }
 
-void hpfb_copyarea(struct fb_info *info, int sx, int sy, unsigned int width,
-                   unsigned int height, int dx, int dy)
+void hpfb_copyarea(struct fb_info *info, struct fb_copyarea *area) 
 {
 	while (readb(fb_regs + BUSY) & fb_bitmask);
 	writeb(0x3, fb_regs + WMRR);
-	writew(sx, fb_regs + SOURCE_X);
-	writew(sy, fb_regs + SOURCE_Y);
-	writew(dx, fb_regs + DEST_X);
-	writew(dy, fb_regs + DEST_Y);
-	writew(height, fb_regs + WHEIGHT);
-	writew(width, fb_regs + WWIDTH);
+	writew(area->sx, fb_regs + SOURCE_X);
+	writew(area->sy, fb_regs + SOURCE_Y);
+	writew(area->dx, fb_regs + DEST_X);
+	writew(area->dy, fb_regs + DEST_Y);
+	writew(area->height, fb_regs + WHEIGHT);
+	writew(area->width, fb_regs + WWIDTH);
 	writeb(fb_bitmask, fb_regs + WMOVE);
 }
 
 static struct fb_ops hpfb_ops = {
 	owner:		THIS_MODULE,
-        fb_check_var:   hpfb_check_var,
         fb_setcolreg:   hpfb_setcolreg,
-        fb_fillrect:    cfb_fillrect,
+	fb_fillrect:	cfb_fillrect,
         fb_copyarea:    hpfb_copyarea,
-        fb_imageblit:   cfb_imageblit,
+	fb_imageblit:	cfb_imageblit,
 };
 
 #define TOPCAT_FBOMSB	0x5d
@@ -136,17 +127,6 @@ int __init hpfb_init_one(unsigned long base)
 	writeb(0, base+0x4516);
 	writeb(0x90, base+0x4206);
 #endif
-
-	/*
-	 *	Fill in the available video resolution
-	 */
-	 
-	hpfb_defined.xres = 1024;
-	hpfb_defined.yres = 768;
-	hpfb_defined.xres_virtual = 1024;
-	hpfb_defined.yres_virtual = 768;
-	hpfb_defined.bits_per_pixel = 8;
-
 	/* 
 	 *	Give the hardware a bit of a prod and work out how many bits per
 	 *	pixel are supported.
@@ -168,7 +148,7 @@ int __init hpfb_init_one(unsigned long base)
 	/*
 	 *	Let there be consoles..
 	 */
-	fb_info.node  = -1;
+	fb_info.node  = NODEV;
 	fb_info.fbops = &hpfb_ops;
 	fb_info.flags = FBINFO_FLAG_DEFAULT;
 	fb_info.var   = hpfb_defined;
