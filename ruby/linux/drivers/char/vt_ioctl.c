@@ -1332,7 +1332,8 @@ void reset_vc(struct vc_data *vc)
 	vc->vt_mode.frsig = 0;
 	vc->vt_pid = -1;
 	vc->vt_newvt = -1;
-	reset_palette(vc);
+	if (!in_interrupt())    /* Via keyboard.c:SAK() - akpm */
+		reset_palette(vc);
 }
 
 inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)

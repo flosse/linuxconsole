@@ -144,6 +144,8 @@ static int dead_key_next;
 static int npadch = -1;				/* -1 or number assembled on pad */
 static unsigned char diacr;
 static char rep;				/* flag telling character repeat */
+pm_callback pm_kbd_request_override = NULL;
+typedef void (pm_kbd_func) (void);
 static struct pm_dev *pm_kbd;
 
 static unsigned char ledstate = 0xff;		/* undefined */
@@ -1133,7 +1135,7 @@ int __init kbd_init(void)
 	tasklet_enable(&keyboard_tasklet);
 	tasklet_schedule(&keyboard_tasklet);
 
-	pm_kbd = pm_register(PM_SYS_DEV, PM_SYS_KBC, NULL);
+	pm_kbd = pm_register(PM_SYS_DEV, PM_SYS_KBC, pm_kbd_request_override);
 
 	input_register_handler(&kbd_handler);
 	return 0;

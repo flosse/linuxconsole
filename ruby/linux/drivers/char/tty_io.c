@@ -95,12 +95,12 @@
 #include <asm/system.h>
 #include <asm/bitops.h>
 
-#include <linux/vt_kern.h>
 #include <linux/devfs_fs_kernel.h>
-
 #include <linux/kmod.h>
 
 #ifdef CONFIG_VT
+#include <linux/vt_kern.h>
+extern void con_init_devfs (void);
 #ifdef CONFIG_PROM_CONSOLE
 extern void prom_con_init(void);
 #endif
@@ -163,6 +163,8 @@ extern void clps711xuart_console_init(void);
 extern void anakin_console_init(void);
 extern void sgi_serial_console_init(void);
 extern void sci_console_init(void);
+extern void tx3912_console_init(void);
+extern void tx3912_rs_init(void);
 
 #ifndef MIN
 #define MIN(a,b)	((a) < (b) ? (a) : (b))
@@ -272,6 +274,8 @@ int tty_register_ldisc(int disc, struct tty_ldisc *new_ldisc)
 	
 	return 0;
 }
+
+EXPORT_SYMBOL(tty_register_ldisc);
 
 /* Set the discipline of a tty line. */
 static int tty_set_ldisc(struct tty_struct *tty, int ldisc)
@@ -447,9 +451,7 @@ void do_tty_hangup(void *data)
 	file_list_lock();
 	for (l = tty->tty_files.next; l != &tty->tty_files; l = l->next) {
 		struct file * filp = list_entry(l, struct file, f_list);
-		if (!filp->f_dentry)
-			continue;
-		if (filp->f_dentry->d_inode->i_rdev == SYSCONS_DEV) {
+		if (filp->f_dentry->d_inode->i_rdev == SYSCONS_DEV) { 
 			cons_filp = filp;
 			continue;
 		}
@@ -749,10 +751,10 @@ static ssize_t tty_write(struct file * file, const char * buf, size_t count,
 		return -ESPIPE;
 
 	/*
-	 *      For now, we redirect writes from /dev/console.
+	 *      For now, we redirect writes from /dev/console. 
 	 */
 	inode = file->f_dentry->d_inode;
-	is_console = (inode->i_rdev == SYSCONS_DEV); 
+	is_console = (inode->i_rdev == SYSCONS_DEV);
 
 	if (is_console && redirect)
 		tty = redirect;
@@ -1498,12 +1500,12 @@ static int tiocswinsz(struct tty_struct *tty, struct tty_struct *real_tty,
 	if (!memcmp(&tmp_ws, &tty->winsize, sizeof(*arg)))
 		return 0;
 #ifdef CONFIG_VT
-	if (tty->driver.type == TTY_DRIVER_TYPE_CONSOLE) {
-		struct vc_data *vc = (struct vc_data *) tty->driver_data;
+       	if (tty->driver.type == TTY_DRIVER_TYPE_CONSOLE) {
+               	struct vc_data *vc = (struct vc_data *) tty->driver_data;
 
-		if (!vc || vc_resize(vc, tmp_ws.ws_col, tmp_ws.ws_row))
-			return -ENXIO;
-	}
+               	if (!vc || vc_resize(vc, tmp_ws.ws_col, tmp_ws.ws_row))
+                       	return -ENXIO;
+       	}
 #endif
 	if (tty->pgrp > 0)
 		kill_pg(tty->pgrp, SIGWINCH, 1);
@@ -2024,7 +2026,7 @@ void tty_register_devfs (struct tty_driver *driver, unsigned int flags, unsigned
 			break;
 		default:
 			if (driver->major == PTY_MASTER_MAJOR)
-				flags |= DEVFS_FL_AUTO_OWNER;
+				mode |= S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
 			break;
 	}
 	if ( (minor <  driver->minor_start) || 
@@ -2190,6 +2192,9 @@ void __init console_init(void)
 #ifdef CONFIG_VT
 	vt_console_init();
 #endif
+#ifdef CONFIG_AU1000_SERIAL_CONSOLE
+	au1000_serial_console_init();
+#endif
 #ifdef CONFIG_SERIAL_CONSOLE
 #if (defined(CONFIG_8xx) || defined(CONFIG_8260))
 	console_8xx_init();
@@ -2231,14 +2236,20 @@ void __init console_init(void)
 #ifdef CONFIG_SERIAL_SA1100_CONSOLE
 	sa1100_rs_console_init();
 #endif
+#ifdef CONFIG_ARC_CONSOLE
+	arc_console_init();
+#endif
 #ifdef CONFIG_SERIAL_AMBA_CONSOLE
 	ambauart_console_init();
 #endif
+#ifdef CONFIG_SERIAL_TX3912_CONSOLE
+	tx3912_console_init();
+#endif
 #ifdef CONFIG_SERIAL_CLPS711X_CONSOLE
-       	clps711xuart_console_init();
+	clps711xuart_console_init();
 #endif
 #ifdef CONFIG_SERIAL_ANAKIN_CONSOLE
-       	anakin_console_init();
+	anakin_console_init();
 #endif
 }
 
@@ -2254,7 +2265,7 @@ static struct tty_driver dev_ptmx_driver;
 void __init tty_init(void)
 {
 	struct tty_driver *p;
-       	int i;
+	int i;
 
 	/*
 	 * dev_tty_driver and dev_console_driver are actually magic
@@ -2288,8 +2299,8 @@ void __init tty_init(void)
 		panic("Couldn't register /dev/console driver\n");
 
 	/* 
-	 * Some consoles calls tty_register_driver() before kmalloc() works.
-         * Thus, we can't devfs_register() then.  Do so now, instead.
+	 * Some console calls tty_register_driver() before kmalloc() works.
+	 * Thus, we can't devfs_register() then.  Do so now, instead. 
 	 */
 	for (p = tty_drivers; p; p = p->next) {
 		if (p->flags && TTY_DRIVER_NO_DEVFS) {
@@ -2297,7 +2308,6 @@ void __init tty_init(void)
 				tty_register_devfs(p, DEVFS_FL_AOPEN_NOTIFY, p->minor_start + i);
 		}
 	}
-
 
 #ifdef CONFIG_UNIX98_PTYS
 	dev_ptmx_driver = dev_tty_driver;
@@ -2314,20 +2324,23 @@ void __init tty_init(void)
 	
 #ifdef CONFIG_VT
 #if defined (CONFIG_PROM_CONSOLE)
-       	prom_con_init();
+	prom_con_init();
 #endif
 #if defined (CONFIG_FRAMEBUFFER_CONSOLE)
-       	fb_console_init();
+	fb_console_init();
 #endif
 	kbd_init();
 	console_map_init();
-        vcs_init();
+	vcs_init();
 #endif
 #ifdef CONFIG_ESPSERIAL  /* init ESP before rs, so rs doesn't see the port */
 	espserial_init();
 #endif
 #if defined(CONFIG_MVME162_SCC) || defined(CONFIG_BVME6000_SCC) || defined(CONFIG_MVME147_SCC)
 	vme_scc_init();
+#endif
+#ifdef CONFIG_SERIAL_TX3912
+	tx3912_rs_init();
 #endif
 #ifdef CONFIG_COMPUTONE
 	ip2_init();

@@ -32,7 +32,6 @@
 #define development_version (LINUX_VERSION_CODE & 0x100)
 
 extern void die(char *, struct pt_regs *, unsigned long write);
-extern int console_loglevel;
 
 /*
  * Macro for exception fixup code to access integer registers.

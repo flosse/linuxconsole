@@ -41,6 +41,7 @@ rm -fv drivers/char/joystick/interact.c
 rm -fv drivers/char/joystick/lightning.c
 rm -fv drivers/char/joystick/magellan.c
 rm -fv drivers/char/joystick/ns558.c
+rm -fv drivers/char/joystick/emu10k1-gp.c
 rm -fv drivers/char/joystick/pcigame.c
 rm -fv drivers/char/joystick/serio.c
 rm -fv drivers/char/joystick/serport.c

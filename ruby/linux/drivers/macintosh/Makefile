@@ -15,7 +15,7 @@ O_TARGET	:= macintosh.o
 
 # Objects that export symbols.
 
-export-objs	:= adb.o rtc.o
+export-objs	:= adb.o rtc.o via-pmu.o
 
 # Object file lists.
 

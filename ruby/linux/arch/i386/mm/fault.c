@@ -17,6 +17,7 @@
 #include <linux/smp_lock.h>
 #include <linux/interrupt.h>
 #include <linux/init.h>
+#include <linux/vt_kern.h>		/* For unblank_screen() */
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
@@ -51,8 +52,14 @@ good_area:
 	start &= PAGE_MASK;
 
 	for (;;) {
-		if (handle_mm_fault(current->mm, vma, start, 1) <= 0)
-			goto bad_area;
+	survive:
+		{
+			int fault = handle_mm_fault(current->mm, vma, start, 1);
+			if (!fault)
+				goto bad_area;
+			if (fault < 0)
+				goto out_of_memory;
+		}
 		if (!size)
 			break;
 		size--;
@@ -75,6 +82,14 @@ check_stack:
 
 bad_area:
 	return 0;
+
+out_of_memory:
+	if (current->pid == 1) {
+		current->policy |= SCHED_YIELD;
+		schedule();
+		goto survive;
+	}
+	goto bad_area;
 }
 
 asmlinkage void do_invalid_op(struct pt_regs *, unsigned long);
@@ -183,6 +198,7 @@ good_area:
 				goto bad_area;
 	}
 
+ survive:
 	/*
 	 * If for any reason at all we couldn't handle the fault,
 	 * make sure we exit gracefully rather than endlessly redo
@@ -286,6 +302,12 @@ no_context:
  */
 out_of_memory:
 	up_read(&mm->mmap_sem);
+	if (tsk->pid == 1) {
+		tsk->policy |= SCHED_YIELD;
+		schedule();
+		down_read(&mm->mmap_sem);
+		goto survive;
+	}
 	printk("VM: killing process %s\n", tsk->comm);
 	if (error_code & 4)
 		do_exit(SIGKILL);
@@ -301,7 +323,7 @@ do_sigbus:
 	tsk->thread.cr2 = address;
 	tsk->thread.error_code = error_code;
 	tsk->thread.trap_no = 14;
-	info.si_code = SIGBUS;
+	info.si_signo = SIGBUS;
 	info.si_errno = 0;
 	info.si_code = BUS_ADRERR;
 	info.si_addr = (void *)address;

@@ -1,5 +1,5 @@
 /*
- * BK Id: SCCS/s.pmac_setup.c 1.24 07/06/01 14:49:51 trini
+ * BK Id: SCCS/s.pmac_setup.c 1.39 09/08/01 15:47:42 paulus
  */
 /*
  *  linux/arch/ppc/kernel/setup.c
@@ -49,7 +49,7 @@
 #include <linux/pmu.h>
 
 #include <asm/processor.h>
-#include <asm/init.h>
+#include <asm/sections.h>
 #include <asm/prom.h>
 #include <asm/system.h>
 #include <asm/pgtable.h>
@@ -62,6 +62,8 @@
 #include <asm/machdep.h>
 #include <asm/dma.h>
 #include <asm/bootx.h>
+#include <asm/cputable.h>
+#include <asm/btext.h>
 
 #include <asm/time.h>
 #include "local_irq.h"
@@ -107,13 +109,16 @@ void pmac_progress(char *s, unsigned short hex);
 sys_ctrler_t sys_ctrler = SYS_CTRLER_UNKNOWN;
 
 #ifdef CONFIG_SMP
+extern struct smp_ops_t psurge_smp_ops;
+extern struct smp_ops_t core99_smp_ops;
+
 volatile static long int core99_l2_cache;
-void __pmac
+void __init
 core99_init_l2(void)
 {
 	int cpu = smp_processor_id();
 
-	if ( (_get_PVR() >> 16) != 8 && (_get_PVR() >> 16) != 12 )
+	if (!(cur_cpu_spec[0]->cpu_features & CPU_FTR_L2CR))
 		return;
 
 	if (cpu == 0){
@@ -240,6 +245,9 @@ pmac_setup_arch(void)
 {
 	struct device_node *cpu;
 	int *fp;
+	unsigned long pvr;
+	
+	pvr = PVR_VER(mfspr(PVR));
 
 	/* Set loops_per_jiffy to a half-way reasonable value,
 	   for use until calibrate_delay gets called. */
@@ -247,18 +255,12 @@ pmac_setup_arch(void)
 	if (cpu != 0) {
 		fp = (int *) get_property(cpu, "clock-frequency", NULL);
 		if (fp != 0) {
-			switch (_get_PVR() >> 16) {
-			case 4:		/* 604 */
-			case 8:		/* G3 */
-			case 9:		/* 604e */
-			case 10:	/* mach V (604ev5) */
-			case 12:	/* G4 */
-			case 20:	/* 620 */
+			if (pvr == 4 || pvr >= 8)
+				/* 604, G3, G4 etc. */
 				loops_per_jiffy = *fp / HZ;
-				break;
-			default:	/* 601, 603, etc. */
+			else
+				/* 601, 603, etc. */
 				loops_per_jiffy = *fp / (2*HZ);
-			}
 		} else
 			loops_per_jiffy = 50000000 / HZ;
 	}
@@ -266,14 +268,13 @@ pmac_setup_arch(void)
 	/* this area has the CPU identification register
 	   and some registers used by smp boards */
 	sysctrl_regs = (volatile u32 *) ioremap(0xf8000000, 0x1000);
-	__ioremap(0xffc00000, 0x400000, pgprot_val(PAGE_READONLY));
 	ohare_init();
 
 	/* Lookup PCI hosts */
 	pmac_find_bridges();
 	
 	/* Checks "l2cr-value" property in the registry */
-	if ( (_get_PVR() >> 16) == 8 || (_get_PVR() >> 16) == 12 ) {
+	if (cur_cpu_spec[0]->cpu_features & CPU_FTR_L2CR) {
 		struct device_node *np = find_devices("cpus");		
 		if (np == 0)
 			np = find_type_devices("cpu");		
@@ -305,9 +306,19 @@ pmac_setup_arch(void)
 
 #ifdef CONFIG_ADB_CUDA
 	find_via_cuda();
+#else
+	if (find_devices("via-cuda")) {
+		printk("WARNING ! Your machine is Cuda based but your kernel\n");
+		printk("          wasn't compiled with CONFIG_ADB_CUDA option !\n");
+	}
 #endif	
 #ifdef CONFIG_ADB_PMU
 	find_via_pmu();
+#else
+	if (find_devices("via-pmu")) {
+		printk("WARNING ! Your machine is PMU based but your kernel\n");
+		printk("          wasn't compiled with CONFIG_ADB_PMU option !\n");
+	}
 #endif	
 #ifdef CONFIG_NVRAM
 	pmac_nvram_init();
@@ -318,6 +329,14 @@ pmac_setup_arch(void)
 	else
 #endif
 		ROOT_DEV = to_kdev_t(DEFAULT_ROOT_DEVICE);
+
+#ifdef CONFIG_SMP
+	/* Check for Core99 */
+	if (find_devices("uni-n"))
+		ppc_md.smp_ops = &core99_smp_ops;
+	else
+		ppc_md.smp_ops = &psurge_smp_ops;
+#endif /* CONFIG_SMP */
 }
 
 static void __init ohare_init(void)
@@ -432,9 +451,11 @@ note_bootable_part(kdev_t dev, int part, int goodness)
 	static int found_boot = 0;
 	char *p;
 
-	/* Do nothing if the root has been set already. */
+	/* Do nothing if the root has been mounted already. */
+	if (init_task.fs->rootmnt != NULL)
+		return;
 	if ((goodness <= current_root_goodness) &&
-		(ROOT_DEV != to_kdev_t(DEFAULT_ROOT_DEVICE)))
+	    (ROOT_DEV != to_kdev_t(DEFAULT_ROOT_DEVICE)))
 		return;
 	p = strstr(saved_command_line, "root=");
 	if (p != NULL && (p == saved_command_line || p[-1] == ' '))
@@ -520,41 +541,7 @@ pmac_halt(void)
 /*
  * IDE stuff.
  */
-void __pmac
-pmac_ide_insw(ide_ioreg_t port, void *buf, int ns)
-{
-	_insw_ns((unsigned short *)(port+_IO_BASE), buf, ns);
-}
-
-void __pmac
-pmac_ide_outsw(ide_ioreg_t port, void *buf, int ns)
-{
-	_outsw_ns((unsigned short *)(port+_IO_BASE), buf, ns);
-}
-
-int __pmac
-pmac_ide_default_irq(ide_ioreg_t base)
-{
-#if defined(CONFIG_BLK_DEV_IDE) && defined(CONFIG_BLK_DEV_IDE_PMAC)
-	extern int pmac_ide_get_irq(ide_ioreg_t base);
-        return pmac_ide_get_irq(base);
-#else
-	return 0;
-#endif
-}
-
-ide_ioreg_t __pmac
-pmac_ide_default_io_base(int index)
-{
-#if defined(CONFIG_BLK_DEV_IDE) && defined(CONFIG_BLK_DEV_IDE_PMAC)
-	extern ide_ioreg_t pmac_ide_get_base(int index);
-        return pmac_ide_get_base(index);
-#else
-	return 0;
-#endif
-}
-
-int __pmac
+static int __pmac
 pmac_ide_check_region(ide_ioreg_t from, unsigned int extent)
 {
 	/*
@@ -563,11 +550,11 @@ pmac_ide_check_region(ide_ioreg_t from, unsigned int extent)
 	 * register, it should be OK.
 	 */
 	if (from < ~_IO_BASE)
-		return 0;
-	return check_region(from, extent);
+		return check_region(from, extent);
+	return 0;
 }
 
-void __pmac
+static void __pmac
 pmac_ide_request_region(ide_ioreg_t from,
 			unsigned int extent,
 			const char *name)
@@ -576,7 +563,7 @@ pmac_ide_request_region(ide_ioreg_t from,
 		request_region(from, extent, name);
 }
 
-void __pmac
+static void __pmac
 pmac_ide_release_region(ide_ioreg_t from,
 			unsigned int extent)
 {
@@ -584,20 +571,23 @@ pmac_ide_release_region(ide_ioreg_t from,
 		release_region(from, extent);
 }
 
-#if defined(CONFIG_BLK_DEV_IDE) && defined(CONFIG_BLK_DEV_IDE_PMAC)
-/* This is declared in drivers/block/ide-pmac.c */
-void __pmac
-pmac_ide_init_hwif_ports (hw_regs_t *hw, ide_ioreg_t data_port, ide_ioreg_t ctrl_port, int *irq);
-#else
 /*
- * This registers the standard ports for this architecture with the IDE
- * driver.
+ * This is only used if we have a PCI IDE controller, not
+ * for the IDE controller in the ohare/paddington/heathrow/keylargo.
  */
-void __pmac
-pmac_ide_init_hwif_ports(hw_regs_t *hw, ide_ioreg_t data_port, ide_ioreg_t ctrl_port, int *irq)
+static void __pmac
+pmac_ide_init_hwif_ports(hw_regs_t *hw, ide_ioreg_t data_port,
+		ide_ioreg_t ctrl_port, int *irq)
 {
+	ide_ioreg_t reg = data_port;
+	int i;
+
+	for (i = IDE_DATA_OFFSET; i <= IDE_STATUS_OFFSET; i++) {
+		hw->io_ports[i] = reg;
+		reg += 1;
+	}
+	hw->io_ports[IDE_CONTROL_OFFSET] = ctrl_port;
 }
-#endif
 #endif
 
 /*
@@ -719,19 +709,16 @@ pmac_init(unsigned long r3, unsigned long r4, unsigned long r5,
 	ppc_md.find_end_of_memory = pmac_find_end_of_memory;
 
 #if defined(CONFIG_BLK_DEV_IDE) && defined(CONFIG_BLK_DEV_IDE_PMAC)
-        ppc_ide_md.insw			= pmac_ide_insw;
-        ppc_ide_md.outsw		= pmac_ide_outsw;
-        ppc_ide_md.default_irq		= pmac_ide_default_irq;
-        ppc_ide_md.default_io_base	= pmac_ide_default_io_base;
         ppc_ide_md.ide_check_region	= pmac_ide_check_region;
         ppc_ide_md.ide_request_region	= pmac_ide_request_region;
         ppc_ide_md.ide_release_region	= pmac_ide_release_region;
-        ppc_ide_md.fix_driveid		= ppc_generic_ide_fix_driveid;
         ppc_ide_md.ide_init_hwif	= pmac_ide_init_hwif_ports;
 #endif /* CONFIG_BLK_DEV_IDE && CONFIG_BLK_DEV_IDE_PMAC */
+
 #ifdef CONFIG_BOOTX_TEXT
 	ppc_md.progress = pmac_progress;
 #endif /* CONFIG_BOOTX_TEXT */
+
 	if (ppc_md.progress) ppc_md.progress("pmac_init(): exit", 0);
 	
 }
@@ -745,7 +732,7 @@ pmac_progress(char *s, unsigned short hex)
 {
 	if (disp_bi == 0)
 		return;
-	prom_drawstring(s);
-	prom_drawchar('\n');
+	btext_drawstring(s);
+	btext_drawchar('\n');
 }
 #endif /* CONFIG_BOOTX_TEXT */

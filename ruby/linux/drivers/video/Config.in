@@ -86,6 +86,9 @@ if [ "$CONFIG_FB" = "y" ]; then
       bool '    S3 Trio display support' CONFIG_FB_S3TRIO
       tristate '  VGA 16-color graphics console' CONFIG_FB_VGA16
    fi
+   if [ "$CONFIG_PARISC" = "y" ]; then
+      bool '  Generic STI frame buffer device support' CONFIG_FB_STI
+   fi
    if [ "$CONFIG_MAC" = "y" ]; then
       define_bool CONFIG_FB_MAC y
       bool '  Apple "valkyrie" display support' CONFIG_FB_VALKYRIE
@@ -124,12 +127,16 @@ if [ "$CONFIG_FB" = "y" ]; then
          bool '  CGsix (GX,TurboGX) support' CONFIG_FB_CGSIX
       fi
    fi
-   tristate '  NEC PowerVR 2 display support' CONFIG_FB_PVR2
-   dep_bool '    Debug pvr2fb' CONFIG_FB_PVR2_DEBUG $CONFIG_FB_PVR2
+   if [ "$CONFIG_SH_DREAMCAST" = "y" ]; then
+      tristate '  NEC PowerVR 2 display support' CONFIG_FB_PVR2
+      dep_bool '    Debug pvr2fb' CONFIG_FB_PVR2_DEBUG $CONFIG_FB_PVR2
+   fi
    bool '  Epson 1355 framebuffer support' CONFIG_FB_E1355
    if [ "$CONFIG_FB_E1355" = "y" ]; then
-      hex '    Register Base Address' CONFIG_E1355_REG_BASE a8000000
-      hex '    Framebuffer Base Address' CONFIG_E1355_FB_BASE a8200000
+      if [ "$CONFIG_SUPERH" = "y" ]; then	
+         hex '    Register Base Address' CONFIG_E1355_REG_BASE a8000000
+         hex '    Framebuffer Base Address' CONFIG_E1355_FB_BASE a8200000
+      fi
    fi
    if [ "$CONFIG_PCI" != "n" ]; then
       tristate '  Matrox acceleration (EXPERIMENTAL)' CONFIG_FB_MATROX
@@ -150,14 +157,21 @@ if [ "$CONFIG_FB" = "y" ]; then
       if [ "$CONFIG_FB_ATY" != "n" ]; then
          bool '    Mach64 GX support (EXPERIMENTAL)' CONFIG_FB_ATY_GX
          bool '    Mach64 CT/VT/GT/LT (incl. 3D RAGE) support' CONFIG_FB_ATY_CT
+	 if [ "$CONFIG_FB_ATY_CT" = "y" ]; then
+	    bool '      Sony Vaio C1VE 1024x480 LCD support' CONFIG_FB_ATY_CT_VAIO_LCD
+         fi
       fi
+      tristate '  ATI Radeon display support (EXPERIMENTAL)' CONFIG_FB_RADEON	
       tristate '  ATI Rage 128 display support (EXPERIMENTAL)' CONFIG_FB_ATY128
       tristate '  3Dfx acceleration support' CONFIG_FB_TDFX 
       if [ "$CONFIG_FB_TDFX" != "n" ]; then		
          bool '    3Dfx Banshee/Voodoo3 display support (EXPERIMENTAL)' CONFIG_FB_3DFX
-      	 bool '    Voodoo 1 display support (EXPERIMENTAL)' CONFIG_FB_SST	
-      fi	
-      tristate '  SIS 630/540 display support (EXPERIMENTAL)' CONFIG_FB_SIS
+      	 bool '    3Dfx Voodoo Graphics (sst1) support (EXPERIMENTAL)' CONFIG_FB_VOODOO1	
+      fi
+      if [ "$CONFIG_FB_SIS" != "n" ]; then
+	 bool '    SIS 630/540/730 support' CONFIG_FB_SIS_300
+	 bool '    SIS 315H/315 support' CONFIG_FB_SIS_315
+      fi
    fi
    if [ "$ARCH" = "sparc" -o "$ARCH" = "sparc64" ]; then
       bool '  SBUS and UPA framebuffers' CONFIG_FB_SBUS
@@ -197,6 +211,16 @@ if [ "$CONFIG_FB" = "y" ]; then
    fi
    if [ "$CONFIG_HD64461" = "y" ]; then
       tristate '  HD64461 Frame Buffer support' CONFIG_FB_HIT
+   fi
+   if [ "$CONFIG_DECSTATION" = "y" ]; then
+      if [ "$CONFIG_TC" = "y" ]; then
+         bool '  PMAG-BA TURBOchannel framebuffer support' CONFIG_FB_PMAG_BA
+         bool '  PMAGB-B TURBOchannel framebuffer spport' CONFIG_FB_PMAGB_B
+         bool '  Maxine (Personal DECstation) onboard framebuffer spport' CONFIG_FB_MAXINE
+      fi
+   fi
+   if [ "$CONFIG_NINO" = "y" ]; then
+      bool '  TMPTX3912/PR31700 frame buffer support' CONFIG_FB_TX3912
    fi
    if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
       tristate '  Virtual Frame Buffer support (ONLY FOR TESTING!)' CONFIG_FB_VIRTUAL

@@ -1,5 +1,4 @@
-/* $Id$
- *
+/*
  * This file is subject to the terms and conditions of the GNU General Public
  * License.  See the file "COPYING" in the main directory of this archive
  * for more details.
@@ -67,7 +66,7 @@ void __init ip22_setup(void)
 	 * graphics console, it is set to "d" for the first serial
 	 * line and "d2" for the second serial line.
 	 */
-	ctype = ArcArcGetEnvironmentVariable("console");
+	ctype = ArcGetEnvironmentVariable("console");
 	if(*ctype == 'd') {
 		if(*(ctype+1)=='2')
 			console_setup ("ttyS1");
@@ -82,7 +81,30 @@ void __init ip22_setup(void)
 	ip22_volume_set(simple_strtoul(ArcGetEnvironmentVariable("volume"),
 	                              NULL, 10));
 
+#ifdef CONFIG_VT
+#ifdef CONFIG_SGI_NEWPORT_CONSOLE
+	conswitchp = &newport_con;
+
+	screen_info = (struct screen_info) {
+		0, 0,		/* orig-x, orig-y */
+		0,		/* unused */
+		0,		/* orig_video_page */
+		0,		/* orig_video_mode */
+		160,		/* orig_video_cols */
+		0, 0, 0,	/* unused, ega_bx, unused */
+		64,		/* orig_video_lines */
+		0,		/* orig_video_isVGA */
+		16		/* orig_video_points */
+	};
+#else
+	conswitchp = &dummy_con;
+#endif
+#endif
 	rtc_ops = &indy_rtc_ops;
+	kbd_ops = &sgi_kbd_ops;
+#ifdef CONFIG_PSMOUSE
+	aux_device_present = 0xaa;
+#endif
 #ifdef CONFIG_VIDEO_VINO
 	init_vino();
 #endif

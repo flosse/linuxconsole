@@ -37,7 +37,6 @@
 #include <asm/system.h>
 #include <asm/io.h>
 #include <asm/io_generic.h>
-#include <asm/smp.h>
 #include <asm/machvec.h>
 #ifdef CONFIG_SH_EARLY_PRINTK
 #include <asm/sh_bios.h>
@@ -47,7 +46,12 @@
  * Machine setup..
  */
 
-struct sh_cpuinfo boot_cpu_data = { CPU_SH_NONE, 0, 0, 0, };
+/*
+ * Initialize loops_per_jiffy as 10000000 (1000MIPS).
+ * This value will be used at the very early stage of serial setup.
+ * The bigger value means no problem.
+ */
+struct sh_cpuinfo boot_cpu_data = { CPU_SH_NONE, 0, 10000000, };
 struct screen_info screen_info;
 
 #if defined(CONFIG_SH_GENERIC) || defined(CONFIG_SH_UNKNOWN)
@@ -207,8 +211,7 @@ static inline void parse_cmdline (char ** cmdline_p, char mv_name[MV_NAME_SIZE],
 	saved_command_line[COMMAND_LINE_SIZE-1] = '\0';
 
 	memory_start = (unsigned long)PAGE_OFFSET+__MEMORY_START;
-	/* Default is 4Mbyte. */
-	memory_end = (unsigned long)PAGE_OFFSET+0x00400000+__MEMORY_START;
+	memory_end = memory_start + __MEMORY_SIZE;
 
 	for (;;) {
 		/*
@@ -266,7 +269,9 @@ static inline void parse_cmdline (char ** cmdline_p, char mv_name[MV_NAME_SIZE],
 
 void __init setup_arch(char **cmdline_p)
 {
+#if defined(CONFIG_SH_GENERIC) || defined(CONFIG_SH_UNKNOWN)
 	extern struct sh_machine_vector mv_unknown;
+#endif
 	struct sh_machine_vector *mv = NULL;
 	char mv_name[MV_NAME_SIZE] = "";
 	unsigned long mv_io_base = 0;
@@ -354,6 +359,18 @@ void __init setup_arch(char **cmdline_p)
 #define PFN_DOWN(x)	((x) >> PAGE_SHIFT)
 #define PFN_PHYS(x)	((x) << PAGE_SHIFT)
 
+#ifdef CONFIG_DISCONTIGMEM
+	NODE_DATA(0)->bdata = &discontig_node_bdata[0];
+	NODE_DATA(1)->bdata = &discontig_node_bdata[1];
+
+	bootmap_size = init_bootmem_node(NODE_DATA(1), 
+					 PFN_UP(__MEMORY_START_2ND),
+					 PFN_UP(__MEMORY_START_2ND),
+					 PFN_DOWN(__MEMORY_START_2ND+__MEMORY_SIZE_2ND));
+	free_bootmem_node(NODE_DATA(1), __MEMORY_START_2ND, __MEMORY_SIZE_2ND);
+	reserve_bootmem_node(NODE_DATA(1), __MEMORY_START_2ND, bootmap_size);
+#endif
+
 	/*
 	 * Find the highest page frame number we have available
 	 */
@@ -375,7 +392,7 @@ void __init setup_arch(char **cmdline_p)
 	 * is intact) must be done via bootmem_alloc().
 	 */
 	bootmap_size = init_bootmem_node(NODE_DATA(0), start_pfn,
-					 __MEMORY_START>>PAGE_SHIFT, 
+					 __MEMORY_START>>PAGE_SHIFT,
 					 max_low_pfn);
 
 	/*
@@ -397,7 +414,8 @@ void __init setup_arch(char **cmdline_p)
 			last_pfn = max_low_pfn;
 
 		pages = last_pfn - curr_pfn;
-		free_bootmem(PFN_PHYS(curr_pfn), PFN_PHYS(pages));
+		free_bootmem_node(NODE_DATA(0), PFN_PHYS(curr_pfn),
+				  PFN_PHYS(pages));
 	}
 
 	/*
@@ -407,19 +425,19 @@ void __init setup_arch(char **cmdline_p)
 	 * case of us accidentally initializing the bootmem allocator with
 	 * an invalid RAM area.
 	 */
-	reserve_bootmem(__MEMORY_START+PAGE_SIZE, (PFN_PHYS(start_pfn) + 
-			bootmap_size + PAGE_SIZE-1) - __MEMORY_START);
+	reserve_bootmem_node(NODE_DATA(0), __MEMORY_START+PAGE_SIZE,
+		(PFN_PHYS(start_pfn)+bootmap_size+PAGE_SIZE-1)-__MEMORY_START);
 
 	/*
 	 * reserve physical page 0 - it's a special BIOS page on many boxes,
 	 * enabling clean reboots, SMP operation, laptop functions.
 	 */
-	reserve_bootmem(__MEMORY_START, PAGE_SIZE);
+	reserve_bootmem_node(NODE_DATA(0), __MEMORY_START, PAGE_SIZE);
 
 #ifdef CONFIG_BLK_DEV_INITRD
 	if (LOADER_TYPE && INITRD_START) {
 		if (INITRD_START + INITRD_SIZE <= (max_low_pfn << PAGE_SHIFT)) {
-			reserve_bootmem(INITRD_START+__MEMORY_START, INITRD_SIZE);
+			reserve_bootmem_node(NODE_DATA(0), INITRD_START+__MEMORY_START, INITRD_SIZE);
 			initrd_start =
 				INITRD_START ? INITRD_START + PAGE_OFFSET + __MEMORY_START : 0;
 			initrd_end = initrd_start + INITRD_SIZE;
@@ -449,7 +467,6 @@ void __init setup_arch(char **cmdline_p)
 	for (i = 0; i < STANDARD_IO_RESOURCES; i++)
 		request_resource(&ioport_resource, standard_io_resources+i);
 #endif
-
 	/* Perform the machine specific initialisation */
 	if (sh_mv.mv_init_arch != NULL) {
 		sh_mv.mv_init_arch();

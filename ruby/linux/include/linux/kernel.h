@@ -10,6 +10,7 @@
 #include <stdarg.h>
 #include <linux/linkage.h>
 #include <linux/stddef.h>
+#include <linux/types.h>
 
 /* Optimization barrier */
 /* The "volatile" is due to gcc bugs */
@@ -61,6 +62,13 @@ extern unsigned long long simple_strtoull(const char *,char **,unsigned int);
 extern long long simple_strtoll(const char *,char **,unsigned int);
 extern int sprintf(char * buf, const char * fmt, ...);
 extern int vsprintf(char *buf, const char *, va_list);
+extern int snprintf(char * buf, size_t size, const char *fmt, ...);
+extern int vsnprintf(char *buf, size_t size, const char *fmt, va_list args);
+
+extern int sscanf(const char *, const char *, ...)
+	__attribute__ ((format (scanf,2,3)));
+extern int vsscanf(const char *, const char *, va_list);
+
 extern int get_option(char **str, int *pint);
 extern char *get_options(char *str, int nints, int *ints);
 extern unsigned long long memparse(char *ptr, char **retptr);
@@ -85,9 +93,8 @@ static inline void console_verbose(void)
 		console_loglevel = 15;
 }
 
-/* If set, an oops, panic(), BUG() or die() is in progress */
 extern void bust_spinlocks(int yes);
-extern int oops_in_progress;
+extern int oops_in_progress;		/* If set, an oops, panic(), BUG() or die() is in progress */
 
 static inline void do_BUG(const char *file, int line)
 {
@@ -122,10 +129,33 @@ static inline void do_BUG(const char *file, int line)
 	((unsigned char *)&addr)[1], \
 	((unsigned char *)&addr)[0]
 
-#define min(type,x,y) \
-	({ type __x = (x), __y = (y); __x < __y ? __x: __y; })
-#define max(type,x,y) \
-	({ type __x = (x), __y = (y); __x > __y ? __x: __y; })
+/*
+ * min()/max() macros that also do
+ * strict type-checking.. See the
+ * "unnecessary" pointer comparison.
+ */
+#define min(x,y) ({ \
+	const typeof(x) _x = (x);	\
+	const typeof(y) _y = (y);	\
+	(void) (&_x == &_y);		\
+	_x < _y ? _x : _y; })
+
+#define max(x,y) ({ \
+	const typeof(x) _x = (x);	\
+	const typeof(y) _y = (y);	\
+	(void) (&_x == &_y);		\
+	_x > _y ? _x : _y; })
+
+/*
+ * ..and if you can't take the strict
+ * types, you can specify one yourself.
+ *
+ * Or not use min/max at all, of course.
+ */
+#define min_t(type,x,y) \
+	({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
+#define max_t(type,x,y) \
+	({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
 
 #endif /* __KERNEL__ */
 

@@ -22,7 +22,7 @@ obj-y	 += mem.o tty_io.o n_tty.o tty_ioctl.o raw.o pty.o misc.o random.o
 # This list comes from 'grep -l EXPORT_SYMBOL *.[hc]'.
 
 export-objs     :=	vt.o keyboard.o sysrq.o misc.o pty.o random.o \
-			selection.o serial.o sonypi.o tty_io.o tty_ioctl.o
+			selection.o serial.o sonypi.o tty_io.o tty_ioctl.o 
 
 mod-subdirs	:=	ftape drm pcmcia
 
@@ -30,9 +30,20 @@ list-multi	:=
 
 SERIAL   =serial.o
 
+ifeq ($(CONFIG_DECSTATION),y)
+  SERIAL   = decserial.o
+endif
+
+ifeq ($(CONFIG_QTRONIX_KEYBOARD),y)
+  KEYBD    = qtronix.o
+  KEYMAP   = qtronixmap.o
+endif
+
 obj-$(CONFIG_VT) += vt.o vt_ioctl.o decvte.o vc_screen.o consolemap.o consolemap_deftbl.o selection.o keyboard.o defkeymap.o
 obj-$(CONFIG_SERIAL) += $(SERIAL)
 obj-$(CONFIG_SERIAL_21285) += serial_21285.o
+obj-$(CONFIG_SERIAL_SA1100) += serial_sa1100.o
+obj-$(CONFIG_SERIAL_AMBA) += serial_amba.o
 
 obj-$(CONFIG_MAGIC_SYSRQ) += sysrq.o
 obj-$(CONFIG_ATARI_DSP56K) += dsp56k.o
@@ -60,18 +71,17 @@ obj-$(CONFIG_SERIAL167) += serial167.o
 obj-$(CONFIG_MVME147_SCC) += generic_serial.o vme_scc.o
 obj-$(CONFIG_MVME162_SCC) += generic_serial.o vme_scc.o
 obj-$(CONFIG_BVME6000_SCC) += generic_serial.o vme_scc.o
+obj-$(CONFIG_SERIAL_TX3912) += generic_serial.o serial_tx3912.o
 
 subdir-$(CONFIG_RIO) += rio
 
 obj-$(CONFIG_PRINTER) += lp.o
-
 obj-$(CONFIG_DTLK) += dtlk.o
 obj-$(CONFIG_R3964) += n_r3964.o
 obj-$(CONFIG_APPLICOM) += applicom.o
 obj-$(CONFIG_SONYPI) += sonypi.o
 obj-$(CONFIG_RTC) += rtc.o
 obj-$(CONFIG_EFI_RTC) += efirtc.o
-obj-$(CONFIG_SA1100_RTC) += sa1100-rtc.o
 ifeq ($(CONFIG_PPC),)
   obj-$(CONFIG_NVRAM) += nvram.o
 endif
@@ -112,14 +122,8 @@ obj-$(CONFIG_21285_WATCHDOG) += wdt285.o
 obj-$(CONFIG_977_WATCHDOG) += wdt977.o
 obj-$(CONFIG_I810_TCO) += i810-tco.o
 obj-$(CONFIG_MACHZ_WDT) += machzwd.o
-obj-$(CONFIG_SA1100_WATCHDOG) += sa1100_wdt.o
 obj-$(CONFIG_SOFT_WATCHDOG) += softdog.o
 
-ifeq ($(CONFIG_ARCH_ACORN),y)
-mod-subdirs    += ../acorn/char
-subdir-y       += ../acorn/char
-obj-y          += ../acorn/char/acorn-char.o
-endif
 
 include $(TOPDIR)/Rules.make
 
@@ -133,5 +137,10 @@ consolemap_deftbl.c: $(FONTMAPFILE) conmakehash
 
 consolemap_deftbl.o: consolemap_deftbl.c $(TOPDIR)/include/linux/types.h
 
+.DELETE_ON_ERROR:
+
 defkeymap.c: defkeymap.map
-	loadkeys --mktable defkeymap.map > defkeymap.c
+	set -e ; loadkeys --mktable $< | sed -e 's/^static *//' > $@
+
+qtronixmap.c: qtronixmap.map
+	set -e ; loadkeys --mktable $< | sed -e 's/^static *//' > $@

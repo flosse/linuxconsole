@@ -186,7 +186,7 @@ void show_stack(unsigned long * esp)
 	show_trace(esp);
 }
 
-static void show_registers(struct pt_regs *regs)
+void show_registers(struct pt_regs *regs)
 {
 	int i;
 	int in_kernel = 1;
@@ -418,84 +418,14 @@ static void unknown_nmi_error(unsigned char reason, struct pt_regs * regs)
 	printk("Do you have a strange power saving mode enabled?\n");
 }
 
-#if CONFIG_X86_IO_APIC
-
-int nmi_watchdog = 0;
-
-static int __init setup_nmi_watchdog(char *str)
-{
-        get_option(&str, &nmi_watchdog);
-        return 1;
-}
-
-__setup("nmi_watchdog=", setup_nmi_watchdog);
-
-static spinlock_t nmi_print_lock = SPIN_LOCK_UNLOCKED;
-
-inline void nmi_watchdog_tick(struct pt_regs * regs)
-{
-	/*
-	 * the best way to detect wether a CPU has a 'hard lockup' problem
-	 * is to check it's local APIC timer IRQ counts. If they are not
-	 * changing then that CPU has some problem.
-	 *
-	 * as these watchdog NMI IRQs are broadcasted to every CPU, here
-	 * we only have to check the current processor.
-	 *
-	 * since NMIs dont listen to _any_ locks, we have to be extremely
-	 * careful not to rely on unsafe variables. The printk might lock
-	 * up though, so we have to break up the console locks first ...
-	 * [when there will be more tty-related locks, break them up
-	 *  here too!]
-	 */
-
-	static unsigned int last_irq_sums [NR_CPUS],
-				alert_counter [NR_CPUS];
-
-	/*
-	 * Since current-> is always on the stack, and we always switch
-	 * the stack NMI-atomically, it's safe to use smp_processor_id().
-	 */
-	int sum, cpu = smp_processor_id();
-
-	sum = apic_timer_irqs[cpu];
-
-	if (last_irq_sums[cpu] == sum) {
-		/*
-		 * Ayiee, looks like this CPU is stuck ...
-		 * wait a few IRQs (5 seconds) before doing the oops ...
-		 */
-		alert_counter[cpu]++;
-		if (alert_counter[cpu] == 5*HZ) {
-			spin_lock(&nmi_print_lock);
-			/*
-			 * We are in trouble anyway, lets at least try
-			 * to get a message out.
-			 */
-			bust_spinlocks(1);
-			printk("NMI Watchdog detected LOCKUP on CPU%d, registers:\n", cpu);
-			show_registers(regs);
-			printk("console shuts up ...\n");
-			console_silent();
-			spin_unlock(&nmi_print_lock);
-			bust_spinlocks(0);
-			do_exit(SIGSEGV);
-		}
-	} else {
-		last_irq_sums[cpu] = sum;
-		alert_counter[cpu] = 0;
-	}
-}
-#endif
-
 asmlinkage void do_nmi(struct pt_regs * regs, long error_code)
 {
 	unsigned char reason = inb(0x61);
 
-
 	++nmi_count(smp_processor_id());
+
 	if (!(reason & 0xc0)) {
-#if CONFIG_X86_IO_APIC
+#if CONFIG_X86_LOCAL_APIC
 		/*
 		 * Ok, so this is none of the documented NMI sources,
 		 * so it must be the NMI watchdog.
@@ -503,11 +433,9 @@ asmlinkage void do_nmi(struct pt_regs * regs, long error_code)
 		if (nmi_watchdog) {
 			nmi_watchdog_tick(regs);
 			return;
-		} else
-			unknown_nmi_error(reason, regs);
-#else
-		unknown_nmi_error(reason, regs);
+		}
 #endif
+		unknown_nmi_error(reason, regs);
 		return;
 	}
 	if (reason & 0x80)

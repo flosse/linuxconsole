@@ -1,5 +1,5 @@
 /*
- * BK Id: %F% %I% %G% %U% %#%
+ * BK Id: SCCS/s.chrp_setup.c 1.36 09/08/01 15:47:42 paulus
  */
 /*
  *  linux/arch/ppc/kernel/setup.c
@@ -31,7 +31,6 @@
 #include <linux/init.h>
 #include <linux/blk.h>
 #include <linux/ioport.h>
-#include <linux/console.h>
 #include <linux/pci.h>
 #include <linux/version.h>
 #include <linux/adb.h>
@@ -50,8 +49,9 @@
 #include <asm/machdep.h>
 #include <asm/irq.h>
 #include <asm/hydra.h>
-#include <asm/init.h>
+#include <asm/sections.h>
 #include <asm/time.h>
+#include <asm/btext.h>
 
 #include "local_irq.h"
 #include "i8259.h"
@@ -67,18 +67,20 @@ void chrp_find_bridges(void);
 void chrp_event_scan(void);
 void rtas_display_progress(char *, unsigned short);
 void rtas_indicator_progress(char *, unsigned short);
-void bootx_text_progress(char *, unsigned short);
+void btext_progress(char *, unsigned short);
 
 extern unsigned long pmac_find_end_of_memory(void);
-
 extern kdev_t boot_dev;
-
 extern PTE *Hash, *Hash_end;
 extern unsigned long Hash_size, Hash_mask;
 extern int probingmem;
 extern unsigned long loops_per_jiffy;
-extern int bootx_text_mapped;
 static int max_width;
+
+#ifdef CONFIG_SMP
+extern struct smp_ops_t chrp_smp_ops;
+extern struct smp_ops_t xics_smp_ops;
+#endif
 
 static const char *gg2_memtypes[4] = {
 	"FPM", "SDRAM", "EDO", "BEDO"
@@ -231,9 +233,6 @@ chrp_setup_arch(void)
 	chrp_find_bridges();
 
 #ifndef CONFIG_PPC64BRIDGE
-	/* PCI bridge config space access area -
-	 * appears to be not in devtree on longtrail. */
-	ioremap(GG2_PCI_CONFIG_BASE, 0x80000);
 	/*
 	 *  Temporary fixes for PCI devices.
 	 *  -- Geert
@@ -242,7 +241,6 @@ chrp_setup_arch(void)
 
 #endif /* CONFIG_PPC64BRIDGE */
 
-#ifndef CONFIG_POWER4
 	/* Some IBM machines don't have the hydra -- Cort */
 	if (!OpenPIC_Addr) {
 		struct device_node *root;
@@ -259,7 +257,6 @@ chrp_setup_arch(void)
 			OpenPIC_Addr = ioremap(opprop[n-1], 0x40000);
 		}
 	}
-#endif
 
 	/*
 	 *  Fix the Super I/O configuration
@@ -390,61 +387,14 @@ chrp_init2(void)
 /*
  * IDE stuff.
  */
-unsigned int chrp_ide_irq = 0;
-int chrp_ide_ports_known = 0;
-ide_ioreg_t chrp_ide_regbase[MAX_HWIFS];
-ide_ioreg_t chrp_idedma_regbase;
 
-void __chrp
-chrp_ide_probe(void)
-{
-        struct pci_dev *pdev = pci_find_device(PCI_VENDOR_ID_WINBOND, PCI_DEVICE_ID_WINBOND_82C105, NULL);
-
-        chrp_ide_ports_known = 1;
-
-        if(pdev) {
-                chrp_ide_regbase[0]=pdev->resource[0].start;
-                chrp_ide_regbase[1]=pdev->resource[2].start;
-                chrp_idedma_regbase=pdev->resource[4].start;
-                chrp_ide_irq=pdev->irq;
-        }
-}
-
-void __chrp
-chrp_ide_insw(ide_ioreg_t port, void *buf, int ns)
-{
-	ide_insw(port+_IO_BASE, buf, ns);
-}
-
-void __chrp
-chrp_ide_outsw(ide_ioreg_t port, void *buf, int ns)
-{
-	ide_outsw(port+_IO_BASE, buf, ns);
-}
-
-int __chrp
-chrp_ide_default_irq(ide_ioreg_t base)
-{
-        if (chrp_ide_ports_known == 0)
-	        chrp_ide_probe();
-	return chrp_ide_irq;
-}
-
-ide_ioreg_t __chrp
-chrp_ide_default_io_base(int index)
-{
-        if (chrp_ide_ports_known == 0)
-	        chrp_ide_probe();
-	return chrp_ide_regbase[index];
-}
-
-int __chrp
+static int __chrp
 chrp_ide_check_region(ide_ioreg_t from, unsigned int extent)
 {
         return check_region(from, extent);
 }
 
-void __chrp
+static void __chrp
 chrp_ide_request_region(ide_ioreg_t from,
 			unsigned int extent,
 			const char *name)
@@ -452,14 +402,14 @@ chrp_ide_request_region(ide_ioreg_t from,
         request_region(from, extent, name);
 }
 
-void __chrp
+static void __chrp
 chrp_ide_release_region(ide_ioreg_t from,
 			unsigned int extent)
 {
         release_region(from, extent);
 }
 
-void __chrp
+static void __chrp
 chrp_ide_init_hwif_ports(hw_regs_t *hw, ide_ioreg_t data_port, ide_ioreg_t ctrl_port, int *irq)
 {
 	ide_ioreg_t reg = data_port;
@@ -469,20 +419,42 @@ chrp_ide_init_hwif_ports(hw_regs_t *hw, ide_ioreg_t data_port, ide_ioreg_t ctrl_
 		hw->io_ports[i] = reg;
 		reg += 1;
 	}
-	if (ctrl_port) {
-		hw->io_ports[IDE_CONTROL_OFFSET] = ctrl_port;
-	} else {
-		hw->io_ports[IDE_CONTROL_OFFSET] = 0;
-	}
-	if (irq != NULL)
-		hw->irq = chrp_ide_irq;
+	hw->io_ports[IDE_CONTROL_OFFSET] = ctrl_port;
 }
-
 #endif
 
+/*
+ * One of the main thing these mappings are needed for is so that
+ * xmon can get to the serial port early on.  We probably should
+ * handle the machines with the mpc106 as well as the python (F50)
+ * and the GG2 (longtrail).  Actually we should look in the device
+ * tree and do the right thing.
+ */
+static void __init
+chrp_map_io(void)
+{
+	char *name;
+
+	/*
+	 * The code below tends to get removed, please don't take it out.
+	 * The F50 needs this mapping and it you take it out I'll track you
+	 * down and slap your hands.  If it causes problems please email me.
+	 *  -- Cort <cort@fsmlabs.com>
+	 */
+	name = get_property(find_path_device("/"), "name", NULL);
+	if (name && strncmp(name, "IBM-70", 6) == 0
+	    && strstr(name, "-F50")) {
+		io_block_mapping(0x80000000, 0x80000000, 0x10000000, _PAGE_IO);
+		io_block_mapping(0x90000000, 0x90000000, 0x10000000, _PAGE_IO);
+		return;
+	} else {
+		io_block_mapping(0xf8000000, 0xf8000000, 0x04000000, _PAGE_IO);
+	}
+}
+
 void __init
-	   chrp_init(unsigned long r3, unsigned long r4, unsigned long r5,
-		     unsigned long r6, unsigned long r7)
+chrp_init(unsigned long r3, unsigned long r4, unsigned long r5,
+	  unsigned long r6, unsigned long r7)
 {
 #ifdef CONFIG_BLK_DEV_INITRD
 	/* take care of initrd if we have one */
@@ -522,6 +494,7 @@ void __init
 	ppc_md.calibrate_decr = chrp_calibrate_decr;
 
 	ppc_md.find_end_of_memory = pmac_find_end_of_memory;
+	ppc_md.setup_io_mappings = chrp_map_io;
 
 	if (rtas_data) {
 		struct device_node *rtas;
@@ -540,22 +513,23 @@ void __init
 		}
 	}
 #ifdef CONFIG_BOOTX_TEXT
-	if (ppc_md.progress == NULL && bootx_text_mapped)
-		ppc_md.progress = bootx_text_progress;
+	if (ppc_md.progress == NULL && boot_text_mapped)
+		ppc_md.progress = btext_progress;
 #endif
 
+#ifdef CONFIG_SMP
+#ifndef CONFIG_POWER4
+	ppc_md.smp_ops = &chrp_smp_ops;
+#else
+	ppc_md.smp_ops = &xics_smp_ops;
+#endif /* CONFIG_POWER4 */
+#endif /* CONFIG_SMP */
+
 #if defined(CONFIG_BLK_DEV_IDE) || defined(CONFIG_BLK_DEV_IDE_MODULE)
-        ppc_ide_md.insw = chrp_ide_insw;
-        ppc_ide_md.outsw = chrp_ide_outsw;
-        ppc_ide_md.default_irq = chrp_ide_default_irq;
-        ppc_ide_md.default_io_base = chrp_ide_default_io_base;
         ppc_ide_md.ide_check_region = chrp_ide_check_region;
         ppc_ide_md.ide_request_region = chrp_ide_request_region;
         ppc_ide_md.ide_release_region = chrp_ide_release_region;
-        ppc_ide_md.fix_driveid = ppc_generic_ide_fix_driveid;
         ppc_ide_md.ide_init_hwif = chrp_ide_init_hwif_ports;
-
-        ppc_ide_md.io_base = _IO_BASE;
 #endif
 
 	/*
@@ -600,7 +574,7 @@ rtas_indicator_progress(char *s, unsigned short hex)
 
 #ifdef CONFIG_BOOTX_TEXT
 void
-bootx_text_progress(char *s, unsigned short hex)
+btext_progress(char *s, unsigned short hex)
 {
 	prom_print(s);
 	prom_print("\n");

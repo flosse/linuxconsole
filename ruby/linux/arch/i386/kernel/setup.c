@@ -64,6 +64,9 @@
  *
  *  VIA C3 Support.
  *  Dave Jones <davej@suse.de>, March 2001
+ *
+ *  AMD Athlon/Duron/Thunderbird bluesmoke support.
+ *  Dave Jones <davej@suse.de>, April 2001.
  */
 
 /*
@@ -92,6 +95,7 @@
 #include <linux/highmem.h>
 #include <linux/bootmem.h>
 #include <asm/processor.h>
+#include <asm/mtrr.h>
 #include <asm/uaccess.h>
 #include <asm/system.h>
 #include <asm/io.h>
@@ -142,11 +146,9 @@ struct sys_desc_table_struct {
 
 struct e820map e820;
 
-unsigned char aux_device_present;
-
+extern void mcheck_init(struct cpuinfo_x86 *c);
 extern int root_mountflags;
 extern char _text, _etext, _edata, _end;
-extern unsigned long cpu_khz;
 
 static int disable_x86_serial_nr __initdata = 1;
 static int disable_x86_fxsr __initdata = 0;
@@ -784,7 +786,6 @@ void __init setup_arch(char **cmdline_p)
 		machine_submodel_id = SYS_DESC_TABLE.table[1];
 		BIOS_revision = SYS_DESC_TABLE.table[2];
 	}
-	aux_device_present = AUX_DEVICE_INFO;
 
 #ifdef CONFIG_BLK_DEV_RAM
 	rd_image_start = RAMDISK_FLAGS & RAMDISK_IMAGE_START_MASK;
@@ -936,27 +937,14 @@ void __init setup_arch(char **cmdline_p)
 	 * trampoline before removing it. (see the GDT stuff)
 	 */
 	reserve_bootmem(PAGE_SIZE, PAGE_SIZE);
-	smp_alloc_memory(); /* AP processor realmode stacks in low memory*/
 #endif
 
-#ifdef CONFIG_X86_IO_APIC
+#ifdef CONFIG_X86_LOCAL_APIC
 	/*
 	 * Find and reserve possible boot-time SMP configuration:
 	 */
 	find_smp_config();
 #endif
-	paging_init();
-#ifdef CONFIG_X86_IO_APIC
-	/*
-	 * get boot-time SMP configuration:
-	 */
-	if (smp_found_config)
-		get_smp_config();
-#endif
-#ifdef CONFIG_X86_LOCAL_APIC
-	init_apic_mappings();
-#endif
-
 #ifdef CONFIG_BLK_DEV_INITRD
 	if (LOADER_TYPE && INITRD_START) {
 		if (INITRD_START + INITRD_SIZE <= (max_low_pfn << PAGE_SHIFT)) {
@@ -974,6 +962,25 @@ void __init setup_arch(char **cmdline_p)
 		}
 	}
 #endif
+
+	/*
+	 * NOTE: before this point _nobody_ is allowed to allocate
+	 * any memory using the bootmem allocator.
+	 */
+
+#ifdef CONFIG_SMP
+	smp_alloc_memory(); /* AP processor realmode stacks in low memory*/
+#endif
+	paging_init();
+#ifdef CONFIG_X86_LOCAL_APIC
+	/*
+	 * get boot-time SMP configuration:
+	 */
+	if (smp_found_config)
+		get_smp_config();
+	init_apic_mappings();
+#endif
+
 
 	/*
 	 * Request address space for all standard RAM and ROM resources
@@ -1079,11 +1086,18 @@ static void __init display_cacheinfo(struct cpuinfo_x86 *c)
 	l2size = ecx >> 16;
 
 	/* AMD errata T13 (order #21922) */
-	if (c->x86_vendor == X86_VENDOR_AMD &&
-	    c->x86 == 6 &&
-	    c->x86_model == 3 &&
-	    c->x86_mask == 0) {
-		l2size = 64;
+	if ((c->x86_vendor == X86_VENDOR_AMD) && (c->x86 == 6)) {
+		if (c->x86_model == 3 && c->x86_mask == 0)	/* Duron Rev A0 */
+			l2size = 64;
+		if (c->x86_model == 4 &&
+			(c->x86_mask==0 || c->x86_mask==1))	/* Tbird rev A1/A2 */
+			l2size = 256;
+	}
+
+	/* VIA C3 CPUs (670-68F) need further shifting. */
+	if (c->x86_vendor == X86_VENDOR_CENTAUR && (c->x86 == 6) &&
+		((c->x86_model == 7) || (c->x86_model == 8))) {
+		l2size = l2size >> 8;
 	}
 
 	if ( l2size == 0 )
@@ -1100,7 +1114,7 @@ static void __init display_cacheinfo(struct cpuinfo_x86 *c)
  *	misexecution of code under Linux. Owners of such processors should
  *	contact AMD for precise details and a CPU swap.
  *
- *	See	http://www.mygale.com/~poulot/k6bug.html
+ *	See	http://www.multimania.com/poulot/k6bug.html
  *		http://www.amd.com/K6/k6docs/revgd.html
  *
  *	The following test is erm.. interesting. AMD neglected to up
@@ -1116,6 +1130,12 @@ static int __init init_amd(struct cpuinfo_x86 *c)
 	u32 l, h;
 	int mbytes = max_mapnr >> (20-PAGE_SHIFT);
 	int r;
+
+	/*
+	 *	FIXME: We should handle the K5 here. Set up the write
+	 *	range and also turn on MSR 83 bits 4 and 31 (write alloc,
+	 *	no bus pipeline)
+	 */
 
 	/* Bit 31 in normal CPUID used for nonstandard 3DNow ID;
 	   3DNow is IDd by bit 31 in extended CPUID (1*32+31) anyway */
@@ -1176,13 +1196,13 @@ static int __init init_amd(struct cpuinfo_x86 *c)
 				if(mbytes>508)
 					mbytes=508;
 					
-				rdmsr(0xC0000082, l, h);
+				rdmsr(MSR_K6_WHCR, l, h);
 				if ((l&0x0000FFFF)==0) {
 					unsigned long flags;
 					l=(1<<0)|((mbytes/4)<<1);
 					local_irq_save(flags);
-					__asm__ __volatile__ ("wbinvd": : :"memory");
-					wrmsr(0xC0000082, l, h);
+					wbinvd();
+					wrmsr(MSR_K6_WHCR, l, h);
 					local_irq_restore(flags);
 					printk(KERN_INFO "Enabling old style K6 write allocation for %d Mb\n",
 						mbytes);
@@ -1197,13 +1217,13 @@ static int __init init_amd(struct cpuinfo_x86 *c)
 				if(mbytes>4092)
 					mbytes=4092;
 
-				rdmsr(0xC0000082, l, h);
+				rdmsr(MSR_K6_WHCR, l, h);
 				if ((l&0xFFFF0000)==0) {
 					unsigned long flags;
 					l=((mbytes>>2)<<22)|(1<<16);
 					local_irq_save(flags);
-					__asm__ __volatile__ ("wbinvd": : :"memory");
-					wrmsr(0xC0000082, l, h);
+					wbinvd();
+					wrmsr(MSR_K6_WHCR, l, h);
 					local_irq_restore(flags);
 					printk(KERN_INFO "Enabling new style K6 write allocation for %d Mb\n",
 						mbytes);
@@ -1217,10 +1237,10 @@ static int __init init_amd(struct cpuinfo_x86 *c)
 					set_bit(X86_FEATURE_K6_MTRR, &c->x86_capability);
 				break;
 			}
-
 			break;
 
 		case 6:	/* An Athlon/Duron. We can trust the BIOS probably */
+			mcheck_init(c);
 			break;		
 	}
 
@@ -1303,9 +1323,10 @@ extern void calibrate_delay(void) __init;
 
 static void __init check_cx686_slop(struct cpuinfo_x86 *c)
 {
+	unsigned long flags;
+
 	if (Cx86_dir0_msb == 3) {
 		unsigned char ccr3, ccr5;
-		unsigned long flags;
 
 		local_irq_save(flags);
 		ccr3 = getCx86(CX86_CCR3);
@@ -1542,14 +1563,12 @@ static void __init init_centaur(struct cpuinfo_x86 *c)
 				name="??";
 			}
 
-			/* get FCR  */
-			rdmsr(0x107, lo, hi);
-
+			rdmsr(MSR_IDT_FCR1, lo, hi);
 			newlo=(lo|fcr_set) & (~fcr_clr);
 
 			if (newlo!=lo) {
 				printk(KERN_INFO "Centaur FCR was 0x%X now 0x%X\n", lo, newlo );
-				wrmsr(0x107, newlo, hi );
+				wrmsr(MSR_IDT_FCR1, newlo, hi );
 			} else {
 				printk(KERN_INFO "Centaur FCR is 0x%X\n",lo);
 			}
@@ -1568,14 +1587,15 @@ static void __init init_centaur(struct cpuinfo_x86 *c)
 				c->x86_cache_size = (cc>>24)+(dd>>24);
 			}
 			sprintf( c->x86_model_id, "WinChip %s", name );
+			mcheck_init(c);
 			break;
 
 		case 6:
 			switch (c->x86_model) {
 				case 6 ... 7:		/* Cyrix III or C3 */
-					rdmsr (0x1107, lo, hi);
+					rdmsr (MSR_VIA_FCR, lo, hi);
 					lo |= (1<<1 | 1<<7);	/* Report CX8 & enable PGE */
-					wrmsr (0x1107, lo, hi);
+					wrmsr (MSR_VIA_FCR, lo, hi);
 
 					set_bit(X86_FEATURE_CX8, &c->x86_capability);
 					set_bit(X86_FEATURE_3DNOW, &c->x86_capability);
@@ -1586,7 +1606,6 @@ static void __init init_centaur(struct cpuinfo_x86 *c)
 			}
 			break;
 	}
-
 }
 
 
@@ -1659,7 +1678,6 @@ static void __init init_rise(struct cpuinfo_x86 *c)
 	if (c->x86_model > 2)
 		printk(" II");
 	printk("\n");
-	printk("If you have one of these please email davej@suse.de\n");
 
 	/* Unhide possibly hidden capability flags
 	   The mp6 iDragon family don't have MSRs.
@@ -1685,7 +1703,6 @@ static void __init init_intel(struct cpuinfo_x86 *c)
 #ifndef CONFIG_M686
 	static int f00f_workaround_enabled = 0;
 #endif
-	extern void mcheck_init(struct cpuinfo_x86 *c);
 	char *p = NULL;
 	unsigned int l1i = 0, l1d = 0, l2 = 0, l3 = 0; /* Cache sizes */
 
@@ -1980,9 +1997,9 @@ static void __init squash_the_stupid_serial_number(struct cpuinfo_x86 *c)
 	    disable_x86_serial_nr ) {
 		/* Disable processor serial number */
 		unsigned long lo,hi;
-		rdmsr(0x119,lo,hi);
+		rdmsr(MSR_IA32_BBL_CR_CTL,lo,hi);
 		lo |= 0x200000;
-		wrmsr(0x119,lo,hi);
+		wrmsr(MSR_IA32_BBL_CR_CTL,lo,hi);
 		printk(KERN_NOTICE "CPU serial number disabled.\n");
 		clear_bit(X86_FEATURE_PN, &c->x86_capability);
 

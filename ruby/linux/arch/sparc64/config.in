@@ -194,6 +194,9 @@ if [ "$CONFIG_SCSI" != "n" ]; then
       fi
       dep_tristate 'Qlogic ISP SCSI support' CONFIG_SCSI_QLOGIC_ISP $CONFIG_SCSI
       dep_tristate 'Qlogic ISP FC SCSI support' CONFIG_SCSI_QLOGIC_FC $CONFIG_SCSI
+      if [ "$CONFIG_SCSI_QLOGIC_FC" != "n" ]; then
+	 define_bool CONFIG_SCSI_QLOGIC_FC_FIRMWARE y
+      fi
    fi
 
    endmenu
