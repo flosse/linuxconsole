@@ -1236,7 +1236,7 @@ out:
 /* Allocate the console screen memory. */
 static int vt_open(struct tty_struct *tty, struct file * filp)
 {
-        unsigned int currcons = MINOR(tty->device) - tty->driver.minor_start;
+        unsigned int currcons = MINOR(tty->device);
 	struct vc_data *vc = (struct vc_data *) tty->driver_data;
 
 	if (!vc) {
@@ -1264,7 +1264,7 @@ static void vt_close(struct tty_struct *tty, struct file * filp)
         if (!tty)
                 return;
         if (tty->count != 1) return;
-        vcs_make_devfs (MINOR (tty->device) - tty->driver.minor_start, 1);
+        vcs_make_devfs(MINOR(tty->device), 1);
         tty->driver_data = 0;
 }
 
@@ -1533,21 +1533,28 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
  * else. If you want the screen to clear, call tty_write with
  * the appropriate escape-sequence.
  */
-static struct tty_struct *console_table[MAX_NR_CONSOLES];
-static struct termios *console_termios[MAX_NR_CONSOLES];
-static struct termios *console_termios_locked[MAX_NR_CONSOLES];
+static struct tty_struct *console_table[MAX_NR_USER_CONSOLES];
+static struct termios *console_termios[MAX_NR_USER_CONSOLES];
+static struct termios *console_termios_locked[MAX_NR_USER_CONSOLES];
 static int console_refcount;
 struct tty_driver vt_driver;
 
+static struct tty_struct *console_table2[MAX_NR_USER_CONSOLES];
+static struct termios *console_termios2[MAX_NR_USER_CONSOLES];
+static struct termios *console_termios_locked2[MAX_NR_USER_CONSOLES];
+static int console_refcount2;
+struct tty_driver vt_driver2;
+
 void __init vt_console_init(void)
 {
+#if defined(CONFIG_VGA_CONSOLE)
         memset(&vt_driver, 0, sizeof(struct tty_driver));
         vt_driver.magic = TTY_DRIVER_MAGIC;
         vt_driver.name = "vc/%d";
         vt_driver.name_base = current_vc;
         vt_driver.major = TTY_MAJOR;
         vt_driver.minor_start = current_vc;
-        vt_driver.num = MAX_NR_CONSOLES;
+        vt_driver.num = MAX_NR_USER_CONSOLES;
         vt_driver.type = TTY_DRIVER_TYPE_CONSOLE;
         vt_driver.init_termios = tty_std_termios;
         vt_driver.flags = TTY_DRIVER_REAL_RAW | TTY_DRIVER_RESET_TERMIOS;
@@ -1577,10 +1584,45 @@ void __init vt_console_init(void)
         if (tty_register_driver(&vt_driver))
                 panic("Couldn't register console driver\n");
 
-#if defined(CONFIG_VGA_CONSOLE)
 	vga_console_init();
 #endif
 #if defined(CONFIG_MDA_CONSOLE)
+        memset(&vt_driver2, 0, sizeof(struct tty_driver));
+        vt_driver2.magic = TTY_DRIVER_MAGIC;
+        vt_driver2.name = "vc/%d";
+        vt_driver2.name_base = current_vc;
+        vt_driver2.major = TTY_MAJOR;
+        vt_driver2.minor_start = current_vc;
+        vt_driver2.num = MAX_NR_USER_CONSOLES;
+        vt_driver2.type = TTY_DRIVER_TYPE_CONSOLE;
+        vt_driver2.init_termios = tty_std_termios;
+        vt_driver2.flags = TTY_DRIVER_REAL_RAW | TTY_DRIVER_RESET_TERMIOS;
+        /* Tell tty_register_driver() to skip consoles because they are
+         * registered before kmalloc() is ready. We'll patch them in later.
+         * See comments at console_init(); see also con_init_devfs().
+         */
+        vt_driver2.flags |= TTY_DRIVER_NO_DEVFS;
+        vt_driver2.refcount = &console_refcount2;
+        vt_driver2.table = console_table2;
+        vt_driver2.termios = console_termios2;
+        vt_driver2.termios_locked = console_termios_locked2;
+
+        vt_driver2.open = vt_open;
+        vt_driver2.close = vt_close;
+        vt_driver2.write = vt_write;
+        vt_driver2.write_room = vt_write_room;
+        vt_driver2.put_char = vt_put_char;
+        vt_driver2.flush_chars = vt_flush_chars;
+        vt_driver2.chars_in_buffer = vt_chars_in_buffer;
+        vt_driver2.ioctl = vt_ioctl;
+        vt_driver2.stop = vt_stop;
+        vt_driver2.start = vt_start;
+        vt_driver2.throttle = vt_throttle;
+        vt_driver2.unthrottle = vt_unthrottle;
+
+        if (tty_register_driver(&vt_driver2))
+                panic("Couldn't register second console driver\n");
+
 	mda_console_init();
 #endif
 }
