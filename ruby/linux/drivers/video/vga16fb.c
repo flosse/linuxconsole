@@ -56,6 +56,7 @@ static struct fb_var_screeninfo vga16fb_defined __initdata = {
 	{0,0,0,0,0,0}
 };
 
+/* name should not depend on EGA/VGA */
 static struct fb_fix_screeninfo vga16fb_fix __initdata = {
     "VGA16 VGA", VGA_FB_PHYS, VGA_FB_PHYS_LEN, FB_TYPE_VGA_PLANES,  
     FB_AUX_VGA_PLANES_VGA4, FB_VISUAL_PSEUDOCOLOR, 8, 1, 0, 640/8, 
@@ -359,6 +360,149 @@ static int vga16fb_pan_display(struct fb_var_screeninfo *var,
 	return 0;
 }
 
+static void vga16fb_fillrect(struct fb_info *info, int x1, int y1,
+	 		     unsigned int width, unsigned int height, 
+			     unsigned long color, int rop)
+{
+        int line_ofs = info->fix.line_length - width;
+        char *where;
+        int x;
+
+	outb(VGA_GFX_MODE, VGA_GFX_I);
+        outb(0, VGA_GFX_D);
+	outb(VGA_GFX_DATA_ROTATE, VGA_GFX_I);
+        outb(0, VGA_GFX_D);
+	outb(VGA_GFX_SR_ENABLE, VGA_GFX_I);
+        outb(0xf, VGA_GFX_D);
+	outb(VGA_GFX_SR_VALUE, VGA_GFX_I);
+        outb(color, VGA_GFX_D);
+	outb(VGA_GFX_BIT_MASK, VGA_GFX_I);
+        outb(0xff, VGA_GFX_D);
+
+        where = info->screen_base + x1 + y1 * info->fix.line_length;
+        
+	while (height--) {
+                for (x = 0; x < width; x++) {
+                        writeb(0, where);
+                        where++;
+                }
+                where += line_ofs;
+        }
+	return;
+}
+
+static void vga16fb_copyarea(struct fb_info *info, int sx, int sy, 
+			     unsigned int width, unsigned int height, 
+			     int dx, int dy)
+{
+        char *dest, *src;
+        int line_ofs, x;
+
+	outb(VGA_GFX_MODE, VGA_GFX_I);
+        outb(1, VGA_GFX_D);
+	outb(VGA_GFX_DATA_ROTATE, VGA_GFX_I);
+        outb(0, VGA_GFX_D);
+	outb(VGA_GFX_SR_ENABLE, VGA_GFX_I);
+        outb(0xf, VGA_GFX_D);
+        
+        if (dy < sy || (dy == sy && dx < sx)) {
+                line_ofs = info->fix.line_length - width;
+                dest = info->screen_base + dx + dy * info->fix.line_length;
+                src = info->screen_base + sx + sy * info->fix.line_length;
+                while (height--) {
+                        for (x = 0; x < width; x++) {
+			        readb(src);
+                                writeb(0, dest);
+                                dest++;
+                                src++;
+                        }
+                        src += line_ofs;
+                        dest += line_ofs;
+                }
+        } else {
+                line_ofs = info->fix.line_length - width;
+                dest = info->screen_base + dx + width + 
+				(dy + height - 1) * info->fix.line_length;
+                src = info->screen_base + sx + width + 
+				(sy + height - 1) * info->fix.line_length;
+                while (height--) {
+                        for (x = 0; x < width; x++) {
+                                dest--;
+                                src--;
+                                readb(src);
+                                writeb(0, dest);
+                        }
+                        src -= line_ofs;
+                        dest -= line_ofs;
+                }
+        }
+	return;
+}
+
+static void vga16fb_imageblit(struct fb_info *info, unsigned int width, 
+			      unsigned int height, unsigned long *image,
+                   	      int image_depth, int dx, int dy)
+{
+	char *dest = info->screen_base+dx + dy * info->fix.line_length * height;
+	char *pic = (char *) image;
+	int x1, y1;
+
+	if (image_depth == 1) {
+		int fg = 0; //attr_fgcol(p,c);
+	        int bg = 1; //attr_bgcol(p,c);
+
+		outb(VGA_GFX_MODE, VGA_GFX_I);
+        	outb(2, VGA_GFX_D);
+		outb(VGA_GFX_DATA_ROTATE, VGA_GFX_I);
+        	outb(0, VGA_GFX_D);
+		outb(VGA_GFX_SR_ENABLE, VGA_GFX_I);
+        	outb(0xf, VGA_GFX_D);
+
+        	outb(VGA_GFX_SR_VALUE, VGA_GFX_I);
+        	outb(fg, VGA_GFX_D);
+
+		outb(VGA_GFX_BIT_MASK, VGA_GFX_I);
+		outb(0xff, VGA_GFX_D);	
+        	writeb(bg, dest);
+        	rmb();
+        	fb_readb(dest); /* fill latches */
+        	outb(VGA_GFX_MODE, VGA_GFX_I);
+        	outb(3, VGA_GFX_D);
+        	wmb();
+        	for (y1=dy;y1<(dy + height);y1++,dest += info->fix.line_length)
+                	fb_writeb(*pic, dest);
+        	wmb();
+	} else {
+        	if (info->var.bits_per_pixel == 4 && 
+		    info->fix.type == FB_TYPE_VGA_PLANES) {
+                	outb_p(1,0x3ce); outb_p(0xf,0x3cf);
+                	outb_p(3,0x3ce); outb_p(0,0x3cf);
+                	outb_p(5,0x3ce); outb_p(0,0x3cf);
+
+                	for (y1 = dy; y1 < (dy + height); y1++) {
+                        	for (x1 = dx; x1 < (dx + width); x1++) {
+                                	dest = info->screen_base + y1*info->fix.line_length + x1/4 + dx/8;
+                                	outb_p(0,0x3ce);
+                                	outb_p(*pic >> 4,0x3cf);
+                                	outb_p(8,0x3ce);
+                                	outb_p(1 << (7 - x1 % 4 * 2),0x3cf);
+                                	fb_readb(dest);
+                                	fb_writeb(0, dest);
+
+                                	outb_p(0,0x3ce);
+                                	outb_p(*pic & 0xf,0x3cf);
+                                	outb_p(8,0x3ce);
+                                	outb_p(1 << (7-(1 + x1 % 4 * 2)),0x3cf);
+                                	fb_readb(dest);
+                                	fb_writeb(0, dest);
+                                	pic++;
+                       	 	}
+                	}
+		}
+	}
+	return;
+}
+
 static struct fb_ops vga16fb_ops = {
 	owner:		THIS_MODULE,
 	fb_check_var:	vga16fb_check_var,
@@ -366,23 +510,13 @@ static struct fb_ops vga16fb_ops = {
 	fb_setcolreg:	vga16fb_setcolreg,
 	fb_blank:	vga16fb_blank,
 	fb_pan_display:	vga16fb_pan_display,
+        fb_fillrect:    vga16fb_fillrect,
+        fb_copyarea:    vga16fb_copyarea,
+        fb_imageblit:   vga16fb_imageblit,
 };
 
 int __init vga16fb_setup(char *options)
 {
-	char *this_opt;
-	
-	vga16fb.fontname[0] = '\0';
-	
-	if (!options || !*options)
-		return 0;
-	
-	for(this_opt=strtok(options,","); this_opt; this_opt=strtok(NULL,",")) {
-		if (!*this_opt) continue;
-		
-		if (!strncmp(this_opt, "font:", 5))
-			strcpy(vga16fb.fontname, this_opt+5);
-	}
 	return 0;
 }
 
@@ -414,8 +548,6 @@ int __init vga16fb_init(void)
 	/* XXX share VGA I/O region with vgacon and others */
 	vga16fb.par = &default_par;
 
-	/* name should not depend on EGA/VGA */
-	strcpy(vga16fb.modename, "VGA16 VGA");
 	vga16fb.node = -1;
 	vga16fb.fix = vga16fb_fix;
 	vga16fb.var = vga16fb_defined;
@@ -429,7 +561,7 @@ int __init vga16fb_init(void)
 		return -EINVAL;
 
 	printk(KERN_INFO "fb%d: %s frame buffer device\n",
-	       GET_FB_IDX(vga16fb.node), vga16fb.modename);
+	       GET_FB_IDX(vga16fb.node), vga16fb.fix.id);
 	
 	return 0;
 }
