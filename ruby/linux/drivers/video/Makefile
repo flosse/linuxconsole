@@ -134,6 +134,7 @@ obj-$(CONFIG_FBCON_MAC)           += fbcon-mac.o
 obj-$(CONFIG_FBCON_MFB)           += fbcon-mfb.o
 obj-$(CONFIG_FBCON_VGA)           += fbcon-vga.o
 obj-$(CONFIG_FBCON_HGA)           += fbcon-hga.o
+obj-$(CONFIG_FBCON_ACCEL)  	  += fbcon-accel.o
 
 # Extract lists of the multi-part drivers.
 # The 'int-*' lists are the intermediate files used to build the multi's.
