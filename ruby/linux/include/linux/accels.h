@@ -47,7 +47,8 @@ struct accel_ops {
      void (*copyarea)(void *par, int sx, int sy, unsigned int width, 
 		      unsigned int height, int dx, int dy);
      void (*imageblit)(void *par, int dx, int dy, unsigned int width, 
-                       unsigned int height, int image_depth, void *image);
+                       unsigned int height, unsigned long fgx, 
+		       unsigned long bgx, void *image);
 };
 
 struct accel_ops *gfxops[32];
