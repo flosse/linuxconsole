@@ -550,15 +550,11 @@ void input_register_handler(struct input_handler *handler)
 	struct input_handle *handle;
 	struct input_device_id *id;
 
-printk("A\n");
-
 	if (!handler) return;
 
 /*
  * Add minors if needed.
  */
-
-printk("B\n");
 
 	if (handler->fops != NULL)
 		input_table[handler->minor >> 5] = handler;
@@ -566,7 +562,6 @@ printk("B\n");
 /*
  * Add the handler.
  */
-printk("C\n");
 
 	handler->next = input_handler;	
 	input_handler = handler;
@@ -575,14 +570,12 @@ printk("C\n");
  * Notify it about all existing devices.
  */
 
-printk("D\n");
 	while (dev) {
 		if ((id = input_match_device(handler->id_table, dev)))
 			if ((handle = handler->connect(handler, dev, id)))
 				input_link_handle(handle);
 		dev = dev->next;
 	}
-printk("E\n");
 
 /*
  * Notify /proc.
@@ -590,11 +583,8 @@ printk("E\n");
 
 #ifdef CONFIG_PROC_FS
 	input_devices_state++;
-printk("F\n");
 	wake_up(&input_devices_poll_wait);
 #endif
-
-printk("G\n");
 }
 
 void input_unregister_handler(struct input_handler *handler)

@@ -41,7 +41,7 @@
 #include <asm/unaligned.h>
 #include <linux/input.h>
 
-#define DEBUG
+#undef DEBUG
 #undef DEBUG_DATA
 
 #include <linux/usb.h>
