@@ -33,7 +33,7 @@
 #include <unistd.h>
 #include <stdio.h>
 
-char *events[EV_MAX + 1] = { "Reset", "Key", "Relative", "Absolute", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+char *events[EV_MAX + 1] = { "Sync", "Key", "Relative", "Absolute", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 NULL, NULL, NULL, "LED", "Sound", NULL, "Repeat", "ForceFeedback", NULL, "ForceFeedbackStatus"};
 char *keys[KEY_MAX + 1] = { "Reserved", "Esc", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "Minus", "Equal", "Backspace",
 "Tab", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "LeftBrace", "RightBrace", "Enter", "LeftControl", "A", "S", "D", "F", "G",
@@ -164,12 +164,18 @@ int main (int argc, char **argv)
 		}
 
 		for (i = 0; i < rd / sizeof(struct input_event); i++)
-			printf("Event: time %ld.%06ld, type %d (%s), code %d (%s), value %d\n",
-				ev[i].time.tv_sec, ev[i].time.tv_usec, ev[i].type,
-				events[ev[i].type] ? events[ev[i].type] : "?",
-				ev[i].code,
-				names[ev[i].type] ? (names[ev[i].type][ev[i].code] ? names[ev[i].type][ev[i].code] : "?") : "?",
-				ev[i].value);
+
+			if (ev[i].type == EV_SYN) {
+				printf("Event: time %ld.%06ld, -------------- %s ------------\n",
+					ev[i].time.tv_sec, ev[i].time.tv_usec, ev[i].code ? "Report Sync" : "Config Sync");
+			} else {
+				printf("Event: time %ld.%06ld, type %d (%s), code %d (%s), value %d\n",
+					ev[i].time.tv_sec, ev[i].time.tv_usec, ev[i].type,
+					events[ev[i].type] ? events[ev[i].type] : "?",
+					ev[i].code,
+					names[ev[i].type] ? (names[ev[i].type][ev[i].code] ? names[ev[i].type][ev[i].code] : "?") : "?",
+					ev[i].value);
+			}	
 
 	}
 }
