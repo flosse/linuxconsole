@@ -155,6 +155,9 @@ static struct {
 /* Encode a time value */
 #define TIME_SCALE(a)	((a) == 0xffff ? 0xffff : (a) * 1000 / 256)
 
+/* Forward declaration */
+static int iforce_erase_effect(struct input_dev *dev, int effect_id);
+
 static void dump_packet(char *msg, u16 cmd, unsigned char *data)
 {
 	int i;
@@ -351,12 +354,28 @@ static int iforce_open(struct input_dev *dev)
 			break;
 #endif
 	}
+
+	/* Reset device */
+	send_packet(iforce, FF_CMD_ENABLE, "\004");
+
 	return 0;
 }
 
 static void iforce_close(struct input_dev *dev)
 {
 	struct iforce *iforce = dev->private;
+	int i;
+
+	/* Disable force feedback playback */
+	send_packet(iforce, FF_CMD_ENABLE, "\001");
+
+	/* Erase all effects */
+	for (i=0; i<dev->ff_effects_max; ++i) {
+		if (test_bit(FF_CORE_IS_USED, iforce->core_effects[i].flags) && iforce_erase_effect(dev, i)) {
+			printk(KERN_WARNING "input%d: iforce_close: erase effect %d failed\n",
+				dev->number, i);
+		}
+	}
 
 	switch (iforce->bus) {
 #ifdef IFORCE_USB
@@ -896,6 +915,13 @@ static int iforce_init_device(struct iforce *iforce)
 	if (!get_id_packet(iforce, "N"))
 		iforce->dev.ff_effects_max = iforce->edata[1];
 
+	/* Check if the device can store more effects than the driver can really handle */
+	if (iforce->dev.ff_effects_max > FF_EFFECTS_MAX) {
+		printk(KERN_WARNING "input??: Device can handle %d effects, but N_EFFECTS_MAX is set to %d in iforce.c\n",
+			iforce->dev.ff_effects_max, FF_EFFECTS_MAX);
+		iforce->dev.ff_effects_max = FF_EFFECTS_MAX;
+	}
+
 /*
  * Display additional info.
  */
@@ -910,7 +936,6 @@ static int iforce_init_device(struct iforce *iforce)
  */
 
 	send_packet(iforce, FF_CMD_AUTOCENTER, "\004\000");
-	send_packet(iforce, FF_CMD_ENABLE, "\004");
 
 /*
  * Find appropriate device entry
