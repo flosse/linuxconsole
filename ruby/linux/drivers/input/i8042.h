@@ -34,14 +34,6 @@
 #undef I8042_RESET
 
 /*
- * If you want to override the keylock setting (useful when you
- * don't want anyone to mess with your BIOS and LILO settings,
- * and you can't make BIOS password-protected), define this.
- */
-
-#undef I8042_OVERRIDE_KEYLOCK
-
-/*
  * If you want to trace all the i/o the i8042 module does for
  * debugging purposes, define this.
  */
