@@ -106,7 +106,7 @@ extern void prom_con_init(void);
 #ifdef CONFIG_MDA_CONSOLE
 extern void mda_console_init(void);
 #endif
-#ifdef CONFIG_FB_CONSOLE
+#ifdef CONFIG_FRAMEBUFFER_CONSOLE
 extern void fb_console_init(void);
 #endif
 #endif
@@ -2282,7 +2282,7 @@ void __init tty_init(void)
 #if defined (CONFIG_MDA_CONSOLE)
         mda_console_init();
 #endif
-#if defined (CONFIG_FB_CONSOLE)
+#if defined (CONFIG_FRAMEBUFFER_CONSOLE)
 	fb_console_init();
 #endif
 	kbd_init();
