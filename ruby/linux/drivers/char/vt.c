@@ -1570,6 +1570,7 @@ void __init vt_console_init(void)
 	vt->vt_sw = &dummy_con;
 #endif
 	vc = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
+	vt->default_mode = vc;
 	display_desc = create_vt(vt, 1);
 	if (!display_desc) { 
 		free_bootmem((unsigned long) vt, sizeof(struct vt_struct));
