@@ -1,7 +1,7 @@
 /*
  * linux/drivers/video/skeletonfb.c -- Skeleton for a frame buffer device
  *
- *  Modified to new api Jan 2001 by James Simmons (jsimmons@linux-fbdev.org)
+ *  Modified to new api Jan 2001 by James Simmons (jsimmons@transvirtual.com)
  *
  *  Created 28 Dec 1997 by Geert Uytterhoeven
  *
@@ -21,9 +21,6 @@
 #include <linux/fb.h>
 #include <linux/init.h>
 
-/* This header contains struct xxx_par for your graphics card */
-#include <video/skeletion.h>
-
     /*
      *  This is just simple sample code.
      *
@@ -31,6 +28,20 @@
      *  Even less warranty that it actually works :-)
      */
 
+/* 
+ * This structure defines the hardware state of the graphics card. Normally
+ * you place this in a header file in linux/include/video. This file usually
+ * also includes register information. That allows other driver subsystems
+ * and userland applications the ability to use the same header file to 
+ * avoid duplicate work and easy porting of software. 
+ */
+struct xxx_par;
+
+/*
+ * Here we define the default structs fb_fix_screeninfo and fb_var_screeninfo
+ * if we don't use modedb. If we do use modedb see xxxfb_init how to use it
+ * to get a fb_var_screeninfo. Otherwise define a default var as well. 
+ */
 static struct fb_fix_screeninfo xxxfb_fix __initdata = {
     "FB's name", (unsigned long) NULL, 0, FB_TYPE_PACKED_PIXELS, 0,
     FB_VISUAL_PSEUDOCOLOR, 1, 1, 1, 0, (unsigned long) NULL, 0, FB_ACCEL_NONE
@@ -45,7 +56,10 @@ static struct fb_fix_screeninfo xxxfb_fix __initdata = {
      *  graphics card would be shared between each struct fb_info. This
      *  allows when one display changes it video resolution (info->var) 
      *  the other displays know instantly. Each display can always be
-     *  aware of the entire hardware state that affects it. I hope this 
+     *  aware of the entire hardware state that affects it. The other side 
+     *  of the coin is multiple graphics cards that pass data around until
+     *  it is finally displayed on one monitor. Such examples are the
+     *  voodoo 1 cards and high end NUMA graphics servers. I hope this 
      *  covers every possible hardware design. If not feel free to send 
      *  me more design types. 
      */
@@ -56,12 +70,7 @@ static struct fb_fix_screeninfo xxxfb_fix __initdata = {
      */ 
 static struct fb_info info;
     /* 
-     * This struct represents the state of a rendering pipe. A modern 
-     * graphics card can have more than one pipe per card depending 
-     * on the hardware design. So the same holds true if you have
-     * multiple pipes. Use arrays or allocate them dynamically.
-     *
-     * Read video/skeleton.h for more information about graphics pipes. 
+     * This represents the default state of the hardware. 
      */
 static struct xxx_par __initdata current_par;
 
@@ -71,40 +80,69 @@ static int inverse = 0;
 int xxxfb_init(void);
 int xxxfb_setup(char*);
 
-/* ------------------- chipset specific functions -------------------------- */
-
+/**
+ *      xxxfb_check_var - REQUIRED function. Validates a var passed in. 
+ *      @var: frame buffer variable screen structure
+ *      @info: frame buffer structure that represents a single frame buffer 
+ *
+ *	Checks to see if the hardware supports the state requested by
+ *	var passed in. This function does not alter the hardware state!!! 
+ *	This means the data stored in fb_info, par and var, do not change.
+ *	Do NOT change these. This function can be called on its own if we
+ *	intent to only test a mode and not actually set it. The stuff in 
+ *	modedb.c is a example of this. If the var passed in is slightly 
+ *	off by what the hardware can support then we alter the var PASSED in
+ *	to what we can do. If the hardware doesn't support mode change 
+ * 	just return a -EINVAL;
+ *
+ *	Returns negative errno on error, or zero on success.
+ */
 static int xxxfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 {
     const struct xxx_par *par = (const struct xxx_par *) info->par;
-    /* 
-     * We test to see if the hardware can support var. Struct xxx_par will
-     * have the information needed to see if it does. Note we don't change
-     * par nor info->var. This function can be called on its own if we
-     * intent to only test a mode and not set it. Return 0 if it is a
-     * acceptable mode.
-     */
-
     /* ... */
     return 0;	   	
 }
 
+/**
+ *      xxxfb_set_par - NOT a required function. Alters the hardware state.
+ *      @info: frame buffer structure that represents a single frame buffer
+ *
+ *	Using the fb_var_screeninfo in fb_info we set the resolution of the
+ *	this particular framebuffer. This function alters par stored in 
+ *	fb_info. It doesn't not alter var in fb_info since we are using that
+ *	data. This means we depend on the data in var inside fb_info to be
+ *	supported by the hardware. xxxfb_check_var is always called before
+ *	xxxfb_set_par to ensure this.  
+ *
+ */
 static void xxxfb_set_par(struct fb_info *info)
 {
-    /*
-     *  xxx_fb_check_var tested the mode we want to set the hardware to.
-     *  If it passes it then is set to info->var. Now we set the hardware
-     *  (and struct par) according to info->var.
-     */
-
+    struct xxx_par *par = (struct xxx_par *) info->par;
     /* ... */
 }
 
-    /*
-     *  Set a single color register. The values supplied have a 16 bit
-     *  magnitude. Return != 0 for invalid regno. This routine assumes
-     *  your graphics hardware is packed pixel based (most are :-). 
-     *  Return != 0 for invalid regno.
-     */
+/**
+ *  	xxxfb_setcolreg - REQUIRED function. Sets a color register.
+ *      @regno: boolean, 0 copy local, 1 get_user() function
+ *      @red: frame buffer colormap structure
+ *	@green: The green value which can be up to 16 bits wide 
+ *	@blue:  The blue value which can be up to 16 bits wide.
+ *	@transp: If supported the alpha value which can be up to 16 bits wide.	
+ *      @info: frame buffer info structure
+ * 
+ *  	Set a single color register. The values supplied have a 16 bit
+ *  	magnitude which needs to be scaled in this function for the hardware. 
+ *	Things to take into consideration are how many color registers, if
+ *	any, are supported with the current color visual. With truecolor mode
+ *	no color palettes are supported. Here a psuedo palette is created 
+ *	which we store the value in pseudo_palette in struct fb_info. For
+ *	pseudocolor mode we have a limited color palette. To deal with this
+ *	we can program what color is displayed for a particular pixel value.
+ *	DirectColor is similar in that we can program each color field. 
+ * 
+ *	Returns negative errno on error, or zero on success.
+ */
 static int xxxfb_setcolreg(unsigned regno, unsigned red, unsigned green,
 			   unsigned blue, unsigned transp,
 			   const struct fb_info *info)
@@ -183,32 +221,43 @@ static int xxxfb_setcolreg(unsigned regno, unsigned red, unsigned green,
     return 0;
 }
 
+/**
+ *      xxxfb_pan_display - NOT a required function. Pans the display.
+ *      @var: frame buffer variable screen structure
+ *      @info: frame buffer structure that represents a single frame buffer
+ *
+ *	Pan (or wrap, depending on the `vmode' field) the display using the
+ *  	`xoffset' and `yoffset' fields of the `var' structure.
+ *  	If the values don't fit, return -EINVAL.
+ *
+ *      Returns negative errno on error, or zero on success.
+ *
+ */
 static int xxxfb_pan_display(struct fb_var_screeninfo *var,
 			     const struct fb_info *info)
 {
-    /*
-     *  Pan (or wrap, depending on the `vmode' field) the display using the
-     *  `xoffset' and `yoffset' fields of the `var' structure.
-     *  If the values don't fit, return -EINVAL.
-     */
-
     /* ... */
     return 0;
 }
 
+/**
+ *      xxxfb_blank - NOT a required function. Blanks the display.
+ *      @blank_mode: the blank mode we want. 
+ *      @info: frame buffer structure that represents a single frame buffer
+ *
+ *      Blank the screen if blank_mode != 0, else unblank. Return 0 if
+ *      blanking succeeded, != 0 if un-/blanking failed due to e.g. a 
+ *      video mode which doesn't support it. Implements VESA suspend
+ *      and powerdown modes on hardware that supports disabling hsync/vsync:
+ *      blank_mode == 2: suspend vsync
+ *      blank_mode == 3: suspend hsync
+ *      blank_mode == 4: powerdown
+ *
+ *      Returns negative errno on error, or zero on success.
+ *
+ */
 static int xxxfb_blank(int blank_mode, const struct fb_info *info)
 {
-    /*
-     *  Blank the screen if blank_mode != 0, else unblank. If blank == NULL
-     *  then the caller blanks by setting the CLUT (Color Look Up Table) to all
-     *  black. Return 0 if blanking succeeded, != 0 if un-/blanking failed due
-     *  to e.g. a video mode which doesn't support it. Implements VESA suspend
-     *  and powerdown modes on hardware that supports disabling hsync/vsync:
-     *    blank_mode == 2: suspend vsync
-     *    blank_mode == 3: suspend hsync
-     *    blank_mode == 4: powerdown
-     */
-
     /* ... */
     return 0;
 }
@@ -220,16 +269,61 @@ static int xxxfb_blank(int blank_mode, const struct fb_info *info)
  * or non packed pixel format layouts.  
  */
 
+/**
+ *      xxxfb_fillrect - REQUIRED function. Can use generic routines if 
+ *		 	 non acclerated hardware and packed pixel based.
+ *			 Draws a rectangle on the screen.		
+ *
+ *      @info: frame buffer structure that represents a single frame buffer
+ *	@x1: The x and y corrdinates of the upper left hand corner of the 
+ *	@y1: area we want to draw to. 
+ *	@width: How wide the rectangle is we want to draw.
+ *	@height: How tall the rectangle is we want to draw.
+ *	@color:	The color to fill in the rectangle with. 
+ *	@rop: The rater operation. We can draw the rectangle with a COPY
+ *	      of XOR which provides erasing effect. 
+ *
+ *	This drawing operation places/removes a retangle on the screen 
+ *	depending on the rastering operation with the value of color which
+ *	is in the current color depth format.
+ */
 void xxxfb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,
                     unsigned int height, unsigned long color, int rop)
 {
 }
 
+/**
+ *      xxxfb_copyarea - REQUIRED function. Can use generic routines if
+ *                       non acclerated hardware and packed pixel based.
+ *                       Copies on area of the screen to another area.
+ *
+ *      @info: frame buffer structure that represents a single frame buffer
+ *      @sx: The x and y corrdinates of the upper left hand corner of the
+ *      @sy: source area on the screen.
+ *      @width: How wide the rectangle is we want to copy.
+ *      @height: How tall the rectangle is we want to copy.
+ *      @dx: The x and y coordinates of the destination area on the screen.
+ *
+ *      This drawing operation copies a rectangular area from one area of the
+ *	screen to another area.
+ */
 void xxxfb_copyarea(struct fb_info *p, int sx, int sy, unsigned int width,
                          unsigned int height, int dx, int dy)
 {
 }
 
+/**
+ *      xxxfb_imageblit - REQUIRED function. Can use generic routines if
+ *                        non acclerated hardware and packed pixel based.
+ *                        Copies a image from system memory to the screen. 
+ *
+ *      @info: frame buffer structure that represents a single frame buffer
+ *	@image:	structure defining the image.
+ *
+ *      This drawing operation draws a image on the screen. It can be a 
+ *	mono image (needed for font handling) or a color image (needed for
+ *	tux). 
+ */
 void xxxfb_imageblit(struct fb_info *p, struct fb_image *image) 
 {
 }
@@ -254,7 +348,7 @@ int __init xxxfb_init(void)
     info.node = -1;
     info.fbops = &xxxfb_ops;
     info.fix = xxxfb_fix;
-    info.par = xxx_par;
+    info.par = current_par;
     info.pseudo_palette = xxxfb_pseudo_palette;
     info.flags = FBINFO_FLAG_DEFAULT;
     /* This should give a reasonable default video mode */
@@ -330,10 +424,10 @@ static struct fb_ops xxxfb_ops = {
 	fb_open:	xxxfb_open,    /* only if you need it to do something */
 	fb_release:	xxxfb_release, /* only if you need it to do something */
 	fb_check_var:	xxxfb_check_var,
-	fb_set_par:	xxxfb_set_par,
+	fb_set_par:	xxxfb_set_par,	   /* optional */	
 	fb_setcolreg:	xxxfb_setcolreg,
-	fb_blank:	xxxfb_blank,
-	fb_pan_display:	xxxfb_pan_display,
+	fb_blank:	xxxfb_blank,	   /* optional */
+	fb_pan_display:	xxxfb_pan_display, /* optional */	
 	fb_fillrect:	xxxfb_fillrect,  
 	fb_copyarea:	xxxfb_copyarea,  
 	fb_imageblit:	xxxfb_imageblit, 
