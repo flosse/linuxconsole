@@ -1,0 +1,89 @@
+<!DOCTYPE "-//IETF//DTD HTML 3.2//EN" PUBLIC>
+<html>
+<head>
+<meta name="description" content="Linux Input drivers">
+<meta name="keywords" content="joystick gamepad keyboard mouse wheel force feedback touchpad tablet input device linux driver gnu">
+<title>Linux Input Drivers</title>
+<LINK REV=MADE HREF="mailto:vojtech@suse.cz">
+</head>
+
+<body text="#000000" bgcolor="#ffffff">
+
+<table border=0 cellspacing=0 cellpadding=0 width="100%" bgcolor="#FFFFFF">
+<tr><td><img SRC="images/l1i.png" border=0 width=32 height=64 alt=""><br></td><td width="100%" background="images/m1i.png">
+<img src="images/title.png" border=0 alt="Linux Input Drivers" width=512 height=64><br></td><td>
+<img SRC="images/r1i.png" border=0 width=32 height=64 alt=""><br></td></tr>
+<tr><td><img src="images/l2i.png" border=0 width=32 height=16 alt=""><br></td><td></td><td>
+<img SRC="images/r2i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td background="images/l3i.png"><img src="images/l3i.png" border=0 width=32 height=16 alt=""><br></td><td>
+<div align=center><strong>
+
+<a href="input.html#introduction">Introduction</a> -
+<a href="input.html#news">News</a> -
+<a href="../quick.html#download">Download</a> -
+<a href="joystick.html">Joysticks</a> -
+<a href="../quick.html">Quick Start</a> -
+<a href="input.html#documentation">Documentation</a> -
+<a href="input_hardware.html">Supported Hardware</a> -
+<a href="adapters.html">Adapters</a> -
+<a href="links.html">Links</a><br>
+
+</strong></div></td><td background="images/r3i.png"><img src="images/r3i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="images/l4i.png" border=0 width=32 height=16 alt=""><br></td><td>
+</td><td><img SRC="images/r4i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="images/l6i.png" border=0 width=32 height=16 alt=""><br></td><td background="images/m2i.png">
+<img src="images/m2i.png" border=0 width=32 height=16 alt=""><br></td><td>
+<img src="images/r6i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="images/l2i.png" border=0 width=32 height=16 alt=""><br></td><td>
+</td><td><img SRC="images/r2i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td background="images/l3i.png"><img src="images/l3i.png" border=0 width=32 height=16 alt=""><br></td><td>
+
+<!----------------------------------------------------------------------------------------------------------->
+<h2>Sun keyboard to PC serial port adapter</h2>
+<p>
+
+Many people have dreamed having their Sun Type 4 or Type 5 keyboard attached to their
+Linux box up to now. And with this adapter, it is finally possible.
+Because the standard Sun keyboards use TTL RS232 at 1200 bps to talk to the
+Suns, it's very easy to make them talk to any non-Sun computer by converting
+this to true RS232. All what you need is a MAX232 chip that'll take care
+about the correct voltage levels, and also some chip to invert the signals
+(CD4049 in the pic, I've used a 7400 quad-nand myself), since the MAX232
+inverts them as well, and we don't need this. This all easily fits into a
+25-pin serial connector. The schematic below was drawn by 
+Leonardo M. Teixiera &lt;leonardoteixeira@inetone.com.br&gt;.
+<p>
+
+<div align=center>
+<img src="sunkbd.png" alt="Sun to RS232 interface schematic" width=578 height=366>
+</div>
+<p>
+
+<h2>Parport to AUX port adapter</h2>
+<p>
+
+In some cases one kbd port and one aux port is not enough and you may want to add
+another keyboard or mouse. You can use this adapter, together with the parkbd.c
+module for that. Schematics will follow sometime later.
+<p>
+<!----------------------------------------------------------------------------------------------------------->
+
+<address>
+<p>Send any questions, comments, bug reports to:
+<a href="mailto:vojtech@suse.cz">Vojtech Pavlik &lt;vojtech@suse.cz&gt;</a></p>
+</address>
+
+<div align=center>
+<a href="http://www.suse.cz/"><img src="images/sponsor.png" alt="Sponsored by SuSE" border=0 width=298 height=61></a>
+</div>
+
+</td><td background="images/r3i.png"><img src="images/r3i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="images/l5i.png" border=0 width=32 height=16 alt=""><br></td><td>
+</td><td><img SRC="images/r5i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="images/l7i.png" border=0 width=32 height=16 alt=""><br></td><td background="images/m2i.png">
+<img src="images/m2i.png" border=0 width=32 height=16 alt=""><br>
+</td><td><img SRC="images/r7i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+</table>
+
+</body>
+</html>

@@ -1,0 +1,327 @@
+<!DOCTYPE "-//IETF//DTD HTML 3.2//EN" PUBLIC>
+<html>
+<head>
+<meta name="description" content="Linux Input drivers">
+<meta name="keywords" content="joystick gamepad keyboard mouse wheel force feedback touchpad tablet input device linux driver gnu">
+<title>Linux Input Drivers</title>
+<LINK REV=MADE HREF="mailto:vojtech@suse.cz">
+</head>
+
+<body text="#000000" bgcolor="#ffffff">
+
+<table border=0 cellspacing=0 cellpadding=0 width="100%" bgcolor="#FFFFFF">
+<tr><td><img SRC="images/l1i.png" border=0 width=32 height=64 alt=""><br></td><td width="100%" background="images/m1i.png">
+<img src="images/title.png" border=0 alt="Linux Input Drivers" width=512 height=64><br></td><td>
+<img SRC="images/r1i.png" border=0 width=32 height=64 alt=""><br></td></tr>
+<tr><td><img src="images/l2i.png" border=0 width=32 height=16 alt=""><br></td><td></td><td>
+<img SRC="images/r2i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td background="images/l3i.png"><img src="images/l3i.png" border=0 width=32 height=16 alt=""><br></td><td>
+<div align=center><strong>
+
+<a href="input.html#introduction">Introduction</a> -
+<a href="input.html#news">News</a> -
+<a href="../quick.html#download">Download</a> -
+<a href="joystick.html">Joysticks</a> -
+<a href="../quick.html">Quick Start</a> -
+<a href="input.html#documentation">Documentation</a> -
+<a href="hardware.html">Supported Hardware</a> -
+<a href="adapters.html">Adapters</a> -
+<a href="links.html">Links</a><br>
+
+</strong></div></td><td background="images/r3i.png"><img src="images/r3i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="images/l4i.png" border=0 width=32 height=16 alt=""><br></td><td>
+</td><td><img SRC="images/r4i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="images/l6i.png" border=0 width=32 height=16 alt=""><br></td><td background="images/m2i.png">
+<img src="images/m2i.png" border=0 width=32 height=16 alt=""><br></td><td>
+<img src="images/r6i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="images/l2i.png" border=0 width=32 height=16 alt=""><br></td><td>
+</td><td><img SRC="images/r2i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td background="images/l3i.png"><img src="images/l3i.png" border=0 width=32 height=16 alt=""><br></td><td>
+
+<!----------------------------------------------------------------------------------------------------------->
+<h2><a name="hardware">Supported hardware</a></h2>
+<p>
+
+Currently supported devices are:
+<p>
+
+<ul>
+<li>PS/2 port controllers
+	<ul>
+	<li>i8042 AT kbd+aux controller
+	<li>ct82c710 aux controller
+	<li>Q40 kbd controller
+	<li>Acorn RiscPC kbd controller
+	<li>parport to aux adapter
+	</ul>
+<li>Serial ports
+	<ul>
+	<li>serial port line discipline
+	</ul>
+<li>Game ports
+	<ul>
+	<li>NS558 compatible gameports
+		<ul>
+		<li>Legacy ISA gameports
+		<li>ISA PnP gameports
+		<li>PCI gameports (SB Live!)
+		</ul>
+	<li>PCI ADC gameports
+		<ul>
+		<li>Aureal Vortex
+		<li>Aureal Vortex2
+		<li>Trident 4DWave/DX
+		<li>Trident 4DWave/NX
+		</ul>
+	<li>PDPI Lightning 4 advanced gameport card
+	</ul>
+<li>PS/2 devices
+	<ul>
+	<li>AT keyboards (Set 2 and Set 3)
+		<ul>
+		<li>Set 2 (AT) keyboards native mode
+		<li>Set 3 (PS/2) keyboards native mode
+		<li>Set 2 Extended (IBM RapidAccess, Chicony ...) keyboards 
+		</ul>
+	<li>XT keyboards
+	<li>PS/2 mice
+		<ul>
+		<li>Standard PS/2 mice
+		<li>Microsoft IntelliMouse/IntelliEye and other ImPS/2 mice
+		<li>Mictosoft IntelliMouse Explorer and other ImExPS/2 5-button mice
+		<li>Genius NetMouse/NetScroll and other GenPS/2 mice
+		<li>Logitech Pilot, MouseMan, and other PS/2++ mice
+		<li>Logitech TouchPad 3 (PS/2T++)
+		</ul>
+	</ul>
+<li>Serial devices
+	<ul>
+	<li>Serial mice (MSC, Sun, MS, MMan, IntelliMouse and MMWheel)
+		<ul>
+		<li>MouseSystems mice
+		<li>Microsoft 2-button mice
+		<li>Microsoft mice w/ middle-button detection
+		<li>Logitech/Genius 3-button MS mode mice (MouseMan)
+		<li>Microsoft IntelliMouse mice
+		<li>Logitech MouseManWheel mice
+		</ul>
+	<li>Sun keyboards
+		<ul>
+		<li>Type 4 Sun keyboards
+		<li>Type 5 Sun keyboards
+		</ul>
+	<li>Logitech WingMan Warrior joystick
+	<li>LogiCad3d Magellan 6dof controllers
+	<li>LabTec SpaceOrb/Avenger 6dof controller
+	<li>LabTec SpaceBall 4000 FLX 6dof controller
+	<li>Gunze AHL-51S touchscreen
+	<li>Gravis Stinger
+	<li>I-Force based joysticks and wheels (without force feedback)
+		<ul>
+		<li>Logitech WingMan Force
+		<li>Logitech WingMan Force Wheel
+		<li>Guillemot Race Leader Wheel
+		<li>and others
+		</ul>
+	</ul>
+<li>Gameport devices
+	<ul>
+	<li>Analog joysticks and gamepads
+		<ul>
+		<li>Standard analog joysticks
+		<li>CH FlightStick Pro compatible joysticks
+		<li>ThrustMaster FCS compatible joysticks
+		<li>Genius 6 and 8 button compatible gamepads
+		<li>Saitek Cyborg 3D Digital
+		<li>Saitek Cyborg 3D Digital Pad
+		<li>Saitek R4 Racing Wheel
+		</ul>
+	<li>Assasin 3D and MadCatz Panther devices
+		<ul>
+		<li>FP-Gaming Assasin 3D trackball + ADC gameport
+		<li>MadCatz Panther trackball + ADC gameport
+		<li>MadCatz Panther XL joystick
+		</ul>
+	<li>Logitech ADI digital joysticks and gamepads
+		<ul>
+		<li>Logitech CyberMan 2 
+		<li>Logitech ThunderPad Digital 
+		<li>Logitech WingMan Extreme Digital 
+		<li>Logitech WingMan Extreme Digital 3D 
+		<li>Logitech WingMan Formula 
+		<li>Logitech WingMan Gamepad 
+		<li>Logitech WingMan Gamepad Extreme 
+		<li>Logitech WingMan Gamepad USB 
+		<li>Logitech WingMan Interceptor 
+		</ul>
+	<li>Creative Labs Blaster Cobra gamepad
+	<li>Genius Digital joysticks
+		<ul>
+		<li>Genius Flight2000 F-23 joystick
+		<li>Genius Flight2000 F-31 joystick
+		<li>Genius G-09D gamepad (without force feedback)
+		</ul>
+	<li>Gravis GrIP joysticks and gamepads
+		<ul>
+		<li>Gravis GamePad Pro
+		<li>Gravis BlackHawk Digital joystick
+		<li>Gravis Xterminator Digital gamepad
+		<li>Gravis Xterminator DualControl joystick
+		</ul>
+	<li>InterAct digital joysticks and gamepads
+		<ul>
+		<li>InterAct HammerHead/FX gamepad (without force feedback)
+		<li>InterAct ProPad8 gamepad
+		</ul>
+	<li>ThrustMaster DirectConnect joysticks and gamepads
+		<ul>
+		<li>ThrustMaster Millenium 3D Inceptor 
+		<li>ThrustMaster Rage 3D 
+		<li>ThrustMaster FragMaster 
+		<li>ThrustMaster Fusion Digital Game Pad 
+		<li>ThrustMaster Attack Throttle 
+		</ul>
+	<li>Microsoft SideWinder digital joysticks and gamepads
+		<ul>
+		<li>Microsoft SideWinder 3D Pro 
+		<li>Microsoft SideWinder Force Feedback Pro (without force feedback)
+		<li>Microsoft SideWinder Force Feedback Wheel (without force feedback)
+		<li>Microsoft SideWinder FreeStyle Pro 
+		<li>Microsoft SideWinder GamePad 
+		<li>Microsoft SideWinder Precision Pro 
+		<li>Microsoft SideWinder Precision Pro USB 
+		</ul>
+	</ul>
+<li>Parallel port devices
+	<ul>
+	<li>Gaming console joysticks and gamepads
+		<ul>
+		<li>Multisystem joysticks (Atari, Amiga, Commodore, Amstrad) 
+		<li>Nintendo 64 gamepads 
+		<li>Nintendo Entertainment System (and clone - SVI, Pegasus ...) gamepads
+		<li>Sega Genesis (MegaDrive) gamepads 
+		<li>Sega Genesis extended 5 and 6 button gamepads
+		<li>Sega Master System gamepads 
+		<li>Sega Saturn gamepads 
+		<li>Sony PSX Analog gamepads
+		<li>Sony PSX DualShock gamepads
+		<li>Sony PSX gamepads
+		<li>Sony PSX JogCon gamepads
+		<li>Sony PSX MadCatz wheel
+		<li>Sony PSX Namco stick
+		<li>Sony PSX NegCon gamepads
+		<li>Super Nintendo Entertainment System gamepads 
+		<li>0.8.0.2 Multisystem joystick interface 
+		<li>SNESKey/DirectPadPro parallel port joystick interfaces
+		<li>TurboGraFX parallel port joystick interface
+		</ul>
+	</ul>
+<li>Bus devices
+	<ul>
+	<li>Inport busmice
+		<ul>
+		<li>Microsoft InPort busmouse
+		<li>ATI XL busmouse
+		</ul>
+	<li>Logitech busmice
+	<li>IBM PC110 touchpad
+	<li>Amiga input devices
+		<ul>
+		<li>Amiga keyboard
+		<li>Amiga mouse
+		<li>Amiga digital joystick
+		</ul>
+	<li>Acorn RiscPC mouse
+	</ul>
+<li>USB devices
+	<ul>
+	<li>Human Interface Device standard (HID) devices
+		<ul>
+		<li>HID Mice (w/ wheel)
+		<li>HID Keyboards
+		<li>HID Joysticks and gamepads
+		<li>HID Digitizers and tablets
+		</ul>
+	<li>HID Boot Protocol devices
+		<ul>
+		<li>HIDBP Keyboards
+		<li>HIDBP Mice
+		</ul>
+	<li>I-Force based joysticks and wheels (without force feedback)
+		<ul>
+		<li>Logitech WingMan Force
+		<li>Logitech WingMan Force Wheel
+		<li>and others
+		</ul>
+	<li>Wacom digitizers
+		<ul>
+		<li>Wacom Graphire
+		<li>Wacom Intuos 4x5
+		<li>Wacom Intuos 6x8
+		<li>Wacom Intuos 9x12
+		<li>Wacom Intuos 12x12
+		<li>Wacom Intuos 12x18
+		</ul>
+	</ul>
+</ul>
+<p>
+
+Devices that have a good chance to be supported soon:
+<p>
+
+<ul>
+<li>A4-Tech double-wheel MagicChip mice
+<li>HammerHead/FX and PSX RumblePack with ForceFeedback!
+<li>LabTec SpaceBall 2003 FLX
+<li>LabTec SpaceBall 3003 FLX
+<li>LogiCad3D CyberPuck
+<li>LogiCad3D Magellan Plus
+<li>Logitech CyberMan
+</ul>
+<p>
+
+Devices for which there is a hope to be supported sometime:
+<p>
+
+<ul>
+<li>Art+Com Joystick-Connect
+<li>BG Systems BeeBox
+<li>BG Systems CerealBox & FlyPanel
+<li>BG Systems FlyBox
+<li>Colorado Spectrum Notebook Gameport
+<li>Colorado Spectrum Workstation Gameport
+<li>Gravis GrIP MultiPort
+<li>I-Force force feedback
+<li>Immersion Impulse Engine 2000
+<li>Immersion Interface Box
+<li>Logitech 3D Mouse
+<li>Microsoft SideWinder Force Feedback Pro &amp; Wheel with ForceFeedback
+<li>Pegasus FreeD
+<li>Technology Playgroup Unwinder
+<li>ThrustMaster serial joysticks
+</ul>
+<p>
+
+If you have any input devices you'd like to be supported by these drivers, tell me!
+<p>
+<!----------------------------------------------------------------------------------------------------------->
+
+<address>
+<p>Send any questions, comments, bug reports to:
+<a href="mailto:vojtech@suse.cz">Vojtech Pavlik &lt;vojtech@suse.cz&gt;</a></p>
+</address>
+
+<div align=center>
+<a href="http://www.suse.cz/"><img src="sponsor.png" alt="Sponsored by SuSE" border=0 width=298 height=61></a>
+</div>
+
+</td><td background="images/r3i.png"><img src="images/r3i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="images/l5i.png" border=0 width=32 height=16 alt=""><br></td><td>
+</td><td><img SRC="images/r5i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="images/l7i.png" border=0 width=32 height=16 alt=""><br></td><td background="images/m2i.png">
+<img src="images/m2i.png" border=0 width=32 height=16 alt=""><br>
+</td><td><img SRC="images/r7i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+</table>
+
+</body>
+</html>
