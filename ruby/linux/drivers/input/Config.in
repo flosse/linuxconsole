@@ -56,7 +56,7 @@ if [ "$CONFIG_INPUT" != "n" ]; then
       if [ "$CONFIG_INPUT_GAMECARDS" != "n" ]; then 
          tristate '  Classic gameports (ISA and PnP)' CONFIG_INPUT_NS558
          tristate '  PDPI Lightning 4 gamecard' CONFIG_INPUT_LIGHTNING
-         tristate '  Aureal Vortex and Trident 4DWave gameports' CONFIG_INPUT_PCIGAME
+         tristate '  Aureal Vortex and Vortex2 gameport' CONFIG_INPUT_VORTEX
          tristate '  Crystal SoundFusion gameports' CONFIG_INPUT_CS461X
          tristate '  ForteMedia 801 gameports' CONFIG_INPUT_FM801
 	 tristate '  SoundBlaster Live gameports' CONFIG_INPUT_EMU10K1
