@@ -83,7 +83,8 @@ static int analog_options[ANALOG_PORTS];
 #define ANALOG_LOOP_TIME	1750	/* 1.75 * loop */
 #define ANALOG_REFRESH_TIME	HZ/100	/* 10 ms */
 #define ANALOG_AXIS_TIME	2	/* 2 * refresh */
-#define ANALOG_RESOLUTION	8	/* 8 bits */
+#define ANALOG_RESOLUTION	12	/* 10 bits */
+#define ANALOG_FUZZ		8	/* 3 bit gauss */
 
 #define ANALOG_MAX_NAME_LENGTH  128
 
@@ -116,6 +117,7 @@ struct analog_port {
 	int speed;
 	int loop;
 	int timeout;
+	int fuzz;
 	int cooked;
 	int axes[4];
 	int buttons;
@@ -405,8 +407,8 @@ static void analog_init_device(struct analog_port *port, struct analog *analog)
 
 			analog->dev.absmax[t] = (x << 1) - (x >> 3);
 			analog->dev.absmin[t] = (x >> 3);
-			analog->dev.absfuzz[t] = (x >> 6);
-			analog->dev.absflat[t] = (x >> 4);
+			analog->dev.absfuzz[t] = port->fuzz;
+			analog->dev.absflat[t] = (x >> 3);
 
 			j++;
 		}
@@ -539,6 +541,7 @@ static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
 		gameport_cooked_read(gameport, port->axes, &port->buttons);
 		for (i = 0; i < 4; i++)
 			if (port->axes[i] != -1) port->mask |= 1 << i;
+		port->fuzz = gameport->fuzz;
 	} else {
 		analog_calibrate_timer(port);
 		gameport_trigger(gameport);
@@ -546,6 +549,7 @@ static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
 		wait_ms(ANALOG_MAX_TIME);
 		port->mask = (gameport_read(gameport) ^ port->mask) & port->mask & 0xf;
 		analog_cooked_read(port);
+		port->fuzz = ANALOG_FUZZ;
 	}
 
 	if (analog_init_masks(port)) {

@@ -41,6 +41,7 @@ struct gameport {
 	int io;
 	int size;
 	int speed;
+	int fuzz;
 	int type;
 	struct pci_dev *pci;
 

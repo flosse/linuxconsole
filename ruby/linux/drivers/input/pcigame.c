@@ -46,6 +46,8 @@
 
 #define PCI_VENDOR_ID_AUREAL	0x12eb
 
+#define PCIGAME_DATA_WAIT	20	/* 20 ms */
+
 #define PCIGAME_4DWAVE		0
 #define PCIGAME_VORTEX		1
 #define PCIGAME_VORTEX2		2
@@ -89,7 +91,7 @@ static int pcigame_cooked_read(struct gameport *gameport, int *axes, int *button
         struct pcigame *pcigame = gameport->driver;
 	int i;
 
-	*buttons = ~readb(pcigame->base + pcigame->data->legacy) >> 4;
+	*buttons = (~readb(pcigame->base + pcigame->data->legacy) >> 4) & 0xf;
 
 	for (i = 0; i < 4; i++) {
 		axes[i] = readw(pcigame->base + pcigame->data->axes + i * pcigame->data->axsize);
@@ -106,7 +108,7 @@ static int pcigame_open(struct gameport *gameport, int mode)
 	switch (mode) {
 		case GAMEPORT_MODE_COOKED:
 			writeb(pcigame->data->adcmode, pcigame->base + pcigame->data->gcr);
-			udelay(10);
+			wait_ms(PCIGAME_DATA_WAIT);
 			return 0;
 		case GAMEPORT_MODE_RAW:
 			writeb(0, pcigame->base + pcigame->data->gcr);
@@ -135,7 +137,7 @@ static int __devinit pcigame_probe(struct pci_dev *dev, const struct pci_device_
 
 	pcigame->gameport.driver = pcigame;
 	pcigame->gameport.type = GAMEPORT_EXT;
-	pcigame->gameport.pci = dev;
+	pcigame->gameport.fuzz = 64;
 	
 	pcigame->gameport.read = pcigame_read;
 	pcigame->gameport.trigger = pcigame_trigger;
@@ -153,8 +155,8 @@ static int __devinit pcigame_probe(struct pci_dev *dev, const struct pci_device_
 
 	gameport_register_port(&pcigame->gameport);
 	
-	printk(KERN_INFO "gameport%d: %s at pci%02x.%x\n",
-		pcigame->gameport.number, dev->name, PCI_SLOT(dev->devfn), PCI_FUNC(dev->devfn));
+	printk(KERN_INFO "gameport%d: %s at pci%02x:%02x.%x\n",
+		pcigame->gameport.number, dev->name, dev->bus->number, PCI_SLOT(dev->devfn), PCI_FUNC(dev->devfn));
 
 	return 0;
 }

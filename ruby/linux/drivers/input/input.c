@@ -91,11 +91,27 @@ void input_event(struct input_dev *dev, unsigned int type, unsigned int code, in
 		
 		case EV_ABS:
 
-			if (code > ABS_MAX || !test_bit(code, dev->absbit) || (value == dev->abs[code]))
+			if (code > ABS_MAX || !test_bit(code, dev->absbit))
+				return;
+
+			if (dev->absfuzz[code]) {
+				if ((value > dev->abs[code] - (dev->absfuzz[code] >> 1)) &&
+				    (value < dev->abs[code] + (dev->absfuzz[code] >> 1)))
+					return;
+
+				if ((value > dev->abs[code] - dev->absfuzz[code]) &&
+				    (value < dev->abs[code] + dev->absfuzz[code]))
+					value = (dev->abs[code] * 3 + value) >> 2;
+
+				if ((value > dev->abs[code] - (dev->absfuzz[code] << 1)) &&
+				    (value < dev->abs[code] + (dev->absfuzz[code] << 1)))
+					value = (dev->abs[code] + value) >> 1;
+			}
+
+			if (dev->abs[code] == value)
 				return;
 
 			dev->abs[code] = value;
-
 			break;
 
 		case EV_REL:
