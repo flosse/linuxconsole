@@ -61,7 +61,8 @@ static void serio_find_dev(struct serio *serio)
 
 void serio_rescan(struct serio *serio)
 {
-	serio_close(serio);
+	if (serio->dev && serio->dev->disconnect)
+		serio->dev->disconnect(serio);
 	serio_find_dev(serio);
 }
 

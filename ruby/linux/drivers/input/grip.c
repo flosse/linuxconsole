@@ -61,7 +61,7 @@ struct grip {
 };
 
 static int grip_btn_gpp[] = { BTN_START, BTN_SELECT, BTN_TR2, BTN_Y, 0, BTN_TL2, BTN_A, BTN_B, BTN_X, 0, BTN_TL, BTN_TR, -1 };
-static int grip_btn_xt[] = { BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_TRIGGER, BTN_TOP, BTN_SELECT, BTN_MODE, BTN_START, -1 };
+static int grip_btn_xt[] = { BTN_TRIGGER, BTN_TOP, BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z,  BTN_SELECT, BTN_MODE, BTN_START, -1 };
 static int grip_btn_bd[] = { BTN_THUMB, BTN_THUMB2, BTN_TRIGGER, BTN_TOP, BTN_BASE, -1 };
 
 static int grip_abs_gpp[] = { ABS_X, ABS_Y, -1 };
