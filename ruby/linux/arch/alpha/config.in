@@ -316,7 +316,6 @@ if [ "$CONFIG_CD_NO_IDESCSI" != "n" ]; then
 fi
 endmenu
 
-source drivers/usb/Config.in
 source drivers/input/Config.in
 source drivers/char/Config.in
 
@@ -333,6 +332,7 @@ if [ "$CONFIG_SOUND" != "n" ]; then
 fi
 endmenu
 
+source drivers/usb/Config.in
 source drivers/media/Config.in
 source drivers/video/Config.in
 

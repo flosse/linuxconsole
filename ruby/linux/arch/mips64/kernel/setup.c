@@ -84,8 +84,6 @@ unsigned long mips_machgroup = MACH_GROUP_UNKNOWN;
 
 struct boot_mem_map boot_mem_map;
 
-unsigned char aux_device_present;
-
 extern void load_mmu(void);
 
 static char command_line[CL_SIZE] = { 0, };

@@ -47,7 +47,6 @@ static void __init sni_rm200_pci_time_init(struct irqaction *irq)
 	setup_irq(0, irq);
 }
 
-unsigned char aux_device_present;
 extern unsigned char sni_map_isa_cache;
 
 /*
@@ -97,8 +96,6 @@ void __init sni_rm200_pci_setup(void)
 	_machine_restart = sni_machine_restart;
 	_machine_halt = sni_machine_halt;
 	_machine_power_off = sni_machine_power_off;
-
-	aux_device_present = 0xaa;
 
 	/*
 	 * Some cluefull person has placed the PCI config data directly in
