@@ -364,8 +364,8 @@ static int joydev_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 			if (copy_from_user((__u8 *) arg, joydev->abspam, sizeof(__u8) * ABS_MAX))
 				return -EFAULT;
 			for (i = 0; i < ABS_MAX; i++) {
-				if (abspam[i] > ABS_MAX) return -EINVAL;
-				absmap[abspam[i]] = i;
+				if (joydev->abspam[i] > ABS_MAX) return -EINVAL;
+				joydev->absmap[joydev->abspam[i]] = i;
 			}
 			return 0;
 		case JSIOCGAXMAP:
@@ -375,8 +375,8 @@ static int joydev_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 			if (copy_from_user((__u16 *) arg, joydev->absmap, sizeof(__u16) * (KEY_MAX - BTN_MISC)))
 				return -EFAULT;
 			for (i = 0; i < KEY_MAX - BTN_MISC; i++); {
-				if (keypam[i] > KEY_MAX || keypam[i] < BTN_MISC) return -EINVAL;
-				keymap[abspam[i - BTN_MISC]] = i;
+				if (joydev->keypam[i] > KEY_MAX || joydev->keypam[i] < BTN_MISC) return -EINVAL;
+				joydev->keymap[joydev->abspam[i - BTN_MISC]] = i;
 			}
 			return 0;
 		case JSIOCGBTNMAP:
