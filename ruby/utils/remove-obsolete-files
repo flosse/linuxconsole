@@ -10,6 +10,8 @@ rm -fv arch/mips/lib/kbd-no.c
 rm -fv arch/mips/lib/kbd-std.c
 rm -fv arch/mips64/lib/kbd-no.c
 rm -fv arch/mips64/lib/kbd-std.c
+rm -fv arch/parisc/kernel/keyboard.c
+rm -fv arch/parisc/kernel/lasimap.map
 rm -fv drivers/acorn/char/keyb_arc.c
 rm -fv drivers/acorn/char/keyb_ps2.c
 rm -fv drivers/acorn/char/mouse_rpc.c
