@@ -6,6 +6,7 @@ mainmenu_name "Linux Kernel Configuration"
 
 define_bool CONFIG_X86 y
 define_bool CONFIG_ISA y
+define_bool CONFIG_SBUS n
 
 define_bool CONFIG_UID16 y
 
@@ -43,10 +44,16 @@ if [ "$CONFIG_M486" = "y" -o "$CONFIG_M586" = "y" ]; then
    define_bool CONFIG_X86_USE_STRING_486 y
    define_bool CONFIG_X86_ALIGNMENT_16 y
 fi
-if [ "$CONFIG_M586TSC" = "y" -o "$CONFIG_MK6" = "y" ]; then
+if [ "$CONFIG_M586TSC" = "y" ]; then
    define_bool CONFIG_X86_USE_STRING_486 y
    define_bool CONFIG_X86_ALIGNMENT_16 y
    define_bool CONFIG_X86_TSC y
+fi
+if [ "$CONFIG_MK6" = "y" ]; then
+   define_bool CONFIG_X86_ALIGNMENT_16 y
+   define_bool CONFIG_X86_TSC y
+   define_bool CONFIG_X86_USE_3DNOW y
+   define_bool CONFIG_X86_USE_PPRO_CHECKSUM y
 fi
 if [ "$CONFIG_M686" = "y" ]; then
    define_bool CONFIG_X86_TSC y
@@ -136,6 +143,8 @@ bool 'Support for hot-pluggable devices' CONFIG_HOTPLUG
 
 if [ "$CONFIG_HOTPLUG" = "y" ] ; then
    source drivers/pcmcia/Config.in
+else
+   define_bool CONFIG_PCMCIA n
 fi
 
 bool 'System V IPC' CONFIG_SYSVIPC
@@ -252,9 +261,6 @@ endmenu
 
 source drivers/char/Config.in
 
-source drivers/usb/Config.in
-
-source drivers/input/Config.in
 
 #source drivers/misc/Config.in
 
@@ -280,6 +286,9 @@ if [ "$CONFIG_SOUND" != "n" ]; then
    source drivers/sound/Config.in
 fi
 endmenu
+
+source drivers/usb/Config.in
+source drivers/input/Config.in
 
 mainmenu_option next_comment
 comment 'Kernel hacking'
