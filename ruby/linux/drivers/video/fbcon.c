@@ -717,6 +717,14 @@ const struct consw fb_con = {
  //   con_invert_region:	fbcon_invert_region,
 };
 
+/* FIXME!!!! Broke. Assume one framebuffer device. Just done to make it work
+   again. */
+static struct tty_struct *fbcon_table[MAX_NR_USER_CONSOLES];
+static struct termios *fbcon_termios[MAX_NR_USER_CONSOLES];
+static struct termios *fbcon_termios_locked[MAX_NR_USER_CONSOLES];
+static int fbcon_refcount;
+struct tty_driver fbcon_driver;
+
 int __init fb_console_init(void)
 {
    const char *display_desc = NULL;
@@ -729,9 +737,15 @@ int __init fb_console_init(void)
    if (!vt) return -ENOMEM;
    memset(vt, 0, sizeof(struct vt_struct));
 
+   memset(&fbcon_driver, 0, sizeof(struct tty_driver)); 	
+   fbcon_driver.refcount = &fbcon_refcount;
+   fbcon_driver.table = fbcon_table;
+   fbcon_driver.termios = fbcon_termios;
+   fbcon_driver.termios_locked = fbcon_termios_locked;
+
    vt->kmalloced = 1;
    vt->vt_sw = &fb_con;
-   display_desc = create_vt(vt, 0);
+   display_desc = create_vt(&fbcon_driver, vt, 0);
  
    if (!display_desc) return -ENODEV; 
    printk("Console: %s %s %dx%d\n", vt->default_mode->vc_can_do_color ? "colour" : "mono",display_desc, vt->default_mode->vc_cols, vt->default_mode->vc_rows);

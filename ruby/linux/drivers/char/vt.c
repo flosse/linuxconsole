@@ -964,55 +964,6 @@ int vc_resize(struct vc_data *vc, unsigned int cols, unsigned int lines)
 }
 
 /*
- * Mapping and unmapping VT display  
- */
-const char *create_vt(struct vt_struct *vt, int init)
-{
-	const char *display_desc = vt->vt_sw->con_startup(vt, init);
-
-	if (!display_desc) return NULL;	
-	vt->first_vc = current_vc;
-	init_MUTEX(&vt->lock);
-	vt->first_vc = current_vc;
-	vt->next = vt_cons;
-	vt_cons = vt;
-	vt->vt_dont_switch = 0;
-        vt->scrollback_delta = 0;
-        vt->vt_blanked = 0;
-        vt->blank_interval = 10*60*HZ;
-        vt->off_interval = 0;
-	if (vt->pm_con)
-		vt->pm_con->data = vt;
-	vt->default_mode->display_fg = vt;
-	vt->vc_cons[0] = vc_allocate(current_vc);
-	vt->keyboard = NULL;
-	if (!admin_vt) {
-		struct vc_data *vc = vt->vc_cons[0];		
-
-		admin_vt = vt;
-#ifdef CONFIG_VT_CONSOLE
-		register_console(&vt_console_driver);
-        	printable = 1;
-#endif
-                gotoxy(vc, x, y);
-                vte_ed(vt->vc_cons[0], 0);
-                update_screen(vt->vc_cons[0]);
-	}
-        init_timer(&vt->timer);
-        vt->timer.data = (long) vt;
-        vt->timer.function = blank_screen;
-        mod_timer(&vt->timer, jiffies + vt->blank_interval);
-	INIT_TQUEUE(&vt->vt_tq, vt_callback, vt);
-	current_vc += MAX_NR_USER_CONSOLES;
-	return display_desc;
-}
-
-int release_vt(struct vt_struct *vt)
-{
-	return 0;
-}
-
-/*
  * Selection stuff for GPM.
  */
 void mouse_report(struct tty_struct *tty, int butt, int mrx, int mry)
@@ -1529,100 +1480,96 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
 }
 
 /*
+ * Mapping and unmapping VT display  
+ */
+const char *create_vt(struct tty_driver *drv, struct vt_struct *vt, int init)
+{
+	const char *display_desc = vt->vt_sw->con_startup(vt, init);
+
+	if (!display_desc) return NULL;	
+
+	/* Must be done before register_console */
+	drv->magic = TTY_DRIVER_MAGIC;
+        drv->name = "vc/%d";
+        drv->name_base = current_vc;
+        drv->major = TTY_MAJOR;
+        drv->minor_start = current_vc;
+        drv->num = MAX_NR_USER_CONSOLES;
+        drv->type = TTY_DRIVER_TYPE_CONSOLE;
+        drv->init_termios = tty_std_termios;
+        drv->flags = TTY_DRIVER_REAL_RAW | TTY_DRIVER_RESET_TERMIOS;
+        /* Tell tty_register_driver() to skip consoles because they are
+         * registered before kmalloc() is ready. We'll patch them in later.
+         * See comments at console_init(); see also con_init_devfs().
+         */
+        drv->flags |= TTY_DRIVER_NO_DEVFS;
+        drv->open = vt_open;
+        drv->close = vt_close;
+        drv->write = vt_write;
+        drv->write_room = vt_write_room;
+        drv->put_char = vt_put_char;
+        drv->flush_chars = vt_flush_chars;
+        drv->chars_in_buffer = vt_chars_in_buffer;
+        drv->ioctl = vt_ioctl;
+        drv->stop = vt_stop;
+        drv->start = vt_start;
+        drv->throttle = vt_throttle;
+        drv->unthrottle = vt_unthrottle;
+       	if (tty_register_driver(drv))
+                printk("Couldn't register console driver\n");
+	/* Now to setup the VT */
+	vt->first_vc = current_vc;
+	init_MUTEX(&vt->lock);
+	vt->first_vc = current_vc;
+	vt->next = vt_cons;
+	vt_cons = vt;
+	vt->vt_dont_switch = 0;
+        vt->scrollback_delta = 0;
+        vt->vt_blanked = 0;
+        vt->blank_interval = 10*60*HZ;
+        vt->off_interval = 0;
+	if (vt->pm_con)
+		vt->pm_con->data = vt;
+	vt->default_mode->display_fg = vt;
+	vt->vc_cons[0] = vc_allocate(current_vc);
+	vt->keyboard = NULL;
+	if (!admin_vt) {
+		struct vc_data *vc = vt->vc_cons[0];		
+
+		admin_vt = vt;
+#ifdef CONFIG_VT_CONSOLE
+		register_console(&vt_console_driver);
+        	printable = 1;
+#endif
+                gotoxy(vc, x, y);
+                vte_ed(vt->vc_cons[0], 0);
+                update_screen(vt->vc_cons[0]);
+	}
+        init_timer(&vt->timer);
+        vt->timer.data = (long) vt;
+        vt->timer.function = blank_screen;
+        mod_timer(&vt->timer, jiffies + vt->blank_interval);
+	INIT_TQUEUE(&vt->vt_tq, vt_callback, vt);
+	current_vc += MAX_NR_USER_CONSOLES;
+	return display_desc;
+}
+
+int release_vt(struct vt_struct *vt)
+{
+	return 0;
+}
+
+/*
  * This routine initializes console interrupts, and does nothing
  * else. If you want the screen to clear, call tty_write with
  * the appropriate escape-sequence.
  */
-static struct tty_struct *console_table[MAX_NR_USER_CONSOLES];
-static struct termios *console_termios[MAX_NR_USER_CONSOLES];
-static struct termios *console_termios_locked[MAX_NR_USER_CONSOLES];
-static int console_refcount;
-struct tty_driver vt_driver;
-
-static struct tty_struct *console_table2[MAX_NR_USER_CONSOLES];
-static struct termios *console_termios2[MAX_NR_USER_CONSOLES];
-static struct termios *console_termios_locked2[MAX_NR_USER_CONSOLES];
-static int console_refcount2;
-struct tty_driver vt_driver2;
-
 void __init vt_console_init(void)
 {
 #if defined(CONFIG_VGA_CONSOLE)
-        memset(&vt_driver, 0, sizeof(struct tty_driver));
-        vt_driver.magic = TTY_DRIVER_MAGIC;
-        vt_driver.name = "vc/%d";
-        vt_driver.name_base = current_vc;
-        vt_driver.major = TTY_MAJOR;
-        vt_driver.minor_start = current_vc;
-        vt_driver.num = MAX_NR_USER_CONSOLES;
-        vt_driver.type = TTY_DRIVER_TYPE_CONSOLE;
-        vt_driver.init_termios = tty_std_termios;
-        vt_driver.flags = TTY_DRIVER_REAL_RAW | TTY_DRIVER_RESET_TERMIOS;
-        /* Tell tty_register_driver() to skip consoles because they are
-         * registered before kmalloc() is ready. We'll patch them in later.
-         * See comments at console_init(); see also con_init_devfs().
-         */
-        vt_driver.flags |= TTY_DRIVER_NO_DEVFS;
-        vt_driver.refcount = &console_refcount;
-        vt_driver.table = console_table;
-        vt_driver.termios = console_termios;
-        vt_driver.termios_locked = console_termios_locked;
-
-        vt_driver.open = vt_open;
-        vt_driver.close = vt_close;
-        vt_driver.write = vt_write;
-        vt_driver.write_room = vt_write_room;
-        vt_driver.put_char = vt_put_char;
-        vt_driver.flush_chars = vt_flush_chars;
-        vt_driver.chars_in_buffer = vt_chars_in_buffer;
-        vt_driver.ioctl = vt_ioctl;
-        vt_driver.stop = vt_stop;
-        vt_driver.start = vt_start;
-        vt_driver.throttle = vt_throttle;
-        vt_driver.unthrottle = vt_unthrottle;
-
-        if (tty_register_driver(&vt_driver))
-                panic("Couldn't register console driver\n");
-
 	vga_console_init();
 #endif
 #if defined(CONFIG_MDA_CONSOLE)
-        memset(&vt_driver2, 0, sizeof(struct tty_driver));
-        vt_driver2.magic = TTY_DRIVER_MAGIC;
-        vt_driver2.name = "vc/%d";
-        vt_driver2.name_base = current_vc;
-        vt_driver2.major = TTY_MAJOR;
-        vt_driver2.minor_start = current_vc;
-        vt_driver2.num = MAX_NR_USER_CONSOLES;
-        vt_driver2.type = TTY_DRIVER_TYPE_CONSOLE;
-        vt_driver2.init_termios = tty_std_termios;
-        vt_driver2.flags = TTY_DRIVER_REAL_RAW | TTY_DRIVER_RESET_TERMIOS;
-        /* Tell tty_register_driver() to skip consoles because they are
-         * registered before kmalloc() is ready. We'll patch them in later.
-         * See comments at console_init(); see also con_init_devfs().
-         */
-        vt_driver2.flags |= TTY_DRIVER_NO_DEVFS;
-        vt_driver2.refcount = &console_refcount2;
-        vt_driver2.table = console_table2;
-        vt_driver2.termios = console_termios2;
-        vt_driver2.termios_locked = console_termios_locked2;
-
-        vt_driver2.open = vt_open;
-        vt_driver2.close = vt_close;
-        vt_driver2.write = vt_write;
-        vt_driver2.write_room = vt_write_room;
-        vt_driver2.put_char = vt_put_char;
-        vt_driver2.flush_chars = vt_flush_chars;
-        vt_driver2.chars_in_buffer = vt_chars_in_buffer;
-        vt_driver2.ioctl = vt_ioctl;
-        vt_driver2.stop = vt_stop;
-        vt_driver2.start = vt_start;
-        vt_driver2.throttle = vt_throttle;
-        vt_driver2.unthrottle = vt_unthrottle;
-
-        if (tty_register_driver(&vt_driver2))
-                panic("Couldn't register second console driver\n");
-
 	mda_console_init();
 #endif
 }

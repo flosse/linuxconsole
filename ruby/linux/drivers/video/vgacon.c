@@ -62,6 +62,12 @@
  */
 #undef TRIDENT_GLITCH
 
+static struct tty_struct *vgacon_table[MAX_NR_USER_CONSOLES];
+static struct termios *vgacon_termios[MAX_NR_USER_CONSOLES];
+static struct termios *vgacon_termios_locked[MAX_NR_USER_CONSOLES];
+static int vgacon_refcount;
+struct tty_driver vgacon_driver;
+
 static struct vc_data vga_default;
 static struct vt_struct vga_vt;
 
@@ -957,15 +963,20 @@ int __init vga_console_init(void)
 {
         const char *display_desc = NULL;
 
-        memset(&vga_vt, 0, sizeof(struct vt_struct));
+	memset(&vgacon_driver, 0, sizeof(struct tty_driver));
+        vgacon_driver.refcount = &vgacon_refcount;
+        vgacon_driver.table = vgacon_table;
+        vgacon_driver.termios = vgacon_termios;
+        vgacon_driver.termios_locked = vgacon_termios_locked;
 
+        memset(&vga_vt, 0, sizeof(struct vt_struct));
 #ifdef MODULE
         vga_vt.kmalloced = 1;
 #else
         vga_vt.kmalloced = 0;
 #endif
         vga_vt.vt_sw = &vga_con;
-        display_desc = create_vt(&vga_vt, 1);
+        display_desc = create_vt(&vgacon_driver, &vga_vt, 1);
         if (!display_desc) return -ENODEV;
 	printk("Console: %s %s %dx%d\n",
                 vga_vt.default_mode->vc_can_do_color ? "colour" : "mono",
