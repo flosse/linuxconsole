@@ -78,9 +78,9 @@
 #define BIT(x) (1UL << (x))
 
 /* COMMAND_2D reg. values */
-#define ROP_COPY        0xcc     // src
-#define ROP_INVERT      0x55     // NOT dst
-#define ROP_XOR         0x66     // src XOR dst
+#define TDFX_ROP_COPY        0xcc     // src
+#define TDFX_ROP_INVERT      0x55     // NOT dst
+#define TDFX_ROP_XOR         0x66     // src XOR dst
 
 #define AUTOINC_DSTX                    BIT(10)
 #define AUTOINC_DSTY                    BIT(11)
