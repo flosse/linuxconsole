@@ -472,32 +472,27 @@ static int analog_init_masks(struct analog_port *port)
 	analog[0].buttons = analog_joy_btn;
 
 	for (i = 0; i < 24; i += 3)
-		if (js[i] == port->gameport->number)
+		if (js[i] == port->gameport->number) {
 			for (j = 0; j < 2; j++) {
 				analog[j].mask = js[i + j + 1];
 				analog[j].buttons = (analog[j].mask & ANALOG_BTNS_GAMEPAD)
 						  ? analog_pad_btn : analog_joy_btn;
-				break;
 			}
-
-	printk("A: %#x\n", analog[0].mask);
+			break;
+		}
 
 	analog[0].mask &= ~(ANALOG_AXES_STD | ANALOG_HAT_FCS | ANALOG_BTNS_GAMEPAD)
 			| port->mask | ((port->mask << 8) & ANALOG_HAT_FCS)
 			| ((port->mask << 10) & ANALOG_BTNS_TLR) | ((port->mask << 12) & ANALOG_BTNS_TLR2);
-	printk("B: %#x\n", analog[0].mask);
 
 	analog[0].mask &= ~(ANALOG_THROTTLE | ANALOG_BTN_TR | ANALOG_BTN_TR2)
 			| ((~analog[0].mask & ANALOG_HAT_FCS) >> 8)
 			| ((~analog[0].mask & ANALOG_HAT_FCS) << 2)
 			| ((~analog[0].mask & ANALOG_HAT_FCS) << 4);
-	printk("C: %#x\n", analog[0].mask);
 
 	analog[0].mask &= ~(ANALOG_THROTTLE | ANALOG_RUDDER)
 			| (((~analog[0].mask & ANALOG_BTNS_TLR ) >> 10)
 			&  ((~analog[0].mask & ANALOG_BTNS_TLR2) >> 12));
-
-	printk("D: %#x\n", analog[0].mask);
 
 	analog[1].mask &= (analog[0].mask & ANALOG_EXTENSIONS) ? 0 
 			: ((ANALOG_BUTTONS_STD | mask) & ~analog[0].mask);
