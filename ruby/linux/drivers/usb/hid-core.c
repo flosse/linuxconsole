@@ -1093,7 +1093,7 @@ void hid_submit_report(struct hid_device *hid, struct hid_report *report, unsign
 	int head;
 	unsigned long flags;
 
-	if (dir == USB_DIR_OUT && hid->urbout) {
+	if (hid->urbout && dir == USB_DIR_OUT && report->type == HID_OUTPUT_REPORT) {
 
 		spin_lock_irqsave(&hid->outlock, flags);
 
