@@ -365,7 +365,7 @@ static void fn_enter(struct vc_data *vc)
 		diacr = 0;
 	}
 	put_queue(vc, 13);
-	if (get_kbd_mode(vc->kbd_table, VC_CRLF))
+	if (get_kbd_mode(&vc->kbd_table, VC_CRLF))
 		put_queue(vc, 10);
 }
 
@@ -373,14 +373,14 @@ static void fn_caps_toggle(struct vc_data *vc)
 {
 	if (rep)
 		return;
-	chg_kbd_led(vc->kbd_table, VC_CAPSLOCK);
+	chg_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
 }
 
 static void fn_caps_on(struct vc_data *vc)
 {
 	if (rep)
 		return;
-	set_kbd_led(vc->kbd_table, VC_CAPSLOCK);
+	set_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
 }
 
 static void fn_show_ptregs(struct vc_data *vc)
@@ -412,7 +412,7 @@ static void fn_hold(struct vc_data *vc)
 
 static void fn_num(struct vc_data *vc)
 {
-	if (get_kbd_mode(vc->kbd_table, VC_APPLIC))
+	if (get_kbd_mode(&vc->kbd_table, VC_APPLIC))
 		applkey(vc, 'P', 1);
 	else
 		fn_bare_num(vc);
@@ -427,7 +427,7 @@ static void fn_num(struct vc_data *vc)
 static void fn_bare_num(struct vc_data *vc)
 {
 	if (!rep)
-		chg_kbd_led(vc->kbd_table, VC_NUMLOCK);
+		chg_kbd_led(&vc->kbd_table, VC_NUMLOCK);
 }
 
 static void fn_lastcons(struct vc_data *vc)
@@ -444,12 +444,12 @@ static void fn_dec_console(struct vc_data *vc)
 
 	for (i = j-1; i != j; i--) {
 		if (i == -1)
-			i = MAX_NR_USER_CONSOLES-1;
+			i = vt->vc_count - 1;
 		tmp = vt->vc_cons[i];
 		if (tmp)
 			break;
 	}
-	set_console(tmp);
+	if(tmp) set_console(tmp);
 }
 
 static void fn_inc_console(struct vc_data *vc)
@@ -459,13 +459,13 @@ static void fn_inc_console(struct vc_data *vc)
 	struct vc_data *tmp = NULL;
 
 	for (i = j+1; i != j; i++) {
-		if (i == MAX_NR_USER_CONSOLES)
+		if (i == vt->vc_count)
 			i = 0;
 		tmp = vt->vc_cons[i];
 		if (tmp)
 			break;
 	}
-	set_console(tmp);
+	if(tmp) set_console(tmp);
 }
 
 static void fn_send_intr(struct vc_data *vc)
@@ -622,7 +622,7 @@ static void k_cur(struct vc_data *vc, unsigned char value, char up_flag)
 
 	if (up_flag)
 		return;
-	applkey(vc, cur_chars[value], get_kbd_mode(vc->kbd_table, VC_CKMODE));
+	applkey(vc, cur_chars[value], get_kbd_mode(&vc->kbd_table, VC_CKMODE));
 }
 
 static void k_pad(struct vc_data *vc, unsigned char value, char up_flag)
@@ -634,12 +634,12 @@ static void k_pad(struct vc_data *vc, unsigned char value, char up_flag)
 		return;		/* no action, if this is a key release */
 
 	/* kludge... shift forces cursor/number keys */
-	if (get_kbd_mode(vc->kbd_table, VC_APPLIC) && !shift_down[KG_SHIFT]) {
+	if (get_kbd_mode(&vc->kbd_table, VC_APPLIC) && !shift_down[KG_SHIFT]) {
 		applkey(vc, app_map[value], 1);
 		return;
 	}
 
-	if (!get_kbd_led(vc->kbd_table, VC_NUMLOCK))
+	if (!get_kbd_led(&vc->kbd_table, VC_NUMLOCK))
 		switch (value) {
 			case KVAL(K_PCOMMA):
 			case KVAL(K_PDOT):
@@ -673,12 +673,12 @@ static void k_pad(struct vc_data *vc, unsigned char value, char up_flag)
 				k_fn(vc, KVAL(K_PGUP), 0);
 				return;
 			case KVAL(K_P5):
-				applkey(vc, 'G', get_kbd_mode(vc->kbd_table, VC_APPLIC));
+				applkey(vc, 'G', get_kbd_mode(&vc->kbd_table, VC_APPLIC));
 				return;
 		}
 
 	put_queue(vc, pad_chars[value]);
-	if (value == KVAL(K_PENTER) && get_kbd_mode(vc->kbd_table, VC_CRLF))
+	if (value == KVAL(K_PENTER) && get_kbd_mode(&vc->kbd_table, VC_CRLF))
 		put_queue(vc, 10);
 }
 
@@ -695,7 +695,7 @@ static void k_shift(struct vc_data *vc, unsigned char value, char up_flag)
 	if (value == KVAL(K_CAPSSHIFT)) {
 		value = KVAL(K_SHIFT);
 		if (!up_flag)
-			clr_kbd_led(vc->kbd_table, VC_CAPSLOCK);
+			clr_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
 	}
 
 	if (up_flag) {
@@ -728,7 +728,7 @@ static void k_meta(struct vc_data *vc, unsigned char value, char up_flag)
 	if (up_flag)
 		return;
 
-	if (get_kbd_mode(vc->kbd_table, VC_META)) {
+	if (get_kbd_mode(&vc->kbd_table, VC_META)) {
 		put_queue(vc, '\033');
 		put_queue(vc, value);
 	} else
@@ -761,7 +761,7 @@ static void k_lock(struct vc_data *vc, unsigned char value, char up_flag)
 {
 	if (up_flag || rep)
 		return;
-	chg_kbd_lock(vc->kbd_table, value);
+	chg_kbd_lock(&vc->kbd_table, value);
 }
 
 static void k_slock(struct vc_data *vc, unsigned char value, char up_flag)
@@ -769,11 +769,11 @@ static void k_slock(struct vc_data *vc, unsigned char value, char up_flag)
 	k_shift(vc, value, up_flag);
 	if (up_flag || rep)
 		return;
-	chg_kbd_slock(vc->kbd_table, value);
+	chg_kbd_slock(&vc->kbd_table, value);
 	/* try to make Alt, oops, AltGr and such work */
 	if (!key_maps[vc->kbd_table.lockstate ^ vc->kbd_table.slockstate]) {
 		vc->kbd_table.slockstate = 0;
-		chg_kbd_slock(vc->kbd_table, value);
+		chg_kbd_slock(&vc->kbd_table, value);
 	}
 }
 
@@ -1046,7 +1046,7 @@ void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down)
 	else
 		clear_bit(keycode, key_down);
 
-	if (rep && (!get_kbd_mode(vc->kbd_table, VC_REPEAT) || (tty && 
+	if (rep && (!get_kbd_mode(&vc->kbd_table, VC_REPEAT) || (tty && 
 		(!L_ECHO(tty) && tty->driver->chars_in_buffer(tty))))) {
 		/*
 		 * Don't repeat a key if the input buffers are not empty and the
@@ -1080,7 +1080,7 @@ void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down)
 
 	if (type == KT_LETTER) {
 		type = KT_LATIN;
-		if (get_kbd_led(vc->kbd_table, VC_CAPSLOCK)) {
+		if (get_kbd_led(&vc->kbd_table, VC_CAPSLOCK)) {
 			key_map = key_maps[shift_final ^ (1 << KG_SHIFT)];
 			if (key_map)
 				keysym = key_map[keycode];
@@ -1145,11 +1145,24 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 	 * beeper is independent we can share it with all VTs that don't 
 	 * have one.
 	 */
+        //if(strncmp(dev->phys,"isa0061",7))
 	if (i != BTN_MISC) {
-		if (!vt->keyboard) {
-			vt->keyboard = handle;
-			handle->private = vt;
-		}
+                while (vt) {
+                        if (vt->next && !vt->next->keyboard) {
+                                vt = vt->next;
+                                continue;
+                        }
+                        if (!vt->keyboard) {
+                                vt->keyboard = handle;
+                                handle->private = vt;
+                                printk(KERN_INFO "keyboard.c: %s vc:%d-%d\n",
+                                       dev->name,
+                                       vt->first_vc,
+                                       vt->first_vc + vt->vc_count - 1);
+				break;
+                        }
+                        vt = vt->next;
+                }
 		kbd_refresh_leds(handle);
 	}	
 	if (test_bit(EV_SND, dev->evbit)) { 

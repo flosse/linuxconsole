@@ -96,54 +96,54 @@ static inline void set_leds(void)
 	tasklet_schedule(&keyboard_tasklet);
 }
 
-static inline int get_kbd_mode(struct kbd_struct kbd, int flag)
+static inline int get_kbd_mode(struct kbd_struct * kbd, int flag)
 {
-	return ((kbd.modeflags >> flag) & 1);
+	return ((kbd->modeflags >> flag) & 1);
 }
 
-static inline int get_kbd_led(struct kbd_struct kbd, int flag)
+static inline int get_kbd_led(struct kbd_struct * kbd, int flag)
 {
-	return ((kbd.ledflagstate >> flag) & 1);
+	return ((kbd->ledflagstate >> flag) & 1);
 }
 
-static inline void set_kbd_mode(struct kbd_struct kbd, int flag)
+static inline void set_kbd_mode(struct kbd_struct * kbd, int flag)
 {
-	kbd.modeflags |= 1 << flag;
+	kbd->modeflags |= 1 << flag;
 }
 
-static inline void set_kbd_led(struct kbd_struct kbd, int flag)
+static inline void set_kbd_led(struct kbd_struct * kbd, int flag)
 {
-	kbd.ledflagstate |= 1 << flag;
+	kbd->ledflagstate |= 1 << flag;
 }
 
-static inline void clr_kbd_mode(struct kbd_struct kbd, int flag)
+static inline void clr_kbd_mode(struct kbd_struct * kbd, int flag)
 {
-	kbd.modeflags &= ~(1 << flag);
+	kbd->modeflags &= ~(1 << flag);
 }
 
-static inline void clr_kbd_led(struct kbd_struct kbd, int flag)
+static inline void clr_kbd_led(struct kbd_struct * kbd, int flag)
 {
-	kbd.ledflagstate &= ~(1 << flag);
+	kbd->ledflagstate &= ~(1 << flag);
 }
 
-static inline void chg_kbd_lock(struct kbd_struct kbd, int flag)
+static inline void chg_kbd_lock(struct kbd_struct * kbd, int flag)
 {
-	kbd.lockstate ^= 1 << flag;
+	kbd->lockstate ^= 1 << flag;
 }
 
-static inline void chg_kbd_slock(struct kbd_struct kbd, int flag)
+static inline void chg_kbd_slock(struct kbd_struct * kbd, int flag)
 {
-	kbd.slockstate ^= 1 << flag;
+	kbd->slockstate ^= 1 << flag;
 }
 
-static inline void chg_kbd_mode(struct kbd_struct kbd, int flag)
+static inline void chg_kbd_mode(struct kbd_struct * kbd, int flag)
 {
-	kbd.modeflags ^= 1 << flag;
+	kbd->modeflags ^= 1 << flag;
 }
 
-static inline void chg_kbd_led(struct kbd_struct kbd, int flag)
+static inline void chg_kbd_led(struct kbd_struct * kbd, int flag)
 {
-	kbd.ledflagstate ^= 1 << flag;
+	kbd->ledflagstate ^= 1 << flag;
 }
 
 #define U(x) ((x) ^ 0xf000)

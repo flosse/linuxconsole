@@ -497,7 +497,7 @@ int con_set_cmap(struct vc_data *vc, unsigned char *arg)
 		get_user(green[i], arg++);
 		get_user(blue[i], arg++);
 	}
-	for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
+	for (i = 0; i < vc->display_fg->vc_count; i++) {
 		struct vc_data *tmp = vc->display_fg->vc_cons[i];
 		
 		if (tmp) {
@@ -642,9 +642,9 @@ void complete_change_console(struct vc_data *new_vc, struct vc_data *old_vc)
 	 */
 	if (old_vc_mode != new_vc->vc_mode) {
 		if (new_vc->vc_mode == KD_TEXT)
-			unblank_screen();
+			unblank_vt(new_vc->display_fg);
 		else
-			do_blank_screen(1);
+			do_blank_screen(new_vc->display_fg, 1);
 	}
 
 	/*
@@ -673,9 +673,9 @@ void complete_change_console(struct vc_data *new_vc, struct vc_data *old_vc)
 
 			if (old_vc_mode != new_vc->vc_mode) {
 				if (new_vc->vc_mode == KD_TEXT)
-					unblank_screen();
+					unblank_vt(new_vc->display_fg);
 				else
-					do_blank_screen(1);
+					do_blank_screen(new_vc->display_fg, 1);
 			}
 		}
 	}
@@ -815,9 +815,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		 * explicitly blank/unblank the screen if switching modes
 		 */
 		if (arg == KD_TEXT)
-			unblank_screen();
+			unblank_vt(vc->display_fg);
 		else
-			do_blank_screen(1);
+			do_blank_screen(vc->display_fg, 1);
 		return 0;
 
 	case KDGETMODE:
@@ -869,10 +869,10 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	case KDSKBMETA:
 		switch(arg) {
 		  case K_METABIT:
-			clr_kbd_mode(vc->kbd_table, VC_META);
+			clr_kbd_mode(&vc->kbd_table, VC_META);
 			break;
 		  case K_ESCPREFIX:
-			set_kbd_mode(vc->kbd_table, VC_META);
+			set_kbd_mode(&vc->kbd_table, VC_META);
 			break;
 		  default:
 			return -EINVAL;
@@ -880,7 +880,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		return 0;
 
 	case KDGKBMETA:
-		ucval = (get_kbd_mode(vc->kbd_table, VC_META) ? K_ESCPREFIX : K_METABIT);
+		ucval = (get_kbd_mode(&vc->kbd_table, VC_META) ? K_ESCPREFIX : K_METABIT);
 	setint:
 		return put_user(ucval, (int *)arg); 
 
@@ -1027,13 +1027,13 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	{
 		int j = vc->display_fg->first_vc;
 	
-		for (i = 0; i < MAX_NR_USER_CONSOLES; ++i, j++) {
+		for ((j) ? (i = 0) : (i = j = 1); i < vc->display_fg->vc_count; ++i, j++) {
 			struct vc_data *tmp = find_vc(j);	
 			
 			if (!tmp || (tmp && !VT_IS_IN_USE(tmp)))
 				break;
 		}	
-		ucval = i < MAX_NR_USER_CONSOLES ? (j) : -1;
+		ucval = i < vc->display_fg->vc_count ? (j) : -1;
 		goto setint;		 
 	}
 	/*
@@ -1118,7 +1118,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 						return i;
 					}
 				}
-				
+				vc->vt_newvt = -1;
 				/*
 				 * When we actually do the console switch,
 				 * make sure we are atomic with respect to
@@ -1173,7 +1173,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		if (get_user(ll, &vtsizes->v_rows) ||
 		    get_user(cc, &vtsizes->v_cols))
 			return -EFAULT;
-		for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
+		for (i = 0; i < vc->display_fg->vc_count; i++) {
 			struct vc_data *tmp = vc->display_fg->vc_cons[i];
 
 			vc_resize(tmp, cc, ll);
@@ -1216,7 +1216,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		if (clin > 32)
 			return -EINVAL;
     
-		for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
+		for (i = 0; i < vc->display_fg->vc_count; i++) {
 			struct vc_data *tmp = vc->display_fg->vc_cons[i];
 
 			if (vlin)

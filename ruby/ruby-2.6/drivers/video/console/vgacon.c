@@ -830,7 +830,7 @@ static int vgacon_do_font_op(struct vgastate *state,char *arg,int set,int ch512)
 		int i;	
 		
 		/* attribute controller */
-		for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
+		for (i = 0; i < vga_vt.vc_count; i++) {
 			struct vc_data *vc = vga_vt.vc_cons[i];
 
 			if (vc)
@@ -898,11 +898,13 @@ static int vgacon_adjust_height(struct vc_data *vc, unsigned fontheight)
 	outb_p(vde, vga_video_port_val);
 	spin_unlock_irq(&vga_lock);
 
-	for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
+	for (i = 0; i < vc->display_fg->vc_count; i++) {
 		struct vc_data *tmp = vc->display_fg->vc_cons[i];
 
-		if (tmp)
+		if (tmp) {
+		        tmp->vc_font.height = fontheight;
 			vc_resize(tmp, 0, rows);	/* Adjust console size */
+		}
 	}
 	return 0;
 }
@@ -1089,14 +1091,15 @@ int __init vga_console_init(void)
 	const char *display_desc = NULL;
 
 	memset(&vga_vt, 0, sizeof(struct vt_struct));
-	vga_vt.kmalloced = 0;
+	vga_vt.vt_kmalloced = 0;
 	vga_vt.vt_sw = &vga_con;
-	display_desc = vt_map_display(&vga_vt, 1);
+	display_desc = vt_map_display(&vga_vt, 1, MAX_NR_USER_CONSOLES);
 	if (!display_desc) return -ENODEV;
-	printk("Console: %s %s %dx%d\n",
+	printk("Console: %s %s %dx%d vc:%d-%d\n",
 			vga_vt.default_mode->vc_can_do_color ? "Colour" : "Mono",
 			display_desc, vga_vt.default_mode->vc_cols,
-			vga_vt.default_mode->vc_rows);
+			vga_vt.default_mode->vc_rows,
+			vga_vt.first_vc, vga_vt.first_vc + vga_vt.vc_count - 1);
 	return 0;
 }	
 

@@ -28,13 +28,18 @@
 #define DUMMY_COLUMNS	80
 #define DUMMY_ROWS	25
 #endif
+#define MAX_DUMB_CONSOLES 16
 
+static unsigned long dumb_num = 0;
+static unsigned long dumb_vc_count = 0;
 static struct vt_struct dummy_vt;
 static struct vc_data default_mode;
 
 static const char *dummycon_startup(struct vt_struct *vt, int init)
 {
-	vt->default_mode = &default_mode;		
+	vt->default_mode = &default_mode;
+	vt->default_mode->vc_cols = DUMMY_COLUMNS;
+	vt->default_mode->vc_rows = DUMMY_ROWS;
 	return "dummy device";
 }
 
@@ -83,13 +88,56 @@ int __init dumbcon_init(void)
 	const char *display_desc = NULL;
 
 	memset(&dummy_vt, 0, sizeof(struct vt_struct));
-	dummy_vt.kmalloced = 0;
-	dummy_vt.vt_sw = &dummy_con;
-	display_desc = vt_map_display(&dummy_vt, 1);
+	dummy_vt.vt_kmalloced = 0;
+	dummy_vt.vt_sw = &dummy_con;		
+	display_desc = vt_map_display(&dummy_vt, 1, MAX_NR_USER_CONSOLES);
 	if (!display_desc) return -ENODEV;
-	printk("Console: mono %s %dx%d\n", display_desc,
+	printk("Console: mono %s %dx%d vc:%d-%d\n", display_desc,
 		dummy_vt.default_mode->vc_cols,	
-		dummy_vt.default_mode->vc_rows);
+		dummy_vt.default_mode->vc_rows,
+		dummy_vt.first_vc, dummy_vt.first_vc + dummy_vt.vc_count - 1);
 	return 0;
 }
 
+int dumbcon_add(void)
+{
+        const char *display_desc = NULL;
+        struct vt_struct *vt;
+
+        vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
+
+        if (!vt) return -ENOMEM;
+
+        memset(vt, 0, sizeof(struct vt_struct));
+        vt->vt_kmalloced = 1;
+        vt->vt_sw = &dummy_con;
+        display_desc = vt_map_display(vt, 1, MAX_NR_USER_CONSOLES);
+        if (!display_desc) {
+		kfree(vt);
+	        return -ENODEV;
+	}
+	printk("Console: mono %s %dx%d vc:%d-%d\n", display_desc,
+		vt->default_mode->vc_cols,	
+		vt->default_mode->vc_rows,
+		vt->first_vc, vt->first_vc + vt->vc_count - 1);
+        return 0;
+}
+
+int __init dumb_console_init(void)
+{
+        unsigned long i;
+        for(i=0; i<dumb_num && i<MAX_DUMB_CONSOLES; i++ ) {
+	        if(dumbcon_add()) return 1;
+        }
+        return 0;
+}
+
+int __init dumbcon_setup(char *options)
+{
+        if (!options || !*options)
+	        return 0;
+        dumb_num =  simple_strtoul(options, 0, 0);
+        return 0;
+}
+
+__setup("dumbcon=", dumbcon_setup);

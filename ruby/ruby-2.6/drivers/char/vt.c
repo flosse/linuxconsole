@@ -122,6 +122,9 @@ extern void console_map_init(void);
 #ifdef CONFIG_VGA_CONSOLE
 extern int vga_console_init(void);
 #endif
+#ifdef CONFIG_DUMMY_CONSOLE
+extern int dumb_console_init(void);
+#endif
 #if defined (CONFIG_PROM_CONSOLE)
 extern void prom_con_init(void);
 #endif
@@ -179,7 +182,6 @@ int (*console_blank_hook)(int);
 #endif
 
 static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data);
-static struct pm_dev *pm_con;
 
 /*
  * Console cursor handling
@@ -685,6 +687,7 @@ static void powerdown_screen(unsigned long private)
 	struct vt_struct *vt = (struct vt_struct *) private;
 	struct vc_data *vc = vt->fg_console;
 
+        vc->display_fg->timer.data = (long) vt;
 	vc->display_fg->timer.function = unblank_screen_t;
 	switch (vc->display_fg->blank_mode) {
 	case VESA_NO_BLANKING:
@@ -697,9 +700,9 @@ static void powerdown_screen(unsigned long private)
 	}
 }
 
-static void timer_do_blank_screen(int entering_gfx, int from_timer_handler)
+static void timer_do_blank_screen(struct vt_struct *vt, int entering_gfx, int from_timer_handler)
 {
-	struct vc_data *vc = vt_cons->fg_console;
+	struct vc_data *vc = vt->fg_console;
 	int i;
 
 	if (vc->display_fg->vt_blanked)
@@ -724,6 +727,7 @@ static void timer_do_blank_screen(int entering_gfx, int from_timer_handler)
 	hide_cursor(vc);
 	if (!from_timer_handler)
 		del_timer_sync(&vc->display_fg->timer);
+        vc->display_fg->timer.data = (long) vc->display_fg;
 	vc->display_fg->timer.function = unblank_screen_t;
 
 	save_screen(vc);
@@ -736,6 +740,7 @@ static void timer_do_blank_screen(int entering_gfx, int from_timer_handler)
 	if (console_blank_hook && console_blank_hook(1))
 		return;
 	if (vc->display_fg->off_interval) {
+	        vc->display_fg->timer.data = (long) vc->display_fg;
 		vc->display_fg->timer.function = powerdown_screen;
 		mod_timer(&vc->display_fg->timer, jiffies + vc->display_fg->off_interval);
 	}
@@ -743,9 +748,9 @@ static void timer_do_blank_screen(int entering_gfx, int from_timer_handler)
 		sw->con_blank(vc, vc->display_fg->blank_mode + 1);
 }
 
-void do_blank_screen(int entering_gfx)
+void do_blank_screen(struct vt_struct *vt, int entering_gfx)
 {
-	timer_do_blank_screen(entering_gfx, 0);
+	timer_do_blank_screen(vt, entering_gfx, 0);
 }
 
 /*
@@ -753,7 +758,7 @@ void do_blank_screen(int entering_gfx)
  */
 static void unblank_screen_t(unsigned long dummy)
 {
-	unblank_screen();
+	unblank_vt((struct vt_struct *) dummy);
 }
 
 /*
@@ -761,15 +766,15 @@ static void unblank_screen_t(unsigned long dummy)
  */
 static void blank_screen(unsigned long dummy)
 {
-	timer_do_blank_screen(0, 1);
+	timer_do_blank_screen((struct vt_struct *) dummy, 0, 1);
 }
 
 /*
- * Called by timer as well as from vt_console_driver
+ * Called by timer
  */
-void unblank_screen(void)
+void unblank_vt(struct vt_struct *vt)
 {
-	struct vc_data *vc = vt_cons->fg_console;
+	struct vc_data *vc = vt->fg_console;
 
 	ignore_poke = 0;
 	if (!vc->display_fg->vt_blanked)
@@ -782,6 +787,7 @@ void unblank_screen(void)
 	if (vcmode != KD_TEXT)
 		return; /* but leave vc->vc_display_fg->vt_blanked != 0 */
 
+	vc->display_fg->timer.data = (long) vt;
 	vc->display_fg->timer.function = blank_screen;
 	if (vc->display_fg->blank_interval) {
 		mod_timer(&vc->display_fg->timer, jiffies + vc->display_fg->blank_interval);
@@ -795,6 +801,19 @@ void unblank_screen(void)
 		console_blank_hook(0);
 	set_palette(vc);
 	set_cursor(vc);
+}
+
+/*
+ * Called from vt_console_driver
+ */
+void unblank_screen(void)
+{
+        struct vt_struct *vt = vt_cons;
+
+        while(vt) {
+                unblank_vt(vt);
+                vt = vt->next;
+        }
 }
 
 void poke_blanked_console(struct vt_struct *vt)
@@ -816,16 +835,20 @@ void poke_blanked_console(struct vt_struct *vt)
  */
 static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
 {
-	switch (rqst)
-	{
-	case PM_RESUME:
-		unblank_screen();
-		break;
-	case PM_SUSPEND:
-		do_blank_screen(0);
-		break;
-	}
-	return 0;
+        struct vt_struct *vt = vt_cons; /*FIXME*/
+
+        if (vt) {
+                switch (rqst)
+                {
+                case PM_RESUME:
+                        unblank_vt(vt);
+                        break;
+                case PM_SUSPEND:
+                        do_blank_screen(vt, 0);
+                        break;
+                }
+        }
+        return 0;
 }
 /*
  * This is the console switching callback.
@@ -887,6 +910,7 @@ static void visual_init(struct vc_data *vc, int init)
 	can_do_color = default_mode->vc_can_do_color;
 	video_num_columns = default_mode->vc_cols;
 	video_num_lines = default_mode->vc_rows;
+	video_scan_lines = default_mode->vc_scan_lines;
 	screensize = video_num_columns * video_num_lines;
 	vc->vc_font = vc->display_fg->default_mode->vc_font;
 	sw->con_init(vc, init);
@@ -911,9 +935,14 @@ static void vc_init(struct vc_data *vc, int do_clear)
 
 struct vc_data *find_vc(int currcons)
 {
-	struct vt_struct *vt = vt_cons;
+        struct vt_struct *vt;
 
-	return vt->vc_cons[currcons - vt->first_vc];
+        for (vt = vt_cons; vt != NULL; vt = vt->next) {
+                if ((currcons < vt->first_vc + vt->vc_count) &&
+                    currcons >= vt->first_vc)
+                        return vt->vc_cons[currcons - vt->first_vc];
+        }
+        return NULL;
 }
 
 struct vc_data *vc_allocate(unsigned int currcons)
@@ -927,18 +956,26 @@ struct vc_data *vc_allocate(unsigned int currcons)
 	}
 
 	/* prevent users from taking too much memory */
-	if (currcons >= MAX_NR_USER_CONSOLES && !capable(CAP_SYS_RESOURCE)) {
+	if (currcons >= MAX_NR_CONSOLES && !capable(CAP_SYS_RESOURCE)) {
 		currcons = -EPERM;
 		return NULL;
 	}
 
+        for (vt = vt_cons; vt != NULL; vt = vt->next) {
+                if (currcons < vt->first_vc + vt->vc_count &&
+                    currcons >= vt->first_vc)
+                        goto found_pool;
+        }
+        currcons = -ENXIO;
+        return NULL;
+      found_pool:
 	/* due to the granularity of kmalloc, we waste some memory here */
 	/* the alloc is done in two steps, to optimize the common situation
 	   of a 25x80 console (structsize=216, screenbuf_size=4000) */
 	/* although the numbers above are not valid since long ago, the
 	   point is still up-to-date and the comment still has its value
 	   even if only as a historical artifact.  --mj, July 1998 */
-	if (vt->kmalloced || !((vt->first_vc + 1)== currcons))
+	if (vt->vt_kmalloced || !((vt->first_vc + 1)== currcons))
 		vc = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
 	else
 		vc = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
@@ -949,15 +986,16 @@ struct vc_data *vc_allocate(unsigned int currcons)
    	memset(vc, 0, sizeof(struct vc_data));
 		
 	cons_num = currcons;
-	vc->display_fg = vt_cons;
+	vc->display_fg = vt;
 	visual_init(vc, 1);
-	if (vt->kmalloced || !((vt->first_vc + 1) == currcons)) {
+	if (vt->vt_kmalloced || !((vt->first_vc + 1) == currcons)) {
 		screenbuf = (unsigned short *) kmalloc(screenbuf_size, GFP_KERNEL);
 		if (!screenbuf) {
 			kfree(vc);
 			currcons = -ENOMEM;
 			return NULL;
 		}
+		kmalloced = 1;
 		if (!*vc->vc_uni_pagedir_loc)
 			con_set_default_unimap(vc);
 	} else {
@@ -972,6 +1010,11 @@ struct vc_data *vc_allocate(unsigned int currcons)
 	if ((vt->first_vc + 1) == currcons)
 		vt->want_vc = vt->fg_console = vt->last_console = vc;
 	vc_init(vc, 1);
+/*         if (!vt->pm_con) { */
+/*                 vt->pm_con = pm_register(PM_SYS_DEV, */
+/* 					 PM_SYS_VGA, */
+/* 					 pm_con_request); */
+/*         } */
 	return vc;
 }
 
@@ -983,13 +1026,9 @@ int vc_disallocate(struct vc_data *vc)
 	if (vc) {
 		sw->con_deinit(vc);
 		vt->vc_cons[cons_num - vt->first_vc] = NULL;
-		if (vt->kmalloced || !(vt->first_vc == cons_num)) {
+		if (kmalloced)
 			kfree(screenbuf);
-			kfree(vc);
-		} else {
-			free_bootmem((unsigned long) screenbuf, screenbuf_size);
-			free_bootmem((unsigned long) vc, sizeof(struct vc_data));
-		}	
+		kfree(vc);
 	}
 	release_console_sem();
 	return 0;
@@ -1073,10 +1112,11 @@ int vc_resize(struct vc_data *vc, unsigned int cols, unsigned int lines)
 	}
 	if (nlend > nl)
 		scr_memsetw((void *) nl, video_erase_char, nlend - nl);
-	if (vc->display_fg->kmalloced)
+	if (kmalloced) {
 		kfree(screenbuf);
+	}
 	screenbuf = newscreen;
-	vc->display_fg->kmalloced = 1;
+	kmalloced = 1;
 	screenbuf_size = ss;
 	set_origin(vc);
 
@@ -1131,7 +1171,7 @@ int mouse_reporting(struct vc_data *vc)
  * since console_init (and thus con_init) are called before any
  * kernel memory allocation is available.
  */
-char con_buf[PAGE_SIZE];
+//char con_buf[PAGE_SIZE];
 #define CON_BUF_SIZE	PAGE_SIZE
 DECLARE_MUTEX(con_buf_sem);
 
@@ -1171,12 +1211,12 @@ again:
 		if (count > CON_BUF_SIZE)
 			count = CON_BUF_SIZE;
 		console_conditional_schedule();
-		if (copy_from_user(con_buf, buf, count)) {
+		if (copy_from_user(&vc->display_fg->con_buf, buf, count)) {
 			n = 0; /* ?? are error codes legal here ?? */
 			goto out;
 		}
 
-		buf = con_buf;
+		buf = vc->display_fg->con_buf;
 	}
 
 	/* At this point 'buf' is guaranteed to be a kernel buffer
@@ -1374,9 +1414,10 @@ static void vt_close(struct tty_struct *tty, struct file * filp)
 static int vt_write(struct tty_struct * tty, int from_user,
 		     const unsigned char *buf, int count)
 {
+        struct vc_data *vc = (struct vc_data *) tty->driver_data;
 	int	retval;
 
-	pm_access(pm_con);
+	pm_access(vc->display_fg->pm_con);
 	retval = do_con_write(tty, from_user, buf, count);
 	vt_flush_chars(tty);
 
@@ -1385,9 +1426,11 @@ static int vt_write(struct tty_struct * tty, int from_user,
 
 static void vt_put_char(struct tty_struct *tty, unsigned char ch)
 {
+        struct vc_data *vc = (struct vc_data *) tty->driver_data;
+
 	if (in_interrupt())
 		return;		/* n_r3964 calls put_char() from interrupt context */
-	pm_access(pm_con);
+	pm_access(vc->display_fg->pm_con);
 	do_con_write(tty, 0, &ch, 1);
 }
 
@@ -1400,18 +1443,18 @@ static int vt_write_room(struct tty_struct *tty)
 
 static void vt_flush_chars(struct tty_struct *tty)
 {
-	struct vc_data *vc;
+        struct vc_data *vc = (struct vc_data *) tty->driver_data;
 
 	if (in_interrupt())	/* from flush_to_ldisc */
 		return;
 
-	pm_access(pm_con);
+        if(!vc) return;
+
+	pm_access(vc->display_fg->pm_con);
 	
 	/* if we race with vt_close(), vc may be null */
 	acquire_console_sem();
-	vc = (struct vc_data *)tty->driver_data;
-	if (vc)
-		set_cursor(vc);
+	set_cursor(vc);
 	release_console_sem();
 }
 
@@ -1433,7 +1476,7 @@ static void vt_stop(struct tty_struct *tty)
 	vc = (struct vc_data *)tty->driver_data;
 	if (!vc)
 		return;
-	set_kbd_led(vc->kbd_table, VC_SCROLLOCK);
+	set_kbd_led(&vc->kbd_table, VC_SCROLLOCK);
 	set_leds();
 }
 
@@ -1450,7 +1493,7 @@ static void vt_start(struct tty_struct *tty)
 	
 	if (!vc) 	
 		return;
-	clr_kbd_led(vc->kbd_table, VC_SCROLLOCK);
+	clr_kbd_led(&vc->kbd_table, VC_SCROLLOCK);
 	set_leds();
 }
 
@@ -1492,8 +1535,10 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
 
 	if (!vc)
 		vc = admin_vt->fg_console;
+        if (!vc)
+                goto quit;
 
-	pm_access(pm_con);
+	pm_access(vc->display_fg->pm_con);
 
 	/* read `x' only after setting currcons properly (otherwise
 	   the `x' macro will read the x of the foreground console). */
@@ -1664,7 +1709,7 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
 			break;
 		case TIOCL_BLANKSCREEN: /* until explicitly unblanked, not only poked */
 			ignore_poke = 1;
-			do_blank_screen(0);
+			do_blank_screen(vc->display_fg, 0);
 			break;
 		case TIOCL_BLANKEDSCREEN:	
 			ret = vc->display_fg->vt_blanked;
@@ -1679,16 +1724,21 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
 /*
  * Mapping and unmapping displays to a VT
  */
-const char *vt_map_display(struct vt_struct *vt, int init)
+const char *vt_map_display(struct vt_struct *vt, int init, int vc_count)
 {
-	const char *display_desc = vt->vt_sw->con_startup(vt, init);
+        const char *display_desc;
 	
+	if (current_vc + vc_count > MAX_NR_CONSOLES + 1)
+	        return NULL;
+
+	display_desc = vt->vt_sw->con_startup(vt, init);
 	if (!display_desc)
 		return NULL;
 
 	/* Now to setup VT */
 	init_MUTEX(&vt->lock);
 	vt->first_vc = current_vc;
+	vt->vc_count = vc_count;
 	vt->next = vt_cons;
 	vt_cons = vt;
 	vt->vt_dont_switch = 0;
@@ -1716,6 +1766,7 @@ const char *vt_map_display(struct vt_struct *vt, int init)
 	gotoxy(vt->fg_console, vt->fg_console->vc_x, vt->fg_console->vc_y);
 	vte_ed(vt->fg_console, 0);
 	update_screen(vt->fg_console);
+	current_vc += vc_count;
 	return display_desc;
 }
 
@@ -1737,8 +1788,10 @@ static int __init vt_console_init(void)
 {
 	int err = 0;
 	
-#ifdef CONFIG_VGA_CONSOLE
+#if defined (CONFIG_VGA_CONSOLE)
 	err = vga_console_init();	
+#elif defined (CONFIG_DUMMY_CONSOLE)
+        err = dumbcon_init();
 #endif
 	return err;
 }
@@ -1787,6 +1840,9 @@ int __init vty_init(void)
 #if defined (CONFIG_FRAMEBUFFER_CONSOLE)
 	fb_console_init();
 #endif	
+#if defined (CONFIG_DUMMY_CONSOLE)
+        dumb_console_init();
+#endif
 	kbd_init();
 	console_map_init();
 	vcs_init();
@@ -1808,7 +1864,7 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
 	/* First shutdown old console driver */
 	hide_cursor(vc);
 
-	for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
+	for (i = 0; i < vt->vc_count; i++) {
 		vc = vt->vc_cons[i];
 		if (vc)
 			sw->con_deinit(vc);
@@ -1824,7 +1880,7 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
 	vt->vt_sw = csw;
 
 	/* Set the VC states to the new default mode */
-	for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
+	for (i = 0; i < vt->vc_count; i++) {
 		int old_was_color;
 		vc = vt->vc_cons[i];
 

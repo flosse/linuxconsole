@@ -129,7 +129,7 @@ static loff_t vcs_lseek(struct file *file, loff_t offset, int orig)
  * so that we can easily avoid touching user space while holding the
  * console spinlock.
  */
-extern char con_buf[PAGE_SIZE];
+//extern char con_buf[PAGE_SIZE];
 #define CON_BUF_SIZE	PAGE_SIZE
 extern struct semaphore con_buf_sem;
 
@@ -196,7 +196,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 		 * attempt to move it to userspace.
 		 */
 
-		con_buf_start = con_buf0 = con_buf;
+		con_buf_start = con_buf0 = vc->display_fg->con_buf;
 		orig_count = this_round;
 		maxcol = vc->vc_cols;
 		if (!attr) {
@@ -233,7 +233,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 				/* Advance state pointers and move on. */
 				this_round -= tmp_count;
 				p = HEADER_SIZE;
-				con_buf0 = con_buf + HEADER_SIZE;
+				con_buf0 = vc->display_fg->con_buf + HEADER_SIZE;
 				/* If this_round >= 0, then p is even... */
 			} else if (p & 1) {
 				/* Skip first byte for output if start address is odd
@@ -358,7 +358,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 		 * in the write data from userspace safely.
 		 */
 		release_console_sem();
-		ret = copy_from_user(con_buf, buf, this_round);
+		ret = copy_from_user(vc->display_fg->con_buf, buf, this_round);
 		acquire_console_sem();
 
 		if (ret) {
@@ -388,7 +388,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 		 * under the lock using the local kernel buffer.
 		 */
 
-		con_buf0 = con_buf;
+		con_buf0 = vc->display_fg->con_buf;
 		orig_count = this_round;
 		maxcol = vc->vc_cols;
 		p = pos;

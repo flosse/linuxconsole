@@ -142,6 +142,7 @@ struct vc_data {
 	unsigned int vc_need_wrap:1;
 	unsigned int vc_can_do_color:1;
 	unsigned int vc_report_mouse:2;
+        unsigned int vc_kmalloced:1;
 	unsigned char vc_utf:1;		/* Unicode UTF-8 encoding */
 	unsigned char vc_utf_count;
 	int vc_utf_char;
@@ -214,7 +215,7 @@ struct vt_struct {
 	struct vc_data *want_vc;	/* VC we want to switch to */
 	int scrollback_delta;
 	int cursor_original;
-	char kmalloced;		/* Did we use kmalloced ? */
+	char vt_kmalloced;		/* Did we use kmalloced ? */
 	char vt_dont_switch;	/* VC switching flag */
 	char vt_blanked;	/* Is this display blanked */
 	int blank_mode;		/* 0:none 1:suspendV 2:suspendH 3:powerdown */
@@ -238,6 +239,7 @@ struct vt_struct {
 	struct input_handle *beeper;	/* Bell noise support */
 	void *data_hook;		/* Hook for driver data */	
 	unsigned int first_vc;
+	unsigned int vc_count;
 	struct vc_data *vc_cons[MAX_NR_USER_CONSOLES];	/* VT's VC pool */
 	struct vt_struct *next;
 };
@@ -255,7 +257,7 @@ void vte_decsc(struct vc_data *vc);
 void terminal_emulation(struct tty_struct *tty, int c);
 
 /* vt.c */
-const char *vt_map_display(struct vt_struct *vt, int init);
+const char *vt_map_display(struct vt_struct *vt, int init, int vc_count);
 void vt_map_input(struct vt_struct *vt);
 struct vc_data *find_vc(int currcons);
 struct vc_data *vc_allocate(unsigned int console);
@@ -288,7 +290,8 @@ void update_screen(struct vc_data *vc);
 inline int resize_screen(struct vc_data *vc, int width, int height);
 inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed);
 inline void save_screen(struct vc_data *vc);
-void do_blank_screen(int gfx_mode);
+void do_blank_screen(struct vt_struct *vt, int gfx_mode);
+void unblank_vt(struct vt_struct *vt);
 void unblank_screen(void);
 void poke_blanked_console(struct vt_struct *vt);
 int con_font_op(struct vc_data *vc, struct console_font_op *op);
