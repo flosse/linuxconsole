@@ -1,56 +1,64 @@
-
 <html>
 <head>
 <meta http-equiv=Content-Type content="text/html; charset=iso-8859-1">
 <title>Linux Framebuffer Driver Writing HOWTO</title>
 </head>
 <body link=blue vlink=purple bgcolor="#ffffff">
-<h1><font face="Arial, Helvetica, sans-serif">Linux Framebuffer Driver Writing 
-  HOWTO</font></h1>
-<p><font face="Arial, Helvetica, sans-serif">James Simmons, <a href="mailto:jsimmons@acsu.buffalo.edu">jsimmons@acsu.buffalo.edu</a></font></p>
-<p><font face="Arial, Helvetica, sans-serif">v1.00, 9 October 1999</font></p>
-<p><font face="Arial, Helvetica, sans-serif">This document describes how to support 
-  a framebuffer video card for Linux. It lists the supported video hardware, describes 
-  how to program the kernel drivers, and answers frequently asked questions. The 
-  goal is to bring current framebuffer driver writers as well as new ones up to 
-  speed on the new developments occurring in the graphics system for Linux.</font></p>
+
+<h1 ALIGN=CENTER>Linux Framebuffer Driver Writing HOWTO</h1> 
+
+<p>James Simmons, <a href="mailto:jsimmons@transvirtual.com">jsimmons@transvirtual.com</a></p>
+<p>v1.1, November 2001</p>
+
+<p>This document describes how to support a framebuffer video card for linux.
+   It lists the supported video hardware, describes how to program the kernel
+   drivers, and answers frequently asked questions. The goal is to bring 
+   current framebuffer driver writers as well as new ones up to speed on the 
+   new developments occurring in the graphics system for Linux.
+</p>
+
 <hr width="100%" size="2">
-<h2><font face="Arial, Helvetica, sans-serif">Table of Contents</font></h2>
-<h3><font face="Arial, Helvetica, sans-serif">1. <a href="1.html">Introduction</a></font></h3>
+<h2>Table of Contents</h2>
+
+<h3>1. <a href="1.html">Introduction</a></h3>
+
 <blockquote> 
-  <p><font face="Arial, Helvetica, sans-serif">1.1 Acknowledgments</font><br>
-    <font face="Arial, Helvetica, sans-serif">1.2 Revision History</font><font face="Arial, Helvetica, sans-serif"><br>
-    1.3 New versions of this document<br>
-    </font><font face="Arial, Helvetica, sans-serif">1.4 Feedback</font><font face="Arial, Helvetica, sans-serif"><br>
-    1.5 Distribution Policy</font> </p>
+  <p>1.1 Acknowledgments<br>
+     1.2 Revision History<br>
+     1.3 New versions of this document<br>
+     1.4 Feedback<br>
+     1.5 Distribution Policy</p>
 </blockquote>
-<h3><font face="Arial, Helvetica, sans-serif">2. <a href="2.html">Framebuffer 
-  Video Card Technology</a></font></h3>
+
+<h3>2. <a href="2.html">Framebuffer Video Card Technology</a></h3> 
+
 <blockquote> 
-  <p><font face="Arial, Helvetica, sans-serif">2.1 Monitor<br>
-    </font><font face="Arial, Helvetica, sans-serif">2.2 Video Card</font></p>
+  <p>2.1 Monitor<br>
+     2.2 Video Card</p>
 </blockquote>
-<h3><font face="Arial, Helvetica, sans-serif">3. <a href="3.html">Setting a Video 
-  Mode</a></font></h3>
+
+<h3>3. <a href="3.html">Setting a Video Mode</a></h3> 
+
 <blockquote> 
-  <p><font face="Arial, Helvetica, sans-serif">3.1 Fixed Frequency Monitors<br>
-    </font><font face="Arial, Helvetica, sans-serif">3.2 Multi Frequency Monitors<br>
-    </font><font face="Arial, Helvetica, sans-serif">3.3 Recipe for multisync 
-    monitors</font><font face="Arial, Helvetica, sans-serif"><br>
-    3.4 Recipe for Monosync<br>
-    </font><font face="Arial, Helvetica, sans-serif">3.5 Colors</font> </p>
+  <p>3.1 Fixed Frequency Monitors<br>
+     3.2 Multi Frequency Monitors<br>
+     3.3 Recipe for multisync monitors<br> 
+     3.4 Recipe for Monosync<br>
+     3.5 Colors</p>
 </blockquote>
-<h3><font face="Arial, Helvetica, sans-serif">4. <a href="4.html">Framebuffer 
-  Internal API </a></font></h3>
+
+<h3>4. <a href="4.html">Framebuffer Internal API </a></h3>
+
 <blockquote> 
-  <p><font face="Arial, Helvetica, sans-serif">4.1 Data Structures<br>
-    </font><font face="Arial, Helvetica, sans-serif">4.2 Driver layout</font></p>
+  <p>4.1 Data Structures<br>
+     4.2 Driver layout</p>
 </blockquote>
-<h3><font face="Arial, Helvetica, sans-serif">5. Answers To Frequently Asked Questions</font></h3>
-<blockquote> <font face="Arial, Helvetica, sans-serif">5.1 Does fbdev support 
-  accels?</font></blockquote>
-<h3><font face="Arial, Helvetica, sans-serif">6. References</font></h3>
-<p align="center"><font face="Arial, Helvetica, sans-serif"><a href="http://www.linux-fbdev.org">back 
-  to linux-fbdev</a></font></p>
+
+
+<h3>5. Answers To Frequently Asked Questions</h3>
+
+<blockquote>5.1 Does fbdev support accels?</blockquote> 
+
+<h3>6. References</h3>
 </body>
 </html>

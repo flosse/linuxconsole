@@ -5,80 +5,122 @@
 </head>
 
 <body bgcolor="#FFFFFF">
-<h2><font face="Arial, Helvetica, sans-serif">1.  Introduction</font></h2>
+<h2>1.  Introduction</h2>
 <hr width="100%" size="2">
-<p><font face="Arial, Helvetica, sans-serif">This is the Linux Framebuffer driver 
-  HOWTO. It is intended as a quick reference covering everything you need to know 
-  to write a framebuffer video driver under Linux. Frequently asked questions 
-  about video mode setting under Linux are answered, and references are given 
-  to some other sources of information on a variety of topics related to computer 
-  graphics. Also, read this document not once, not twice but three times if you 
-  are not familiar with video hardware.</font></p>
-<p><font face="Arial, Helvetica, sans-serif">The scope is limited to the aspects 
-  of writing a mode setting video card framebuffer driver pertaining to Linux. 
-  listed See the other documents in the References section for more general information 
-  on how to setup framebuffer cards and setting up the XFB_Dev X server.</font></p>
-<h3><font face="Arial, Helvetica, sans-serif">1.1.  Acknowledgments</font></h3>
-<p><font face="Arial, Helvetica, sans-serif">Much of this information came from 
-  the new framebuffer internal API being developed by me for the upcoming next 
-  series of kernels. Originally, this was based on a patch by Fabrice Bellard. 
-  I learned of this patch and was impressed by it. Later, I took over development 
-  and improved it even more. Much thanks goes to Fabrice for getting the ball 
-  rolling. This API is a natural extension of the original API developed by Martin 
-  Schaller and now maintained by Geert Uytterhoeven (<a href="mailto:geert@linux-m68k.org">geert@linux-m68k.org</a>). 
-  Thanks go to you and the many others who developed the Linux framebuffer system, 
-  drivers and utilities. A great amount of thanks goes to Andreas Beck of the 
-  GGI project for helping me write this document and teaching me about mode setting. 
-  Thanks also go out to those who have supported my work. </font></p>
-<p><font face="Arial, Helvetica, sans-serif">Thanks to the SGML Tools package, 
-  this HOWTO is available in several formats, all generated from a common source 
-  file.</font></p>
-<h3><font face="Arial, Helvetica, sans-serif">1.2.  Revision History</font></h3>
-<p><font face="Arial, Helvetica, sans-serif">Version 1.0</font></p>
-<p><font face="Arial, Helvetica, sans-serif">First version; posted to fbdev mailing 
-  list only.</font></p>
-<h3><font face="Arial, Helvetica, sans-serif">1.3.  New versions of this document</font></h3>
-<p><font face="Arial, Helvetica, sans-serif">New versions of this document will 
-  be periodically posted to the comp.os.linux.answers newsgroup. They will also 
-  be uploaded to various anonymous ftp sites that archive such information including 
-  <a href="ftp://metalabs.unc.edu/pub/Linux/docs/HOWTO/">ftp://metalabs.unc.edu/pub/Linux/docs/HOWTO/</a>&gt;. 
-  Hypertext versions of this and other Linux HOWTOs are available on many World-Wide-Web 
-  sites, including &lt;<a href="http://metalab.unc.edu/LDP/">http://metalab.unc.edu/LDP/</a>&gt;. 
-  Most Linux CD-ROM distributions include the HOWTOs, often under the /usr/doc 
-  directory, and you can also buy printed copies from several vendors. Sometimes 
-  the HOWTOs available from CD-ROM vendors, ftp sites, and printed format are 
-  out of date. If the date on this HOWTO is more than six months in the past, 
-  then a newer copy is probably available on the Internet.</font></p>
-<p><font face="Arial, Helvetica, sans-serif">Most translations of this and other 
-  Linux HOWTOs can also be found at &lt;<a
+
+<p>
+This is the Linux Framebuffer driver HOWTO. It is intended as a quick reference
+covering everything you need to know to write a framebuffer video driver under
+Linux. Frequently asked questions about video mode setting under Linux are 
+answered, and references are given 
+to some other sources of information on a variety of topics related to computer 
+graphics. Also, read this document not once, not twice but three times if you 
+are not familiar with video hardware.
+</p>
+
+<p>
+The scope is limited to the aspects 
+of writing a mode setting video card framebuffer driver pertaining to Linux. 
+listed See the other documents in the References section for more general information 
+on how to setup framebuffer cards and setting up the XFB_Dev X server.
+</p>
+
+<h3>1.1.  Acknowledgments</h3>
+
+<p>
+Much of this information came from 
+the new framebuffer internal API being developed by me for the upcoming next 
+series of kernels. Originally, this was based on a patch by Fabrice Bellard. 
+I learned of this patch and was impressed by it. Later, I took over development 
+and improved it even more. Much thanks goes to Fabrice for getting the ball 
+rolling. This API is a natural extension of the original API developed by Martin 
+Schaller and now maintained by Geert Uytterhoeven (<a href="mailto:geert@linux-m68k.org">geert@linux-m68k.org</a>). 
+Thanks go to you and the many others who developed the Linux framebuffer system, 
+drivers and utilities. A great amount of thanks goes to Andreas Beck of the 
+GGI project for helping me write this document and teaching me about mode setting. 
+Thanks also go out to those who have supported my work. 
+</p>
+
+<p>
+Thanks to the SGML Tools package, 
+this HOWTO is available in several formats, all generated from a common source 
+file.
+</p>
+
+<h3>1.2.  Revision History</h3>
+
+<p>Version 1.0</p>
+<p>First version; posted to fbdev mailing list only.</p>
+<p>Version 1.1</p>
+<p>Updated version; placed into CVS.Updated to reflect new purposed designs in 
+   the framebuffer api</p>
+
+<h3>1.3.  New versions of this document</h3>
+
+<p>
+New versions of this document will 
+be periodically posted to the comp.os.linux.answers newsgroup. They will also 
+be uploaded to various anonymous ftp sites that archive such information including 
+<a href="ftp://metalabs.unc.edu/pub/Linux/docs/HOWTO/">ftp://metalabs.unc.edu/pub/Linux/docs/HOWTO/</a>&gt;. 
+Hypertext versions of this and other Linux HOWTOs are available on many World-Wide-Web 
+sites, including &lt;<a href="http://metalab.unc.edu/LDP/">http://metalab.unc.edu/LDP/</a>&gt;. 
+Most Linux CD-ROM distributions include the HOWTOs, often under the /usr/doc 
+directory, and you can also buy printed copies from several vendors. Sometimes 
+the HOWTOs available from CD-ROM vendors, ftp sites, and printed format are 
+out of date. If the date on this HOWTO is more than six months in the past, 
+then a newer copy is probably available on the Internet.
+</p>
+
+<p>
+Most translations of this and other 
+Linux HOWTOs can also be found at &lt;<a
 href="http://sunsite.unc.edu/pub/Linux/docs/HOWTO/translations/">http://sunsite.unc.edu/pub/Linux/docs/HOWTO/translations/</a>&gt; 
-  and &lt;<a href="ftp://sunsite.unc.edu/pub/Linux/docs/HOWTO/translations/">ftp://sunsite.unc.edu/pub/Linux/docs/HOWTO/translations/</a>&gt;.</font></p>
-<p><font face="Arial, Helvetica, sans-serif">If you make a translation of this 
-  document into another language, let me know and I'll include a reference to 
-  it here. As of yet there are no translations.</font></p>
-<h3><font face="Arial, Helvetica, sans-serif">1.4.  Feedback</font></h3>
-<p><font face="Arial, Helvetica, sans-serif">I rely on you, the reader, to make 
-  this HOWTO useful. If you have any suggestions, corrections, or comments, please 
+  and &lt;<a href="ftp://sunsite.unc.edu/pub/Linux/docs/HOWTO/translations/">ftp://sunsite.unc.edu/pub/Linux/docs/HOWTO/translations/</a>&gt;.
+</p>
+
+<p>
+If you make a translation of this 
+document into another language, let me know and I'll include a reference to 
+it here. As of yet there are no translations.
+</p>
+
+<h3>1.4.  Feedback</h3>
+
+<p>
+I rely on you, the reader, to make 
+this HOWTO useful. If you have any suggestions, corrections, or comments, please 
   send them to me, &lt;<a
-href="mailto:jsimmons@acsu.buffalo.edu">jsimmons@acsu.buffalo.edu</a>&gt;, and 
-  I will try to incorporate them in the next revision.</font></p>
-<p><font face="Arial, Helvetica, sans-serif">I am also willing to answer general 
-  questions on video cards and fbcon under Linux as best I can. Before doing so, 
-  please read all of the information in this HOWTO and send me detailed information 
-  about the problem. Please do not ask me about using framebuffer cards under 
-  operating systems other than Linux.</font></p>
-<p><font face="Arial, Helvetica, sans-serif">If you publish this document on a 
-  CD-ROM or in hardcopy form, a complimentary copy would be appreciated. Mail 
-  me for my postal address. Also, consider making a donation to the Linux Documentation 
-  Project to help support free documentation for Linux. Contact the Linux HOWTO 
-  coordinator, Tim Bynum &lt;<a
+href="mailto:jsimmons@transvirtual.com">jsimmons@transvirtual.com</a>&gt;, and 
+  I will try to incorporate them in the next revision.
+</p>
+
+<p>
+I am also willing to answer general 
+questions on video cards and fbcon under Linux as best I can. Before doing so, 
+please read all of the information in this HOWTO and send me detailed information 
+about the problem. Please do not ask me about using framebuffer cards under 
+operating systems other than Linux.
+</p>
+
+<p>
+If you publish this document on a 
+CD-ROM or in hardcopy form, a complimentary copy would be appreciated. Mail 
+me for my postal address. Also, consider making a donation to the Linux Documentation 
+Project to help support free documentation for Linux. Contact the Linux HOWTO 
+coordinator, Tim Bynum &lt;<a
 href="mailto:linux-howto@sunsite.unc.edu">linux-howto@sunsite.unc.edu</a>&gt;, 
-  for more information.</font></p>
-<h3><font face="Arial, Helvetica, sans-serif">1.5.  Distribution Policy</font></h3>
-<p><font face="Arial, Helvetica, sans-serif">Copyright (c) 1999 by James Simmons.  
-  This document may be distributed under the terms set forth in the LDP license 
-  at &lt;<a href="http://sunsite.unc.edu/LDP/COPYRIGHT.html">http://sunsite.unc.edu/LDP/COPYRIGHT.html</a>&gt;.</font></p>
-<p align="center"><font face="Arial, Helvetica, sans-serif"><a href="index.html">index</a> 
-  <a href="2.html">forward</a></font></p>
+  for more information.
+</p>
+
+<h3>1.5.  Distribution Policy</h3>
+
+<p>
+Copyright (c) 2001 by James Simmons.  
+This document may be distributed under the terms set forth in the LDP license 
+at &lt;<a href="http://sunsite.unc.edu/LDP/COPYRIGHT.html">http://sunsite.unc.edu/LDP/COPYRIGHT.html</a>&gt;.
+</p>
+
+<p align="center"><a href="index.html">index</a> 
+<a href="2.html">forward</a></p>
 </body>
 </html>

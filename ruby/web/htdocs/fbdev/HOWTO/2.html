@@ -5,186 +5,251 @@
 </head>
 
 <body bgcolor="#FFFFFF">
-<h2><font face="Arial, Helvetica, sans-serif">2.  Framebuffer Card Technology</font></h2>
+<h2>2.  Framebuffer Card Technology</h2>
 <hr width="100%" size="2">
-<p><font face="Arial, Helvetica, sans-serif">This section gives a very cursory 
+
+<p>
+  This section gives a very cursory 
   overview of graphics cards that have accessible framebuffer technology, in order 
   to help you understand the concepts used later in the document. If you are considering 
   writing a driver for a video card please contact the manufacturer for documentation 
-  on the card. Also, please consider reading some books on video hardware in order 
-  to learn more.   </font></p>
-<p><font face="Arial, Helvetica, sans-serif">The way framebuffer devices behave 
+  on the card. Also, please consider reading some books on video hardware in order to learn more.
+</p>
+
+<p>
+The way framebuffer devices behave 
   under Linux is something very similar to /dev/mem. /dev/fb is in fact viewed 
   as a memory device, except in this case the memory is video ram and is mmaped 
   to userspace for direct access. This model is, of course, simplified for the 
   purpose of making programming the frame buffer much easier as well as making 
   it device and platform independent. Since we are interested in building a driver, 
-  we need to understand how exactly the video card itself works.</font></p>
-<h3><font face="Arial, Helvetica, sans-serif">2.1 Monitor</font></h3>
-<p><font face="Arial, Helvetica, sans-serif">First, lets describe one of the biggest 
-  but often overlooked components: the monitor. Today, there exist many types 
-  of monitors. Flat screen to LED and so on. For all the many types, the basic 
-  principle behind the monitor is the same. Basically, a monitor builds an image 
-  sequentially from the data it gets on its input lines. To achieve this, a beam 
-  scans over the screen in a kind of &quot;zig-zag&quot; pattern that covers the 
-  whole visible part of the screen once per frame. It happens so fast the eye 
-  can't see this happening (well, we hope). So which way does this beam go? All 
-  monitors have chosen to always go left to right with a quick jump back to the 
-  far left when we hit the right boundary of the monitor. Same goes for the top 
-  to bottom approach, but at a much slower pace since most of our time is used 
-  to move left to right for every single line. Obviously, the displayed data needs 
-  to be synchronized with the current position of the beam to be able to build 
-  a steady picture. This is what those HSYNC and VSYNC you see in your monitor 
-  manual are for. These two lines that say, &quot;hey move the beam to the left 
-  now&quot; and &quot;move the ray to the top now&quot;. Some systems encode this 
-  information. For example, the green channel, which is called sync on green, 
-  but that doesn't change the principle. All a monitor knows about a mode is what 
-  it gets that's contained in the frequencies with which those signals return. 
-  These frequencies are called the horizontal and vertical frequencies (aka refresh 
-  rate), as they determine how often per second a whole image is drawn. A monitor 
-  knows nothing about depth, clocks, and borders. If two modes have the same frequencies, 
-  they will be the same to the monitor. This is why different centering data for 
-  e.g. 640x480x16 and 640x480x32 are not stored in the monitor. The monitor can't 
-  distinguish between those modes. Between two HSYNC we get the RGB signals.</font></p>
+  we need to understand how exactly the video card itself works.
+</p>
+
+<h3>2.1 Monitor</font></h3>
+
+<p>
+First, lets describe one of the biggest 
+but often overlooked components: the monitor. Today, there exist many types 
+of monitors. Flat screen to LED and so on. For all the many types, the basic 
+principle behind the monitor is the same. Basically, a monitor builds an image 
+sequentially from the data it gets on its input lines. To achieve this, a beam 
+scans over the screen in a kind of &quot;zig-zag&quot; pattern that covers the 
+whole visible part of the screen once per frame. It happens so fast the eye 
+can't see this happening (well, we hope). So which way does this beam go? All 
+monitors have chosen to always go left to right with a quick jump back to the 
+far left when we hit the right boundary of the monitor. Same goes for the top 
+to bottom approach, but at a much slower pace since most of our time is used 
+to move left to right for every single line. Obviously, the displayed data needs 
+to be synchronized with the current position of the beam to be able to build 
+a steady picture. This is what those HSYNC and VSYNC you see in your monitor 
+manual are for. These two lines that say, &quot;hey move the beam to the left 
+now&quot; and &quot;move the ray to the top now&quot;. Some systems encode this 
+information. For example, the green channel, which is called sync on green, 
+but that doesn't change the principle. All a monitor knows about a mode is what 
+it gets that's contained in the frequencies with which those signals return. 
+These frequencies are called the horizontal and vertical frequencies (aka refresh 
+ rate), as they determine how often per second a whole image is drawn. A monitor 
+knows nothing about depth, clocks, and borders. If two modes have the same frequencies, 
+they will be the same to the monitor. This is why different centering data for 
+e.g. 640x480x16 and 640x480x32 are not stored in the monitor. The monitor can't 
+distinguish between those modes. Between two HSYNC we get the RGB signals.</p>
 <table width="90%" border="0" cellspacing="0" cellpadding="0" align="center">
   <tr> 
-    <td width="15%"><font face="Arial, Helvetica, sans-serif">HSYNC</font></td>
+    <td width="15%">HSYNC</td>
     <td width="2%">&nbsp;</td>
-    <td width="2%"><font face="Arial, Helvetica, sans-serif">/</font></td>
-    <td width="2%"><font face="Arial, Helvetica, sans-serif">-</font></td>
-    <td width="2%"><font face="Arial, Helvetica, sans-serif">\</font></td>
+    <td width="2%">/</td>
+    <td width="2%">-</td>
+    <td width="2%">\</td>
     <td width="0%">&nbsp;</td>
     <td colspan="10"> 
       <hr width="100%" size="2">
     </td>
     <td width="0%">&nbsp;</td>
-    <td width="2%"><font face="Arial, Helvetica, sans-serif">/</font></td>
-    <td width="0%"><font face="Arial, Helvetica, sans-serif">--</font></td>
-    <td width="5%"><font face="Arial, Helvetica, sans-serif">\</font></td>
+    <td width="2%">/</td>
+    <td width="0%">--</td>
+    <td width="5%">\</td>
   </tr>
   <tr> 
-    <td width="15%"><font face="Arial, Helvetica, sans-serif">RGB</font></td>
+    <td width="15%">RGB</td>
     <td width="2%">&nbsp;</td>
     <td width="2%">&nbsp;</td>
     <td width="2%">&nbsp;</td>
-    <td width="2%"><font face="Arial, Helvetica, sans-serif">data</font></td>
+    <td width="2%">data</td>
     <td width="0%">&nbsp;</td>
-    <td width="7%"><font face="Arial, Helvetica, sans-serif">data</font></td>
-    <td width="7%"><font face="Arial, Helvetica, sans-serif">data</font></td>
-    <td width="7%"><font face="Arial, Helvetica, sans-serif">data</font></td>
-    <td width="7%"><font face="Arial, Helvetica, sans-serif">data</font></td>
-    <td width="7%"><font face="Arial, Helvetica, sans-serif">data</font></td>
-    <td width="7%"><font face="Arial, Helvetica, sans-serif">data</font></td>
-    <td width="7%"><font face="Arial, Helvetica, sans-serif">data</font></td>
-    <td width="7%"><font face="Arial, Helvetica, sans-serif">data</font></td>
-    <td width="7%"><font face="Arial, Helvetica, sans-serif">data</font></td>
-    <td width="7%"><font face="Arial, Helvetica, sans-serif">data</font></td>
+    <td width="7%">data</td>
+    <td width="7%">data</td>
+    <td width="7%">data</td>
+    <td width="7%">data</td>
+    <td width="7%">data</td>
+    <td width="7%">data</td>
+    <td width="7%">data</td>
+    <td width="7%">data</td>
+    <td width="7%">data</td>
+    <td width="7%">data</td>
     <td width="0%">&nbsp;</td>
-    <td width="2%"><font face="Arial, Helvetica, sans-serif">data</font></td>
+    <td width="2%">data</td>
     <td width="0%">&nbsp;</td>
     <td width="5%">&nbsp;</td>
   </tr>
   <tr> 
-    <td width="15%"><font face="Arial, Helvetica, sans-serif">time</font></td>
-    <td width="2%"><font face="Arial, Helvetica, sans-serif">1</font></td>
-    <td width="2%"><font face="Arial, Helvetica, sans-serif">2</font></td>
+    <td width="15%">time</td>
+    <td width="2%">1</td>
+    <td width="2%">2</td>
     <td width="2%">&nbsp;</td>
-    <td width="2%"><font face="Arial, Helvetica, sans-serif">3</font></td>
+    <td width="2%">3</td>
     <td width="0%">&nbsp;</td>
     <td colspan="10"> 
       <hr width="100%" size="2">
     </td>
     <td width="0%">&nbsp;</td>
-    <td width="2%"><font face="Arial, Helvetica, sans-serif">4</font></td>
+    <td width="2%">4</td>
     <td width="0%">&nbsp;</td>
-    <td width="5%"><font face="Arial, Helvetica, sans-serif">5</font></td>
+    <td width="5%">5</td>
   </tr>
 </table>
-<p><font face="Arial, Helvetica, sans-serif">At 1, the HSYNC pulse gets raised. 
-  The beam will now quickly move to the left. During that time, the RGB lines 
-  should be black (ray off), otherwise it would leave a noticeable trace while 
-  moving, which would look ugly. </font></p>
-<p><font face="Arial, Helvetica, sans-serif">At 2, the HSYNC pulse ends. This 
-  point isn't of much interest, as you cannot tell, if the ray is already at the 
-  left edge. The only thing important about point 2 is, that the time between 
-  point 1 and 2 must be sufficiently high for the monitor to detect the HSYNC 
-  signal. Usually, the HSYNC pulse can be made very small.</font></p>
-<p><font face="Arial, Helvetica, sans-serif">At some point after 1, the ray will 
-  start flying to the right again. When point 3 comes, it will actually start 
-  to display data. Point 3 can thus be adjusted to change the left border location. 
-  If you wait longer before you start sending data, the left border will move 
-  to the right.</font></p>
-<p><font face="Arial, Helvetica, sans-serif">When you have sent all data, you 
-  reach point 4. As a HSYNC pulse should then be sent to start a new line, we 
-  set the RGB lines to black again. At point 5 we have completed a cycle and start 
-  the next line.</font></p>
-<h3><font face="Arial, Helvetica, sans-serif">2.2 Video card </font></h3>
-<p><font face="Arial, Helvetica, sans-serif">Next, we look at the video card point 
-  of view. The video card could send out a steady stream of data to the monitor 
-  except for one thing. The monitor needs time for retracing so the video card 
-  will be put into some &quot;delay&quot; at specific times. To be precise between 
-  point 4 and point 1 on the NEXT line on the previous diagram. For the video 
-  card, the &quot;natural&quot; coordinate system starts at point 3, when it starts 
-  emitting data. This point usually causes some confusion with modeline calculation:</font></p>
-<p><font face="Arial, Helvetica, sans-serif">HSYNC __/~~~\______________________________________________/~~~\___</font></p>
-<p><font face="Arial, Helvetica, sans-serif">RGB   ___________datadatadatadatadatadatadatadatadatad_____________</font></p>
-<p><font face="Arial, Helvetica, sans-serif">time    1   2    3                                    
-  4    5   6</font></p>
-<p><font face="Arial, Helvetica, sans-serif">grc     SS  SE   0                                    
-  W    SS  SE</font></p>
-<p><font face="Arial, Helvetica, sans-serif">From the graphics card point of view 
-  (grc), a line starts at &quot;0&quot;. From that point onward, it will output 
-  the data in its video ram. There is a counter that will limit the number of 
-  pixels that are put on one line. This is what we call the width of the mode. 
-  On a 640x480 standard VESA mode, this is 640 pixels. </font></p>
-<p><font face="Arial, Helvetica, sans-serif">We will usually want a small right 
-  border to allow the monitor to prepare for the following SYNC pulse we will 
-  generate. The aforementioned counter will run on (but data output from video 
-  RAM will be suppressed) until we reach the point SS (SyncStart). On a 640x480 
-  standard VGA mode, this happens at 664 pixels. That is, we left a border of 
-  24 pixels.</font></p>
-<p><font face="Arial, Helvetica, sans-serif">Now we raise the HSYNC to tell the 
-  monitor to go left. This signal remains asserted until we reach the point SE 
-  (SyncEnd). (760 pixels on VGA - i.e. 96 pixels of sync pulse. This is pretty 
-  long, but VGA monitors weren't very quick.)</font></p>
-<p><font face="Arial, Helvetica, sans-serif">We will also want some left border, 
-  so we wait until we reach the next &quot;0&quot; point before starting to generate 
-  a signal again. On standard VGA this happens at 800 pixels (40 pixels left border). 
-  At that point, we reset the counter to 0 and start over. This point is usually 
-  called the &quot;total&quot; for this reason.</font></p>
-<p><font face="Arial, Helvetica, sans-serif">Now let us look at how we can change 
-  the picture's appearance by changing values in such a modeline.</font></p>
-<p><font face="Arial, Helvetica, sans-serif">Moving SE should not cause any difference 
-  at all, except if you make the sync pulse too small for the monitor to recognize.</font></p>
-<p><font face="Arial, Helvetica, sans-serif">Moving SS and SE together will move 
-  the location of the sync pulse within the picture. Let us assume we move them 
-  both to the &quot;left&quot;, i.e. we decrease their startpoints. What happens 
-  is, that we decrease the distance W-SS (which determines the right border) and 
-  increase 0-SE (the left border). As a result, the picture moves to the right.</font></p>
-<p><font face="Arial, Helvetica, sans-serif">Now what happens, if you change W? 
-  You get extra pixels at the right border. As usually borders are pretty large 
-  for standard VGA modes, you can usually display something like 648x486 without 
-  a problem on a standard VGA monitor. You will not be able to see the difference.</font></p>
-<p><font face="Arial, Helvetica, sans-serif">Of course, there are limits to this: 
-  If you go too far, you will produce pixels beyond the visible area of the monitor 
-  (which is useless), or interfere with the retrace, what gives ugly stripes from 
-  the retracing CRT ray.</font></p>
-<p><font face="Arial, Helvetica, sans-serif">Now let's shed some light on a few 
-  remaining terms:</font></p>
-<p><font face="Arial, Helvetica, sans-serif">BlankStart BS and BlankEnd BE. Between 
-  SE and 0, you can put a BE point on many graphics cards. At that point, the 
-  RGB lines are no longer clamped to black (to avoid interfering with the retrace), 
-  but can be programmed to a border color. The same goes for BS, which can be 
-  placed between W and SS. Usually, one doesn't use that feature nowadays, as 
-  we have tunable monitors that allow stretching the mode to the physical limits 
-  of the monitor.</font></p>
-<p><font face="Arial, Helvetica, sans-serif">On old monitors, one used large borders 
-  to ensure the data was always visible. There, the border color made some sense 
-  as kind of eye candy.</font></p>
-<p><font face="Arial, Helvetica, sans-serif">Pixelclock. That is the rate at which 
-  pixels are output to the RGB lines. It is usually the basic unit for all timing 
-  values in a graphics card.</font></p>
-<p align="center"><font face="Arial, Helvetica, sans-serif"> <a href="index.html">index</a> 
-  <a href="1.html">back</a> <a href="3.html">forward </a></font></p>
+
+<p>
+At 1, the HSYNC pulse gets raised. 
+The beam will now quickly move to the left. During that time, the RGB lines 
+should be black (ray off), otherwise it would leave a noticeable trace while 
+moving, which would look ugly. 
+</p>
+
+<p>
+At 2, the HSYNC pulse ends. This 
+point isn't of much interest, as you cannot tell, if the ray is already at the 
+left edge. The only thing important about point 2 is, that the time between 
+point 1 and 2 must be sufficiently high for the monitor to detect the HSYNC 
+signal. Usually, the HSYNC pulse can be made very small.
+</p>
+
+<p>
+At some point after 1, the ray will 
+start flying to the right again. When point 3 comes, it will actually start 
+to display data. Point 3 can thus be adjusted to change the left border location. 
+If you wait longer before you start sending data, the left border will move 
+to the right.
+</p>
+
+<p>
+When you have sent all data, you 
+reach point 4. As a HSYNC pulse should then be sent to start a new line, we 
+set the RGB lines to black again. At point 5 we have completed a cycle and start 
+the next line.
+</p>
+
+<h3>2.2 Video card </h3>
+
+<p>
+Next, we look at the video card point 
+of view. The video card could send out a steady stream of data to the monitor 
+except for one thing. The monitor needs time for retracing so the video card 
+will be put into some &quot;delay&quot; at specific times. To be precise between 
+point 4 and point 1 on the NEXT line on the previous diagram. For the video 
+card, the &quot;natural&quot; coordinate system starts at point 3, when it starts 
+emitting data. This point usually causes some confusion with modeline calculation:
+</p>
+
+<p>HSYNC __/~~~\______________________________________________/~~~\___</p>
+<p>RGB   ___________datadatadatadatadatadatadatadatadatad_____________</p>
+<p>time    1   2    3                                    
+  4    5   6</p>
+<p>grc     SS  SE   0                                    
+  W    SS  SE</p>
+
+<p>
+From the graphics card point of view 
+(grc), a line starts at &quot;0&quot;. From that point onward, it will output 
+the data in its video ram. There is a counter that will limit the number of 
+pixels that are put on one line. This is what we call the width of the mode. 
+On a 640x480 standard VESA mode, this is 640 pixels. 
+</p>
+
+<p>
+We will usually want a small right 
+border to allow the monitor to prepare for the following SYNC pulse we will 
+generate. The aforementioned counter will run on (but data output from video 
+RAM will be suppressed) until we reach the point SS (SyncStart). On a 640x480 
+standard VGA mode, this happens at 664 pixels. That is, we left a border of 
+24 pixels.
+</p>
+
+<p>
+Now we raise the HSYNC to tell the 
+monitor to go left. This signal remains asserted until we reach the point SE 
+(SyncEnd). (760 pixels on VGA - i.e. 96 pixels of sync pulse. This is pretty 
+long, but VGA monitors weren't very quick.)
+</p>
+
+<p>
+We will also want some left border, 
+so we wait until we reach the next &quot;0&quot; point before starting to generate 
+a signal again. On standard VGA this happens at 800 pixels (40 pixels left border). 
+At that point, we reset the counter to 0 and start over. This point is usually 
+called the &quot;total&quot; for this reason.
+</p>
+
+<p>
+Now let us look at how we can change 
+the picture's appearance by changing values in such a modeline.
+</p>
+
+<p>
+Moving SE should not cause any difference 
+at all, except if you make the sync pulse too small for the monitor to recognize.
+</p>
+
+<p>
+Moving SS and SE together will move 
+the location of the sync pulse within the picture. Let us assume we move them 
+both to the &quot;left&quot;, i.e. we decrease their startpoints. What happens 
+is, that we decrease the distance W-SS (which determines the right border) and 
+increase 0-SE (the left border). As a result, the picture moves to the right.
+</p>
+
+<p>
+Now what happens, if you change W? 
+You get extra pixels at the right border. As usually borders are pretty large 
+for standard VGA modes, you can usually display something like 648x486 without 
+a problem on a standard VGA monitor. You will not be able to see the difference.
+</p>
+
+<p>
+Of course, there are limits to this: 
+If you go too far, you will produce pixels beyond the visible area of the monitor 
+(which is useless), or interfere with the retrace, what gives ugly stripes from 
+the retracing CRT ray.
+</p>
+
+<p>
+Now let's shed some light on a few 
+remaining terms:
+</p>
+
+<p>
+BlankStart BS and BlankEnd BE. Between 
+SE and 0, you can put a BE point on many graphics cards. At that point, the 
+RGB lines are no longer clamped to black (to avoid interfering with the retrace), 
+but can be programmed to a border color. The same goes for BS, which can be 
+placed between W and SS. Usually, one doesn't use that feature nowadays, as 
+we have tunable monitors that allow stretching the mode to the physical limits 
+of the monitor.
+</p>
+
+<p>
+On old monitors, one used large borders 
+to ensure the data was always visible. There, the border color made some sense 
+as kind of eye candy.
+</p>
+
+<p>
+Pixelclock. That is the rate at which 
+pixels are output to the RGB lines. It is usually the basic unit for all timing 
+values in a graphics card.
+</p>
+
+<p align="center"> <a href="index.html">index</a> 
+<a href="1.html">back</a> <a href="3.html">forward </a></p>
 </body>
 </html>
