@@ -257,7 +257,7 @@ char *absolutes[ABS_MAX + 1] = {
 char *misc[MSC_MAX + 1] = {
 	[ 0 ... MSC_MAX] = NULL,
 	[MSC_SERIAL] = "Serial",	[MSC_PULSELED] = "Pulseled",
-	[MSC_GESTURE] = "Gesture"
+	[MSC_GESTURE] = "Gesture",	[MSC_RAW] = "RawData"
 };
 
 char *leds[LED_MAX + 1] = {
@@ -369,6 +369,13 @@ int main (int argc, char **argv)
 			if (ev[i].type == EV_SYN) {
 				printf("Event: time %ld.%06ld, -------------- %s ------------\n",
 					ev[i].time.tv_sec, ev[i].time.tv_usec, ev[i].code ? "Config Sync" : "Report Sync" );
+			} else if (ev[i].type == EV_MSC && ev[i].code == MSC_RAW) {
+				printf("Event: time %ld.%06ld, type %d (%s), code %d (%s), value %02x\n",
+					ev[i].time.tv_sec, ev[i].time.tv_usec, ev[i].type,
+					events[ev[i].type] ? events[ev[i].type] : "?",
+					ev[i].code,
+					names[ev[i].type] ? (names[ev[i].type][ev[i].code] ? names[ev[i].type][ev[i].code] : "?") : "?",
+					ev[i].value);
 			} else {
 				printf("Event: time %ld.%06ld, type %d (%s), code %d (%s), value %d\n",
 					ev[i].time.tv_sec, ev[i].time.tv_usec, ev[i].type,
