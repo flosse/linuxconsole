@@ -656,11 +656,32 @@ static int sstfb_blank(int blank, struct fb_info *info)
 	return 0;
 }
 
-/* TODO */
 static int sstfb_pan_display(struct fb_var_screeninfo *var,
                              struct fb_info *info)
 {
-        return -EINVAL;
+	if (var->vmode & FB_VMODE_YWRAP) {
+		if (var->yoffset < 0 ||
+		    var->yoffset >= info->var.yres_virtual ||
+		    var->xoffset) {
+		 	return -EINVAL;
+		}
+	} else {
+		if (var->xoffset + var->xres > info->var.xres_virtual ||
+		    var->yoffset + var->yres > info->var.yres_virtual) {
+			return -EINVAL;
+		}
+	}
+	
+	info->var.xoffset = var->xoffset;
+	info->var.yoffset = var->yoffset;
+
+	if (var->vmode & FB_VMODE_YWRAP) {
+		info->var.vmode |= FB_VMODE_YWRAP;
+	} else {
+		info->var.vmode &= ~FB_VMODE_YWRAP;
+	}
+	
+        return 0;
 }
 
 static void sstfb_fillrect(struct fb_info *info, int x, int y, 
