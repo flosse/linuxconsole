@@ -73,8 +73,8 @@ NULL, NULL, NULL, "BtnDead",
 "TV2", "VCR", "VCR2", "Sat", "Sat2", "CD", "Tape", "Radio", "Tuner", "Player", 
 "Text", "DVD", "Aux", "MP3", "Audio", "Video", "Directory", "List", "Memo",
 "Calendar", "Red", "Green", "Yellow", "Blue", "ChannelUp", "ChannelDown", 
-"First", "Last", "AB", "Play", "Restart", "Slow", "Shuffle", "FastForward", 
-"Previous", "Next", "Digits", "Teen", "Twen", "Break" };
+"First", "Last", "AB", "Next", "Restart", "Slow", "Shuffle", "Break",
+"Previous", "Digits", "Teen", "Twen" };
 
 char *absval[5] = { "Value", "Min  ", "Max  ", "Fuzz ", "Flat " };
 char *relatives[REL_MAX + 1] = { "X", "Y", "Z", NULL, NULL, NULL, "HWheel", "Dial", "Wheel" };
