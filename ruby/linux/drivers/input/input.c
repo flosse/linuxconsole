@@ -777,6 +777,10 @@ static int __init input_init(void)
 
 static void __exit input_exit(void)
 {
+	remove_proc_entry("devices", proc_bus_input_dir);
+	remove_proc_entry("handlers", proc_bus_input_dir);
+	remove_proc_entry("input", proc_bus);
+
 	devfs_unregister(input_devfs_handle);
         if (devfs_unregister_chrdev(INPUT_MAJOR, "input"))
                 printk(KERN_ERR "input: can't unregister char major %d", INPUT_MAJOR);
