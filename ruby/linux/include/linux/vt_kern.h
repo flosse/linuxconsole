@@ -143,7 +143,6 @@ struct vc_data {
         unsigned long   *vc_uni_pagedir_loc;  /* [!] Location of uni_pagedir var
 iable for this console */
 	wait_queue_head_t paste_wait;	        /* For selections */	
-#ifdef CONFIG_VT_EXTENDED
         /* Internal flags */
         unsigned int    vc_decscl;              /* operating level */
         unsigned int    vc_c8bit        : 1;    /* 8-bit controls */
@@ -169,7 +168,6 @@ r Set */
         unsigned char   vc_saved_G2;
         unsigned char   vc_saved_G3;
         unsigned char   vc_saved_GS;
-#endif /* CONFIG_VT_EXTENDED */
 };                                 
 
 struct consw {
@@ -191,7 +189,6 @@ struct consw {
         u8      (*con_build_attr)(struct vc_data *, u8, u8, u8, u8, u8);
         void    (*con_invert_region)(struct vc_data *, u16 *, int);
         u16    *(*con_screen_pos)(struct vc_data *, int);
-        unsigned long (*con_getxy)(struct vc_data *,unsigned long,int *,int *);
 };
 
 extern const struct consw dummy_con;   	/* dummy console buffer */
@@ -203,16 +200,6 @@ extern const struct consw mda_con;	/* MDA text console */
 extern const struct consw nvvga_con;	/* NVIDIA text console */ 
 
 void take_over_console(struct vt_struct *vt, const struct consw *sw);
-
-struct vc_pool {
-	/* 
-	 * First VC for first vc pool in linked list is always allocated. 
-	 * Their are always 16 VC per pool 
-	 */
-	int first_vc;
-	struct vc_data *vc_cons[MAX_NR_USER_CONSOLES];	/* VT's VC pool */
-	struct vc_pool *next;				/* more VC pools */
-};
 
 struct vt_struct {
 	struct vc_data  *fg_console;		/* VC being displayed */
@@ -239,7 +226,8 @@ struct vt_struct {
 	struct vc_data *default_mode;	 	/* Default mode */
 	struct tasklet_struct vt_tasklet;	/* VT tasklet */
 	struct input_handle *keyboard;		/* Keyboard attached */
-	struct vc_pool  vcs;			 
+	int first_vc;
+        struct vc_data *vc_cons[MAX_NR_USER_CONSOLES];  /* VT's VC pool */
 	struct vt_struct *next;				
 }; 
 
