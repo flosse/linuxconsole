@@ -98,9 +98,9 @@ int main (int argc, char **argv)
 	int abs[5];
 
 	if (argc < 2) {
-		printf ("Usage: evtest /dev/input/eventX\n");
-		printf ("Where X = input device number\n");
-		exit (1);
+		printf("Usage: evtest /dev/input/eventX\n");
+		printf("Where X = input device number\n");
+		exit(1);
 	}
 
 	if ((fd = open(argv[argc - 1], O_RDONLY)) < 0) {
@@ -108,7 +108,11 @@ int main (int argc, char **argv)
 		exit(1);
 	}
 
-	ioctl(fd, EVIOCGVERSION, &version);
+	if (ioctl(fd, EVIOCGVERSION, &version)) {
+		perror("evtest: can't get version");
+		exit(1);
+	}
+
 	printf("Input driver version is %d.%d.%d\n",
 		version >> 16, (version >> 8) & 0xff, version & 0xff);
 
