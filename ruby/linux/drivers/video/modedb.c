@@ -256,7 +256,7 @@ static int __init my_atoi(const char *name)
 int __fb_try_mode(struct fb_var_screeninfo *var, struct fb_info *info,
 		  const struct fb_videomode *mode, unsigned int bpp)
 {
-    int err;
+    int err = 0;
 
     DPRINTK("Trying mode %s %dx%d-%d@%d\n", mode->name ? mode->name : "noname",
 	    mode->xres, mode->yres, bpp, mode->refresh);
@@ -277,7 +277,7 @@ int __fb_try_mode(struct fb_var_screeninfo *var, struct fb_info *info,
     var->vsync_len = mode->vsync_len;
     var->sync = mode->sync;
     var->vmode = mode->vmode;
-    err = info->fbops->fb_set_var(var, info);
+    err = fb_set_var(var, info);
     var->activate &= ~FB_ACTIVATE_TEST;
     return !err;
 }
