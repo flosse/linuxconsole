@@ -84,7 +84,6 @@ static int vgacon_set_palette(struct vc_data *vc, unsigned char *table);
 static int vgacon_resize(struct vc_data *vc, unsigned int rows, unsigned int cols);
 static int vgacon_scroll(struct vc_data *vc, int lines);
 static int vgacon_set_origin(struct vc_data *vc);
-static void vgacon_save_screen(struct vc_data *vc);
 static u8 vgacon_build_attr(struct vc_data *vc, u8 color, u8 intensity, u8 blink, u8 underline, u8 reverse);
 static void vgacon_invert_region(struct vc_data *vc, u16 *p, int count);
 
@@ -876,12 +875,6 @@ static int vgacon_set_origin(struct vc_data *c)
 	return 1;
 }
 
-static void vgacon_save_screen(struct vc_data *c)
-{
-	if (!vga_is_gfx)
-		scr_memcpyw_from((u16 *) c->vc_screenbuf, (u16 *) vga_origin, c->vc_screenbuf_size);
-}
-
 static u8 vgacon_build_attr(struct vc_data *vc, u8 color, u8 intensity, 
 			    u8 blink, u8 underline, u8 reverse)
 {
@@ -948,7 +941,6 @@ const struct consw vga_con = {
 	con_resize:		vgacon_resize,
 	con_scroll:		DUMMY,
 	con_set_origin:		vgacon_set_origin,
-	con_save_screen:	vgacon_save_screen,
 	con_build_attr:		vgacon_build_attr,
 	con_invert_region:	vgacon_invert_region,
 };

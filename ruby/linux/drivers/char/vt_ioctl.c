@@ -617,7 +617,6 @@ void do_blank_screen(struct vc_data *vc)
 
         /* entering graphics mode? */
         hide_cursor(vc);
-        save_screen(vc);
         vc->display_fg->vt_sw->con_blank(vc, -1);
         vc->display_fg->vt_blanked = 1;
         set_origin(vc);
@@ -1355,7 +1354,6 @@ inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
         hide_cursor(old_vc);
         if (old_vc->vc_num != new_vc->vc_num) {
 		vt->fg_console = new_vc;
-               	save_screen(old_vc);
                 set_origin(old_vc);               
 		
 		set_origin(new_vc);	

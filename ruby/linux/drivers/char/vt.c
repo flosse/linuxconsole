@@ -454,12 +454,6 @@ void update_region(struct vc_data *vc, unsigned long start, int count)
         }
 }
 
-inline void save_screen(struct vc_data *vc)
-{
-        if (sw->con_save_screen)
-                sw->con_save_screen(vc);
-}
-
 /*      Redrawing of screen */
 void update_screen(struct vc_data *vc)
 {
@@ -596,7 +590,6 @@ static void blank_screen(unsigned long private)
         	add_timer(&vt->timer);
         } 
         
-	save_screen(vt->fg_console);
         /* In case we need to reset origin, blanking hook returns 1 */
         i = vt->vt_sw->con_blank(vt->fg_console, 1);
         vt->vt_blanked = 1;        
@@ -696,7 +689,7 @@ static void console_softint(unsigned long private)
                 struct vc_data *vc = vt->fg_console;
                 clear_selection();
                 if (vcmode == KD_TEXT)
-                      sw->con_scroll(vt->fg_console,vt->scrollback_delta);
+                      sw->con_scroll(vt->fg_console, vt->scrollback_delta);
                 vt->scrollback_delta = 0;
         }
         spin_unlock_irq(&console_lock);
@@ -1551,9 +1544,8 @@ void __init vt_console_init(void)
         admin_vt = vt;
 	vc = vt->vcs.vc_cons[0];
         screenbuf = (unsigned short *) alloc_bootmem(screenbuf_size);
-        vc_init(vc, !sw->con_save_screen); 
+        vc_init(vc, 0); 
         
-        save_screen(vc);
         gotoxy(vc, x, y);
         vte_ed(vc, 0);
         update_screen(vc);
@@ -1602,8 +1594,6 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
                 if (!vc || !sw)
                         continue;
 
-                if (IS_VISIBLE)
-                        save_screen(vc);
                 old_was_color = vc->vc_can_do_color;
                 sw->con_deinit(vc);
                 visual_init(vc);
