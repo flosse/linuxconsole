@@ -437,12 +437,12 @@ static void fn_send_intr(struct vc_data *vc)
 
 static void fn_scroll_forw(struct vc_data *vc)
 {
-	scrollfront(vc, 0);
+//	scroll_up(vc, vc->vc_rows/2);
 }
 
 static void fn_scroll_back(struct vc_data *vc)
 {
-	scrollback(vc, 0);
+//	scroll_down(vc, vc->vc_rows/2);
 }
 
 static void fn_compose(struct vc_data *vc)
