@@ -169,7 +169,7 @@ int main(int argc, char** argv)
 		scanf("%d", &i);
 		if (i >= 0 && i < N_EFFECTS) {
 			play.type = EV_FF;
-			play.code = FF_PLAY | effects[i].id;
+			play.code = effects[i].id;
 			play.value = 1;
 
 			if (write(fd, (const void*) &play, sizeof(play)) == -1) {
@@ -185,7 +185,8 @@ int main(int argc, char** argv)
 	/* Stop the effects */
 	for (i=0; i<N_EFFECTS; ++i) {
 		stop.type = EV_FF;
-		stop.code = FF_STOP | effects[i].id;
+		stop.code =  effects[i].id;
+		stop.value = 0;
         
 		if (write(fd, (const void*) &stop, sizeof(stop)) == -1) {
 			perror("Stop effect");

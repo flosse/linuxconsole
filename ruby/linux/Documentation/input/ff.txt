@@ -125,14 +125,14 @@ Control of playing is done with write(). Below is an example:
 ...
 	/* Play three times */
 	play.type = EV_FF;
-	play.code = FF_PLAY | effect.id;
+	play.code = effect.id;
 	play.value = 3;
 	
 	write(fd, (const void*) &play, sizeof(play));
 ...
 	/* Stop an effect */
 	stop.type = EV_FF;
-	stop.code = FF_STOP | effect.id;
+	stop.code = effect.id;
+	stop.value = 0;
 	
 	write(fd, (const void*) &play, sizeof(stop));
-

@@ -275,40 +275,22 @@ static void iforce_init_ff(struct iforce *iforce)
 static int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {
 	struct iforce* iforce = (struct iforce*)(dev->private);
-	int effect_id = code & FF_CTRL_MASK;
 	unsigned char data[3];
+
+	if (type != EV_FF)
+		return -1;
 
 	printk(KERN_DEBUG "iforce ff: input event %d %d %d\n", type, code, value);
 
-	if (code & FF_PLAY) {
-	        printk(KERN_DEBUG "iforce ff: play effect %d\n", effect_id);
-
-	        data[0] = (unsigned char)effect_id;
-	        data[1] = (value == 1) ? 0x01 : 0x41;
-	        data[2] = (unsigned char)value;
+        data[0] = LO(code);
+        data[1] = (value > 0) ? ((value > 1) ? 0x41 : 0x01) : 0;
+        data[2] = LO(value);
  
-		down_interruptible(&(iforce->ff_mutex));
-	        send_packet(iforce, FF_CMD_PLAY, data);
-		up(&(iforce->ff_mutex));
+	down_interruptible(&(iforce->ff_mutex));
+        send_packet(iforce, FF_CMD_PLAY, data);
+	up(&(iforce->ff_mutex));
 
-		return 0; 
-	}
-
-	if (code & FF_STOP) {
-		printk(KERN_DEBUG "iforce ff: stop effect %d\n", effect_id); 
-
-		data[0] = (unsigned char) effect_id;
-		data[1] = 0;
-		data[2] = 0;
- 
-		down_interruptible(&(iforce->ff_mutex));
-		send_packet(iforce, FF_CMD_PLAY, data);
-		up(&(iforce->ff_mutex));
-
-		return 0; 
-	}
-
-	return -1;
+	return 0;
 }
 
 /*

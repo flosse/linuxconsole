@@ -88,7 +88,7 @@ printf("level: %04x direction: %04x\n", (unsigned int)effect.u.constant.level, (
 		struct input_event play;
 		first = 0;
 		play.type = EV_FF;
-		play.code = FF_PLAY | effect.id;
+		play.code = effect.id;
 		play.value = 1;
 
 		if (write(ff_fd, (const void*) &play, sizeof(play)) == -1) {
@@ -102,7 +102,8 @@ static void stop_effect()
 {
 	struct input_event stop;
 	stop.type = EV_FF;
-	stop.code = FF_STOP;
+	stop.code = 0;
+	stop.value = 0;
 
 	if (write(ff_fd, (const void*) &stop, sizeof(stop)) == -1) {
 		perror("Stop effect");

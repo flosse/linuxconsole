@@ -34,6 +34,7 @@
 #else
 #include <sys/time.h>
 #include <sys/ioctl.h>
+#include <asm/types.h>
 #endif
 
 /*
@@ -563,7 +564,7 @@ struct ff_effect {
  */
 #define FF_X		0x00
 #define FF_Y		0x01
-#define FF_AXES_MAX	0x01
+#define FF_MAX		0x01
 
 /*
  * Types of force feedback effects
@@ -589,17 +590,6 @@ struct ff_effect {
 #define FF_BUTTON_NONE	0x00
 #define FF_BUTTON_1	0x01
 /* ... */
-
-/*
- * Commands issued by using write()
- * They trigger effects
- * To be used for the field 'code' of struct input_event
- * The lower byte contains the id of effect to play or stop.
- */
-#define FF_CTRL_SHIFT   8
-#define FF_CTRL_MASK	0xff
-#define FF_PLAY		(0x01<<FF_CTRL_SHIFT)
-#define FF_STOP		(0x02<<FF_CTRL_SHIFT)
 
 #ifdef __KERNEL__
 
