@@ -205,7 +205,7 @@ inline void gotoxay(struct vc_data *vc, int new_x, int new_y)
 
 void set_palette(struct vc_data *vc)
 {
-        if (vcmode != KD_GRAPHICS)
+        if (IS_VISIBLE && vcmode != KD_GRAPHICS)
                 sw->con_set_palette(vc, color_table);
 }
 
@@ -748,16 +748,9 @@ static void visual_init(struct vc_data *vc, int init)
 
 static void vc_init(struct vc_data *vc, int do_clear)
 {
-        int j, k ;
-
         set_origin(vc);
         pos = origin;
         reset_vc(vc);
-        for (j=k=0; j<16; j++) {
-                palette[k++] = default_red[j] ;
-                palette[k++] = default_grn[j] ;
-                palette[k++] = default_blu[j] ;
-        }
         def_color       = 0x07;   /* white */
         ulcolor         = 0x0f;   /* bold white */
         halfcolor       = 0x08;   /* grey */
