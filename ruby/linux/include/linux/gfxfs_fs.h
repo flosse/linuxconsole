@@ -54,5 +54,7 @@ extern struct file_operations gfxfs_file_ops;
 extern struct file_operations gfxfs_dir_ops;
 extern struct inode_operations gfxfs_dir_inode_ops;
 
+extern int gfxfs_mknod(struct inode *dir, struct dentry *dentry, int mode, int dev);
+
 #endif /* __GFXFS_FS_H */
 
