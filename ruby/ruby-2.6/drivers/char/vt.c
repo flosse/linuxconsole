@@ -1083,9 +1083,9 @@ int vc_resize(struct vc_data *vc, unsigned int cols, unsigned int lines)
 	video_size_row = new_row_size;
 	screenbuf_size = ss;
 
-	err = resize_screen(vc, new_cols * vc->vc_font.width, new_rows * vc->vc_font.height);
+	err = resize_screen(vc, new_cols, new_rows);
 	if (err) {
-		resize_screen(vc, old_cols * vc->vc_font.width, old_rows * vc->vc_font.height);
+		resize_screen(vc, old_cols, old_rows);
 		kfree(newscreen);
 		return err;
 	}
