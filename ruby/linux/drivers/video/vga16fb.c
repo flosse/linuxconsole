@@ -18,16 +18,9 @@
 #include <linux/malloc.h>
 #include <linux/delay.h>
 #include <linux/fb.h>
-#include <linux/console.h>
-#include <linux/selection.h>
 #include <linux/ioport.h>
 #include <linux/init.h>
 
-#include <video/fbcon.h>
-#include <video/fbcon-vga-planes.h>
-#include <video/fbcon-vga.h>
-#include <video/fbcon-cfb4.h>
-#include <video/fbcon-cfb8.h>
 #include "vga.h"
 
 #define VGA_FB_PHYS 0xA0000
@@ -69,14 +62,9 @@ static struct fb_fix_screeninfo vga16fb_fix __initdata = {
     (unsigned long) NULL, 0, FB_ACCEL_NONE
 };
 
-static struct display disp;
-static int currcon   = 0;
-
 /* --------------------------------------------------------------------- */
 
-static void vga16fb_pan_var(struct fb_info *info, 
-			    struct fb_var_screeninfo *var,
-			    struct display *p)
+static void vga16fb_pan_var(struct fb_info *info,struct fb_var_screeninfo *var) 
 {
 	u32 pos;
 	u32 xoffset;
@@ -84,10 +72,6 @@ static void vga16fb_pan_var(struct fb_info *info,
 	xoffset = var->xoffset;
 	if (var->bits_per_pixel == 8) {
 		pos = (var->xres_virtual * var->yoffset + xoffset) >> 2;
-	} else if (var->bits_per_pixel == 0) {
-		int fh = fontheight(p);
-		if (!fh) fh = 16;
-		pos = (var->xres_virtual * (var->yoffset / fh) + xoffset) >> 3;
 	} else {
 		if (var->nonstd)
 			xoffset--;
@@ -108,92 +92,14 @@ static void vga16fb_pan_var(struct fb_info *info,
 	vga_io_w(VGA_ATT_IW, 0x20);
 }
 
-static int vga16fb_update_var(int con, struct fb_info *info)
-{
-	struct display* p;
-
-	p = (con < 0) ? info->disp : fb_display + con;
-	vga16fb_pan_var(info, &p->var, p);
-	return 0;
-}
-
-static int vga16fb_get_fix(struct fb_fix_screeninfo *fix, int con,
-			   struct fb_info *info)
-{
-	*fix = info->fix;
-	return 0;
-}
-
-static int vga16fb_get_var(struct fb_var_screeninfo *var, int con,
-			 struct fb_info *info)
-{	
-	*var = info->var;
-	return 0;
-}
-
-static void vga16fb_set_disp(int con, struct fb_info *info)
-{
-	struct vga_hw_state *par = (struct vga_hw_state *) info->par;
-	struct display *display;
-
-	display = (con < 0) ? info->disp : fb_display + con;
-	
-	display->screen_base = info->screen_base;
-	display->visual = info->fix.visual;
-	display->type = info->fix.type;
-	display->type_aux = info->fix.type_aux;
-	display->ypanstep = info->fix.ypanstep;
-	display->ywrapstep = info->fix.ywrapstep;
-	display->line_length = info->fix.line_length;
-	display->next_line = info->fix.line_length;
-	display->can_soft_blank = 1;
-	display->inverse = 0;
-
-	switch (display->type) {
-#ifdef FBCON_HAS_VGA_PLANES
-		case FB_TYPE_VGA_PLANES:
-			if (display->type_aux == FB_AUX_VGA_PLANES_VGA4) {
-				if (par->video_type==VIDEO_TYPE_VGAC)
-					display->dispsw = &fbcon_vga_planes;
-				else
-					display->dispsw = &fbcon_ega_planes;
-			} else
-				display->dispsw = &fbcon_vga8_planes;
-			break;
-#endif
-#ifdef FBCON_HAS_VGA
-		case FB_TYPE_TEXT:
-			display->dispsw = &fbcon_vga;
-			break;
-#endif
-		default: /* only FB_TYPE_PACKED_PIXELS */
-			switch (display->var.bits_per_pixel) {
-#ifdef FBCON_HAS_CFB4
-				case 4:
-					display->dispsw = &fbcon_cfb4;
-					break;
-#endif
-#ifdef FBCON_HAS_CFB8
-				case 8: 
-					display->dispsw = &fbcon_cfb8;
-					break;
-#endif
-				default:
-					display->dispsw = &fbcon_dummy;
-			}
-			break;
-	}
-}
-
 #define FAIL(X) return -EINVAL
 
 #define MODE_SKIP4	1
 #define MODE_8BPP	2
 #define MODE_CFB	4
 #define MODE_TEXT	8
-static int vga16fb_check_var(struct fb_var_screeninfo *var, 
-			      const struct fb_info *info,
-			      struct display *p)
+static int vga16fb_check_var(struct fb_var_screeninfo *var,  
+			     struct fb_info *info)
 {
 	const struct vga_hw_state *par = (struct vga_hw_state *) info->par;
 	u32 xres, right, hslen, left, yres, lower, vslen, upper;
@@ -202,49 +108,24 @@ static int vga16fb_check_var(struct fb_var_screeninfo *var,
 
 	if (var->bits_per_pixel == 4) {
 		if (var->nonstd) {
-#ifdef FBCON_HAS_CFB4
 			if (par->video_type != VIDEO_TYPE_VGAC)
 				return -EINVAL;
 			shift = 3;
 			maxmem = 16384;
-#else
-			return -EINVAL;
-#endif
 		} else {
-#ifdef FBCON_HAS_VGA_PLANES
 			shift = 3;
 			maxmem = 65536;
-#else
-			return -EINVAL;
-#endif
 		}
 	} else if (var->bits_per_pixel == 8) {
 		if (par->video_type != VIDEO_TYPE_VGAC)
 			return -EINVAL;	/* only supported on VGA */
 		shift = 2;
 		if (var->nonstd) {
-#ifdef FBCON_HAS_VGA_PLANES
 			maxmem = 65536;
-#else
-			return -EINVAL;
-#endif
 		} else {
-#ifdef FBCON_HAS_CFB8
 			maxmem = 16384;
-#else
 			return -EINVAL;
-#endif
 		}
-#ifdef FBCON_HAS_VGA	
-	} else if (var->bits_per_pixel == 0) {
-		int fh;
-
-		fh = fontheight(p);
-		if (!fh)
-			fh = 16;
-		maxmem = 32768 * fh;
-		shift = 3;
-#endif	
 	} else
 		return -EINVAL;
 
@@ -315,92 +196,39 @@ static int vga16fb_check_var(struct fb_var_screeninfo *var,
 }
 #undef FAIL
 
-static void vga16fb_load_font(struct display* p) {
-       int chars;
-       unsigned char* font;
-       unsigned char* dest;
-
-       if (!p || !p->fontdata)
-               return;
-       chars = 256;
-       font = p->fontdata;
-       dest = p->fb_info->screen_base;
-
-       vga_io_wseq(VGA_SEQ_RESET, 0x01);
-       vga_io_wseq(VGA_SEQ_PLANE_WRITE, 0x04);
-       vga_io_wseq(VGA_SEQ_MEMORY_MODE, 0x07);
-       vga_io_wseq(VGA_SEQ_RESET, 0x03);
-       vga_io_wgfx(VGA_GFX_MODE, 0x00);
-       vga_io_wgfx(VGA_GFX_MISC, 0x04);
-       while (chars--) {
-               int i;
-
-               for (i = fontheight(p); i > 0; i--)
-                       writeb(*font++, dest++);
-               dest += 32 - fontheight(p);
-       }
-       vga_io_wseq(VGA_SEQ_RESET, 0x01);
-       vga_io_wseq(VGA_SEQ_PLANE_WRITE, 0x03);
-       vga_io_wseq(VGA_SEQ_MEMORY_MODE, 0x03);
-       vga_io_wseq(VGA_SEQ_RESET, 0x03);
-       vga_io_wgfx(VGA_GFX_MODE, 0x10);
-       vga_io_wgfx(VGA_GFX_MISC, 0x06);
-}
-
-static int vga16fb_set_par(struct fb_info *info, struct display *p)
+static int vga16fb_set_par(struct fb_info *info)
 {
 	struct vga_hw_state *par = (struct vga_hw_state *) info->par;
-	int shift, double_scan = 0;
+	int double_scan = 0;
 
 	par->pel_mask = 0xFF;
 
 	if (info->var.bits_per_pixel == 4) {
 		if (info->var.nonstd) {
-#ifdef FBCON_HAS_CFB4
 			info->fix.type = FB_TYPE_PACKED_PIXELS;
 			info->fix.line_length = info->var.xres_virtual / 2;
 			par->mode = MODE_SKIP4 | MODE_CFB;
 			par->pel_mask = 0x0F;
 			par->shift = 3; 
-#endif
 		} else {
-#ifdef FBCON_HAS_VGA_PLANES
 			info->fix.type = FB_TYPE_VGA_PLANES;
 			info->fix.type_aux = FB_AUX_VGA_PLANES_VGA4;
 			info->fix.line_length = info->var.xres_virtual / 8;
                         par->mode = 0;
 			par->shift = 3;
-#endif	
 		}
-#ifdef FBCON_HAS_VGA
-	} else if (info->var.bits_per_pixel == 0) {
-		int fh;
-
-		info->fix.type = FB_TYPE_TEXT;
-		info->fix.type_aux = FB_AUX_TEXT_CGA;
-		info->fix.line_length = info->var.xres_virtual / 4;
-                par->mode = MODE_TEXT;
-                fh = fontheight(p);
-                if (!fh)
-                       fh = 16;
-		par->shift = 3;
-#endif
 	} else {	/* 8bpp */
                 if (info->var.nonstd) {
-#ifdef FBCON_HAS_VGA_PLANES
                         par->mode = MODE_8BPP | MODE_CFB;
 			info->fix.type = FB_TYPE_VGA_PLANES;
                         info->fix.type_aux = FB_AUX_VGA_PLANES_CFB8;
                         info->fix.line_length = info->var.xres_virtual / 4;
 			par->shift = 2;
-#endif
                 } else {
-#ifdef FBCON_HAS_CFB8
                         par->mode = MODE_SKIP4 | MODE_8BPP | MODE_CFB;
 			info->fix.type = FB_TYPE_PACKED_PIXELS;
                         info->fix.line_length = info->var.xres_virtual;
 			par->shift = 2;
-#endif
                 }
         }
 	par->xres  = info->var.xres >> par->shift;
@@ -438,8 +266,6 @@ static int vga16fb_set_par(struct fb_info *info, struct display *p)
                 vga_clock_chip(par, info->var.pixclock, 1, 1);
 
         vga_set_mode(par, double_scan);
-	if (par->mode & MODE_TEXT)
-		vga16fb_load_font(p);
 	return 0;
 }
 
@@ -465,9 +291,9 @@ static void vga16_setpalette(int regno, unsigned red, unsigned green, unsigned b
 	vga_io_w(VGA_PEL_D, blue  >> 10);
 }
 
-static int vga16_setcolreg(unsigned regno, unsigned red, unsigned green,
-			  unsigned blue, unsigned transp,
-			  struct fb_info *info)
+static int vga16fb_setcolreg(unsigned regno, unsigned red, unsigned green,
+			     unsigned blue, unsigned transp,
+			     struct fb_info *info)
 {
 	struct vga_hw_state *par = (struct vga_hw_state *) info->par;
 
@@ -492,80 +318,53 @@ static int vga16_setcolreg(unsigned regno, unsigned red, unsigned green,
 	return 0;
 }
 
-static int vga16fb_set_var(struct fb_var_screeninfo *var, int con,
-			  struct fb_info *info)
+/* 0 unblank, 1 blank, 2 no vsync, 3 no hsync, 4 off */
+static int vga16fb_blank(int blank, struct fb_info *info)
 {
-	struct display *display;
-	int err;
+	struct vga_hw_state *par = (struct vga_hw_state *) info->par;
 
-	if (con < 0)
-		display = info->disp;
-	else
-		display = fb_display + con;
-	
-	if (memcmp(&info->var, var, sizeof(var))) {
-		if ((err = vga16fb_check_var(var, info, display)) != 0)
-			return err;
-	
-		if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
-			display->var = info->var = *var;
-			vga16fb_set_par(info, display);
-			vga16fb_set_disp(con, info);
-			if (info->changevar)
-				info->changevar(con);
-			fb_set_cmap(&info->cmap, 1, vga16_setcolreg, info);
+	switch (blank) {
+	case 0:				/* Unblank */
+		if (par->vesa_blanked) {
+			vga_vesa_unblank(par);
+			par->vesa_blanked = 0;
 		}
+		if (par->palette_blanked) {
+			fb_set_cmap(&info->cmap, 1, info);
+			par->palette_blanked = 0;
+		}
+		break;
+	case 1:				/* blank */
+		vga_pal_blank();
+		par->palette_blanked = 1;
+		break;
+	default:			/* VESA blanking */
+		vga_vesa_blank(par, blank-1);
+		par->vesa_blanked = 1;
+		break;
 	}
 	return 0;
 }
 
-static int vga16fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info)
-{
-	if (con == currcon) /* current console? */
-		fb_copy_cmap(&info->cmap, cmap, kspc ? 0 : 2);
-	else if (fb_display[con].cmap.len) /* non default colormap? */
-		fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-	else
-		fb_copy_cmap(fb_default_cmap(16), cmap, kspc ? 0 : 2);
-	return 0;
-}
-
-static int vga16fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info)
-{
-	if (con == currcon)			/* current console? */
-		return fb_set_cmap(cmap, kspc, vga16_setcolreg, info);
-	else
-		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
-	return 0;
-}
-
-static int vga16fb_pan_display(struct fb_var_screeninfo *var, int con,
+static int vga16fb_pan_display(struct fb_var_screeninfo *var,
 			       struct fb_info *info) 
 {
-	if (var->xoffset + fb_display[con].var.xres > fb_display[con].var.xres_virtual ||
-	    var->yoffset + fb_display[con].var.yres > fb_display[con].var.yres_virtual)
+	if (var->xoffset + info->var.xres > info->var.xres_virtual ||
+	    var->yoffset + info->var.yres > info->var.yres_virtual)
 		return -EINVAL;
-	if (con == currcon) {
-		vga16fb_pan_var(info, var, fb_display+con);
-		info->var.xoffset = var->xoffset;
-		info->var.yoffset = var->yoffset;
-		info->var.vmode &= ~FB_VMODE_YWRAP;
-	}
-	fb_display[con].var.xoffset = var->xoffset;
-	fb_display[con].var.yoffset = var->yoffset;
-	fb_display[con].var.vmode &= ~FB_VMODE_YWRAP;
+	vga16fb_pan_var(info, var);
+	info->var.xoffset = var->xoffset;
+	info->var.yoffset = var->yoffset;
+	info->var.vmode &= ~FB_VMODE_YWRAP;
 	return 0;
 }
 
 static struct fb_ops vga16fb_ops = {
 	owner:		THIS_MODULE,
-	fb_get_fix:	vga16fb_get_fix,
-	fb_get_var:	vga16fb_get_var,
-	fb_set_var:	vga16fb_set_var,
-	fb_get_cmap:	vga16fb_get_cmap,
-	fb_set_cmap:	vga16fb_set_cmap,
+	fb_check_var:	vga16fb_check_var,
+	fb_set_par:	vga16fb_set_par,
+	fb_setcolreg:	vga16fb_setcolreg,
+	fb_blank:	vga16fb_blank,
 	fb_pan_display:	vga16fb_pan_display,
 };
 
@@ -585,33 +384,6 @@ int __init vga16fb_setup(char *options)
 			strcpy(vga16fb.fontname, this_opt+5);
 	}
 	return 0;
-}
-
-/* 0 unblank, 1 blank, 2 no vsync, 3 no hsync, 4 off */
-static void vga16fb_blank(int blank, struct fb_info *info)
-{
-	struct vga_hw_state *par = (struct vga_hw_state *) info->par;
-
-	switch (blank) {
-	case 0:				/* Unblank */
-		if (par->vesa_blanked) {
-			vga_vesa_unblank(par);
-			par->vesa_blanked = 0;
-		}
-		if (par->palette_blanked) {
-			fb_set_cmap(&info->cmap, 1, vga16_setcolreg, info);
-			par->palette_blanked = 0;
-		}
-		break;
-	case 1:				/* blank */
-		vga_pal_blank();
-		par->palette_blanked = 1;
-		break;
-	default:			/* VESA blanking */
-		vga_vesa_blank(par, blank-1);
-		par->vesa_blanked = 1;
-		break;
-	}
 }
 
 int __init vga16fb_init(void)
@@ -641,20 +413,18 @@ int __init vga16fb_init(void)
 
 	/* XXX share VGA I/O region with vgacon and others */
 	vga16fb.par = &default_par;
-	disp.var = vga16fb.var = vga16fb_defined;
 
 	/* name should not depend on EGA/VGA */
 	strcpy(vga16fb.modename, "VGA16 VGA");
 	vga16fb.node = -1;
 	vga16fb.fix = vga16fb_fix;
+	vga16fb.var = vga16fb_defined;
 	vga16fb.fbops = &vga16fb_ops;
-	vga16fb.blank=&vga16fb_blank;
 	vga16fb.flags=FBINFO_FLAG_DEFAULT;
 	err = fb_alloc_cmap(&vga16fb.cmap, 16, 0);
 	if (err)
 		return err;
-	vga16fb_set_disp(-1, &vga16fb);
-	
+		
 	if (register_framebuffer(&vga16fb)<0)
 		return -EINVAL;
 
@@ -666,11 +436,8 @@ int __init vga16fb_init(void)
 
 static void __exit vga16fb_exit(void)
 {
-    /* XXX unshare VGA regions 
-    release_vt(&fb_con); */
     unregister_framebuffer(&vga16fb);	
     iounmap(vga16fb.screen_base);
-    /* take_over_console(&some_vt, &vga_con); */
 }
 
 #ifdef MODULE
