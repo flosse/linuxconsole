@@ -51,11 +51,9 @@ int fbgen_get_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 
 int fbgen_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 {
-    struct fbgen_par *hwpar = (struct fbgen_par *) info->par;
-    struct fbgen_hwswitch *fbhw = (struct fbgen_hwswitch *) hwpar->fbhw;	
     int oldbpp, err;
 
-    if ((err = fbhw->fb_check_var(var, &info->par, info)))
+    if ((err = info->fbops->fb_check_var(var, &info->par, info)))
 	return err;
 
     if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
@@ -66,7 +64,7 @@ int fbgen_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 	    info->var.yres_virtual != var->yres_virtual ||
 	    info->var.yoffset != var->yoffset || 
 	    oldbpp != var->bits_per_pixel) {
-	    fbhw->set_par(&hwpar->par, info); 	
+	    info->fbops->fb_set_par(&info->par, info); 	
 	    fbgen_set_disp(con, info);
 	    
 	    if (oldbpp != var->bits_per_pixel) {
