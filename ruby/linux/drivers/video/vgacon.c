@@ -841,9 +841,9 @@ vgacon_do_font_op(struct vc_data *vc, char *arg, int set, int ch512)
  * Adjust the screen to fit a font of a certain height
  */
 static int
-vgacon_adjust_height(unsigned fontheight)
+vgacon_adjust_height(struct vc_data *c, unsigned fontheight)
 {
-	int rows, maxscan;
+	int rows, maxscan, i;
 	unsigned char ovr, vde, fsr;
 
 	if (fontheight == vga_video_font_height)
@@ -886,7 +886,10 @@ vgacon_adjust_height(unsigned fontheight)
 	outb_p( vde, vga_video_port_val );
 	sti();
 
-	vc_resize_all(rows, 0);			/* Adjust console size */
+	for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
+		struct vc_data *tmp = vc->display_fg->vcs.vc_cons[i];
+		vc_resize(tmp, rows, 0);   /* Adjust console size */
+	}
 	return 0;
 }
 
@@ -902,7 +905,7 @@ static int vgacon_font_op(struct vc_data *c, struct console_font_op *op)
 			return -EINVAL;
 		rc = vgacon_do_font_op(vc, op->data, 1, op->charcount == 512);
 		if (!rc && !(op->flags & KD_FONT_FLAG_DONT_RECALC))
-			rc = vgacon_adjust_height(op->height);
+			rc = vgacon_adjust_height(c, op->height);
 	} else if (op->op == KD_FONT_OP_GET) {
 		op->width = 8;
 		op->height = vga_video_font_height;

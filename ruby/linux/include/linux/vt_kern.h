@@ -277,10 +277,7 @@ struct console_font_op;
 const char* create_vt(struct vt_struct *vt, struct consw *sw);
 struct vc_data* find_vc(int currcons);
 int vc_allocate(unsigned int console);
-int vc_resize(unsigned int lines, unsigned int cols,
-	      unsigned int first, unsigned int last);
-#define vc_resize_all(l, c) vc_resize(l, c, 0, MAX_NR_CONSOLES-1)
-#define vc_resize_con(l, c, x) vc_resize(l, c, x, x)
+int vc_resize(struct vc_data *vc, unsigned int lines, unsigned int cols);
 void vc_disallocate(unsigned int console);
 void add_softcursor(struct vc_data *vc);
 void set_cursor(struct vc_data *vc);

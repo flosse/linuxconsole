@@ -1059,7 +1059,12 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 			return i;
 		get_user(ll, &vtsizes->v_rows);
 		get_user(cc, &vtsizes->v_cols);
-		return vc_resize_all(ll, cc);
+
+		for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
+			struct vc_data *tmp = vc->display_fg->vcs.vc_cons[i];
+			vc_resize(tmp, ll, cc);
+		}
+		return 0;
 	}
 
 	case VT_RESIZEX:
@@ -1078,26 +1083,20 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		get_user(vcol, &vtconsize->v_vcol);
 		get_user(ccol, &vtconsize->v_ccol);
 		vlin = vlin ? vlin : video_scan_lines;
-		if ( clin )
-		  {
-		    if ( ll )
-		      {
+		if (clin) {
+		    if (ll) {
 			if ( ll != vlin/clin )
-			  return -EINVAL; /* Parameters don't add up */
-		      }
-		    else 
-		      ll = vlin/clin;
-		  }
-		if ( vcol && ccol )
-		  {
-		    if ( cc )
-		      {
+			  	return -EINVAL; /* Parameters don't add up */
+		    } else
+		      	ll = vlin/clin;
+		}
+		if (vcol && ccol) {
+		    if (cc) {
 			if ( cc != vcol/ccol )
 			  return -EINVAL;
-		      }
-		    else
-		      cc = vcol/ccol;
-		  }
+		    } else 
+		        cc = vcol/ccol;
+		}
 
 		if ( clin > 32 )
 		  return -EINVAL;
@@ -1106,8 +1105,12 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		  video_scan_lines = vlin;
 		if ( clin )
 		  video_font_height = clin;
-		
-		return vc_resize_all(ll, cc);
+	
+		for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
+                        struct vc_data *tmp = vc->display_fg->vcs.vc_cons[i];
+                        vc_resize(tmp, ll, cc);
+                }
+		return 0;
   	}
 
 	case PIO_FONT: {

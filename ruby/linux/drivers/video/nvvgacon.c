@@ -187,7 +187,7 @@ static void nvvgacon_init(struct vc_data *c, int init)
 		c->vc_cols = nvvga_video_num_columns;
 		c->vc_rows = nvvga_video_num_lines;
 	} else {
-		vc_resize_con(nvvga_video_num_lines, nvvga_video_num_columns, c->vc_num);
+		vc_resize(vc, nvvga_video_num_lines, nvvga_video_num_columns);
         }
 	
 	MOD_INC_USE_COUNT;
@@ -636,7 +636,10 @@ nvvgacon_adjust_height(unsigned fontheight)
 	writeb( vde, nvvga_video_port_val );
 	sti();
 
-	vc_resize_all(rows, 0);			/* Adjust console size */
+	for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
+                struct vc_data *tmp = vc->display_fg->vcs.vc_cons[i];
+                vc_resize(tmp, rows, 0);   /* Adjust console size */
+        }
 	return 0;
 }
 

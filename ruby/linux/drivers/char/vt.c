@@ -855,106 +855,87 @@ void vc_disallocate(unsigned int currcons)
 }                     
 
 /*
- * Change # of rows and columns (0 means unchanged/the size of fg_console)
+ * Change # of rows and columns (0 means unchanged/the size of visible VC)
  * [this is to be used together with some user program
  * like resize that changes the hardware videomode]
  */
-int vc_resize(unsigned int lines, unsigned int cols,
-              unsigned int first, unsigned int last)
+int vc_resize(struct vc_data *vc, unsigned int lines, unsigned int cols)
 {
-        unsigned int cc, ll, ss, sr, todo = 0;
-        unsigned short *newscreens[MAX_NR_USER_CONSOLES];
-	struct vc_data *vc = vc->display_fg->fg_console;
-	int currcons, i;
+	unsigned long ol, nl, nlend, rlth, rrem;
+	unsigned int occ, oll, oss, osr;
+	unsigned short *newscreens = NULL;
+        unsigned int cc, ll, ss, sr;
 
         cc = (cols ? cols : video_num_columns);
         ll = (lines ? lines : video_num_lines);
         sr = cc << 1;
         ss = sr * ll;
 
-        for (currcons = first; currcons <= last; currcons++) {
-                if (!find_vc(currcons) ||
-                    (cc == video_num_columns && ll == video_num_lines))
-                        newscreens[currcons] = NULL;
-                else {
-                        unsigned short *p = (unsigned short *) kmalloc(ss, GFP_USER);
-                        if (!p) {
-                                for (i = first; i < currcons; i++)
-                                        if (newscreens[i])
-                                                kfree_s(newscreens[i], ss);
-                                return -ENOMEM;
-                        }
-                        newscreens[currcons] = p;
-                        todo++;
-                }
+        if (!vc || (cc == video_num_columns && ll == video_num_lines))
+		return 0;       
+        
+	newscreens = (unsigned short *) kmalloc(ss, GFP_USER);
+        if (!newscreens) 
+        	return -ENOMEM;
+       
+	oll = video_num_lines;
+        occ = video_num_columns;
+        osr = video_size_row;
+        oss = screenbuf_size;
+
+        video_num_lines = ll;
+        video_num_columns = cc;
+        video_size_row = sr;
+        screenbuf_size = ss;
+
+        rlth = MIN(osr, sr);
+        rrem = sr - rlth;
+        ol = origin;
+        nl = (long) newscreens;
+        nlend = nl + ss;
+        if (ll < oll)
+        	ol += (oll - ll) * osr;
+
+        update_attr(vc);
+
+        while (ol < scr_end) {
+        	scr_memcpyw((unsigned short *) nl, (unsigned short *) ol, rlth);
+                if (rrem)
+                	scr_memsetw((void *)(nl + rlth),video_erase_char,rrem);
+                ol += osr;
+                nl += sr;
         }
-        if (!todo)
-                return 0;
+        if (nlend > nl)
+        	scr_memsetw((void *) nl, video_erase_char, nlend - nl);
+        
+	/* 
+	if (vc->display_fg->kmalloced)
+        	kfree_s(screenbuf, oss); 
+	*/
+        screenbuf = newscreens;
+        /* vc->display_fg->kmalloced = 1; */
+        screenbuf_size = ss;
+        set_origin(vc);
 
-        for (currcons = first; currcons <= last; currcons++) {
-                unsigned int occ, oll, oss, osr;
-                unsigned long ol, nl, nlend, rlth, rrem;
-                if (!newscreens[currcons] || !find_vc(currcons))
-                        continue;
-		vc = find_vc(currcons);
-	
-                oll = video_num_lines;
-                occ = video_num_columns;
-                osr = video_size_row;
-                oss = screenbuf_size;
+        /* do part of a vte_ris() */
+        top = 0;
+        bottom = video_num_lines;
+        gotoxy(vc, x, y);
+        vte_decsc(vc);
 
-                video_num_lines = ll;
-                video_num_columns = cc;
-                video_size_row = sr;
-                screenbuf_size = ss;
+        if (console_table[cons_num]) {
+        	struct winsize ws, *cws = &console_table[cons_num]->winsize;
+                memset(&ws, 0, sizeof(ws));
+                ws.ws_row = video_num_lines;
+                ws.ws_col = video_num_columns;
+                if ((ws.ws_row != cws->ws_row || ws.ws_col != cws->ws_col) &&
+                     console_table[cons_num]->pgrp > 0)
+                        kill_pg(console_table[cons_num]->pgrp, SIGWINCH, 1);
+                *cws = ws;
+	}
 
-                rlth = MIN(osr, sr);
-                rrem = sr - rlth;
-                ol = origin;
-                nl = (long) newscreens[currcons];
-                nlend = nl + ss;
-                if (ll < oll)
-                        ol += (oll - ll) * osr;
-
-                update_attr(vc);
-
-                while (ol < scr_end) {
-                        scr_memcpyw((unsigned short *) nl, (unsigned short *) ol, rlth);
-                        if (rrem)
-                                scr_memsetw((void *)(nl + rlth), video_erase_char, rrem);
-                        ol += osr;
-                        nl += sr;
-                }
-                if (nlend > nl)
-                        scr_memsetw((void *) nl, video_erase_char, nlend - nl);
-                if (vc->display_fg->kmalloced)
-                        kfree_s(screenbuf, oss);
-                screenbuf = newscreens[currcons];
-                vc->display_fg->kmalloced = 1; 
-                screenbuf_size = ss;
-                set_origin(vc);
-
-                /* do part of a vte_ris() */
-                top = 0;
-                bottom = video_num_lines;
-                gotoxy(vc, x, y);
-                vte_decsc(vc);
-
-                if (console_table[currcons]) {
-                        struct winsize ws, *cws = &console_table[currcons]->winsize;
-                        memset(&ws, 0, sizeof(ws));
-                        ws.ws_row = video_num_lines;
-                        ws.ws_col = video_num_columns;
-                        if ((ws.ws_row != cws->ws_row || ws.ws_col != cws->ws_col) &&
-                            console_table[currcons]->pgrp > 0)
-                                kill_pg(console_table[currcons]->pgrp, SIGWINCH, 1);
-                        *cws = ws;
-                }
-
-                if (IS_VISIBLE)
-                        update_screen(vc);
-        }
-
+        if (IS_VISIBLE)
+        	update_screen(vc);
         return 0;
 }
 
