@@ -162,7 +162,6 @@ static void input_repeat_key(unsigned long data)
 
 int input_open_device(struct input_handle *handle)
 {
-	printk("opening dev: %d\n", handle->dev->number);
 	handle->open++;
 	if (handle->dev->open)
 		return handle->dev->open(handle->dev);
@@ -171,7 +170,6 @@ int input_open_device(struct input_handle *handle)
 
 void input_close_device(struct input_handle *handle)
 {
-	printk("closing dev: %d\n", handle->dev->number);
 	if (handle->dev->close)
 		handle->dev->close(handle->dev);
 	handle->open--;
@@ -179,15 +177,10 @@ void input_close_device(struct input_handle *handle)
 
 static void input_link_handle(struct input_handle *handle)
 {
-	printk("a\n");
 	handle->dnext = handle->dev->handle;
-	printk("b\n");
 	handle->hnext = handle->handler->handle;
-	printk("c\n");
 	handle->dev->handle = handle;
-	printk("d\n");
 	handle->handler->handle = handle;
-	printk("e\n");
 }
 
 static void input_unlink_handle(struct input_handle *handle)
@@ -251,6 +244,7 @@ void input_unregister_device(struct input_dev *dev)
 {
 	struct input_handle *handle = dev->handle;
 	struct input_dev **devptr = &input_dev;
+	struct input_handle *dnext;
 
 /*
  * Kill any pending repeat timers.
@@ -263,9 +257,10 @@ void input_unregister_device(struct input_dev *dev)
  */
 
 	while (handle) {
+		dnext = handle->dnext;
 		input_unlink_handle(handle);
 		handle->handler->disconnect(handle);
-		handle = handle->dnext;
+		handle = dnext;
 	}
 
 /*
@@ -316,15 +311,17 @@ void input_unregister_handler(struct input_handler *handler)
 {
 	struct input_handler **handlerptr = &input_handler;
 	struct input_handle *handle = handler->handle;
+	struct input_handle *hnext;
 
 /*
  * Tell the handler to disconnect from all devices it keeps open.
  */
 
 	while (handle) {
+		hnext = handle->hnext;
 		input_unlink_handle(handle);
 		handler->disconnect(handle);
-		handle = handle->hnext;
+		handle = hnext;
 	}
 
 /*
