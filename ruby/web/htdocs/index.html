@@ -25,12 +25,11 @@ going on for some time.  This project will try to pull it all together
 into a coherent architecture from which we can generate clean patches 
 for Linus and the core kernel team.<p>
 
-Right now the console subsystem and the subsystems that are depended on 
+Right now the console subsystem and the subsystems that depend on 
 it have a couple of problems as well as some design issues which need 
-to be address for todays needs:
+to be addressed for todays needs:
 
 <ol>
-<li>
 
 <li>Terminal emulation is much too intertwined with the lower 
     levels of the console implementation. Eventually terminal
@@ -41,7 +40,7 @@ to be address for todays needs:
     able to exist independent of the console/TTY layer. Especially 
     on embedded devices this is important.<p>
 
-<li>The console system is to vga centeric in design. We designed it
+<li>The console system is too vga-centeric in design. We designed it
     to be more platform independent.<p>
 
 <li>The built-in ANSI X3.64/ECMA-48 terminal emulation is incomplete
@@ -52,20 +51,20 @@ to be address for todays needs:
 
 <ul>
 <li> Multi-desktop operation -- console instances running on multiple
-     (possibly dissimilar) video cards and seperate keyboards.
+     (possibly dissimilar) video cards and separate keyboards.
 <li> With the new console locking mechanism the underlying drivers can
      be DMA/irq based for maximum speed.
 <li> Much simpler framebuffer api. Plus with the new design it is possible
      to use framebuffer devices without a VT. 
 <li> The console system input system is based solely on the input api. This
      allows for things like a universal keymap. No more compiling in new
-     keymaps for every type of different keyboards out there. Plus with this
+     keymaps for every type of different keyboard out there. Plus with this
      design it is possible to use a keyboard without the console system.
 <li> New serial API. The serial layer is more like the parport layer now.
-     Having to using the TTY layer for something like a serial mouse is
+     Having to use the TTY layer for something like a serial mouse is
      plain silly. The idea is to create a basic serial API and register
      device interfaces. For a modem you would want to register a TTY interface
-     whereas for a serial mouse or joystick we would want to register a
+     whereas for a serial mouse or joystick we would want to register an
      interface for the input api.
 <li> Support for hot plug. We can add or remove graphics cards or even 
      keyboards to create new desktop VTs.     
@@ -73,33 +72,33 @@ to be address for todays needs:
 <li> Support for different fonts, and textmodes per VC.
 <li> Better Unicode support. You will be able to display Kanji on the
      command line. Bidirectional support.
-<li> Not really apart of the console system, force feedback is a important
+<li> Not really a part of the console system, force feedback is a important
      element to the input layer that this project is also working.
 </ul>
 
 <H1>Project Status and News:</H1>
 
-Development is moving fast. Since we cover alot of areas of the linux kernel
-we have seperate links to pages that have developements to each different
+Development is moving fast. Since we cover a lot of areas of the linux kernel
+we have separate links to pages that have developements to each different
 sub system<p>   
 
 <a href="input/input.html">Input API</a> 
 
 <H1>Getting Involved</H1>
 
-So you like to try out this new system or even better yet contribute. If you
+So you like to try out this new system or even better yet contribute. If you'd
 like to give it a try <a href="quick.html">click here</a> for instructions.
 
-Once it try it out we know you will have questions or just want to tell you
+Once you try it out we know you will have questions or just want to tell
 your experiences we have a public developement mailing list. Also our list 
 is archived. If you like to join follow this <a
 href="http://lists.sourceforge.net/lists/listinfo/linuxconsole-dev">link</a>.
 
-Now if you like to get your hands dirty an get invloved I recommend going our
+Now if you like to get your hands dirty and get invloved I recommend joining our
 <a href="http://lists.sourceforge.net/lists/listinfo/linuxconsole-commit">CVS
 commit mailing list</a>. Here you will see all the changes going on. A must
 for developers and a great way to learn how the new TTY/console layer works.
-Plus each page for subscribing has a link to the maling list archives.<p>
+Plus each page for subscribing has a link to the mailing list archives.<p>
 
 Last but not least is our <a href="http://sourceforge.net/project/?group_id=3063">SourceForge page</a>.<p>
 
