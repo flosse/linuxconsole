@@ -167,7 +167,7 @@ static int h3600_ts_pm_callback(struct pm_dev *pm_dev, pm_request_t req,
 
 /*
  * This function translates the native event packets to linux input event
- * packets. Some packets coming from ldisc are not touchscreen related. In
+ * packets. Some packets coming from serial are not touchscreen related. In
  * this case we send them off to be processed elsewhere. 
  */
 static void h3600ts_process_packet(struct h3600_dev *ts)
@@ -260,7 +260,7 @@ static void h3600ts_process_packet(struct h3600_dev *ts)
 
 /*
  * Power management can't be done in a interrupt context. So we have to
- * use a keventd.
+ * use keventd.
  */
 static int suspend_button_pushed = 0;
 static void suspend_button_task_handler(void *data)
@@ -422,10 +422,9 @@ static void h3600ts_connect(struct serio *serio, struct serio_dev *dev)
 	ts->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y);
 	ts->dev.ledbit[0] = BIT(LED_SLEEP); 
 
-	/* values ???? */
-	ts->dev.absmin[ABS_X] = 0;   ts->dev.absmin[ABS_Y] = 0;
-	ts->dev.absmax[ABS_X] = 100; ts->dev.absmax[ABS_Y] = 100;
-	//ts->dev.absfuzz[ABS_X] = 1; ts->dev.absfuzz[ABS_Y] = 1;
+	ts->dev.absmin[ABS_X] = 60;   ts->dev.absmin[ABS_Y] = 35;
+	ts->dev.absmax[ABS_X] = 985; ts->dev.absmax[ABS_Y] = 1024;
+	ts->dev.absfuzz[ABS_X] = 0; ts->dev.absfuzz[ABS_Y] = 0;
 
 	ts->serio = serio;
 	serio->private = ts;
