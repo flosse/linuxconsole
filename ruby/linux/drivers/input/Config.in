@@ -76,8 +76,6 @@ if [ "$CONFIG_INPUT" != "n" ]; then
    if [ "$CONFIG_ADB" = "y" ]; then	
       comment 'ADB devices'
       tristate '  ADB HID' CONFIG_INPUT_ADBHID
-      tristate '  #Microsoft SideWinder 3D Pro for Mac' CONFIG_INPUT_ADBSW
-      tristate '  #Gravis MouseStick' CONFIG_INPUT_MOUSESTICK
    fi
 
    comment 'Bus devices'
