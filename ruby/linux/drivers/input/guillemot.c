@@ -40,8 +40,8 @@ MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
 MODULE_DESCRIPTION("Guillemot Digital joystick driver");
 MODULE_LICENSE("GPL");
 
-#define GUILLEMOT_MAX_START	400	/* 400 us */
-#define GUILLEMOT_MAX_STROBE	40	/* 40 us */
+#define GUILLEMOT_MAX_START	600	/* 600 us */
+#define GUILLEMOT_MAX_STROBE	60	/* 60 us */
 #define GUILLEMOT_MAX_LENGTH	17	/* 17 bytes */
 #define GUILLEMOT_REFRESH_TIME	HZ/50	/* 20 ms */
 
@@ -259,6 +259,7 @@ fail1:  kfree(guillemot);
 static void guillemot_disconnect(struct gameport *gameport)
 {
 	struct guillemot *guillemot = gameport->private;
+	printk(KERN_INFO "guillemot.c: Failed %d reads out of %d on %s\n", guillemot->reads, guillemot->bads, guillemot->phys);
 	input_unregister_device(&guillemot->dev);
 	gameport_close(gameport);
 	kfree(guillemot);

@@ -204,6 +204,7 @@ static int hid_add_field(struct hid_parser *parser, unsigned report_type, unsign
 		return -1;
 	}
 
+#if 0 /* Old code, could be right in some way, but generates superfluous fields */
 	if (HID_MAIN_ITEM_VARIABLE & ~flags) { /* ARRAY */
 		if (parser->global.logical_maximum <= parser->global.logical_minimum) {
 			dbg("logical range invalid %d %d", parser->global.logical_minimum, parser->global.logical_maximum);
@@ -214,6 +215,15 @@ static int hid_add_field(struct hid_parser *parser, unsigned report_type, unsign
 	} else { /* VARIABLE */
 		usages = parser->global.report_count;
 	}
+#else
+	if (parser->global.logical_maximum <= parser->global.logical_minimum) {
+		dbg("logical range invalid %d %d", parser->global.logical_minimum, parser->global.logical_maximum);
+		return -1;
+	}
+	usages = parser->local.usage_index;
+
+	dbg("add_field: usage_index: %d, report_count: %d", parser->global.report_count, parser->local.usage_index);
+#endif
 
 	offset = report->size;
 	report->size += parser->global.report_size * parser->global.report_count;
@@ -1062,7 +1072,9 @@ void hid_init_reports(struct hid_device *hid)
 		if (len > hid->urb.transfer_buffer_length) {
 			hid->urb.transfer_buffer_length = len < 32 ? len : 32;
 		}
-		usb_set_idle(hid->dev, hid->ifnum, 0, report->id);
+#if 0
+		usb_set_idle(hid->dev, hid->ifnum, 0, report->id); /*** FIXME mixing sync & async ***/
+#endif
 		hid_submit_report(hid, report, USB_DIR_IN);
 		list = list->next;
 	}
@@ -1229,6 +1241,12 @@ static void* hid_probe(struct usb_device *dev, unsigned int ifnum,
 	if (!hiddev_connect(hid))
 		hid->claimed |= HID_CLAIMED_HIDDEV;
 #endif
+
+	if (!hid->claimed) {
+		hid_free_device(hid);
+		return NULL;
+	}
+
 	printk(KERN_INFO);
 
 	if (hid->claimed & HID_CLAIMED_INPUT)
@@ -1240,7 +1258,7 @@ static void* hid_probe(struct usb_device *dev, unsigned int ifnum,
 
 	c = "Device";
 	for (i = 0; i < hid->maxapplication; i++)
-		if (IS_INPUT_APPLICATION(hid->application[i])) {
+		if ((hid->application[i] & 0xffff) < ARRAY_SIZE(hid_types)) {
 			c = hid_types[hid->application[i] & 0xffff];
 			break;
 		}
