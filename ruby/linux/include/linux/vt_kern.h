@@ -8,6 +8,7 @@
 
 #include <linux/config.h>
 #include <linux/vt.h>
+#include <linux/kd.h>
 #include <linux/kbd_kern.h>
 #include <linux/input.h>
 
@@ -56,8 +57,6 @@
 #define DO_UPDATE IS_VISIBLE
 #endif
 
-struct console_font_op; 
-
 extern unsigned char color_table[];
 extern int default_red[];
 extern int default_grn[];
@@ -87,7 +86,11 @@ struct vc_data {
         unsigned int    vc_cols;                /* [#] Console size */
         unsigned int    vc_rows;
         unsigned int    vc_size_row;            /* Bytes per row */
-        unsigned short  *vc_screenbuf;          /* In-memory character/attribute buffer */
+        unsigned long   vc_origin;              /* [!] Start of real screen */
+        unsigned long   vc_scr_end;             /* [!] End of real screen */
+        unsigned long   vc_visible_origin;      /* [!] Top of visible window */
+        unsigned int    vc_top, vc_bottom;      /* Scrolling region */
+	unsigned short  *vc_screenbuf;          /* In-memory character/attribute buffer */
         unsigned int    vc_screenbuf_size;
         unsigned char   vc_attr;                /* Current attributes */
         unsigned char   vc_def_color;           /* Default colors */
@@ -96,20 +99,17 @@ struct vc_data {
         unsigned char   vc_ulcolor;             /* Color for underline mode */
         unsigned char   vc_halfcolor;           /* Color for half intensity mode */
         unsigned short  vc_complement_mask;     /* [#] Xor mask for mouse pointer */
-        unsigned short  vc_hi_font_mask;        /* [#] Attribute set for upper 256 chars of font or 0 if not supported */                                    
-        unsigned short  vc_video_erase_char;    /* Background erase character */
         unsigned short  vc_s_complement_mask;   /* Saved mouse pointer mask */
+        unsigned short  vc_video_erase_char;    /* Background erase character */
         unsigned int    vc_x, vc_y;             /* Cursor position */
-        unsigned int    vc_top, vc_bottom;      /* Scrolling region */
-        unsigned int    vc_state;               /* Escape sequence parser state */
-        unsigned int    vc_npar,vc_par[NPAR];   /* Parameters of current escape sequence */
-        unsigned long   vc_origin;              /* [!] Start of real screen */
-        unsigned long   vc_scr_end;             /* [!] End of real screen */
-        unsigned long   vc_visible_origin;      /* [!] Top of visible window */
         unsigned long   vc_pos;                 /* Cursor address */
         unsigned int    vc_saved_x;
         unsigned int    vc_saved_y;
+        unsigned int    vc_state;               /* Escape sequence parser state */
+        unsigned int    vc_npar,vc_par[NPAR];   /* Parameters of current escape sequence */
 	struct kbd_struct kbd_table;		/* VC keyboard state */       
+	unsigned short  vc_hi_font_mask;        /* [#] Attribute set for upper 256 chars of font or 0 if not supported */
+	struct console_font_op vc_font;		/* VC current font set */
 	/* data for manual vt switching */
 	struct vt_mode  vt_mode;
         int             vt_pid;
