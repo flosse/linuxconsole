@@ -24,7 +24,6 @@
 #include <linux/devfs_fs_kernel.h>
 #include <linux/vt_kern.h>
 #include <linux/selection.h>
-#include <linux/kbd_kern.h>
 #include <linux/consolemap.h>
 #include <linux/timer.h>
 #include <linux/interrupt.h>
@@ -70,10 +69,6 @@ static struct termios *console_termios[MAX_NR_CONSOLES];
 static struct termios *console_termios_locked[MAX_NR_CONSOLES];
 struct vc_data *vc_cons[MAX_NR_CONSOLES];
 
-#ifndef VT_SINGLE_DRIVER
-static struct consw *con_driver_map[MAX_NR_CONSOLES];
-#endif
-
 static void vte_decsc(struct vc_data *vc);
 static void vte_ris(struct vc_data *vc, int do_clear);
 static void con_flush_chars(struct tty_struct *tty);
@@ -97,6 +92,19 @@ int fg_console = 0;
 int last_console = 0;
 int want_console = -1;
 int kmsg_redirect = 0;
+
+/* 
+ * the default colour table, for VGA+ colour systems 
+ */
+int default_red[] = {0x00,0xaa,0x00,0xaa,0x00,0xaa,0x00,0xaa,
+    0x55,0xff,0x55,0xff,0x55,0xff,0x55,0xff};
+int default_grn[] = {0x00,0x00,0xaa,0x55,0x00,0x00,0xaa,0xaa,
+    0x55,0x55,0xff,0xff,0x55,0x55,0xff,0xff};
+int default_blu[] = {0x00,0x00,0x00,0x00,0xaa,0xaa,0xaa,0xaa,
+    0x55,0x55,0x55,0x55,0xff,0xff,0xff,0xff};     
+
+unsigned char color_table[] = { 0, 4, 2, 6, 1, 5, 3, 7,
+                                       8,12,10,14, 9,13,11,15 };  
 
 /*
  * Unfortunately, we need to delay tty echo when we're currently writing to the
@@ -148,7 +156,7 @@ void add_softcursor(struct vc_data *vc)
                 sw->con_putc(vc, i, y, x);
 }
 
-static void hide_cursor(struct vc_data *vc)
+void hide_cursor(struct vc_data *vc)
 {
 	int currcons = vc->vc_num;	
 
@@ -244,50 +252,6 @@ void reset_palette(struct vc_data *vc)
 }
 
 /*
- * Load palette into the DAC registers. arg points to a colour
- * map, 3 bytes per colour, 16 colours, range from 0 to 255.
- */
-
-static int set_get_cmap(unsigned char *arg, int set)
-{
-    int currcons = fg_console;	
-    int i, j, k;
-
-    for (i = 0; i < 16; i++)
-        if (set) {
-            get_user(default_red[i], arg++);
-            get_user(default_grn[i], arg++);
-            get_user(default_blu[i], arg++);
-        } else {
-            put_user(default_red[i], arg++);
-            put_user(default_grn[i], arg++);
-            put_user(default_blu[i], arg++);
-        }
-    if (set) {
-        for (i = 0; i < MAX_NR_CONSOLES; i++)
-            if (vc_cons_allocated(i)) {
-                for (j = k = 0; j < 16; j++) {
-                    palette[k++] = default_red[j];
-                    palette[k++] = default_grn[j];
-                    palette[k++] = default_blu[j];
-                }
-                set_palette(vc_cons[i]);
-            }
-    }
-    return 0;
-}
-
-int con_set_cmap(unsigned char *arg)
-{
-        return set_get_cmap (arg,1);
-}
-
-int con_get_cmap(unsigned char *arg)
-{
-        return set_get_cmap (arg,0);
-}
-
-/*
  * Functions to handle console scrolling.
  */
 static int scrollback_delta = 0;
@@ -332,8 +296,7 @@ static void scrup(struct vc_data *vc, unsigned int t, unsigned int b, int nr)
         scr_memsetw(d + (b-t-nr) * video_num_columns, video_erase_char, video_size_row*nr);
 }
 
-static void
-scrdown(struct vc_data *vc, unsigned int t, unsigned int b, int nr)
+static void scrdown(struct vc_data *vc, unsigned int t, unsigned int b, int nr)
 {
 	int currcons = vc->vc_num;
         unsigned short *s;
@@ -471,7 +434,7 @@ static void delete_line(struct vc_data *vc, unsigned int nr)
 /*
  * Functions that manage whats displayed on the screen
  */
-static void set_origin(struct vc_data *vc)
+void set_origin(struct vc_data *vc)
 {
 	int currcons = vc->vc_num;
 
@@ -482,7 +445,7 @@ static void set_origin(struct vc_data *vc)
         pos = origin + video_size_row*y + 2*x;
 }
 
-static inline void save_screen(struct vc_data *vc)
+inline void save_screen(struct vc_data *vc)
 {
         if (sw->con_save_screen)
                 sw->con_save_screen(vc);
@@ -706,9 +669,50 @@ static void vesa_powerdown(void)
     }
 }
 
+static void vesa_powerdown_screen(void)
+{
+        timer_active &= ~(1<<BLANK_TIMER);
+        timer_table[BLANK_TIMER].fn = unblank_screen;
+
+        vesa_powerdown();
+}
+
 static void blank_screen(void)
 {
-        do_blank_screen(0);
+        int currcons = fg_console;
+        struct vc_data *vc = vc_cons[currcons];
+        int i;
+
+        if (console_blanked)
+                return;
+
+        /* don't blank graphics */
+        if (vcmode != KD_TEXT) {
+                console_blanked = fg_console + 1;
+                return;
+        }
+
+        hide_cursor(vc);
+        if (vesa_off_interval) {
+                timer_table[BLANK_TIMER].fn = vesa_powerdown_screen;
+                timer_table[BLANK_TIMER].expires = jiffies + vesa_off_interval;
+                timer_active |= (1<<BLANK_TIMER);
+        } else {
+                timer_active &= ~(1<<BLANK_TIMER);
+                timer_table[BLANK_TIMER].fn = unblank_screen;
+        }
+
+        save_screen(vc);
+        /* In case we need to reset origin, blanking hook returns 1 */
+        i = sw->con_blank(vc_cons[currcons], 1);
+        console_blanked = fg_console + 1;        
+        if (i)
+                set_origin(vc);
+
+        if (console_blank_hook && console_blank_hook(1))
+                return;
+        if (vesa_blank_mode)
+                sw->con_blank(vc, vesa_blank_mode + 1);          
 }
 
 void unblank_screen(void)
@@ -736,62 +740,6 @@ void unblank_screen(void)
                 /* Low-level driver cannot restore -> do it ourselves */
                 update_screen(fg_console);
         set_cursor(vc_cons[fg_console]);
-}
-
-static void vesa_powerdown_screen(void)
-{
-        timer_active &= ~(1<<BLANK_TIMER);
-        timer_table[BLANK_TIMER].fn = unblank_screen;
-
-        vesa_powerdown();
-}
-
-void do_blank_screen(int entering_gfx)
-{
-        int currcons = fg_console;
-	struct vc_data *vc = vc_cons[currcons];
-        int i;
-
-        if (console_blanked)
-                return;
-
-        /* entering graphics mode? */
-        if (entering_gfx) {
-                hide_cursor(vc);
-                save_screen(vc);
-                sw->con_blank(vc, -1);
-                console_blanked = fg_console + 1;
-                set_origin(vc);
-                return;
-        }
-
-        /* don't blank graphics */
-        if (vcmode != KD_TEXT) {
-                console_blanked = fg_console + 1;
-                return;
-        }
-
-        hide_cursor(vc);
-        if (vesa_off_interval) {
-                timer_table[BLANK_TIMER].fn = vesa_powerdown_screen;
-                timer_table[BLANK_TIMER].expires = jiffies + vesa_off_interval;
-                timer_active |= (1<<BLANK_TIMER);
-        } else {
-                timer_active &= ~(1<<BLANK_TIMER);
-                timer_table[BLANK_TIMER].fn = unblank_screen;
-        }
-
-        save_screen(vc);
-        /* In case we need to reset origin, blanking hook returns 1 */
-        i = sw->con_blank(vc_cons[currcons], 1);
-        console_blanked = fg_console + 1;
-        if (i)
-                set_origin(vc);
-
-        if (console_blank_hook && console_blank_hook(1))
-                return;
-        if (vesa_blank_mode)
-                sw->con_blank(vc, vesa_blank_mode + 1);
 }
 
 void poke_blanked_console(void)
@@ -840,10 +788,6 @@ static void visual_init(struct vc_data *vc, int init)
 
     /* ++Geert: sw->con_init determines console size */
     sw = conswitchp;
-#ifndef VT_SINGLE_DRIVER
-    if (con_driver_map[currcons])
-        sw = con_driver_map[currcons];
-#endif
     vc->vc_uni_pagedir_loc = &vc->vc_uni_pagedir;
     vc->vc_uni_pagedir = 0;
     hi_font_mask = 0;
@@ -864,7 +808,7 @@ static void vc_init(struct vc_data *vc, int do_clear)
 
         set_origin(vc);
         pos = origin;
-        reset_vc(currcons);
+        reset_vc(cons_num);
         for (j=k=0; j<16; j++) {
                 palette[k++] = default_red[j] ;
                 palette[k++] = default_grn[j] ;
@@ -899,10 +843,10 @@ int vc_allocate(unsigned int currcons)  /* return 0 on success */
                 return -ENOMEM;
             vc_cons[currcons] = (struct vc_data *)p;
 	    vc_cons[currcons]->vc_num = currcons;	
-            display_fg = vt_cons;
+            vc_cons[currcons]->display_fg = vt_cons;
             visual_init(vc_cons[currcons], 1);
             if (!*vc_cons[currcons]->vc_uni_pagedir_loc)
-                con_set_default_unimap(currcons);
+                con_set_default_unimap(vc_cons[currcons]);
             q = (long)kmalloc(screenbuf_size, GFP_KERNEL);
             if (!q) {
                 kfree_s((char *) p, sizeof(struct vc_data));
@@ -1064,20 +1008,9 @@ enum {  ESinit,
 #define __VTE_ST        (c8bit == 0 ? "\033\\" : "\234")
 #define __VTE_APC       (c8bit == 0 ? "\033_" : "\237")
 
-#define set_kbd(x) set_vc_kbd_mode(kbd_table+currcons,x)
-#define clr_kbd(x) clr_vc_kbd_mode(kbd_table+currcons,x)
-#define is_kbd(x) vc_kbd_mode(kbd_table+currcons,x)
-
-unsigned char color_table[] = { 0, 4, 2, 6, 1, 5, 3, 7,
-                                       8,12,10,14, 9,13,11,15 };
-
-/* the default colour table, for VGA+ colour systems */
-int default_red[] = {0x00,0xaa,0x00,0xaa,0x00,0xaa,0x00,0xaa,
-    0x55,0xff,0x55,0xff,0x55,0xff,0x55,0xff};
-int default_grn[] = {0x00,0x00,0xaa,0x55,0x00,0x00,0xaa,0xaa,
-    0x55,0x55,0xff,0xff,0x55,0x55,0xff,0xff};
-int default_blu[] = {0x00,0x00,0x00,0x00,0xaa,0xaa,0xaa,0xaa,
-    0x55,0x55,0x55,0x55,0xff,0xff,0xff,0xff};
+#define set_kbd(kbd_table, x) set_vc_kbd_mode(kbd_table, x)
+#define clr_kbd(kbd_table, x) clr_vc_kbd_mode(kbd_table, x)
+#define is_kbd(kbd_table, x) vc_kbd_mode(kbd_table, x)
 
 /*
  * LINE FEED (LF)
@@ -1343,17 +1276,17 @@ static void vte_sgr(struct vc_data *vc)
                         case 10:        /*  primary (default) font */
                                 translate = set_translate(charset == 0
                                                 ? G0_charset
-                                                : G1_charset, cons_num);
+                                                : G1_charset, vc);
                                 disp_ctrl = 0;
                                 toggle_meta = 0;
                                 break;
                         case 11:        /* first alternative font */
-                                translate = set_translate(IBMPC_MAP,cons_num);
+                                translate = set_translate(IBMPC_MAP, vc);
                                 disp_ctrl = 1;
                                 toggle_meta = 0;
                                 break;
                         case 12:        /* second alternative font */
-                                translate = set_translate(IBMPC_MAP,cons_num);
+                                translate = set_translate(IBMPC_MAP, vc);
                                 disp_ctrl = 1;
                                 toggle_meta = 1;
                                 break;
@@ -1575,9 +1508,9 @@ static void set_mode(struct vc_data *vc, int on_off)
 			/* DEC private modes set/reset */
                         case 1: /* DECCKM - Cursor keys mode */
                                 if (on_off)
-                                        set_kbd(VC_CKMODE);
+                                        set_kbd(&vc->kbd_table, VC_CKMODE);
                                 else
-                                        clr_kbd(VC_CKMODE);
+                                        clr_kbd(&vc->kbd_table, VC_CKMODE);
                                 break;
                         case 2: /* DECANM - ANSI mode */
                                 break;
@@ -1608,9 +1541,9 @@ static void set_mode(struct vc_data *vc, int on_off)
                         case 8: /* DECARM - Autorepeat mode */
                                 decarm = on_off;
                                 if (on_off)
-                                        set_kbd(VC_REPEAT);
+                                        set_kbd(&vc->kbd_table, VC_REPEAT);
                                 else
-                                        clr_kbd(VC_REPEAT);
+                                        clr_kbd(&vc->kbd_table, VC_REPEAT);
                                 break;
                         case 9:
                                 report_mouse = on_off ? 1 : 0;
@@ -1630,9 +1563,9 @@ static void set_mode(struct vc_data *vc, int on_off)
                         case 66: /* DECNKM - Numeric keybad mode */
                                 decnkm = on_off;
                                 if (on_off)
-                                        set_kbd(VC_APPLIC);
+                                        set_kbd(&vc->kbd_table, VC_APPLIC);
                                 else
-                                        clr_kbd(VC_APPLIC);
+                                        clr_kbd(&vc->kbd_table, VC_APPLIC);
                                 break;
                         case 67:        /* DECBKM - Backarrow key mode */
                                 break;
@@ -1657,9 +1590,9 @@ static void set_mode(struct vc_data *vc, int on_off)
                                 break;
                         case 20:                /* Lf, Enter == CrLf/Lf */
                                 if (on_off)
-                                        set_kbd(VC_CRLF);
+                                        set_kbd(&vc->kbd_table, VC_CRLF);
                                 else
-                                        clr_kbd(VC_CRLF);
+                                        clr_kbd(&vc->kbd_table, VC_CRLF);
                                 break;
                 }
 }
@@ -2022,7 +1955,7 @@ static void vte_decrc(struct vc_data *vc)
         G2_charset      = saved_G2;
         G3_charset      = saved_G3;
 #endif /* ndef CONFIG_VT_EXTENDED */
-        translate       = set_translate(charset ? G1_charset : G0_charset,cons_num);
+        translate       = set_translate(charset ? G1_charset : G0_charset, vc);
         update_attr(vc);
         need_wrap = 0;
 }
@@ -2053,7 +1986,7 @@ static void vte_ris(struct vc_data *vc, int do_clear)
         priv2           = 0;
         priv3           = 0;
         priv4           = 0;
-        translate       = set_translate(LAT1_MAP, cons_num);
+        translate       = set_translate(LAT1_MAP, vc);
         G0_charset      = LAT1_MAP;
         G1_charset      = GRAF_MAP;
         charset         = 0;
@@ -2081,14 +2014,16 @@ static void vte_ris(struct vc_data *vc, int do_clear)
         irm             = 0;    /* replace */
         lnm             = 0;    /* line feed */
 
-        set_kbd(VC_REPEAT);
-        clr_kbd(VC_CKMODE);
-        clr_kbd(VC_APPLIC);
-        clr_kbd(VC_CRLF);
-        kbd_table[currcons].lockstate = 0;
-        kbd_table[currcons].slockstate = 0;
-        kbd_table[currcons].ledmode = LED_SHOW_FLAGS;
-        kbd_table[currcons].ledflagstate = kbd_table[currcons].default_ledflagstate;
+        set_kbd(&vc->kbd_table, VC_REPEAT);
+        clr_kbd(&vc->kbd_table, VC_CKMODE);
+        clr_kbd(&vc->kbd_table, VC_APPLIC);
+        clr_kbd(&vc->kbd_table, VC_CRLF);
+        vc->kbd_table.kbdmode = VC_XLATE;
+        vc->kbd_table.lockstate = KBD_DEFLOCK;
+        vc->kbd_table.slockstate = 0;
+        vc->kbd_table.ledmode = LED_SHOW_FLAGS;
+        vc->kbd_table.ledflagstate = 
+		vc->kbd_table.default_ledflagstate = KBD_DEFLEDS;
         set_leds();
 
         cursor_type = CUR_DEFAULT;
@@ -2209,19 +2144,19 @@ static void do_con_trol(struct tty_struct *tty, int c)
                  * DEC VT series processes FF as LF.
                  */
                 vte_lf(vc);
-                if (!is_kbd(VC_CRLF))
+                if (!is_kbd(&vc->kbd_table, VC_CRLF))
                         return;
         case 0x0d:      /* CR - Carriage return */
                 vte_cr(vc);
                 return;
         case 0x0e:      /* SO - Shift out / LS1 - Locking shift 1 */
                 charset = 1;
-                translate = set_translate(G1_charset, cons_num);
+                translate = set_translate(G1_charset, vc);
                 disp_ctrl = 1;
                 return;
         case 0x0f:      /* SI - Shift in / LS0 - Locking shift 0 */
                 charset = 0;
-                translate = set_translate(G0_charset, cons_num);
+                translate = set_translate(G0_charset, vc);
                 disp_ctrl = 0;
                 return;
         case 0x10:      /* DLE - */
@@ -2394,11 +2329,11 @@ static void do_con_trol(struct tty_struct *tty, int c)
 #endif /* def CONFIG_VT_EXTENDED */
                 case '=':       /* DECKPAM - Keypad application mode */
                         decnkm = 1;
-                        set_kbd(VC_APPLIC);
+                        set_kbd(&vc->kbd_table, VC_APPLIC);
                         return;
                 case '>':       /* DECKPNM - Keypad numeric mode */
                         decnkm = 0;
-                        clr_kbd(VC_APPLIC);
+                        clr_kbd(&vc->kbd_table, VC_APPLIC);
                         return;
 
                         /* ===== C1 control functions ===== */
@@ -2862,7 +2797,7 @@ static void do_con_trol(struct tty_struct *tty, int c)
                         case 1: /* LED 1 on */
                         case 2: /* LED 2 on */
                         case 3: /* LED 3 on */
-                                setledstate(kbd_table + cons_num,
+                                setledstate(&vc->kbd_table,
                                             (par[0] < 3) ? par[0] : 4);
                         case 4: /* LED 4 on */
                         }
@@ -3087,7 +3022,7 @@ static void do_con_trol(struct tty_struct *tty, int c)
                         break;
                 }
                 if (charset == 0)
-                        translate = set_translate(G0_charset, cons_num);
+                        translate = set_translate(G0_charset, vc);
                 vc_state = ESinit;
                 return;
         case ESg1d4:
@@ -3114,7 +3049,7 @@ static void do_con_trol(struct tty_struct *tty, int c)
                         break;
                 }
                 if (charset == 1)
-                        translate = set_translate(G1_charset, cons_num);
+                        translate = set_translate(G1_charset, vc);
                 vc_state = ESinit;
                 return;
 #ifdef CONFIG_VT_EXTENDED
@@ -3142,7 +3077,7 @@ static void do_con_trol(struct tty_struct *tty, int c)
                         break;
                 }
                 if (charset == 1)
-                        translate = set_translate(G2_charset, cons_num);
+                        translate = set_translate(G2_charset, vc);
                 vc_state = ESinit;
                 return;
         case ESg3d4:
@@ -3169,7 +3104,7 @@ static void do_con_trol(struct tty_struct *tty, int c)
                         break;
                 }
                 if (charset == 1)
-                        translate = set_translate(G3_charset, cons_num);
+                        translate = set_translate(G3_charset, vc);
                 vc_state = ESinit;
                 return;
 #endif /* CONFIG_VT_EXTENDED */
@@ -3574,13 +3509,15 @@ static int con_chars_in_buffer(struct tty_struct *tty)
  */
 static void con_stop(struct tty_struct *tty)
 {
+	struct vc_data *vc;
         int console_num;
         if (!tty)
                 return;
         console_num = MINOR(tty->device) - (tty->driver.minor_start);
         if (!vc_cons_allocated(console_num))
                 return;
-        set_vc_kbd_led(kbd_table + console_num, VC_SCROLLOCK);
+	vc = (struct vc_data *) tty->driver_data;
+        set_vc_kbd_led(&vc->kbd_table, VC_SCROLLOCK);
         set_leds();
 }
 
@@ -3589,13 +3526,15 @@ static void con_stop(struct tty_struct *tty)
  */
 static void con_start(struct tty_struct *tty)
 {
+	struct vc_data *vc;
         int console_num;
         if (!tty)
                 return;
         console_num = MINOR(tty->device) - (tty->driver.minor_start);
         if (!vc_cons_allocated(console_num))
                 return;
-        clr_vc_kbd_led(kbd_table + console_num, VC_SCROLLOCK);
+	vc = (struct vc_data *) tty->driver_data;
+        clr_vc_kbd_led(&vc->kbd_table, VC_SCROLLOCK);
         set_leds();
 }
 
@@ -3749,7 +3688,8 @@ DECLARE_TASKLET_DISABLED(console_tasklet, console_softint, 0);
 void __init vt_console_init(void)
 {
         const char *display_desc = NULL;
-        unsigned int currcons = 0;
+        struct vc_data *vc;
+	unsigned int currcons = 0;
 
         if (conswitchp)
                 display_desc = conswitchp->con_startup();
@@ -3807,21 +3747,21 @@ void __init vt_console_init(void)
         for (currcons = 0; currcons < MIN_NR_CONSOLES; currcons++) {
                 vt_cons = (struct vt_struct *)
                                 alloc_bootmem(sizeof(struct vt_struct));
-		vc_cons[currcons] = (struct vc_data *)
+		vc = vc_cons[currcons] = (struct vc_data *)
                                 alloc_bootmem(sizeof(struct vc_data));
-		vc_cons[currcons]->vc_num = currcons;
-                display_fg = vt_cons;
-		visual_init(vc_cons[currcons], 1);
+		vc->vc_num = currcons;
+                vc->display_fg = vt_cons;
+		visual_init(vc, 1);
                 screenbuf = (unsigned short *) alloc_bootmem(screenbuf_size);
                 kmalloced = 0;
-                vc_init(vc_cons[currcons], currcons || !sw->con_save_screen); 
+                vc_init(vc, currcons || !sw->con_save_screen); 
         }
-        currcons = fg_console = 0;
+        vc = vc_cons[fg_console];
         /* master_display_fg = vc_cons[currcons]; */
-        set_origin(vc_cons[currcons]);
-        save_screen(vc_cons[currcons]);
-        gotoxy(vc_cons[currcons], x, y);
-        vte_ed(vc_cons[currcons], 0);
+        set_origin(vc);
+        save_screen(vc);
+        gotoxy(vc, x, y);
+        vte_ed(vc, 0);
         update_screen(fg_console);
         printk("Console: %s %s %dx%d",
                 can_do_color ? "colour" : "mono",
@@ -3869,8 +3809,6 @@ void take_over_console(struct consw *csw, int first, int last, int deflt)
                 int old_was_color;
                 int currcons = i;
 
-                con_driver_map[i] = csw;
-
                 if (!vc_cons[i] || !sw)
                         continue;
 
@@ -3905,11 +3843,6 @@ void take_over_console(struct consw *csw, int first, int last, int deflt)
 
 void give_up_console(struct consw *csw)
 {
-        int i;
-
-        for(i = 0; i < MAX_NR_CONSOLES; i++)
-                if (con_driver_map[i] == csw)
-                        con_driver_map[i] = NULL;
 }
 
 #endif
