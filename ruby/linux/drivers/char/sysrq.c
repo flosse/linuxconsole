@@ -68,13 +68,13 @@ void handle_sysrq(int key, struct pt_regs *pt_regs,
 	console_loglevel = 7;
 	printk(KERN_INFO "SysRq: ");
 	switch (key) {
-	case 'r':					    /* R -- Reset raw mode */
+#ifdef CONFIG_VT
+	case 'r':			   /* R -- Reset raw mode */
 		if (kbd) {
 			kbd->kbdmode = VC_XLATE;
 			printk("Keyboard mode set to XLATE\n");
 		}
 		break;
-#ifdef CONFIG_VT
 	case 'k': 		{			    /* K -- SAK */
 		struct vc_data *vc = (struct vc_data *) tty->driver_data;
 		printk("SAK\n");
@@ -84,7 +84,7 @@ void handle_sysrq(int key, struct pt_regs *pt_regs,
 		break;
 	}
 #endif
-	case 'b':					    /* B -- boot immediately */
+	case 'b':			    /* B -- boot immediately */
 		printk("Resetting\n");
 		machine_restart(NULL);
 		break;
@@ -137,9 +137,9 @@ void handle_sysrq(int key, struct pt_regs *pt_regs,
 		orig_log_level = 8;
 		break;
 	default:					    /* Unknown: help */
+#ifdef CONFIG_VT
 		if (kbd)
 			printk("unRaw ");
-#ifdef CONFIG_VT
 		if (tty)
 			printk("saK ");
 #endif
