@@ -36,12 +36,12 @@ obj-y	 += tty_io.o n_tty.o tty_ioctl.o mem.o raw.o pty.o misc.o random.o
 # All of the (potential) objects that export symbols.
 # This list comes from 'grep -l EXPORT_SYMBOL *.[hc]'.
 
-export-objs     :=	console.o i2c-old.o keyboard.o sysrq.o \
-			misc.o pty.o random.o selection.o serial.o videodev.o \
-			tty_io.o bttv.o cpia.o
+export-objs     :=	vt.o i2c-old.o keyboard.o sysrq.o misc.o pty.o \
+			random.o selection.o serial.o videodev.o tty_io.o \
+			bttv.o cpia.o
 
 KEYMAP   =defkeymap.o
-CONSOLE  =console.o
+CONSOLE  =vt.o
 SERIAL   =serial.o
 
 ifeq ($(ARCH),m68k)
@@ -78,7 +78,7 @@ ifneq ($(CONFIG_SUN_SERIAL),)
 endif
 
 
-obj-$(CONFIG_VT) += vt.o vc_screen.o consolemap.o consolemap_deftbl.o $(CONSOLE) selection.o
+obj-$(CONFIG_VT) += vt_ioctl.o vc_screen.o consolemap.o consolemap_deftbl.o $(CONSOLE) selection.o
 obj-$(CONFIG_SERIAL) += $(SERIAL)
 obj-$(CONFIG_SERIAL_21285) += serial_21285.o
 
