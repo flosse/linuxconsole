@@ -194,14 +194,12 @@ static void dump_packet(char *msg, u16 cmd, unsigned char *data)
 static void iforce_usb_xmit(struct iforce *iforce)
 {
 	int n, c;
+	unsigned long flags;
 
-printk(KERN_DEBUG "iforce.c: in iforce_usb_xmit\n");
-
-	spin_lock(&iforce->xmit_lock);
+	spin_lock_irqsave(&iforce->xmit_lock, flags);
 
 	if (iforce->xmit.head == iforce->xmit.tail) {
-printk(KERN_DEBUG "iforce.c: leaving iforce_usb_xmit: nothing to send\n");
-		spin_unlock(&iforce->xmit_lock);
+		spin_unlock_irqrestore(&iforce->xmit_lock, flags);
 		return;
 	}
 
@@ -227,7 +225,7 @@ printk(KERN_DEBUG "iforce.c: leaving iforce_usb_xmit: nothing to send\n");
 	}
 	XMIT_INC(iforce->xmit.tail, n);
 
-	spin_unlock(&iforce->xmit_lock);
+	spin_unlock_irqrestore(&iforce->xmit_lock, flags);
 
 	if (n=usb_submit_urb(&iforce->out)) {
 		printk(KERN_WARNING "iforce.c: iforce_usb_xmit: usb_submit_urb failed %d\n", n);
@@ -240,18 +238,19 @@ static void iforce_serial_xmit(struct iforce *iforce)
 {
 	unsigned char cs;
 	int i;
+	unsigned long flags;
 
 	if (test_and_set_bit(IFORCE_XMIT_RUNNING, iforce->xmit_flags)) {
 		set_bit(IFORCE_XMIT_AGAIN, iforce->xmit_flags);
 		return;
 	}
 
-	spin_lock(&iforce->xmit_lock);
+	spin_lock_irqsave(&iforce->xmit_lock, flags);
 
 again:
 	if (iforce->xmit.head == iforce->xmit.tail) {
 		clear_bit(IFORCE_XMIT_RUNNING, iforce->xmit_flags);
-		spin_unlock(&iforce->xmit_lock);
+		spin_unlock_irqrestore(&iforce->xmit_lock, flags);
 		return;
 	}
 
@@ -276,7 +275,7 @@ again:
 
 	clear_bit(IFORCE_XMIT_RUNNING, iforce->xmit_flags);
 
-	spin_unlock(&iforce->xmit_lock);
+	spin_unlock_irqrestore(&iforce->xmit_lock, flags);
 }
 
 static void iforce_serio_write_wakeup(struct serio *serio)
@@ -295,23 +294,41 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 	int n = LO(cmd);
 	int c;
 	int empty;
+	int head, tail;
+	unsigned long flags;
 			
-	spin_lock(&iforce->xmit_lock);
+/*
+ * Update head and tail of xmit buffer
+ */
+	spin_lock_irqsave(&iforce->xmit_lock, flags);
 
-	dump_packet("send_packet", cmd, data);
+	head = iforce->xmit.head;
+	tail = iforce->xmit.tail;
 
-	empty = iforce->xmit.head == iforce->xmit.tail;
-	/* Store head of paquet first */
-	iforce->xmit.buf[iforce->xmit.head] = HI(cmd);
-	iforce->xmit.head++; iforce->xmit.head &= XMIT_SIZE -1;
-	iforce->xmit.buf[iforce->xmit.head] = LO(cmd);
-	iforce->xmit.head++; iforce->xmit.head &= XMIT_SIZE -1;
+	if (CIRC_SPACE(head, tail, XMIT_SIZE) < n+2) {
+		printk(KERN_WARNING "iforce.c: not enough space in xmit buffer to send new packet\n");
+		spin_unlock_irqrestore(&iforce->xmit_lock, flags);
+		return;
+	}
 
-	/* Copy rest of data then */
-	c = CIRC_SPACE_TO_END(iforce->xmit.head, iforce->xmit.tail, XMIT_SIZE);
+	empty = head == tail;
+	XMIT_INC(iforce->xmit.head, n+2);
+
+	spin_unlock_irqrestore(&iforce->xmit_lock, flags);
+
+
+/*
+ * Store packet in xmit buffer
+ */
+	iforce->xmit.buf[head] = HI(cmd);
+	XMIT_INC(head, 1);
+	iforce->xmit.buf[head] = LO(cmd);
+	XMIT_INC(head, 1);
+
+	c = CIRC_SPACE_TO_END(head, tail, XMIT_SIZE);
 	if (n < c) c=n;
 
-	memcpy(&iforce->xmit.buf[iforce->xmit.head],
+	memcpy(&iforce->xmit.buf[head],
 	       data,
 	       c);
 	if (n != c) {
@@ -319,25 +336,23 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 		       data,
 		       n - c);
 	}
-	XMIT_INC(iforce->xmit.head, n);
+	XMIT_INC(head, n);
 
-	spin_unlock(&iforce->xmit_lock);
-
-	/* Start the sending of data in background if necessary */
+/*
+ * If necessary, start the transmission
+ */
 	switch (iforce->bus) {
 
 #ifdef IFORCE_232
 		case IFORCE_232:
 		if (empty)
-//serio_write(iforce->serio, 0x2b);
-			iforce_serial_xmit(iforce);
+			serio_write(iforce->serio, 0x2b);
 		break;
 #endif
 #ifdef IFORCE_USB
 		case IFORCE_USB: 
 
 		if (empty & !iforce->out.status) {
-printk(KERN_DEBUG "iforce.c: send_packet: call iforce_usb_xmit needed\n");
 			iforce_usb_xmit(iforce);
 		}
 		break;
