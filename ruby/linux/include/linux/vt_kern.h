@@ -194,7 +194,7 @@ r Set */
 };                                 
 
 struct consw {
-        const char *(*con_startup)(void);
+        const char *(*con_startup)(struct vt_struct *);
         void    (*con_init)(struct vc_data *, int);
         void    (*con_deinit)(struct vc_data *);
         void    (*con_clear)(struct vc_data *, int, int, int, int);
@@ -225,8 +225,8 @@ extern struct consw vga_con;     /* VGA text console */
 extern struct consw newport_con; /* SGI Newport console  */
 extern struct consw prom_con;    /* SPARC PROM console */
 
-void take_over_console(struct consw *sw, int first, int last, int deflt);
-void give_up_console(struct consw *sw);
+void take_over_console(struct vt_struct *vt, struct consw *sw);
+void give_up_console(struct vt_struct *vt, struct consw *sw);
 
 struct vc_pool {
 	/* 
