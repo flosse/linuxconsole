@@ -612,7 +612,7 @@ void __init mda_console_init(void)
 	vc_init(vc, 1);			
       	tasklet_enable(&vt->vt_tasklet); 
 	tasklet_schedule(&vt->vt_tasklet);
-	printk("Console: mono %s %dx%d",display_desc, vc->vc_cols, vc->vc_rows);
+	printk("Console: mono %s %dx%d\n",display_desc,vc->vc_cols,vc->vc_rows);
         return;
 }
 
