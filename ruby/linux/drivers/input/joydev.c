@@ -254,6 +254,10 @@ static ssize_t joydev_read(struct file *file, char *buf, size_t count, loff_t *p
 
 		while (list->head == list->tail) {
 
+			if (!joydev->exist) {
+				retval = -ENODEV;
+				break;
+			}
 			if (file->f_flags & O_NONBLOCK) {
 				retval = -EAGAIN;
 				break;
@@ -324,6 +328,8 @@ static int joydev_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 	struct joydev *joydev = list->joydev;
 	struct input_dev *dev = joydev->handle.dev;
 	int i;
+
+	if (!joydev->exist) return -ENODEV;
 
 	switch (cmd) {
 

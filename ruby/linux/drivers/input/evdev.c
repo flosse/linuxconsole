@@ -90,7 +90,9 @@ static int evdev_fasync(int fd, struct file *file, int on)
 
 static int evdev_flush(struct file * file)
 {
-	return input_flush_device(&((struct evdev_list*)file->private_data)->evdev->handle, file);
+	struct evdev_list *list = (struct evdev_list*)file->private_data;
+	if (!list->evdev->exist) return -ENODEV;
+	return input_flush_device(&list->evdev->handle, file);
 }
 
 static int evdev_release(struct inode * inode, struct file * file)
@@ -156,6 +158,8 @@ static ssize_t evdev_write(struct file * file, const char * buffer, size_t count
 	struct evdev_list *list = file->private_data;
 	struct input_event event;
 	int retval = 0;
+
+	if (!list->evdev->exist) return -ENODEV;
 
 	while (retval < count) {
 
@@ -230,6 +234,8 @@ static int evdev_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 	struct evdev *evdev = list->evdev;
 	struct input_dev *dev = evdev->handle.dev;
 	int retval, t, u;
+
+	if (!evdev->exist) return -ENODEV;
 
 	switch (cmd) {
 
