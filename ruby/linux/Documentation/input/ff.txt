@@ -195,3 +195,23 @@ If you update very often, some device may stop playing effects. The driver
 checks that, and re-start the updated effect if necessary. However, this
 prevents effects from being palyed smoothly.
 
+3.8 Information about the status of effects
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Every time the status of an effect is changed, an event is sent. The values
+and meanings of the fields of the event are as follows:
+struct input_event {
+/* When the status of the effect changed */
+	struct timeval time;
+
+/* Set to EV_FF_STATUS */
+	unsigned short type;
+
+/* Contains the id of the effect */
+	unsigned short code;
+
+/* Indicates the status */
+	unsigned int value;
+};
+
+FF_STATUS_STOPPED	The effect stopped playing
+FF_STATUS_PLAYING	The effect started to play
