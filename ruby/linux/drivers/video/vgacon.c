@@ -632,7 +632,7 @@ static void vgacon_cursor(struct vc_data *vc, int mode)
     unsigned int v1, v2;	
     int val;
 
-    if (vc->vc_origin != vga_origin)
+    if (vga_vram_base != vga_origin)
 	vgacon_scrolldelta(vc, 0);
     switch (mode) {
 	case CM_ERASE:
@@ -747,10 +747,7 @@ static void vgacon_bmove(struct vc_data *vc, int sy, int sx, int dy, int dx,
 
 static int vgacon_switch(struct vc_data *vc)
 {
-	if (!vga_is_gfx)
-		scr_memcpyw_to((u16 *) vc->vc_origin, (u16 *) vc->vc_screenbuf,
-				 vc->vc_screenbuf_size);
-	return 0;	/* Redrawing not needed */
+	return 1;	/* Redrawing not needed */
 }
 
 static void vga_set_palette(struct vc_data *vc, unsigned char *table)
@@ -837,7 +834,7 @@ static int vgacon_resize(struct vc_data *vc, unsigned int rows,
 static int vgacon_scrolldelta(struct vc_data *c, int lines)
 {
 	if (!lines)			/* Turn scrollback off */
-		vga_origin = c->vc_origin;
+		vga_origin = vga_vram_base;
 	else {
 		int vram_size = vga_vram_end - vga_vram_base;
 		int margin = c->vc_size_row * 4;
@@ -851,7 +848,7 @@ static int vgacon_scrolldelta(struct vc_data *c, int lines)
 			we = vram_size;
 		}
 		p = (vga_origin - vga_vram_base - ul + we) % we + lines * c->vc_size_row;
-		st = (c->vc_origin - vga_vram_base - ul + we) % we;
+		st = (vga_origin - vga_vram_base - ul + we) % we;
 		if (p < margin)
 			p = 0;
 		if (p > st - margin)
@@ -870,7 +867,7 @@ static int vgacon_set_origin(struct vc_data *c)
          */
         if (vga_is_gfx || (c->display_fg->vt_blanked && !vgacon_state.palette_blanked))
 		return 0;
-	c->vc_origin = vga_origin = vga_vram_base;
+	vga_origin = vga_vram_base;
 	vga_set_mem_top(c);
 	vga_rolled_over = 0;
 	return 1;
@@ -879,7 +876,7 @@ static int vgacon_set_origin(struct vc_data *c)
 static void vgacon_save_screen(struct vc_data *c)
 {
 	if (!vga_is_gfx)
-		scr_memcpyw_from((u16 *) c->vc_screenbuf, (u16 *) c->vc_origin, c->vc_screenbuf_size);
+		scr_memcpyw_from((u16 *) c->vc_screenbuf, (u16 *) vga_origin, c->vc_screenbuf_size);
 }
 
 static u8 vgacon_build_attr(struct vc_data *vc, u8 color, u8 intensity, 
