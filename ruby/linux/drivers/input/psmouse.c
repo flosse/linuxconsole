@@ -73,8 +73,9 @@ struct psmouse {
 #define PSMOUSE_PS2TPP	3
 #define PSMOUSE_GENPS	4
 #define PSMOUSE_IMPS	5
+#define PSMOUSE_IMEX	6
 
-static char *psmouse_protocols[] = { "None", "PS/2", "PS2++", "PS2T++", "GenPS/2", "ImPS/2"};
+static char *psmouse_protocols[] = { "None", "PS/2", "PS2++", "PS2T++", "GenPS/2", "ImPS/2", "ImExPS/2" };
 
 /*
  * psmouse_process_packet() anlyzes the PS/2 mouse packet contents and
@@ -135,6 +136,16 @@ static void psmouse_process_packet(struct psmouse *psmouse)
 		input_report_rel(dev, REL_WHEEL, (signed char) packet[3]);
 
 /*
+ * Scroll wheel and buttons on IntelliMouse Explorer
+ */
+
+	if (psmouse->type == PSMOUSE_IMEX) {
+		input_report_rel(dev, REL_WHEEL, (int) (packet[3] & 7) - (int) (packet[2] & 8);
+		input_report_key(dev, BTN_SIDE, (packet[3] >> 4) & 1);
+		input_report_key(dev, BTN_EXTRA, (packet[3] >> 5) & 1);
+	}
+
+/*
  * Extra buttons on Genius NewNet 3D
  */
 
@@ -153,7 +164,6 @@ static void psmouse_process_packet(struct psmouse *psmouse)
 
 	input_report_rel(dev, REL_X, packet[1] ? (int) packet[1] - (int) ((packet[0] << 4) & 0x100) : 0);
 	input_report_rel(dev, REL_Y, packet[2] ? (int) ((packet[0] << 3) & 0x100) - (int) packet[2] : 0);
-
 
 }
 
@@ -405,11 +415,35 @@ static int psmouse_extensions(struct psmouse *psmouse)
 	psmouse_command(psmouse, param, PSMOUSE_CMD_GETID);
 	
 	if (param[0] == 3) {
-		if (!psmouse->vendor) psmouse->vendor = "Microsoft";
-		if (!psmouse->name) psmouse->name = "IntelliMouse";
+
 		set_bit(REL_WHEEL, psmouse->dev.relbit);
-		set_bit(BTN_SIDE, psmouse->dev.keybit);
-		set_bit(BTN_EXTRA, psmouse->dev.keybit);
+
+/*
+ * Try IntelliMouse Explorer magic init.
+ */
+
+		param[0] = 200;
+		psmouse_command(psmouse, param, PSMOUSE_CMD_SETRATE);
+		param[0] = 200;
+		psmouse_command(psmouse, param, PSMOUSE_CMD_SETRATE);
+		param[0] =  80;
+		psmouse_command(psmouse, param, PSMOUSE_CMD_SETRATE);
+		psmouse_command(psmouse, param, PSMOUSE_CMD_GETID);
+
+		if (param[0] == 4) {
+
+			psmouse->vendor = "Microsoft";
+			psmouse->name = "IntelliMouse Explorer";
+
+			set_bit(BTN_SIDE, psmouse->dev.keybit);
+			set_bit(BTN_EXTRA, psmouse->dev.keybit);
+
+			return PSMOUSE_IMEX;
+		}
+
+		psmouse->vendor = "Microsoft";
+		psmouse->name = "IntelliMouse";
+
 		return PSMOUSE_IMPS;
 	}
 
@@ -417,6 +451,9 @@ static int psmouse_extensions(struct psmouse *psmouse)
  * Okay, all failed, we have a standard mouse here. The number of the buttons is
  * still a question, though.
  */
+
+	psmouse->vendor = "Generic";
+	psmouse->name = "Mouse";
 
 	return PSMOUSE_PS2;
 }
@@ -438,7 +475,7 @@ static int psmouse_probe(struct psmouse *psmouse)
 
 /*
  * Next, we check if it's a mouse. It should send 0x00 or 0x03
- * in case of an IntelliMouse in 4-byte mode.
+ * in case of an IntelliMouse in 4-byte mode or 0x04 for IM Explorer.
  */
 
 	param[0] = param[1] = 0xa5;
@@ -446,7 +483,7 @@ static int psmouse_probe(struct psmouse *psmouse)
 	if (psmouse_command(psmouse, param, PSMOUSE_CMD_GETID))
 		return -1;
 
-	if (param[0] != 0x00 && param[0] != 0x03)
+	if (param[0] != 0x00 && param[0] != 0x03 && param[0] != 0x04)
 		return -1;
 
 /*
@@ -524,7 +561,7 @@ static void psmouse_powerup(void *data)
 
 	if (psmouse->packet[0] == PSMOUSE_RET_BAT && (psmouse->pktcnt == 1 ||
 	   (psmouse->pktcnt == 2 && psmouse->packet[1] == 0x00))) {
-		mdelay(40); /* FIXME!!! Wait somw nicer way */
+		mdelay(40); /* FIXME!!! Wait some nicer way */
 		serio_rescan(psmouse->serio);
 	}
 }
