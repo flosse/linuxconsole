@@ -43,7 +43,7 @@
  * as well as break everything.
  */
 
-#define SW_DEBUG
+#undef SW_DEBUG
 
 #define SW_START	400	/* The time we wait for the first bit [400 us] */
 #define SW_STROBE	45	/* Max time per bit [45 us] */
@@ -115,9 +115,9 @@ struct sw {
 	struct timer_list timer;
 	struct input_dev dev[4];
 	int length;
-	unsigned char type;
-	unsigned char bits;
-	unsigned char number;
+	int type;
+	int bits;
+	int number;
 	int fail;
 	int ok;
 	int reads;
@@ -317,10 +317,10 @@ static int sw_parse(unsigned char *buf, struct sw *sw)
 			input_report_abs(dev, ABS_HAT0Y, sw_hat_to_axis[hat].y);
 
 			for (j = 0; j < 7; j++)
-				input_report_key(dev, sw_btn[SW_ID_3DP][j], GB(j+8,1));
+				input_report_key(dev, sw_btn[SW_ID_3DP][j], !GB(j+8,1));
 
-			input_report_key(dev, BTN_BASE4, GB(38,1));
-			input_report_key(dev, BTN_BASE5, GB(37,1));
+			input_report_key(dev, BTN_BASE4, !GB(38,1));
+			input_report_key(dev, BTN_BASE5, !GB(37,1));
 
 			return 0;
 
@@ -603,13 +603,14 @@ static void sw_connect(struct gameport *gameport, struct gameport_dev *dev)
 	if (!j) {							/* Read ID failed. Happens in 1-bit mode on PP */
 		udelay(SW_TIMEOUT);
 		i = sw_read_packet(gameport, buf, SW_LENGTH, 0);	/* Retry reading packet */
-		dbg("Init 2b: Mode %d. Length %d.", m , i);
+		dbg("Init 2b: Mode %d. Length %d.", m, i);
 		if (!i) goto fail2;
 		udelay(SW_TIMEOUT);
 		j = sw_read_packet(gameport, idbuf, SW_LENGTH, i);	/* Retry reading ID */
 		dbg("Init 2c: ID Length %d.", j);
 	}
 
+	sw->type = -1;
 	k = SW_FAIL;							/* Try SW_FAIL times */
 	l = 0;
 
@@ -617,7 +618,7 @@ static void sw_connect(struct gameport *gameport, struct gameport_dev *dev)
 		k--;
 		udelay(SW_TIMEOUT);
 		i = sw_read_packet(gameport, buf, SW_LENGTH, 0);	/* Read data packet */
-		dbg("Init 3: Length %d.", i);
+		dbg("Init 3: Mode %d. Length %d. Last %d. Tries %d.", m, i, l, k);
 
 		if (i > l) {						/* Longer? As we can only lose bits, it makes */
 									/* no sense to try detection for a packet shorter */
@@ -627,6 +628,8 @@ static void sw_connect(struct gameport *gameport, struct gameport_dev *dev)
 			sw->gameport = gameport;
 			sw->length = i;
 			sw->bits = m;
+
+			dbg("Init 3a: Case %d.\n", i * m);
 
 			switch (i * m) {
 				case 60:
@@ -663,9 +666,9 @@ static void sw_connect(struct gameport *gameport, struct gameport_dev *dev)
 			}
 		}
 
-	} while (k && !sw->type);
+	} while (k && (sw->type == -1));
 
-	if (!sw->type) {
+	if (sw->type == -1) {
 		printk(KERN_WARNING "sidewinder.c: unknown joystick device detected "
 			"on gameport%d, contact <vojtech@suse.cz>\n", gameport->number);
 		sw_print_packet("ID", j * 3, idbuf, 3);
