@@ -590,9 +590,7 @@ const struct consw newport_con = {
     con_save_screen:	DUMMY,
 };
 
-#ifdef MODULE
-
-int init_module(void) 
+int __init newport_module_init(void) 
 {
     const char *display_desc = NULL;
     struct vt_struct *vt;
@@ -616,9 +614,10 @@ int init_module(void)
     return 0;
 }
 
-int cleanup_module(void) {
+void __exit newport_module_exit(void) {
     printk("Unloading SGI Newport Console Driver\n");
-    return 0;
 }
 
-#endif
+module_init(newport_module_init);
+module_exit(newport_module_exit);
+

@@ -560,8 +560,7 @@ const struct consw mda_con = {
 	con_invert_region:	mdacon_invert_region,
 };
 
-#ifdef MODULE
-void __init mda_console_init(void)
+int __init mda_module_init(void)
 {
         const char *display_desc = NULL;
         struct vt_struct *vt;
@@ -604,15 +603,11 @@ void __init mda_console_init(void)
         return;
 }
 
-int init_module(void)
-{
-	mda_console_init();
-	return 0;
-}
-
-void cleanup_module(void)
+void __exit mda_module_exit()
 {
 	/* release_vt(&mda_vt); */
 }
-#endif
+
+module_init(mda_module_init);
+module_exit(mda_module_exit);
 

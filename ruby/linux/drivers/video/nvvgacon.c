@@ -814,11 +814,7 @@ void __init nvvgacon_setup(char *str, int *ints)
 }
 #endif
 
-#ifdef MODULE
-void nvvga_console_init(void)
-#else
-void __init nvvga_console_init(void)
-#endif
+int __init nvvgacon_module_init(void)
 {
 	const char *display_desc = NULL;
         struct vt_struct *vt;
@@ -864,15 +860,11 @@ void __init nvvga_console_init(void)
         printk("Console: color %s %dx%d\n", display_desc, vc->vc_cols, vc->vc_rows);
 }
 
-#ifdef MODULE
-
-int init_module(void)
-{
-	nvvgacon_console_init();
-}
-
-void cleanup_module(void)
+void __exit nvvgacon_module_exit()
 {
 	/* release_vt(&nvvga_vt); */
 }
-#endif
+
+module_init(nvvgacon_module_init);
+module_exit(nvvgacon_module_exit);
+
