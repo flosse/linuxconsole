@@ -81,7 +81,7 @@ static int analog_options[ANALOG_PORTS];
 #define ANALOG_GAMEPAD		0x80000
 
 #define ANALOG_MAX_TIME		3	/* 3 ms */
-#define ANALOG_LOOP_TIME	1500	/* 1.5 * loop */
+#define ANALOG_LOOP_TIME	2000	/* 2 * loop */
 #define ANALOG_REFRESH_TIME	HZ/100	/* 10 ms */
 #define ANALOG_AXIS_TIME	2	/* 2 * refresh */
 #define ANALOG_INIT_RETRIES	8	/* 8 times */
@@ -299,7 +299,7 @@ static void analog_timer(unsigned long data)
 			port->bads -= analog_cooked_read(port);
 			analog_button_read(port, saitek, chf);
 			port->reads++;
-			port->axtime = ANALOG_AXIS_TIME;
+			port->axtime = ANALOG_AXIS_TIME - 1;
 		} else {
 			if (!saitek)
 				analog_button_read(port, saitek, chf);
