@@ -192,11 +192,13 @@ struct consw {
         unsigned long (*con_getxy)(struct vc_data *,unsigned long,int *,int *);
 };
 
-extern const struct consw dummy_con;   /* dummy console buffer */
-extern const struct consw fb_con;      /* frame buffer based console */
-extern const struct consw vga_con;     /* VGA text console */
-extern const struct consw newport_con; /* SGI Newport console  */
-extern const struct consw prom_con;    /* SPARC PROM console */
+extern const struct consw dummy_con;   	/* dummy console buffer */
+extern const struct consw fb_con;      	/* frame buffer based console */
+extern const struct consw vga_con;     	/* VGA text console */
+extern const struct consw newport_con; 	/* SGI Newport console  */
+extern const struct consw prom_con;    	/* SPARC PROM console */
+extern const struct consw mda_con;	/* MDA text console */
+extern const struct consw nvvga_con;	/* NVIDIA text console */ 
 
 void take_over_console(struct vt_struct *vt, const struct consw *sw);
 
