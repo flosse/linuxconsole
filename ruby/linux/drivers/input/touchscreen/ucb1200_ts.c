@@ -39,14 +39,6 @@
  *
  */
 
-/*
- * INSTRUCTIONS
- * To use this driver, simply ``mknod /dev/ts c 11 0'' and
- * use it as if it were an iPAQ.  TODO: iPAQ-compatible IOCTL's.
- * 
- *
- */
-
 #include <linux/config.h>
 #include <linux/types.h>
 #include <linux/module.h>
@@ -63,8 +55,6 @@
 #include <asm/hardware.h>
 #include <asm/irq.h>
 #include <asm/ucb1200.h>
-
-#include "ucb1200_ts.h"
 
 /*
  * UCB1200 register 9: Touchscreen control register
@@ -85,14 +75,6 @@
 #define TSPX_LOW (1 << 12)
 #define TSMX_LOW (1 << 13)
 
-
-/* From Compaq's Touch Screen Specification version 0.2 (draft) */
-typedef struct {
-    short pressure;
-    short x;
-    short y;
-    short millisecs;
-} TS_EVENT;
 
 static int raw_max_x, raw_max_y, res_x, res_y, raw_min_x, raw_min_y, xyswap;
 
@@ -170,54 +152,6 @@ static inline void set_read_pressure(void)
 	ucb1200_start_adc(ADC_INPUT_TSPX);
 }
 
-static int ucb1200_ts_ioctl(struct inode *inode, struct file *filp, unsigned int cmd, unsigned long arg)
-{
-/* Microwindows style (should change to TS_CAL when the specification is ready) */
-   switch (cmd)
-   {
-      case 3:
-	 raw_max_x = arg;
-	 break;
-      case 4:
-	 raw_max_y = arg;
-	 break;
-      case 5:
-	 res_x = arg;
-	 break;
-      case 6:
-	 res_y = arg;
-	 break;
-      case 10:
-	 raw_min_x = arg;
-	 break;
-      case 11:
-	 raw_min_y = arg;
-	 break;
-      case 12:
-/* New attribute for portrait modes */
-	 xyswap = arg;
-/* Allen Add */
-      case 13:	       /* 0 = Enable calibration ; 1 = Calibration OK */
-	 cal_ok = arg;
-      case 14:	       /* Clear all buffer data */
-	 ts_clear();
-	 break;
-      case 15:	       /* X axis reversed setting */
-	 x_rev = arg;
-	 break;
-      case 16:	       /* Y axis reversed setting */
-	 y_rev = arg;
-	 break;
-      case 17:	       /* Clear all buffer data */
-	 print_par();
-	 break;
-/* Allen */
-   }
-
-   return 0;
-}
-
-
 static void ts_clear(void)
 {
    int i;
@@ -235,22 +169,7 @@ static void ts_clear(void)
 
 }
 
-static void print_par(void)
-{
-   printk(" Kernel ==> cal_ok = %d\n",cal_ok);
-   printk(" Kernel ==> raw_max_x = %d\n",raw_max_x);
-   printk(" Kernel ==> raw_max_y = %d\n",raw_max_y);
-   printk(" Kernel ==> res_x = %d\n",res_x);
-   printk(" Kernel ==> res_y = %d\n",res_y);
-   printk(" Kernel ==> raw_min_x = %d\n",raw_min_x);
-   printk(" Kernel ==> raw_min_y = %d\n",raw_min_y);
-   printk(" Kernel ==> xyswap = %d\n",xyswap);
-   printk(" Kernel ==> x_rev = %d\n",x_rev);
-   printk(" Kernel ==> y_rev = %d\n",y_rev);
-}
-
 /* Allen */
-
 static inline int pen_up(void)
 {
 	ucb1200_stop_adc();
@@ -264,10 +183,8 @@ static void new_data(void)
    static TS_EVENT last_data = { 0, 0, 0, 0 };
    int diff0, diff1, diff2, diff3;
 
-   if (cur_data.pressure)
-   {
-      if (sample < 3)
-      {
+   if (cur_data.pressure) {
+      if (sample < 3) {
 	 samples[sample].x = cur_data.x;
 	 samples[sample++].y = cur_data.y;
 	 return;
@@ -412,94 +329,6 @@ static void start_chain(void)
 	spin_unlock_irqrestore(&owner_lock, flags);
 }
 
-static unsigned int ucb1200_ts_poll(struct file *filp, poll_table *wait)
-{
-	poll_wait(filp, &queue, wait);
-	if (head != tail)
-		return POLLIN | POLLRDNORM;
-	return 0;
-}
-
-static ssize_t ucb1200_ts_read(struct file *filp, char *buf, size_t count, loff_t *l)
-{
-   DECLARE_WAITQUEUE(wait, current);
-   int i;
-   TS_EVENT t;
-   short out_buf[4];
-
-   if (head == tail)
-   {
-      if (filp->f_flags & O_NONBLOCK)
-	 return -EAGAIN;
-      add_wait_queue(&queue, &wait);
-      current->state = TASK_INTERRUPTIBLE;
-      while ((head == tail) && !signal_pending(current))
-      {
-	 schedule();
-	 current->state = TASK_INTERRUPTIBLE;
-      }
-      current->state = TASK_RUNNING;
-      remove_wait_queue(&queue, &wait);
-   }
-   for (i = count; i >= sizeof(out_buf); i -= sizeof(out_buf), buf += sizeof(out_buf))
-   {
-      if (head == tail)
-	 break;
-      t = get_data();
-
-      out_buf[0] = t.pressure;
-
-/* Alen Add */
-#if 0
-
-#ifdef CONFIG_SA1100_ASSABET
-      if (xyswap)
-      {
-	 out_buf[1] = (((raw_max_y - t.y)) * res_y) / (raw_max_y - raw_min_y);
-	 out_buf[2] = (((t.x - raw_min_x)) * res_x) / (raw_max_x - raw_min_x);
-      }
-      else
-      {
-	 out_buf[1] = (((raw_max_x - t.x)) * res_x) / (raw_max_x - raw_min_x);
-	 out_buf[2] = (((raw_max_y - t.y)) * res_y) / (raw_max_y - raw_min_y);
-      }
-#else
-      if (xyswap)
-      {
-	 out_buf[1] = (((t.y - raw_min_y)) * res_y) / (raw_max_y - raw_min_y);
-	 out_buf[2] = (((t.x - raw_min_x)) * res_x) / (raw_max_x - raw_min_x);
-      }
-      else
-      {
-	 out_buf[1] = (((t.x - raw_min_x)) * res_x) / (raw_max_x - raw_min_x);
-	 out_buf[2] = (((t.y - raw_min_y)) * res_y) / (raw_max_y - raw_min_y);
-      }
-#endif
-
-#else
-      if (cal_ok)
-      {
-	 	out_buf[1] = (x_rev) ? ((raw_max_x - t.x) * res_x) / (raw_max_x - raw_min_x) :
-		((t.x - raw_min_x) * res_x) / (raw_max_x - raw_min_x);
-	 	out_buf[2] = (y_rev) ? ((raw_max_y - t.y) * res_y) / (raw_max_y - raw_min_y) :
-		((t.y - raw_min_y) * res_y) / (raw_max_y - raw_min_y);
-      }
-      else
-      {
-	 	out_buf[1] = t.x;
-	 	out_buf[2] = t.y;
-      }
-#endif
-/* Allen */
-
-      out_buf[3] = t.millisecs;
-
-      copy_to_user(buf, &out_buf, sizeof(out_buf));
-   }
-
-   return count - i;
-}
-
 /* Forward declaration */
 static void ucb1200_ts_timer(unsigned long);
 
@@ -524,16 +353,6 @@ static void ucb1200_ts_timer(unsigned long data)
    }
    else
       start_chain();
-}
-
-static int ucb1200_ts_fasync(int fd, struct file *filp, int on)
-{
-	int retval;
-
-	retval = fasync_helper(fd, filp, on, &fasync);
-	if (retval < 0)
-		return retval;
-	return 0;
 }
 
 static int ucb1200_ts_open(struct inode *inode, struct file *filp)

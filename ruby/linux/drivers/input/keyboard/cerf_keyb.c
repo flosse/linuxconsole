@@ -343,22 +343,6 @@ static void keyboard_interrupt(unsigned long foo)
    add_timer(&kbd_timer);
 }
 
-void cerf_leds(unsigned char leds)
-{
-}
-char cerf_unexpected_up(unsigned char keycode)
-{
-return 0;
-}
-int cerf_getkeycode(unsigned int scancode)
-{
-return 0;
-}
-int cerf_setkeycode(unsigned int scancode, unsigned int keycode)
-{
-return 0;
-}
-
 void cerf_kbd_init_hw(void)
 {
    printk("Starting Cerf PDA Keyboard Driver... ");

@@ -25,7 +25,7 @@ obj-$(CONFIG_INPUT_EVBUG)	+= evbug.o
 subdir-$(CONFIG_INPUT_JOYSTICK)	+= joystick
 subdir-$(CONFIG_INPUT_KEYBOARD)	+= keyboard
 subdir-$(CONFIG_INPUT_MOUSE)	+= mouse
-subdir-$(CONFIG_INPUT_TS)	+= touchscreen
+subdir-$(CONFIG_INPUT_TOUCHSCREEN) += touchscreen
 
 ifeq ($(CONFIG_INPUT_KEYBOARD),y)
 	obj-y += keyboard/keybdrv.o
@@ -39,7 +39,7 @@ ifeq ($(CONFIG_INPUT_JOYSTICK),y)
 	obj-y += joystick/joydrv.o
 endif
 
-ifeq ($(CONFIG_INPUT_TS),y)
+ifeq ($(CONFIG_INPUT_TOUCHSCREEN),y)
 	obj-y += touchscreen/tsdrv.o
 endif
 
