@@ -90,7 +90,7 @@ static void mousedev_event(struct input_handle *handle, unsigned int type, unsig
 		while (list) {
 			switch (type) {
 				case EV_ABS:
-					if (test_bit(BTN_TRIGGER, dev->keybit))
+					if (test_bit(BTN_TRIGGER, handle->dev->keybit))
 						break;
 					switch (code) {
 						case ABS_X:	
