@@ -581,9 +581,9 @@ static void k_dead(struct tty_struct *tty, unsigned char value, char up_flag)
 static void k_cons(struct tty_struct *tty, unsigned char value, char up_flag)
 {
 	struct vc_data *tmp = (struct vc_data *) tty->driver_data; 
-	struct vc_data *vc = find_vc(value);
+	struct vc_data *vc = find_vc(value + tmp->display_fg->vcs.first_vc);
 
-	if (up_flag || !vc || (tmp->display_fg != vc->display_fg))
+	if (up_flag || !vc)
 		return;	
 	set_console(vc);
 }
