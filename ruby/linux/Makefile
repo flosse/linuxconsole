@@ -1,8 +1,8 @@
 VERSION = 2
 PATCHLEVEL = 5
-SUBLEVEL = 26
+SUBLEVEL = 27
 EXTRAVERSION = -ruby
- 
+
 # *DOCUMENTATION*
 # Too see a list of typical targets execute "make help"
 # More info can be located in ./Documentation/kbuild
@@ -157,7 +157,8 @@ objtree := $(TOPDIR)
 
 export srctree objtree
 
-SUBDIRS		:= init kernel mm fs ipc lib drivers sound net
+SUBDIRS		:= init kernel mm fs ipc lib drivers sound net security
+
 
 noconfig_targets := xconfig menuconfig config oldconfig randconfig \
 		    defconfig allyesconfig allnoconfig allmodconfig \
@@ -223,7 +224,7 @@ endif
 # ---------------------------------------------------------------------------
 
 INIT		:= init/init.o
-CORE_FILES	:= kernel/kernel.o mm/mm.o fs/fs.o ipc/ipc.o
+CORE_FILES	:= kernel/kernel.o mm/mm.o fs/fs.o ipc/ipc.o security/built-in.o
 LIBS		:= lib/lib.a
 DRIVERS		:= drivers/built-in.o sound/sound.o
 NETWORKS	:= net/network.o
