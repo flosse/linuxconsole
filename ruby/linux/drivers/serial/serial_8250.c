@@ -21,6 +21,7 @@
 #include <linux/tty.h>
 #include <linux/tty_flip.h>
 #include <linux/major.h>
+#include <linux/slab.h>
 #include <linux/ptrace.h>
 #include <linux/ioport.h>
 #include <linux/init.h>
@@ -1729,7 +1730,7 @@ static void serial8250_console_write(struct console *co, const char *s, u_int co
 	/*
 	 *	Now, do each character
 	 */
-	for (i = 0; i < count; i++) {
+	for (i = 0; i < count; i++, s++) {
 		wait_for_xmitr(port);
 
 		/*
@@ -1867,28 +1868,41 @@ static struct uart_driver serial8250_reg = {
  */
 int register_serial(struct serial_struct *req)
 {
-	struct uart_port port;
+	struct uart_port *port;
+	int ret;
 
-	port.iobase   = req->port;
-	port.membase  = req->iomem_base;
-	port.irq      = req->irq;
-	port.uartclk  = req->baud_base * 16;
-	port.fifosize = req->xmit_fifo_size;
-	port.regshift = req->iomem_reg_shift;
-	port.iotype   = req->io_type;
-	port.flags    = req->flags | ASYNC_BOOT_AUTOCONF;
+	port = kmalloc(sizeof (struct uart_port), GFP_KERNEL);
+	if (!port)
+		return -ENOMEM;
+
+	port->iobase   = req->port;
+	port->membase  = req->iomem_base;
+	port->irq      = req->irq;
+	port->uartclk  = req->baud_base * 16;
+	port->fifosize = req->xmit_fifo_size;
+	port->regshift = req->iomem_reg_shift;
+	port->iotype   = req->io_type;
+	port->flags    = req->flags | ASYNC_BOOT_AUTOCONF;
 
 	if (HIGH_BITS_OFFSET)
-		port.iobase |= req->port_high << HIGH_BITS_OFFSET;
+		port->iobase |= req->port_high << HIGH_BITS_OFFSET;
 
 	/*
 	 * If a clock rate wasn't specified by the low level
 	 * driver, then default to the standard clock rate.
 	 */
-	if (port.uartclk == 0)
-		port.uartclk = BASE_BAUD * 16;
+	if (port->uartclk == 0)
+		port->uartclk = BASE_BAUD * 16;
 
-	return uart_register_port(&serial8250_reg, &port);
+	ret = uart_register_port(&serial8250_reg, port);
+
+	/*
+	 * This will be removed once uart_register_port gobbles
+	 * the port pointer.
+	 */
+	kfree(port);
+
+	return ret;
 }
 
 void unregister_serial(int line)
