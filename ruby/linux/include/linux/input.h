@@ -418,6 +418,7 @@ struct input_event {
 #define LED_SLEEP		0x05
 #define LED_SUSPEND		0x06
 #define LED_MUTE		0x07
+#define LED_MISC		0x08
 #define LED_MAX			0x0f
 
 /*

@@ -30,12 +30,13 @@
  */
 
 #include <asm/types.h>
+#include <linux/input.h>
 
 /*
  * Version
  */
 
-#define JS_VERSION		0x020000
+#define JS_VERSION		0x020100
 
 /*
  * Types and constants for reading from /dev/js
@@ -56,14 +57,19 @@ struct js_event {
  * IOCTL commands for joystick driver
  */
 
-#define JSIOCGVERSION		_IOR('j', 0x01, __u32)			/* get driver version */
+#define JSIOCGVERSION		_IOR('j', 0x01, __u32)				/* get driver version */
 
-#define JSIOCGAXES		_IOR('j', 0x11, __u8)			/* get number of axes */
-#define JSIOCGBUTTONS		_IOR('j', 0x12, __u8)			/* get number of buttons */
-#define JSIOCGNAME(len)		_IOC(_IOC_READ, 'j', 0x13, len)         /* get identifier string */
+#define JSIOCGAXES		_IOR('j', 0x11, __u8)				/* get number of axes */
+#define JSIOCGBUTTONS		_IOR('j', 0x12, __u8)				/* get number of buttons */
+#define JSIOCGNAME(len)		_IOC(_IOC_READ, 'j', 0x13, len)			/* get identifier string */
 
-#define JSIOCSCORR		_IOW('j', 0x21, struct js_corr)		/* set correction values */
-#define JSIOCGCORR		_IOR('j', 0x22, struct js_corr)		/* get correction values */
+#define JSIOCSCORR		_IOW('j', 0x21, struct js_corr)			/* set correction values */
+#define JSIOCGCORR		_IOR('j', 0x22, struct js_corr)			/* get correction values */
+
+#define JSIOCSAXMAP		_IOW('j', 0x31, __u8[ABS_MAX])			/* set axis mapping */
+#define JSIOCGAXMAP		_IOR('j', 0x32, __u8[ABS_MAX])			/* get axis mapping */
+#define JSIOCSBTNMAP		_IOW('j', 0x33, __u16[KEY_MAX - BTN_MISC])	/* set button mapping */
+#define JSIOCGBTNMAP		_IOR('j', 0x34, __u16[KEY_MAX - BTN_MISC])	/* get button mapping */
 
 /*
  * Types and constants for get/set correction
