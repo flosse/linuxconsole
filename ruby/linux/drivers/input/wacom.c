@@ -215,10 +215,10 @@ static void wacom_intuos_irq(struct urb *urb)
 
 		switch (((__u32)data[2] << 4) | (data[3] >> 4)) {
 			case 0x832:
-			case 0x812:
 			case 0x012: wacom->tool = BTN_TOOL_PENCIL;	break;	/* Inking pen */
 			case 0x822:
 			case 0x022: wacom->tool = BTN_TOOL_PEN;		break;	/* Pen */
+			case 0x812:
 			case 0x032: wacom->tool = BTN_TOOL_BRUSH;	break;	/* Stroke pen */
 			case 0x094: wacom->tool = BTN_TOOL_MOUSE;	break;	/* Mouse 4D */
 			case 0x096: wacom->tool = BTN_TOOL_LENS;	break;	/* Lens cursor */
