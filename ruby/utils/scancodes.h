@@ -136,6 +136,7 @@ static struct scancode_list scancodes[] = {
 	{ 0x057, 0x078, 0x56, 0x09, 0x44, 0x67, 0x5f,    0,    0,    0,  87 },	/* F11 */
 	{ 0x058, 0x007, 0x5e, 0x0b, 0x45, 0x6f,    0,    0,    0,    0,  88 },	/* F12 */
 	{ 0x11c, 0x15a, 0x79, 0x5a, 0x58, 0x4c, 0x43,    0, 0x72,    0,  96 },	/* KP Enter */
+	{     0,     0,    0,    0,    0, 0x34,    0,    0,    0,    0,  96 },	/* KP Enter on Apple PowerBooks */
 	{ 0x135, 0x14a, 0x77, 0x2e, 0x54, 0x4b, 0x5c,    0, 0x64,    0,  98 },	/* KP / */
 	{ 0x138, 0x111, 0x39, 0x0d, 0xe6, 0x7c, 0x65, 0x02,    0,    0, 100 },	/* Right Alt (Graph) */
 	{     0,     0, 0x58,    0,    0,    0,    0,    0,    0,    0, 100 },	/* Alt Graph - Sun PS/2 Type 5 */
@@ -224,10 +225,11 @@ static struct scancode_list scancodes[] = {
                                                                       
 /*                                                                    
  * Line Feed found on Sun Type 4 keyboard                            
+ * Fn+KP Enter on Apple PowerBooks
  */                                                                   
                                                                       
-	{ 0x05b,     0,    0, 0x6f,    0,    0,    0,    0,    0,    0, 101 },	/* Line Feed */
-                                                                      
+	{ 0x05b,     0,    0, 0x6f,    0, 0x6e,    0,    0,    0,    0, 101 },	/* Line Feed */
+
 #if 0
 /*                                                                    
  * PP-06 keyboard extension keys                                      
@@ -342,6 +344,7 @@ static struct scancode_list scancodes[] = {
  */                                                                   
                                                                       
 	{ 0x15e, 0x137,    0, 0x30, 0x66, 0x7f,    0,    0,    0,    0, 116 },	/* Power */
+	{     0,     0,    0,    0,    0, 0x7e,    0,    0,    0,    0, 116 },	/* Alternate coding on some Apple kbds */
 	{ 0x15f, 0x13f, 0x7f,    0, 0xf8,    0,    0,    0,    0,    0, 142 },	/* Sleep */
 	{ 0x163, 0x15e,    0,    0,    0,    0,    0,    0,    0,    0, 143 },	/* WakeUp */
                                                                       
@@ -430,10 +433,16 @@ static struct scancode_list scancodes[] = {
 	{ 0x070,     0,    0,    0,    0,    0,    0,    0, 0x60,    0, 170 },	/* ISO KEY (?) */
                                                                       
 /*                                                                    
- * Japan alphabet switch key                                          
+ * USB Keypad Comma, for keyboards with both . and , on the keypad
  */                                                                   
 
-	{ 0x175, 0x068,    0,    0, 0x87,    0,    0,    0,    0,    0, 181 },	/* Intl1 / Jpn key - clashes with Focus PF8 */
+	{     0,     0,    0,    0, 0x85, 0x5f,    0,    0,    0,    0, 124 },  /* KP , */
+
+/*     
+ * USB International keys (see USB HID Usage Tables)
+ */
+
+	{ 0x175, 0x068,    0,    0, 0x87, 0x5e,    0,    0,    0,    0, 181 },	/* Intl1 / Jpn key - clashes with Focus PF8 */
 	{     0,     0,    0,    0, 0x88,    0,    0,    0,    0,    0, 182 },  /* International2 */
 	{     0,     0,    0,    0, 0x89, 0x5d,    0,    0,    0,    0, 183 },  /* International3 */
 	{     0,     0,    0,    0, 0x8a,    0,    0,    0,    0,    0, 184 },  /* International4 */
