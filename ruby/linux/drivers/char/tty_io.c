@@ -106,9 +106,6 @@ extern void con_init_devfs (void);
 #ifdef CONFIG_PROM_CONSOLE
 extern void prom_con_init(void);
 #endif
-#ifdef CONFIG_MDA_CONSOLE
-extern void mda_console_init(void);
-#endif
 #ifdef CONFIG_FRAMEBUFFER_CONSOLE
 extern void fb_console_init(void);
 #endif
@@ -1499,7 +1496,7 @@ static int tiocswinsz(struct tty_struct *tty, struct tty_struct *real_tty,
 	if (tty->driver.type == TTY_DRIVER_TYPE_CONSOLE) {
 		struct vc_data *vc = (struct vc_data *) tty->driver_data;
 		
-		if (!vc || vc_resize(vc, tmp_ws.ws_row, tmp_ws.ws_col))
+		if (!vc || vc_resize(vc, tmp_ws.ws_col, tmp_ws.ws_row))
 			return -ENXIO;
 	}
 #endif
@@ -2283,9 +2280,6 @@ void __init tty_init(void)
 #ifdef CONFIG_VT
 #if defined (CONFIG_PROM_CONSOLE)
         prom_con_init();
-#endif
-#if defined (CONFIG_MDA_CONSOLE)
-        mda_console_init();
 #endif
 #if defined (CONFIG_FRAMEBUFFER_CONSOLE)
 	fb_console_init();
