@@ -156,14 +156,14 @@ static void analog_decode(struct analog *analog, int *axes, int *initial, unsign
 			case 0x8: buttons = 0x08; break;
 			case 0x5: buttons = 0x10; break;
 			case 0x9: buttons = 0x20; break;
-			case 0xf: hat[0] = 1; break;
-			case 0xb: hat[0] = 2; break;
-			case 0x7: hat[0] = 3; break;
-			case 0x3: hat[0] = 4; break;
-			case 0xe: hat[1] = 1; break;
-			case 0xa: hat[1] = 2; break;
-			case 0x6: hat[1] = 3; break;
-			case 0xc: hat[1] = 4; break;
+			case 0x3: hat[0]++;
+			case 0x7: hat[0]++;
+			case 0xb: hat[0]++;
+			case 0xf: hat[0]++; buttons = 0; break;
+			case 0xc: hat[1]++;
+			case 0x6: hat[1]++;
+			case 0xa: hat[1]++;
+			case 0xe: hat[1]++; buttons = 0; break;
 		}
 
 	for (j = k = 0; j < 6; j++)
@@ -439,8 +439,8 @@ static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
 	port->timer.function = analog_timer;
 
 #if 0
-	port->adi[0].mask = ....
-	port->adi[1].mask = ....
+	port->analog[0].mask = ....
+	port->analog[1].mask = ....
 #endif
 
 	if (gameport_open(gameport, dev, GAMEPORT_MODE_COOKED)) {
