@@ -191,10 +191,10 @@ __setup("fbcon=", fbcon_setup);
 static const char *fbcon_startup(struct vt_struct *vt, int init)
 {
     const char *display_desc = "frame buffer device";
-    struct vc_data *vc = vt->default_mode;
     struct fbcon_font_desc *font = NULL;
     struct fb_info *info;
-    struct module *owner;	
+    struct module *owner;
+    struct vc_data *vc;		
     int logo;	
 
     /*
@@ -230,6 +230,9 @@ static const char *fbcon_startup(struct vt_struct *vt, int init)
         printk(KERN_ERR "fbcon_startup: No support for fontwidth %d\n", font->width);
     }
 #endif
+
+    vc = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);	
+    vt->default_mode = vc;	
 
     vc->vc_font.width = font->width;
     vc->vc_font.height = font->height;
@@ -685,15 +688,8 @@ void __init fb_console_init(void)
    if (!vt) return;
    memset(vt, 0, sizeof(struct vt_struct));
 
-   vt->default_mode = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
-   if (!vt->default_mode) {
-        kfree(vt);
-        return;
-   }
-
    vc = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
    if (!vc) {
-       kfree(vt->default_mode);
        kfree(vt);
        return;
    }
@@ -706,7 +702,6 @@ void __init fb_console_init(void)
    q = (long) kmalloc(vc->vc_screenbuf_size, GFP_KERNEL);
    if (!display_desc || !q) {
        kfree(vt->vc_cons[0]);
-       kfree(vt->default_mode);
        kfree(vt);
        if (q) {
            kfree((char *) q);
@@ -715,8 +710,6 @@ void __init fb_console_init(void)
    }
    vc->vc_screenbuf = (unsigned short *) q;
    vc_init(vc, 1);
-   tasklet_enable(&vt->vt_tasklet);
-   tasklet_schedule(&vt->vt_tasklet);
 */
    printk("Console: %s %s %dx%d\n", vc->vc_can_do_color ? "colour" : "mono",
            display_desc, vc->vc_cols, vc->vc_rows);
