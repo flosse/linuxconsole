@@ -44,7 +44,6 @@ EXPORT_SYMBOL(serio_unregister_device);
 EXPORT_SYMBOL(serio_open);
 EXPORT_SYMBOL(serio_close);
 EXPORT_SYMBOL(serio_rescan);
-EXPORT_SYMBOL(serio_async_write);
 
 static struct serio *serio_list;
 static struct serio_dev *serio_dev;
