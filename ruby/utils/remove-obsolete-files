@@ -13,6 +13,7 @@ rm -fv arch/mips64/lib/kbd-std.c
 rm -fv drivers/acorn/char/keyb_arc.c
 rm -fv drivers/acorn/char/keyb_ps2.c
 rm -fv drivers/acorn/char/mouse_rpc.c
+rm -fv drivers/char/console.c
 rm -fv drivers/char/adbmouse.c
 rm -fv drivers/char/amigamouse.c
 rm -fv drivers/char/amikeyb.c
