@@ -223,28 +223,21 @@ void reset_palette(struct vc_data *vc)
 /*
  * Functions to handle console scrolling.
  */
-static inline void scrolldelta(struct vc_data *vc, int lines)
-{
-        vc->display_fg->scrollback_delta += lines;
-	vc->display_fg->want_vc = vc;
-	tasklet_schedule(&vc->display_fg->vt_tasklet);
-}
-
-void scrollback(struct vc_data *vc, int lines)
+void scroll_up(struct vc_data *vc, int lines)
 {
         if (!lines)
-                lines = video_num_lines/2;
-        scrolldelta(vc, -lines);
+		return;
+//        scrolldelta(vc, -lines);
 }
 
-void scrollfront(struct vc_data *vc, int lines)
+void scroll_down(struct vc_data *vc, int lines)
 {
         if (!lines)
-                lines = video_num_lines/2;
-        scrolldelta(vc, lines);
+		return;
+//        scrolldelta(vc, lines);
 }
 
-void scrup(struct vc_data *vc, unsigned int t, unsigned int b, int nr)
+void scroll_region_up(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
 {
         unsigned short *d, *s;
 
@@ -252,15 +245,15 @@ void scrup(struct vc_data *vc, unsigned int t, unsigned int b, int nr)
                 nr = b - t;
         if (b > video_num_lines || t >= b || nr < 1)
                 return;
-        if (IS_VISIBLE && sw->con_scroll_region(vc, t, b, SM_UP, nr))
-                return;
         d = (unsigned short *) (origin+video_size_row*t);
         s = (unsigned short *) (origin+video_size_row*(t+nr));
         scr_memcpyw(d, s, (b-t-nr) * video_size_row);
         scr_memsetw(d + (b-t-nr) * video_num_columns, video_erase_char, video_size_row*nr);
+	if (IS_VISIBLE)
+		sw->con_scroll_region(vc, t, b, SM_UP, nr);
 }
 
-void scrdown(struct vc_data *vc, unsigned int t, unsigned int b, int nr)
+void scroll_region_down(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
 {
         unsigned short *s;
         unsigned int step;
@@ -269,12 +262,12 @@ void scrdown(struct vc_data *vc, unsigned int t, unsigned int b, int nr)
                 nr = b - t;
         if (b > video_num_lines || t >= b || nr < 1)
                 return;
-        if (IS_VISIBLE && sw->con_scroll_region(vc, t, b, SM_DOWN, nr))
-                return;
         s = (unsigned short *) (origin+video_size_row*t);
         step = video_num_columns * nr;
         scr_memmovew(s + step, s, (b-t-nr)*video_size_row);
         scr_memsetw(s, video_erase_char, 2*step);
+	if (IS_VISIBLE)
+		sw->con_scroll_region(vc, t, b, SM_DOWN, nr);
 }
 
 /*
@@ -378,13 +371,13 @@ void delete_char(struct vc_data *vc, unsigned int nr)
 
 void insert_line(struct vc_data *vc, unsigned int nr)
 {
-        scrdown(vc, y, bottom, nr);
+        scroll_region_down(vc, y, bottom, nr);
         need_wrap = 0;
 }
 
 void delete_line(struct vc_data *vc, unsigned int nr)
 {
-        scrup(vc, y, bottom, nr);
+        scroll_region_up(vc, y, bottom, nr);
         need_wrap = 0;
 }
 
@@ -1457,7 +1450,7 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
                         need_wrap = 1;
                 }
         }
-	/* I think this is wrong. Only should happen when visiable? */
+	/* I think this is wrong. Only should happen when visible? */
         set_cursor(vc);
         poke_blanked_console(vc->display_fg);
 quit:
