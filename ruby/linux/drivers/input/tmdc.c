@@ -249,7 +249,7 @@ static void tmdc_connect(struct gameport *gameport, struct gameport_dev *dev)
 		char padbtn;
 	} models[] = {	{   1, "ThrustMaster Millenium 3D Inceptor",	  6, 0, 6,  0 },
 			{   3, "ThrustMaster Rage 3D Gamepad",		  2, 0, 0, 10 },
-			{   8, "ThrustMaster FragMaster',		  4, 0, 0, 10 },
+			{   8, "ThrustMaster FragMaster",		  4, 0, 0, 10 },
 			{ 163, "Thrustmaster Fusion GamePad",		  2, 0, 0, 10 },
 			{   0, "Unknown %d-axis, %d-button TM device %d", 0, 0, 0,  0 }};
 	unsigned char data[2][TMDC_MAX_LENGTH];

@@ -335,14 +335,7 @@ int __init ns558_init(void)
 	}
 #endif
 
-/*
- * Probe for PCI ports.
- */
-
-	if (!ns558 && !ns558_pci)
-		return -ENODEV;
-
-	return 0;
+	return (ns558 || ns558_pci) ? 0 : -ENODEV;
 }
 
 void __exit ns558_exit(void)

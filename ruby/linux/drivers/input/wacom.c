@@ -259,7 +259,7 @@ static void wacom_intuos_irq(struct urb *urb)
 				input_report_abs(dev, ABS_RZ, (data[7] & 0x20) ?
 					((__u32)data[6] << 2) | ((data[7] >> 6) & 3):
 					(-(((__u32)data[6] << 2) | ((data[7] >> 6) & 3))) - 1);
-				break
+				break;
 			}
 
 			input_report_key(dev, BTN_LEFT,   data[8] & 0x01);
