@@ -47,7 +47,7 @@ static struct fb_var_screeninfo vga16fb_defined __initdata = {
 	{0,0,0},	/* B */
 	{0,0,0},	/* transparency */
 	0,		/* standard pixel format */
-	FB_ACTIVATE_NOW,
+	FB_ACTIVATE_TEST,
 	-1,-1,
 	0,
 	39721, 48, 16, 39, 8,
