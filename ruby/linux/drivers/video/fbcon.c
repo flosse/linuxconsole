@@ -600,11 +600,20 @@ static int fbcon_resize(struct vc_data *vc,unsigned int cols,unsigned int rows)
 {
     struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;	
     struct fb_var_screeninfo var;
-    
-    var.xres = cols * vc->vc_font.width;
+    int err;   
+
+    /* We grab what works and then modify the resolution only. */
+    memcpy(&var, &info->var, sizeof(struct fb_var_screeninfo));		 
+    var.xres = var.xres_virtual = cols * vc->vc_font.width;
     var.yres = rows * vc->vc_font.height;
-    if (fb_set_var(&var, info))
-	return 1;
+    var.activate = FB_ACTIVATE_NOW;		
+
+    DPRINTK("attempting to set mode to %d rows x cols%d\n", rows, cols);
+    
+    err = fb_set_var(&var, info);
+    if (err)
+	return err;
+    DPRINTK("Graphics mode is now set at %dx%d depth %d\n", var.xres, var.yres, 		var.bits_per_pixel);	
     vc->vc_can_do_color = var.bits_per_pixel != 1;
     vc->vc_scrollback = 1;
     return 0;
