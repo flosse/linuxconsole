@@ -69,7 +69,6 @@
 static struct tty_driver normal, callout;
 static struct tty_struct *clps711x_table[UART_NR];
 static struct termios *clps711x_termios[UART_NR], *clps711x_termios_locked[UART_NR];
-static struct uart_state clps711x_state[UART_NR];
 
 #define UBRLCR(port)		((port)->base + UBRLCR1)
 #define UARTDR(port)		((port)->base + UARTDR1)
@@ -105,7 +104,7 @@ static void clps711xuart_enable_ms(struct uart_port *port)
 static void ambauart_modem_status(struct uart_info *info)
 {
 	unsigned int status, delta;
-	struct uart_icount *icount = &info->state->icount;
+	struct uart_icount *icount = &info->port->icount;
 
 	UART_PUT_ICR(info->port, 0);
 
@@ -117,47 +116,15 @@ static void ambauart_modem_status(struct uart_info *info)
 	if (!delta)
 		return;
 
-	if (delta & AMBA_UARTFR_DCD) {
-		icount->dcd++;
-#ifdef CONFIG_HARD_PPS
-		if ((info->flags & ASYNC_HARDPPS_CD) &&
-		    (status & AMBA_UARTFR_DCD)
-			hardpps();
-#endif
-		if (info->flags & ASYNC_CHECK_CD) {
-			if (status & AMBA_UARTFR_DCD)
-				wake_up_interruptible(&info->open_wait);
-			else if (!((info->flags & ASYNC_CALLOUT_ACTIVE) &&
-				   (info->flags & ASYNC_CALLOUT_NOHUP))) {
-				if (info->tty)
-					tty_hangup(info->tty);
-			}
-		}
-	}
+	if (delta & AMBA_UARTFR_DCD)
+		uart_handle_dcd_change(info, status & AMBA_UARTFR_DCD);
 
 	if (delta & AMBA_UARTFR_DSR)
 		icount->dsr++;
 
-	if (delta & AMBA_UARTFR_CTS) {
-		icount->cts++;
+	if (delta & AMBA_UARTFR_CTS)
+		uart_handle_cts_change(info, status & AMBA_UARTFR_CTS);
 
-		if (info->flags & ASYNC_CTS_FLOW) {
-			status &= AMBA_UARTFR_CTS;
-
-			if (info->tty->hw_stopped) {
-				if (status) {
-					info->tty->hw_stopped = 0;
-					info->ops->start_tx(info->port, 1, 0);
-					uart_event(info, EVT_WRITE_WAKEUP);
-				}
-			} else {
-				if (!status) {
-					info->tty->hw_stopped = 1;
-					info->ops->stop_tx(info->port, 0);
-				}
-			}
-		}
-	}
 	wake_up_interruptible(&info->delta_msr_wait);
 }
 #endif
@@ -167,7 +134,6 @@ static void clps711xuart_int_rx(int irq, void *dev_id, struct pt_regs *regs)
 	struct uart_info *info = dev_id;
 	struct tty_struct *tty = info->tty;
 	unsigned int status, ch, flg, ignored = 0;
-	struct uart_icount *icount = &info->state->icount;
 	struct uart_port *port = info->port;
 
 	status = clps_readl(SYSFLG(port));
@@ -176,7 +142,7 @@ static void clps711xuart_int_rx(int irq, void *dev_id, struct pt_regs *regs)
 
 		if (tty->flip.count >= TTY_FLIPBUF_SIZE)
 			goto ignore_char;
-		icount->rx++;
+		port->icount.rx++;
 
 		flg = TTY_NORMAL;
 
@@ -186,16 +152,10 @@ static void clps711xuart_int_rx(int irq, void *dev_id, struct pt_regs *regs)
 		 */
 		if (ch & UART_ANY_ERR)
 			goto handle_error;
-#ifdef SUPPORT_SYSRQ
-		if (info->sysrq) {
-			if (ch && time_before(jiffies, info->sysrq)) {
-				handle_sysrq(ch, regs, NULL, NULL);
-				info->sysrq = 0;
-				goto ignore_char;
-			}
-			info->sysrq = 0;
-		}
-#endif
+
+		if (uart_handle_sysrq_char(info, ch, regs))
+			goto ignore_char;
+
 	error_return:
 		*tty->flip.flag_buf_ptr++ = flg;
 		*tty->flip.char_buf_ptr++ = ch;
@@ -209,11 +169,11 @@ out:
 
 handle_error:
 	if (ch & UARTDR_PARERR)
-		icount->parity++;
+		port->icount.parity++;
 	else if (ch & UARTDR_FRMERR)
-		icount->frame++;
+		port->icount.frame++;
 	if (ch & UARTDR_OVERR)
-		icount->overrun++;
+		port->icount.overrun++;
 
 	if (ch & port->ignore_status_mask) {
 		if (++ignored > 100)
@@ -252,10 +212,10 @@ static void clps711xuart_int_tx(int irq, void *dev_id, struct pt_regs *regs)
 	struct uart_port *port = info->port;
 	int count;
 
-	if (info->x_char) {
-		clps_writel(info->x_char, UARTDR(port));
-		info->state->icount.tx++;
-		info->x_char = 0;
+	if (port->x_char) {
+		clps_writel(port->x_char, UARTDR(port));
+		port->icount.tx++;
+		port->x_char = 0;
 		return;
 	}
 	if (info->xmit.head == info->xmit.tail
@@ -269,7 +229,7 @@ static void clps711xuart_int_tx(int irq, void *dev_id, struct pt_regs *regs)
 	do {
 		clps_writel(info->xmit.buf[info->xmit.tail], UARTDR(port));
 		info->xmit.tail = (info->xmit.tail + 1) & (UART_XMIT_SIZE - 1);
-		info->state->icount.tx++;
+		port->icount.tx++;
 		if (info->xmit.head == info->xmit.tail)
 			break;
 	} while (--count > 0);
@@ -655,12 +615,17 @@ void __init clps711xuart_console_init(void)
 #endif
 
 static struct uart_register clps711x_reg = {
-	normal_major:		SERIAL_CLPS711X_MAJOR,
+#ifdef CONFIG_DEVFS_FS
 	normal_name:		SERIAL_CLPS711X_NAME,
-	normal_driver:		&normal,
-
-	callout_major:		CALLOUT_CLPS711X_MAJOR,
 	callout_name:		CALLOUT_CLPS711X_NAME,
+#else
+	normal_name:		SERIAL_CLPS711X_NAME,
+	callout_name:		CALLOUT_CLPS711X_NAME,
+#endif
+
+	normal_major:		SERIAL_CLPS711X_MAJOR,
+	normal_driver:		&normal,
+	callout_major:		CALLOUT_CLPS711X_MAJOR,
 	callout_driver:		&callout,
 
 	table:			clps711x_table,
@@ -670,7 +635,6 @@ static struct uart_register clps711x_reg = {
 	minor:			SERIAL_CLPS711X_MINOR,
 	nr:			UART_NR,
 
-	state:			clps711x_state,
 	port:			clps711x_ports,
 	cons:			CLPS711X_CONSOLE,
 };

@@ -462,6 +462,10 @@ fi
 source drivers/media/Config.in
 source drivers/video/Config.in
 
+if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
+   source net/bluetooth/Config.in
+fi
+
 mainmenu_option next_comment
 comment 'Kernel hacking'
 

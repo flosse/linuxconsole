@@ -151,6 +151,7 @@ extern int serial167_init(void);
 extern long serial167_console_init(void);
 extern void console_8xx_init(void);
 extern int rs_8xx_init(void);
+extern void mac_scc_console_init(void);
 extern void hwc_console_init(void);
 extern void hwc_tty_init(void);
 extern void con3215_init(void);
@@ -1875,6 +1876,8 @@ static void __do_SAK(void *arg)
  */
 void do_SAK(struct tty_struct *tty)
 {
+	if (!tty)
+		return;
 	PREPARE_TQUEUE(&tty->SAK_tq, __do_SAK, tty);
 	schedule_task(&tty->SAK_tq);
 }
@@ -2191,6 +2194,8 @@ void __init console_init(void)
 #ifdef CONFIG_SERIAL_CONSOLE
 #if (defined(CONFIG_8xx) || defined(CONFIG_8260))
 	console_8xx_init();
+#elif defined(CONFIG_MAC_SERIAL)
+        mac_scc_console_init();
 #elif defined(CONFIG_SERIAL)
 	serial_console_init();
 #endif /* CONFIG_8xx */
@@ -2314,9 +2319,6 @@ void __init tty_init(void)
 #endif
 #ifdef CONFIG_COMPUTONE
 	ip2_init();
-#endif
-#ifdef CONFIG_MAC_SERIAL
-	macserial_init();
 #endif
 #ifdef CONFIG_ROCKETPORT
 	rp_init();

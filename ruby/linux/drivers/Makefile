@@ -42,8 +42,9 @@ subdir-$(CONFIG_FC4)		+= fc4
 subdir-$(CONFIG_HAMRADIO)	+= net/hamradio
 subdir-$(CONFIG_I2C)		+= i2c
 subdir-$(CONFIG_ACPI)		+= acpi
-subdif-$(CONFIG_SSI)		+= ssi
+
 subdir-$(CONFIG_BLUEZ)		+= bluetooth
+subdif-$(CONFIG_SSI)            += ssi
 
 include $(TOPDIR)/Rules.make
 

@@ -120,6 +120,9 @@ if [ "$CONFIG_WATCHDOG" != "n" ]; then
       fi
    fi
    tristate '  ZF MachZ Watchdog' CONFIG_MACHZ_WDT
+   if [ "$CONFIG_ARCH_SA1100" = "y" ]; then
+      tristate '  SA1100 watchdog' CONFIG_SA1100_WATCHDOG
+   fi		
 fi
 endmenu
 
@@ -165,6 +168,7 @@ if [ "$CONFIG_AGP" != "n" ]; then
    bool '  AMD Irongate support' CONFIG_AGP_AMD
    bool '  Generic SiS support' CONFIG_AGP_SIS
    bool '  ALI chipset support' CONFIG_AGP_ALI
+   bool '  Serverworks LE/HE support' CONFIG_AGP_SWORKS	
 fi
 
 source drivers/char/drm/Config.in

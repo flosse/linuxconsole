@@ -67,7 +67,6 @@
 
 #define UART_NR		2
 
-#define SERIAL_AMBA_NAME	"ttyAM"
 #define SERIAL_AMBA_MAJOR	204
 #define SERIAL_AMBA_MINOR	16
 #define SERIAL_AMBA_NR		UART_NR
@@ -80,7 +79,6 @@
 static struct tty_driver normal, callout;
 static struct tty_struct *amba_table[UART_NR];
 static struct termios *amba_termios[UART_NR], *amba_termios_locked[UART_NR];
-static struct uart_state amba_state[UART_NR];
 #ifdef SUPPORT_SYSRQ
 static struct console amba_console;
 #endif
@@ -172,7 +170,6 @@ ambauart_rx_chars(struct uart_info *info)
 {
 	struct tty_struct *tty = info->tty;
 	unsigned int status, ch, rsr, flg, ignored = 0;
-	struct uart_icount *icount = &info->state->icount;
 	struct uart_port *port = info->port;
 
 	status = UART_GET_FR(port);
@@ -181,7 +178,7 @@ ambauart_rx_chars(struct uart_info *info)
 
 		if (tty->flip.count >= TTY_FLIPBUF_SIZE)
 			goto ignore_char;
-		icount->rx++;
+		port->icount.rx++;
 
 		flg = TTY_NORMAL;
 
@@ -192,16 +189,10 @@ ambauart_rx_chars(struct uart_info *info)
 		rsr = UART_GET_RSR(port);
 		if (rsr & AMBA_UARTRSR_ANY)
 			goto handle_error;
-#ifdef SUPPORT_SYSRQ
-		if (info->sysrq) {
-			if (ch && time_before(jiffies, info->sysrq)) {
-				handle_sysrq(ch, regs, NULL, NULL);
-				info->sysrq = 0;
-				goto ignore_char;
-			}
-			info->sysrq = 0;
-		}
-#endif
+
+		if (uart_handle_sysrq_char(info, ch, regs))
+			goto ignore_char;
+
 	error_return:
 		*tty->flip.flag_buf_ptr++ = flg;
 		*tty->flip.char_buf_ptr++ = ch;
@@ -216,10 +207,10 @@ out:
 handle_error:
 	if (rsr & AMBA_UARTRSR_BE) {
 		rsr &= ~(AMBA_UARTRSR_FE | AMBA_UARTRSR_PE);
-		icount->brk++;
+		port->icount.brk++;
 
 #ifdef SUPPORT_SYSRQ
-		if (info->state->line == amba_console.index) {
+		if (port->line == amba_console.index) {
 			if (!info->sysrq) {
 				info->sysrq = jiffies + HZ*5;
 				goto ignore_char;
@@ -227,11 +218,11 @@ handle_error:
 		}
 #endif
 	} else if (rsr & AMBA_UARTRSR_PE)
-		icount->parity++;
+		port->icount.parity++;
 	else if (rsr & AMBA_UARTRSR_FE)
-		icount->frame++;
+		port->icount.frame++;
 	if (rsr & AMBA_UARTRSR_OE)
-		icount->overrun++;
+		port->icount.overrun++;
 
 	if (rsr & port->ignore_status_mask) {
 		if (++ignored > 100)
@@ -271,10 +262,10 @@ static void ambauart_tx_chars(struct uart_info *info)
 	struct uart_port *port = info->port;
 	int count;
 
-	if (info->x_char) {
-		UART_PUT_CHAR(port, info->x_char);
-		info->state->icount.tx++;
-		info->x_char = 0;
+	if (port->x_char) {
+		UART_PUT_CHAR(port, port->x_char);
+		port->icount.tx++;
+		port->x_char = 0;
 		return;
 	}
 	if (info->xmit.head == info->xmit.tail
@@ -288,7 +279,7 @@ static void ambauart_tx_chars(struct uart_info *info)
 	do {
 		UART_PUT_CHAR(port, info->xmit.buf[info->xmit.tail]);
 		info->xmit.tail = (info->xmit.tail + 1) & (UART_XMIT_SIZE - 1);
-		info->state->icount.tx++;
+		port->icount.tx++;
 		if (info->xmit.head == info->xmit.tail)
 			break;
 	} while (--count > 0);
@@ -305,7 +296,7 @@ static void ambauart_tx_chars(struct uart_info *info)
 static void ambauart_modem_status(struct uart_info *info)
 {
 	unsigned int status, delta;
-	struct uart_icount *icount = &info->state->icount;
+	struct uart_icount *icount = &info->port->icount;
 
 	UART_PUT_ICR(info->port, 0);
 
@@ -317,47 +308,15 @@ static void ambauart_modem_status(struct uart_info *info)
 	if (!delta)
 		return;
 
-	if (delta & AMBA_UARTFR_DCD) {
-		icount->dcd++;
-#ifdef CONFIG_HARD_PPS
-		if ((info->flags & ASYNC_HARDPPS_CD) &&
-		    (status & AMBA_UARTFR_DCD)
-			hardpps();
-#endif
-		if (info->flags & ASYNC_CHECK_CD) {
-			if (status & AMBA_UARTFR_DCD)
-				wake_up_interruptible(&info->open_wait);
-			else if (!((info->flags & ASYNC_CALLOUT_ACTIVE) &&
-				   (info->flags & ASYNC_CALLOUT_NOHUP))) {
-				if (info->tty)
-					tty_hangup(info->tty);
-			}
-		}
-	}
+	if (delta & AMBA_UARTFR_DCD)
+		uart_handle_dcd_change(info, status & AMBA_UARTFR_DCD);
 
 	if (delta & AMBA_UARTFR_DSR)
 		icount->dsr++;
 
-	if (delta & AMBA_UARTFR_CTS) {
-		icount->cts++;
+	if (delta & AMBA_UARTFR_CTS)
+		uart_handle_cts_change(info, status & AMBA_UARTFR_CTS);
 
-		if (info->flags & ASYNC_CTS_FLOW) {
-			status &= AMBA_UARTFR_CTS;
-
-			if (info->tty->hw_stopped) {
-				if (status) {
-					info->tty->hw_stopped = 0;
-					info->ops->start_tx(info->port, 1, 0);
-					uart_event(info, EVT_WRITE_WAKEUP);
-				}
-			} else {
-				if (!status) {
-					info->tty->hw_stopped = 1;
-					info->ops->stop_tx(info->port, 0);
-				}
-			}
-		}
-	}
 	wake_up_interruptible(&info->delta_msr_wait);
 
 }
@@ -740,17 +699,21 @@ void __init ambauart_console_init(void)
 static struct uart_register amba_reg = {
 	owner:			THIS_MODULE,
 	normal_major:		SERIAL_AMBA_MAJOR,
-	normal_name:		SERIAL_AMBA_NAME,
+#ifdef CONFIG_DEVFS_FS
+	normal_name:		"ttyAM%d",
+	callout_name:		"cuaam%d",
+#else
+	normal_name:		"ttyAM",
+	callout_name:		"cuaam",
+#endif
 	normal_driver:		&normal,
 	callout_major:		CALLOUT_AMBA_MAJOR,
-	callout_name:		CALLOUT_AMBA_NAME,
 	callout_driver:		&callout,
 	table:			amba_table,
 	termios:		amba_termios,
 	termios_locked:		amba_termios_locked,
 	minor:			SERIAL_AMBA_MINOR,
 	nr:			UART_NR,
-	state:			amba_state,
 	port:			amba_ports,
 	cons:			AMBA_CONSOLE,
 };

@@ -50,7 +50,6 @@
 #include <asm/bitops.h>
 #include <asm/hardware.h>
 #include <asm/mach/serial_sa1100.h>
-#include <asm/arch/serial_reg.h>
 
 #if defined(CONFIG_SERIAL_SA1100_CONSOLE) && defined(CONFIG_MAGIC_SYSRQ)
 #define SUPPORT_SYSRQ
@@ -94,7 +93,6 @@
 static struct tty_driver normal, callout;
 static struct tty_struct *sa1100_table[NR_PORTS];
 static struct termios *sa1100_termios[NR_PORTS], *sa1100_termios_locked[NR_PORTS];
-static struct uart_state sa1100_state[NR_PORTS];
 #ifdef SUPPORT_SYSRQ
 static struct console sa1100_console;
 #endif
@@ -146,7 +144,6 @@ sa1100_rx_chars(struct uart_info *info)
 {
 	struct tty_struct *tty = info->tty;
 	unsigned int status, ch, flg, ignored = 0;
-	struct uart_icount *icount = &info->state->icount;
 	struct uart_port *port = info->port;
 
 	status = UTSR1_TO_SM(UART_GET_UTSR1(port)) | UTSR0_TO_SM(UART_GET_UTSR0(port));
@@ -155,7 +152,7 @@ sa1100_rx_chars(struct uart_info *info)
 
 		if (tty->flip.count >= TTY_FLIPBUF_SIZE)
 			goto ignore_char;
-		icount->rx++;
+		port->icount.rx++;
 
 		flg = TTY_NORMAL;
 
@@ -165,16 +162,10 @@ sa1100_rx_chars(struct uart_info *info)
 		 */
 		if (status & UTSR1_TO_SM(UTSR1_PRE | UTSR1_FRE | UTSR1_ROR))
 			goto handle_error;
-#ifdef SUPPORT_SYSRQ
-		if (info->sysrq) {
-			if (ch && time_before(jiffies, info->sysrq)) {
-				handle_sysrq(ch, regs, NULL, NULL);
-				info->sysrq = 0;
-				goto ignore_char;
-			}
-			info->sysrq = 0;
-		}
-#endif
+
+		if (uart_handle_sysrq_char(info, ch, regs))
+			goto ignore_char;
+
 	error_return:
 		*tty->flip.flag_buf_ptr++ = flg;
 		*tty->flip.char_buf_ptr++ = ch;
@@ -188,11 +179,11 @@ out:
 
 handle_error:
 	if (status & UTSR1_TO_SM(UTSR1_PRE))
-		icount->parity++;
+		port->icount.parity++;
 	else if (status & UTSR1_TO_SM(UTSR1_FRE))
-		icount->frame++;
+		port->icount.frame++;
 	if (status & UTSR1_TO_SM(UTSR1_ROR))
-		icount->overrun++;
+		port->icount.overrun++;
 
 	if (status & port->ignore_status_mask) {
 		if (++ignored > 100)
@@ -230,10 +221,10 @@ static void sa1100_tx_chars(struct uart_info *info)
 {
 	struct uart_port *port = info->port;
 
-	if (info->x_char) {
-		UART_PUT_CHAR(port, info->x_char);
-		info->state->icount.tx++;
-		info->x_char = 0;
+	if (port->x_char) {
+		UART_PUT_CHAR(port, port->x_char);
+		port->icount.tx++;
+		port->x_char = 0;
 		return;
 	}
 	if (info->xmit.head == info->xmit.tail
@@ -250,7 +241,7 @@ static void sa1100_tx_chars(struct uart_info *info)
 	while (UART_GET_UTSR1(port) & UTSR1_TNF) {
 		UART_PUT_CHAR(port, info->xmit.buf[info->xmit.tail]);
 		info->xmit.tail = (info->xmit.tail + 1) & (UART_XMIT_SIZE - 1);
-		info->state->icount.tx++;
+		port->icount.tx++;
 		if (info->xmit.head == info->xmit.tail)
 			break;
 	}
@@ -287,11 +278,11 @@ static void sa1100_int(int irq, void *dev_id, struct pt_regs *regs)
 			UART_PUT_UTSR0(port, status & (UTSR0_RBB | UTSR0_REB));
 
 		if (status & UTSR0_RBB)
-			info->state->icount.brk++;
+			port->icount.brk++;
 
 		if (status & UTSR0_REB) {
 #ifdef SUPPORT_SYSRQ
-			if (info->state->line == sa1100_console.index &&
+			if (port->line == sa1100_console.index &&
 			    !info->sysrq) {
 				info->sysrq = jiffies + HZ*5;
 			}
@@ -670,7 +661,6 @@ static struct console sa1100_console = {
 void __init sa1100_rs_console_init(void)
 {
 	sa1100_init_ports();
-	sa1100_console.driver = &normal;	
 	register_console(&sa1100_console);
 }
 
@@ -682,17 +672,21 @@ void __init sa1100_rs_console_init(void)
 static struct uart_register sa1100_reg = {
 	owner:			THIS_MODULE,
 	normal_major:		SERIAL_SA1100_MAJOR,
+#ifdef CONFIG_DEVFS_FS
 	normal_name:		"ttySA%d",
+	callout_name:		"cusa%d",
+#else
+	normal_name:		"ttySA",
+	callout_name:		"cusa",
+#endif
 	normal_driver:		&normal,
 	callout_major:		CALLOUT_SA1100_MAJOR,
-	callout_name:		"cusa%d",
 	callout_driver:		&callout,
 	table:			sa1100_table,
 	termios:		sa1100_termios,
 	termios_locked:		sa1100_termios_locked,
 	minor:			MINOR_START,
 	nr:			NR_PORTS,
-	state:			sa1100_state,
 	port:			sa1100_ports,
 	cons:			SA1100_CONSOLE,
 };
