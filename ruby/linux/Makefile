@@ -1,12 +1,12 @@
 VERSION = 2
 PATCHLEVEL = 5
-SUBLEVEL = 27
+SUBLEVEL = 44
 EXTRAVERSION = -ruby
 
 # *DOCUMENTATION*
-# Too see a list of typical targets execute "make help"
+# To see a list of typical targets execute "make help"
 # More info can be located in ./Documentation/kbuild
-# Comments in this file is targeted only to the developer, do not
+# Comments in this file are targeted only to the developer, do not
 # expect to learn how to build the kernel reading this file.
 
 # We are using a recursive build, so we need to do a little thinking
@@ -27,16 +27,23 @@ EXTRAVERSION = -ruby
 
 KERNELRELEASE=$(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
 
-ARCH := $(shell uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ -e s/arm.*/arm/ -e s/sa110/arm/)
+# SUBARCH tells the usermode build what the underlying arch is.  That is set
+# first, and if a usermode build is happening, the "ARCH=um" on the command
+# line overrides the setting of ARCH below.  If a native build is happening,
+# then ARCH is assigned, getting whatever value it gets normally, and 
+# SUBARCH is subsequently ignored.
+
+SUBARCH := $(shell uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ -e s/arm.*/arm/ -e s/sa110/arm/)
+ARCH := $(SUBARCH)
+
 KERNELPATH=kernel-$(shell echo $(KERNELRELEASE) | sed -e "s/-//g")
+
+UTS_MACHINE := $(ARCH)
 
 CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 	  else if [ -x /bin/bash ]; then echo /bin/bash; \
 	  else echo sh; fi ; fi)
 TOPDIR	:= $(CURDIR)
-
-HPATH   	= $(TOPDIR)/include
-FINDHPATH	= $(HPATH)/asm $(HPATH)/linux $(HPATH)/scsi $(HPATH)/net
 
 HOSTCC  	= gcc
 HOSTCFLAGS	= -Wall -Wstrict-prototypes -O2 -fomit-frame-pointer
@@ -46,13 +53,6 @@ CROSS_COMPILE 	=
 # 	That's our default target when none is given on the command line
 
 all:	vmlinux
-
-#	Print entire command lines instead of short version
-#	For now, leave the default
-
-ifndef KBUILD_VERBOSE
-  KBUILD_VERBOSE = 1
-endif
 
 # 	Decide whether to build built-in, modular, or both.
 #	Normally, just do built-in.
@@ -83,7 +83,7 @@ ifneq ($(filter all,$(MAKECMDGOALS)),)
   KBUILD_MODULES := 1
 endif
 
-export KBUILD_MODULES KBUILD_BUILTIN
+export KBUILD_MODULES KBUILD_BUILTIN KBUILD_VERBOSE
 
 # Beautify output
 # ---------------------------------------------------------------------------
@@ -100,12 +100,28 @@ export KBUILD_MODULES KBUILD_BUILTIN
 # If it is set to "silent_", nothing wil be printed at all, since
 # the variable $(silent_cmd_cc_o_c) doesn't exist.
 
-#	If the user wants quiet mode, echo short versions of the commands 
-#	only and suppress the 'Entering/Leaving directory' messages
+#	For now, leave verbose as default
 
-ifneq ($(KBUILD_VERBOSE),1)
+ifndef KBUILD_VERBOSE
+  KBUILD_VERBOSE = 1
+endif
+
+MAKEFLAGS += --no-print-directory
+
+# For maximum performance (+ possibly random breakage, uncomment
+# the following)
+
+#MAKEFLAGS += -rR
+
+#	If the user wants quiet mode, echo short versions of the commands 
+#	only
+
+ifeq ($(KBUILD_VERBOSE),1)
+  quiet =
+  Q =
+else
   quiet=quiet_
-  MAKEFLAGS += --no-print-directory
+  Q = @
 endif
 
 #	If the user is running make -s (silent mode), suppress echoing of
@@ -115,11 +131,18 @@ ifneq ($(findstring s,$(MAKEFLAGS)),)
   quiet=silent_
 endif
 
-export quiet
+export quiet Q KBUILD_VERBOSE
 
-#
-# Include the make variables (CC, etc...)
-#
+#	Paths to obj / src tree
+
+src	:= .
+obj	:= .
+srctree := .
+objtree := .
+
+export srctree objtree
+
+# 	Make variables (CC, etc...)
 
 AS		= $(CROSS_COMPILE)as
 LD		= $(CROSS_COMPILE)ld
@@ -130,35 +153,33 @@ NM		= $(CROSS_COMPILE)nm
 STRIP		= $(CROSS_COMPILE)strip
 OBJCOPY		= $(CROSS_COMPILE)objcopy
 OBJDUMP		= $(CROSS_COMPILE)objdump
-MAKEFILES	= $(TOPDIR)/.config
 GENKSYMS	= /sbin/genksyms
 DEPMOD		= /sbin/depmod
+KALLSYMS	= /sbin/kallsyms
 PERL		= perl
 MODFLAGS	= -DMODULE
 CFLAGS_MODULE   = $(MODFLAGS)
 AFLAGS_MODULE   = $(MODFLAGS)
 CFLAGS_KERNEL	=
 AFLAGS_KERNEL	=
-EXPORT_FLAGS    =
 NOSTDINC_FLAGS  = -nostdinc -iwithprefix include
 
-export	VERSION PATCHLEVEL SUBLEVEL EXTRAVERSION KERNELRELEASE ARCH \
-	CONFIG_SHELL TOPDIR HPATH HOSTCC HOSTCFLAGS CROSS_COMPILE AS LD CC \
-	CPP AR NM STRIP OBJCOPY OBJDUMP MAKE MAKEFILES GENKSYMS PERL
+CPPFLAGS	:= -D__KERNEL__ -Iinclude
+CFLAGS 		:= $(CPPFLAGS) -Wall -Wstrict-prototypes -Wno-trigraphs -O2 \
+	  	   -fomit-frame-pointer -fno-strict-aliasing -fno-common
+AFLAGS		:= -D__ASSEMBLY__ $(CPPFLAGS)
 
-export CPPFLAGS EXPORT_FLAGS NOSTDINC_FLAGS OBJCOPYFLAGS
+export	VERSION PATCHLEVEL SUBLEVEL EXTRAVERSION KERNELRELEASE ARCH \
+	CONFIG_SHELL TOPDIR HOSTCC HOSTCFLAGS CROSS_COMPILE AS LD CC \
+	CPP AR NM STRIP OBJCOPY OBJDUMP MAKE GENKSYMS PERL UTS_MACHINE
+
+export CPPFLAGS NOSTDINC_FLAGS OBJCOPYFLAGS LDFLAGS
 export CFLAGS CFLAGS_KERNEL CFLAGS_MODULE 
 export AFLAGS AFLAGS_KERNEL AFLAGS_MODULE
 
-src	:= .
-obj	:= .
-srctree := $(TOPDIR)
-objtree := $(TOPDIR)
-
-export srctree objtree
-
-SUBDIRS		:= init kernel mm fs ipc lib drivers sound net security
-
+# The temporary file to save gcc -MD generated dependencies must not
+# contain a comma
+depfile = $(subst $(comma),_,$(@D)/.$(@F).d)
 
 noconfig_targets := xconfig menuconfig config oldconfig randconfig \
 		    defconfig allyesconfig allnoconfig allmodconfig \
@@ -166,7 +187,55 @@ noconfig_targets := xconfig menuconfig config oldconfig randconfig \
 		    help tags TAGS sgmldocs psdocs pdfdocs htmldocs \
 		    checkconfig checkhelp checkincludes
 
+RCS_FIND_IGNORE := \( -name SCCS -o -name BitKeeper -o -name .svn -o -name CVS \) -prune -o
+RCS_TAR_IGNORE := --exclude SCCS --exclude BitKeeper --exclude .svn --exclude CVS
+
+# Helpers built in scripts/
+# ---------------------------------------------------------------------------
+
+scripts/docproc scripts/fixdep scripts/split-include : scripts ;
+
+.PHONY: scripts
+scripts:
+	+@$(Q)$(MAKE) -f scripts/Makefile.build obj=scripts
+
+# Objects we will link into vmlinux / subdirs we need to visit
+# ---------------------------------------------------------------------------
+
+init-y		:= init/
+drivers-y	:= drivers/ sound/
+net-y		:= net/
+libs-y		:= lib/
+core-y		:=
+SUBDIRS		:=
+
 ifeq ($(filter $(noconfig_targets),$(MAKECMDGOALS)),)
+
+include-config := 1
+
+-include .config
+
+endif
+
+include arch/$(ARCH)/Makefile
+
+core-y		+= kernel/ mm/ fs/ ipc/ security/
+
+SUBDIRS		+= $(patsubst %/,%,$(filter %/, $(init-y) $(init-m) \
+		     $(core-y) $(core-m) $(drivers-y) $(drivers-m) \
+		     $(net-y) $(net-m) $(libs-y) $(libs-m)))
+
+ALL_SUBDIRS     := $(SUBDIRS) $(patsubst %/,%,$(filter %/, $(init-n) $(init-) \
+		     $(core-n) $(core-) $(drivers-n) $(drivers-) \
+		     $(net-n) $(net-) $(libs-n) $(libs-)))
+
+init-y		:= $(patsubst %/, %/built-in.o, $(init-y))
+core-y		:= $(patsubst %/, %/built-in.o, $(core-y))
+drivers-y	:= $(patsubst %/, %/built-in.o, $(drivers-y))
+net-y		:= $(patsubst %/, %/built-in.o, $(net-y))
+libs-y		:= $(patsubst %/, %/lib.a, $(libs-y))
+
+ifdef include-config
 
 # Here goes the main Makefile
 # ===========================================================================
@@ -178,17 +247,25 @@ ifeq ($(filter $(noconfig_targets),$(MAKECMDGOALS)),)
 
 #	In this section, we need .config
 
--include .config
-
 #	If .config doesn't exist - tough luck
 
-.config:
+.config: arch/$(ARCH)/config.in # FIXME $(shell find . -name Config.in)
 	@echo '***'
-	@echo '*** You have not yet configured your kernel!'
-	@echo '*** Please run some configurator (do "make xconfig" or'
-	@echo '*** "make menuconfig" or "make oldconfig" or "make config").'
+	@if [ -f $@ ]; then \
+	  echo '*** The tree was updated, so your .config may be'; \
+	  echo '*** out of date!'; \
+	else \
+	  echo '*** You have not yet configured your kernel!'; \
+	fi
+	@echo '***'
+	@echo '*** Please run some configurator (e.g. "make oldconfig" or'
+	@echo '*** "make menuconfig" or "make xconfig").'
 	@echo '***'
 	@exit 1
+
+ifdef CONFIG_MODULES
+export EXPORT_FLAGS := -DEXPORT_SYMTAB
+endif
 
 #
 # INSTALL_PATH specifies where to place the updated kernel and system map
@@ -206,39 +283,6 @@ ifeq ($(filter $(noconfig_targets),$(MAKECMDGOALS)),)
 MODLIB	:= $(INSTALL_MOD_PATH)/lib/modules/$(KERNELRELEASE)
 export MODLIB
 
-#
-# standard CFLAGS
-#
-
-CPPFLAGS := -D__KERNEL__ -I$(HPATH)
-
-CFLAGS := $(CPPFLAGS) -Wall -Wstrict-prototypes -Wno-trigraphs -O2 \
-	  -fomit-frame-pointer -fno-strict-aliasing -fno-common
-AFLAGS := -D__ASSEMBLY__ $(CPPFLAGS)
-
-ifdef CONFIG_MODULES
-EXPORT_FLAGS := -DEXPORT_SYMTAB
-endif
-
-# Link components for vmlinux
-# ---------------------------------------------------------------------------
-
-INIT		:= init/init.o
-CORE_FILES	:= kernel/kernel.o mm/mm.o fs/fs.o ipc/ipc.o security/built-in.o
-LIBS		:= lib/lib.a
-DRIVERS		:= drivers/built-in.o sound/sound.o
-NETWORKS	:= net/network.o
-
-include arch/$(ARCH)/Makefile
-
-export	NETWORKS DRIVERS LIBS HEAD LDFLAGS MAKEBOOT ASFLAGS
-
-# boot target
-# ---------------------------------------------------------------------------
-
-boot: vmlinux
-	@$(MAKE) -C arch/$(ARCH)/boot
-
 # Build vmlinux
 # ---------------------------------------------------------------------------
 
@@ -249,34 +293,78 @@ boot: vmlinux
 #       we cannot yet know if we will need to relink vmlinux.
 #	So we descend into init/ inside the rule for vmlinux again.
 
-vmlinux-objs := $(HEAD) $(INIT) $(CORE_FILES) $(LIBS) $(DRIVERS) $(NETWORKS)
+vmlinux-objs := $(HEAD) $(init-y) $(core-y) $(libs-y) $(drivers-y) $(net-y)
 
-quiet_cmd_link_vmlinux = LD     $@
-cmd_link_vmlinux = $(LD) $(LDFLAGS) $(LDFLAGS_$(@F)) $(HEAD) $(INIT) \
-		--start-group \
-		$(CORE_FILES) \
-		$(LIBS) \
-		$(DRIVERS) \
-		$(NETWORKS) \
-		--end-group \
-		-o vmlinux
+quiet_cmd_vmlinux__ = LD      $@
+define cmd_vmlinux__
+	$(LD) $(LDFLAGS) $(LDFLAGS_vmlinux) $(HEAD) $(init-y) \
+	--start-group \
+	$(core-y) \
+	$(libs-y) \
+	$(drivers-y) \
+	$(net-y) \
+	--end-group \
+	$(filter .tmp_kallsyms%,$^) \
+	-o $@
+endef
 
 #	set -e makes the rule exit immediately on error
 
-define rule_link_vmlinux
+define rule_vmlinux__
 	set -e
-	echo '  Generating build number'
-	. scripts/mkversion > .tmpversion
-	mv -f .tmpversion .version
-	+$(MAKE) -C init
-	$(call cmd,link_vmlinux)
-	$(cmd_link_vmlinux)
-	echo 'cmd_$@ := $(cmd_link_vmlinux)' > $(@D)/.$(@F).cmd
-	$(NM) vmlinux | grep -v '\(compiled\)\|\(\.o$$\)\|\( [aUw] \)\|\(\.\.ng$$\)\|\(LASH[RL]DI\)' | sort > System.map
+	$(if $(filter .tmp_kallsyms%,$^),,
+	  echo '  Generating build number'
+	  . scripts/mkversion > .tmp_version
+	  mv -f .tmp_version .version
+	  $(Q)$(MAKE) -f scripts/Makefile.build obj=init
+	)
+	$(call cmd,vmlinux__)
+	echo 'cmd_$@ := $(cmd_vmlinux__)' > $(@D)/.$(@F).cmd
 endef
 
-vmlinux: $(vmlinux-objs) FORCE
-	$(call if_changed_rule,link_vmlinux)
+define rule_vmlinux
+	$(rule_vmlinux__)
+	$(NM) $@ | grep -v '\(compiled\)\|\(\.o$$\)\|\( [aUw] \)\|\(\.\.ng$$\)\|\(LASH[RL]DI\)' | sort > System.map
+endef
+
+LDFLAGS_vmlinux += -T arch/$(ARCH)/vmlinux.lds.s
+
+#	Generate section listing all symbols and add it into vmlinux
+#	It's a three stage process:
+#	o .tmp_vmlinux1 has all symbols and sections, but __kallsyms is
+#	  empty
+#	  Running kallsyms on that gives as .tmp_kallsyms1.o with
+#	  the right size
+#	o .tmp_vmlinux2 now has a __kallsyms section of the right size,
+#	  but due to the added section, some addresses have shifted
+#	  From here, we generate a correct .tmp_kallsyms2.o
+#	o The correct .tmp_kallsyms2.o is linked into the final vmlinux.
+
+ifdef CONFIG_KALLSYMS
+
+kallsyms.o := .tmp_kallsyms2.o
+
+quiet_cmd_kallsyms = KSYM    $@
+cmd_kallsyms = $(KALLSYMS) $< > $@
+
+.tmp_kallsyms1.o: .tmp_vmlinux1
+	$(call cmd,kallsyms)
+
+.tmp_kallsyms2.o: .tmp_vmlinux2
+	$(call cmd,kallsyms)
+
+.tmp_vmlinux1: $(vmlinux-objs) arch/$(ARCH)/vmlinux.lds.s FORCE
+	$(call if_changed_rule,vmlinux__)
+
+.tmp_vmlinux2: $(vmlinux-objs) .tmp_kallsyms1.o arch/$(ARCH)/vmlinux.lds.s FORCE
+	$(call if_changed_rule,vmlinux__)
+
+endif
+
+#	Finally the vmlinux rule
+
+vmlinux: $(vmlinux-objs) $(kallsyms.o) arch/$(ARCH)/vmlinux.lds.s FORCE
+	$(call if_changed_rule,vmlinux)
 
 #	The actual objects are generated when descending, 
 #	make sure no implicit rule kicks in
@@ -287,7 +375,7 @@ $(sort $(vmlinux-objs)): $(SUBDIRS) ;
 
 .PHONY: $(SUBDIRS)
 $(SUBDIRS): .hdepend prepare
-	@$(MAKE) -C $@
+	$(Q)$(MAKE) -f scripts/Makefile.build obj=$@
 
 #	Things we need done before we descend to build or make
 #	module versions are listed in "prepare"
@@ -296,21 +384,31 @@ $(SUBDIRS): .hdepend prepare
 prepare: include/linux/version.h include/asm include/config/MARKER
 	@echo '  Starting the build. KBUILD_BUILTIN=$(KBUILD_BUILTIN) KBUILD_MODULES=$(KBUILD_MODULES)'
 
+#	This can be used by arch/$ARCH/Makefile to preprocess
+#	their vmlinux.lds.S file
+
+AFLAGS_vmlinux.lds.o += -P -C -U$(ARCH)
+
+arch/$(ARCH)/vmlinux.lds.s: %.s: %.S scripts FORCE
+	$(call if_changed_dep,as_s_S)
+
+targets += arch/$(ARCH)/vmlinux.lds.s
+
 # Single targets
 # ---------------------------------------------------------------------------
 
-%.s: %.c FORCE
-	@$(MAKE) -C $(@D) $(@F)
-%.i: %.c FORCE
-	@$(MAKE) -C $(@D) $(@F)
-%.o: %.c FORCE
-	@$(MAKE) -C $(@D) $(@F)
-%.lst: %.c FORCE
-	@$(MAKE) -C $(@D) $(@F)
-%.s: %.S FORCE
-	@$(MAKE) -C $(@D) $(@F)
-%.o: %.S FORCE
-	@$(MAKE) -C $(@D) $(@F)
+%.s: %.c scripts FORCE
+	$(Q)$(MAKE) -f scripts/Makefile.build obj=$(@D) $@
+%.i: %.c scripts FORCE
+	$(Q)$(MAKE) -f scripts/Makefile.build obj=$(@D) $@
+%.o: %.c scripts FORCE
+	$(Q)$(MAKE) -f scripts/Makefile.build obj=$(@D) $@
+%.lst: %.c scripts FORCE
+	$(Q)$(MAKE) -f scripts/Makefile.build obj=$(@D) $@
+%.s: %.S scripts FORCE
+	$(Q)$(MAKE) -f scripts/Makefile.build obj=$(@D) $@
+%.o: %.S scripts FORCE
+	$(Q)$(MAKE) -f scripts/Makefile.build obj=$(@D) $@
 
 # 	FIXME: The asm symlink changes when $(ARCH) changes. That's
 #	hard to detect, but I suppose "make mrproper" is a good idea
@@ -357,15 +455,6 @@ include/linux/version.h: Makefile
 	) > $@.tmp
 	@$(update-if-changed)
 
-# Helpers built in scripts/
-# ---------------------------------------------------------------------------
-
-scripts/fixdep scripts/split-include : scripts ;
-
-.PHONY: scripts
-scripts:
-	@$(MAKE) -C scripts
-
 # Generate module versions
 # ---------------------------------------------------------------------------
 
@@ -377,33 +466,42 @@ scripts:
 
 depend dep: .hdepend
 
-#	.hdepend is our (misnomed) marker for whether we've run
+#	.hdepend is our (misnomed) marker for whether we've
 #	generated module versions
 
-.hdepend: $(if $(filter dep depend,$(MAKECMDGOALS)),FORCE)
+make-versions := $(strip $(if $(filter dep depend,$(MAKECMDGOALS)),1) \
+			 $(if $(wildcard .hdepend),,1))
+
+.hdepend: prepare FORCE
+ifneq ($(make-versions),)
 	@$(MAKE) include/linux/modversions.h
 	@touch $@
+endif
 
 ifdef CONFIG_MODVERSIONS
 
 # 	Update modversions.h, but only if it would change.
 
-include/linux/modversions.h: scripts/fixdep prepare FORCE
+.PHONY: __rm_tmp_export-objs
+__rm_tmp_export-objs: 
 	@rm -rf .tmp_export-objs
-	@$(MAKE) $(patsubst %,_sfdep_%,$(SUBDIRS))
+
+include/linux/modversions.h: $(patsubst %,_modver_%,$(SUBDIRS))
 	@echo -n '  Generating $@'
 	@( echo "#ifndef _LINUX_MODVERSIONS_H";\
 	   echo "#define _LINUX_MODVERSIONS_H"; \
 	   echo "#include <linux/modsetver.h>"; \
-	   for f in `cd .tmp_export-objs; find modules -name SCCS -prune -o -name BitKeeper -prune -o -name \*.ver -print | sort`; do \
+	   cd .tmp_export-objs >/dev/null; \
+	   for f in `find modules -name \*.ver -print | sort`; do \
 	     echo "#include <linux/$${f}>"; \
 	   done; \
 	   echo "#endif"; \
 	) > $@.tmp; \
 	$(update-if-changed)
 
-$(patsubst %,_sfdep_%,$(SUBDIRS)): FORCE
-	@$(MAKE) -C $(patsubst _sfdep_%, %, $@) fastdep
+.PHONY: $(patsubst %, _modver_%, $(SUBDIRS))
+$(patsubst %, _modver_%, $(SUBDIRS)): __rm_tmp_export-objs
+	$(Q)$(MAKE) -f scripts/Makefile.modver obj=$(patsubst _modver_%,%,$@)
 
 else # !CONFIG_MODVERSIONS
 
@@ -421,7 +519,7 @@ ifdef CONFIG_MODULES
 #	Build modules
 
 ifdef CONFIG_MODVERSIONS
-MODFLAGS += -include $(HPATH)/linux/modversions.h
+MODFLAGS += -include include/linux/modversions.h
 endif
 
 .PHONY: modules
@@ -455,8 +553,7 @@ _modinst_post:
 
 .PHONY: $(patsubst %, _modinst_%, $(SUBDIRS))
 $(patsubst %, _modinst_%, $(SUBDIRS)) :
-	@$(MAKE) -C $(patsubst _modinst_%, %, $@) modules_install
-
+	$(Q)$(MAKE) -f scripts/Makefile.modinst obj=$(patsubst _modinst_%,%,$@)
 else # CONFIG_MODULES
 
 # Modules not configured
@@ -506,20 +603,20 @@ spec:
 #	   will become invalid
 
 rpm:	clean spec
-	find . -name SCCS -prune -o -name BitKeeper -prune -o \
+	find . $(RCS_FIND_IGNORE) \
 		\( -size 0 -o -name .depend -o -name .hdepend \) \
 		-type f -print | xargs rm -f
 	set -e; \
 	cd $(TOPDIR)/.. ; \
 	ln -sf $(TOPDIR) $(KERNELPATH) ; \
-	tar -cvz --exclude CVS -f $(KERNELPATH).tar.gz $(KERNELPATH)/. ; \
+	tar -cvz $(RCS_TAR_IGNORE) -f $(KERNELPATH).tar.gz $(KERNELPATH)/. ; \
 	rm $(KERNELPATH) ; \
 	cd $(TOPDIR) ; \
 	. scripts/mkversion > .version ; \
 	rpm -ta $(TOPDIR)/../$(KERNELPATH).tar.gz ; \
 	rm $(TOPDIR)/../$(KERNELPATH).tar.gz
 
-else # ifeq ($(filter $(noconfig_targets),$(MAKECMDGOALS)),)
+else # ifdef include-config
 
 ifeq ($(filter-out $(noconfig_targets),$(MAKECMDGOALS)),)
 
@@ -553,145 +650,125 @@ ifeq ($(filter-out $(noconfig_targets),$(MAKECMDGOALS)),)
 	make_with_config
 
 xconfig:
-	@$(MAKE) -C scripts kconfig.tk
+	$(Q)$(MAKE) -f scripts/Makefile.build obj=scripts scripts/kconfig.tk
 	wish -f scripts/kconfig.tk
 
 menuconfig:
-	@$(MAKE) -C scripts lxdialog
-	$(CONFIG_SHELL) scripts/Menuconfig arch/$(ARCH)/config.in
+	$(Q)$(MAKE) -f scripts/Makefile.build obj=scripts lxdialog
+	$(CONFIG_SHELL) $(src)/scripts/Menuconfig arch/$(ARCH)/config.in
 
 config:
-	$(CONFIG_SHELL) scripts/Configure arch/$(ARCH)/config.in
+	$(CONFIG_SHELL) $(src)/scripts/Configure arch/$(ARCH)/config.in
 
 oldconfig:
-	$(CONFIG_SHELL) scripts/Configure -d arch/$(ARCH)/config.in
+	$(CONFIG_SHELL) $(src)/scripts/Configure -d arch/$(ARCH)/config.in
 
 randconfig:
-	$(CONFIG_SHELL) scripts/Configure -r arch/$(ARCH)/config.in
+	$(CONFIG_SHELL) $(src)/scripts/Configure -r arch/$(ARCH)/config.in
 
 allyesconfig:
-	$(CONFIG_SHELL) scripts/Configure -y arch/$(ARCH)/config.in
+	$(CONFIG_SHELL) $(src)/scripts/Configure -y arch/$(ARCH)/config.in
 
 allnoconfig:
-	$(CONFIG_SHELL) scripts/Configure -n arch/$(ARCH)/config.in
+	$(CONFIG_SHELL) $(src)/scripts/Configure -n arch/$(ARCH)/config.in
 
 allmodconfig:
-	$(CONFIG_SHELL) scripts/Configure -m arch/$(ARCH)/config.in
+	$(CONFIG_SHELL) $(src)/scripts/Configure -m arch/$(ARCH)/config.in
 
 defconfig:
-	yes '' | $(CONFIG_SHELL) scripts/Configure -d arch/$(ARCH)/config.in
+	yes '' | $(CONFIG_SHELL) $(src)/scripts/Configure -d arch/$(ARCH)/config.in
 
-# Cleaning up
-# ---------------------------------------------------------------------------
+###
+# Cleaning is done on three levels.
+# make clean     Delete all automatically generated files, including
+#                tools and firmware.
+# make mrproper  Delete the current configuration, and related files
+#                Any core files spread around is deleted as well
+# make distclean Remove editor backup files, patch leftover files and the like
 
-#	files removed with 'make clean'
-CLEAN_FILES += \
-	include/linux/compile.h \
-	vmlinux System.map \
-	drivers/char/consolemap_deftbl.c drivers/video/promcon_tbl.c \
-	drivers/char/conmakehash \
-	drivers/char/drm/*-mod.c \
-	drivers/char/defkeymap.c drivers/char/qtronixmap.c \
-	drivers/pci/devlist.h drivers/pci/classlist.h drivers/pci/gen-devlist \
-	drivers/zorro/devlist.h drivers/zorro/gen-devlist \
-	sound/oss/bin2hex sound/oss/hex2hex \
-	drivers/atm/fore200e_mkfirm drivers/atm/{pca,sba}*{.bin,.bin1,.bin2} \
-	drivers/scsi/aic7xxx/aic7xxx_seq.h \
-	drivers/scsi/aic7xxx/aic7xxx_reg.h \
-	drivers/scsi/aic7xxx/aicasm/aicasm_gram.c \
-	drivers/scsi/aic7xxx/aicasm/aicasm_scan.c \
-	drivers/scsi/aic7xxx/aicasm/y.tab.h \
-	drivers/scsi/aic7xxx/aicasm/aicasm \
-	drivers/scsi/53c700_d.h drivers/scsi/sim710_d.h \
-	drivers/scsi/53c7xx_d.h drivers/scsi/53c7xx_u.h \
-	drivers/scsi/53c8xx_d.h drivers/scsi/53c8xx_u.h \
-	net/802/cl2llc.c net/802/transit/pdutr.h net/802/transit/timertr.h \
-	net/802/pseudo/pseudocode.h \
-	net/khttpd/make_times_h net/khttpd/times.h \
-	submenu*
+# Files removed with 'make clean'
+CLEAN_FILES += vmlinux System.map MC*
 
-# 	files removed with 'make mrproper'
+# Files removed with 'make mrproper'
 MRPROPER_FILES += \
 	include/linux/autoconf.h include/linux/version.h \
-	drivers/net/hamradio/soundmodem/sm_tbl_{afsk1200,afsk2666,fsk9600}.h \
-	drivers/net/hamradio/soundmodem/sm_tbl_{hapn4800,psk4800}.h \
-	drivers/net/hamradio/soundmodem/sm_tbl_{afsk2400_7,afsk2400_8}.h \
-	drivers/net/hamradio/soundmodem/gentbl \
-	sound/oss/*_boot.h sound/oss/.*.boot \
-	sound/oss/msndinit.c \
-	sound/oss/msndperm.c \
-	sound/oss/pndsperm.c \
-	sound/oss/pndspini.c \
-	drivers/atm/fore200e_*_fw.c drivers/atm/.fore200e_*.fw \
-	.version .config* config.in config.old \
-	scripts/tkparse scripts/kconfig.tk scripts/kconfig.tmp \
-	scripts/lxdialog/*.o scripts/lxdialog/lxdialog \
+	.version .config .config.old config.in config.old \
 	.menuconfig.log \
 	include/asm \
-	.hdepend scripts/split-include scripts/docproc \
-	scripts/fixdep $(TOPDIR)/include/linux/modversions.h \
+	.hdepend include/linux/modversions.h \
 	tags TAGS kernel.spec \
-	.tmpversion
+	.tmp*
 
-# 	directories removed with 'make mrproper'
+# Directories removed with 'make mrproper'
 MRPROPER_DIRS += \
 	.tmp_export-objs \
 	include/config \
-	$(TOPDIR)/include/linux/modules
+	include/linux/modules
 
-#	That's our way to know about arch specific cleanup.
+# clean - Delete all intermediate files
+#
+clean-dirs += $(ALL_SUBDIRS) Documentation/DocBook scripts
 
-include arch/$(ARCH)/Makefile
+$(addprefix _clean_,$(clean-dirs)):
+	$(Q)$(MAKE) -f scripts/Makefile.clean obj=$(patsubst _clean_%,%,$@)
 
-clean:	archclean
-	@echo 'Cleaning up'
-	@find . -name SCCS -prune -o -name BitKeeper -prune -o \
-		\( -name \*.[oas] -o -name core -o -name .\*.cmd -o \
-		-name .\*.tmp -o -name .\*.d \) -type f -print \
-		| grep -v lxdialog/ | xargs rm -f
-	@rm -f $(CLEAN_FILES)
-	@$(MAKE) -C Documentation/DocBook clean
+quiet_cmd_rmclean = RM  $$(CLEAN_FILES)
+cmd_rmclean	  = rm -f $(CLEAN_FILES)
+clean: archclean $(addprefix _clean_,$(clean-dirs))
+	$(call cmd,rmclean)
+	@find . $(RCS_FIND_IGNORE) \
+	 	\( -name '*.[oas]' -o -name '.*.cmd' -o -name '.*.d' \
+		-o -name '.*.tmp' \) -type f -print | xargs rm -f
 
-mrproper: clean archmrproper
-	@echo 'Making mrproper'
-	@find . -name SCCS -prune -o -name BitKeeper -prune -o \
-		\( -name .depend -o -name .\*.cmd \) \
-		-type f -print | xargs rm -f
-	@rm -f $(MRPROPER_FILES)
-	@rm -rf $(MRPROPER_DIRS)
-	@$(MAKE) -C Documentation/DocBook mrproper
-
-distclean: mrproper
-	@echo 'Making distclean'
-	@find . -name SCCS -prune -o -name BitKeeper -prune -o \
-		\( -not -type d \) -and \
+# mrproper - delete configuration + modules + core files
+#
+quiet_cmd_mrproper = RM  $$(MRPROPER_DIRS) + $$(MRPROPER_FILES)
+cmd_mrproper = rm -rf $(MRPROPER_DIRS) && rm -f $(MRPROPER_FILES)
+mrproper distclean: clean archmrproper
+	@echo '  Making $@ in the srctree'
+	@find . $(RCS_FIND_IGNORE) \
 	 	\( -name '*.orig' -o -name '*.rej' -o -name '*~' \
 		-o -name '*.bak' -o -name '#*#' -o -name '.*.orig' \
-	 	-o -name '.*.rej' -o -name '.SUMS' -o -size 0 \) -type f \
-		-print | xargs rm -f
+	 	-o -name '.*.rej' -o -size 0 \
+		-o -name '*%' -o -name '.*.cmd' -o -name 'core' \) \
+		-type f -print | xargs rm -f
+	$(call cmd,mrproper)
 
 # Generate tags for editors
 # ---------------------------------------------------------------------------
 
-TAGS: FORCE
-	{ find include/asm-${ARCH} -name SCCS -prune -o -name BitKeeper -prune \
-		-o -name '*.h' -print ; \
-	find include -name SCCS -prune -o -name BitKeeper -prune -o \
-		-type d \( -name "asm-*" -o -name config \) -prune -o \
-		-name '*.h' -print ; \
-	find $(SUBDIRS) init arch/${ARCH} \
-		-name SCCS -prune -o -name BitKeeper -prune -o \
-		-name '*.[chS]' -print ; } | grep -v SCCS | etags -
+define all-sources
+	( find . $(RCS_FIND_IGNORE) \
+	       \( -name include -o -name arch \) -prune -o \
+	       -name '*.[chS]' -print; \
+	  find arch/$(ARCH) $(RCS_FIND_IGNORE) \
+	       -name '*.[chS]' -print; \
+	  find include $(RCS_FIND_IGNORE) \
+	       \( -name config -o -name 'asm-*' \) -prune \
+	       -o -name '*.[chS]' -print; \
+	  find include/asm-$(ARCH) $(RCS_FIND_IGNORE) \
+	       -name '*.[chS]' -print; \
+	  find include/asm-generic $(RCS_FIND_IGNORE) \
+	       -name '*.[chS]' -print )
+endef
+
+quiet_cmd_TAGS = MAKE   $@
+cmd_TAGS = $(all-sources) | etags -
 
 # 	Exuberant ctags works better with -I
-tags: FORCE
+
+quiet_cmd_tags = MAKE   $@
+define cmd_tags
+	rm -f $@; \
 	CTAGSF=`ctags --version | grep -i exuberant >/dev/null && echo "-I __initdata,__exitdata,EXPORT_SYMBOL,EXPORT_SYMBOL_NOVERS"`; \
-	ctags $$CTAGSF `find include/asm-$(ARCH) -name SCCS -prune -o -name BitKeeper -prune -o -name '*.h' -print` && \
-	find include -name SCCS -prune -o -name BitKeeper -prune -o \
-		-type d \( -name "asm-*" -o -name config \) -prune -o \
-		-name '*.h' -print | xargs ctags $$CTAGSF -a && \
-	find $(SUBDIRS) init -name SCCS -prune -o -name BitKeeper -prune -o \
-		-name '*.[ch]' -print | xargs ctags $$CTAGSF -a
+	$(all-sources) | xargs ctags $$CTAGSF -a
+endef
+
+TAGS: FORCE
+	$(call cmd,TAGS)
+
+tags: FORCE
+	$(call cmd,tags)
 
 # Brief documentation of the typical targets used
 # ---------------------------------------------------------------------------
@@ -732,26 +809,24 @@ help:
 
 # Documentation targets
 # ---------------------------------------------------------------------------
-
-sgmldocs psdocs pdfdocs htmldocs:
-	@$(MAKE) -C Documentation/DocBook $@
-
+sgmldocs psdocs pdfdocs htmldocs: scripts
+	$(Q)$(MAKE) -f Documentation/DocBook/Makefile $@
 
 # Scripts to check various things for consistency
 # ---------------------------------------------------------------------------
 
 checkconfig:
-	find * -name SCCS -prune -o -name BitKeeper -prune -o \
+	find * $(RCS_FIND_IGNORE) \
 		-name '*.[hcS]' -type f -print | sort \
 		| xargs $(PERL) -w scripts/checkconfig.pl
 
 checkhelp:
-	find * -name SCCS -prune -o -name BitKeeper -prune -o \
+	find * $(RCS_FIND_IGNORE) \
 		-name [cC]onfig.in -print | sort \
 		| xargs $(PERL) -w scripts/checkhelp.pl
 
 checkincludes:
-	find * -name SCCS -prune -o -name BitKeeper -prune -o \
+	find * $(RCS_FIND_IGNORE) \
 		-name '*.[hcS]' -type f -print | sort \
 		| xargs $(PERL) -w scripts/checkincludes.pl
 
@@ -765,17 +840,38 @@ else # ifneq ($(filter-out $(noconfig_targets),$(MAKECMDGOALS)),)
 	$(MAKE) $@
 
 endif # ifeq ($(filter-out $(noconfig_targets),$(MAKECMDGOALS)),)
-endif # ifeq ($(filter $(noconfig_targets),$(MAKECMDGOALS)),)
+endif # ifdef include-config
 
 # FIXME Should go into a make.lib or something 
 # ===========================================================================
 
+a_flags = -Wp,-MD,$(depfile) $(AFLAGS) $(NOSTDINC_FLAGS) \
+	  $(modkern_aflags) $(EXTRA_AFLAGS) $(AFLAGS_$(*F).o)
+
+quiet_cmd_as_s_S = CPP     $@
+cmd_as_s_S       = $(CPP) $(a_flags)   -o $@ $< 
+
 # read all saved command lines
 
-cmd_files := $(wildcard .*.cmd)
+targets := $(wildcard $(sort $(targets)))
+cmd_files := $(wildcard .*.cmd $(foreach f,$(targets),$(dir $(f)).$(notdir $(f)).cmd))
+
 ifneq ($(cmd_files),)
   include $(cmd_files)
 endif
+
+# execute the command and also postprocess generated .d dependencies
+# file
+
+if_changed_dep = $(if $(strip $? $(filter-out FORCE $(wildcard $^),$^)\
+		          $(filter-out $(cmd_$(1)),$(cmd_$@))\
+			  $(filter-out $(cmd_$@),$(cmd_$(1)))),\
+	@set -e; \
+	$(if $($(quiet)cmd_$(1)),echo '  $($(quiet)cmd_$(1))';) \
+	$(cmd_$(1)); \
+	scripts/fixdep $(depfile) $@ '$(cmd_$(1))' > $(@D)/.$(@F).tmp; \
+	rm -f $(depfile); \
+	mv -f $(@D)/.$(@F).tmp $(@D)/.$(@F).cmd)
 
 # Usage: $(call if_changed_rule,foo)
 # will check if $(cmd_foo) changed, or any of the prequisites changed,
@@ -799,6 +895,9 @@ define update-if-changed
 		mv -f $@.tmp $@; \
 	fi
 endef
+#	$(call descend,<dir>,<target>)
+#	Recursively call a sub-make in <dir> with target <target>
 
+descend = $(Q)$(MAKE) -f scripts/Makefile.build obj=$(1) $(2)
 
 FORCE:
