@@ -37,10 +37,6 @@
 #include <linux/input.h>
 #include <linux/smp_lock.h>
 
-MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
-MODULE_DESCRIPTION("Input driver event char devices");
-MODULE_LICENSE("GPL");
-
 struct evdev {
 	int exist;
 	int open;
@@ -423,4 +419,5 @@ module_init(evdev_init);
 module_exit(evdev_exit);
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
-MODULE_DESCRIPTION("Event character device driver");
+MODULE_DESCRIPTION("Input driver event char devices");
+MODULE_LICENSE("GPL");
