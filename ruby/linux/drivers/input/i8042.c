@@ -49,10 +49,10 @@ MODULE_PARM(i8042_unlock, "1i");
 MODULE_PARM(i8042_reset, "1i");
 MODULE_PARM(i8042_direct, "1i");
 
-static int i8042_noaux = 0;
-static int i8042_unlock = 0;
-static int i8042_reset = 0;
-static int i8042_direct = 0;
+static int i8042_noaux;
+static int i8042_unlock;
+static int i8042_reset;
+static int i8042_direct;
 
 spinlock_t i8042_lock = SPIN_LOCK_UNLOCKED;
 
@@ -73,7 +73,7 @@ static unsigned char i8042_ctr;
 static unsigned long i8042_start;
 #endif
 
-static unsigned long i8042_unxlate_seen[128 / BITS_PER_LONG] = { 0, };
+static unsigned long i8042_unxlate_seen[128 / BITS_PER_LONG];
 static unsigned char i8042_unxlate_table[128] = {
 	  0,118, 22, 30, 38, 37, 46, 54, 61, 62, 70, 69, 78, 85,102, 13,
 	 21, 29, 36, 45, 44, 53, 60, 67, 68, 77, 84, 91, 90, 20, 28, 27,
