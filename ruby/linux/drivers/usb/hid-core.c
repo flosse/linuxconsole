@@ -1436,15 +1436,9 @@ static void hid_disconnect(struct usb_device *dev, void *ptr)
 {
 	struct hid_device *hid = ptr;
 
-	dbg("cleanup called");
 	usb_unlink_urb(hid->urbin);
 	usb_unlink_urb(hid->urbout);
 	usb_unlink_urb(hid->urbctrl);
-
-	usb_free_urb(hid->urbin);
-	usb_free_urb(hid->urbctrl);
-	if (hid->urbout)
-		usb_free_urb(hid->urbout);
 
 	if (hid->claimed & HID_CLAIMED_INPUT)
 		hidinput_disconnect(hid);
@@ -1452,6 +1446,12 @@ static void hid_disconnect(struct usb_device *dev, void *ptr)
 	if (hid->claimed & HID_CLAIMED_HIDDEV)
 		hiddev_disconnect(hid);
 #endif
+
+	usb_free_urb(hid->urbin);
+	usb_free_urb(hid->urbctrl);
+	if (hid->urbout)
+		usb_free_urb(hid->urbout);
+
 	hid_free_device(hid);
 }
 
