@@ -871,70 +871,77 @@ int vc_disallocate(struct vc_data *vc)
 
 /*
  * Change # of rows and columns (0 means unchanged/the size of visible VC)
- * [this is to be used together with some user program
- * like resize that changes the hardware videomode]
  */
 int vc_resize(struct vc_data *vc, unsigned int cols, unsigned int lines)
 {
-	unsigned long ol, nl, nlend, rlth, rrem;
-	unsigned int occ, oll, oss, osr;
-	unsigned short *newscreens = NULL;
-        unsigned int cc, ll, ss, sr;
+	unsigned long new_scr_end, new_origin, new_screensize, rlth, rrem;
+	unsigned long old_screenbuf = 0, old_scr_end = 0;
+	unsigned int old_cols, old_rows, old_screenbuf_size, old_row_size;
+	unsigned short *newscreen = NULL;
+        unsigned int new_cols, new_rows, new_screenbuf_size, new_row_size;
 	int err = 0;
 
 	if (!vc) return 0;
 
-        cc = (cols ? cols : video_num_columns);
-        ll = (lines ? lines : video_num_lines);
-        sr = cc << 1;
-        ss = sr * ll;
+  	new_cols = (cols ? cols : video_num_columns);
+        new_rows = (lines ? lines : video_num_lines);
+        new_row_size = new_cols << 1;
+        new_screenbuf_size = new_row_size * new_rows;
 
-	if (!vc || (cc == video_num_columns && ll == video_num_lines))
+	if (new_cols == video_num_columns && new_rows == video_num_lines)
                 return 0;
 	
-	oll = video_num_lines;
-        occ = video_num_columns;
-        osr = video_size_row;
-        oss = screenbuf_size;
+	old_rows = video_num_lines;
+        old_cols = video_num_columns;
+        old_row_size = video_size_row;
+        old_screenbuf_size = screenbuf_size;
+	old_screenbuf = (unsigned long) screenbuf;	
 
-	err = resize_screen(vc, cc, ll);    
+	err = resize_screen(vc, new_cols, new_rows);    
 	if (err) return err;    
-	
-	newscreens = (unsigned short *) kmalloc(ss * scrollback, GFP_USER);
-        if (!newscreens) 
-        	return -ENOMEM;
-       
-        screenbuf_size = ss * scrollback;
 
-        rlth = MIN(osr, sr);
-        rrem = sr - rlth;
-        ol = origin;
-        nl = (long) newscreens;
-        nlend = nl + ss;
-        if (ll < oll)
-        	ol += (oll - ll) * osr;
+	/* scrollback could have been changed by resize_screen */
+	newscreen = (unsigned short *) kmalloc(new_screenbuf_size, GFP_USER);
+        if (!newscreen) {
+		resize_screen(vc, old_cols, old_rows); 
+        	return -ENOMEM;
+	}
+	
+        rlth = MIN(old_row_size, new_row_size);
+        rrem = new_row_size - rlth;
+        new_scr_end = scr_end = (long) newscreen + new_screenbuf_size;
+	new_screensize = new_rows*new_cols;
+        new_origin = (long) (new_scr_end - 2*new_screensize);
 
         update_attr(vc);
 
-        while (ol < scr_end) {
-        	scr_memcpyw((unsigned short *) nl, (unsigned short *) ol, rlth);
+	while (old_screenbuf < old_scr_end) {
+		old_scr_end -= old_row_size;
+		new_scr_end -= new_row_size;
+        	scr_memcpyw((unsigned short *) new_scr_end, 
+			    (unsigned short *) old_scr_end, rlth);
                 if (rrem)
-                	scr_memsetw((void *)(nl + rlth),video_erase_char,rrem);
-                ol += osr;
-                nl += sr;
-        }
-        if (nlend > nl)
-        	scr_memsetw((void *) nl, video_erase_char, nlend - nl);
-        
+                	scr_memsetw((void *)(new_scr_end + rlth),video_erase_char,rrem);
+	}
+
+        if (new_screenbuf_size > old_screenbuf_size)
+        	scr_memsetw((void *) newscreen, video_erase_char, new_screenbuf_size - old_screenbuf_size);
+      
 	/* 
 	if (vc->display_fg->kmalloced)
 	*/        
-	kfree(screenbuf); 
-        screenbuf = newscreens;
-        vc->display_fg->kmalloced = 1;
-        screenbuf_size = ss * scrollback;
+	kfree(screenbuf);
+        screenbuf_size = new_screenbuf_size * scrollback;
+	screensize = new_screensize;
+        screenbuf = newscreen;
+        //vc->display_fg->kmalloced = 1;
+	video_num_lines = new_rows;
+        video_num_columns = new_cols;
+        video_size_row = new_row_size;
+	origin = new_origin;
+	scr_end = new_scr_end;
+ 
         set_origin(vc);
-
         /* do part of a vte_ris() */
         top = 0;
         bottom = video_num_lines;
