@@ -432,6 +432,12 @@ static void fbcon_init(struct vc_data *conp, int init)
     /* on which frame buffer will we open this console? */
     info = registered_fb[(int)con2fb_map[unit]];
 
+    /* 
+     * Set the console to the default video mode. We assume the driver already
+     * checked the mode 
+     */	
+    info->fbops->fb_set_par(info->par, info);
+
     /*
      *  We assume initial frame buffer devices can be opened this
      *  many times
