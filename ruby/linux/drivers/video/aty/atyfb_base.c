@@ -2340,6 +2340,12 @@ int __init atyfb_setup(char *options)
 		curblink = 0;
 	} else if (!strncmp(this_opt, "noaccel", 7)) {
 		noaccel = 1;
+#ifdef CONFIG_MTRR
+	} else if (!strncmp(this_opt, "nomtrr", 6)) {
+		fb_disable_mtrrs();
+#endif
+	} else if (!strncmp(this_opt, "inverse", 7)) {
+		fb_invert_cmaps();
 	} else if (!strncmp(this_opt, "vram:", 5))
 		default_vram = simple_strtoul(this_opt+5, NULL, 0);
 	else if (!strncmp(this_opt, "pll:", 4))
