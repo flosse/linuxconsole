@@ -245,12 +245,12 @@ struct aty128_constants {
 };
 
 struct aty128_crtc {
-    u32 gen_cntl;
-    u32 ext_cntl;
     u32 h_total, h_sync_strt_wid;
     u32 v_total, v_sync_strt_wid;
-    u32 pitch;
     u32 offset, offset_cntl;
+    u32 gen_cntl;
+    u32 ext_cntl;
+    u32 pitch;
     u32 bpp;
 };
 
@@ -315,11 +315,8 @@ static void aty128fb_blank(int blank, struct fb_info *fb);
      *  Internal routines
      */
 static void aty128_set_dispsw(struct display *disp,
-			struct fb_info_aty128 *info, int bpp, int accel);
+			struct fb_info_aty128 *info, int accel);
 static void do_install_cmap(int con, struct fb_info *info);
-static int aty128_decode_var(struct fb_var_screeninfo *var,
-                             struct aty128fb_par *par,
-                             struct fb_info_aty128 *info);
 static int aty128_pci_register(struct pci_dev *pdev,
                                const struct aty128_chip_info *aci);
 static struct fb_info_aty128 *aty128_board_list_add(struct fb_info_aty128
@@ -730,51 +727,26 @@ aty128_set_crtc(const struct aty128_crtc *crtc,
 #endif
 }
 
-
 static int
 aty128_var_to_crtc(const struct fb_var_screeninfo *var,
 			struct aty128_crtc *crtc,
 			const struct fb_info_aty128 *info)
 {
-    u32 bpp;
-    u32 h_total, h_disp, h_sync_strt, h_sync_wid, h_sync_pol;
-    u32 v_total, v_disp, v_sync_strt, v_sync_wid, v_sync_pol, c_sync;
-    u32 depth, bytpp;
+    u32 h_total, h_disp, h_sync_strt, h_sync_wid, h_sync_pol, c_sync;
+    u32 v_total, v_disp, v_sync_strt, v_sync_wid, v_sync_pol;
     u8 hsync_strt_pix[5] = { 0, 0x12, 9, 6, 5 };
     u8 mode_bytpp[7] = { 0, 0, 1, 2, 2, 3, 4 };
+    u32 depth, bytpp;
 
-    /* input */
-    bpp   = var->bits_per_pixel;
-
-    /* convert bpp into ATI register depth */
-    depth = bpp_to_depth(bpp);
-
-    /* make sure we didn't get an invalid depth */
-    if (depth == -EINVAL) {
-        printk(KERN_ERR "aty128fb: Invalid depth\n");
-        return -EINVAL;
-    }
-
+    depth = bpp_to_depth(var->bits_per_pixel);
     /* convert depth to bpp */
     bytpp = mode_bytpp[depth];
 
-    /* make sure there is enough video ram for the mode */
-    if ((u32)(var->xres_virtual * var->yres_virtual * bytpp) > info->fb_info.fix.smem_len) {
-        printk(KERN_ERR "aty128fb: Not enough memory for mode\n");
-        return -EINVAL;
-    }
-
-    h_disp = (var->xres >> 3) - 1;
     h_total = (((var->xres + var->right_margin + var->hsync_len + var->left_margin) >> 3) - 1) & 0xFFFFL;
-
-    v_disp = var->yres - 1;
     v_total = (var->yres + var->upper_margin + var->vsync_len + var->lower_margin - 1) & 0xFFFFL;
 
-    /* check to make sure h_total and v_total are in range */
-    if (((h_total >> 3) - 1) > 0x1ff || (v_total - 1) > 0x7FF) {
-        printk(KERN_ERR "aty128fb: invalid width ranges\n");
-        return -EINVAL;
-    }
+    h_disp = (var->xres >> 3) - 1;
+    v_disp = var->yres - 1;
 
     h_sync_wid = (var->hsync_len + 7) >> 3;
     if (h_sync_wid == 0)
@@ -811,7 +783,7 @@ aty128_var_to_crtc(const struct fb_var_screeninfo *var,
 
     crtc->offset = 0;
     crtc->offset_cntl = 0;
-    crtc->bpp = bpp;
+    crtc->bpp = var->bits_per_pixel;
     return 0;
 }
 
@@ -855,7 +827,6 @@ aty128_set_pll(struct aty128fb_par *par, const struct fb_info_aty128 *info)
     /* clear the reset, just in case */
     aty_st_pll(PPLL_CNTL, aty_ld_pll(PPLL_CNTL) & ~PPLL_RESET);
 }
-
 
 static int
 aty128_var_to_pll(u32 period_in_ps, struct aty128fb_par *par,
@@ -971,6 +942,9 @@ aty128_ddafifo(struct aty128fb_par *par, const struct fb_info_aty128 *info)
 static int 
 aty128fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info) 
 {
+    u8 mode_bytpp[7] = { 0, 0, 1, 2, 2, 3, 4 };
+    u32 depth, bytpp, h_total, v_total;
+    
     /* basic (in)sanity checks */
     if (!var->xres)
         var->xres = 1;
@@ -1046,6 +1020,33 @@ aty128fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
     if (var->yres_virtual < var->yres + var->yoffset)
 	var->yres_virtual = var->yres + var->yoffset;
 
+    /* convert bpp into ATI register depth */
+    depth = bpp_to_depth(var->bits_per_pixel);
+
+    /* make sure we didn't get an invalid depth */
+    if (depth == -EINVAL) {
+        printk(KERN_ERR "aty128fb: Invalid depth\n");
+        return -EINVAL;
+    }
+
+    /* convert depth to bpp */
+    bytpp = mode_bytpp[depth];
+
+    /* make sure there is enough video ram for the mode */
+    if ((u32)(var->xres_virtual * var->yres_virtual * bytpp) > info->fix.smem_len) {
+        printk(KERN_ERR "aty128fb: Not enough memory for mode\n");
+        return -EINVAL;
+    }
+
+    h_total = (((var->xres + var->right_margin + var->hsync_len + var->left_margin) >> 3) - 1) & 0xFFFFL;
+    v_total = (var->yres + var->upper_margin + var->vsync_len + var->lower_margin - 1) & 0xFFFFL;
+
+    /* check to make sure h_total and v_total are in range */
+    if (((h_total >> 3) - 1) > 0x1ff || (v_total - 1) > 0x7FF) {
+        printk(KERN_ERR "aty128fb: invalid width ranges\n");
+        return -EINVAL;
+    }
+
     var->red.msb_right = 0;
     var->green.msb_right = 0;
     var->blue.msb_right = 0;
@@ -1068,6 +1069,10 @@ aty128_set_par(struct aty128fb_par *par,
 			struct fb_info_aty128 *info)
 { 
     u32 config;
+
+    aty128_var_to_crtc(&info->fb_info.var, &par->crtc, info);
+    aty128_var_to_pll(info->fb_info.var.pixclock, par, info);
+    aty128_ddafifo(par, info);
 
     info->fb_info.par = par;
     
@@ -1109,6 +1114,9 @@ aty128_set_par(struct aty128fb_par *par,
     if (info->fb_info.var.accel_flags & FB_ACCELF_TEXT)
         aty128_init_engine(par, info);
 
+    info->fb_info.fix.line_length = (info->fb_info.var.xres_virtual * par->crtc.bpp) >> 3;
+    info->fb_info.fix.visual      = par->crtc.bpp <= 8 ? FB_VISUAL_PSEUDOCOLOR : FB_VISUAL_DIRECTCOLOR;
+
 #ifdef CONFIG_FB_COMPAT_XPMAC
     if (!console_fb_info || console_fb_info == &info->fb_info) {
         struct fb_var_screeninfo var;
@@ -1132,28 +1140,6 @@ aty128_set_par(struct aty128fb_par *par,
 }
 
     /*
-     *  encode/decode the User Defined Part of the Display
-     */
-
-static int
-aty128_decode_var(struct fb_var_screeninfo *var, struct aty128fb_par *par,
-			struct fb_info_aty128 *info)
-{
-    int err;
-
-    if ((err = aty128_var_to_crtc(var, &par->crtc, info)))
-	return err;
-
-    if ((err = aty128_var_to_pll(var->pixclock, par, info)))
-	return err;
-
-    if ((err = aty128_ddafifo(par, info)))
-	return err;
-
-    return 0;
-}
-
-    /*
      *  Set the User Defined Part of the Display
      */
 
@@ -1163,74 +1149,59 @@ aty128fb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *fb)
     struct fb_info_aty128 *info = (struct fb_info_aty128 *)fb;
     struct aty128fb_par par;
     struct display *display;
-    int oldxres, oldyres, oldvxres, oldvyres, oldbpp, oldaccel;
-    int accel, err;
+    int accel, oldbpp, err;
 
     display = (con >= 0) ? &fb_display[con] : fb->disp;
 
-    aty128fb_check_var(var, &info->fb_info);
+    if (memcmp(&info->fb_info.var, var, sizeof(var)) || con < 0) {
+    	if ((err = aty128fb_check_var(var, &info->fb_info)))
+        	return err;
     
-    if ((err = aty128_decode_var(var, &par, info)))
-	return err;
+    	if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
+    		oldbpp = display->var.bits_per_pixel;
+    
+		info->fb_info.var = *var;
+	
+		aty128_set_par(&par, info);
 
-    if ((var->activate & FB_ACTIVATE_MASK) != FB_ACTIVATE_NOW)
-	return 0;
+        	display->screen_base = info->fb_info.screen_base;
+    		display->var = *var;
+		display->visual = info->fb_info.fix.visual;
+		display->type = info->fb_info.fix.type;
+		display->type_aux = info->fb_info.fix.type_aux;
+		display->ypanstep = info->fb_info.fix.ypanstep;
+		display->ywrapstep = info->fb_info.fix.ywrapstep;
+		display->line_length = info->fb_info.fix.line_length;
+		display->can_soft_blank = 1;
+		display->inverse = 0;
 
-    oldxres = display->var.xres;
-    oldyres = display->var.yres;
-    oldvxres = display->var.xres_virtual;
-    oldvyres = display->var.yres_virtual;
-    oldbpp = display->var.bits_per_pixel;
-    oldaccel = display->var.accel_flags;
-    display->var = info->fb_info.var = *var;
-    if (oldxres != var->xres || oldyres != var->yres ||
-	oldvxres != var->xres_virtual || oldvyres != var->yres_virtual ||
-	oldbpp != var->bits_per_pixel || oldaccel != var->accel_flags) {
+		accel = var->accel_flags & FB_ACCELF_TEXT;
+        	aty128_set_dispsw(display, info, accel);
 
-    	info->fb_info.fix.line_length = (var->xres_virtual * par.crtc.bpp) >> 3;
-    	info->fb_info.fix.visual      = par.crtc.bpp <= 8 ? FB_VISUAL_PSEUDOCOLOR : FB_VISUAL_DIRECTCOLOR;
+		if (accel)
+	    		display->scrollmode = SCROLL_YNOMOVE;
+		else
+	    		display->scrollmode = SCROLL_YREDRAW;
 
-        display->screen_base = info->fb_info.screen_base;
-	display->visual = info->fb_info.fix.visual;
-	display->type = info->fb_info.fix.type;
-	display->type_aux = info->fb_info.fix.type_aux;
-	display->ypanstep = info->fb_info.fix.ypanstep;
-	display->ywrapstep = info->fb_info.fix.ywrapstep;
-	display->line_length = info->fb_info.fix.line_length;
-	display->can_soft_blank = 1;
-	display->inverse = 0;
-
-	accel = var->accel_flags & FB_ACCELF_TEXT;
-        aty128_set_dispsw(display, info, par.crtc.bpp, accel);
-
-	if (accel)
-	    display->scrollmode = SCROLL_YNOMOVE;
-	else
-	    display->scrollmode = SCROLL_YREDRAW;
-
-	if (info->fb_info.changevar)
-	    (*info->fb_info.changevar)(con);
-    	info->fb_info.par = &par;
-    }
-
-    if (!info->fb_info.display_fg || info->fb_info.display_fg->vc_num == con)
-	aty128_set_par(&par, info);
-
-    if (oldbpp != var->bits_per_pixel) {
-	if ((err = fb_alloc_cmap(&display->cmap, 0, 0)))
-	    return err;
-	do_install_cmap(con, &info->fb_info);
-    } 
-
+		if (info->fb_info.changevar)
+	    		(*info->fb_info.changevar)(con);
+    	
+		if (oldbpp != var->bits_per_pixel) {
+			if ((err = fb_alloc_cmap(&display->cmap, 0, 0)))
+	    			return err;
+			do_install_cmap(con, &info->fb_info);
+    		}
+	}
+    }		 
     return 0;
 }
 
 
 static void
 aty128_set_dispsw(struct display *disp,
-			struct fb_info_aty128 *info, int bpp, int accel)
+			struct fb_info_aty128 *info, int accel)
 {
-    switch (bpp) {
+    switch (info->fb_info.var.bits_per_pixel) {
 #ifdef FBCON_HAS_CFB8
     case 8:
 	disp->dispsw = accel ? &fbcon_aty128_8 : &fbcon_cfb8;
@@ -1424,11 +1395,12 @@ aty128_init(struct fb_info_aty128 *info, struct pci_dev *pdev, const char *name)
     else
         var.accel_flags |= FB_ACCELF_TEXT;
 
-    if (aty128_decode_var(&var, &default_par, info)) {
+    if (aty128fb_check_var(&var, &info->fb_info)) {
 	printk(KERN_ERR "aty128fb: Cannot set default mode.\n");
 	return 0;
     }
 
+    info->fb_info.var = var;	
     info->fb_info.par = &default_par;	
 
     /* setup the DAC the way we like it */
