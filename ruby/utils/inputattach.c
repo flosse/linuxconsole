@@ -147,6 +147,24 @@ int mzp_init(int fd)
 	return 0;
 }
 
+int newton_init(int fd)
+{
+  int i;
+  unsigned char c;
+  unsigned char response[35] =
+  { 0x16, 0x10, 0x02, 0x64, 0x5f, 0x69, 0x64, 0x00,
+    0x00, 0x00, 0x0c, 0x6b, 0x79, 0x62, 0x64, 0x61,
+    0x70, 0x70, 0x6c, 0x00, 0x00, 0x00, 0x01, 0x6e,
+    0x6f, 0x66, 0x6d, 0x00, 0x00, 0x00, 0x00, 0x10,
+    0x03, 0xdd, 0xe7 };
+
+  for (i = 0; i < 35; i++)
+    if (readchar(fd, &c, 400) || (c != response[i]))
+      return -1;
+
+  return 0;
+}
+
 int dump_init(int fd)
 {
 	unsigned char c, o = 0;
@@ -190,6 +208,7 @@ struct input_types input_types[] = {
 { "--intellimouse",	"-ms3",		B1200, CS7,			SERIO_MZ,	0x11,	1,	NULL },
 { "--mmwheel",		"-mmw",		B1200, CS7 | CSTOPB,		SERIO_MZP,	0x13,	1,	mzp_init },
 { "--iforce",		"-ifor",	B38400, CS8 | CRTSCTS,		SERIO_IFORCE,	0x00,	0,	NULL },
+{ "--newtonkbd",        "-newt",        B9600, CS8,                     SERIO_NEWTON,  0x00,    0,      newton_init },
 { "--dump",		"-dump",	B1200, CS7, 			0,		0x00,	0,	dump_init },
 { "", "", 0, 0 }
 
