@@ -112,7 +112,7 @@ static void sunkbd_interrupt(struct serio *serio, unsigned char data, unsigned i
 			if (sunkbd->keycode[data & SUNKBD_KEY]) {
                                 input_report_key(&sunkbd->dev, sunkbd->keycode[data & SUNKBD_KEY], !(data & SUNKBD_RELEASE));
                         } else {
-                                printk("sunkbd.c: Unknown key (scancode %#x) %s.\n",
+                                printk(KERN_WARNING "sunkbd.c: Unknown key (scancode %#x) %s.\n",
                                         data & SUNKBD_KEY, data & SUNKBD_RELEASE ? "released" : "pressed");
                         }
 	}
@@ -259,7 +259,7 @@ static void sunkbd_connect(struct serio *serio, struct serio_dev *dev)
 
 	input_register_device(&sunkbd->dev);
 
-	printk("input%d: %s on serio%d\n", sunkbd->dev.number, sunkbd->name, serio->number);
+	printk(KERN_INFO "input%d: %s on serio%d\n", sunkbd->dev.number, sunkbd->name, serio->number);
 }
 
 /*

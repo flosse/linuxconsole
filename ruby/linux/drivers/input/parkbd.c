@@ -174,7 +174,7 @@ int __init parkbd_init(void)
 
 	serio_register_port(&parkbd_port);
 
-	printk("serio%d: PARKBD %s adapter on %s\n",
+	printk(KERN_INFO "serio%d: PARKBD %s adapter on %s\n",
                         parkbd_port.number, parkbd_mode ? "AT" : "XT", parkbd_dev->port->name);
 
 	return 0;

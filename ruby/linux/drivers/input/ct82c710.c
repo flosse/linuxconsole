@@ -188,7 +188,8 @@ int __init ct82c710_init(void)
 
 	serio_register_port(&ct82c710_port);
 
-	printk("serio%d: C&T 82c710 mouse port at %#x irq %d\n", ct82c710_port.number, ct82c710_data, CT82C710_IRQ);
+	printk(KERN_INFO "serio%d: C&T 82c710 mouse port at %#x irq %d\n",
+		ct82c710_port.number, ct82c710_data, CT82C710_IRQ);
 
 	return 0;
 }

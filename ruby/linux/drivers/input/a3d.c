@@ -1,5 +1,5 @@
 /*
- *  a3d.c  Version 1.2
+ * $Id$
  *
  *  Copyright (c) 1998-2000 Vojtech Pavlik
  *
@@ -30,7 +30,6 @@
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
  */
 
-#include <linux/errno.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/malloc.h>
@@ -39,7 +38,7 @@
 #include <linux/input.h>
 
 #define A3D_MAX_START		400	/* 400 us */ 
-#define A3D_MAX_STROBE		40	/* 40 us */ 
+#define A3D_MAX_STROBE		60	/* 40 us */ 
 #define A3D_DELAY_READ		3	/* 3 ms */
 #define A3D_MAX_LENGTH		40	/* 40*3 bits */
 #define A3D_REFRESH_TIME	HZ/50	/* 20 ms */
@@ -48,9 +47,8 @@
 #define A3D_MODE_PAN		2	/* Panther */
 #define A3D_MODE_OEM		3	/* Panther OEM version */
 #define A3D_MODE_PXL		4	/* Panther XL */
-#define A3D_MODE_PXLR		5	/* Panther XL w/ rudder */
 
-char *a3d_names[] = { "FP-Gaming Assassin 3D", "MadCatz Panther", "OEM Panther",
+char *a3d_names[] = { NULL, "FP-Gaming Assassin 3D", "MadCatz Panther", "OEM Panther",
 			"MadCatz Panther XL", "MadCatz Panther XL w/ rudder" };
 
 struct a3d {
@@ -112,21 +110,9 @@ static int a3d_csum(char *data, int count)
 	return (csum & 0x3f) != ((data[count - 2] << 3) | data[count - 1]);
 }
 
-/*
- * a3d_timer() reads and analyzes A3D joystick data.
- */
-
-static void a3d_timer(unsigned long private)
+static void a3d_read(struct a3d *a3d, char *data)
 {
-	struct a3d *a3d = (void *) private;
 	struct input_dev *dev = &a3d->dev;
-	char data[A3D_MAX_LENGTH];
-
-	a3d->reads++;
-	if (a3d_read_packet(a3d->gameport, a3d->length, data) != a3d->length
-	    || data[0] != a3d->mode || a3d_csum(data, a3d->length)) { 
-		a3d->bads++;
-	} else
 
 	switch (a3d->mode) {
 
@@ -148,9 +134,8 @@ static void a3d_timer(unsigned long private)
 
 			a3d->buttons = ((data[3] << 3) | data[4]) & 0xf;
 
-			break;
+			return;
 
-		case A3D_MODE_PXLR:
 		case A3D_MODE_PXL:
 
 			input_report_rel(dev, REL_X, ((data[ 9] << 6) | (data[10] << 3) | data[11]) - ((data[ 9] & 4) << 7));
@@ -177,9 +162,23 @@ static void a3d_timer(unsigned long private)
 			input_report_key(dev, BTN_TOP,     data[8] & 4);
 			input_report_key(dev, BTN_PINKIE,  data[7] & 1);
 
-			break;
+			return;
 	}
+}
 
+
+/*
+ * a3d_timer() reads and analyzes A3D joystick data.
+ */
+
+static void a3d_timer(unsigned long private)
+{
+	struct a3d *a3d = (void *) private;
+	char data[A3D_MAX_LENGTH];
+	a3d->reads++;
+	if (a3d_read_packet(a3d->gameport, a3d->length, data) != a3d->length
+		|| data[0] != a3d->mode || a3d_csum(data, a3d->length))
+	 	a3d->bads++; else a3d_read(a3d, data);
 	mod_timer(&a3d->timer, jiffies + A3D_REFRESH_TIME);
 }
 
@@ -191,10 +190,10 @@ static void a3d_timer(unsigned long private)
 
 int a3d_adc_cooked_read(struct gameport *gameport, int *axes, int *buttons)
 {
-	struct a3d *a3d = gameport->private;
+	struct a3d *a3d = gameport->driver;
 	int i;
 	for (i = 0; i < 4; i++)
-		axes[i] = a3d->axes[i] < 254 ? a3d->axes[i] : -1;
+		axes[i] = (a3d->axes[i] < 254) ? a3d->axes[i] : -1;
 	*buttons = a3d->buttons; 
 	return 0;
 }
@@ -206,7 +205,7 @@ int a3d_adc_cooked_read(struct gameport *gameport, int *axes, int *buttons)
 
 int a3d_adc_open(struct gameport *gameport, int mode)
 {
-	struct a3d *a3d = gameport->private;
+	struct a3d *a3d = gameport->driver;
 	if (mode != GAMEPORT_MODE_COOKED)
 		return -1;
 	if (!a3d->used++)
@@ -220,7 +219,7 @@ int a3d_adc_open(struct gameport *gameport, int mode)
 
 static void a3d_adc_close(struct gameport *gameport)
 {
-	struct a3d *a3d = gameport->private;
+	struct a3d *a3d = gameport->driver;
 	if (!--a3d->used)
 		del_timer(&a3d->timer);
 }
@@ -279,41 +278,72 @@ static void a3d_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 	a3d->mode = data[0];
 
-	if (!a3d->mode || a3d->mode >= 4) {
+	if (!a3d->mode || a3d->mode > 5) {
 		printk(KERN_WARNING "a3d.c: Unknown A3D device detected "
 			"(gameport%d, id=%d), contact <vojtech@suse.cz>\n", gameport->number, a3d->mode);
 		goto fail2;
 	}
-	
+
+
 	if (a3d->mode == A3D_MODE_PXL) {
-		if ((char)((data[21] << 6) | (data[22] << 3) | (data[23])) < 126)
-			a3d->mode = A3D_MODE_PXLR;
+
+		int axes[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_RUDDER };
+
 		a3d->length = 33;
 
-		/* Fill the input structures */
+		a3d->dev.evbit[0] |= BIT(EV_ABS) | BIT(EV_KEY) | BIT(EV_REL);
+		a3d->dev.relbit[0] |= BIT(REL_X) | BIT(REL_Y);
+		a3d->dev.absbit[0] |= BIT(ABS_X) | BIT(ABS_Y) | BIT(ABS_THROTTLE) | BIT(ABS_RUDDER)
+				   | BIT(ABS_HAT0X) | BIT(ABS_HAT0Y) | BIT(ABS_HAT1X) | BIT(ABS_HAT1Y);
 
-		a3d->dev.open = a3d_open;
-		a3d->dev.close = a3d_close;
+		a3d->dev.keybit[LONG(BTN_MOUSE)] |= BIT(BTN_RIGHT) | BIT(BTN_LEFT) | BIT(BTN_MIDDLE)
+						 | BIT(BTN_SIDE) | BIT(BTN_EXTRA);
+
+		a3d->dev.keybit[LONG(BTN_JOYSTICK)] |= BIT(BTN_TRIGGER) | BIT(BTN_THUMB) | BIT(BTN_TOP) | BIT(BTN_PINKIE);
+
+		a3d_read(a3d, data);
+
+		for (i = 0; i < 4; i++) {
+			if (i < 2) {
+				a3d->dev.absmin[axes[i]] = 48;
+				a3d->dev.absmax[axes[i]] = a3d->dev.abs[axes[i]] * 2 - 48;
+				a3d->dev.absflat[axes[i]] = 8;
+			} else {
+				a3d->dev.absmin[axes[i]] = 2;
+				a3d->dev.absmax[axes[i]] = 253;
+			}
+			a3d->dev.absmin[ABS_HAT0X + i] = -1;
+			a3d->dev.absmax[ABS_HAT0X + i] = 1;
+		}
 
 	} else {
 		a3d->length = 29;
 
-		/* Fill the input & gameport structures */
+		a3d->dev.evbit[0] |= BIT(EV_KEY) | BIT(EV_REL);
+		a3d->dev.relbit[0] |= BIT(REL_X) | BIT(REL_Y);
+		a3d->dev.keybit[LONG(BTN_MOUSE)] |= BIT(BTN_RIGHT) | BIT(BTN_LEFT) | BIT(BTN_MIDDLE);
 
+		a3d->adc.driver = a3d;
 		a3d->adc.open = a3d_adc_open;
 		a3d->adc.close = a3d_adc_close;
 		a3d->adc.cooked_read = a3d_adc_cooked_read;
-	
-		a3d->dev.open = a3d_open;
-		a3d->dev.close = a3d_close;
+		a3d->adc.fuzz = 1; 
+		a3d->adc.type = GAMEPORT_EXT; 
+
+		a3d_read(a3d, data);
 
 		gameport_register_port(&a3d->adc);
-		printk(KERN_INFO "gameport%d: %s ADC gameport on gameport%d\n",
+		printk(KERN_INFO "gameport%d: %s on gameport%d.0\n",
 			a3d->adc.number, a3d_names[a3d->mode], gameport->number);
 	}
 
+	a3d->dev.private = a3d;
+	a3d->dev.name = a3d_names[a3d->mode];
+	a3d->dev.open = a3d_open;
+	a3d->dev.close = a3d_close;
+
 	input_register_device(&a3d->dev);
-	printk(KERN_INFO "input%d: %s on gameport%d\n",
+	printk(KERN_INFO "input%d: %s on gameport%d.0\n",
 		a3d->dev.number, a3d_names[a3d->mode], gameport->number);
 
 	return;

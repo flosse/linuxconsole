@@ -76,8 +76,8 @@ static int analog_options[ANALOG_PORTS];
 #define ANALOG_BTNS_GAMEPAD	0xf000
 #define ANALOG_EXTENSIONS	0xff00
 
-#define ANALOG_GAMEPAD_FLAG0	0x01000000
-#define ANALOG_GAMEPAD_FLAG1	0x10000000
+#define ANALOG_GAMEPAD		0x10000
+#define ANALOG_SAITEK		0x20000
 
 #define ANALOG_MAX_TIME		3	/* 3 ms */
 #define ANALOG_LOOP_TIME	1500	/* 1.5 * loop */
@@ -101,10 +101,16 @@ static int analog_pad_btn[] = { BTN_A, BTN_B, BTN_C, BTN_X, BTN_TL2, BTN_TR2, BT
 static int analog_joy_btn[] = { BTN_TRIGGER, BTN_THUMB, BTN_TOP, BTN_TOP2, BTN_BASE, BTN_BASE2,
 				BTN_BASE3, BTN_BASE4, BTN_BASE5, BTN_THUMB2 };
 
+static int analog_saitek_axes[] = { ABS_X, ABS_Y, ABS_RX, ABS_THROTTLE };
+static int analog_saitek_btn[] = { BTN_TRIGGER, BTN_THUMB, BTN_TOP, BTN_TOP2, BTN_BASE, BTN_BASE2,
+					BTN_BASE3, BTN_BASE4, BTN_BASE5, BTN_THUMB2, BTN_A, BTN_B, BTN_C, BTN_X,
+					BTN_Y, BTN_Z };
+
 struct analog {
 	struct input_dev dev;
 	int mask;
 	int *buttons;
+	int *axes;
 	char name[ANALOG_MAX_NAME_LENGTH];
 };
 
@@ -159,7 +165,7 @@ static unsigned long analog_faketime = 0;
  * analog_decode() decodes analog joystick data and reports input events.
  */
 
-static void analog_decode(struct analog *analog, int *axes, int *initial, unsigned char buttons)
+static void analog_decode(struct analog *analog, int *axes, int *initial, int buttons)
 {
 	struct input_dev *dev = &analog->dev;
 	int i, j;
@@ -192,6 +198,10 @@ static void analog_decode(struct analog *analog, int *axes, int *initial, unsign
 	if (analog->mask & ANALOG_BTN_TR2)
 		input_report_key(dev, analog->buttons[9], axes[3] > (initial[3] + (initial[3] >> 1)));
 
+	if (analog->mask & ANALOG_SAITEK)
+		for (i = 0; i < 16; i++)
+			input_report_key(dev, analog_saitek_btn[i], (buttons >> i) & 1);
+
 	if (analog->mask & ANALOG_HAT_FCS)
 		for (i = 0; i < 4; i++)
 			if (axes[3] < ((initial[3] * ((i << 1) + 1)) >> 3)) {
@@ -201,7 +211,7 @@ static void analog_decode(struct analog *analog, int *axes, int *initial, unsign
 
 	for (i = j = 0; i < 4; i++)
 		if (analog->mask & (1 << i))
-			input_report_abs(dev, analog_axes[j++], axes[i]);
+			input_report_abs(dev, analog->axes[j++], axes[i]);
 
 	for (i = j = 0; i < 3; i++)
 		if (analog->mask & analog_exts[i]) {
@@ -267,6 +277,26 @@ static int analog_button_read(struct analog_port *port)
 	return 0;
 }
 
+static int analog_saitek_read(struct analog_port *port)
+{
+	unsigned char u;
+	int i = 0;
+
+	port->buttons = 0;
+	u = (~gameport_read(port->gameport) >> 4) & 0xf;
+
+	while (u && i < 16) {
+
+		port->buttons |= 1 << u;
+		udelay(310);
+		gameport_trigger(port->gameport);
+		udelay(70);
+		u = (~gameport_read(port->gameport) >> 4) & 0xf;
+		i++;
+	}
+	return 0;
+}
+
 /*
  * analog_timer() repeatedly polls the Analog joysticks.
  */
@@ -280,12 +310,15 @@ static void analog_timer(unsigned long data)
 		port->bads -= gameport_cooked_read(port->gameport, port->axes, &port->buttons);
 		port->reads++;
 	} else {
+		if (~port->analog[0].mask & ANALOG_SAITEK)
+			analog_button_read(port);
 		if (!port->axtime--) {
 			port->bads -= analog_cooked_read(port);
 			port->reads++;
 			port->axtime = ANALOG_AXIS_TIME;
+			if (port->analog[0].mask & ANALOG_SAITEK)
+				analog_saitek_read(port);
 		}
-		analog_button_read(port);
 	}
 
 	for (i = 0; i < 2; i++) 
@@ -378,7 +411,7 @@ static void analog_name(struct analog *analog)
 	if (analog->mask & ANALOG_HAT_FCS) strcat(analog->name, " FCS");
 	if (analog->mask & ANALOG_ANY_CHF) strcat(analog->name, " CHF");
 	
-	strcat(analog->name, (analog->buttons == analog_joy_btn) ? " joystick" : " gamepad");
+	strcat(analog->name, (analog->mask & ANALOG_GAMEPAD) ? " gamepad": " joystick");
 }
 
 /*
@@ -387,9 +420,12 @@ static void analog_name(struct analog *analog)
 
 static void analog_init_device(struct analog_port *port, struct analog *analog, int index)
 {
-	int i, j, t, x;
+	int i, j, t, x, y;
 
 	analog_name(analog);
+
+	analog->buttons = (analog->mask & ANALOG_GAMEPAD) ? analog_pad_btn : analog_joy_btn;
+	analog->axes = (analog->mask & ANALOG_SAITEK) ? analog_saitek_axes : analog_axes;
 
 	analog->dev.open = analog_open;
 	analog->dev.close = analog_close;
@@ -399,18 +435,21 @@ static void analog_init_device(struct analog_port *port, struct analog *analog, 
 	for (i = j = 0; i < 4; i++)
 		if (analog->mask & (1 << i)) {
 			
-			t = analog_axes[j];
+			t = analog->axes[j];
 			x = port->axes[i];
+			y = (x >> 3);
 	
 			set_bit(t, analog->dev.absbit);
 
-			if ((i == 2 || i == 3) && (j == 2 || j == 3))
+			if ((i == 2 || i == 3) && (t == ABS_THROTTLE || t == ABS_RUDDER)) {
 				x = (port->axes[0] + port->axes[1]) >> 1;
+				y = 0;
+			}
 
 			analog->dev.absmax[t] = (x << 1) - (x >> 3);
 			analog->dev.absmin[t] = (x >> 3);
 			analog->dev.absfuzz[t] = port->fuzz;
-			analog->dev.absflat[t] = (x >> 3);
+			analog->dev.absflat[t] = y;
 
 			j++;
 		}
@@ -436,6 +475,10 @@ static void analog_init_device(struct analog_port *port, struct analog *analog, 
 	for (i = 0; i < 4; i++)
 		if (analog->mask & (ANALOG_BTN_TL << i))
 			set_bit(analog->buttons[i + 6], analog->dev.keybit);
+
+	if (analog->mask & ANALOG_SAITEK)
+		for (i = 0; i < 16; i++)
+			set_bit(analog_saitek_btn[i], analog->dev.keybit);
 
 	analog_decode(analog, port->axes, port->initial, port->buttons);
 
@@ -475,12 +518,13 @@ static int analog_init_masks(struct analog_port *port)
 
 	i = port->gameport->number < ANALOG_PORTS ? analog_options[port->gameport->number] : 0xff;
 
-	analog[0].mask = i & 0xffff;
-	analog[0].buttons = (i & ANALOG_GAMEPAD_FLAG0) ? analog_pad_btn : analog_joy_btn;
+	analog[0].mask = i & 0xfffff;
 
 	analog[0].mask &= ~(ANALOG_AXES_STD | ANALOG_HAT_FCS | ANALOG_BTNS_GAMEPAD)
 			| port->mask | ((port->mask << 8) & ANALOG_HAT_FCS)
 			| ((port->mask << 10) & ANALOG_BTNS_TLR) | ((port->mask << 12) & ANALOG_BTNS_TLR2);
+
+	analog[0].mask &= (analog[0].mask & ANALOG_SAITEK) ? (ANALOG_SAITEK | ANALOG_AXES_STD) : ~0;
 
 	analog[0].mask &= ~(ANALOG_THROTTLE | ANALOG_BTN_TR | ANALOG_BTN_TR2)
 			| ((~analog[0].mask & ANALOG_HAT_FCS) >> 8)
@@ -491,11 +535,10 @@ static int analog_init_masks(struct analog_port *port)
 			| (((~analog[0].mask & ANALOG_BTNS_TLR ) >> 10)
 			&  ((~analog[0].mask & ANALOG_BTNS_TLR2) >> 12));
 
-	analog[1].mask = (i >> 16) & 0xff;
-	analog[1].buttons = (i & ANALOG_GAMEPAD_FLAG1) ? analog_pad_btn : analog_joy_btn;
+	analog[1].mask = ((i >> 20) & 0xff) | ((i >> 12) & 0xf0000);
 
-	analog[1].mask &= (analog[0].mask & ANALOG_EXTENSIONS) ? 0 
-			: ((ANALOG_BTNS_STD | port->mask) & ~analog[0].mask);
+	analog[1].mask &= (analog[0].mask & ANALOG_EXTENSIONS & ~ANALOG_GAMEPAD) ? 0
+			: (((ANALOG_BTNS_STD | port->mask) & ~analog[0].mask) | ANALOG_GAMEPAD);
 
 	if (port->cooked) {
 
@@ -532,7 +575,9 @@ static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
 	port->timer.data = (long) port;
 	port->timer.function = analog_timer;
 
-	if (gameport_open(gameport, dev, GAMEPORT_MODE_COOKED)) {
+	if (((port->gameport->number < ANALOG_PORTS) &&
+	     (analog_options[port->gameport->number] & ANALOG_SAITEK)) ||
+	      gameport_open(gameport, dev, GAMEPORT_MODE_COOKED)) {
 		if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW)) {
 			kfree(port);
 			return;
@@ -594,13 +639,14 @@ struct analog_types analog_types[] = {
 	{ "auto",	0x000000ff },
 	{ "2btn",	0x0000003f },
 	{ "4btn",	0x000000ff },
-	{ "y-joy",	0x00cc0033 },
-	{ "y-pad",	0x11cc0033 },
+	{ "y-joy",	0x0cc00033 },
+	{ "y-pad",	0x1cc10033 },
 	{ "fcs",	0x000008f7 },
 	{ "chf",	0x000002ff },
 	{ "fullchf",	0x000007ff },
-	{ "gamepad",	0x010030f3 },
-	{ "gamepad8",	0x0100f0f3 },
+	{ "gamepad",	0x000130f3 },
+	{ "gamepad8",	0x0001f0f3 },
+	{ "saitek",	0x000200ff },
 	{ NULL, 0 }
 };
 

@@ -70,7 +70,6 @@ static void warrior_process_packet(struct warrior *warrior)
 
 	switch ((data[0] >> 4) & 7) {
 		case 1:					/* Button data */
-			printk("btn: %d\n", data[3] & 0x0f);
 			input_report_key(dev, BTN_TRIGGER,  data[3]       & 1);
 			input_report_key(dev, BTN_THUMB,   (data[3] >> 1) & 1);
 			input_report_key(dev, BTN_TOP,     (data[3] >> 2) & 1);

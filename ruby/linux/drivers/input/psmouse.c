@@ -112,7 +112,7 @@ static void psmouse_process_packet(struct psmouse *psmouse)
 
 			default:
 
-				printk("psmouse.c: Received PS2++ packet #%x, but don't know how to handle.\n",
+				printk(KERN_WARNING "psmouse.c: Received PS2++ packet #%x, but don't know how to handle.\n",
 					((packet[1] >> 4) & 0x03) | ((packet[0] >> 2) & 0xc0));
 
 			}
@@ -182,7 +182,7 @@ static void psmouse_interrupt(struct serio *serio, unsigned char data, unsigned 
 	}
 
 	if (psmouse->pktcnt && jiffies - psmouse->last > 2) {
-		printk("psmouse.c: Lost synchronization, throwing %d bytes away.\n", psmouse->pktcnt);
+		printk(KERN_WARNING "psmouse.c: Lost synchronization, throwing %d bytes away.\n", psmouse->pktcnt);
 		psmouse->pktcnt = 0;
 	}
 	
@@ -492,7 +492,7 @@ static void psmouse_initialize(struct psmouse *psmouse)
  */
 
 	if (psmouse_command(psmouse, NULL, PSMOUSE_CMD_ENABLE)) {
-		printk("psmouse.c: Failed to enable mouse on serio%d\n", psmouse->serio->number);
+		printk(KERN_WARNING "psmouse.c: Failed to enable mouse on serio%d\n", psmouse->serio->number);
 	}
 
 }
@@ -566,7 +566,7 @@ static void psmouse_connect(struct serio *serio, struct serio_dev *dev)
 
 	input_register_device(&psmouse->dev);
 	
-	printk("input%d: %s %s %s on serio%d\n", psmouse->dev.number,
+	printk(KERN_INFO "input%d: %s %s %s on serio%d\n", psmouse->dev.number,
 		psmouse_protocols[psmouse->type], psmouse->vendor, psmouse->name, serio->number);
 
 	psmouse_initialize(psmouse);

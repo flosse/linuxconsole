@@ -421,7 +421,7 @@ static struct input_handle *mousedev_connect(struct input_handler *handler, stru
 	if (mousedev_mix.open)
 		input_open_device(&mousedev->handle);
 
-	printk("mouse%d: PS/2 mouse device for input%d\n", minor, dev->number);
+	printk(KERN_INFO "mouse%d: PS/2 mouse device for input%d\n", minor, dev->number);
 
 	return &mousedev->handle;
 }
@@ -459,7 +459,7 @@ static int __init mousedev_init(void)
 	mousedev_mix.minor = MOUSEDEV_MIX;
 	mousedev_mix.devfs = input_register_minor("mice", MOUSEDEV_MIX, MOUSEDEV_MINOR_BASE);
 
-	printk("mice: PS/2 mouse device common for all mice\n");
+	printk(KERN_INFO "mice: PS/2 mouse device common for all mice\n");
 
 	return 0;
 }

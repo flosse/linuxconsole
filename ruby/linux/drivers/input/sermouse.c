@@ -257,7 +257,7 @@ static void sermouse_connect(struct serio *serio, struct serio_dev *dev)
 
 	input_register_device(&sermouse->dev);
 	
-	printk("input%d: %s mouse on serio%d\n", sermouse->dev.number,
+	printk(KERN_INFO "input%d: %s mouse on serio%d\n", sermouse->dev.number,
 		sermouse_protocols[sermouse->type], serio->number);
 }
 

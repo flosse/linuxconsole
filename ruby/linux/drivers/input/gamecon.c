@@ -253,9 +253,7 @@ static void js_multi_read_packet(struct js_console_info *info, int length, unsig
 	for (i = 0; i < length; i++) {
 		JS_PAR_DATA_OUT(~(1 << i), info->port);
 		data[i] = JS_PAR_STATUS(info->port) ^ ~JS_PAR_STATUS_INVERT;
-		printk(" %d", data[i]);
 	}
-	printk("\n");
 }
 
 /*

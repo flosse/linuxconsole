@@ -116,7 +116,8 @@ static int i8042_flush(void)
 
 	while ((inb(I8042_STATUS_REG) & I8042_STR_OBF) && (i++ < I8042_BUFFER_SIZE))
 #ifdef I8042_DEBUG_IO
-		printk("i8042.c: %02x <- i8042 (flush) [%d]\n", inb(I8042_DATA_REG), (int) (jiffies - i8042_start));
+		printk(KERN_DEBUG "i8042.c: %02x <- i8042 (flush) [%d]\n",
+			inb(I8042_DATA_REG), (int) (jiffies - i8042_start));
 #else
 		inb(I8042_DATA_REG);
 #endif
@@ -144,7 +145,8 @@ static int i8042_command(unsigned char *param, int command)
 	retval = i8042_wait_write();
 	if (!retval) {
 #ifdef I8042_DEBUG_IO
-		printk("i8042.c: %02x -> i8042 (command) [%d]\n", command & 0xff, (int) (jiffies - i8042_start));
+		printk(KERN_DEBUG "i8042.c: %02x -> i8042 (command) [%d]\n",
+			command & 0xff, (int) (jiffies - i8042_start));
 #endif
 		outb(command & 0xff, I8042_COMMAND_REG);
 	}
@@ -153,7 +155,8 @@ static int i8042_command(unsigned char *param, int command)
 		for (i = 0; i < ((command >> 12) & 0xf); i++) {
 			if ((retval = i8042_wait_write())) break;
 #ifdef I8042_DEBUG_IO
-			printk("i8042.c: %02x -> i8042 (parameter) [%d]\n", param[i], (int) (jiffies - i8042_start));
+			printk(KERN_DEBUG "i8042.c: %02x -> i8042 (parameter) [%d]\n",
+				param[i], (int) (jiffies - i8042_start));
 #endif
 			outb(param[i], I8042_DATA_REG);
 		}
@@ -166,7 +169,8 @@ static int i8042_command(unsigned char *param, int command)
 			else
 				param[i] = inb(I8042_DATA_REG);
 #ifdef I8042_DEBUG_IO
-			printk("i8042.c: %02x <- i8042 (return) [%d]\n", param[i], (int) (jiffies - i8042_start));
+			printk(KERN_DEBUG "i8042.c: %02x <- i8042 (return) [%d]\n",
+				param[i], (int) (jiffies - i8042_start));
 #endif
 		}
 
@@ -191,7 +195,8 @@ static int i8042_kbd_write(struct serio *port, unsigned char c)
 
 	if(!(retval = i8042_wait_write())) {
 #ifdef I8042_DEBUG_IO
-		printk("i8042.c: %02x -> i8042 (kbd-data) [%d]\n", c, (int) (jiffies - i8042_start));
+		printk(KERN_DEBUG "i8042.c: %02x -> i8042 (kbd-data) [%d]\n",
+			c, (int) (jiffies - i8042_start));
 #endif
 		outb(c, I8042_DATA_REG);
 	}
@@ -246,7 +251,7 @@ static int i8042_open(struct serio *port)
  */
 
 	if (request_irq(values->irq, i8042_interrupt, 0, values->name, NULL)) {
-		printk("i8042.c: Can't get irq %d for %s\n", values->irq, values->name);
+		printk(KERN_ERR "i8042.c: Can't get irq %d for %s\n", values->irq, values->name);
 		return -1;
 	}
 
@@ -258,7 +263,7 @@ static int i8042_open(struct serio *port)
 	i8042_ctr &= ~values->disable;
 
 	if (i8042_command(&i8042_ctr, I8042_CMD_CTL_WCTR)) {
-		printk("i8042.c: Can't write CTR while opening %s.\n", values->name);
+		printk(KERN_ERR "i8042.c: Can't write CTR while opening %s.\n", values->name);
 		return -1;
 	}
 
@@ -288,7 +293,7 @@ static void i8042_close(struct serio *port)
 	i8042_ctr |= values->disable;
 
 	if (i8042_command(&i8042_ctr, I8042_CMD_CTL_WCTR)) {
-		printk("i8042.c: Can't write CTR while closing %s.\n", values->name);
+		printk(KERN_ERR "i8042.c: Can't write CTR while closing %s.\n", values->name);
 		return;
 	}
 
@@ -355,7 +360,7 @@ static void i8042_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 		data = inb(I8042_DATA_REG);
 
 #ifdef I8042_DEBUG_IO
-		printk("i8042.c: %02x <- i8042 (interrupt-%s) [%d]\n",
+		printk(KERN_DEBUG "i8042.c: %02x <- i8042 (interrupt-%s) [%d]\n",
 			data, (str & I8042_STR_AUXDATA) ? "aux" : "kbd", (int) (jiffies - i8042_start));
 #endif
 
@@ -396,7 +401,7 @@ static int __init i8042_controller_init(void)
  */
 
 	if (check_region(I8042_DATA_REG, 16)) {
-		printk("i8042.c: %#x port already in use!\n", I8042_DATA_REG);
+		printk(KERN_ERR "i8042.c: %#x port already in use!\n", I8042_DATA_REG);
 		return -1;
 	}
 
@@ -412,12 +417,13 @@ static int __init i8042_controller_init(void)
 		unsigned char param;
 
 		if (i8042_command(&param, I8042_CMD_CTL_TEST)) {
-			printk("i8042.c: i8042 controller self test timeout.\n");
+			printk(KERN_ERR "i8042.c: i8042 controller self test timeout.\n");
 			return -1;
 		}
 
 		if (param != I8042_RET_CTL_TEST) {
-			printk("i8042.c: i8042 controller selftest failed. (%#x != %#x)\n", param, I8042_RET_CTL_TEST);
+			printk(KERN_ERR "i8042.c: i8042 controller selftest failed. (%#x != %#x)\n",
+				 param, I8042_RET_CTL_TEST);
 			return -1;
 		}
 	}
@@ -427,7 +433,7 @@ static int __init i8042_controller_init(void)
  */
 
 	if (i8042_command(&i8042_ctr, I8042_CMD_CTL_RCTR)) {
-		printk("i8042.c: Can't read CTR while initializing i8042.\n");
+		printk(KERN_ERR "i8042.c: Can't read CTR while initializing i8042.\n");
 		return -1;
 	}
 
@@ -453,7 +459,7 @@ static int __init i8042_controller_init(void)
 		if (i8042_unlock) {
 			i8042_ctr |= I8042_CTR_IGNKEYLOCK;
 		} else {
-			printk("i8042.c: Warning: Keylock active.\n");
+			printk(KERN_WARNING "i8042.c: Warning: Keylock active.\n");
 		}
 	}
 
@@ -472,7 +478,7 @@ static int __init i8042_controller_init(void)
  */
 
 	if (i8042_command(&i8042_ctr, I8042_CMD_CTL_WCTR)) {
-		printk("i8042.c: Can't write CTR while initializing i8042.\n");
+		printk(KERN_ERR "i8042.c: Can't write CTR while initializing i8042.\n");
 		return -1;
 	}
 
@@ -495,7 +501,7 @@ void i8042_controller_cleanup(void)
 		unsigned char param;
 
 		if (i8042_command(&param, I8042_CMD_CTL_TEST))
-			printk("i8042.c: i8042 controller reset timeout.\n");
+			printk(KERN_ERR "i8042.c: i8042 controller reset timeout.\n");
 	}
 
 /*
@@ -505,7 +511,7 @@ void i8042_controller_cleanup(void)
 	i8042_ctr = i8042_initial_ctr;
 
 	if (i8042_command(&i8042_ctr, I8042_CMD_CTL_WCTR))
-		printk("i8042.c: Can't restore CTR.\n");
+		printk(KERN_WARNING "i8042.c: Can't restore CTR.\n");
 
 /*
  * Reset anything that is connected to the ports if the ports
@@ -594,7 +600,7 @@ static int __init i8042_port_register(struct i8042_values *values, struct serio 
 {
 	values->exists = 1;
 	serio_register_port(port);
-	printk("serio%d: i8042 %s port at %#x,%#x irq %d\n",
+	printk(KERN_INFO "serio%d: i8042 %s port at %#x,%#x irq %d\n",
 		port->number, values->name, I8042_DATA_REG, I8042_COMMAND_REG, values->irq);
 
 	return 0;

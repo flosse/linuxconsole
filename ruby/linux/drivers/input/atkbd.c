@@ -136,7 +136,7 @@ static void atkbd_interrupt(struct serio *serio, unsigned char data, unsigned in
 	int code = data;
 
 #ifdef ATKBD_DEBUG
-	printk("atkbd.c: Received %02x\n", data);
+	printk(KERN_DEBUG "atkbd.c: Received %02x\n", data);
 #endif
 
 	switch (code) {

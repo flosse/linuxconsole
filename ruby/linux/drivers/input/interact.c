@@ -10,7 +10,7 @@
  */
 
 /*
- * InterAct HammerHead/FX gamepad driver for Linux
+ * InterAct digital gamepad/joystick driver for Linux
  */
 
 /*
@@ -36,6 +36,7 @@
 #include <linux/kernel.h>
 #include <linux/malloc.h>
 #include <linux/module.h>
+#include <linux/delay.h>
 #include <linux/init.h>
 #include <linux/gameport.h>
 #include <linux/input.h>
@@ -45,23 +46,46 @@
 #define INTERACT_MAX_LENGTH	32	/* 32 bits */
 #define INTERACT_REFRESH_TIME	HZ/50	/* 20 ms */
 
-#define INTERACT_TYPE_HHFX	1	/* HammerHead/FX */
+#define INTERACT_TYPE_HHFX	0	/* HammerHead/FX */
+#define INTERACT_TYPE_PP8D	1	/* ProPad 8 */
 
 struct interact {
 	struct gameport *gameport;
 	struct input_dev dev;
 	struct timer_list timer;
-	int type;
 	int used;
 	int bads;
 	int reads;
+	unsigned char type;
+	unsigned char length;
 };
 
-static unsigned char interact_abs[] = { ABS_RX, ABS_RY, ABS_X, ABS_Y };
-static short interact_btn[] = { BTN_TR, BTN_X, BTN_Y, BTN_Z, BTN_A, BTN_B, BTN_C, BTN_TL, BTN_TL2, BTN_TR2, BTN_MODE, BTN_SELECT };
+static short interact_abs_hhfx[] = 
+	{ ABS_RX, ABS_RY, ABS_X, ABS_Y, ABS_HAT0X, ABS_HAT0Y, -1 };
+static short interact_abs_pp8d[] =
+	{ ABS_X, ABS_Y, -1 };
+
+static short interact_btn_hhfx[] =
+	{ BTN_TR, BTN_X, BTN_Y, BTN_Z, BTN_A, BTN_B, BTN_C, BTN_TL, BTN_TL2, BTN_TR2, BTN_MODE, BTN_SELECT, -1 };
+static short interact_btn_pp8d[] =
+	{ BTN_C, BTN_TL, BTN_TR, BTN_A, BTN_B, BTN_Y, BTN_Z, BTN_X, -1 };
+
+struct interact_type {
+	int id;
+	short *abs;
+	short *btn;
+	char *name;
+	unsigned char length;
+	unsigned char b8;
+};
+
+static struct interact_type interact_type[] = {
+	{ 0x6202, interact_abs_hhfx, interact_btn_hhfx, "InterAct HammerHead/FX",    32, 4 },
+	{ 0x53f8, interact_abs_pp8d, interact_btn_pp8d, "InterAct ProPad 8 Digital", 16, 0 },
+	{ 0 }};
 
 /*
- * interact_read_packet() reads and Hammerhead/FX joystick data.
+ * interact_read_packet() reads and InterAct joystick data.
  */
 
 static int interact_read_packet(struct gameport *gameport, int length, u32 *data)
@@ -87,7 +111,7 @@ static int interact_read_packet(struct gameport *gameport, int length, u32 *data
 		if (v & ~u & 0x40) {
 			data[0] = (data[0] << 1) | ((v >> 4) & 1);
 			data[1] = (data[1] << 1) | ((v >> 5) & 1);
-			data[2] = (data[1] << 1) | ((v >> 7) & 1);
+			data[2] = (data[2] << 1) | ((v >> 7) & 1);
 			i++;
 			t = s;
 		}
@@ -111,33 +135,42 @@ static void interact_timer(unsigned long private)
 
 	interact->reads++;
 
-	if (interact_read_packet(interact->gameport, INTERACT_MAX_LENGTH, data) < INTERACT_MAX_LENGTH) {
+	if (interact_read_packet(interact->gameport, interact->length, data) < interact->length) {
 		interact->bads++;
 	} else
+
+	for (i = 0; i < 3; i++)
+		data[i] <<= INTERACT_MAX_LENGTH - interact->length;
 
 	switch (interact->type) {
 
 		case INTERACT_TYPE_HHFX:
 
-#if 0
-			printk("data0: %08x, data1: %08x data2: %08x\n", data[0], data[1], data[2]); 
-#endif
-
 			for (i = 0; i < 4; i++)
-				input_report_abs(dev, interact_abs[i], (data[i & 1] >> ((i >> 1) << 3)) & 0xff);
+				input_report_abs(dev, interact_abs_hhfx[i], (data[i & 1] >> ((i >> 1) << 3)) & 0xff);
 
 			for (i = 0; i < 2; i++)
 				input_report_abs(dev, ABS_HAT0Y - i,
 					((data[1] >> ((i << 1) + 17)) & 1)  - ((data[1] >> ((i << 1) + 16)) & 1));
 
 			for (i = 0; i < 8; i++)
-				input_report_key(dev, interact_btn[i], (data[0] >> (i + 16)) & 1);
+				input_report_key(dev, interact_btn_hhfx[i], (data[0] >> (i + 16)) & 1);
 
 			for (i = 0; i < 4; i++)
-				input_report_key(dev, interact_btn[i + 8], (data[1] >> (i + 20)) & 1);
+				input_report_key(dev, interact_btn_hhfx[i + 8], (data[1] >> (i + 20)) & 1);
 
 			break;
 
+		case INTERACT_TYPE_PP8D:
+
+			for (i = 0; i < 2; i++)
+				input_report_abs(dev, interact_abs_pp8d[i], 
+					((data[0] >> ((i << 1) + 20)) & 1)  - ((data[0] >> ((i << 1) + 21)) & 1));
+
+			for (i = 0; i < 8; i++)
+				input_report_key(dev, interact_btn_pp8d[i], (data[1] >> (i + 16)) & 1);
+
+			break;
 	}
 
 	mod_timer(&interact->timer, jiffies + INTERACT_REFRESH_TIME);
@@ -191,38 +224,47 @@ static void interact_connect(struct gameport *gameport, struct gameport_dev *dev
 	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW))
 		goto fail1;
 
-	i = interact_read_packet(gameport, INTERACT_MAX_LENGTH, data);
+	i = interact_read_packet(gameport, INTERACT_MAX_LENGTH * 2, data);
 
-	if (i != 32 || (data[0] >> 24) != 0x0c || (data[1] >> 24) != 0x02)
+	if (i != 32 || (data[0] >> 24) != 0x0c || (data[1] >> 24) != 0x02) {
 		goto fail2;
+	}
 
-	interact->type = INTERACT_TYPE_HHFX;
+	for (i = 0; interact_type[i].length; i++)
+		if (interact_type[i].id == (data[2] >> 16))
+			break;
+
+	if (!interact_type[i].length) {
+		printk(KERN_WARNING "interact.c: Unknown joystick on gameport%d. [len %d d0 %08x d1 %08x i2 %08x]\n",
+			gameport->number, i, data[0], data[1], data[2]);
+		goto fail2;	
+	}
+
+	interact->type = i;
+	interact->length = interact_type[i].length;
 
 	interact->dev.private = interact;
 	interact->dev.open = interact_open;
 	interact->dev.close = interact_close;
 	interact->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 
-	for (i = 0; i < 4; i++) {
-		t = interact_abs[i];
+	for (i = 0; (t = interact_type[interact->type].abs[i]) >= 0; i++) {
 		set_bit(t, interact->dev.absbit);
-		interact->dev.absmin[t] = 0;
-		interact->dev.absmax[t] = 255;
+		if (i < interact_type[interact->type].b8) {
+			interact->dev.absmin[t] = 0;
+			interact->dev.absmax[t] = 255;
+		} else {
+			interact->dev.absmin[t] = -1;
+			interact->dev.absmax[t] = 1;
+		}
 	}
 
-	for (i = 0; i < 2; i++) {
-		t = ABS_HAT0X + i;
-		set_bit(t, interact->dev.absbit);
-		interact->dev.absmin[t] = -1;
-		interact->dev.absmax[t] = 1;
-	}
-
-	for (i = 0; i < 12; i++)
-		set_bit(interact_btn[i], interact->dev.keybit);
+	for (i = 0; (t = interact_type[interact->type].btn[i]) >= 0; i++)
+		set_bit(t, interact->dev.keybit);
 
 	input_register_device(&interact->dev);
-	printk(KERN_INFO "input%d: HammerHead/FX on gameport%d.0\n",
-		interact->dev.number, gameport->number);
+	printk(KERN_INFO "input%d: %s on gameport%d.0\n",
+		interact->dev.number, interact_type[interact->type].name, gameport->number);
 
 	return;
 fail2:	gameport_close(gameport);

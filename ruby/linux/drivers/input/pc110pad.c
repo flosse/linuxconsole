@@ -106,7 +106,7 @@ static int __init pc110pad_init(void)
 {
 	if (request_region(pc110pad_io, 4, "pc110pad"))
 	{
-		printk("pc110pad: I/O area %#x-%#x in use.\n", pc110pad_io, pc110pad_io + 4);
+		printk(KERN_ERR "pc110pad: I/O area %#x-%#x in use.\n", pc110pad_io, pc110pad_io + 4);
 		return -EBUSY;
 	}
 
@@ -115,7 +115,7 @@ static int __init pc110pad_init(void)
 	if (request_irq(pc110pad_irq, pc110pad_interrupt, 0, "pc110pad", 0))
 	{
 		release_region(pc110pad_io, 4);
-		printk("pc110pad: Unable to get irq %d.\n", pc110pad_irq);
+		printk(KERN_ERR "pc110pad: Unable to get irq %d.\n", pc110pad_irq);
 		return -EBUSY;
 	}
 
@@ -131,7 +131,7 @@ static int __init pc110pad_init(void)
 
 	input_register_device(&pc110pad_dev);	
 
-	printk("input%d: IBM PC110 digitizer pad at %#x irq %d\n",
+	printk(KERN_INFO "input%d: IBM PC110 digitizer pad at %#x irq %d\n",
 		pc110pad_dev.number, pc110pad_io, pc110pad_irq);
 	
 	return 0;

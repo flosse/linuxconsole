@@ -131,7 +131,7 @@ static void spaceball_interrupt(struct serio *serio, unsigned char data, unsigne
 			spaceball->escape ^= 1;
 		default:
 			if (spaceball->escape) {
-				printk("joy-spaceball: Unknown escaped character: %#x\n", data);
+				printk(KERN_WARNING "spaceball.c: Unknown escaped character: %#x\n", data);
 				spaceball->escape = 0;
 			}
 			if (spaceball->idx < JS_SBALL_MAX_LENGTH)

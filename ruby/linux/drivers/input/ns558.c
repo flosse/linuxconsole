@@ -126,7 +126,7 @@ static struct ns558* ns558_isa_probe(int io, struct ns558 *next)
 	i--;
 
 	if (!(port = kmalloc(sizeof(struct ns558), GFP_KERNEL))) {
-		printk("Memory allocation failed.\n");
+		printk(KERN_ERR "Memory allocation failed.\n");
 		return next;
 	}
        	memset(port, 0, sizeof(struct ns558));
@@ -173,7 +173,7 @@ static int __devinit ns558_pci_probe(struct pci_dev *pdev, const struct pci_devi
 		return -EBUSY;
 
 	if (!(port = kmalloc(sizeof(struct ns558), GFP_KERNEL))) {
-		printk("Memory allocation failed.\n");
+		printk(KERN_ERR "Memory allocation failed.\n");
 		return -ENOMEM;
 	}
 	memset(port, 0, sizeof(struct ns558));
@@ -244,12 +244,12 @@ static struct ns558* ns558_pnp_probe(struct pci_dev *dev, struct ns558 *next)
 		return next;
 
 	if (!(dev->resource[0].flags & IORESOURCE_IO)) {
-		printk("No i/o ports on a gameport? Weird\n");
+		printk(KERN_WARNING "No i/o ports on a gameport? Weird\n");
 		return next;
 	}
 
 	if (dev->activate && dev->activate(dev) < 0) {
-		printk("PnP resource allocation failed\n");
+		printk(KERN_ERR "PnP resource allocation failed\n");
 		return next;
 	}
 	
@@ -260,7 +260,7 @@ static struct ns558* ns558_pnp_probe(struct pci_dev *dev, struct ns558 *next)
 		goto deactivate;
 
 	if (!(port = kmalloc(sizeof(struct ns558), GFP_KERNEL))) {
-		printk("Memory allocation failed.\n");
+		printk(KERN_ERR "Memory allocation failed.\n");
 		goto deactivate;
 	}
 	memset(port, 0, sizeof(struct ns558));
