@@ -104,12 +104,12 @@ struct fbvt_data {
      */
 
 /* Color */
-#define attr_fgcol(p,s)    \
-	(((s) >> ((p)->fgshift)) & 0x0f)
-#define attr_bgcol(p,s)    \
-	(((s) >> ((p)->bgshift)) & 0x0f)
-#define	attr_bgcol_ec(p, vc) \
-	((vc) ? (((vc)->vc_video_erase_char >> ((p)->bgshift)) & 0x0f) : 0)
+#define attr_fgcol(vc, s)    \
+	(((s) >> (vc->vc_font.charcount > 256 ? 8 : 9)) & 0x0f)
+#define attr_bgcol(vc, s)    \
+	(((s) >> (vc->vc_font.charcount > 256 ? 12 : 13)) & 0x0f)
+#define	attr_bgcol_ec(vc) \
+	((vc)->vc_video_erase_char >> ((vc->vc_font.charcount > 256 ? 12 : 13) & 0x0f))
 
 /* Monochrome */
 #define attr_bold(p,s) \

@@ -285,7 +285,7 @@ static void fbcon_clear(struct vc_data *vc, int sy, int sx, int height,
 			int width)
 {
     struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
-    unsigned long color = attr_bgcol_ec(info, vc);	
+    unsigned long color = attr_bgcol_ec(vc);	
 
     info->fbops->fb_fillrect(info, sx, sy, width, height, color, ROP_COPY);	
 }
@@ -294,8 +294,6 @@ static void fbcon_putc(struct vc_data *vc, int c, int ypos, int xpos)
 {
     struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
     unsigned short charmask = (vc->vc_font.charcount > 256) ? 0xff: 0x1ff;
-    unsigned long fgx = attr_fgcol(info, scr_readw(s));
-    unsigned long bgx = attr_bgcol(info, scr_readw(s));
     unsigned int dy = ypos * vc->vc_font.height;	 	
     unsigned int dx = xpos * vc->vc_font.width;
     void *image; 	
