@@ -63,11 +63,10 @@
 #include <asm/setup.h>
 #include <asm/io.h>
 
-#include <video/fbcon.h>
-#include <video/fbcon-afb.h>
-#include <video/fbcon-ilbm.h>
+#include "fbcon-afb.h"
+#include "fbcon-ilbm.h"
 #include <video/fbcon-mfb.h>
-
+#include "fbcon.h"
 
 #define DEBUG
 
@@ -1108,16 +1107,17 @@ static int amifb_get_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info);
 static int amifb_set_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info);
-static int amifb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info);
 static int amifb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                            u_int transp, struct fb_info *info);
-static int amifb_blank(int blank, struct fb_info *info);
+static void amifb_blank(int blank, struct fb_info *info);
 static int amifb_pan_display(struct fb_var_screeninfo *var, int con,
-                             struct fb_info *info);
+			     struct fb_info *info);
+static int amifb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
+			  struct fb_info *info);
+static int amifb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			  struct fb_info *info);
 static int amifb_ioctl(struct inode *inode, struct file *file, u_int cmd,
 		       u_long arg, int con, struct fb_info *info);
-
 
 static int amifb_get_fix_cursorinfo(struct fb_fix_cursorinfo *fix, int con);
 static int amifb_get_var_cursorinfo(struct fb_var_cursorinfo *var,
@@ -1182,16 +1182,16 @@ static void ami_rebuild_copper(void);
 
 
 static struct fb_ops amifb_ops = {
-	owner:          THIS_MODULE,
-	fb_get_fix:	amifb_get_fix, 
+	owner:		THIS_MODULE,
+	fb_get_fix:	amifb_get_fix,
 	fb_get_var:	amifb_get_var,
-	fb_set_var:	amifb_set_var, 
-	fb_get_cmap:	amifb_get_cmap, 
-	fb_set_cmap:	fbgen_set_cmap,
+	fb_set_var:	amifb_set_var,
+	fb_get_cmap:	amifb_get_cmap,
+	fb_set_cmap:	amifb_set_cmap,
 	fb_setcolreg:	amifb_setcolreg,
 	fb_blank:	amifb_blank,
-	fb_pan_display:	amifb_pan_display, 
-	fb_ioctl:	amifb_ioctl
+	fb_pan_display:	amifb_pan_display,
+	fb_ioctl:	amifb_ioctl,
 };
 
 int __init amifb_setup(char *options)
@@ -1200,6 +1200,7 @@ int __init amifb_setup(char *options)
 	char mcap_spec[80];
 
 	mcap_spec[0] = '\0';
+	fb_info.fontname[0] = '\0';
 
 	if (!options || !*options)
 		return 0;
@@ -1212,6 +1213,8 @@ int __init amifb_setup(char *options)
 			amifb_ilbm = 1;
 		else if (!strncmp(this_opt, "monitorcap:", 11))
 			strcpy(mcap_spec, this_opt+11);
+		else if (!strncmp(this_opt, "font:", 5))
+			strcpy(fb_info.fontname, this_opt+5);
 		else if (!strncmp(this_opt, "fstart:", 7))
 			min_fstrt = simple_strtoul(this_opt+7, NULL, 0);
 		else
@@ -1371,8 +1374,7 @@ static int amifb_set_var(struct fb_var_screeninfo *var, int con,
 			    default:
 				display->dispsw = &fbcon_dummy;
 			}
-			if (fb_info.changevar)
-				(*fb_info.changevar)(con);
+			fbcon_changevar(con);
 		}
 		if (oldbpp != var->bits_per_pixel) {
 			if ((err = fb_alloc_cmap(&display->cmap, 0, 0)))
@@ -1431,6 +1433,28 @@ static int amifb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 	else
 		fb_copy_cmap(fb_default_cmap(1<<fb_display[con].var.bits_per_pixel),
 			     cmap, kspc ? 0 : 2);
+	return 0;
+}
+
+	/*
+	 * Set the Colormap
+	 */
+
+static int amifb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			  struct fb_info *info)
+{
+	int err;
+
+	if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
+		if ((err = fb_alloc_cmap(&fb_display[con].cmap,
+					 1<<fb_display[con].var.bits_per_pixel,
+					 0)))
+			return err;
+	}
+	if (con == currcon)			/* current console? */
+		return fb_set_cmap(cmap, kspc, info);
+	else
+		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
 	return 0;
 }
 
@@ -1713,7 +1737,6 @@ default_chipset:
 	}
 
 	strcpy(fb_info.modename, amifb_name);
-	fb_info.changevar = NULL;
 	fb_info.node = -1;
 	fb_info.fbops = &amifb_ops;
 	fb_info.disp = &disp;
@@ -1831,7 +1854,7 @@ static int amifbcon_updatevar(int con, struct fb_info *info)
 	 * Blank the display.
 	 */
 
-static int amifb_blank(int blank, struct fb_info *info)
+static void amifb_blank(int blank, struct fb_info *info)
 {
 	do_blank = blank ? blank : -1;
 }

@@ -112,8 +112,6 @@ void dn_video_setup(char *options, int *ints);
 
 /* frame buffer operations */
 
-static int dn_fb_open(struct fb_info *info);
-static int dn_fb_release(struct fb_info *info);
 static int dn_fb_get_fix(struct fb_fix_screeninfo *fix, int con, 
 			 struct fb_info *info);
 static int dn_fb_get_var(struct fb_var_screeninfo *var, int con,
@@ -122,8 +120,8 @@ static int dn_fb_set_var(struct fb_var_screeninfo *var, int isactive,
 			 struct fb_info *info);
 static int dn_fb_get_cmap(struct fb_cmap *cmap,int kspc,int con,
 			  struct fb_info *info);
-static int dn_fb_pan_display(struct fb_var_screeninfo *var, int con,
-			     struct fb_info *info);
+static int dn_fb_set_cmap(struct fb_cmap *cmap,int kspc,int con,
+			  struct fb_info *info);
 
 static int dnfbcon_switch(int con,struct fb_info *info);
 static int dnfbcon_updatevar(int con,struct fb_info *info);
@@ -133,9 +131,13 @@ static void dn_fb_set_disp(int con,struct fb_info *info);
 
 static struct display disp[MAX_NR_CONSOLES];
 static struct fb_info fb_info;
-static struct fb_ops dn_fb_ops = { 
-	dn_fb_open,dn_fb_release, dn_fb_get_fix, dn_fb_get_var, dn_fb_set_var,
-	dn_fb_get_cmap, fbgen_set_cmap, dn_fb_pan_display, NULL
+static struct fb_ops dn_fb_ops = {
+	owner:		THIS_MODULE,
+	fb_get_fix:	dn_fb_get_fix,
+	fb_get_var:	dn_fb_get_var,
+	fb_set_var:	dn_fb_set_var,
+	fb_get_cmap:	dn_fb_get_cmap,
+	fb_set_cmap:	dn_fb_set_cmap,
 };
 
 static int currcon=0;
@@ -153,22 +155,6 @@ static char dn_fb_name[]="Apollo ";
 #define USE_DN_ACCEL
 
 static struct display_switch dispsw_apollofb;
-
-static int dn_fb_open(struct fb_info *info)
-{
-        /*
-         * Nothing, only a usage count for the moment
-         */
-
-        MOD_INC_USE_COUNT;
-        return(0);
-}
-
-static int dn_fb_release(struct fb_info *info)
-{
-        MOD_DEC_USE_COUNT;
-        return(0);
-}
 
 static int dn_fb_get_fix(struct fb_fix_screeninfo *fix, int con,
 			 struct fb_info *info) {
@@ -275,15 +261,6 @@ static int dn_fb_set_cmap(struct fb_cmap *cmap,int kspc,int con,
 
 }
 
-static int dn_fb_pan_display(struct fb_var_screeninfo *var, int con,
-			     struct fb_info *info) {
-
-	printk("panning not supported\n");
-
-	return -EINVAL;
-
-}
-
 static void dn_fb_set_disp(int con, struct fb_info *info) {
 
   struct fb_fix_screeninfo fix;
@@ -311,8 +288,8 @@ unsigned long dn_fb_init(unsigned long mem_start) {
        
 printk("dn_fb_init\n");
 
-	fb_info.changevar=NULL;
 	strcpy(&fb_info.modename[0],dn_fb_name);
+	fb_info.fontname[0]=0;
 	fb_info.disp=disp;
 	fb_info.switch_con=&dnfbcon_switch;
 	fb_info.updatevar=&dnfbcon_updatevar;
@@ -574,6 +551,11 @@ static void rev_char_apollofb(struct display *p, int xx, int yy)
 }
 
 static struct display_switch dispsw_apollofb = {
-    fbcon_mfb_setup, bmove_apollofb, clear_apollofb,
-    putc_apollofb, putcs_apollofb, rev_char_apollofb
+    setup:		fbcon_mfb_setup,
+    bmove:		bmove_apollofb,
+    clear:		clear_apollofb,
+    putc:		putc_apollofb,
+    putcs:		putcs_apollofb,
+    revc:		rev_char_apollofb,
+    fontwidthmask:	FONTWIDTH(8)
 };

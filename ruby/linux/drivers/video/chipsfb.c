@@ -47,7 +47,12 @@ static int currcon = 0;
 
 struct fb_info_chips {
 	struct fb_info info;
+	struct fb_fix_screeninfo fix;
+	struct fb_var_screeninfo var;
 	struct display disp;
+	struct {
+		__u8 red, green, blue;
+	} palette[256];
 	unsigned long frame_buffer_phys;
 	__u8 *frame_buffer;
 	unsigned long blitter_regs_phys;
@@ -110,39 +115,50 @@ static struct pmu_sleep_notifier chips_sleep_notifier = {
 int chips_init(void);
 void chips_of_init(struct device_node *dp);
 
-static int chips_open(struct fb_info *info, int user);
-static int chips_release(struct fb_info *info, int user);
-static int chips_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-                           u_int transp, struct fb_info *info);
-static int chips_blank(int blank, struct fb_info *info);
-static int chips_pan_display(struct fb_var_screeninfo *var, int con,
-                             struct fb_info *info);
+static int chips_get_fix(struct fb_fix_screeninfo *fix, int con,
+			 struct fb_info *info);
+static int chips_get_var(struct fb_var_screeninfo *var, int con,
+			 struct fb_info *info);
+static int chips_set_var(struct fb_var_screeninfo *var, int con,
+			 struct fb_info *info);
+static int chipsfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+                             u_int transp, struct fb_info *info);
+static int chips_get_cmap(struct fb_cmap *cmap, int kspc, int con,
+			  struct fb_info *info);
+static int chips_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			  struct fb_info *info);
 
 static struct fb_ops chipsfb_ops = {
-	fb_open:	chips_open,
-	fb_release:	chips_release,
-	fb_get_fix:	fbgen_get_fix,
-	fb_get_var:	fbgen_get_var,
+	owner:		THIS_MODULE,
+	fb_get_fix:	chips_get_fix,
+	fb_get_var:	chips_get_var,
 	fb_set_var:	chips_set_var,
-	fb_get_cmap:	fbgen_get_cmap,
-	fb_set_cmap:	fbgen_set_cmap,
+	fb_get_cmap:	chips_get_cmap,
+	fb_set_cmap:	chips_set_cmap,
 	fb_setcolreg:	chips_setcolreg,
 	fb_blank:	chips_blank,
-	fb_pan_display:	chips_pan_display
 };
 
+static int chipsfb_getcolreg(u_int regno, u_int *red, u_int *green,
+			     u_int *blue, u_int *transp, struct fb_info *info);
+static void do_install_cmap(int con, struct fb_info *info);
 static void chips_set_bitdepth(struct fb_info_chips *p, struct display* disp, int con, int bpp);
 
-
-static int chips_open(struct fb_info *info, int user)
+static int chips_get_fix(struct fb_fix_screeninfo *fix, int con,
+			 struct fb_info *info)
 {
-	MOD_INC_USE_COUNT;
+	struct fb_info_chips *cp = (struct fb_info_chips *) info;
+
+	*fix = cp->fix;
 	return 0;
 }
 
-static int chips_release(struct fb_info *info, int user)
+static int chips_get_var(struct fb_var_screeninfo *var, int con,
+			 struct fb_info *info)
 {
-	MOD_DEC_USE_COUNT;
+	struct fb_info_chips *cp = (struct fb_info_chips *) info;
+
+	*var = cp->var;
 	return 0;
 }
 
@@ -162,14 +178,119 @@ static int chips_set_var(struct fb_var_screeninfo *var, int con,
 	if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW &&
 		var->bits_per_pixel != disp->var.bits_per_pixel) {
 		chips_set_bitdepth(cp, disp, con, var->bits_per_pixel);
-	
+	}
 
+	return 0;
+}
+
+static int chips_get_cmap(struct fb_cmap *cmap, int kspc, int con,
+			  struct fb_info *info)
+{
+	if (con == currcon)		/* current console? */
+		return fb_get_cmap(cmap, kspc, chipsfb_getcolreg, info);
+	if (fb_display[con].cmap.len)	/* non default colormap? */
+		fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
+	else {
+		int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
+		fb_copy_cmap(fb_default_cmap(size), cmap, kspc ? 0 : 2);
 	}
 	return 0;
 }
 
-static int chips_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-		           u_int transp, struct fb_info *info)
+static int chips_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			 struct fb_info *info)
+{
+	int err;
+
+	if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
+		int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
+		if ((err = fb_alloc_cmap(&fb_display[con].cmap, size, 0)))
+			return err;
+	}
+	if (con == currcon)			/* current console? */
+		return fb_set_cmap(cmap, kspc, info);
+	else
+		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
+	return 0;
+}
+
+static int chipsfbcon_switch(int con, struct fb_info *info)
+{
+	struct fb_info_chips *p = (struct fb_info_chips *) info;
+	int new_bpp, old_bpp;
+
+	/* Do we have to save the colormap? */
+	if (fb_display[currcon].cmap.len)
+		fb_get_cmap(&fb_display[currcon].cmap, 1, chipsfb_getcolreg, info);
+
+	new_bpp = fb_display[con].var.bits_per_pixel;
+	old_bpp = fb_display[currcon].var.bits_per_pixel;
+	currcon = con;
+
+	if (new_bpp != old_bpp)
+		chips_set_bitdepth(p, &fb_display[con], con, new_bpp);
+	
+	do_install_cmap(con, info);
+	return 0;
+}
+
+static int chipsfb_updatevar(int con, struct fb_info *info)
+{
+	return 0;
+}
+
+static void chipsfb_blank(int blank, struct fb_info *info)
+{
+	struct fb_info_chips *p = (struct fb_info_chips *) info;
+	int i;
+
+	// used to disable backlight only for blank > 1, but it seems
+	// useful at blank = 1 too (saves battery, extends backlight life)
+	if (blank) {
+		pmu_enable_backlight(0);
+		/* get the palette from the chip */
+		for (i = 0; i < 256; ++i) {
+			out_8(p->io_base + 0x3c7, i);
+			udelay(1);
+			p->palette[i].red = in_8(p->io_base + 0x3c9);
+			p->palette[i].green = in_8(p->io_base + 0x3c9);
+			p->palette[i].blue = in_8(p->io_base + 0x3c9);
+		}
+		for (i = 0; i < 256; ++i) {
+			out_8(p->io_base + 0x3c8, i);
+			udelay(1);
+			out_8(p->io_base + 0x3c9, 0);
+			out_8(p->io_base + 0x3c9, 0);
+			out_8(p->io_base + 0x3c9, 0);
+		}
+	} else {
+		pmu_enable_backlight(1);
+		for (i = 0; i < 256; ++i) {
+			out_8(p->io_base + 0x3c8, i);
+			udelay(1);
+			out_8(p->io_base + 0x3c9, p->palette[i].red);
+			out_8(p->io_base + 0x3c9, p->palette[i].green);
+			out_8(p->io_base + 0x3c9, p->palette[i].blue);
+		}
+	}
+}
+
+static int chipsfb_getcolreg(u_int regno, u_int *red, u_int *green,
+			     u_int *blue, u_int *transp, struct fb_info *info)
+{
+	struct fb_info_chips *p = (struct fb_info_chips *) info;
+
+	if (regno > 255)
+		return 1;
+	*red = (p->palette[regno].red<<8) | p->palette[regno].red;
+	*green = (p->palette[regno].green<<8) | p->palette[regno].green;
+	*blue = (p->palette[regno].blue<<8) | p->palette[regno].blue;
+	*transp = 0;
+	return 0;
+}
+
+static int chipsfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+			     u_int transp, struct fb_info *info)
 {
 	struct fb_info_chips *p = (struct fb_info_chips *) info;
 
@@ -178,6 +299,9 @@ static int chips_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 	red >>= 8;
 	green >>= 8;
 	blue >>= 8;
+	p->palette[regno].red = red;
+	p->palette[regno].green = green;
+	p->palette[regno].blue = blue;
 	out_8(p->io_base + 0x3c8, regno);
 	udelay(1);
 	out_8(p->io_base + 0x3c9, red);
@@ -193,49 +317,82 @@ static int chips_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 	return 0;
 }
 
-static int chips_blank(int blank, struct fb_info *info)
+static void do_install_cmap(int con, struct fb_info *info)
 {
-        struct fb_info_chips *p = (struct fb_info_chips *) info;
-        int i;
-
-        // used to disable backlight only for blank > 1, but it seems
-        // useful at blank = 1 too (saves battery, extends backlight life)
-        if (blank) {
-                pmu_enable_backlight(0);
-                /* get the palette from the chip */
-                for (i = 0; i < 256; ++i) {
-                        out_8(p->io_base + 0x3c7, i);
-                        udelay(1);
-                        p->palette[i].red = in_8(p->io_base + 0x3c9);
-                        p->palette[i].green = in_8(p->io_base + 0x3c9);
-                        p->palette[i].blue = in_8(p->io_base + 0x3c9);
-                }
-                for (i = 0; i < 256; ++i) {
-                        out_8(p->io_base + 0x3c8, i);
-                        udelay(1);
-                        out_8(p->io_base + 0x3c9, 0);
-                        out_8(p->io_base + 0x3c9, 0);
-                        out_8(p->io_base + 0x3c9, 0);
-                }
-        } else {
-                pmu_enable_backlight(1);
-                for (i = 0; i < 256; ++i) {
-                        out_8(p->io_base + 0x3c8, i);
-                        udelay(1);
-                        out_8(p->io_base + 0x3c9, p->palette[i].red);
-                        out_8(p->io_base + 0x3c9, p->palette[i].green);
-                        out_8(p->io_base + 0x3c9, p->palette[i].blue);
-                }
-        }
-        return 0;
+	if (con != currcon)
+		return;
+	if (fb_display[con].cmap.len)
+		fb_set_cmap(&fb_display[con].cmap, 1, info);
+	else {
+		int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
+		fb_set_cmap(fb_default_cmap(size), 1, info);
+	}
 }
 
-static int chips_pan_display(struct fb_var_screeninfo *var, int con,
-			     struct fb_info *info)
+static void chips_set_bitdepth(struct fb_info_chips *p, struct display* disp, int con, int bpp)
 {
-	if (var->xoffset != 0 || var->yoffset != 0)
-		return -EINVAL;
-	return 0;
+	int err;
+	struct fb_fix_screeninfo* fix = &p->fix;
+	struct fb_var_screeninfo* var = &p->var;
+	
+	if (bpp == 16) {
+		if (con == currcon) {
+			write_cr(0x13, 200);		// Set line length (doublewords)
+			write_xr(0x81, 0x14);		// 15 bit (555) color mode
+			write_xr(0x82, 0x00);		// Disable palettes
+			write_xr(0x20, 0x10);		// 16 bit blitter mode
+		}
+
+		fix->line_length = 800*2;
+		fix->visual = FB_VISUAL_TRUECOLOR;
+
+		var->red.offset = 10;
+		var->green.offset = 5;
+		var->blue.offset = 0;
+		var->red.length = var->green.length = var->blue.length = 5;
+		
+#ifdef FBCON_HAS_CFB16
+		disp->dispsw = &fbcon_cfb16;
+		disp->dispsw_data = p->fbcon_cfb16_cmap;
+#else
+		disp->dispsw = &fbcon_dummy;
+#endif
+	} else if (bpp == 8) {
+		if (con == currcon) {
+			write_cr(0x13, 100);		// Set line length (doublewords)
+			write_xr(0x81, 0x12);		// 8 bit color mode
+			write_xr(0x82, 0x08);		// Graphics gamma enable
+			write_xr(0x20, 0x00);		// 8 bit blitter mode
+		}
+
+		fix->line_length = 800;
+		fix->visual = FB_VISUAL_PSEUDOCOLOR;		
+
+ 		var->red.offset = var->green.offset = var->blue.offset = 0;
+		var->red.length = var->green.length = var->blue.length = 8;
+		
+#ifdef FBCON_HAS_CFB8
+		disp->dispsw = &fbcon_cfb8;
+#else
+		disp->dispsw = &fbcon_dummy;
+#endif
+	}
+
+	var->bits_per_pixel = bpp;
+	disp->line_length = p->fix.line_length;
+	disp->visual = fix->visual;
+	disp->var = *var;
+
+#if (defined(CONFIG_PMAC_PBOOK) || defined(CONFIG_FB_COMPAT_XPMAC))
+	display_info.depth = bpp;
+	display_info.pitch = fix->line_length;
+#endif
+	
+	fbcon_changevar(con);
+
+	if ((err = fb_alloc_cmap(&disp->cmap, 0, 0)))
+		return;
+	do_install_cmap(con, (struct fb_info *)p);
 }
 
 struct chips_init_reg {
@@ -367,7 +524,7 @@ static void __init chips_hw_init(struct fb_info_chips *p)
 		write_fr(chips_init_fr[i].addr, chips_init_fr[i].data);
 }
 
-static void __init init_chips(struct fb_info *p)
+static void __init init_chips(struct fb_info_chips *p)
 {
 	int i;
 
@@ -418,9 +575,9 @@ static void __init init_chips(struct fb_info *p)
 	p->info.node = -1;
 	p->info.fbops = &chipsfb_ops;
 	p->info.disp = &p->disp;
-	p->info.changevar = NULL;
+	p->info.fontname[0] = 0;
 	p->info.switch_con = &chipsfbcon_switch;
-	p->info.updatevar = &fbgen_update_var;
+	p->info.updatevar = &chipsfb_updatevar;
 	p->info.flags = FBINFO_FLAG_DEFAULT;
 
 	for (i = 0; i < 16; ++i) {
@@ -524,7 +681,8 @@ void __init chips_of_init(struct device_node *dp)
  * Save the contents of the frame buffer when we go to sleep,
  * and restore it when we wake up again.
  */
-int chips_sleep_notify(struct pmu_sleep_notifier *self, int when)
+int
+chips_sleep_notify(struct pmu_sleep_notifier *self, int when)
 {
 	struct fb_info_chips *p;
 
@@ -564,23 +722,3 @@ int chips_sleep_notify(struct pmu_sleep_notifier *self, int when)
 	return PBOOK_SLEEP_OK;
 }
 #endif /* CONFIG_PMAC_PBOOK */
-
-static int chipsfbcon_switch(int con, struct fb_info *info)
-{
-	struct fb_info_chips *p = (struct fb_info_chips *) info;
-	int new_bpp, old_bpp;
-
-	/* Do we have to save the colormap? */
-	if (fb_display[currcon].cmap.len)
-		fb_get_cmap(&fb_display[currcon].cmap, 1, chipsfb_getcolreg, info);
-
-	new_bpp = fb_display[con].var.bits_per_pixel;
-	old_bpp = fb_display[currcon].var.bits_per_pixel;
-	currcon = con;
-
-	if (new_bpp != old_bpp)
-		chips_set_bitdepth(p, &fb_display[con], con, new_bpp);
-	
-	do_install_cmap(con, info);
-	return 0;
-}

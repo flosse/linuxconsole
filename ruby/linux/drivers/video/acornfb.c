@@ -28,13 +28,13 @@
 #include <asm/irq.h>
 #include <asm/uaccess.h>
 
-#include "fbcon.h"
 #include <video/fbcon-mfb.h>
 #include <video/fbcon-cfb2.h>
 #include <video/fbcon-cfb4.h>
 #include <video/fbcon-cfb8.h>
 #include <video/fbcon-cfb16.h>
 #include <video/fbcon-cfb32.h>
+#include "fbcon.h"
 
 #include "acornfb.h"
 
@@ -769,6 +769,25 @@ acornfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 }
 
 static int
+acornfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+		 struct fb_info *info)
+{
+	int err = 0;
+
+	if (!fb_display[con].cmap.len)
+		err = fb_alloc_cmap(&fb_display[con].cmap,
+				    current_par.palette_size, 0);
+	if (!err) {
+		if (con == current_par.currcon)
+			err = fb_set_cmap(cmap, kspc, info); 
+		else
+			fb_copy_cmap(cmap, &fb_display[con].cmap,
+				     kspc ? 0 : 1);
+	}
+	return err;
+}
+
+static int
 acornfb_decode_var(struct fb_var_screeninfo *var, int con, int *visual)
 {
 	int err;
@@ -1018,8 +1037,8 @@ acornfb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 		break;
 	}
 
-	if (chgvar && info && info->changevar)
-		info->changevar(con);
+	if (chgvar && info)
+		fbcon_changevar(con);
 
 	if (con == current_par.currcon) {
 		struct fb_cmap *cmap;
@@ -1058,7 +1077,7 @@ acornfb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 		else
 			cmap = fb_default_cmap(current_par.palette_size);
 
-		fb_set_cmap(cmap, 1, acornfb_setcolreg, info);
+		fb_set_cmap(cmap, 1, info);
 	}
 	return 0;
 }
@@ -1092,12 +1111,12 @@ acornfb_pan_display(struct fb_var_screeninfo *var, int con,
 }
 
 static struct fb_ops acornfb_ops = {
-	owner:          THIS_MODULE,
+	owner:		THIS_MODULE,
 	fb_get_fix:	acornfb_get_fix,
 	fb_get_var:	acornfb_get_var,
 	fb_set_var:	acornfb_set_var,
 	fb_get_cmap:	acornfb_get_cmap,
-	fb_set_cmap:	fbgen_set_cmap,
+	fb_set_cmap:	acornfb_set_cmap,
 	fb_setcolreg:	acornfb_setcolreg,
 	fb_blank:	acornfb_blank,
 	fb_pan_display:	acornfb_pan_display,
@@ -1133,7 +1152,7 @@ acornfb_switch(int con, struct fb_info *info)
 	return 0;
 }
 
-static int 
+static void 
 acornfb_blank(int blank, struct fb_info *info)
 {
 	union palette p;
@@ -1249,11 +1268,11 @@ acornfb_init_fbinfo(void)
 	first = 0;
 
 	strcpy(fb_info.modename, "Acorn");
+	strcpy(fb_info.fontname, "Acorn8x8");
 
 	fb_info.node		   = -1;
 	fb_info.fbops		   = &acornfb_ops;
 	fb_info.disp		   = &global_disp;
-	fb_info.changevar	   = NULL;
 	fb_info.switch_con	   = acornfb_switch;
 	fb_info.updatevar	   = acornfb_updatevar;
 	fb_info.flags		   = FBINFO_FLAG_DEFAULT;
@@ -1289,6 +1308,9 @@ acornfb_init_fbinfo(void)
 /*
  * setup acornfb options:
  *
+ *  font:fontname
+ *	Set fontname
+ *
  *  mon:hmin-hmax:vmin-vmax:dpms:width:height
  *	Set monitor parameters:
  *		hmin   = horizontal minimum frequency (Hz)
@@ -1315,6 +1337,11 @@ acornfb_init_fbinfo(void)
  *	size can optionally be followed by 'M' or 'K' for
  *	MB or KB respectively.
  */
+static void __init
+acornfb_parse_font(char *opt)
+{
+	strcpy(fb_info.fontname, opt);
+}
 
 static void __init
 acornfb_parse_mon(char *opt)
@@ -1433,6 +1460,7 @@ static struct options {
 	char *name;
 	void (*parse)(char *opt);
 } opt_table[] __initdata = {
+	{ "font",    acornfb_parse_font    },
 	{ "mon",     acornfb_parse_mon     },
 	{ "montype", acornfb_parse_montype },
 	{ "dram",    acornfb_parse_dram    },

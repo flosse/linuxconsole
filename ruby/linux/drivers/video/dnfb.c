@@ -1,13 +1,3 @@
-/*
- * linux/drivers/video/dnfb.c -- Apollo frame buffer device
- *
- * Copyright (C) 2000
- *
- *  This file is subject to the terms and conditions of the GNU General Public
- *  License. See the file COPYING in the main directory of this archive for
- *  more details.
- */
-
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/string.h>
@@ -26,7 +16,7 @@
 #include <linux/fb.h>
 #include <linux/module.h>
 #include "dn_accel.h"
-#include <video/fbcon.h>
+#include "fbcon.h"
 #include <video/fbcon-mfb.h>
 
 /* apollo video HW definitions */
@@ -122,152 +112,216 @@
 #define outw(a,d) *(unsigned short *)a=d
 #endif
 
-/* accel stuff */
-#define USE_DN_ACCEL
 
-static int currcon = 0;
-static struct fb_info fb_info;
-static struct display disp;
-static struct display_switch dispsw_apollofb;
-
-static struct fb_fix_screeninfo dnfb_fix __initdata = {
-    "Apollo ", (FRAME_BUFFER_START+IO_BASE), FRAME_BUFFER_LEN, 
-    FB_TYPE_PACKED_PIXELS, 0, FB_VISUAL_MONO10, 0, 0, 0, 256, 
-    (unsigned long) NULL, 0, FB_ACCEL_NONE
-};
-
-static struct fb_var_screeninfo dnfb_var __initdata = {
-    /* 1280x1024, 1 bpp */
-    1280, 1024, 2048, 1024, 0, 0, 1, 0,
-    {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 0, 0},
-    0, FB_ACTIVATE_NOW, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, FB_VMODE_NONINTERLACED
-};
+void dn_video_setup(char *options, int *ints);
 
 /* frame buffer operations */
-int dnfb_init(void);
-void dn_fb_setup(char *options, int *ints);
 
-static int dn_fb_open(struct fb_info *info,int user);
-static int dn_fb_release(struct fb_info *info,int user);
-static int dn_fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-                          u_int transp, struct fb_info *info);
-static int dn_fb_blank(int blank,struct fb_info *info);
-
-static struct fb_ops dn_fb_ops = {
-        fb_open:		dn_fb_open,
-	fb_release:		dn_fb_release, 
-	fb_get_fix:		fbgen_get_fix, 
-	fb_get_var:		fbgen_get_var, 
-	fb_set_var:		dn_fb_set_var,
-        fb_get_cmap:		fbgen_get_cmap, 
-	fb_set_cmap:		fbgen_set_cmap, 
-	fb_setcolreg:		dn_fb_setcolreg,
-	fb_blank:		dn_fb_blank
-};
+static int dn_fb_get_fix(struct fb_fix_screeninfo *fix, int con, 
+			 struct fb_info *info);
+static int dn_fb_get_var(struct fb_var_screeninfo *var, int con,
+			 struct fb_info *info);
+static int dn_fb_set_var(struct fb_var_screeninfo *var, int isactive,
+			 struct fb_info *info);
+static int dn_fb_get_cmap(struct fb_cmap *cmap,int kspc,int con,
+			  struct fb_info *info);
+static int dn_fb_set_cmap(struct fb_cmap *cmap,int kspc,int con,
+			  struct fb_info *info);
+static void dn_fb_blank(int blank,struct fb_info *info);
 
 static int dnfbcon_switch(int con,struct fb_info *info);
 static int dnfbcon_updatevar(int con,struct fb_info *info);
 
 static void dn_fb_set_disp(int con,struct fb_info *info);
 
-static int dn_fb_open(struct fb_info *info,int user)
-{
-        /*
-         * Nothing, only a usage count for the moment
-         */
+static struct display disp[MAX_NR_CONSOLES];
+static struct fb_info fb_info;
+static struct fb_ops dn_fb_ops = {
+	owner:		THIS_MODULE,
+	fb_get_fix:	dn_fb_get_fix,
+	fb_get_var:	dn_fb_get_var,
+	fb_set_var:	dn_fb_set_var,
+	fb_get_cmap:	dn_fb_get_cmap,
+	fb_set_cmap:	dn_fb_set_cmap,
+	fb_blank:	dn_fb_blank,
+};
 
-        MOD_INC_USE_COUNT;
-        return(0);
+static int currcon=0;
+
+#define NUM_TOTAL_MODES 1
+struct fb_var_screeninfo dn_fb_predefined[] = {
+
+	{ 0, },
+
+};
+
+static char dn_fb_name[]="Apollo ";
+
+/* accel stuff */
+#define USE_DN_ACCEL
+
+static struct display_switch dispsw_apollofb;
+
+static int dn_fb_get_fix(struct fb_fix_screeninfo *fix, int con,
+			 struct fb_info *info) {
+
+	strcpy(fix->id,"Apollo Mono");
+	fix->smem_start=(FRAME_BUFFER_START+IO_BASE);
+	fix->smem_len=FRAME_BUFFER_LEN;
+	fix->type=FB_TYPE_PACKED_PIXELS;
+	fix->type_aux=0;
+	fix->visual=FB_VISUAL_MONO10;
+	fix->xpanstep=0;
+	fix->ypanstep=0;
+	fix->ywrapstep=0;
+        fix->line_length=256;
+
+	return 0;
+
 }
+        
+static int dn_fb_get_var(struct fb_var_screeninfo *var, int con,
+			 struct fb_info *info) {
+		
+	var->xres=1280;
+	var->yres=1024;
+	var->xres_virtual=2048;
+	var->yres_virtual=1024;
+	var->xoffset=0;
+	var->yoffset=0;
+	var->bits_per_pixel=1;
+	var->grayscale=0;
+	var->nonstd=0;
+	var->activate=0;
+	var->height=-1;
+	var->width=-1;
+	var->pixclock=0;
+	var->left_margin=0;
+	var->right_margin=0;
+	var->hsync_len=0;
+	var->vsync_len=0;
+	var->sync=0;
+	var->vmode=FB_VMODE_NONINTERLACED;
 
-static int dn_fb_release(struct fb_info *info,int user)
-{
-        MOD_DEC_USE_COUNT;
-        return(0);
+	return 0;
+
 }
 
 static int dn_fb_set_var(struct fb_var_screeninfo *var, int con,
-			 struct fb_info *info) 
-{
+			 struct fb_info *info) {
+
+        printk("fb_set_var\n");
+	if(var->xres!=1280) 
+		return -EINVAL;
+	if(var->yres!=1024)
+		return -EINVAL;
+	if(var->xres_virtual!=2048)
+		return -EINVAL;
+	if(var->yres_virtual!=1024)
+		return -EINVAL;
+	if(var->xoffset!=0)
+		return -EINVAL;
+	if(var->yoffset!=0)
+		return -EINVAL;
+	if(var->bits_per_pixel!=1)
+		return -EINVAL;
+	if(var->grayscale!=0)
+		return -EINVAL;
+	if(var->nonstd!=0)
+		return -EINVAL;
+	if(var->activate!=0)
+		return -EINVAL;
+	if(var->pixclock!=0)
+		return -EINVAL;
+	if(var->left_margin!=0)
+		return -EINVAL;
+	if(var->right_margin!=0)
+		return -EINVAL;
+	if(var->hsync_len!=0)
+		return -EINVAL;
+	if(var->vsync_len!=0)
+		return -EINVAL;
+	if(var->sync!=0)
+		return -EINVAL;
+	if(var->vmode!=FB_VMODE_NONINTERLACED)
+		return -EINVAL;
+
+	return 0;
+
+}
+
+static int dn_fb_get_cmap(struct fb_cmap *cmap,int kspc,int con,
+			  struct fb_info *info) {
+
+	printk("get cmap not supported\n");
+
 	return -EINVAL;
 }
 
-static int dnfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-                          u_int transp, struct fb_info *info)
-{
-	/* Do nothing We support only mono at this time */
-	return 0;
+static int dn_fb_set_cmap(struct fb_cmap *cmap,int kspc,int con,
+			  struct fb_info *info) {
+
+	printk("set cmap not supported\n");
+
+	return -EINVAL;
+
 }
 
-static int dnfb_blank(int blank,  struct fb_info *info)
-{
+static void dn_fb_set_disp(int con, struct fb_info *info) {
 
-        if (blank)  {
-                outb(0x0,  AP_CONTROL_3A);
-        } else {
-                outb(0x1,  AP_CONTROL_3A);
-        }
-        return 0;
-}
-
-static void dn_fb_set_disp(int con, struct fb_info *info) 
-{
+  struct fb_fix_screeninfo fix;
   struct display *display;
+  
+  dn_fb_get_fix(&fix,con, info);
 
   if (con>=0)
-	display = &fb_display[con];
+	display=&fb_display[con];
   else
-	display = &disp;
+	display=&disp[0];
 
   if(con==-1) 
     con=0;
 
-   display->screen_base = (u_char *)info->fix.smem_start;
-   display->visual = info->fix.visual;
-   display->type = info->fix.type;
-   display->type_aux = info->fix.type_aux;
-   display->ypanstep = info->fix.ypanstep;
-   display->ywrapstep = info->fix.ywrapstep;
+   display->screen_base = (u_char *)fix.smem_start;
+   display->visual = fix.visual;
+   display->type = fix.type;
+   display->type_aux = fix.type_aux;
+   display->ypanstep = fix.ypanstep;
+   display->ywrapstep = fix.ywrapstep;
    display->can_soft_blank = 1;
    display->inverse = 0;
-   display->line_length = info->fix.line_length;
+   display->line_length = fix.line_length;
 #ifdef FBCON_HAS_MFB
    display->dispsw = &fbcon_mfb;
 #else
-   display->dispsw = &fbcon_dummy;
+   display->dispsw=&fbcon_dummy;
 #endif
-}
 
-void dn_fb_setup(char *options, int *ints) {
-        return;
 }
- 
-int dnfb_init(void) 
-{
+  
+unsigned long dnfb_init(unsigned long mem_start) {
+
 	int err;
 
-	fb_info.changevar=NULL;
-	strcpy(&fb_info.modename[0],fb_info.fix.id);
-	fb_info.disp = disp;
-	fb_info.var = dnfb_var;
-	fb_info.fix = dnfb_fix;
-	fb_info.switch_con = &fbgen_switch;
-	fb_info.updatevar = &fbgen_updatevar;
+	strcpy(&fb_info.modename[0],dn_fb_name);
+	fb_info.fontname[0]=0;
+	fb_info.disp=disp;
+	fb_info.switch_con=&dnfbcon_switch;
+	fb_info.updatevar=&dnfbcon_updatevar;
 	fb_info.node = -1;
 	fb_info.fbops = &dn_fb_ops;
-
-	fb_alloc_cmap(&fb_info.cmap, 2, 0);
-	fb_set_cmap(&fb_info.cmap, 1, dn_fb_setcolreg, &fb_info);
 	
+        dn_fb_get_var(&disp[0].var,0, &fb_info);
+
 	dn_fb_set_disp(-1, &fb_info);
 	
-	if (register_framebuffer(&fb_info) < 0)
-                panic("unable to register apollo frame buffer\n"); 
-                return 1;
+	err=register_framebuffer(&fb_info);
+	if(err < 0) {
+		panic("unable to register apollo frame buffer\n");
 	}
  
 	/* now we have registered we can safely setup the hardware */
+
         outb(RESET_CREG,  AP_CONTROL_3A);
         outw(0x0,  AP_WRITE_ENABLE);
         outb(NORMAL_MODE, AP_CONTROL_0); 
@@ -276,12 +330,49 @@ int dnfb_init(void)
         outw(SWAP(0x3), AP_ROP_1);
 
         printk("apollo frame buffer alive and kicking !\n");
-	return 0;
+
+
+	return mem_start;
+
 }	
 
+	
+static int dnfbcon_switch(int con,  struct fb_info *info) { 
+
+	currcon=con;
+	
+	return 0;
+
+}
+
+static int dnfbcon_updatevar(int con,  struct fb_info *info) {
+
+	return 0;
+
+}
+
+static void dnfbcon_blank(int blank,  struct fb_info *info) {
+
+	if(blank)  {
+        	outb(0x0,  AP_CONTROL_3A);
+	}
+	else {
+	        outb(0x1,  AP_CONTROL_3A);
+	}
+
+	return ;
+
+}
+
+void dn_video_setup(char *options, int *ints) {
+	
+	return;
+
+}
+
 void dn_bitblt(struct display *p,int x_src,int y_src, int x_dest, int y_dest,
-               int x_count, int y_count) 
-{
+               int x_count, int y_count) {
+
 	int incr,y_delta,pre_read=0,x_end,x_word_count;
 	ushort *src,dummy;
 	uint start_mask,end_mask,dest;
@@ -355,6 +446,7 @@ void dn_bitblt(struct display *p,int x_src,int y_src, int x_dest, int y_dest,
 static void bmove_apollofb(struct display *p, int sy, int sx, int dy, int dx,
 		      int height, int width)
 {
+
     int fontheight,fontwidth;
 
     fontheight=fontheight(p);
@@ -415,6 +507,11 @@ static void rev_char_apollofb(struct display *p, int xx, int yy)
 }
 
 static struct display_switch dispsw_apollofb = {
-    fbcon_mfb_setup, bmove_apollofb, clear_apollofb,
-    putc_apollofb, putcs_apollofb, rev_char_apollofb
+    setup:		fbcon_mfb_setup,
+    bmove:		bmove_apollofb,
+    clear:		clear_apollofb,
+    putc:		putc_apollofb,
+    putcs:		putcs_apollofb,
+    revc:		rev_char_apollofb,
+    fontwidthmask:	FONTWIDTH(8)
 };

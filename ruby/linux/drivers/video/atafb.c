@@ -71,25 +71,22 @@
 #include <linux/fb.h>
 #include <asm/atarikb.h>
 
-#include <video/fbcon.h>
 #include <video/fbcon-cfb8.h>
 #include <video/fbcon-cfb16.h>
-#include <video/fbcon-iplan2p2.h>
-#include <video/fbcon-iplan2p4.h>
-#include <video/fbcon-iplan2p8.h>
+#include "fbcon-iplan2p2.h"
+#include "fbcon-iplan2p4.h"
+#include "fbcon-iplan2p8.h"
 #include <video/fbcon-mfb.h>
-
+#include "fbcon.h"
 
 #define SWITCH_ACIA 0x01		/* modes for switch on OverScan */
 #define SWITCH_SND6 0x40
 #define SWITCH_SND7 0x80
 #define SWITCH_NONE 0x00
 
-
 #define arraysize(x)			(sizeof(x)/sizeof(*(x)))
 
 #define up(x, r) (((x) + (r) - 1) & ~((r)-1))
-
 
 static int default_par=0;	/* default resolution (0=none) */
 
@@ -2420,46 +2417,12 @@ do_install_cmap(int con, struct fb_info *info)
 	if (con != currcon)
 		return;
 	if (fb_display[con].cmap.len)
-		fb_set_cmap(&fb_display[con].cmap, 1, fbhw->setcolreg, info);
+		fb_set_cmap(&fb_display[con].cmap, 1, info);
 	else
 		fb_set_cmap(fb_default_cmap(1<<fb_display[con].var.bits_per_pixel),
-					    1, fbhw->setcolreg, info);		
+					    1, info);		
 }
 
-
-	/*
-	 * Open/Release the frame buffer device
-	 */
-
-static int atafb_open(struct fb_info *info, int user)
-{
-	/*
-	 * Nothing, only a usage count for the moment
-	 */
-
-	MOD_INC_USE_COUNT;
-	return(0);
-}
-
-static int atafb_release(struct fb_info *info, int user)
-{
-	MOD_DEC_USE_COUNT;
-	return(0);
-}
-
-
-static int
-atafb_get_fix(struct fb_fix_screeninfo *fix, int con, struct fb_info *info)
-{
-	struct atafb_par par;
-	if (con == -1)
-		atafb_get_par(&par);
-	else
-		fbhw->decode_var(&fb_display[con].var,&par);
-	memset(fix, 0, sizeof(struct fb_fix_screeninfo));
-	return fbhw->encode_fix(fix, &par);
-}
-	
 static int
 atafb_get_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 {
@@ -2567,7 +2530,7 @@ atafb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 		    || oldbpp != var->bits_per_pixel
 		    || oldyoffset != var->yoffset) {
 			atafb_set_disp(con, info);
-			(*fb_info.changevar)(con);
+			fbcon_changevar(con);
 			fb_alloc_cmap(&fb_display[con].cmap, 0, 0);
 			do_install_cmap(con, info);
 		}
@@ -2603,10 +2566,17 @@ atafb_set_cmap(struct fb_cmap *cmap, int kspc, int con, struct fb_info *info)
 		return err;
 	}
 	if (con == currcon) /* current console ? */
-		return fb_set_cmap(cmap, kspc, fbhw->setcolreg, info);
+		return fb_set_cmap(cmap, kspc, info);
 	else
 		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
 	return 0;
+}
+
+static int 
+atafb_setcolreg(u_int regno, u_int red, u_int green, u_int blue, u_int transp,
+                struct fb_info *info)
+{
+	fbhw->setcolreg(regno, red, green, blue, transp, info);
 }
 
 static int
@@ -2658,21 +2628,20 @@ atafb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 }
 
 static struct fb_ops atafb_ops = {
-	fb_open:	atafb_open, 
-	fb_release:	atafb_release, 
-	fb_get_fix:	atafb_get_fix, 
+	owner:		THIS_MODULE,
+	fb_get_fix:	atafb_get_fix,
 	fb_get_var:	atafb_get_var,
-	fb_set_var:	atafb_set_var, 
-	fb_get_cmap:	atafb_get_cmap, 
+	fb_set_var:	atafb_set_var,
+	fb_get_cmap:	atafb_get_cmap,
 	fb_set_cmap:	atafb_set_cmap,
 	fb_setcolreg:	atafb_setcolreg,
 	fb_blank:	atafb_blank,
-	fb_pan_display:	atafb_pan_display, 
-	fb_ioctl:	atafb_ioctl	
+	fb_pan_display:	atafb_pan_display,
+	fb_ioctl:	atafb_ioctl,
 };
 
 static void
-check_defaut_par( int detected_mode )
+check_default_par( int detected_mode )
 {
 	char default_name[10];
 	int i;
@@ -2733,7 +2702,8 @@ atafb_switch(int con, struct fb_info *info)
  * 3 = suspend hsync
  * 4 = off
  */
-static int atafb_blank(int blank, struct fb_info *info)
+static void
+atafb_blank(int blank, struct fb_info *info)
 {
 	unsigned short black[16];
 	struct fb_cmap cmap;
@@ -2747,7 +2717,7 @@ static int atafb_blank(int blank, struct fb_info *info)
 		cmap.transp=NULL;
 		cmap.start=0;
 		cmap.len=16;
-		fb_set_cmap(&cmap, 1, fbhw->setcolreg, info);
+		fb_set_cmap(&cmap, 1, info);
 	}
 	else
 		do_install_cmap(currcon, info);
@@ -2850,7 +2820,6 @@ int __init atafb_init(void)
 #endif /* ATAFB_EXT */
 
 	strcpy(fb_info.modename, "Atari Builtin ");
-	fb_info.changevar = NULL;
 	fb_info.node = -1;
 	fb_info.fbops = &atafb_ops;
 	fb_info.disp = &disp;
@@ -2916,6 +2885,7 @@ int __init atafb_setup( char *options )
 	int_str[0]          =
 	mcap_spec[0]        =
 	user_mode[0]        =
+	fb_info.fontname[0] = '\0';
 
     if (!options || !*options)
 		return 0;
@@ -2926,6 +2896,8 @@ int __init atafb_setup( char *options )
 		default_par=temp;
 	else if (! strcmp(this_opt, "inverse"))
 		inverse=1;
+	else if (!strncmp(this_opt, "font:", 5))
+	   strcpy(fb_info.fontname, this_opt+5);
 	else if (! strncmp(this_opt, "hwscroll_",9)) {
 		hwscroll=simple_strtoul(this_opt+9, NULL, 10);
 		if (hwscroll < 0)

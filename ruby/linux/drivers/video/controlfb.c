@@ -110,21 +110,20 @@ struct fb_info_control {
 };
 
 /******************** Prototypes for exported functions ********************/
-static int control_open(struct fb_info *info, int user);
-static int control_release(struct fb_info *info, int user);
 static int control_get_fix(struct fb_fix_screeninfo *fix, int con,
 			 struct fb_info *info);
 static int control_get_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info);
 static int control_set_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info);
-static int control_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info);
 static int control_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                              u_int transp, struct fb_info *info);
-static int control_blank(int blank_mode, struct fb_info *info);
 static int control_pan_display(struct fb_var_screeninfo *var, int con,
-                             struct fb_info *info);
+			     struct fb_info *info);
+static int control_get_cmap(struct fb_cmap *cmap, int kspc, int con,
+			  struct fb_info *info);
+static int control_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			  struct fb_info *info);
 
 
 static int controlfb_getcolreg(u_int regno, u_int *red, u_int *green,
@@ -139,6 +138,7 @@ static void control_set_dispsw(struct display *disp, int cmode, struct fb_info_c
 /************************* Internal variables *****************************/
 static int currcon = 0;
 static int par_set = 0;
+static char fontname[40] __initdata = { 0 };
 static int default_vmode = VMODE_NVRAM;
 static int default_cmode = CMODE_NVRAM;
 
@@ -166,33 +166,20 @@ static void control_par_to_display(struct fb_par_control *par,
 static int controlfb_updatevar(int con, struct fb_info *info);
 
 static struct fb_ops controlfb_ops = {
-	fb_open:		control_open,
-	fb_release:		control_release,
-	fb_get_fix:		control_get_fix,
-	fb_get_var:		control_get_var,
-	fb_set_var:		control_set_var,
-	fb_get_cmap:		fbgen_get_cmap,
-	fb_set_cmap:		fbgen_set_cmap,
-	fb_setcolreg:		control_setcolreg,
-	fb_blank:		control_blank,
-	fb_pan_display:		control_pan_display,
+	owner:		THIS_MODULE,
+	fb_get_fix:	control_get_fix,
+	fb_get_var:	control_get_var,
+	fb_set_var:	control_set_var,
+	fb_get_cmap:	control_get_cmap,
+	fb_set_cmap:	control_set_cmap,
+	fb_setcolreg:	control_setcolreg,
+	fb_blank:	control_blank,
+	fb_pan_display:	control_pan_display,
 };
 
+
+
 /********************  The functions for controlfb_ops ********************/
-
-/**********  Dummies for loading control as a module  **********/
-
-int control_open(struct fb_info *info, int user)
-{
-	MOD_INC_USE_COUNT;
-	return 0;
-}
-
-static int control_release(struct fb_info *info, int user)
-{
-	MOD_DEC_USE_COUNT;
-	return 0;
-}
 
 #ifdef MODULE
 int init_module(void)
@@ -278,8 +265,7 @@ static int control_set_var(struct fb_var_screeninfo *var, int con,
 		struct fb_fix_screeninfo	fix;
 		control_par_to_fix(&par, &fix, p);
 		control_par_to_display(&par, disp, &fix, p);
-		if(info->changevar)
-			(*info->changevar)(con);
+		fbcon_changevar(con);
 	} else
 		disp->var = *var;
 	/*p->disp = *disp;*/
@@ -308,6 +294,38 @@ static int control_pan_display(struct fb_var_screeninfo *var, int con,
 	if(con == currcon)
 		out_le32(&p->control_regs->start_addr.r,
 		    par->yoffset * (par->vxres << par->cmode));
+	return 0;
+}
+
+static int control_get_cmap(struct fb_cmap *cmap, int kspc, int con,
+			  struct fb_info *info)
+{
+	if (con == currcon)		/* current console? */
+		return fb_get_cmap(cmap, kspc, controlfb_getcolreg, info);
+	if (fb_display[con].cmap.len)	/* non default colormap? */
+		fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0: 2);
+	else {
+		int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
+		fb_copy_cmap(fb_default_cmap(size), cmap, kspc ? 0 : 2);
+	}
+	return 0;
+}
+
+static int control_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			 struct fb_info *info)
+{
+	struct display *disp = &fb_display[con];
+	int err;
+
+	if (disp->cmap.len == 0) {
+		int size = disp->var.bits_per_pixel == 16 ? 32 : 256;
+		err = fb_alloc_cmap(&disp->cmap, size, 0);
+		if (err)
+			return err;
+	}
+	if (con == currcon)
+		return fb_set_cmap(cmap, kspc, info);
+	fb_copy_cmap(cmap, &disp->cmap, kspc ? 0 : 1);
 	return 0;
 }
 
@@ -350,7 +368,7 @@ static int controlfb_updatevar(int con, struct fb_info *info)
 	return 0;
 }
 
-static int control_blank(int blank_mode, struct fb_info *info)
+static void control_blank(int blank_mode, struct fb_info *info)
 {
 /*
  *  Blank the screen if blank_mode != 0, else unblank. If blank == NULL
@@ -441,12 +459,10 @@ static void do_install_cmap(int con, struct fb_info *info)
 	if (con != currcon)
 		return;
 	if (fb_display[con].cmap.len)
-		fb_set_cmap(&fb_display[con].cmap, 1, controlfb_setcolreg,
-			    info);
+		fb_set_cmap(&fb_display[con].cmap, 1, info); 
 	else {
 		int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
-		fb_set_cmap(fb_default_cmap(size), 1, controlfb_setcolreg,
-			    info);
+		fb_set_cmap(fb_default_cmap(size), 1, info); 
 	}
 }
 
@@ -589,9 +605,9 @@ static void control_set_hardware(struct fb_info_control *p, struct fb_par_contro
 	out_le32(&p->control_regs->reg19.r, 0);
 
 	for (i = 0; i < 16; ++i) {
-		controlfb_setcolreg(color_table[i], default_red[i]<<8,
-				    default_grn[i]<<8, default_blu[i]<<8,
-				    0, (struct fb_info *)p);
+		control_setcolreg(color_table[i], default_red[i]<<8,
+				  default_grn[i]<<8, default_blu[i]<<8,
+				  0, (struct fb_info *)p);
 	}
 /* Does the above need to be here each time? -- danj */
 
@@ -762,14 +778,10 @@ static int control_var_to_par(struct fb_var_screeninfo *var,
      *  bitfields, horizontal timing, vertical timing.
      */
 	/* swiped by jonh from atyfb.c */
-	if (xres <= 512 && yres <= 384)
-		par->vmode = VMODE_512_384_60;		/* 512x384, 60Hz */
-	else if (xres <= 640 && yres <= 480)
+	if (xres <= 640 && yres <= 480)
 		par->vmode = VMODE_640_480_67;		/* 640x480, 67Hz */
 	else if (xres <= 640 && yres <= 870)
 		par->vmode = VMODE_640_870_75P;		/* 640x870, 75Hz (portrait) */
-	else if (xres <= 768 && yres <= 576)
-		par->vmode = VMODE_768_576_50I;		/* 768x576, 50Hz (PAL full frame) */
 	else if (xres <= 800 && yres <= 600)
 		par->vmode = VMODE_800_600_75;		/* 800x600, 75Hz */
 	else if (xres <= 832 && yres <= 624)
@@ -1084,15 +1096,25 @@ static void control_cfb32_revc(struct display *p, int xx, int yy)
 }
 
 static struct display_switch control_cfb16 = {
-    fbcon_cfb16_setup, fbcon_cfb16_bmove, fbcon_cfb16_clear, fbcon_cfb16_putc,
-    fbcon_cfb16_putcs, control_cfb16_revc, NULL, NULL, fbcon_cfb16_clear_margins,
-    FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
+    setup:		fbcon_cfb16_setup,
+    bmove:		fbcon_cfb16_bmove,
+    clear:		fbcon_cfb16_clear,
+    putc:		fbcon_cfb16_putc,
+    putcs:		fbcon_cfb16_putcs,
+    revc:		control_cfb16_revc,
+    clear_margins:	fbcon_cfb16_clear_margins,
+    fontwidthmask:	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
 };
 
 static struct display_switch control_cfb32 = {
-    fbcon_cfb32_setup, fbcon_cfb32_bmove, fbcon_cfb32_clear, fbcon_cfb32_putc,
-    fbcon_cfb32_putcs, control_cfb32_revc, NULL, NULL, fbcon_cfb32_clear_margins,
-    FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
+    setup:		fbcon_cfb32_setup,
+    bmove:		fbcon_cfb32_bmove,
+    clear:		fbcon_cfb32_clear,
+    putc:		fbcon_cfb32_putc,
+    putcs:		fbcon_cfb32_putcs,
+    revc:		control_cfb32_revc,
+    clear_margins:	fbcon_cfb32_clear_margins,
+    fontwidthmask:	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
 };
 
 
@@ -1128,7 +1150,7 @@ static void control_init_info(struct fb_info *info, struct fb_info_control *p)
 	info->node = -1;	/* ??? danj */
 	info->fbops = &controlfb_ops;
 	info->disp = &p->display;
-	info->changevar = NULL;
+	strcpy(info->fontname, fontname);
 	info->switch_con = &controlfb_switch;
 	info->updatevar = &controlfb_updatevar;
 }
@@ -1143,6 +1165,17 @@ void __init control_setup(char *options)
 
 	for (this_opt = strtok(options, ","); this_opt;
 	     this_opt = strtok(NULL, ",")) {
+		if (!strncmp(this_opt, "font:", 5)) {
+			char *p;
+			int i;
+
+			p = this_opt +5;
+			for (i = 0; i < sizeof(fontname) - 1; i++)
+				if (!*p || *p == ' ' || *p == ',')
+					break;
+			memcpy(fontname, this_opt + 5, i);
+			fontname[i] = 0;
+		}
 		if (!strncmp(this_opt, "vmode:", 6)) {
 			int vmode = simple_strtoul(this_opt+6, NULL, 0);
 		if (vmode > 0 && vmode <= VMODE_MAX)

@@ -33,11 +33,8 @@
 *   - 05 Jan 96: Geert: integration into the current source tree
 *   - 01 Aug 98: Alan: Merge in code from cvision.c and cvision_core.c
 * $Log$
-* Revision 1.2  2000/05/25 12:31:50  jsimmons
-* fbdev api updates
-*
-* Revision 1.1  2000/05/23 13:43:09  jsimmons
-* updated fbdev
+* Revision 1.3  2000/07/30 15:21:37  jsimmons
+* Synced with test5
 *
 * Revision 1.6  1998/09/11 04:54:58  abair
 * Update for 2.1.120 change in include file location.
@@ -244,11 +241,9 @@ static int cyberfb_usermode __initdata = 0;
 /*
  *    Interface used by the world
  */
-int cyberfb_init(void);
+
 int cyberfb_setup(char *options);
 
-static int cyberfb_open(struct fb_info *info, int user);
-static int cyberfb_release(struct fb_info *info, int user);
 static int cyberfb_get_fix(struct fb_fix_screeninfo *fix, int con,
 			   struct fb_info *info);
 static int cyberfb_get_var(struct fb_var_screeninfo *var, int con,
@@ -257,16 +252,17 @@ static int cyberfb_set_var(struct fb_var_screeninfo *var, int con,
 			   struct fb_info *info);
 static int cyberfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 			    struct fb_info *info);
-static int cyberfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-                             u_int transp, struct fb_info *info);
-static int cyberfb_blank(int blank, struct fb_info *info);
-static int cyberfb_pan_display(struct fb_var_screeninfo *var, int con,
-			       struct fb_info *info);
+static int cyberfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			    struct fb_info *info);
+static int cyber_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+                           u_int transp, struct fb_info *info);
+static void cyberfb_blank(int blank, struct fb_info *info);
 
 /*
  *    Interface to the low level console driver
  */
 
+int cyberfb_init(void);
 static int Cyberfb_switch(int con, struct fb_info *info);
 static int Cyberfb_updatevar(int con, struct fb_info *info);
 
@@ -388,8 +384,8 @@ static int Cyber_init(void)
 		*(CursorBase+3+(i*4)) = 0xffff0000;
 	}
 
-	cyberfb_setcolreg (255, 56<<8, 100<<8, 160<<8, 0, NULL /* unused */);
-	cyberfb_setcolreg (254, 0, 0, 0, 0, NULL /* unused */);
+	cyber_setcolreg(255, 56<<8, 100<<8, 160<<8, 0, NULL /* unused */);
+	cyber_setcolreg(254, 0, 0, 0, 0, NULL /* unused */);
 
 	DPRINTK("EXIT\n");
 	return 0;
@@ -526,8 +522,8 @@ static int Cyber_encode_var(struct fb_var_screeninfo *var,
  *    Set a single color register. Return != 0 for invalid regno.
  */
 
-static int cyberfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-	  		     u_int transp, struct fb_info *info)
+static int cyber_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+			   u_int transp, struct fb_info *info)
 {
 	volatile unsigned char *regs = CyberRegs;
 
@@ -590,7 +586,7 @@ static int Cyber_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
 *           0 = restore fb cmap from local cmap
 */
 
-static int cyberfb_blank(int blank, struct fb_info *info)
+void cyberfb_blank(int blank, struct fb_info *info)
 {
 	volatile unsigned char *regs = CyberRegs;
 	int i;
@@ -828,28 +824,6 @@ static void do_install_cmap(int con, struct fb_info *info)
 	DPRINTK("EXIT\n");
 }
 
-
-/*
- *  Open/Release the frame buffer device
- */
-
-static int cyberfb_open(struct fb_info *info, int user)
-{
-	/*
-	 * Nothing, only a usage count for the moment
-	 */
-
-	MOD_INC_USE_COUNT;
-	return(0);
-}
-
-static int cyberfb_release(struct fb_info *info, int user)
-{
-	MOD_DEC_USE_COUNT;
-	return(0);
-}
-
-
 /*
  *    Get the Fixed Part of the Display
  */
@@ -968,7 +942,7 @@ static int cyberfb_set_var(struct fb_var_screeninfo *var, int con,
 		    oldbpp != var->bits_per_pixel ||
 		    oldaccel != var->accel_flags) {
 			cyberfb_set_disp(con, info);
-			(*fb_info.changevar)(con);
+			fbcon_changevar(con);
 			fb_alloc_cmap(&fb_display[con].cmap, 0, 0);
 			do_install_cmap(con, info);
 		}
@@ -1002,36 +976,52 @@ static int cyberfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 	return(0);
 }
 
+
 /*
- *    Pan or Wrap the Display
- *
- *    This call looks only at xoffset, yoffset and the FB_VMODE_YWRAP flag
+ *    Set the Colormap
  */
 
-static int cyberfb_pan_display(struct fb_var_screeninfo *var, int con,
-			       struct fb_info *info)
+static int cyberfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			    struct fb_info *info)
 {
-	return -EINVAL;
+	int err;
+
+	DPRINTK("ENTER\n");
+	if (!fb_display[con].cmap.len) {       /* no colormap allocated? */
+		if ((err = fb_alloc_cmap(&fb_display[con].cmap,
+					 1<<fb_display[con].var.bits_per_pixel,
+					 0))) {
+			DPRINTK("EXIT - fb_alloc_cmap failed\n");
+			return(err);
+		}
+	}
+	if (con == currcon) {		 /* current console? */
+		DPRINTK("EXIT - Current console\n");
+		return(fb_set_cmap(cmap, kspc, info));
+	} else {
+		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
+	}
+	DPRINTK("EXIT\n");
+	return(0);
 }
 
 static struct fb_ops cyberfb_ops = {
-	fb_open:		cyberfb_open, 
-	fb_release:		cyberfb_release, 
-	fb_get_fix:		cyberfb_get_fix, 
-	fb_get_var:		cyberfb_get_var,
-	fb_set_var:		cyberfb_set_var, 
-	fb_get_cmap:		cyberfb_get_cmap, 
-	fb_set_cmap:		fbgen_set_cmap,
-	fb_setcolreg:		cyberfb_setcolreg,
-	fb_blank:		cyberfb_blank,
-	fb_pan_display:		cyberfb_pan_display 
+	owner:		THIS_MODULE,
+	fb_get_fix:	cyberfb_get_fix,
+	fb_get_var:	cyberfb_get_var,
+	fb_set_var:	cyberfb_set_var,
+	fb_get_cmap:	cyberfb_get_cmap,
+	fb_set_cmap:	cyberfb_set_cmap,
+	fb_setcolreg:	cyberfb_setcolreg,
+	fb_blank:	cyberfb_blank,
 };
-
 
 int __init cyberfb_setup(char *options)
 {
 	char *this_opt;
 	DPRINTK("ENTER\n");
+
+	fb_info.fontname[0] = '\0';
 
 	if (!options || !*options) {
 		DPRINTK("EXIT - no options\n");
@@ -1043,6 +1033,8 @@ int __init cyberfb_setup(char *options)
 		if (!strcmp(this_opt, "inverse")) {
 			Cyberfb_inverse = 1;
 			fb_invert_cmaps();
+		} else if (!strncmp(this_opt, "font:", 5)) {
+			strcpy(fb_info.fontname, this_opt+5);
 		} else if (!strcmp (this_opt, "cyber8")) {
 			cyberfb_default = cyberfb_predefined[CYBER8_DEFMODE].var;
 			cyberfb_usermode = 1;
@@ -1098,7 +1090,6 @@ int __init cyberfb_init(void)
 #endif
 
 	    strcpy(fb_info.modename, cyberfb_name);
-	    fb_info.changevar = NULL;
 	    fb_info.node = -1;
 	    fb_info.fbops = &cyberfb_ops;
 	    fb_info.disp = &disp;
@@ -1251,9 +1242,14 @@ static void fbcon_cyber8_revc(struct display *p, int xx, int yy)
 }
 
 static struct display_switch fbcon_cyber8 = {
-   fbcon_cfb8_setup, fbcon_cyber8_bmove, fbcon_cyber8_clear, fbcon_cyber8_putc,
-   fbcon_cyber8_putcs, fbcon_cyber8_revc, NULL, NULL, fbcon_cfb8_clear_margins,
-   FONTWIDTH(8)
+	setup:		fbcon_cfb8_setup,
+	bmove:		fbcon_cyber8_bmove,
+	clear:		fbcon_cyber8_clear,
+	putc:		fbcon_cyber8_putc,
+	putcs:		fbcon_cyber8_putcs,
+	revc:		fbcon_cyber8_revc,
+	clear_margins:	fbcon_cfb8_clear_margins,
+	fontwidthmask:	FONTWIDTH(8)
 };
 #endif
 
