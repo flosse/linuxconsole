@@ -791,7 +791,7 @@ static int sgivwfb_set_var(struct fb_var_screeninfo *var, int con,
 	break;
       }
       par_current.valid = 1;
-      fbcon_changevar(con);
+      fbcon_changevar(display->conp);
     }
   }
   return 0;

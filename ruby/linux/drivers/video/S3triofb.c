@@ -554,16 +554,12 @@ void __init s3triofb_init_of(struct device_node *dp)
     fb_info.node = -1;
     fb_info.fbops = &s3trio_ops;
 #if 0
-    fb_info.fbvar_num = 1;
     fb_info.fbvar = &fb_var;
 #endif
     fb_info.disp = &disp;
     fb_info.fontname[0] = '\0';
     fb_info.switch_con = &s3triofbcon_switch;
     fb_info.updatevar = &s3triofbcon_updatevar;
-#if 0
-    fb_info.setcmap = &s3triofbcon_setcmap;
-#endif
 
 #ifdef CONFIG_FB_COMPAT_XPMAC
     if (!console_fb_info) {

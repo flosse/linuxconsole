@@ -33,6 +33,9 @@
 *   - 05 Jan 96: Geert: integration into the current source tree
 *   - 01 Aug 98: Alan: Merge in code from cvision.c and cvision_core.c
 * $Log$
+* Revision 1.4  2000/08/02 01:23:59  jsimmons
+* Changed fbcon_changevar to use vc_data instead of currcon.
+*
 * Revision 1.3  2000/07/30 15:21:37  jsimmons
 * Synced with test5
 *
@@ -942,7 +945,7 @@ static int cyberfb_set_var(struct fb_var_screeninfo *var, int con,
 		    oldbpp != var->bits_per_pixel ||
 		    oldaccel != var->accel_flags) {
 			cyberfb_set_disp(con, info);
-			fbcon_changevar(con);
+			fbcon_changevar(fb_display[con].conp);
 			fb_alloc_cmap(&fb_display[con].cmap, 0, 0);
 			do_install_cmap(con, info);
 		}

@@ -1374,7 +1374,7 @@ static int amifb_set_var(struct fb_var_screeninfo *var, int con,
 			    default:
 				display->dispsw = &fbcon_dummy;
 			}
-			fbcon_changevar(con);
+			fbcon_changevar(display->conp);
 		}
 		if (oldbpp != var->bits_per_pixel) {
 			if ((err = fb_alloc_cmap(&display->cmap, 0, 0)))

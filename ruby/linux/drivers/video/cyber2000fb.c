@@ -922,7 +922,7 @@ cyber2000fb_set_var(struct fb_var_screeninfo *var, int con,
 		cfb->fb.disp->var = cfb->fb.var;
 
 	if (chgvar && info)
-		fbcon_changevar(con);
+		fbcon_changevar(cfb->fb.disp->conp);
 
 	cyber2000fb_update_start(cfb, var);
 	cyber2000fb_set_timing(cfb, &hw);

@@ -2538,7 +2538,7 @@ static int sisfb_set_var(struct fb_var_screeninfo *var, int con,
 	/* update display of current console */
 	sisfb_set_disp(con, var);
 
-	fbcon_changevar(con);
+	fbcon_changevar(&fb_display[con].conp);
 
 	if ((err = fb_alloc_cmap(&fb_display[con].cmap, 0, 0)))
 		return err;

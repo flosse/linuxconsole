@@ -1380,8 +1380,7 @@ aty128fb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *fb)
 	else
 	    display->scrollmode = SCROLL_YREDRAW;
 
-	if (info->fb_info.changevar)
-	    (*info->fb_info.changevar)(con);
+	fbcon_changevar(display->conp);
     }
 
     if (!info->fb_info.display_fg || info->fb_info.display_fg->vc_num == con)
@@ -1658,7 +1657,6 @@ aty128_init(struct fb_info_aty128 *info, const char *name)
     info->fb_info.node  = -1;
     info->fb_info.fbops = &aty128fb_ops;
     info->fb_info.disp  = &info->disp;
-    info->fb_info.changevar  = NULL;
     info->fb_info.switch_con = &aty128fbcon_switch;
     info->fb_info.updatevar  = NULL;
     info->fb_info.flags = FBINFO_FLAG_DEFAULT;

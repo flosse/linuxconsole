@@ -448,7 +448,6 @@ static int __devinit riva_set_fbinfo (struct rivafb_info *rinfo)
 	strncpy (info->fontname, fontname, sizeof (info->fontname));
 	info->fontname[sizeof (info->fontname) - 1] = 0;
 
-	info->changevar = NULL;
 	info->switch_con = rivafb_switch;
 	info->updatevar = rivafb_updatevar;
 
@@ -961,8 +960,8 @@ static int rivafb_set_var (struct fb_var_screeninfo *var, int con,
 
 	riva_load_video_mode (rivainfo, &v);
 
-	if (chgvar && info && info->changevar)
-		info->changevar (con);
+	if (chgvar && info)
+		fbcon_changevar(dsp->conp);
 
 	DPRINTK ("EXIT, returning 0\n");
 	return 0;

@@ -2530,7 +2530,7 @@ atafb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 		    || oldbpp != var->bits_per_pixel
 		    || oldyoffset != var->yoffset) {
 			atafb_set_disp(con, info);
-			fbcon_changevar(con);
+			fbcon_changevar(&fb_display[con]->conp);
 			fb_alloc_cmap(&fb_display[con].cmap, 0, 0);
 			do_install_cmap(con, info);
 		}

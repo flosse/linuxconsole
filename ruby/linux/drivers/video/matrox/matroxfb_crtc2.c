@@ -357,8 +357,8 @@ static int matroxfb_dh_set_var(struct fb_var_screeninfo* var, int con,
 	p->can_soft_blank = 0;
 	p->inverse = 0;	/* TBD */
 	initMatroxDH(m2info, p);
-	if (chgvar && info && info->changevar)
-		info->changevar(con);
+	if (chgvar && info)
+		fbcon_changevar(p->conp);
 	if (con == m2info->currcon) {
 		struct my_timming mt;
 		struct matrox_hw_state* hw;
@@ -646,7 +646,6 @@ static int matroxfb_dh_regit(CPMINFO struct matroxfb_dh_fb_info* m2info) {
 	memset(d, 0, sizeof(*d));
 
 	strcpy(m2info->fbcon.modename, "MATROX CRTC2");
-	m2info->fbcon.changevar = NULL;
 	m2info->fbcon.node = -1;
 	m2info->fbcon.fbops = &matroxfb_dh_ops;
 	m2info->fbcon.disp = d;

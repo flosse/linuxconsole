@@ -1273,7 +1273,7 @@ static int retz3fb_set_var(struct fb_var_screeninfo *var, int con,
 			 */
 			retz3_set_video(info, var, &zinfo->current_par);
 
-			fbcon_changevar(con);
+			fbcon_changevar(&display->conp);
 		}
 
 		if (oldbpp != var->bits_per_pixel) {

@@ -276,7 +276,7 @@ static int platinum_set_var(struct fb_var_screeninfo *var, int con,
 	    display->inverse = 0;
 	    platinum_set_disp(display, info, par.cmode, 0);
 	    display->scrollmode = SCROLL_YREDRAW;
-	    fbcon_changevar(con);
+	    fbcon_changevar(display->conp);
 	}
 
 	if (!info->fb_info.display_fg ||

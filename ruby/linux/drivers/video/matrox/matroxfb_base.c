@@ -772,8 +772,8 @@ static int matroxfb_set_var(struct fb_var_screeninfo *var, int con,
 	initMatrox(PMINFO display);	/* dispsw */
 	/* dispsw, scrollmode, yscroll */
 	/* fgshift, bgshift, charmask */
-	if (chgvar && info && info->changevar)
-		info->changevar(con);
+	if (chgvar && info)
+		fbcon_changevar(display->conp);
 	if (con == ACCESS_FBINFO(currcon)) {
 		unsigned int pos;
 
@@ -1748,7 +1748,6 @@ static int initMatrox2(WPMINFO struct display* d, struct board* b){
 		vesafb_defined.accel_flags &= ~FB_ACCELF_TEXT;
 
 	strcpy(ACCESS_FBINFO(fbcon.modename), "MATROX VGA");
-	ACCESS_FBINFO(fbcon.changevar) = NULL;
 	ACCESS_FBINFO(fbcon.node) = -1;
 	ACCESS_FBINFO(fbcon.fbops) = &matroxfb_ops;
 	ACCESS_FBINFO(fbcon.disp) = d;
