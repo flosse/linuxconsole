@@ -702,7 +702,7 @@ static int vgacon_blank(struct vc_data *c, int blank)
 #define cmapsz 8192
 
 static int
-vgacon_do_font_op(char *arg, int set, int ch512)
+vgacon_do_font_op(struct vc_data *vc, char *arg, int set, int ch512)
 {
 	int i;
 	char *charmap;
@@ -817,7 +817,7 @@ vgacon_do_font_op(char *arg, int set, int ch512)
 	if ((set)&&(ch512!=vga_512_chars)) {	/* attribute controller */
 		int i;
 		for(i=0; i<MAX_NR_CONSOLES; i++) {
-			struct vc_data *c = vt_cons->vcs.vc_cons[i];
+			struct vc_data *c = vc->display_fg->vcs.vc_cons[i];
 			if (c && c->display_fg->sw == &vga_con)
 				c->vc_hi_font_mask = ch512 ? 0x0800 : 0;
 		}
@@ -900,7 +900,7 @@ static int vgacon_font_op(struct vc_data *c, struct console_font_op *op)
 	if (op->op == KD_FONT_OP_SET) {
 		if (op->width != 8 || (op->charcount != 256 && op->charcount != 512))
 			return -EINVAL;
-		rc = vgacon_do_font_op(op->data, 1, op->charcount == 512);
+		rc = vgacon_do_font_op(vc, op->data, 1, op->charcount == 512);
 		if (!rc && !(op->flags & KD_FONT_FLAG_DONT_RECALC))
 			rc = vgacon_adjust_height(op->height);
 	} else if (op->op == KD_FONT_OP_GET) {
@@ -908,7 +908,7 @@ static int vgacon_font_op(struct vc_data *c, struct console_font_op *op)
 		op->height = vga_video_font_height;
 		op->charcount = vga_512_chars ? 512 : 256;
 		if (!op->data) return 0;
-		rc = vgacon_do_font_op(op->data, 0, 0);
+		rc = vgacon_do_font_op(vc, op->data, 0, 0);
 	} else
 		rc = -ENOSYS;
 	return rc;
