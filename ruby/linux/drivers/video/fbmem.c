@@ -111,6 +111,8 @@ extern int rivafb_init(void);
 extern int rivafb_setup(char*);
 extern int tdfxfb_init(void);
 extern int tdfxfb_setup(char*);
+extern int sisfb_init(void);
+extern int sisfb_setup(char*);
 
 static struct {
 	const char *name;
@@ -230,6 +232,9 @@ static struct {
 #ifdef CONFIG_GSP_RESOLVER
 	/* Not a real frame buffer device... */
 	{ "resolver", NULL, resolver_video_setup },
+#endif
+#ifdef CONFIG_FB_SIS
+	{ "sisfb", sisfb_init, sisfb_setup },
 #endif
 #ifdef CONFIG_FB_VIRTUAL
 	/* Must be last to avoid that vfb becomes your primary display */
@@ -374,9 +379,9 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 		if (copy_from_user(&var, (void *) arg, sizeof(var)))
 			return -EFAULT;
 		if (fb->fb_pan_display)
-			i = fb->fb_pan_display(&var, PROC_CONSOLE(info), info);
-		else 
-			return -EINVAL;
+                        i = fb->fb_pan_display(&var, PROC_CONSOLE(info), info);
+                else
+                        return -EINVAL;
 		if (copy_to_user((void *) arg, &var, sizeof(var)))
 			return -EFAULT;
 		return i;
@@ -410,13 +415,13 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 		return 0;
 	case FBIOBLANK:
 		if (fb->fb_blank)
-			return fb->fb_blank(arg, info);
-		return -EINVAL;
+                        return fb->fb_blank(arg, info);
+                return -EINVAL;
 	default:
 		if (fb->fb_ioctl)
-			return fb->fb_ioctl(inode, file, cmd, arg, 
-					    PROC_CONSOLE(info), info);
-		return -EINVAL;
+                        return fb->fb_ioctl(inode, file, cmd, arg,
+                                            PROC_CONSOLE(info), info);
+                return -EINVAL;
 	}
 }
 
@@ -585,7 +590,8 @@ static struct file_operations fb_fops = {
 
 static devfs_handle_t devfs_handle = NULL;
 
-int register_framebuffer(struct fb_info *fb_info)
+int
+register_framebuffer(struct fb_info *fb_info)
 {
 	static int first = 1;
 	char name_buf[8];
@@ -602,10 +608,9 @@ int register_framebuffer(struct fb_info *fb_info)
 	registered_fb[i] = fb_info;
 
 	if (first) {
-               first = 0;
-               take_over_console(&fb_con, 0, MAX_NR_CONSOLES-1, 1);
-        }
-
+		first = 0;
+		take_over_console(&fb_con, 0, MAX_NR_CONSOLES-1, 1);
+	}
 	sprintf (name_buf, "%d", i);
 	fb_info->devfs_handle =
 	    devfs_register (devfs_handle, name_buf, 0, DEVFS_FL_NONE,
@@ -618,11 +623,11 @@ int register_framebuffer(struct fb_info *fb_info)
 int
 unregister_framebuffer(struct fb_info *fb_info)
 {
-	int i;
+	int i, j;
 
 	i = GET_FB_IDX(fb_info->node);
 	if (fb_info->count) return -EBUSY;
-	
+
 	if (!registered_fb[i])
 		return -EINVAL;
 	devfs_unregister (fb_info->devfs_handle);
