@@ -1826,7 +1826,7 @@ void terminal_emulation(struct tty_struct *tty, int c)
 #endif /* CONFIG_VT_EXTENDED */
                 }
                 return;
-#if CONFIG_VT_EXTENDED
+#ifdef CONFIG_VT_EXTENDED
         case EScsi_space:
                 vc_state = ESinit;
                 switch (c) {
