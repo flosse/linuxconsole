@@ -1,7 +1,7 @@
 		      Joystick API Documentation                -*-Text-*-
 
-		       Ragnar Hojland Espinosa
-		     <ragnar@lightside.dhis.org>
+		        Ragnar Hojland Espinosa
+			  <ragnar@macula.net>
 
 			      7 Aug 1998
 
@@ -30,13 +30,13 @@ By default, the device is opened in blocking mode.
 where js_event is defined as
 
 	struct js_event {
-		__u32 time;     /* event timestamp in miliseconds */
+		__u32 time;     /* event timestamp in milliseconds */
 		__s16 value;    /* value */
 		__u8 type;      /* event type */
 		__u8 number;    /* axis/button number */
 	};
 
-If the read is successfull, it will return sizeof(struct js_event), unless
+If the read is successful, it will return sizeof(struct js_event), unless
 you wanted to read more than one event per read as described in section 3.1.
 
 
@@ -115,7 +115,7 @@ snippet, this ends up being shorter.
 ~~~~~~~~~~~~~~~~~
 
 The time an event was generated is stored in ``js_event.time''. It's a time
-in miliseconds since ... well, since sometime in the past.  This eases the
+in milliseconds since ... well, since sometime in the past.  This eases the
 task of detecting double clicks, figuring out if movement of axis and button
 presses happened at the same time, and similar.
 
@@ -226,7 +226,7 @@ JS_VERSION symbol
 ~~~~~~~~~~~~~~
 
 JSIOCGNAME(len) allows you to get the name string of the joystick - the same
-as is being printed at boot time. The 'len' argument is the lenght of the
+as is being printed at boot time. The 'len' argument is the length of the
 buffer provided by the application asking for the name. It is used to avoid
 possible overrun should the name be too long.
 
