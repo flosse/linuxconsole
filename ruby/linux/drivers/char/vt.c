@@ -1,5 +1,5 @@
 /*
- * console.c - Built-in console device
+ * vt.c - Built-in console device
  * Copyright (C) 1991, 1992  Linus Torvalds
  * Copyright (C) 1999, 2000  Dominik Kubla
  *
@@ -522,8 +522,9 @@ void redraw_screen(int new_console, int is_switch)
 
 	if (redraw) {
 		set_origin(currcons);
-		set_palette(currcons);
 		if (sw->con_switch(vc_cons[currcons].d) && vcmode != KD_GRAPHICS)
+			/* Change the palette after a VT switch. */
+			sw->con_set_palette(vc_cons[currcons].d, color_table);
 			/* Update the screen contents */
 			do_update_region(currcons, origin, screenbuf_size/2);
 	}
