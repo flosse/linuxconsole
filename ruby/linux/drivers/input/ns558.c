@@ -124,6 +124,9 @@ static struct ns558* ns558_isa_probe(int io, struct ns558 *next)
 			if (inb(io & (-1 << i)) != inb((io & (-1 << i)) + (1 << i) - 1)) b++;
 		wait_ms(3);
 
+		printk(KERN_DEBUG "ns558.c: io0 %#x io1 %#x io2 %#x b = %d\n",
+				io, io & (-1 << i), (io & (-1 << i)) + (1 << i) - 1, b);	
+
 		if (b > 100)					/* We allow 10% difference */
 			break;
 	}
