@@ -438,9 +438,9 @@ int con_font_op(struct vc_data *vc, struct console_font_op *op)
 			return -EFAULT;
 		}
 		op->data = temp;
-		down(&vc->vc_tty->driver.tty_lock);
+		acquire_console_sem(&vc->vc_tty->driver);
 		err = vc->display_fg->vt_sw->con_font_op(vc, op);
-		up(&vc->vc_tty->driver.tty_lock);
+		release_console_sem(&vc->vc_tty->driver);
 		if (!err)
 			vc->vc_font = *op;
 		break;
@@ -1042,9 +1042,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 				 * make sure we are atomic with respect to
 				 * other console switches..
 				 */
-				down(&vc->vc_tty->driver.tty_lock);
+				acquire_console_sem(&vc->vc_tty->driver);
 				complete_change_console(tmp, vc->display_fg->fg_console);
-				up(&vc->vc_tty->driver.tty_lock);
+				release_console_sem(&vc->vc_tty->driver);
 			}
 		} else {
 			/*

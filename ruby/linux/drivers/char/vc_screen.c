@@ -131,7 +131,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 	/* Select the proper current console and verify
 	 * sanity of the situation under the console lock.
 	 */
-	down(&vc->vc_tty->driver.tty_lock);
+	acquire_console_sem(&vc->vc_tty->driver);
 
 	attr = (currcons & 128);
 	currcons = (currcons & 127);
@@ -262,9 +262,9 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 		 * all the data to userspace from our temporary buffer.
 		 */
 
-		up(&vc->vc_tty->driver.tty_lock);
+		release_console_sem(&vc->vc_tty->driver);
 		ret = copy_to_user(buf, con_buf_start, orig_count);
-		down(&vc->vc_tty->driver.tty_lock);
+		acquire_console_sem(&vc->vc_tty->driver);
 
 		if (ret) {
 			read += (orig_count - ret);
@@ -280,7 +280,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 	if (read)
 		ret = read;
 unlock_out:
-	up(&vc->vc_tty->driver.tty_lock);
+	release_console_sem(&vc->vc_tty->driver);
 	up(&vc->display_fg->lock);
 	return ret;
 }
@@ -303,7 +303,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	/* Select the proper current console and verify
 	 * sanity of the situation under the console lock.
 	 */
-	down(&vc->vc_tty->driver.tty_lock);
+	acquire_console_sem(&vc->vc_tty->driver);
 
 	attr = (currcons & 128);
 	currcons = (currcons & 127);
@@ -341,9 +341,9 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 		/* Temporarily drop the console lock so that we can read
 		 * in the write data from userspace safely.
 		 */
-		up(&vc->vc_tty->driver.tty_lock);
+		release_console_sem(&vc->vc_tty->driver);
 		ret = copy_from_user(&vc->display_fg->con_buf, buf, this_round);
-		down(&vc->vc_tty->driver.tty_lock);
+		acquire_console_sem(&vc->vc_tty->driver);
 
 		if (ret) {
 			this_round -= ret;
@@ -468,7 +468,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	ret = written;
 
 unlock_out:
-	up(&vc->vc_tty->driver.tty_lock);
+	release_console_sem(&vc->vc_tty->driver);
 	up(&vc->display_fg->lock);
 	return ret;
 }

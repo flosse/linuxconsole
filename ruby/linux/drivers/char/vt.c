@@ -721,7 +721,7 @@ static void vt_callback(void *private)
         struct vt_struct *vt = (struct vt_struct *) private;
         if  (!vt->want_vc) return;
 
-        down(&vt->want_vc->vc_tty->driver.tty_lock);
+        acquire_console_sem(&vt->want_vc->vc_tty->driver);
 
         if (vt->want_vc->vc_num != vt->fg_console->vc_num &&
             !vt->vt_dont_switch) {
@@ -742,7 +742,7 @@ static void vt_callback(void *private)
                       sw->con_scroll(vt->fg_console, vt->scrollback_delta);
                 vt->scrollback_delta = 0;
         }
-        up(&vt->fg_console->vc_tty->driver.tty_lock);
+        release_console_sem(&vt->fg_console->vc_tty->driver);
 }
 
 /*
@@ -1079,9 +1079,6 @@ again:
          * console rendering and vcs write/read operations.  We hold
          * the console spinlock during the entire write.
          */
-
-        down(&vc->vc_tty->driver.tty_lock);
-
         himask = hi_font_mask;
         charmask = himask ? 0x1ff : 0xff;
 
@@ -1213,7 +1210,6 @@ again:
 			      (u16 *)draw_to-(u16 *)draw_from, y, draw_x);
         	draw_x = -1;
         }
-        up(&vc->vc_tty->driver.tty_lock);
 out:
         if (from_user) {
                 /* If the user requested something larger than
@@ -1280,9 +1276,9 @@ static int vt_write(struct tty_struct * tty, int from_user,
 
         pm_access(vc->display_fg->pm_con);
         retval = do_con_write(tty, from_user, buf, count);
-	up(&vc->vc_tty->driver.tty_lock);
+	acquire_console_sem(&vc->vc_tty->driver);
         set_cursor(vc);
-	down(&vc->vc_tty->driver.tty_lock);
+	release_console_sem(&vc->vc_tty->driver);
         return retval;
 }
 
@@ -1309,9 +1305,9 @@ static void vt_flush_chars(struct tty_struct *tty)
 		return;
 
         pm_access(vc->display_fg->pm_con);
-	down(&vc->vc_tty->driver.tty_lock);
+	acquire_console_sem(&vc->vc_tty->driver);
         set_cursor(vc);
-	up(&vc->vc_tty->driver.tty_lock);
+	release_console_sem(&vc->vc_tty->driver);
 }
 
 static int vt_chars_in_buffer(struct tty_struct *tty)

@@ -432,19 +432,12 @@ asmlinkage int printk(const char *fmt, ...)
 	spin_unlock_irqrestore(&logbuf_lock, flags);
 
         for (con = console_drivers; con; con = con->next) {
-                if ((con->flags & CON_ENABLED) && con->write) {
-			if (con_start != log_end) {
-				unsigned long _con_start, _log_end;		
-
-				_con_start = con_start;
-                		_log_end = log_end;
-                		con_start = log_end;            /* Flush */
-				call_console_drivers(con, _con_start, _log_end);
-			}
+                if ((con->flags & CON_ENABLED) && con->write && 
+		     !down_trylock(&con->driver->tty_lock)) {
+			//console_may_schedule = 0;
+			release_console_sem(con->driver);
 		}
 	}
-	if (!oops_in_progress)
-		wake_up_interruptible(&log_wait);
 	return printed_len;
 }
 EXPORT_SYMBOL(printk);
@@ -587,20 +580,14 @@ void register_console(struct console *console)
 	up(&console_sem);
 	if (console->flags & CON_PRINTBUFFER) { 
 		/*
-	 	 *	Print out buffered log messages.
-	 	 */
+                 * release_cosole_sem() will print out the buffered 
+		 * messages for us.
+                 */
 		spin_lock_irqsave(&logbuf_lock, flags);
 		con_start = log_start;
-		if (con_start != log_end) {
-               		unsigned long _con_start, _log_end;
-
-                	_con_start = con_start;
-                	_log_end = log_end;
-                	con_start = log_end;            /* Flush */
-                	call_console_drivers(console, _con_start, _log_end);
-        	}
 		spin_unlock_irqrestore(&logbuf_lock, flags);
 	}
+	release_console_sem(console->driver);
 }
 EXPORT_SYMBOL(register_console);
 
@@ -630,6 +617,7 @@ int unregister_console(struct console * console)
 	 */
 	if (console_drivers == NULL)
 		preferred_console = -1;
+	release_console_sem(console->driver);
 	up(&console_sem);
 	return res;
 }
