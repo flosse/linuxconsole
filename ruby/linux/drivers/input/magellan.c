@@ -1,12 +1,13 @@
 /*
- *  magellan.c  Version 0.1
+ * $Id$
  *
  *  Copyright (c) 1999 Vojtech Pavlik
+ *
+ *  Sponsored by SuSE
  */
 
 /*
- * This is a module for the Linux input driver, supporting
- * the Magellan and Space Mouse 6dof controllers.
+ * Magellan and Space Mouse 6dof controller driver for Linux
  */
 
 /*
@@ -29,7 +30,6 @@
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
  */
 
-#include <linux/errno.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/malloc.h>
@@ -140,7 +140,7 @@ static void magellan_disconnect(struct serio *serio)
 static void magellan_connect(struct serio *serio, struct serio_dev *dev)
 {
 	struct magellan *magellan;
-	int i;
+	int i, t;
 
 	if (serio->type != (SERIO_RS232 | SERIO_MAGELLAN))
 		return;
@@ -151,8 +151,18 @@ static void magellan_connect(struct serio *serio, struct serio_dev *dev)
 	memset(magellan, 0, sizeof(struct magellan));
 
 	magellan->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);	
-	for (i = 0; i < 9; i++) set_bit(magellan_buttons[i], &magellan->dev.keybit);
-	for (i = 0; i < 6; i++) set_bit(magellan_axes[i], &magellan->dev.absbit);
+
+	for (i = 0; i < 9; i++)
+		set_bit(magellan_buttons[i], &magellan->dev.keybit);
+
+	for (i = 0; i < 6; i++) {
+		t = magellan_axes[i];
+		set_bit(t, magellan->dev.absbit);
+		magellan->dev.absmin[t] = -2000;
+		magellan->dev.absmax[t] =  2000;
+		magellan->dev.absflat[t] = 0;
+		magellan->dev.absfuzz[t] = 2;
+	}
 
 	magellan->serio = serio;
 	magellan->dev.private = magellan;

@@ -1,12 +1,13 @@
 /*
- *  warrior.c  Version 0.1
+ * $Id$
  *
  *  Copyright (c) 1999 Vojtech Pavlik
+ *
+ *  Sponsored by SuSE
  */
 
 /*
- * This is a module for the Linux input driver, supporting
- * the Logitech WingMan Warrior joystick.
+ * Logitech WingMan Warrior joystick driver for Linux
  */
 
 /*
@@ -29,7 +30,6 @@
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
  */
 
-#include <linux/errno.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/malloc.h>
@@ -135,6 +135,7 @@ static void warrior_disconnect(struct serio *serio)
 static void warrior_connect(struct serio *serio, struct serio_dev *dev)
 {
 	struct warrior *warrior;
+	int i;
 
 	if (serio->type != (SERIO_RS232 | SERIO_WARRIOR))
 		return;
@@ -148,6 +149,20 @@ static void warrior_connect(struct serio *serio, struct serio_dev *dev)
 	warrior->dev.keybit[LONG(BTN_TRIGGER)] = BIT(BTN_TRIGGER) | BIT(BTN_THUMB) | BIT(BTN_TOP) | BIT(BTN_TOP2);
 	warrior->dev.relbit[0] = BIT(REL_DIAL);
 	warrior->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y) | BIT(ABS_THROTTLE) | BIT(ABS_HAT0X) | BIT(ABS_HAT0Y);
+
+	for (i = 0; i < 2; i++) {
+		warrior->dev.absmax[ABS_X+i] = -64;	
+		warrior->dev.absmin[ABS_X+i] =  64;	
+		warrior->dev.absflat[ABS_X+i] = 8;	
+	}
+
+	warrior->dev.absmax[ABS_THROTTLE] = -112;	
+	warrior->dev.absmin[ABS_THROTTLE] =  112;	
+
+	for (i = 0; i < 2; i++) {
+		warrior->dev.absmax[ABS_HAT0X+i] = -1;	
+		warrior->dev.absmin[ABS_HAT0X+i] =  1;	
+	}
 
 	warrior->serio = serio;
 	warrior->dev.private = warrior;

@@ -1,16 +1,17 @@
 /*
- *  spaceball.c  Version 0.1
+ * $Id$
  *
- *  Copyright (c) 1998 David Thompson
- *  Copyright (c) 1999 Vojtech Pavlik
- *  Copyright (c) 1999 Joseph Krahn
+ *  Copyright (c) 1999-2000 Vojtech Pavlik
+ *
+ *  Based on the work of:
+ *  	David Thompson
+ *  	Joseph Krahn
  *
  *  Sponsored by SuSE
  */
 
 /*
- * This is a module for the Linux input driver, supporting
- * the SpaceTec SpaceBall 4000 FLX.
+ * SpaceTec SpaceBall 4000 FLX driver for Linux
  */
 
 /*
@@ -33,13 +34,12 @@
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
  */
 
-#include <linux/errno.h>
 #include <linux/kernel.h>
+#include <linux/malloc.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/input.h>
 #include <linux/serio.h>
-#include <linux/malloc.h>
 
 /*
  * Constants.
@@ -161,7 +161,7 @@ static void spaceball_disconnect(struct serio *serio)
 static void spaceball_connect(struct serio *serio, struct serio_dev *dev)
 {
 	struct spaceball *spaceball;
-	int i;
+	int i, t;
 
 	if (serio->type != (SERIO_RS232 | SERIO_SPACEBALL))
 		return;
@@ -172,7 +172,15 @@ static void spaceball_connect(struct serio *serio, struct serio_dev *dev)
 
 	spaceball->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);	
 	spaceball->dev.keybit[LONG(BTN_LEFT)] = BIT(BTN_LEFT) | BIT(BTN_RIGHT);
-	for (i = 0; i < 6; i++) set_bit(spaceball_axes[i], &spaceball->dev.absbit);
+
+	for (i = 0; i < 6; i++) {
+		t = spaceball_axes[i];
+		set_bit(t, spaceball->dev.absbit);
+		spaceball->dev.absmin[t] = i < 3 ? -10000 : -2000;
+		spaceball->dev.absmax[t] = i < 3 ?  10000 :  2000;
+		spaceball->dev.absflat[t] = i < 3 ? 50 : 10;
+		spaceball->dev.absfuzz[t] = i < 3 ? 12 : 2;
+	}
 
 	spaceball->serio = serio;
 	spaceball->dev.private = spaceball;

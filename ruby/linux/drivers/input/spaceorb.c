@@ -1,15 +1,16 @@
 /*
- *  spaceorb.c  Version 0.1
+ * $Id$
  *
- *  Copyright (c) 1998 David Thompson
- *  Copyright (c) 1999 Vojtech Pavlik
+ *  Copyright (c) 1999-2000 Vojtech Pavlik
+ * 
+ *  Based on the work of:
+ *  	David Thompson
  *
  *  Sponsored by SuSE
  */
 
 /*
- * This is a module for the Linux input driver, supporting
- * the SpaceTec SpaceOrb 360 and SpaceBall Avenger 6dof controllers.
+ * SpaceTec SpaceOrb 360 and Avenger 6dof controller driver for Linux
  */
 
 /*
@@ -32,7 +33,6 @@
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
  */
 
-#include <linux/errno.h>
 #include <linux/kernel.h>
 #include <linux/malloc.h>
 #include <linux/module.h>
@@ -94,7 +94,7 @@ static void spaceorb_process_packet(struct spaceorb *spaceorb)
 		case 'D':				/* Ball + button data */
 			if (spaceorb->idx != 12) return;
 			for (i = 0; i < 9; i++) spaceorb->data[i+2] ^= spaceorb_xor[i]; 
-			axes[0] = ( data[2]         << 3) | (data[ 3] >> 4);
+			axes[0] = ( data[2]	 << 3) | (data[ 3] >> 4);
 			axes[1] = ((data[3] & 0x0f) << 6) | (data[ 4] >> 1);
 			axes[2] = ((data[4] & 0x01) << 9) | (data[ 5] << 2) | (data[4] >> 5);
 			axes[3] = ((data[6] & 0x1f) << 5) | (data[ 7] >> 2);
@@ -155,7 +155,7 @@ static void spaceorb_disconnect(struct serio *serio)
 static void spaceorb_connect(struct serio *serio, struct serio_dev *dev)
 {
 	struct spaceorb *spaceorb;
-	int i;
+	int i, t;
 
 	if (serio->type != (SERIO_RS232 | SERIO_SPACEORB))
 		return;
@@ -165,8 +165,18 @@ static void spaceorb_connect(struct serio *serio, struct serio_dev *dev)
 	memset(spaceorb, 0, sizeof(struct spaceorb));
 
 	spaceorb->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);	
-	for (i = 0; i < 8; i++) set_bit(spaceorb_buttons[i], &spaceorb->dev.keybit);
-	for (i = 0; i < 6; i++) set_bit(spaceorb_axes[i], &spaceorb->dev.absbit);
+
+	for (i = 0; i < 8; i++)
+		set_bit(spaceorb_buttons[i], &spaceorb->dev.keybit);
+
+	for (i = 0; i < 6; i++) {
+		t = spaceorb_axes[i];
+		set_bit(t, spaceorb->dev.absbit);
+		spaceorb->dev.absmin[t] = -512;
+		spaceorb->dev.absmax[t] =  511;
+		spaceorb->dev.absflat[t] = 0;
+		spaceorb->dev.absfuzz[t] = 2;
+	}
 
 	spaceorb->serio = serio;
 	spaceorb->dev.private = spaceorb;
