@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- *  Copyright (c) 2001 Vojtech Pavlik <vojtech@suse.cz>
+ *  Copyright (c) 2000-2001 Vojtech Pavlik <vojtech@suse.cz>
  *  Copyright (c) 2001 Johann Deneux <deneux@ifrance.com>
  *
  *  USB/RS232 I-Force joysticks and wheels.
@@ -95,10 +95,12 @@ struct iforce_core_effect {
 #define FF_CMD_INIT_F		0xff01
 
 /* For iforce->init_done: Tells what parts of the init process are completed */
-#define FF_INIT_RAMSIZE		1
-#define FF_INIT_N_EFFECTS	2
-#define FF_INIT_DEV_TYPE	4
-#define FF_INIT_ALL_MASK	7
+#define FF_INIT_RAMSIZE		0x01
+#define FF_INIT_N_EFFECTS	0x02
+#define FF_INIT_DEV_TYPE	0x04
+#define FF_INIT_VID		0x08
+#define FF_INIT_PID		0x10
+#define FF_INIT_ALL_MASK	0x1f	
 
 struct iforce {
 	struct input_dev dev;		/* Input device interface */
@@ -155,12 +157,14 @@ static struct ff_init_data {
 	{ FF_CMD_INIT_2,   { 0x01 } },
 	{ FF_CMD_INIT_2,   { 0x00 } },
 
-	{ FF_CMD_INIT_F,   { 0x4F } },
-	{ FF_CMD_INIT_F,   { 0x56 } },
-	{ FF_CMD_INIT_F,   { 0x4E } },
 	{ FF_CMD_INIT_F,   { 0x42 } },
-	{ FF_CMD_INIT_F,   { 0x4D } },
+	{ FF_CMD_INIT_F,   { 0x43 } },
+	{ FF_CMD_INIT_F,   { 0x45 } },
+	{ FF_CMD_INIT_F,   { 0x4d } },
+	{ FF_CMD_INIT_F,   { 0x4e } },
+	{ FF_CMD_INIT_F,   { 0x4f } },
 	{ FF_CMD_INIT_F,   { 0x50 } },
+	{ FF_CMD_INIT_F,   { 0x56 } },
 
 	{ FF_CMD_INIT_0_B, { 0x06, 0xF4, 0x01 } },
 	{ FF_CMD_INIT_3,   { 0x80 } },
@@ -200,8 +204,6 @@ static void dump_packet(char *msg, u16 cmd, unsigned char *data)
  */
 static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 {
-	dump_packet("send", cmd, data);
-
 	switch (iforce->dev.idbus) {
 
 #ifdef IFORCE_232
@@ -743,18 +745,10 @@ static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char 
 		case 0x02:	/* status report */
 
 			input_report_key(dev, BTN_DEAD, data[0] & 0x02);
-
-			if (~iforce->init_done & FF_INIT_N_EFFECTS) {
-				if ((data[1] & 0x7f) + 1 > iforce->n_effects_max) {
-					iforce->n_effects_max = (data[1] & 0x7f) + 1;
-					break;
-				}
-				iforce->init_done |= FF_INIT_N_EFFECTS;
-				iforce_wake(iforce);
-			}
 			break;
-
+			
 		case 0xff:	/* autodetect report */
+
 
 			switch (data[0]) {
 
@@ -767,14 +761,45 @@ static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char 
 					}
 					break;
 
+				case 0x4d:	/* Vendor ID */
+
+					if (~iforce->init_done & FF_INIT_VID) {
+						iforce->dev.idvendor = (data[2] << 8) | data[1];
+						iforce->init_done |= FF_INIT_VID;
+						iforce_wake(iforce);
+					}
+					break;
+
+				case 0x4e:	/* Number of simultaneous effects */
+
+					if (~iforce->init_done & FF_INIT_N_EFFECTS) {
+						iforce->n_effects_max = data[1];
+						iforce->init_done |= FF_INIT_N_EFFECTS;
+						iforce_wake(iforce);
+					}
+					break;
+
+				case 0x50:	/* Product ID */
+
+					if (~iforce->init_done & FF_INIT_PID) {
+						iforce->dev.idproduct = (data[2] << 8) | data[1];
+						iforce->init_done |= FF_INIT_PID;
+						iforce_wake(iforce);
+					}
+					break;
+
+				case 0x43: /* No data? */
+				case 0x45: /* Device revision? */
+				case 0x4f: /* No data? */
+				case 0x56: /* I-Force protocol revision? */
+
 				default:
 					dump_packet("rcff", cmd, data);
-					break;
 			}
+			break;
 
 		default:
 			dump_packet("recv", cmd, data);
-			break;
 	}
 }
 
@@ -825,10 +850,14 @@ static void iforce_init_device(struct iforce *iforce)
 
 	iforce->device_memory.name = "I-Force device effect memory";
 	iforce->device_memory.start = 0;
+	iforce->device_memory.end = 200;
 	iforce->device_memory.flags = IORESOURCE_MEM;
 	iforce->device_memory.parent = NULL;
 	iforce->device_memory.child = NULL;
 	iforce->device_memory.sibling = NULL;
+
+	iforce->n_effects_max = 10;
+	iforce->type = 1;
 
 	init_waitqueue_head(&iforce->wait);
 	iforce_open(&iforce->dev);
@@ -846,12 +875,8 @@ static void iforce_init_device(struct iforce *iforce)
 	remove_wait_queue(&iforce->wait, &wait);
 	iforce_close(&iforce->dev);
 
-	if (!timeout) {
-		printk(KERN_WARNING "iforce.c: Init timeout %#lx\n", iforce->init_done);
-		if (~iforce->init_done & FF_INIT_N_EFFECTS) iforce->n_effects_max = 10;
-		if (~iforce->init_done & FF_INIT_DEV_TYPE)  iforce->type = 1;
-		if (~iforce->init_done & FF_INIT_RAMSIZE)   iforce->device_memory.end = 200;
-	}
+	if (!timeout)
+		printk(KERN_WARNING "iforce.c: Init timeout %#lx. Detection may not be accurate.\n", iforce->init_done);
 
 	iforce->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS) | BIT(EV_FF);
 	iforce->dev.keybit[LONG(BTN_JOYSTICK)] |= BIT(BTN_TRIGGER) | BIT(BTN_TOP) | BIT(BTN_THUMB) | BIT(BTN_TOP2) |
@@ -941,9 +966,9 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 
 	iforce_init_device(iforce);
 
-	printk(KERN_INFO "input%d: %s [%d effects, %ld bytes memory] on usb%d:%d.%d\n",
-		 iforce->dev.number, iforce->dev.name, iforce->n_effects_max,
-		iforce->device_memory.end, dev->bus->busnum, dev->devnum, ifnum);
+	printk(KERN_INFO "input%d: %s [%04x:%04x, %d effects, %ld bytes memory] on usb%d:%d.%d\n",
+		 iforce->dev.number, iforce->dev.name, iforce->dev.idvendor, iforce->dev.idproduct,
+		 iforce->n_effects_max, iforce->device_memory.end, dev->bus->busnum, dev->devnum, ifnum);
 
 	return iforce;
 }
@@ -1032,6 +1057,7 @@ static void iforce_serio_connect(struct serio *serio, struct serio_dev *dev)
 
 	iforce->dev.idbus = BUS_RS232;
 	iforce->dev.idvendor = SERIO_IFORCE;
+	iforce->dev.idproduct = 0x0001;
 	iforce->dev.idversion = 0x0100;
 
 	iforce->serio = serio;
@@ -1044,11 +1070,9 @@ static void iforce_serio_connect(struct serio *serio, struct serio_dev *dev)
 
 	iforce_init_device(iforce);
 
-	iforce->dev.idproduct = iforce->type;
-
-	printk(KERN_INFO "input%d: %s [%d effects, %ld bytes memory] on serio%d\n",
-		iforce->dev.number, iforce->dev.name, iforce->n_effects_max,
-		iforce->device_memory.end, serio->number);
+	printk(KERN_INFO "input%d: %s [%04x:%04x, %d effects, %ld bytes memory] on serio%d\n",
+		iforce->dev.number, iforce->dev.name, iforce->dev.idvendor, iforce->dev.idproduct,
+		iforce->n_effects_max, iforce->device_memory.end, serio->number);
 }
 
 static void iforce_serio_disconnect(struct serio *serio)
