@@ -272,7 +272,7 @@ void terminal_emulation(struct tty_struct *tty, int c);
 
 /* vt.c */
 struct console_font_op;
-void create_vt(struct vt_struct *vt, struct consw *sw);
+const char* create_vt(struct vt_struct *vt, struct consw *sw);
 struct vc_data* find_vc(int currcons);
 int vc_allocate(unsigned int console);
 int vc_resize(unsigned int lines, unsigned int cols,
