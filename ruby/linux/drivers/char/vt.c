@@ -65,6 +65,7 @@ static struct termios *console_termios_locked[MAX_NR_CONSOLES];
 static void con_flush_chars(struct tty_struct *tty);
 
 static int printable = 0;               /* Is console ready for printing? */
+static int current_vc = 0;		/* Which /dev/vc/X to allcoate next */
 
 /*
  * fg_console is the current virtual console,
@@ -691,10 +692,52 @@ int vc_cons_allocated(unsigned int i)
         return (i < MAX_NR_USER_CONSOLES && vt_cons->vcs.vc_cons[i]);
 }
 
+void create_vt(struct vt_struct *vt, struct consw *vt_sw)
+{
+	vt->vt_sw = vt_sw;
+	vt->vt_dont_switch = 0;
+        vt->scrollback_delta = 0;
+        vt->vt_blanked = 0;
+        vt->blank_interval = 10*60*HZ;
+        vt->off_interval = 0;
+	vt->vcs.first_vc = current_vc;  
+	vt->vcs.next = NULL;
+        vt->next = vt_cons;
+	vt_cons = vt;
+	current_vc += MAX_NR_USER_CONSOLES;
+
+        init_timer(&vt->timer);
+        vt->timer.data = (long) vt;
+        vt->timer.function = blank_screen;
+        vt->timer.expires = jiffies + vt->blank_interval;
+        add_timer(&vt->timer);
+}
+
+struct vc_data* find_vc(int currcons)
+{
+	struct vt_struct *vt = vt_cons;
+	struct vc_pool *pool = &vt->vcs;
+
+	for (;;) {
+		if (currcons >= pool->first_vc + MAX_NR_USER_CONSOLES || 
+	    	    currcons < pool->first_vc) 
+			pool = pool->next;
+		else
+			break;	
+		
+		if (!pool) {
+			vt = vt->next;
+			if (vt)
+				pool = &vt->vcs;
+			else return NULL;
+		}
+	} 
+	return pool->vc_cons[currcons - pool->first_vc];	
+}
+
 static void visual_init(struct vc_data *vc, int init)
 {
     /* ++Geert: sw->con_init determines console size */
-    sw = conswitchp;
     vc->vc_uni_pagedir_loc = &vc->vc_uni_pagedir;
     vc->vc_uni_pagedir = 0;
     hi_font_mask = 0;
@@ -730,15 +773,35 @@ static void vc_init(struct vc_data *vc, int do_clear)
 /* return 0 on success */
 int vc_allocate(unsigned int currcons)  
 {
-        if (currcons >= MAX_NR_CONSOLES)
-                return -ENXIO;
+	struct vt_struct *vt = vt_cons;
+	struct vc_pool *pool = &vt->vcs;
+	struct vc_data *vc;
 
-        if (!vt_cons->vcs.vc_cons[currcons]) {
-	    struct vc_data *vc;	
+	if (currcons >= MAX_NR_CONSOLES)
+		return -ENXIO;
+
+        for (;;) {
+                if (currcons >= pool->first_vc + MAX_NR_USER_CONSOLES ||
+                    currcons < pool->first_vc)
+                        pool = pool->next;
+                else
+                        break;
+
+                if (!pool) {
+                        vt = vt->next;
+                        if (vt)
+                                pool = &vt->vcs;
+                        else 
+				return -ENXIO;
+                }
+        }
+	vc = pool->vc_cons[currcons - pool->first_vc];
+
+        if (!vc) {
             long p, q;
 
             /* prevent users from taking too much memory */
-            if (currcons >= MAX_NR_USER_CONSOLES && !capable(CAP_SYS_RESOURCE))
+            if (currcons >= MAX_NR_CONSOLES && !capable(CAP_SYS_RESOURCE))
               return -EPERM;
 
             /* due to the granularity of kmalloc, we waste some memory here */
@@ -750,21 +813,25 @@ int vc_allocate(unsigned int currcons)
             p = (long) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
             if (!p)
                 return -ENOMEM;
-            vt_cons->vcs.vc_cons[currcons] = vc = (struct vc_data *)p;
+            vc = (struct vc_data *)p;
 	    vc->vc_num = currcons;	
-            vc->display_fg = vt_cons;
+            vc->display_fg = vt;
             visual_init(vc, 1);
             if (!*vc->vc_uni_pagedir_loc)
                 con_set_default_unimap(vc);
             q = (long)kmalloc(screenbuf_size, GFP_KERNEL);
             if (!q) {
                 kfree_s((char *) p, sizeof(struct vc_data));
-                vt_cons->vcs.vc_cons[currcons] = vc = NULL;
+                vc = NULL;
                 return -ENOMEM;
             }
             screenbuf = (unsigned short *) q;
             kmalloced = 1;
             vc_init(vc, 1);
+	    if (currcons - pool->first_vc == 0)
+	    	vt->last_console = vt->fg_console = vc;
+	
+	    pool->vc_cons[currcons - pool->first_vc] = vc;		
 	 /*	
             if (!pm_con) 
             	pm_con = pm_register(PM_SYS_DEV, PM_SYS_VGA, pm_con_request);
@@ -775,8 +842,8 @@ int vc_allocate(unsigned int currcons)
 
 void vc_disallocate(unsigned int currcons)
 {
-        if (vc_cons_allocated(currcons)) {
-            struct vc_data *vc = vt_cons->vcs.vc_cons[currcons];
+	struct vc_data *vc = find_vc(currcons);
+        if (vc) {
             sw->con_deinit(vc);
             if (kmalloced)
                 kfree_s(screenbuf, screenbuf_size);
@@ -1134,9 +1201,8 @@ static void console_softint(unsigned long ignored)
 
         spin_lock_irq(&console_lock);
 
-        if (want_vc->vc_num != want_vc->display_fg->fg_console->vc_num && 
-	    vc_cons_allocated(want_vc->vc_num) &&
-	    !want_vc->display_fg->vt_dont_switch) { 
+        if (want_vc && !want_vc->display_fg->vt_dont_switch &&
+	    want_vc->vc_num != want_vc->display_fg->fg_console->vc_num) { 
 		hide_cursor(want_vc->display_fg->fg_console);
 		/* New console, old console */
                 change_console(want_vc, want_vc->display_fg->fg_console);
@@ -1221,25 +1287,25 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
 /* Allocate the console screen memory. */
 static int con_open(struct tty_struct *tty, struct file * filp)
 {
-        unsigned int currcons;
-	struct vc_data *vc;
+        unsigned int currcons = MINOR(tty->device) - tty->driver.minor_start;
+	struct vc_data *vc = (struct vc_data *) tty->driver_data;
 	int i;
 
-        currcons = MINOR(tty->device) - tty->driver.minor_start;
+	if (!vc) {
+        	i = vc_allocate(currcons);
+		if (i)               
+	 		return i;
+		vc = find_vc(currcons);
+        	tty->driver_data = vc;
+		
+		if (!tty->winsize.ws_row && !tty->winsize.ws_col) {
+                        tty->winsize.ws_row = video_num_lines;
+                        tty->winsize.ws_col = video_num_columns;
+ 	       }
+	} 
 
-        i = vc_allocate(currcons);
-        if (i)
-                return i;
-
-	vc = vt_cons->vcs.vc_cons[currcons];
-        tty->driver_data = vc;
-
-        if (!tty->winsize.ws_row && !tty->winsize.ws_col) {
-                tty->winsize.ws_row = video_num_lines;
-                tty->winsize.ws_col = video_num_columns;
-        }
         if (tty->count == 1)
-                vcs_make_devfs (currcons, 0);
+                vcs_make_devfs(currcons, 0);
         return 0;
 }
 
@@ -1376,9 +1442,9 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
            the `x' macro will read the x of the foreground console). */
         myx = x;
 
-        if (!vc_cons_allocated(cons_num)) {
+        if (!vc) {
                 /* impossible */
-                /* printk("vt_console_print: tty %d not allocated ??\n", currcons+1); */
+                /* printk("vt_console_print: tty %d not allocated ??\n", currcons); */
                 goto quit;
         }
 
@@ -1478,8 +1544,8 @@ DECLARE_TASKLET_DISABLED(console_tasklet, console_softint, 0);
 void __init vt_console_init(void)
 {
         const char *display_desc = NULL;
-        struct vc_data *vc;
-	unsigned int currcons = 0;
+        struct vt_struct *vt;
+	struct vc_data *vc;
 
         if (conswitchp)
                 display_desc = conswitchp->con_startup();
@@ -1526,33 +1592,17 @@ void __init vt_console_init(void)
         /*
          * kmalloc is not running yet - we use the bootmem allocator.
          */
-	vt_cons = (struct vt_struct *) alloc_bootmem(sizeof(struct vt_struct));
-	vt_cons->vt_dont_switch = 0;
-	vt_cons->scrollback_delta = 0;
-	vt_cons->vcs.first_vc = 0;
-	vt_cons->vt_blanked = 0;
-	vt_cons->blank_interval = 10*60*HZ;
-	vt_cons->off_interval = 0;
-	
-	init_timer(&vt_cons->timer);
-	vt_cons->timer.data = (long) vt_cons;
-	vt_cons->timer.function = blank_screen;
-	vt_cons->timer.expires = jiffies + vt_cons->blank_interval;
-	add_timer(&vt_cons->timer);
-	
-        for (currcons = 0; currcons < MIN_NR_CONSOLES; currcons++) {
-		vt_cons->vcs.vc_cons[currcons] = vc = 
-		      vt_cons->fg_console = (struct vc_data *)
-                                	alloc_bootmem(sizeof(struct vc_data));
-		vc->vc_num = currcons;
-                vc->display_fg = vt_cons;
-		visual_init(vc, 1);
-                screenbuf = (unsigned short *) alloc_bootmem(screenbuf_size);
-                kmalloced = 0;
-                vc_init(vc, currcons || !sw->con_save_screen); 
-        }
-        vc = vt_cons->fg_console;
-        /* master_display_fg = vc; */
+	vt = (struct vt_struct *) alloc_bootmem(sizeof(struct vt_struct));
+	create_vt(vt, conswitchp);
+	vc = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
+	vt->last_console = vt->fg_console = vt->vcs.vc_cons[0] = vc; 
+	vc->vc_num = 0;
+        vc->display_fg = vt;
+	visual_init(vc, 1);
+        screenbuf = (unsigned short *) alloc_bootmem(screenbuf_size);
+        kmalloced = 0;
+        vc_init(vc, !sw->con_save_screen); 
+        
         set_origin(vc);
         save_screen(vc);
         gotoxy(vc, x, y);
