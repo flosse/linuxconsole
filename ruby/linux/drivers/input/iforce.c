@@ -230,6 +230,7 @@ static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char 
 {
 	struct input_dev *dev = &iforce->dev;
 
+#ifdef IFORCE_232
 	if (HI(iforce->expect_packet) == HI(cmd)) {
 		iforce->expect_packet = 0;
 		iforce->ecmd = cmd;
@@ -237,6 +238,7 @@ static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char 
 		if (waitqueue_active(&iforce->wait))
 			wake_up(&iforce->wait);
 	}
+#endif
 
 	switch (HI(cmd)) {
 
@@ -841,7 +843,6 @@ static int iforce_set_autocenter(struct input_dev *dev, unsigned short strength)
 
 	return 0;
 }
-
 
 static int iforce_init_device(struct iforce *iforce)
 {
