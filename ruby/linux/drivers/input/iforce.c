@@ -102,6 +102,7 @@ struct iforce_core_effect {
 struct iforce {
 	struct input_dev dev;		/* Input device interface */
         int open;
+	int type;
 
         signed char data[IFORCE_MAX_LENGTH];
 
@@ -113,10 +114,9 @@ struct iforce {
 #ifdef IFORCE_USB
         struct usb_device *usbdev;	/* USB transfer */
         struct urb irq, out;
-	wait_queue_head_t wait;
 #endif
 					/* Force Feedback */
-	struct semaphore wait_init_done;
+	wait_queue_head_t wait;
 	unsigned long init_done;
 	struct resource device_memory;  
 	int n_effects_max;
@@ -128,8 +128,54 @@ static struct {
         __s32 y;
 } iforce_hat_to_axis[16] = {{ 0,-1}, { 1,-1}, { 1, 0}, { 1, 1}, { 0, 1}, {-1, 1}, {-1, 0}, {-1,-1}};
 
-static char *iforce_name = "I-Force joystick/wheel";
+static struct ff_init_data {
+	u16 cmd;
+	u8 data[4];
+} ff_init_data[] =  {
 
+	{ FF_CMD_INIT_F,   { 0x4F } },
+	{ FF_CMD_INIT_F,   { 0x56 } },
+	{ FF_CMD_INIT_F,   { 0x4E } },
+	{ FF_CMD_INIT_F,   { 0x42 } },
+	{ FF_CMD_INIT_F,   { 0x4D } },
+	{ FF_CMD_INIT_F,   { 0x50 } },
+
+	{ FF_CMD_INIT_0_B, { 0x06, 0xF4, 0x01 } },
+	{ FF_CMD_INIT_3,   { 0x80 } },
+	{ FF_CMD_INIT_2,   { 0x04 } },
+	{ FF_CMD_INIT_2,   { 0x04 } },
+	{ FF_CMD_INIT_2,   { 0x05 } },
+	{ FF_CMD_INIT_0_A, { 0x04, 0x00 } },
+	{ FF_CMD_INIT_2,   { 0x05 } },
+	{ FF_CMD_INIT_0_A, { 0x04, 0x00 } },
+	{ FF_CMD_INIT_3,   { 0x80 } },
+	{ FF_CMD_INIT_2,   { 0x05 } },
+	{ FF_CMD_INIT_0_A, { 0x04, 0x00 } },
+	{ FF_CMD_INIT_2,   { 0x01 } },
+	{ FF_CMD_INIT_2,   { 0x00 } },
+
+	{ FF_CMD_INIT_F,   { 0x4F } },
+	{ FF_CMD_INIT_F,   { 0x56 } },
+	{ FF_CMD_INIT_F,   { 0x4E } },
+	{ FF_CMD_INIT_F,   { 0x42 } },
+	{ FF_CMD_INIT_F,   { 0x4D } },
+	{ FF_CMD_INIT_F,   { 0x50 } },
+
+	{ FF_CMD_INIT_0_B, { 0x06, 0xF4, 0x01 } },
+	{ FF_CMD_INIT_3,   { 0x80 } },
+	{ FF_CMD_INIT_2,   { 0x04 } },
+	{ FF_CMD_INIT_2,   { 0x04 } },
+	{ FF_CMD_INIT_2,   { 0x05 } },
+	{ FF_CMD_INIT_2,   { 0x04 } },
+	{ FF_CMD_INIT_0_A, { 0x04, 0x00 } },
+	{ FF_CMD_INIT_2,   { 0x05 } },
+	{ FF_CMD_INIT_0_A, { 0x04, 0x00 } },
+	{ FF_CMD_INIT_3,   { 0x80 } },
+	{ 0, }
+ };
+
+static char *iforce_name_joystick = "I-Force joystick";
+static char *iforce_name_wheel = "I-Force wheel";
 
 /* Get hi and low bytes of a 16-bits int */
 #define HI(a)	((unsigned char)((a) >> 8))
@@ -140,10 +186,12 @@ static char *iforce_name = "I-Force joystick/wheel";
  
 static void dump_packet(char *msg, u16 cmd, unsigned char *data)
 {
+	int i;
+
 	printk(KERN_DEBUG "iforce.c: %s ( cmd = %04x, data = ", msg, cmd);
-			for (i = 0; i < LO(cmd); i++)
-				printk("%02x ", data[i]);
-			printk(")\n");
+	for (i = 0; i < LO(cmd); i++)
+		printk("%02x ", data[i]);
+	printk(")\n");
 }
 
 /*
@@ -151,8 +199,6 @@ static void dump_packet(char *msg, u16 cmd, unsigned char *data)
  */
 static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 {
-	int i;
-
 	dump_packet("send", cmd, data);
 
 	switch (iforce->dev.idbus) {
@@ -218,59 +264,6 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 #endif
 	}
 } 
-
-static struct ff_init_data {
-	u16 cmd;
-	u8 data[4];
-} ff_init_data[] =  {
-
-	{ FF_CMD_INIT_F,   { 0x4F } },
-	{ FF_CMD_INIT_F,   { 0x56 } },
-	{ FF_CMD_INIT_F,   { 0x4E } },
-	{ FF_CMD_INIT_F,   { 0x42 } },
-	{ FF_CMD_INIT_F,   { 0x4D } },
-	{ FF_CMD_INIT_F,   { 0x50 } },
-
-	{ FF_CMD_INIT_0_B, { 0x06, 0xF4, 0x01 } },
-	{ FF_CMD_INIT_3,   { 0x80 } },
-	{ FF_CMD_INIT_2,   { 0x04 } },
-	{ FF_CMD_INIT_2,   { 0x04 } },
-	{ FF_CMD_INIT_2,   { 0x05 } },
-	{ FF_CMD_INIT_0_A, { 0x04, 0x00 } },
-	{ FF_CMD_INIT_2,   { 0x05 } },
-	{ FF_CMD_INIT_0_A, { 0x04, 0x00 } },
-	{ FF_CMD_INIT_3,   { 0x80 } },
-	{ FF_CMD_INIT_2,   { 0x05 } },
-	{ FF_CMD_INIT_0_A, { 0x04, 0x00 } },
-	{ FF_CMD_INIT_2,   { 0x01 } },
-	{ FF_CMD_INIT_2,   { 0x00 } },
-
-	{ FF_CMD_INIT_F,   { 0x4F } },
-	{ FF_CMD_INIT_F,   { 0x56 } },
-	{ FF_CMD_INIT_F,   { 0x4E } },
-	{ FF_CMD_INIT_F,   { 0x42 } },
-	{ FF_CMD_INIT_F,   { 0x4D } },
-	{ FF_CMD_INIT_F,   { 0x50 } },
-
-	{ FF_CMD_INIT_0_B, { 0x06, 0xF4, 0x01 } },
-	{ FF_CMD_INIT_3,   { 0x80 } },
-	{ FF_CMD_INIT_2,   { 0x04 } },
-	{ FF_CMD_INIT_2,   { 0x04 } },
-	{ FF_CMD_INIT_2,   { 0x05 } },
-	{ FF_CMD_INIT_2,   { 0x04 } },
-	{ FF_CMD_INIT_0_A, { 0x04, 0x00 } },
-	{ FF_CMD_INIT_2,   { 0x05 } },
-	{ FF_CMD_INIT_0_A, { 0x04, 0x00 } },
-	{ FF_CMD_INIT_3,   { 0x80 } },
-	{ 0, }
- };
-
-static void iforce_init_ff(struct iforce *iforce)
-{
-	int i;
-	for (i = 0; ff_init_data[i].cmd; i++)
-		send_packet(iforce, ff_init_data[i].cmd, ff_init_data[i].data);
-}
 
 /*
  * Start or stop playing an effect
@@ -699,30 +692,26 @@ static int iforce_erase_effect(struct input_dev *dev, int effect_id)
 	return err;
 }
 
-static void iforce_process_packet(struct input_dev *dev, u16 cmd, unsigned char *data, struct iforce *iforce)
+static void iforce_wake(struct iforce *iforce)
 {
-	int i;
+	if (iforce->init_done == FF_INIT_ALL_MASK)
+		if (waitqueue_active(&iforce->wait))
+			wake_up(&iforce->wait);
+}
+
+static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char *data)
+{
+	struct input_dev *dev = &iforce->dev;
 
 	switch (HI(cmd)) {
 
 		case 0x01:	/* joystick position data */
 		case 0x03:	/* wheel position data */
 
-			/* Check if we are in the init phase */
-			if (!(iforce->init_done & FF_INIT_DEV_TYPE)) {
-
-				if (HI(cmd) == 1) { /* Joystick */
-					printk(KERN_INFO "iforce.c: device is a joystick\n");
-					dev->ffbit[0] = BIT(FF_X) | BIT(FF_Y);
-				} else {           /* Wheel */
-					printk(KERN_INFO "iforce.c: device is a wheel\n");
-					dev->ffbit[0] = BIT(FF_X);
-				}
-				
+			if (!iforce->init_done & FF_INIT_DEV_TYPE) {
+				iforce->type = HI(cmd);
 				iforce->init_done |= FF_INIT_DEV_TYPE;
-				if (iforce->init_done == FF_INIT_ALL_MASK)
-					up(&iforce->wait_init_done);
-					
+				iforce_wake(iforce);
 			}
 
 			if (HI(cmd) == 1) {
@@ -754,38 +743,20 @@ static void iforce_process_packet(struct input_dev *dev, u16 cmd, unsigned char 
 
 
 		case 0x02:	/* status report */
-		/*
-		Offset Size Meaning
-		  0      1  Device Status Flags:
-			      bit 7..4: not really used
-			      bit 3: output is paused
-			      bit 2: output is enabled
-			      bit 1: deadman switch (1: deadman switch covered by hand)
-			      bit 0: power supply OK
-		  1      1  EffectStatus
-			      bit 7: effect is playing
-			      bit 6..0: effect number
-		  2      1  EffectChecksum (for detecting transmit errors)
-		  3..?      Blocks which changed since last
-			    update. These are pointers into the effect parameter memory which have
-			    changed since last update. This is meant to be used to detect transmission
-			    errors.
-		*/
-			if (!(iforce->init_done & FF_INIT_N_EFFECTS)) {
-				if ((i = 1 + (data[1] & 127)) > iforce->n_effects_max) {
-					iforce->n_effects_max = i;
-				}
-				else {	/* The cycle is over */
-					printk(KERN_INFO "iforce.c: device can play %d effects\n", iforce->n_effects_max);
-					iforce->init_done |= FF_INIT_N_EFFECTS;
 
-					if (iforce->init_done == FF_INIT_ALL_MASK)
-						up(&iforce->wait_init_done);
+			input_report_key(dev, BTN_DEAD, data[0] & 0x02);
+
+			if (~iforce->init_done & FF_INIT_N_EFFECTS) {
+				if ((data[1] & 0x7f) + 1 > iforce->n_effects_max) {
+					iforce->n_effects_max = (data[1] & 0x7f) + 1;
+					break;
 				}
+				iforce->init_done |= FF_INIT_N_EFFECTS;
+				iforce_wake(iforce);
 			}
 			break;
 
-		case 0xff:
+		case 0xff:	/* autodetect report */
 
 			switch (data[0]) {
 
@@ -794,16 +765,19 @@ static void iforce_process_packet(struct input_dev *dev, u16 cmd, unsigned char 
 					if ((iforce->init_done & FF_INIT_RAMSIZE))
 						break;
 					iforce->device_memory.end = (data[2] << 8) | data[1];
-					printk(KERN_INFO "iforce.c: device has %d bytes of RAM\n", iforce->device_memory.end);
 					iforce->init_done |= FF_INIT_RAMSIZE;
-					if (iforce->init_done == FF_INIT_ALL_MASK)
-						up(&iforce->wait_init_done);
+					iforce_wake(iforce);
 					break;
 
 				default:
+					dump_packet("rcff", cmd, data);
+					break;
+			}
 
 		default:
-			}
+			dump_packet("recv", cmd, data);
+			break;
+	}
 }
 
 
@@ -839,18 +813,52 @@ static void iforce_close(struct input_dev *dev)
 	}
 }
 
-static void iforce_input_setup(struct iforce *iforce)
+static void iforce_init_device(struct iforce *iforce)
 {
-	int i;
+	DECLARE_WAITQUEUE(wait, current);
+	int i, timeout = HZ * 10; /* 10 seconds */
 
-	iforce->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
+	init_waitqueue_head(&iforce->wait);
+
+	for (i = 0; ff_init_data[i].cmd; i++)
+		send_packet(iforce, ff_init_data[i].cmd, ff_init_data[i].data);
+
+	init_waitqueue_head(&iforce->wait); 	
+	set_current_state(TASK_INTERRUPTIBLE);
+	add_wait_queue(&iforce->wait, &wait);
+
+	while (timeout && (iforce->init_done != FF_INIT_ALL_MASK))
+		timeout = schedule_timeout(timeout);
+
+	set_current_state(TASK_RUNNING);
+	remove_wait_queue(&iforce->wait, &wait);
+
+	if (!timeout) {
+		printk(KERN_WARNING "iforce.c: Init timeout\n");
+		if (~iforce->init_done & FF_INIT_N_EFFECTS) iforce->n_effects_max = 10;
+		if (~iforce->init_done & FF_INIT_DEV_TYPE)  iforce->type = 1;
+		if (~iforce->init_done & FF_INIT_RAMSIZE)   iforce->device_memory.end = 200;
+	}
+
+	iforce->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS) | BIT(EV_FF);
 	iforce->dev.keybit[LONG(BTN_JOYSTICK)] |= BIT(BTN_TRIGGER) | BIT(BTN_TOP) | BIT(BTN_THUMB) | BIT(BTN_TOP2) |
 					BIT(BTN_BASE) | BIT(BTN_BASE2) | BIT(BTN_BASE3) | BIT(BTN_BASE4) | BIT(BTN_BASE5);
 	iforce->dev.keybit[LONG(BTN_GAMEPAD)] |= BIT(BTN_A) | BIT(BTN_B) | BIT(BTN_C);
-	iforce->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y) | BIT(ABS_THROTTLE) | BIT(ABS_HAT0X) | BIT(ABS_HAT0Y)
-				| BIT(ABS_WHEEL) | BIT(ABS_GAS) | BIT(ABS_BRAKE);
 
-	iforce->dev.evbit[0] |= BIT(EV_FF);
+	switch (iforce->type) {
+
+		case 0x01: /* Joystick */
+			iforce->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y) | BIT(ABS_THROTTLE) | BIT(ABS_HAT0X) | BIT(ABS_HAT0Y);
+			iforce->dev.ffbit[0] = BIT(FF_X) | BIT(FF_Y);
+			iforce->dev.name = iforce_name_joystick;
+			break;
+
+		case 0x03: /* Wheel */
+			iforce->dev.absbit[0] = BIT(ABS_WHEEL) | BIT(ABS_GAS) | BIT(ABS_BRAKE) | BIT(ABS_HAT0X) | BIT(ABS_HAT0Y);
+			iforce->dev.ffbit[0] = BIT(FF_X);
+			iforce->dev.name = iforce_name_wheel;
+			break;
+	}
 
 	for (i = ABS_X; i <= ABS_Y; i++) {
 		iforce->dev.absmax[i] =  1920;
@@ -884,8 +892,6 @@ static void iforce_input_setup(struct iforce *iforce)
 	iforce->device_memory.child = NULL;
 	iforce->device_memory.sibling = NULL;
 
-	printk(KERN_DEBUG "iforce.c: device detection finished \n");
-
 	input_register_device(&iforce->dev);
 }
 
@@ -895,9 +901,8 @@ static void iforce_usb_irq(struct urb *urb)
 {
 	struct iforce *iforce = urb->context;
 	if (urb->status) return;
-	iforce_process_packet(&iforce->dev,
-		(iforce->data[0] << 8) | (urb->actual_length - 1),
-		iforce->data + 1, iforce);
+	iforce_process_packet(iforce,
+		(iforce->data[0] << 8) | (urb->actual_length - 1), iforce->data + 1);
 }
 
 static void iforce_usb_out(struct urb *urb)
@@ -907,8 +912,8 @@ static void iforce_usb_out(struct urb *urb)
 	if (urb->status)
 		printk(KERN_WARNING "iforce.c: nonzero output urb status %d\n", urb->status);
 
-        if (waitqueue_active(&iforce->wait))
-                wake_up(&iforce->wait);
+	if (waitqueue_active(&iforce->wait))
+		wake_up(&iforce->wait);
 }
 
 static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
@@ -923,7 +928,6 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	if (!(iforce = kmalloc(sizeof(struct iforce) + 32, GFP_KERNEL))) return NULL;
 	memset(iforce, 0, sizeof(struct iforce));
 
-	iforce->dev.name = iforce_name;
 	iforce->dev.idbus = BUS_USB;
 	iforce->dev.idvendor = dev->descriptor.idVendor;
 	iforce->dev.idproduct = dev->descriptor.idProduct;
@@ -931,22 +935,17 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 
 	iforce->usbdev = dev;
 
-	init_waitqueue_head(&iforce->wait);
-
 	FILL_INT_URB(&iforce->irq, dev, usb_rcvintpipe(dev, epirq->bEndpointAddress),
 			iforce->data, 16, iforce_usb_irq, iforce, epirq->bInterval);
 
 	FILL_BULK_URB(&iforce->out, dev, usb_sndbulkpipe(dev, epout->bEndpointAddress),
                         iforce + 1, 32, iforce_usb_out, iforce);
 
-	iforce_open(&iforce->dev);
-	iforce_init_ff(iforce);
-	iforce_close(&iforce->dev);
+	iforce_init_device(iforce);
 
-	iforce_input_setup(iforce);
-
-	printk(KERN_INFO "input%d: %s on usb%d:%d.%d\n",
-		 iforce->dev.number, iforce_name, dev->bus->busnum, dev->devnum, ifnum);
+	printk(KERN_INFO "input%d: %s [%d effects, %ld bytes memory] on usb%d:%d.%d\n",
+		 iforce->dev.number, iforce->dev.name, iforce->n_effects_max,
+		iforce->device_memory.end, dev->bus->busnum, dev->devnum, ifnum);
 
 	return iforce;
 }
@@ -1014,7 +1013,7 @@ static void iforce_serio_irq(struct serio *serio, unsigned char data, unsigned i
 	}
 
         if (iforce->idx == iforce->len) {
-		iforce_process_packet(&iforce->dev, (iforce->id << 8) | iforce->idx, iforce->data, iforce);
+		iforce_process_packet(iforce, (iforce->id << 8) | iforce->idx, iforce->data);
 		iforce->pkt = 0;
 		iforce->id  = 0;
                 iforce->len = 0;
@@ -1032,44 +1031,25 @@ static void iforce_serio_connect(struct serio *serio, struct serio_dev *dev)
 	if (!(iforce = kmalloc(sizeof(struct iforce), GFP_KERNEL))) return;
 	memset(iforce, 0, sizeof(struct iforce));
 
-	iforce->dev.name = iforce_name;
 	iforce->dev.idbus = BUS_RS232;
 	iforce->dev.idvendor = SERIO_IFORCE;
-	iforce->dev.idproduct = 0x0001;
 	iforce->dev.idversion = 0x0100;
 
-	/* FF: iforce_input_event() needs a reference to serio */
 	iforce->serio = serio;
-
 	serio->private = iforce;
-
-	/* This semaphore is set to 0. process_packet() will increase it
-	 * to wake us up so that iforce_input_setup is called only once
-	 * we have autodetected the characteristics of the device
-	 */
-	sema_init(&iforce->wait_init_done, 0);
 
 	if (serio_open(serio, dev)) {
 		kfree(iforce);
 		return;
 	}
 
-	/* Initialise the device */
-printk(KERN_DEBUG "iforce.c: before init_ff\n");
-	iforce_init_ff(iforce);
-printk(KERN_DEBUG "iforce.c: init_ff done\n");
+	iforce_init_device(iforce);
 
-	/* Wait until the device is initialised */
-printk(KERN_DEBUG "iforce.c: wait until init is done\n");
-	/*TODO: timeout -> use default values for capabilities of device */
-	down(&iforce->wait_init_done);
-printk(KERN_DEBUG "iforce.c: init is done, let's go !!!\n");
+	iforce->dev.idproduct = iforce->type;
 
-	/* Now we can safely go on */
-	iforce_input_setup(iforce);
-
-	printk(KERN_INFO "input%d: %s on serio%d\n",
-		 iforce->dev.number, iforce_name, serio->number);
+	printk(KERN_INFO "input%d: %s [%d effects, %ld bytes memory] on serio%d\n",
+		iforce->dev.number, iforce->dev.name, iforce->n_effects_max,
+		iforce->device_memory.end, serio->number);
 }
 
 static void iforce_serio_disconnect(struct serio *serio)
