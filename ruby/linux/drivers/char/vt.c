@@ -684,7 +684,7 @@ const char *create_vt(struct vt_struct *vt, struct consw *vt_sw)
 	const char *display_desc = NULL;
 
 	if (vt_sw)
-                display_desc = vt_sw->con_startup();
+                display_desc = vt_sw->con_startup(vt);
         if (!display_desc) return NULL; 
 	vt->vt_sw = vt_sw;
 	vt->vt_dont_switch = 0;
@@ -1621,19 +1621,17 @@ static void clear_buffer_attributes(struct vc_data *vc)
  *      and become default driver for newly opened ones.
  */
 
-void take_over_console(struct consw *csw, int first, int last, int deflt)
+void take_over_console(struct vt_struct *vt, struct consw *csw)
 {
         const char *desc;
 	int i;
 
-        desc = csw->con_startup();
+        desc = csw->con_startup(vt);
         if (!desc) return;
-        if (deflt)
-                conswitchp = csw;
 
-        for (i = first; i <= last; i++) {
+        for (i = 0; i <= MAX_NR_USER_CONSOLES; i++) {
                 int old_was_color;
-		struct vc_data *vc = vt_cons->vcs.vc_cons[i];
+		struct vc_data *vc = vt->vcs.vc_cons[i];
 
                 if (!vc || !sw)
                         continue;
@@ -1655,18 +1653,12 @@ void take_over_console(struct consw *csw, int first, int last, int deflt)
                 if (IS_VISIBLE)
                         update_screen(vc);
         }
-        printk("Console: switching ");
-        if (!deflt)
-                printk("consoles %d-%d ", first+1, last+1);
-        if (i >= 0)
-                printk("to %s %s %dx%d\n",
-                       vc->vc_can_do_color ? "colour" : "mono",
-                       desc, vc->vc_cols, vc->vc_rows);
-        else
-                printk("to %s\n", desc);
+        printk("Console: switching to %s %s %dx%d\n", 
+                vc->vc_can_do_color ? "colour" : "mono",
+                desc, vc->vc_cols, vc->vc_rows);
 }
 
-void give_up_console(struct consw *csw)
+void give_up_console(struct vt_struct *vt, struct consw *csw)
 {
 }
 
