@@ -127,7 +127,7 @@ static struct ns558* ns558_isa_probe(int io, struct ns558 *next)
 		printk(KERN_DEBUG "ns558.c: io0 %#x io1 %#x io2 %#x b = %d\n",
 				io, io & (-1 << i), (io & (-1 << i)) + (1 << i) - 1, b);	
 
-		if (b > 100)					/* We allow 10% difference */
+		if (b > 300)					/* We allow 30% difference */
 			break;
 	}
 
