@@ -966,14 +966,14 @@ int vc_resize(struct vc_data *vc, unsigned int lines, unsigned int cols)
         gotoxy(vc, x, y);
         vte_decsc(vc);
 
-        if (console_table[cons_num]) {
-        	struct winsize ws, *cws = &console_table[cons_num]->winsize;
+        if (vc->vc_tty) {
+        	struct winsize ws, *cws = &vc->vc_tty->winsize;
                 memset(&ws, 0, sizeof(ws));
                 ws.ws_row = video_num_lines;
                 ws.ws_col = video_num_columns;
                 if ((ws.ws_row != cws->ws_row || ws.ws_col != cws->ws_col) &&
-                     console_table[cons_num]->pgrp > 0)
-                        kill_pg(console_table[cons_num]->pgrp, SIGWINCH, 1);
+                     vc->vc_tty->pgrp > 0)
+                        kill_pg(vc->vc_tty->pgrp, SIGWINCH, 1);
                 *cws = ws;
 	}
 
@@ -1271,7 +1271,8 @@ static int con_open(struct tty_struct *tty, struct file * filp)
 	 		return i;
 		vc = find_vc(currcons);
         	tty->driver_data = vc;
-		
+		vc->vc_tty = tty;	
+	
 		if (!tty->winsize.ws_row && !tty->winsize.ws_col) {
                         tty->winsize.ws_row = video_num_lines;
                         tty->winsize.ws_col = video_num_columns;
