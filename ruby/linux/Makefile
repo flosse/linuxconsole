@@ -152,6 +152,7 @@ DRIVERS-y += drivers/cdrom/driver.o
 endif
 
 DRIVERS-$(CONFIG_SSI) += drivers/ssi/ssi.o
+DRIVERS-$(CONFIG_UART) += drivers/serial/uart.o
 DRIVERS-$(CONFIG_SOUND) += drivers/sound/sounddrivers.o
 DRIVERS-$(CONFIG_PCI) += drivers/pci/driver.o
 DRIVERS-$(CONFIG_MTD) += drivers/mtd/mtdlink.o
