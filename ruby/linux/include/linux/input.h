@@ -15,7 +15,7 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
@@ -302,21 +302,21 @@ struct input_event {
 #define KEY_PROG4		203
 #define KEY_SUSPEND		205
 #define KEY_CLOSE		206
-#define KEY_PLAY                207
-#define KEY_FASTFORWARD         208
-#define KEY_BASSBOOST           209
-#define KEY_PRINT               210
-#define KEY_HP                  211
-#define KEY_CAMERA              212
-#define KEY_SOUND               213
-#define KEY_QUESTION            214
-#define KEY_EMAIL               215
-#define KEY_CHAT                216
-#define KEY_SEARCH              217
-#define KEY_CONNECT             218
-#define KEY_FINANCE             219
-#define KEY_SPORT               220
-#define KEY_SHOP                221
+#define KEY_PLAY		207
+#define KEY_FASTFORWARD		208
+#define KEY_BASSBOOST		209
+#define KEY_PRINT		210
+#define KEY_HP			211
+#define KEY_CAMERA		212
+#define KEY_SOUND		213
+#define KEY_QUESTION		214
+#define KEY_EMAIL		215
+#define KEY_CHAT		216
+#define KEY_SEARCH		217
+#define KEY_CONNECT		218
+#define KEY_FINANCE		219
+#define KEY_SPORT		220
+#define KEY_SHOP		221
 
 #define KEY_UNKNOWN		240
 
@@ -428,7 +428,7 @@ struct input_event {
 #define ABS_DISTANCE		0x19
 #define ABS_TILT_X		0x1a
 #define ABS_TILT_Y		0x1b
-#define ABS_VOLUME              0x20
+#define ABS_VOLUME		0x20
 #define ABS_MISC		0x28
 #define ABS_MAX			0x3f
 
@@ -540,7 +540,7 @@ struct ff_interactive_effect {
 	__u16 direction;
 
 	__s16 right_saturation; /* Max level when joystick is on the right */
-	__s16 left_saturation;  /* Max level when joystick in on the left */
+	__s16 left_saturation;	/* Max level when joystick in on the left */
 
 	__s16 right_coeff;	/* Indicates how fast the force grows when the
 				   joystick moves to the right */
@@ -586,7 +586,7 @@ struct ff_effect {
 };
 
 /*
- * Buttons that can trigger effects.  Use for example FF_BTN(BTN_TRIGGER) to
+ * Buttons that can trigger effects. Use for example FF_BTN(BTN_TRIGGER) to
  * access the bitmap.
  */
 
@@ -797,7 +797,7 @@ void input_event(struct input_dev *dev, unsigned int type, unsigned int code, in
 #define input_report_key(a,b,c) input_event(a, EV_KEY, b, !!(c))
 #define input_report_rel(a,b,c) input_event(a, EV_REL, b, c)
 #define input_report_abs(a,b,c) input_event(a, EV_ABS, b, c)
-#define input_report_ff(a,b,c)  input_event(a, EV_FF, b, c)
+#define input_report_ff(a,b,c)	input_event(a, EV_FF, b, c)
 #define input_report_ff_status(a,b,c)	input_event(a, EV_FF_STATUS, b, c)
 
 #endif

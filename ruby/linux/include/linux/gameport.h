@@ -39,9 +39,9 @@ struct gameport {
 	char *phys;
 
 	unsigned short idbus;
-        unsigned short idvendor;
-        unsigned short idproduct;
-        unsigned short idversion;
+	unsigned short idvendor;
+	unsigned short idproduct;
+	unsigned short idversion;
 
 	int io;
 	int speed;
