@@ -81,8 +81,8 @@ static short tmdc_btn_joy[TMDC_BTN] =
 static short tmdc_btn_fm[TMDC_BTN] =
         { BTN_TRIGGER, BTN_C, BTN_B, BTN_A, BTN_THUMB, BTN_X, BTN_Y, BTN_Z, BTN_TOP, BTN_TOP2 };
 static short tmdc_btn_at[TMDC_BTN] =
-	{ BTN_TRIGGER, BTN_THUMB, BTN_THUMB2, BTN_PINKIE, BTN_BASE, BTN_BASE2, BTN_BASE3,
-	  BTN_BASE4, BTN_BASE5, BTN_BASE6 };
+        { BTN_TRIGGER, BTN_THUMB2, BTN_PINKIE, BTN_THUMB, BTN_BASE6, BTN_BASE5, BTN_BASE4,
+          BTN_BASE3, BTN_BASE2, BTN_BASE };
 
 static struct {
         int x;
@@ -199,7 +199,7 @@ static void tmdc_timer(unsigned long private)
 
 				case TMDC_MODE_AT:
 
-					i = tmdc_byte_a[4];
+					i = tmdc_byte_a[3];
 					input_report_abs(dev, ABS_HAT0X, tmdc_hat_to_axis[(data[j][i] - 141) / 25].x);
 					input_report_abs(dev, ABS_HAT0Y, tmdc_hat_to_axis[(data[j][i] - 141) / 25].y);
 					break;
@@ -251,7 +251,7 @@ static void tmdc_connect(struct gameport *gameport, struct gameport_dev *dev)
 		short *buttons;
 	} models[] = {	{   1, "ThrustMaster Millenium 3D Inceptor",	  6, 2, { 4, 2 }, { 4, 6 }, tmdc_abs, tmdc_btn_joy },
 			{   3, "ThrustMaster Rage 3D Gamepad",		  2, 0, { 8, 2 }, { 0, 0 }, tmdc_abs, tmdc_btn_pad },
-			{   4, "ThrustMaster Attack Throttle",		  4, 2, { 4, 6 }, { 4, 1 }, tmdc_abs_at, tmdc_btn_at },
+			{   4, "ThrustMaster Attack Throttle",		  5, 2, { 4, 6 }, { 4, 2 }, tmdc_abs_at, tmdc_btn_at },
 			{   8, "ThrustMaster FragMaster",		  4, 0, { 8, 2 }, { 0, 0 }, tmdc_abs_fm, tmdc_btn_fm },
 			{ 163, "Thrustmaster Fusion GamePad",		  2, 0, { 8, 2 }, { 0, 0 }, tmdc_abs, tmdc_btn_pad },
 			{   0, "Unknown %d-axis, %d-button TM device %d", 0, 0, { 0, 0 }, { 0, 0 }, tmdc_abs, tmdc_btn_joy }};
