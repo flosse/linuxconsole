@@ -26,6 +26,8 @@ comment 'General setup'
 
 define_bool CONFIG_VT y
 define_bool CONFIG_VT_CONSOLE y
+define_bool CONFIG_VT_EXTENDED y
+define_bool CONFIG_INPUT y
 
 bool 'Symmetric multi-processing support (does not work on sun4/sun4c)' CONFIG_SMP
 
