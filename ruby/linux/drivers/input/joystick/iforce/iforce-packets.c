@@ -111,7 +111,7 @@ int iforce_send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 		case IFORCE_USB: 
 
 		if (iforce->usbdev && empty &&
-			!test_and_set_bit(IFORCE_XMIT_RUNNING, iforce->xmit_flag s)) {
+			!test_and_set_bit(IFORCE_XMIT_RUNNING, iforce->xmit_flags)) {
 
 			iforce_usb_xmit(iforce);
 		}
