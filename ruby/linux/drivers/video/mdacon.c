@@ -40,6 +40,8 @@
 
 #include "vga.h"
 
+#define TEST_MDA_B
+
 static spinlock_t mda_lock = SPIN_LOCK_UNLOCKED;
 
 /* description of the hardware layout */
@@ -114,6 +116,7 @@ static void write_mda_w(unsigned int val, unsigned char reg)
 	spin_unlock_irqrestore(&mda_lock, flags);
 }
 
+#ifdef TEST_MDA_B
 static int test_mda_b(unsigned char val, unsigned char reg)
 {
 	unsigned long flags;
@@ -128,6 +131,7 @@ static int test_mda_b(unsigned char val, unsigned char reg)
 	spin_unlock_irqrestore(&mda_lock, flags);
 	return val;
 }
+#endif
 
 static inline void mda_set_origin(unsigned int location)
 {
@@ -167,10 +171,12 @@ static inline void mda_set_cursor_size(int from, int to)
 
 
 #ifndef MODULE
-void __init mdacon_setup(char *str, int *ints)
+static int __init mdacon_setup(char *str)
 {
-	return;
+	return 0;
 }
+
+__setup("mdacon=", mdacon_setup);
 #endif
 
 static int __init mda_detect(void)
@@ -211,7 +217,7 @@ static int __init mda_detect(void)
 	/* Ok, there is definitely a card registering at the correct
 	 * memory location, so now we do an I/O port test.
 	 */
-
+#ifdef TEST_MDA_B
 	/* Edward: These two mess `tests' mess up my cursor on bootup */
 
 	/* cursor low register */
@@ -223,7 +229,7 @@ static int __init mda_detect(void)
 	if (! test_mda_b(0x99, 0x0f)) {
 		return 0;
 	}
-
+#endif
 	/* See if the card is a Hercules, by checking whether the vsync
 	 * bit of the status register is changing.  This test lasts for
 	 * approximately 1/10th of a second.
