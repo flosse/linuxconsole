@@ -480,6 +480,7 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 	}
 	vgacon_state.mode = MODE_TEXT;
 
+	vc->display_fg = vt;
 	vt->data_hook = (void *) &vgacon_state;
 	
 	if (init) {
