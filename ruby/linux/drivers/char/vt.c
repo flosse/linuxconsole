@@ -852,30 +852,22 @@ found_pool:
         return 0;
 }
 
-void vc_disallocate(unsigned int currcons)
+int vc_disallocate(unsigned int currcons)
 {
-	struct vt_struct *vt = vt_cons;
-        struct vc_pool *pool = &vt->vcs;
+	struct vt_struct *vt;
+        struct vc_pool *pool;
         struct vc_data *vc;
 
-        if (currcons >= MAX_NR_CONSOLES)
-                return;
-
-        for (;;) {
-                if (currcons >= pool->first_vc + MAX_NR_USER_CONSOLES ||
-                    currcons < pool->first_vc)
-                        pool = pool->next;
-                else
-                        break;
-
-                if (!pool) {
-                        vt = vt->next;
-                        if (vt)
-                                pool = &vt->vcs;
-                        else
-                                return;
-                }
-        }
+	if (currcons >= MAX_NR_CONSOLES)
+		return;
+	
+	for (vt = vt_cons; vt != NULL; vt = vt->next)  
+		for (pool = &vt->vcs; pool != NULL; pool = pool->next)  
+                	if (currcons < pool->first_vc + MAX_NR_USER_CONSOLES &&
+                            currcons >= pool->first_vc) 
+                                goto found_pool;
+	return -ENXIO;	
+found_pool:
 	vc = pool->vc_cons[currcons - pool->first_vc];
         
 	if (vc) {
