@@ -157,6 +157,9 @@ struct fb_bitfield {
 #define FB_VMODE_SMOOTH_XPAN	512	/* smooth xpan possible (internally used) */
 #define FB_VMODE_CONUPDATE	512	/* don't update x/yoffset	*/
 
+#define PICOS2KHZ(a) (1000000000UL/(a))
+#define KHZ2PICOS(a) (1000000000UL/(a))
+
 struct fb_var_screeninfo {
 	__u32 xres;			/* visible resolution		*/
 	__u32 yres;
@@ -236,6 +239,17 @@ struct fb_vblank {
 	__u32 reserved[4];		/* reserved for future compatibility */
 };
 
+struct fb_image {
+	__u32 width;			/* Size of image */
+	__u32 height;
+	__u16 x;			/* Where to place image */
+	__u16 y;
+	__u32 fg_color;			/* Only used when a mono bitmap */
+	__u32 bg_color;
+	__u8  depth;			/* Dpeth of the image */
+	char  *data;			/* Pointer to image data */
+}; 
+
 #ifdef __KERNEL__
 
 #define GET_FB_IDX(node)	(MINOR(node))
@@ -278,16 +292,12 @@ struct fb_ops {
     void (*fb_copyarea)(struct fb_info *p, int sx, int sy, unsigned int width,
                         unsigned int height, int dx, int dy);
     /* Draws a image to the display */ 		 	
-    void (*fb_imageblit)(struct fb_info *p, unsigned int width,
-                    	 unsigned int height, unsigned long *image,
-                     	 int image_depth, int dx, int dy);
+    void (*fb_imageblit)(struct fb_info *p, struct fb_image *image);
     /* perform fb specific ioctl */
     int (*fb_ioctl)(struct inode *inode, struct file *file, unsigned int cmd,
 		    unsigned long arg, struct fb_info *info);
     /* perform fb specific mmap */
     int (*fb_mmap)(struct fb_info *info, struct file *file, struct vm_area_struct *vma);
-    /* switch to/from raster image mode */
-    int (*fb_rasterimg)(struct fb_info *info, int start);
 };
 
 struct fb_info {
@@ -364,9 +374,7 @@ extern int cfb_fillrect(struct fb_info *p, unsigned int x1, unsigned int y1,
 			unsigned long color, int rop);
 extern void cfb_copyarea(struct fb_info *p, int sx, int sy, unsigned int width,
                   	 unsigned int rows, int dx, int dy);
-extern void cfb_imageblit(struct fb_info *p, unsigned int width, 
-			  unsigned int height, unsigned long *image,
-                  	  int image_depth, int dx, int dy);
+extern void cfb_imageblit(struct fb_info *p, struct fb_image *image); 
 
     /*
      *  Helper functions
