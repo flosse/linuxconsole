@@ -331,7 +331,7 @@ printk("M\n");
 			input_register_device(tmdc->dev + j);
 printk("N\n");
 			printk(KERN_INFO "input%d: %s on gameport%d.%d\n",
-				tmdc->dev[j].number, tmdc->name[j], gameport->number, i);
+				tmdc->dev[j].number, tmdc->name[j], gameport->number, j);
 printk("O\n");
 		}
 printk("P\n");
