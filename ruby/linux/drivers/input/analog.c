@@ -80,15 +80,17 @@ static struct {
 #define ANALOG_AXES	0
 #define ANALOG_HATS	4
 
-static int analog_exts[] = { ANALOG_HAT1_CHF, ANALOG_HAT2_CHF, ANALOG_ANY_CHF };
 static int analog_axes[] = { ABS_X, ABS_Y, ABS_RUDDER, ABS_THROTTLE }
 static int analog_hats[] = { ABS_HAT0X, ABS_HAT0Y, ABS_HAT1X, ABS_HAT1Y, ABS_HAT2X, ABS_HAT2Y };
-static int analog_buttons[] = { BTN_TRIGGER, BTN_THUMB, BTN_TOP, BTN_TOP2, BTN_BASE, BTN_BASE2,
-				BTN_TL, BTN_TR, BTN_TL2, BTN_TR2 };
+static int analog_exts[] = { ANALOG_HAT1_CHF, ANALOG_HAT2_CHF, ANALOG_ANY_CHF };
+static int analog_pad_btn[] = { BTN_A, BTN_B, BTN_C, BTN_D, BTN_TL2, BTN_TR2, BTN_X, BTN_Y, BTN_TL, BTN_TR };
+static int analog_joy_btn[] = { BTN_TRIGGER, BTN_THUMB, BTN_TOP, BTN_TOP2, BTN_BASE, BTN_BASE2,
+				BTN_BASE3, BTN_BASE4, BTN_BASE5, BTN_THUMB2 };
 
 struct analog {
 	struct input_dev dev;
 	int mask;
+	int *buttons;
 	char name[ANALOG_MAX_NAME_LENGTH];
 };
 
@@ -139,21 +141,17 @@ static unsigned long analog_faketime = 0;
 #endif
 
 /*
- * analog_decode() decodes analog joystick data and reports input events.
+ * analog_decode() decodes analog ioysticj data and reports input events.
  */
 
 static void analog_decode(struct analog *analog, int *axes, int *initial, unsigned char buttons)
 {
 	struct input_dev *dev = &analog->dev;
-	int j, k;
+	int i, j;
 	int hat[3] = {0, 0, 0};
 
 	if (analog->mask & ANALOG_ANY_CHF)
 		switch (buttons & 0xf) {
-			case 0x1: buttons = 0x01; break;
-			case 0x2: buttons = 0x02; break;
-			case 0x4: buttons = 0x04; break;
-			case 0x8: buttons = 0x08; break;
 			case 0x5: buttons = 0x10; break;
 			case 0x9: buttons = 0x20; break;
 			case 0x3: hat[0]++;
@@ -166,34 +164,34 @@ static void analog_decode(struct analog *analog, int *axes, int *initial, unsign
 			case 0xe: hat[1]++; buttons = 0; break;
 		}
 
-	for (j = k = 0; j < 6; j++)
-		if (analog->mask & (0x10 << j))
-			input_report_key(dev, analog_buttons[k++], (buttons >> j) & 1);
+	for (i = j = 0; i < 6; i++)
+		if (analog->mask & (0x10 << i))
+			input_report_key(dev, analog->buttons[j++], (buttons >> i) & 1);
 
 	if (analog->mask & ANALOG_BTN_TL)
-		input_report_key(dev, BTN_TL, axes[2] < (initial[2] >> 1));
+		input_report_key(dev, analog->buttons[6], axes[2] < (initial[2] >> 1));
 	if (analog->mask & ANALOG_BTN_TR)
-		input_report_key(dev, BTN_TR, axes[3] < (initial[3] >> 1));
+		input_report_key(dev, analog->buttons[7], axes[3] < (initial[3] >> 1));
 	if (analog->mask & ANALOG_BTN_TL2)
-		input_report_key(dev, BTN_TL2, axes[2] > (initial[2] + (initial[2] >> 1)));
+		input_report_key(dev, analog->buttons[8], axes[2] > (initial[2] + (initial[2] >> 1)));
 	if (analog->mask & ANALOG_BTN_TR2)
-		input_report_key(dev, BTN_TR2, axes[3] > (initial[3] + (initial[3] >> 1)));
+		input_report_key(dev, analog->buttons[9], axes[3] > (initial[3] + (initial[3] >> 1)));
 
 	if (analog->mask & ANALOG_HAT_FCS)
-		for (j = 0; j < 4; j++)
-			if (axes[3] < ((initial[3] * ((j << 1) + 1)) >> 3)) {
-				hat[2] = j + 1;
+		for (i = 0; i < 4; i++)
+			if (axes[3] < ((initial[3] * ((i << 1) + 1)) >> 3)) {
+				hat[2] = i + 1;
 				break;
 			}
 
-	for (j = k = 0; j < 4; j++)
-		if (analog->mask & (1 << j))
-			input_report_abs(dev, analog_axes[k++], axes[j]);
+	for (i = j = 0; i < 4; i++)
+		if (analog->mask & (1 << i))
+			input_report_abs(dev, analog_axes[j++], axes[i]);
 
-	for (j = k = 0; j < 3; j++)
-		jf (analog->mask & analog_exts[j]) {
-			jnput_report_abs(dev, analog_hats[k++], analog_hat_to_axjs[hat[j]].x);
-			jnput_report_abs(dev, analog_hats[k++], analog_hat_to_axjs[hat[j]].y);
+	for (i = j = 0; i < 3; i++)
+		if (analog->mask & analog_exts[i]) {
+			input_report_abs(dev, analog_hats[j++], analog_hat_to_axis[hat[i]].x);
+			input_report_abs(dev, analog_hats[j++], analog_hat_to_axis[hat[i]].y);
 		}
 }
 
@@ -261,6 +259,7 @@ static int analog_button_read(struct analog_port *port)
 static void analog_timer(unsigned long data)
 {
 	struct analog_port *port = (void *) data;
+	int i;
 
 	if (port->cooked) {
 		port->bads -= gameport_cooked_read(port->gameport, port->axes, &port->buttons);
@@ -274,7 +273,10 @@ static void analog_timer(unsigned long data)
 		analog_button_read(port);
 	}
 
-	analog_decode(port->analog, port->axes, port->initial, port->buttons);
+	for (i = 0; i < 2; i++) 
+		if (port->analog[i].mask)
+			analog_decode(port->analog + i, port->axes, port->initial, port->buttons);
+
 	mod_timer(&port->timer, jiffies + ANALOG_REFRESH_TIME);
 }
 
@@ -327,11 +329,11 @@ static void analog_calibrate_timer(struct analog_port *port)
 
 	tx = 1 << 30;
 
-	for(i = 0; i < 50; i++) {
+	for (i = 0; i < 50; i++) {
 		save_flags(flags);
 		cli();
 		GET_TIME(t1);
-		for(t = 0; t < 50; t++) { gameport_read(gameport); GET_TIME(t2); }
+		for (t = 0; t < 50; t++) { gameport_read(gameport); GET_TIME(t2); }
 		GET_TIME(t3);
 		restore_flags(flags);
 		udelay(i);
@@ -352,12 +354,11 @@ static void analog_name(struct analog *analog)
 	sprintf(analog->name, "Analog %d-axis %d-button",
 		hweight8(analog->mask & 0x0f),
 		hweight8(analog->mask & 0xf0) + (analog->mask & ANALOG_BTNS_CHF) * 2 +
-		       hweight8(analog->mask & ANALOG_BTNS_GAMEPAD));
+		       hweight16(analog->mask & ANALOG_BTNS_GAMEPAD));
 
 	if (analog->mask & ANALOG_HATS_ALL)
 		sprintf(analog->name, "%s %d-hat",
-			analog->name,
-			hweight8(analog->mask & ANALOG_HATS_ALL));
+			analog->name, hweight16(analog->mask & ANALOG_HATS_ALL));
 
 	strcat(analog->name, " joystick");
 
@@ -402,22 +403,42 @@ static int analog_init_devices(struct analog_port *port)
 			return -1;
 	}
 
-	analog = port->analog;
+	for (i = 0; i < 2; i++)
+		if (port->analog[i].mask) {
 
-	analog_name(analog);
+			analog = port->analog + i;
+			analog_name(analog);
 
-	analog->dev.open = analog_open;
-	analog->dev.close = analog_close;
+			analog->dev.open = analog_open;
+			analog->dev.close = analog_close;
+			analog->dev.private = port;
+			analog->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
+			
+			for (j = 0; j < 4; j++)
+				if ((analog->mask >> j) & 1)
+					set_bit(analog_axes[j], analog->dev.absbit);
 
-	analog->dev.private = port;
-	analog->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
-	
-	for (i = 0; i < 4; i++)
-		set_bit(analog_axes[i], analog->dev.absbit);
-	for (i = 0; i < 4; i++)
-		set_bit(analog_buttons[i], analog->dev.keybit);
+			for (j = 0; j < 3; j++) 
+				if (analog->mask & analog_exts[j]) {
+					set_bit(analog_hats[j * 2 + 0], analog->dev.absbit);
+					set_bit(analog_hats[j * 2 + 1], analog->dev.absbit);
+				}
 
-	input_register_device(&analog->dev);
+			for (j = 0; j < 4; j++)
+				if (analog->mask & (1 << j))
+					set_bit(analog->buttons[j], analog->dev.keybit);
+
+			if (analog->mask & ANALOG_BTNS_CHF) {
+				set_bit(analog->buttons[4], analog->dev.keybit);
+				set_bit(analog->buttons[5], analog->dev.keybit);
+			}
+
+			for (j = 0; j < 4; j++)
+				if (analog->mask & (ANALOG_BTN_TL << j))
+					set_bit(analog->buttons[j + 6], analog->dev.keybit);
+
+			input_register_device(&analog->dev);
+		}
 
 	return 0;	
 }
