@@ -1024,7 +1024,7 @@ static int mixer_ioctl(struct es1370_state *s, unsigned int cmd, unsigned long a
 
 static int es1370_open_mixdev(struct inode *inode, struct file *file)
 {
-	int minor = MINOR(inode->i_rdev);
+	unsigned int minor = minor(inode->i_rdev);
 	struct list_head *list;
 	struct es1370_state *s;
 
@@ -1368,7 +1368,7 @@ static int es1370_mmap(struct file *file, struct vm_area_struct *vma)
 		ret = -EINVAL;
 		goto out;
 	}
-	if (remap_page_range(vma->vm_start, virt_to_phys(db->rawbuf), size, vma->vm_page_prot)) {
+	if (remap_page_range(vma, vma->vm_start, virt_to_phys(db->rawbuf), size, vma->vm_page_prot)) {
 		ret = -EAGAIN;
 		goto out;
 	}
@@ -1724,7 +1724,7 @@ static int es1370_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 
 static int es1370_open(struct inode *inode, struct file *file)
 {
-	int minor = MINOR(inode->i_rdev);
+	unsigned int minor = minor(inode->i_rdev);
 	DECLARE_WAITQUEUE(wait, current);
 	unsigned long flags;
 	struct list_head *list;
@@ -1940,7 +1940,7 @@ static int es1370_mmap_dac(struct file *file, struct vm_area_struct *vma)
 	if (size > (PAGE_SIZE << s->dma_dac1.buforder))
 		goto out;
 	ret = -EAGAIN;
-	if (remap_page_range(vma->vm_start, virt_to_phys(s->dma_dac1.rawbuf), size, vma->vm_page_prot))
+	if (remap_page_range(vma, vma->vm_start, virt_to_phys(s->dma_dac1.rawbuf), size, vma->vm_page_prot))
 		goto out;
 	s->dma_dac1.mapped = 1;
 	ret = 0;
@@ -2160,7 +2160,7 @@ static int es1370_ioctl_dac(struct inode *inode, struct file *file, unsigned int
 
 static int es1370_open_dac(struct inode *inode, struct file *file)
 {
-	int minor = MINOR(inode->i_rdev);
+	unsigned int minor = minor(inode->i_rdev);
 	DECLARE_WAITQUEUE(wait, current);
 	unsigned long flags;
 	struct list_head *list;
@@ -2403,7 +2403,7 @@ static unsigned int es1370_midi_poll(struct file *file, struct poll_table_struct
 
 static int es1370_midi_open(struct inode *inode, struct file *file)
 {
-	int minor = MINOR(inode->i_rdev);
+	unsigned int minor = minor(inode->i_rdev);
 	DECLARE_WAITQUEUE(wait, current);
 	unsigned long flags;
 	struct list_head *list;
@@ -2479,12 +2479,8 @@ static int es1370_midi_release(struct inode *inode, struct file *file)
 				break;
 			if (signal_pending(current))
 				break;
-			if (file->f_flags & O_NONBLOCK) {
-				remove_wait_queue(&s->midi.owait, &wait);
-				set_current_state(TASK_RUNNING);
-				unlock_kernel();
-				return -EBUSY;
-			}
+			if (file->f_flags & O_NONBLOCK) 
+				break;
 			tmo = (count * HZ) / 3100;
 			if (!schedule_timeout(tmo ? : 1) && tmo)
 				DBG(printk(KERN_DEBUG "es1370: midi timed out??\n");)

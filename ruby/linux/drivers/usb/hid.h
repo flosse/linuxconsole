@@ -175,6 +175,7 @@ struct hid_item {
 #define HID_UP_KEYBOARD 	0x00070000
 #define HID_UP_LED 		0x00080000
 #define HID_UP_BUTTON 		0x00090000
+#define HID_UP_ORDINAL 		0x000a0000
 #define HID_UP_CONSUMER		0x000c0000
 #define HID_UP_DIGITIZER 	0x000d0000
 #define HID_UP_PID 		0x000f0000
@@ -215,7 +216,7 @@ struct hid_global {
 	__s32    logical_maximum;
 	__s32    physical_minimum;
 	__s32    physical_maximum;
-	unsigned unit_exponent;
+	__s32    unit_exponent;
 	unsigned unit;
 	unsigned report_id;
 	unsigned report_size;
@@ -272,7 +273,7 @@ struct hid_field {
 	__s32     logical_maximum;
 	__s32     physical_minimum;
 	__s32     physical_maximum;
-	unsigned  unit_exponent;
+	__s32     unit_exponent;
 	unsigned  unit;
 	struct hid_report *report;	/* associated report */
 };
@@ -299,6 +300,7 @@ struct hid_report_enum {
 
 #define HID_BUFFER_SIZE		32
 #define HID_CONTROL_FIFO_SIZE	64
+#define HID_OUTPUT_FIFO_SIZE	64
 
 struct hid_control_fifo {
 	unsigned char dir;
@@ -307,6 +309,9 @@ struct hid_control_fifo {
 
 #define HID_CLAIMED_INPUT	1
 #define HID_CLAIMED_HIDDEV	2
+
+#define HID_CTRL_RUNNING	1
+#define HID_OUT_RUNNING		2
 
 struct hid_device {							/* device report descriptor */
 	 __u8 *rdesc;
@@ -320,14 +325,23 @@ struct hid_device {							/* device report descriptor */
 	struct usb_device *dev;						/* USB device */
 	int ifnum;							/* USB interface number */
 
-	struct urb urb;							/* USB URB structure */
-	char buffer[HID_BUFFER_SIZE];					/* Rx buffer */
+	unsigned long iofl;						/* I/O flags (CTRL_RUNNING, OUT_RUNNING) */
 
-	struct urb urbctrl;						/* Control URB */
-	struct usb_ctrlrequest dr;							/* Control devrquest struct */
+	struct urb *urbin;						/* Input URB */
+	char inbuf[HID_BUFFER_SIZE];					/* Input buffer */
+
+	struct urb *urbctrl;						/* Control URB */
+	struct usb_ctrlrequest cr;					/* Control request struct */
 	struct hid_control_fifo ctrl[HID_CONTROL_FIFO_SIZE];		/* Control fifo */
 	unsigned char ctrlhead, ctrltail;				/* Control fifo head & tail */
 	char ctrlbuf[HID_BUFFER_SIZE];					/* Control buffer */
+	spinlock_t ctrllock;						/* Control fifo spinlock */
+
+	struct urb *urbout;						/* Output URB */
+	struct hid_report *out[HID_CONTROL_FIFO_SIZE];			/* Output pipe fifo */
+	unsigned char outhead, outtail;					/* Output pipe fifo head & tail */
+	char outbuf[HID_BUFFER_SIZE];					/* Output buffer */
+	spinlock_t outlock;						/* Output fifo spinlock */
 
 	unsigned claimed;						/* Claimed by hidinput, hiddev? */	
 	unsigned quirks;						/* Various quirks the device can pull on us */
@@ -381,6 +395,7 @@ void hidinput_disconnect(struct hid_device *);
 #else
 #define hid_dump_input(a,b)	do { } while (0)
 #define hid_dump_device(c)	do { } while (0)
+#define hid_dump_field(a,b)	do { } while (0)
 #endif
 
 #endif

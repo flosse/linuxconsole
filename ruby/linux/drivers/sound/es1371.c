@@ -1207,7 +1207,7 @@ static int mixdev_ioctl(struct ac97_codec *codec, unsigned int cmd, unsigned lon
 
 static int es1371_open_mixdev(struct inode *inode, struct file *file)
 {
-	int minor = MINOR(inode->i_rdev);
+	int minor = minor(inode->i_rdev);
 	struct list_head *list;
 	struct es1371_state *s;
 
@@ -1556,7 +1556,7 @@ static int es1371_mmap(struct file *file, struct vm_area_struct *vma)
 		ret = -EINVAL;
 		goto out;
 	}
-	if (remap_page_range(vma->vm_start, virt_to_phys(db->rawbuf), size, vma->vm_page_prot)) {
+	if (remap_page_range(vma, vma->vm_start, virt_to_phys(db->rawbuf), size, vma->vm_page_prot)) {
 		ret = -EAGAIN;
 		goto out;
 	}
@@ -1907,7 +1907,7 @@ static int es1371_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 
 static int es1371_open(struct inode *inode, struct file *file)
 {
-	int minor = MINOR(inode->i_rdev);
+	int minor = minor(inode->i_rdev);
 	DECLARE_WAITQUEUE(wait, current);
 	unsigned long flags;
 	struct list_head *list;
@@ -2125,7 +2125,7 @@ static int es1371_mmap_dac(struct file *file, struct vm_area_struct *vma)
 	if (size > (PAGE_SIZE << s->dma_dac1.buforder))
 		goto out;
 	ret = -EAGAIN;
-	if (remap_page_range(vma->vm_start, virt_to_phys(s->dma_dac1.rawbuf), size, vma->vm_page_prot))
+	if (remap_page_range(vma, vma->vm_start, virt_to_phys(s->dma_dac1.rawbuf), size, vma->vm_page_prot))
 		goto out;
 	s->dma_dac1.mapped = 1;
 	ret = 0;
@@ -2336,7 +2336,7 @@ static int es1371_ioctl_dac(struct inode *inode, struct file *file, unsigned int
 
 static int es1371_open_dac(struct inode *inode, struct file *file)
 {
-	int minor = MINOR(inode->i_rdev);
+	int minor = minor(inode->i_rdev);
 	DECLARE_WAITQUEUE(wait, current);
 	unsigned long flags;
 	struct list_head *list;
@@ -2578,7 +2578,7 @@ static unsigned int es1371_midi_poll(struct file *file, struct poll_table_struct
 
 static int es1371_midi_open(struct inode *inode, struct file *file)
 {
-	int minor = MINOR(inode->i_rdev);
+	int minor = minor(inode->i_rdev);
 	DECLARE_WAITQUEUE(wait, current);
 	unsigned long flags;
 	struct list_head *list;
@@ -2654,10 +2654,7 @@ static int es1371_midi_release(struct inode *inode, struct file *file)
 			if (signal_pending(current))
 				break;
 			if (file->f_flags & O_NONBLOCK) {
-				remove_wait_queue(&s->midi.owait, &wait);
-				set_current_state(TASK_RUNNING);
-				unlock_kernel();
-				return -EBUSY;
+				break;
 			}
 			tmo = (count * HZ) / 3100;
 			if (!schedule_timeout(tmo ? : 1) && tmo)
@@ -2842,8 +2839,8 @@ static int __devinit es1371_probe(struct pci_dev *pcidev, const struct pci_devic
 		printk(KERN_ERR PFX "irq %u in use\n", s->irq);
 		goto err_irq;
 	}
-	printk(KERN_INFO PFX "found es1371 rev %d at io %#lx irq %u\n"
-	       KERN_INFO PFX "features: joystick 0x%x\n", s->rev, s->io, s->irq, joystick[devindex]);
+	printk(KERN_INFO PFX "found es1371 rev %d at io %#lx irq %u joystick %#x\n",
+	       s->rev, s->io, s->irq, s->gameport.io);
 	/* register devices */
 	if ((res=(s->dev_audio = register_sound_dsp(&es1371_audio_fops,-1))<0))
 		goto err_dev1;
@@ -3048,7 +3045,7 @@ module_exit(cleanup_es1371);
 
 #ifndef MODULE
 
-/* format is: es1371=[spdif,[nomic,[amplifier]]] */
+/* format is: es1371=[spdif,[nomix,[amplifier]]] */
 
 static int __init es1371_setup(char *str)
 {
@@ -3059,8 +3056,8 @@ static int __init es1371_setup(char *str)
 
 	(void)
         ((get_option(&str, &spdif[nr_dev]) == 2)
-         && (get_option(&str, &nomic[nr_dev]) == 2)
-         && (get_option(&str, &amplifier)));
+         && (get_option(&str, &nomix[nr_dev]) == 2)
+         && (get_option(&str, &amplifier[nr_dev])));
 
 	nr_dev++;
 	return 1;
