@@ -685,6 +685,7 @@ const char *create_vt(struct vt_struct *vt, struct consw *vt_sw)
 {
 	const char *display_desc = NULL;
 
+	vt->data_hook = NULL;
 	if (vt_sw)
                 display_desc = vt_sw->con_startup(vt);
         if (!display_desc) return NULL; 
@@ -696,7 +697,6 @@ const char *create_vt(struct vt_struct *vt, struct consw *vt_sw)
         vt->off_interval = 0;
 	init_MUTEX(&vt->lock);
 	vt->keyboard = NULL;
-	vt->data_hook = NULL;
 	vt->vcs.first_vc = current_vc;  
 	vt->vcs.next = NULL;
         vt->next = vt_cons;
