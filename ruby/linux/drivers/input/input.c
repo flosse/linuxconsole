@@ -67,7 +67,7 @@ static long input_devices[NBITS(INPUT_DEVICES)];
 
 #ifdef CONFIG_PROC_FS
 static struct proc_dir_entry *proc_bus_input_dir;
-static wait_queue_head_t input_devices_poll_wait;
+DECLARE_WAIT_QUEUE_HEAD(input_devices_poll_wait);
 static int input_devices_state;
 #endif
 
@@ -483,7 +483,7 @@ void input_register_device(struct input_dev *dev)
 
 #ifdef CONFIG_PROC_FS
 	input_devices_state++;
-	wake_up_interruptible(&input_devices_poll_wait);
+	wake_up(&input_devices_poll_wait);
 #endif
 }
 
@@ -540,7 +540,7 @@ void input_unregister_device(struct input_dev *dev)
 
 #ifdef CONFIG_PROC_FS
 	input_devices_state++;
-	wake_up_interruptible(&input_devices_poll_wait);
+	wake_up(&input_devices_poll_wait);
 #endif
 }
 
@@ -549,11 +549,16 @@ void input_register_handler(struct input_handler *handler)
 	struct input_dev *dev = input_dev;
 	struct input_handle *handle;
 	struct input_device_id *id;
+
+printk("A\n");
+
 	if (!handler) return;
 
 /*
  * Add minors if needed.
  */
+
+printk("B\n");
 
 	if (handler->fops != NULL)
 		input_table[handler->minor >> 5] = handler;
@@ -561,6 +566,7 @@ void input_register_handler(struct input_handler *handler)
 /*
  * Add the handler.
  */
+printk("C\n");
 
 	handler->next = input_handler;	
 	input_handler = handler;
@@ -569,12 +575,14 @@ void input_register_handler(struct input_handler *handler)
  * Notify it about all existing devices.
  */
 
+printk("D\n");
 	while (dev) {
 		if ((id = input_match_device(handler->id_table, dev)))
 			if ((handle = handler->connect(handler, dev, id)))
 				input_link_handle(handle);
 		dev = dev->next;
 	}
+printk("E\n");
 
 /*
  * Notify /proc.
@@ -582,8 +590,11 @@ void input_register_handler(struct input_handler *handler)
 
 #ifdef CONFIG_PROC_FS
 	input_devices_state++;
-	wake_up_interruptible(&input_devices_poll_wait);
+printk("F\n");
+	wake_up(&input_devices_poll_wait);
 #endif
+
+printk("G\n");
 }
 
 void input_unregister_handler(struct input_handler *handler)
@@ -620,7 +631,7 @@ void input_unregister_handler(struct input_handler *handler)
 
 #ifdef CONFIG_PROC_FS
 	input_devices_state++;
-	wake_up_interruptible(&input_devices_poll_wait);
+	wake_up(&input_devices_poll_wait);
 #endif
 }
 
@@ -820,7 +831,6 @@ static int __init input_init(void)
 	struct proc_dir_entry *entry;
 
 #ifdef CONFIG_PROC_FS
-	init_waitqueue_head(&input_devices_poll_wait);
 	proc_bus_input_dir = proc_mkdir("input", proc_bus);
 	proc_bus_input_dir->owner = THIS_MODULE;
 	entry = create_proc_read_entry("devices", 0, proc_bus_input_dir, input_devices_read, NULL);
