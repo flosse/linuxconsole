@@ -10,31 +10,37 @@ comment 'Serial port support'
 
 tristate 'Serial port support' CONFIG_UART
 if [ "$CONFIG_UART" = "y" ]; then
-   dep_bool 'DC21285 serial port support' CONFIG_SERIAL_21285 $CONFIG_FOOTBRIDGE
-   dep_bool '  Use /dev/ttyS0 device (OBSOLETE)' CONFIG_SERIAL_21285_OLD $CONFIG_SERIAL_21285 $CONFIG_OBSOLETE
-   dep_bool '  Console on DC21285 serial port' CONFIG_SERIAL_21285_CONSOLE $CONFIG_SERIAL_21285
-   dep_bool 'SA1100 serial port support' CONFIG_SERIAL_SA1100 $CONFIG_ARCH_SA1100
-   dep_bool '  Console on SA1100 serial port' CONFIG_SERIAL_SA1100_CONSOLE $CONFIG_ARCH_SA1100
-   if [ "$CONFIG_ARCH_SA1100" = "y" ]; then
-      int  '  Default SA1100 serial baudrate' CONFIG_SA1100_DEFAULT_BAUDRATE 9600
+   if [ "$CONFIG_ARM" = "y" ]; then
+      dep_bool 'DC21285 serial port support' CONFIG_SERIAL_21285 $CONFIG_FOOTBRIDGE
+      dep_bool '  Use /dev/ttyS0 device (OBSOLETE)' CONFIG_SERIAL_21285_OLD $CONFIG_SERIAL_21285 $CONFIG_OBSOLETE
+      dep_bool '  Console on DC21285 serial port' CONFIG_SERIAL_21285_CONSOLE $CONFIG_SERIAL_21285
+      dep_bool 'SA1100 serial port support' CONFIG_SERIAL_SA1100 $CONFIG_ARCH_SA1100
+      dep_bool '  Console on SA1100 serial port' CONFIG_SERIAL_SA1100_CONSOLE $CONFIG_ARCH_SA1100
+      if [ "$CONFIG_ARCH_SA1100" = "y" ]; then
+         int  '  Default SA1100 serial baudrate' CONFIG_SA1100_DEFAULT_BAUDRATE 9600
+      fi
+      dep_bool 'ARM AMBA serial port support' CONFIG_SERIAL_AMBA $CONFIG_ARCH_INTEGRATOR
+      dep_bool '  Support for console on AMBA serial port' CONFIG_SERIAL_AMBA_CONSOLE $CONFIG_SERIAL_AMBA
+      if [ "$CONFIG_SERIAL_AMBA" = "y" ]; then
+         define_bool CONFIG_SERIAL_INTEGRATOR y
+      fi
+      dep_bool 'CLPS711X serial port support' CONFIG_SERIAL_CLPS711X $CONFIG_ARCH_CLPS711X
+      dep_bool '  Support for console on CLPS711X serial port' CONFIG_SERIAL_CLPS711X_CONSOLE $CONFIG_SERIAL_CLPS711X
+#     dep_bool 'Anakin serial port support' CONFIG_SERIAL_ANAKIN $CONFIG_ARCH_ANAKIN
+#     dep_bool '  Console on Anakin serial port' CONFIG_SERIAL_ANAKIN_CONSOLE $CONFIG_SERIAL_ANAKIN
+#     if [ "$CONFIG_SERIAL_ANAKIN" = "y" ]; then
+#        int  '  Default Anakin serial baudrate' CONFIG_ANAKIN_DEFAULT_BAUDRATE 9600
+#     fi
+#     dep_tristate 'Anakin touchscreen support' CONFIG_TOUCHSCREEN_ANAKIN $CONFIG_ARCH_ANAKIN
    fi
-   dep_bool 'ARM AMBA serial port support' CONFIG_SERIAL_AMBA $CONFIG_ARCH_INTEGRATOR
-   dep_bool '  Support for console on AMBA serial port' CONFIG_SERIAL_AMBA_CONSOLE $CONFIG_SERIAL_AMBA
-   if [ "$CONFIG_SERIAL_AMBA" = "y" ]; then
-      define_bool CONFIG_SERIAL_INTEGRATOR y
-   fi
-   dep_bool 'CLPS711X serial port support' CONFIG_SERIAL_CLPS711X $CONFIG_ARCH_CLPS711X
-   dep_bool '  Support for console on CLPS711X serial port' CONFIG_SERIAL_CLPS711X_CONSOLE $CONFIG_SERIAL_CLPS711X
-#  dep_bool 'Anakin serial port support' CONFIG_SERIAL_ANAKIN $CONFIG_ARCH_ANAKIN
-#  dep_bool '  Console on Anakin serial port' CONFIG_SERIAL_ANAKIN_CONSOLE $CONFIG_SERIAL_ANAKIN
-#  if [ "$CONFIG_SERIAL_ANAKIN" = "y" ]; then
-#     int  '  Default Anakin serial baudrate' CONFIG_ANAKIN_DEFAULT_BAUDRATE 9600
-#  fi
-#  dep_tristate 'Anakin touchscreen support' CONFIG_TOUCHSCREEN_ANAKIN $CONFIG_ARCH_ANAKIN
+   # The new 8250/16550 serial drivers
+   dep_tristate '8250/16550 and compatible serial support (EXPERIMENTAL)' CONFIG_SERIAL_8250 $CONFIG_EXPERIMENTAL
+   dep_bool '  Console on 8250/16550 and compatible serial port (EXPERIMENTAL)' CONFIG_SERIAL_8250_CONSOLE $CONFIG_SERIAL_8250 $CONFIG_EXPERIMENTAL	
    if [ "$CONFIG_SERIAL_AMBA_CONSOLE" = "y" -o \
         "$CONFIG_SERIAL_CLPS711X_CONSOLE" = "y" -o \
         "$CONFIG_SERIAL_SA1100_CONSOLE" = "y" -o \
-        "$CONFIG_SERIAL_ANAKIN_CONSOLE" = "y" ]; then
+        "$CONFIG_SERIAL_ANAKIN_CONSOLE" = "y" -o \
+	"$CONFIG_SERIAL_8250_CONSOLE" = "y" ]; then
       define_bool CONFIG_SERIAL_CORE_CONSOLE y
    fi
 fi	

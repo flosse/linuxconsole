@@ -1799,6 +1799,16 @@ uart_setup_port(struct uart_driver *drv, struct uart_state *state)
 		flags |= UART_CONFIG_IRQ;
 	if (port->flags & ASYNC_BOOT_AUTOCONF)
 		port->ops->config_port(port, flags);
+
+	/*
+	 * Only register this port if it is detected.
+	 */
+	if (port->type != PORT_UNKNOWN) {
+		tty_register_devfs(drv->normal_driver, 0, drv->minor +
+					state->port->line);
+		tty_register_devfs(drv->callout_driver, 0, drv->minor +
+					state->port->line);
+	}
 }
 
 /*
@@ -1841,7 +1851,7 @@ int uart_register_driver(struct uart_driver *drv)
 	normal->subtype		= SERIAL_TYPE_NORMAL;
 	normal->init_termios	= tty_std_termios;
 	normal->init_termios.c_cflag = B38400 | CS8 | CREAD | HUPCL | CLOCAL;
-	normal->flags		= TTY_DRIVER_REAL_RAW;
+	normal->flags		= TTY_DRIVER_REAL_RAW | TTY_DRIVER_NO_DEVFS;
 	normal->refcount	= (int *)(drv->state + drv->nr);
 	normal->table		= drv->table;
 	normal->termios		= drv->termios;
@@ -2060,7 +2070,7 @@ int uart_register_port(struct uart_driver *drv, struct uart_port *port)
 
 	tty_register_devfs(drv->normal_driver, 0, drv->minor +
 					state->port->line);
-	tty_register_devfs(drv->normal_driver, 0, drv->minor +
+	tty_register_devfs(drv->callout_driver, 0, drv->minor +
 					state->port->line);
 	up(&state->count_sem);
 	return i;
