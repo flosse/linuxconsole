@@ -96,12 +96,17 @@ static int tmdc_read_packet(struct gameport *gameport, unsigned char data[2][TMD
 	unsigned long flags;
 	int i[2], j[2], k;
 
+printk("1\n");
+
 	p = gameport_time(gameport, TMDC_MAX_STROBE);
 
+printk("2\n");
 	for (k = 0; k < 2; k++) {
 		t[k] = gameport_time(gameport, TMDC_MAX_START);
+printk("3\n");
 		i[k] = j[k] = 0;
 	}
+printk("4\n");
 
 	__save_flags(flags);
 	__cli();
@@ -132,6 +137,8 @@ static int tmdc_read_packet(struct gameport *gameport, unsigned char data[2][TMD
 	} while (t[0] > 0 || t[1] > 0);
 
 	__restore_flags(flags);
+
+printk("5\n");
 
 	printk(KERN_DEBUG "tmdc.c: t0 %d t1 %d i0 %d i1 %d\n", t[0], t[1], i[0], i[1]);
 
