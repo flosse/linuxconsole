@@ -20,7 +20,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include <linux/input.h>
+#include "../linux/include/linux/input.h"
 #include <sys/ioctl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -186,7 +186,7 @@ void init_device()
 	effect.replay.length=0xffff;
 	effect.replay.delay=0;
 	effect.u.constant.level=0;
-	effect.u.constant.direction=0xC000;
+	effect.direction=0xC000;
 	effect.u.constant.shape.attack_length=0;
 	effect.u.constant.shape.attack_level=0;
 	effect.u.constant.shape.fade_length=0;
@@ -231,7 +231,7 @@ void update_device(double force, double * position)
 	if (force>1.0) force=1.0;
 	if (force<-1.0) force=1.0;
 	effect.u.constant.level=(short)(force*32767.0); /* only to be safe */
-	effect.u.constant.direction=0xC000;
+	effect.direction=0xC000;
 	effect.u.constant.shape.attack_level=(short)(force*32767.0); /* this one counts! */
 	effect.u.constant.shape.fade_level=(short)(force*32767.0); /* only to be safe */
 

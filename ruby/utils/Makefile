@@ -41,7 +41,7 @@ clean:
 	$(RM) *.o *.swp $(PROGRAMS) *.orig *.rej map *~
 
 ffcfstress: ffcfstress.c
-	$(CC) -O2 -mcpu=pentiumpro -fno-implement-inlines -funsigned-char \
+	$(CC) -O2 -fno-implement-inlines -funsigned-char \
 	 -lm ffcfstress.c -o ffcfstress
 
 ffmvforce.o: ffmvforce.c

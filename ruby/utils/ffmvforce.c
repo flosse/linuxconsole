@@ -77,8 +77,8 @@ static void generate_force(int x, int y)
 printf("mouse: %d %d n: %4.2f %4.2f angle: %4.2f\n", x, y, nx, ny, angle);
 	effect.type = FF_CONSTANT;
         effect.u.constant.level = 0x7fff * max(fabs(nx), fabs(ny));
-        effect.u.constant.direction = 0x8000 * (angle + M_PI)/M_PI;
-printf("level: %04x direction: %04x\n", (unsigned int)effect.u.constant.level, (unsigned int)effect.u.constant.direction);
+        effect.direction = 0x8000 * (angle + M_PI)/M_PI;
+printf("level: %04x direction: %04x\n", (unsigned int)effect.u.constant.level, (unsigned int)effect.direction);
         effect.u.constant.shape.attack_length = 0;
         effect.u.constant.shape.attack_level = 0;
         effect.u.constant.shape.fade_length = 0;

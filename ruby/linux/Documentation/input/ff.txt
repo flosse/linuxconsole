@@ -81,9 +81,10 @@ and write() on /dev/input/eventXX.
 #include <linux/input.h>
 #include <sys/ioctl.h>
 
+unsigned long features[4];
 int ioctl(int file_descriptor, int request, unsigned long *features);
 
-"request" must be EVIOCGBIT(EV_FF, sizeof(unsigned long))
+"request" must be EVIOCGBIT(EV_FF, sizeof(unsigned long) * 4)
 
 Returns the features supported by the device. features is a bitfield with the
 following bits:
@@ -95,8 +96,11 @@ following bits:
 - FF_FRICTION	can simulate friction (aka drag, damper effect...)
 - FF_RUMBLE	rumble effects (normally the only effect supported by rumble
 		pads)
-- 8 bits from FF_N_EFFECTS_0 containing the number of effects that can be
-		simultaneously played.
+
+
+int ioctl(int fd, EVIOCGEFFECTS, int *n);
+
+Returns the number of effects the device can keep in its memory.
 
 3.2 Uploading effects to the device
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

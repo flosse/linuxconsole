@@ -105,7 +105,7 @@ int main(int argc, char** argv)
 	effects[1].type = FF_CONSTANT;
 	effects[1].id = -1;
 	effects[1].u.constant.level = 0x2000;	/* Strength : 25 % */
-	effects[1].u.constant.direction = 0x6000;	/* 135 degrees */
+	effects[1].direction = 0x6000;	/* 135 degrees */
 	effects[1].u.constant.shape.attack_length = 0x100;
 	effects[1].u.constant.shape.attack_level = 0;
 	effects[1].u.constant.shape.fade_length = 0x100;
@@ -128,7 +128,7 @@ int main(int argc, char** argv)
 	effects[0].u.periodic.magnitude = 0x4000;	/* 0.5 * Maximum magnitude */
 	effects[0].u.periodic.offset = 0;
 	effects[0].u.periodic.phase = 0;
-	effects[0].u.periodic.direction = 0x4000;	/* Along X axis */
+	effects[0].direction = 0x4000;	/* Along X axis */
 	effects[0].u.periodic.shape.attack_length = 0x100;
 	effects[0].u.periodic.shape.attack_level = 0;
 	effects[0].u.periodic.shape.fade_length = 0x100;

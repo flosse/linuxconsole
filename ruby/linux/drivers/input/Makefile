@@ -28,6 +28,23 @@ ifeq ($(CONFIG_USB_HIDDEV),y)
 	hid-objs	+= hiddev.o
 endif
 
+iforce-objs	:= iforce-packets.o iforce-ff.o iforce-main.o
+ifeq ($(CONFIG_INPUT_IFORCE_232), y)
+	iforce-objs	+= iforce-serio.o
+else
+ifeq ($(CONFIG_INPUT_IFORCE_232), m)
+	iforce-objs	+= iforce-serio.o
+endif
+endif
+
+ifeq ($(CONFIG_INPUT_IFORCE_USB), y)
+	iforce-objs	+= iforce-usb.o
+else
+ifeq ($(CONFIG_INPUT_IFORCE_USB), m)
+	iforce-objs	+= iforce-usb.o
+endif
+endif
+
 # Object file lists.
 
 obj-y	:=
@@ -147,3 +164,6 @@ include $(TOPDIR)/Rules.make
 
 hid.o: $(hid-objs)
 	$(LD) -r -o $@ $(hid-objs)
+
+iforce.o: $(iforce-objs)
+	$(LD) -r -o $@ $(iforce-objs)
