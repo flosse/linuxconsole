@@ -87,8 +87,6 @@ struct alpha_machine_vector alpha_mv;
 int alpha_using_srm;
 #endif
 
-unsigned char aux_device_present = 0xaa;
-
 #define N(a) (sizeof(a)/sizeof(a[0]))
 
 static struct alpha_machine_vector *get_sysvec(long, long, long);
@@ -1041,7 +1039,8 @@ int get_cpuinfo(char *buffer)
 
 	static char cpu_names[][8] = {
 		"EV3", "EV4", "Simulate", "LCA4", "EV5", "EV45", "EV56",
-		"EV6", "PCA56", "PCA57", "EV67", "EV68CB", "EV68AL"
+		"EV6", "PCA56", "PCA57", "EV67", "EV68CB", "EV68AL",
+		"EV68CX", "EV7", "EV79", "EV69"
 	};
 
 	struct percpu_struct *cpu;
