@@ -30,9 +30,9 @@
 #
 
 CC		= gcc
-CFLAGS		= -O2 -Wall
+CFLAGS		= -O2 -Wall -I../linux/include
 
-PROGRAMS	= evtest inputattach jstest jscal
+PROGRAMS	= evtest inputattach jstest jscal fftest
 
 compile: $(PROGRAMS)
 
