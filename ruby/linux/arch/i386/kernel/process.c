@@ -308,12 +308,13 @@ void machine_restart(char * __unused)
 #endif
 
 #ifdef CONFIG_INPUT_I8042
-       /*
-        * Reset the 8042 back to original mode.
-        */
-       extern void i8042_controller_cleanup(void);
-       printk("Resetting i8042...\n");
-       i8042_controller_cleanup();
+	/*
+	* Reset the 8042 back to original mode.
+	*/
+	{
+		extern void i8042_controller_cleanup(void);
+		i8042_controller_cleanup();
+	}
 #endif
 
 	if(!reboot_thru_bios) {
