@@ -319,9 +319,6 @@ struct fb_info {
 					/* tell fb to switch consoles */
    int (*updatevar)(int, struct fb_info*);
 					/* tell fb to update the vars */
-   void (*blank)(int, struct fb_info*);	/* tell fb to (un)blank the screen */
-					/* arg = 0: unblank */
-					/* arg > 0: VESA level (arg-1) */
    void *pseudo_palette;                /* Fake palette of 16 colors and 
 					   the cursor's color for non
                                            palette mode */
