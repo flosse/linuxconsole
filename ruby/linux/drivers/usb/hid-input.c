@@ -382,7 +382,7 @@ static int hidinput_input_event(struct input_dev *dev, unsigned int type, unsign
 
 #ifdef CONFIG_HID_FF
 	if (type == EV_FF) {
-		return hid->ff_event? hid->ff_event(dev, type, code, value) : -1;
+		return hid_ff_event(hid, dev, type, code, value);
 	}
 #else
 	if (0) {}

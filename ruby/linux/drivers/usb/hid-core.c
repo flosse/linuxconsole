@@ -519,6 +519,10 @@ static void hid_free_device(struct hid_device *device)
 {
 	unsigned i,j;
 
+#ifdef CONFIG_HID_FF
+	hid_ff_exit(device);
+#endif
+
 	for (i = 0; i < HID_REPORT_TYPES; i++) {
 		struct hid_report_enum *report_enum = device->report_enum + i;
 
@@ -1374,10 +1378,6 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 	return hid;
 
 fail:
-#ifdef CONFIG_HID_FF
-	if (hid->exit_ff)
-		hid->exit_ff(hid);
-#endif
 	hid_free_device(hid);
 	if (hid->urbin) usb_free_urb(hid->urbin);
 	if (hid->urbout) usb_free_urb(hid->urbout);
@@ -1403,7 +1403,7 @@ static void* hid_probe(struct usb_device *dev, unsigned int ifnum,
 	hid_dump_device(hid);
 
 #ifdef CONFIG_HID_FF
-	if (hid_init_ff(hid)) {
+	if (hid_ff_init(hid)) {
 		hid_free_device(hid);
 		return NULL;
 	}
@@ -1465,10 +1465,6 @@ static void hid_disconnect(struct usb_device *dev, void *ptr)
 	if (hid->urbout)
 		usb_free_urb(hid->urbout);
 
-#ifdef CONFIG_HID_FF
-	if (hid->exit_ff)
-		hid->exit_ff(hid);
-#endif
 	hid_free_device(hid);
 }
 

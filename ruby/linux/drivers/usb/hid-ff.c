@@ -81,18 +81,19 @@ int hid_init_ff(struct hid_device* hid)
 #define LGFF_BUFFER_SIZE 8
 
 struct hid_ff_logitech {
-	struct urb* urbffout;                                           /* Output URB used to send ff commands */
-	struct usb_ctrlrequest ffcr;                                    /* ff commands are sent using control URBs */
-	char ffoutbuf[LGFF_BUFFER_SIZE];
-	signed char rumble_left;                                        /* Magnitude of left motor */
-	signed char rumble_right;                                       /* Magnitude of right motor */
-	int rumble_play;                                                /* Enable rumbling */
+	struct urb* urbffout;             /* Output URB used to send ff commands */
+	struct usb_ctrlrequest ffcr;      /* ff commands are sent using control URBs */
+	char buf[LGFF_BUFFER_SIZE];
+	unsigned char left;               /* Magnitude of left motor */
+	unsigned char right;              /* Magnitude of right motor */
+	int play;                         /* Enable rumbling */
 };
 
 static void hid_lgff_ctrl_out(struct urb *urb);
 static int hid_lgff_upload_effect(struct input_dev* input, struct ff_effect* effect);
 static void hid_lgff_exit(struct hid_device* hid);
-static int hid_lgff_event(struct input_dev* input, unsigned int type, unsigned int code, int value);
+static int hid_lgff_event(struct hid_device *hid, struct input_dev* input,
+			  unsigned int type, unsigned int code, int value);
 static void hid_lgff_make_rumble(struct hid_device* hid);
 
 static int hid_lgff_init(struct hid_device* hid)
@@ -101,10 +102,12 @@ static int hid_lgff_init(struct hid_device* hid)
 
 	/* Private data */
 	private = hid->ff_private = kmalloc(sizeof(struct hid_ff_logitech), GFP_KERNEL);
+	memset(private, 0, sizeof(struct hid_ff_logitech));
+
 	if (!hid->ff_private) return -1;
 
 	/* Event and exit callbacks */
-	hid->exit_ff = hid_lgff_exit;
+	hid->ff_exit = hid_lgff_exit;
 	hid->ff_event = hid_lgff_event;
 
 	/* USB init */
@@ -113,7 +116,7 @@ static int hid_lgff_init(struct hid_device* hid)
 		return -1;
 	}
 
-	FILL_CONTROL_URB(private->urbffout, hid->dev, 0, (void*) &private->ffcr, private->ffoutbuf, 8, hid_lgff_ctrl_out, hid);
+	usb_fill_control_urb(private->urbffout, hid->dev, 0, (void*) &private->ffcr, private->buf, 8, hid_lgff_ctrl_out, hid);
 	dbg("Created ff output control urb");
 
 	/* Input init */
@@ -121,6 +124,7 @@ static int hid_lgff_init(struct hid_device* hid)
 	set_bit(FF_RUMBLE, hid->input.ffbit);
 	set_bit(EV_FF, hid->input.evbit);
 	hid->input.ff_effects_max = 1;
+
 
 	return 0;
 }
@@ -135,15 +139,15 @@ static void hid_lgff_exit(struct hid_device* hid)
 	}
 }
 
-static int hid_lgff_event(struct input_dev* input, unsigned int type, unsigned int code, int value)
+static int hid_lgff_event(struct hid_device *hid, struct input_dev* input,
+			  unsigned int type, unsigned int code, int value)
 {
-	struct hid_device *hid = input->private;
 	struct hid_ff_logitech *lgff = hid->ff_private;
 
 	if (type == EV_FF) {
-		int old = lgff->rumble_play;
-		lgff->rumble_play = (value!=0);
-		if (old != lgff->rumble_play) hid_lgff_make_rumble(hid);
+		int old = lgff->play;
+		lgff->play = (value!=0);
+		if (old != lgff->play) hid_lgff_make_rumble(hid);
 
 		return 0;
 	}
@@ -157,20 +161,20 @@ static void hid_lgff_make_rumble(struct hid_device* hid)
 	int err;
 	
 	dbg("in hid_make_rumble");
-	memcpy(lgff->ffoutbuf, packet, 8);
-	if (lgff->rumble_play) {
-		lgff->ffoutbuf[3] = lgff->rumble_left;
-		lgff->ffoutbuf[4] = lgff->rumble_right;
+	memcpy(lgff->buf, packet, 8);
+	if (lgff->play) {
+		lgff->buf[3] = lgff->left;
+		lgff->buf[4] = lgff->right;
 	} else {
-		lgff->ffoutbuf[3] = 0;
-		lgff->ffoutbuf[4] = 0;
+		lgff->buf[3] = 0;
+		lgff->buf[4] = 0;
 	}
 
 	lgff->urbffout->pipe = usb_sndctrlpipe(hid->dev, 0);
 	lgff->ffcr.bRequestType = USB_TYPE_CLASS | USB_DIR_OUT | USB_RECIP_INTERFACE;
 	lgff->urbffout->transfer_buffer_length = lgff->ffcr.wLength = 8;
 	lgff->ffcr.bRequest = 9;
-	lgff->ffcr.wValue = 0x0203;
+	lgff->ffcr.wValue = 0x0203;    /*NOTE: Potential problem with little/big endian */
 	lgff->ffcr.wIndex = 0;
 	
 	lgff->urbffout->dev = hid->dev;
@@ -190,7 +194,7 @@ static void hid_lgff_ctrl_out(struct urb *urb)
 
 static int hid_lgff_upload_effect(struct input_dev* input, struct ff_effect* effect)
 {
-	struct hid_device* hid = input->private;
+	struct hid_device *hid = input->private;
 	struct hid_ff_logitech *lgff = hid->ff_private;
 
 	dbg("ioctl rumble");
@@ -199,8 +203,8 @@ static int hid_lgff_upload_effect(struct input_dev* input, struct ff_effect* eff
 
 	switch (effect->type) {
 	case FF_RUMBLE:
-		lgff->rumble_left = 0x80;
-		lgff->rumble_right = 0x00;
+		lgff->left = effect->u.rumble.strong_magnitude >> 9;
+		lgff->right = effect->u.rumble.weak_magnitude >> 9;
 		
 		break;
 
