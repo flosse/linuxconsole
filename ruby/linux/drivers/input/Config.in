@@ -91,15 +91,14 @@ if [ "$CONFIG_INPUT" != "n" ]; then
             bool '    I-Force force feedback (EXPERIMENTAL)' CONFIG_INPUT_IFORCE_FF
          fi
    fi
+
    if [ "$CONFIG_ADB" = "y" ]; then	
       comment 'ADB devices'
       tristate '  ADB HID' CONFIG_INPUT_ADBHID
-      if [ "$CONFIG_INPUT_ADBHID" = "y" ]; then
-	 bool '     Support for ADB raw keycodes' CONFIG_MAC_ADBKEYCODES
-         bool '     Support for mouse button 2+3 emulation' CONFIG_MAC_EMUMOUSEBTN
-      else
-         bool '   Support for ADB keyboard (old driver)' CONFIG_ADB_KEYBOARD
-     fi
+   fi
+
+   if [ "$CONFIG_PPC" = "y" ]; then
+      bool '     Support for mouse button 2+3 emulation' CONFIG_MAC_EMUMOUSEBTN
    fi
 
    comment 'Bus devices'

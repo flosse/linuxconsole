@@ -61,7 +61,6 @@
 #include <asm/mediabay.h>
 #include <asm/feature.h>
 #include <asm/machdep.h>
-#include <asm/keyboard.h>
 #include <asm/dma.h>
 #include <asm/bootx.h>
 
@@ -80,28 +79,6 @@ extern void pmac_calibrate_decr(void);
 extern void pmac_pcibios_fixup(void);
 extern void pmac_find_bridges(void);
 
-extern int mackbd_setkeycode(unsigned int scancode, unsigned int keycode);
-extern int mackbd_getkeycode(unsigned int scancode);
-extern int mackbd_translate(unsigned char keycode, unsigned char *keycodep,
-		     char raw_mode);
-extern char mackbd_unexpected_up(unsigned char keycode);
-extern void mackbd_leds(unsigned char leds);
-extern void __init mackbd_init_hw(void);
-extern int mac_hid_kbd_translate(unsigned char scancode, unsigned char *keycode,
-				 char raw_mode);
-extern char mac_hid_kbd_unexpected_up(unsigned char keycode);
-extern void mac_hid_init_hw(void);
-#ifdef CONFIG_MAGIC_SYSRQ
-extern unsigned char mac_hid_kbd_sysrq_xlate[128];
-extern unsigned char pckbd_sysrq_xlate[128];
-extern unsigned char mackbd_sysrq_xlate[128];
-#endif /* CONFIG_MAGIC_SYSRQ */
-extern int pckbd_setkeycode(unsigned int scancode, unsigned int keycode);
-extern int pckbd_getkeycode(unsigned int scancode);
-extern int pckbd_translate(unsigned char scancode, unsigned char *keycode,
-			   char raw_mode);
-extern char pckbd_unexpected_up(unsigned char keycode);
-extern int keyboard_sends_linux_keycodes;
 extern void pmac_nvram_update(void);
 
 extern int pmac_pci_enable_device_hook(struct pci_dev *dev, int initial);
@@ -738,26 +715,6 @@ pmac_init(unsigned long r3, unsigned long r4, unsigned long r5,
 	ppc_md.calibrate_decr = pmac_calibrate_decr;
 
 	ppc_md.find_end_of_memory = pmac_find_end_of_memory;
-
-#ifdef CONFIG_INPUT
-	ppc_md.kbd_init_hw       = mac_hid_init_hw;
-	ppc_md.kbd_translate     = mac_hid_kbd_translate;
-	ppc_md.kbd_unexpected_up = mac_hid_kbd_unexpected_up;
-	ppc_md.kbd_setkeycode    = 0;
-	ppc_md.kbd_getkeycode    = 0;
-#ifdef CONFIG_MAGIC_SYSRQ
-#ifdef CONFIG_MAC_ADBKEYCODES
-	if (!keyboard_sends_linux_keycodes) {
-		ppc_md.ppc_kbd_sysrq_xlate = mac_hid_kbd_sysrq_xlate;
-		SYSRQ_KEY = 0x69;
-	} else
-#endif /* CONFIG_MAC_ADBKEYCODES */
-	{
-		ppc_md.ppc_kbd_sysrq_xlate = pckbd_sysrq_xlate;
-		SYSRQ_KEY = 0x54;
-	}
-#endif /* CONFIG_MAGIC_SYSRQ */
-#endif /* CONFIG_INPUT_ADBHID */
 
 #if defined(CONFIG_BLK_DEV_IDE) && defined(CONFIG_BLK_DEV_IDE_PMAC)
         ppc_ide_md.insw			= pmac_ide_insw;

@@ -876,36 +876,18 @@ static unsigned short x86_keycodes[256] = {
 	332,340,341,342,343,344,345,346,356,359,365,368,369,370,371,372
 };
 
-#ifdef CONFIG_MAC_ADBKEYCODES
-extern int mac_hid_keyboard_sends_linux_keycodes(void);
-static unsigned char mac_keycodes[256] =
-	{ 0, 53, 18, 19, 20, 21, 23, 22, 26, 28, 25, 29, 27, 24, 51, 48,
-	 12, 13, 14, 15, 17, 16, 32, 34, 31, 35, 33, 30, 36, 54,128,  1,
-	  2,  3,  5,  4, 38, 40, 37, 41, 39, 50, 56, 42,  6,  7,  8,  9,
-	 11, 45, 46, 43, 47, 44,123, 67, 58, 49, 57,122,120, 99,118, 96,
-	 97, 98,100,101,109, 71,107, 89, 91, 92, 78, 86, 87, 88, 69, 83,
-	 84, 85, 82, 65, 42,  0, 10,103,111,  0,  0,  0,  0,  0,  0,  0,
-	 76,125, 75,105,124,110,115, 62,116, 59, 60,119, 61,121,114,117,
-	  0,  0,  0,  0,127, 81,  0,113,  0,  0,  0,  0, 95, 55, 55,  0,
-	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-	  0,  0,  0,  0,  0, 94,  0, 93,  0,  0,  0,  0,  0,  0,104,102 };
-#endif
+#ifdef CONFIG_MAC_EMUMOUSEBTN
+extern int mac_hid_mouse_emulate_buttons(int, int, int);
+#endif /* CONFIG_MAC_EMUMOUSEBTN */
 
 static int emulate_raw(struct vc_data *vc, unsigned int keycode, 
 		       unsigned char up_flag)
 {
-#ifdef CONFIG_MAC_ADBKEYCODES
-	if (!mac_hid_keyboard_sends_linux_keycodes()) {
-		if (keycode > 255 || !mac_keycodes[keycode])
-			return -1;
-
-		put_queue((mac_keycodes[keycode] & 0x7f) | up_flag);
-
+#ifdef CONFIG_MAC_EMUMOUSEBTN
+	if (mac_hid_mouse_emulate_buttons(1, keycode, down))
 		return 0;
-	}
-#endif
+#endif /* CONFIG_MAC_EMUMOUSEBTN */
+
 	if (keycode > 255 || !x86_keycodes[keycode])
 		return -1; 
 
