@@ -128,7 +128,6 @@ int set_selection(const unsigned long arg, struct tty_struct *tty, int user)
 	char *bp, *obp;
 	int i, ps, pe;
 
-	unblank_screen();
 	poke_blanked_console(vc->display_fg);
 
 	{ unsigned short *args, xs, ys, xe, ye;
@@ -152,12 +151,12 @@ int set_selection(const unsigned long arg, struct tty_struct *tty, int user)
 		  sel_mode = *args;
 	  }
 	  xs--; ys--; xe--; ye--;
-	  xs = limit(xs, video_num_columns - 1);
-	  ys = limit(ys, video_num_lines - 1);
-	  xe = limit(xe, video_num_columns - 1);
-	  ye = limit(ye, video_num_lines - 1);
-	  ps = ys * video_size_row + (xs << 1);
-	  pe = ye * video_size_row + (xe << 1);
+	  xs = limit(xs, vc->vc_cols - 1);
+	  ys = limit(ys, vc->vc_rows - 1);
+	  xe = limit(xe, vc->vc_cols - 1);
+	  ye = limit(ye, vc->vc_rows - 1);
+	  ps = ys * vc->vc_size_row + (xs << 1);
+	  pe = ye * vc->vc_size_row + (xe << 1);
 
 	  if (sel_mode == 4) {
 	      /* useful for screendump without selection highlights */
@@ -197,7 +196,7 @@ int set_selection(const unsigned long arg, struct tty_struct *tty, int user)
 				    (!spc && !inword(sel_pos(ps))))
 					break;
 				new_sel_start = ps;
-				if (!(ps % video_size_row))
+				if (!(ps % vc->vc_size_row))
 					break;
 			}
 			spc = isspace(sel_pos(pe));
@@ -207,14 +206,14 @@ int set_selection(const unsigned long arg, struct tty_struct *tty, int user)
 				    (!spc && !inword(sel_pos(pe))))
 					break;
 				new_sel_end = pe;
-				if (!((pe + 2) % video_size_row))
+				if (!((pe + 2) % vc->vc_size_row))
 					break;
 			}
 			break;
 		case 2:	/* line-by-line selection */
-			new_sel_start = ps - ps % video_size_row;
-			new_sel_end = pe + video_size_row
-				    - pe % video_size_row - 2;
+			new_sel_start = ps - ps % vc->vc_size_row;
+			new_sel_end = pe + vc->vc_size_row
+				    - pe % vc->vc_size_row - 2;
 			break;
 		case 3:
 			highlight_pointer(pe);
@@ -228,11 +227,11 @@ int set_selection(const unsigned long arg, struct tty_struct *tty, int user)
 
 	/* select to end of line if on trailing space */
 	if (new_sel_end > new_sel_start &&
-		!atedge(new_sel_end, video_size_row) &&
+		!atedge(new_sel_end, vc->vc_size_row) &&
 		isspace(sel_pos(new_sel_end))) {
 		for (pe = new_sel_end + 2; ; pe += 2)
 			if (!isspace(sel_pos(pe)) ||
-			    atedge(pe, video_size_row))
+			    atedge(pe, vc->vc_size_row))
 				break;
 		if (isspace(sel_pos(pe)))
 			new_sel_end = pe;
@@ -279,7 +278,7 @@ int set_selection(const unsigned long arg, struct tty_struct *tty, int user)
 		*bp = sel_pos(i);
 		if (!isspace(*bp++))
 			obp = bp;
-		if (! ((i + 2) % video_size_row)) {
+		if (! ((i + 2) % vc->vc_size_row)) {
 			/* strip trailing blanks from line and add newline,
 			   unless non-space at end of line. */
 			if (obp != bp) {
