@@ -93,7 +93,7 @@ int logitech_command(int fd, char *c)
 
 int magellan_init(int fd)
 {
-	write(fd, "m3\rpBB\rz\r", 11);
+	write(fd, "m3\rpBB\rz\r", 9);
 	return 0;
 }
 
