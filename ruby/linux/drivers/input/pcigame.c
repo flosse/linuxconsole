@@ -155,8 +155,9 @@ static int __devinit pcigame_probe(struct pci_dev *dev, const struct pci_device_
 
 	gameport_register_port(&pcigame->gameport);
 	
-	printk(KERN_INFO "gameport%d: %s at pci%02x:%02x.%x\n",
-		pcigame->gameport.number, dev->name, dev->bus->number, PCI_SLOT(dev->devfn), PCI_FUNC(dev->devfn));
+	printk(KERN_INFO "gameport%d: %s at pci%02x:%02x.%x speed %d kHz\n",
+		pcigame->gameport.number, dev->name, dev->bus->number,
+			PCI_SLOT(dev->devfn), PCI_FUNC(dev->devfn), pcigame->gameport.speed);
 
 	return 0;
 }

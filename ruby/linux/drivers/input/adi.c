@@ -442,6 +442,7 @@ static void adi_init_center(struct adi *adi)
 		if (i < adi->axes10 + adi->axes8) {
 			adi->dev.absmax[t] = x * 2 - 48;
 			adi->dev.absmin[t] = 48;
+			adi->dev.absfuzz[t] = 1;
 			adi->dev.absflat[t] = 16;
 			continue;
 		}
