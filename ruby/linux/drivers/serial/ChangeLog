@@ -19,3 +19,7 @@
 2002-3-14  James Simmons <jsimmons@user.sf.net>
 	* Grabbed RMK latest work and placed it into CVS. I haven't had time
 	  to properly modify it for the input api.
+
+2002-6-18  James Simmons <jsimmons@user.sf.net>
+	* Grabbed RMK latest work and placed it into CVS. I haven't had time
+	  to properly modify it for the input api. Some day I will get to it.

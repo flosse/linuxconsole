@@ -45,6 +45,7 @@
 #include <linux/serial.h>
 #include <linux/console.h>
 #include <linux/sysrq.h>
+#include <linux/spinlock.h>
 
 #include <asm/bitops.h>
 #include <asm/hardware.h>
@@ -63,6 +64,7 @@
 
 #define UART_NR		2
 
+#ifndef CONFIG_SERIAL_CLPS711X_OLD_NAME
 #define SERIAL_CLPS711X_NAME	"ttyCL"
 #define SERIAL_CLPS711X_MAJOR	204
 #define SERIAL_CLPS711X_MINOR	40
@@ -72,6 +74,18 @@
 #define CALLOUT_CLPS711X_MAJOR	205
 #define CALLOUT_CLPS711X_MINOR	40
 #define CALLOUT_CLPS711X_NR	UART_NR
+#else
+#warning The old names/device number for this driver if compatabity is needed
+#define SERIAL_CLPS711X_NAME    "ttyAM"
+#define SERIAL_CLPS711X_MAJOR   204
+#define SERIAL_CLPS711X_MINOR   16
+#define SERIAL_CLPS711X_NR      UART_NR
+
+#define CALLOUT_CLPS711X_NAME   "cuaam"
+#define CALLOUT_CLPS711X_MAJOR  205
+#define CALLOUT_CLPS711X_MINOR  16
+#define CALLOUT_CLPS711X_NR     UART_NR
+#endif
 
 static struct tty_driver normal, callout;
 
@@ -88,16 +102,32 @@ static struct tty_driver normal, callout;
 
 #define UART_ANY_ERR		(UARTDR_FRMERR | UARTDR_PARERR | UARTDR_OVERR)
 
+#define tx_enabled(port)	((port)->unused[0])
+
 static void
 clps711xuart_stop_tx(struct uart_port *port, unsigned int tty_stop)
 {
-	disable_irq(TX_IRQ(port));
+	unsigned long flags;
+
+	spin_lock_irqsave(&port->lock, flags);
+	if (tx_enabled(port)) {
+		disable_irq(TX_IRQ(port));
+		tx_enabled(port) = 0;
+	}
+	spin_unlock_irqrestore(&port->lock, flags);
 }
 
 static void
 clps711xuart_start_tx(struct uart_port *port, unsigned int tty_start)
 {
-	enable_irq(TX_IRQ(port));
+	unsigned long flags;
+
+	spin_lock_irqsave(&port->lock, flags);
+	if (!tx_enabled(port)) {
+		enable_irq(TX_IRQ(port));
+		tx_enabled(port) = 1;
+	}
+	spin_unlock_irqrestore(&port->lock, flags);
 }
 
 static void clps711xuart_stop_rx(struct uart_port *port)
@@ -268,6 +298,8 @@ static int clps711xuart_startup(struct uart_port *port)
 {
 	unsigned int syscon;
 	int retval;
+
+	tx_enabled(port) = 1;
 
 	/*
 	 * Allocate the IRQs

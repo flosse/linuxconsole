@@ -1108,18 +1108,18 @@ static int serial8250_startup(struct uart_port *port)
 	 */
 	serial_outp(up, UART_LCR, UART_LCR_WLEN8);
 
-	spin_lock_irqsave(&port->lock, flags);
+	spin_lock_irqsave(&up->port.lock, flags);
 	if (up->port.flags & ASYNC_FOURPORT) {
 		if (!is_real_interrupt(up->port.irq))
-			port->mctrl |= TIOCM_OUT1;
+			up->port.mctrl |= TIOCM_OUT1;
 	} else
 		/*
 		 * Most PC uarts need OUT2 raised to enable interrupts.
 		 */
 		if (is_real_interrupt(up->port.irq))
-			port->mctrl |= TIOCM_OUT2;
+			up->port.mctrl |= TIOCM_OUT2;
 
-	serial8250_set_mctrl(&up->port, port->mctrl);
+	serial8250_set_mctrl(&up->port, up->port.mctrl);
 	spin_unlock_irqrestore(&up->port.lock, flags);
 
 	/*
@@ -1162,15 +1162,15 @@ static void serial8250_shutdown(struct uart_port *port)
 	up->ier = 0;
 	serial_outp(up, UART_IER, 0);
 
-	spin_lock_irqsave(&port->lock, flags);
+	spin_lock_irqsave(&up->port.lock, flags);
 	if (up->port.flags & ASYNC_FOURPORT) {
 		/* reset interrupts on the AST Fourport board */
 		inb((up->port.iobase & 0xfe0) | 0x1f);
-		port->mctrl |= TIOCM_OUT1;
+		up->port.mctrl |= TIOCM_OUT1;
 	} else
-		port->mctrl &= ~TIOCM_OUT2;
+		up->port.mctrl &= ~TIOCM_OUT2;
 
-	serial8250_set_mctrl(&up->port, port->mctrl);
+	serial8250_set_mctrl(&up->port, up->port.mctrl);
 	spin_unlock_irqrestore(&up->port.lock, flags);
 
 	/*
@@ -1631,8 +1631,6 @@ static void __init serial8250_isa_init_ports(void)
 		serial8250_ports[i].port.uartclk = old_serial_port[i].base_baud * 16;
 		serial8250_ports[i].port.flags   = old_serial_port[i].flags;
 		serial8250_ports[i].port.ops     = &serial8250_pops;
-		init_timer(&serial8250_ports[i].timer);
-		serial8250_ports[i].timer.function = serial8250_timeout;
 	}
 }
 
@@ -1644,6 +1642,9 @@ static void __init serial8250_register_ports(struct uart_driver *drv)
 
 	for (i = 0; i < UART_NR; i++) {
 		serial8250_ports[i].port.line = i;
+		serial8250_ports[i].port.ops = &serial8250_pops;
+		init_timer(&serial8250_ports[i].timer);
+		serial8250_ports[i].timer.function = serial8250_timeout;
 		uart_add_one_port(drv, &serial8250_ports[i].port);
 	}
 }

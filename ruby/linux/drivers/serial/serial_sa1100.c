@@ -803,7 +803,7 @@ static int __init
 sa1100_console_setup(struct console *co, char *options)
 {
 	struct sa1100_port *sport;
-	int baud = CONFIG_SA1100_DEFAULT_BAUDRATE;
+	int baud = 9600;
 	int bits = 8;
 	int parity = 'n';
 	int flow = 'n';

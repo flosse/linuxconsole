@@ -538,9 +538,13 @@ static void uart_send_xchar(struct tty_struct *tty, char ch)
 	struct uart_info *info = tty->driver_data;
 	struct uart_port *port = info->port;
 
-	port->x_char = ch;
-	if (ch)
-		port->ops->start_tx(port, 0);
+	if (port->ops->send_xchar)
+		port->ops->send_xchar(port, ch);
+	else {
+		port->x_char = ch;
+		if (ch)
+			port->ops->start_tx(port, 0);
+	}
 }
 
 static void uart_throttle(struct tty_struct *tty)
@@ -1844,6 +1848,26 @@ uart_parse_options(char *options, int *baud, int *parity, int *bits, int *flow)
 		*flow = *s;
 }
 
+struct baud_rates {
+	unsigned int rate;
+	unsigned int cflag;
+};
+
+static struct baud_rates baud_rates[] = {
+	{ 921600, B921600 },
+	{ 460800, B460800 },
+	{ 230400, B230400 },
+	{ 115200, B115200 },
+	{  57600, B57600  },
+	{  38400, B38400  },
+	{  19200, B19200  },
+	{   9600, B9600   },
+	{   4800, B4800   },
+	{   2400, B2400   },
+	{   1200, B1200   },
+	{      0, B38400  }
+};
+
 /**
  *	uart_set_options - setup the serial console parameters
  *	@port: pointer to the serial ports uart_port structure
@@ -1859,43 +1883,16 @@ uart_set_options(struct uart_port *port, struct console *co,
 {
 	unsigned int cflag = CREAD | HUPCL | CLOCAL;
 	unsigned int quot;
+	int i;
 
 	/*
 	 * Construct a cflag setting.
 	 */
-	switch (baud) {
-	case 1200:
-		cflag |= B1200;
-		break;
-	case 2400:
-		cflag |= B2400;
-		break;
-	case 4800:
-		cflag |= B4800;
-		break;
-	case 9600:
-		cflag |= B9600;
-		break;
-	case 19200:
-		cflag |= B19200;
-		break;
-	default:
-		cflag |= B38400;
-		baud = 38400;
-		break;
-	case 57600:
-		cflag |= B57600;
-		break;
-	case 115200:
-		cflag |= B115200;
-		break;
-	case 230400:
-		cflag |= B230400;
-		break;
-	case 460800:
-		cflag |= B460800;
-		break;
-	}
+	for (i = 0; baud_rates[i].rate; i++)
+		if (baud_rates[i].rate <= baud)
+			break;
+
+	cflag |= baud_rates[i].cflag;
 
 	if (bits == 7)
 		cflag |= CS7;
@@ -2573,8 +2570,6 @@ EXPORT_SYMBOL(uart_register_driver);
 EXPORT_SYMBOL(uart_unregister_driver);
 EXPORT_SYMBOL(uart_register_port);
 EXPORT_SYMBOL(uart_unregister_port);
-EXPORT_SYMBOL(uart_remove_one_port);
-EXPORT_SYMBOL(uart_add_one_port);
 
 MODULE_DESCRIPTION("Serial driver core");
 MODULE_LICENSE("GPL");
