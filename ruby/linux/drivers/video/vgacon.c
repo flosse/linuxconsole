@@ -338,11 +338,11 @@ static void vgacon_init(struct vc_data *c, int init)
 	p = *c->vc_uni_pagedir_loc;
 	if (c->vc_uni_pagedir_loc == &c->vc_uni_pagedir ||
 	    !--c->vc_uni_pagedir_loc[1])
-		con_free_unimap(c->vc_num);
+		con_free_unimap(c);
 	c->vc_uni_pagedir_loc = vgacon_uni_pagedir;
 	vgacon_uni_pagedir[1]++;
 	if (!vgacon_uni_pagedir[0] && p)
-		con_set_default_unimap(c->vc_num);
+		con_set_default_unimap(c);
 }
 
 static inline void vga_set_mem_top(struct vc_data *c)
@@ -356,10 +356,10 @@ static void vgacon_deinit(struct vc_data *c)
 	if (!--vgacon_uni_pagedir[1]) {
 		c->vc_visible_origin = vga_vram_base;
 		vga_set_mem_top(c);
-		con_free_unimap(c->vc_num);
+		con_free_unimap(c);
 	}
 	c->vc_uni_pagedir_loc = &c->vc_uni_pagedir;
-	con_set_default_unimap(c->vc_num);
+	con_set_default_unimap(c);
 }
 
 static u8 vgacon_build_attr(struct vc_data *c, u8 color, u8 intensity, u8 blink, u8 underline, u8 reverse)
