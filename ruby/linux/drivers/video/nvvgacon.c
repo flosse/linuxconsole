@@ -834,6 +834,13 @@ __initfunc(void nvvga_console_init(void))
 
 #ifdef MODULE
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,3,0)
+#define base_address0 dev->resource[0].start
+#define base_address1 dev->resource[1].start
+#else
+#define base_address0 (dev->base_address[0]&PCI_BASE_ADDRESS_MEM_MASK)
+#define base_address1 (dev->base_address[1]&PCI_BASE_ADDRESS_MEM_MASK)
+#endif
 int init_module(void)
 {
     	struct pci_dev *dev;
@@ -844,15 +851,15 @@ int init_module(void)
         found=0;
         while(!found && dev) {
             if(((dev->vendor==PCI_VENDOR_ID_NVIDIA)||(dev->vendor==PCI_VENDOR_ID_NVIDIA_SGS))&&
-               (!vram || (vram==(dev->base_address[1]&PCI_BASE_ADDRESS_MEM_MASK)))
+               (!vram || (vram==base_address1))
                )found=1; else
-            dev=pci_find_class(PCI_CLASS_DISPLAY_VGA,dev);
+            dev=pci_find_class(PCI_CLASS_DISPLAY_VGA<<8,dev);
         }
 
         if(!found) return 1;
 
-        vram_base=dev->base_address[1]&PCI_BASE_ADDRESS_MEM_MASK;
-        mmio_base=dev->base_address[0]&PCI_BASE_ADDRESS_MEM_MASK;
+        vram_base=base_address1;
+        mmio_base=base_address0;
         nvvga_vram_base=ioremap(vram_base,8*64*1024);
         nvvga_mmio_base0=ioremap(mmio_base+0x0c0000,1024);
         nvvga_mmio_base1=ioremap(mmio_base+0x601000,1024);
