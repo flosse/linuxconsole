@@ -962,7 +962,7 @@ static int hid_submit_ctrl(struct hid_device *hid)
 	hid->dr.requesttype = USB_TYPE_CLASS | USB_RECIP_INTERFACE | dir;
 	hid->dr.request = dir ? USB_REQ_GET_REPORT : USB_REQ_SET_REPORT;
 	hid->dr.index = cpu_to_le16(hid->ifnum);
-	hid->dr.value = 0x200 | report->id;
+	hid->dr.value = ((report->type + 1) << 8) | report->id;
 
 	if (usb_submit_urb(&hid->urbctrl)) {
 		err("usb_submit_urb(ctrl) failed");
