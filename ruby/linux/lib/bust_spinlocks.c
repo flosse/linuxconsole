@@ -13,6 +13,7 @@
 #include <linux/spinlock.h>
 #include <linux/tty.h>
 #include <linux/wait.h>
+#include <asm/hardirq.h>
 
 extern spinlock_t timerlist_lock;
 
