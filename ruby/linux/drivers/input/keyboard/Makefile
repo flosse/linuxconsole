@@ -13,7 +13,6 @@ obj-$(CONFIG_KEYBOARD_MAPLE)		+= maple_keyb.o
 obj-$(CONFIG_KEYBOARD_PS2SERKBD)	+= ps2serkbd.o
 obj-$(CONFIG_KEYBOARD_SUNKBD)		+= sunkbd.o
 obj-$(CONFIG_KEYBOARD_XTKBD)		+= xtkbd.o
-obj-$(CONFIG_KEYBOARD_Q40KBD)		+= q40kbd.o
 obj-$(CONFIG_KEYBOARD_NEWTON)		+= newtonkbd.o
 
 # The global Rules.make.
