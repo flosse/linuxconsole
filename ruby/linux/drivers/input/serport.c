@@ -40,15 +40,7 @@
 #include <linux/tty.h>
 #include <linux/circ_buf.h>
 
-#define XMIT_SIZE 128
-
-struct serport {
-	struct tty_struct *tty;
-	wait_queue_head_t wait;
-	struct serio serio;
-	struct circ_buf xmit;
-	char xmit_data[XMIT_SIZE];
-};
+static DECLARE_MUTEX(port_sem);
 
 /*
  * Callback functions from the serio code.
@@ -56,207 +48,128 @@ struct serport {
 
 static int serport_serio_write(struct serio *serio, unsigned char data)
 {
-	struct serport *serport = serio->driver;
-	return -(serport->tty->driver.write(serport->tty, 0, &data, 1) != 1);
+	struct uart_info *info = serio->driver;
+	unsigned long flags;
+	int retval = -1;
+
+	if (!info->xmit.buf)
+                return retval;
+
+	save_flags(flags); cli();
+        if (CIRC_SPACE(info->xmit.head, info->xmit.tail, UART_XMIT_SIZE) != 0) {                info->xmit.buf[info->xmit.head] = ch;
+                info->xmit.head = (info->xmit.head + 1) & (UART_XMIT_SIZE - 1);
+		retval = 0;
+        }
+        restore_flags(flags);
+	return retval;
 }
 
 static int serport_serio_open(struct serio *serio)
 {
-        return 0;
+	struct uart_info *info = serio->driver;
+	int retval = -ENODEV;
+
+	/*        
+	if (!try_inc_mod_count(drv->owner))
+                goto fail;
+	*/
+
+	if (!info)
+                goto out;
+	/*
+         * If the port is in the middle of closing, bail out now.
+         */
+	if (info->flags & ASYNC_CLOSING) {
+		interruptible_sleep_on(&info->close_wait);
+                retval = (info->flags & ASYNC_HUP_NOTIFY) ?
+                        -EAGAIN : -ERESTARTSYS;
+                goto out;
+	}
+	
+	/*
+         * Make sure the device is in D0 state.
+         */
+        if (info->state->count == 1)
+#ifdef CONFIG_PM
+                pm_send(info->state->pm, PM_RESUME, (void *)0);
+#else
+                if (info->ops->pm)
+                        info->ops->pm(info->port, 0, 3);
+#endif
+
+        /*
+         * Start up the serial port
+         */
+        retval = uart_startup(info);
+        if (retval)
+                goto out;
+	uart_change_speed(info, NULL);
+out:
+        if (drv->owner)
+                __MOD_DEC_USE_COUNT(drv->owner);
+fail:
+	return retval;
 }
 
 static void serport_serio_close(struct serio *serio)
 {
-	struct serport *serport = serio->driver;
-	wake_up_interruptible(&serport->wait);
-}
+	struct uart_info *info = serio->private;
+	struct uart_state *state = info->state;
 
-static int serport_serio_async_write(struct serio *serio, unsigned char *data, int len)
-{
-	int i;
-	struct serport *sp = (struct serport *)serio->driver;
+	down(&state->count_sem);
+        save_flags(flags); cli();
 
-	/* Check if there is enough room to write the message */
-	if (CIRC_SPACE(sp->xmit.head, sp->xmit.tail, XMIT_SIZE) < len) {
-		return -EAGAIN;
-	}
-
-	/* Store the data in the circular buffer */
-	for (i=0; i<len; ++i) {
-		sp->xmit.buf[sp->xmit.head] = data[i];
-		sp->xmit.head++;
-		sp->xmit.head &= (XMIT_SIZE -1);
-	}
-
-	/* If necessary, send the first character. The serial driver will then
-	 * call serport_ldisc_write_wakeup when it finishes sending the first
-	 * byte */
-	if (!test_and_set_bit(TTY_DO_WRITE_WAKEUP, &((struct serport*)serio->driver)->tty->flags)) {
-		serio->write(serio, sp->xmit.buf[sp->xmit.tail]);
-		sp->xmit.tail++;
-		sp->xmit.tail &= XMIT_SIZE -1;
-	}
-
-	return len;
-}
-
-/*
- * serport_ldisc_open() is the routine that is called upon setting our line
- * discipline on a tty. It looks for the Mag, and if found, registers
- * it as a joystick device.
- */
-
-static int serport_ldisc_open(struct tty_struct *tty)
-{
-	struct serport *serport;
-
-	MOD_INC_USE_COUNT;
-
-	if (!(serport = kmalloc(sizeof(struct serport), GFP_KERNEL))) {
-		MOD_DEC_USE_COUNT;
-		return -ENOMEM;
-	}
-
-	memset(serport, 0, sizeof(struct serport));
-
-	serport->tty = tty;
-	tty->disc_data = serport;
-
-	serport->xmit.buf = serport->xmit_data;
-
-	serport->serio.type = SERIO_RS232;
-	serport->serio.async_write = serport_serio_async_write;
-	serport->serio.write = serport_serio_write;
-	serport->serio.open = serport_serio_open;
-	serport->serio.close = serport_serio_close;
-	serport->serio.driver = serport;
-
-	init_waitqueue_head(&serport->wait);
-
-	return 0;
-}
-
-/*
- * serport_ldisc_close() is the opposite of serport_ldisc_open()
- */
-
-static void serport_ldisc_close(struct tty_struct *tty)
-{
-	struct serport *serport = (struct serport*) tty->disc_data;
-	kfree(serport);
-	MOD_DEC_USE_COUNT;
-}
-
-/*
- * serport_ldisc_receive() is called by the low level tty driver when characters
- * are ready for us. We forward the characters, one by one to the 'interrupt'
- * routine.
- */
-
-static void serport_ldisc_receive(struct tty_struct *tty, const unsigned char *cp, char *fp, int count)
-{
-	struct serport *serport = (struct serport*) tty->disc_data;
-	int i;
-	for (i = 0; i < count; i++)
-		if (serport->serio.dev)
-			serport->serio.dev->interrupt(&serport->serio, cp[i], 0);
-}
-
-/*
- * serport_ldisc_room() reports how much room we do have for receiving data.
- * Although we in fact have infinite room, we need to specify some value
- * here, and 256 seems to be reasonable.
- */
-
-static int serport_ldisc_room(struct tty_struct *tty)
-{
-	return 256;
-}
-
-/*
- * serport_ldisc_read() just waits indefinitely if everything goes well. 
- * However, when the serio driver closes the serio port, it finishes,
- * returning 0 characters.
- */
-
-static ssize_t serport_ldisc_read(struct tty_struct * tty, struct file * file, unsigned char * buf, size_t nr)
-{
-	struct serport *serport = (struct serport*) tty->disc_data;
-	DECLARE_WAITQUEUE(wait, current);
-	char name[32];
-
-#ifdef CONFIG_DEVFS_FS
-	sprintf(name, tty->driver.name, MINOR(tty->device) - tty->driver.minor_start);
-#else
-	sprintf(name, "%s%d", tty->driver.name, MINOR(tty->device) - tty->driver.minor_start);
-#endif
-
-	serio_register_port(&serport->serio);
-
-	printk(KERN_INFO "serio%d: Serial port %s\n", serport->serio.number, name);
-
-	add_wait_queue(&serport->wait, &wait);
-	current->state = TASK_INTERRUPTIBLE;
-
-	while(serport->serio.type && !signal_pending(current)) schedule();
-
-	current->state = TASK_RUNNING;
-	remove_wait_queue(&serport->wait, &wait);
-
-	serio_unregister_port(&serport->serio);
-
-	return 0;
-}
-
-/*
- * serport_ldisc_ioctl() allows to set the port protocol, and device ID
- */
-
-static int serport_ldisc_ioctl(struct tty_struct * tty, struct file * file, unsigned int cmd, unsigned long arg)
-{
-	struct serport *serport = (struct serport*) tty->disc_data;
+	if (state->count) {
+                restore_flags(flags);
+                up(&state->count_sem);
+                goto done;
+        }
+        info->flags |= ASYNC_CLOSING;
+        restore_flags(flags);
+        up(&state->count_sem);
 	
-	switch (cmd) {
-		case SPIOCSTYPE:
-			return get_user(serport->serio.type, (unsigned long *) arg);
-	}
+        /*
+         * At this point, we stop accepting input.  To do this, we
+         * disable the receive line status interrupts.
+         */
+        if (info->flags & ASYNC_INITIALIZED) {
+                info->ops->stop_rx(info->port);
+                /*
+                 * Before we drop DTR, make sure the UART transmitter
+                 * has completely drained; this is especially
+                 * important if there is a transmit FIFO!
+                 */
+                uart_wait_until_sent(tty, info->timeout);
+        }
+	uart_shutdown(info);
+	info->event = 0;       
+	
+	if (info->blocked_open) {
+                if (info->state->close_delay) {
+                        set_current_state(TASK_INTERRUPTIBLE);
+                        schedule_timeout(info->state->close_delay);
+                        set_current_state(TASK_RUNNING);
+                }
+                wake_up_interruptible(&info->open_wait);
+        } else {
+#ifdef CONFIG_PM
+                /*
+                 * Put device into D3 state.
+                 */
+                pm_send(info->state->pm, PM_SUSPEND, (void *)3);
+#else
+                if (info->ops->pm)
+                        info->ops->pm(info->port, 3, 0);
+#endif
+        }
 
-	return -EINVAL;
+        info->flags &= ~(ASYNC_NORMAL_ACTIVE|ASYNC_CALLOUT_ACTIVE|
+                         ASYNC_CLOSING);
+        wake_up_interruptible(&info->close_wait);
+done:
+        if (drv->owner)
+                __MOD_DEC_USE_COUNT(drv->owner);
 }
-
-static void serport_ldisc_write_wakeup(struct tty_struct * tty)
-{
-	struct serport *sp = (struct serport *) tty->disc_data;
-
-	printk(KERN_DEBUG "wakeup!\n");
-
-	if (sp->xmit.head != sp->xmit.tail) {
-		int n = CIRC_CNT(sp->xmit.head, sp->xmit.tail, XMIT_SIZE);
-		n = sp->tty->driver.write(sp->tty, 0, &sp->xmit.buf[sp->xmit.tail], n);
-		if (n<0) {
-			printk(KERN_WARNING "serport: tty.driver->write failed in write_wakeup\n");
-		}
-		sp->xmit.tail+=n;
-		sp->xmit.tail &= XMIT_SIZE -1;
-	}
-	if (sp->xmit.head == sp->xmit.tail)
-		clear_bit(TTY_DO_WRITE_WAKEUP, &tty->flags);
-}
-
-/*
- * The line discipline structure.
- */
-
-static struct tty_ldisc serport_ldisc = {
-	name:		"input",
-	open:		serport_ldisc_open,
-	close:		serport_ldisc_close,
-	read:		serport_ldisc_read,
-	ioctl:		serport_ldisc_ioctl,
-	receive_buf:	serport_ldisc_receive,
-	receive_room:	serport_ldisc_room,
-	write_wakeup:	serport_ldisc_write_wakeup
-};
 
 /*
  * The functions for insering/removing us as a module.
@@ -264,17 +177,15 @@ static struct tty_ldisc serport_ldisc = {
 
 int __init serport_init(void)
 {
-        if (tty_register_ldisc(N_MOUSE, &serport_ldisc)) {
-                printk(KERN_ERR "serport.c: Error registering line discipline.\n");
-		return -ENODEV;
-	}
+	struct uart_driver *input;
 
+	uart_register_driver(&input)	
 	return  0;
 }
 
 void __exit serport_exit(void)
 {
-	tty_register_ldisc(N_MOUSE, NULL);
+	uart_unregister_driver(&input);
 }
 
 module_init(serport_init);
