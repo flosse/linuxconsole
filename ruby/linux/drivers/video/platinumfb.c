@@ -40,13 +40,15 @@
 #include <asm/prom.h>
 #include <asm/pgtable.h>
 
-#include <video/fbcon.h>
+#include "fbcon.h"
 #include <video/fbcon-cfb8.h>
 #include <video/fbcon-cfb16.h>
 #include <video/fbcon-cfb32.h>
 #include <video/macmodes.h>
 
 #include "platinumfb.h"
+
+static char fontname[40] __initdata = { 0 };
 
 static int currcon = 0;
 
@@ -98,27 +100,20 @@ struct fb_info_platinum {
 /*
  * Frame buffer device API
  */
-int platinum_init(void);
-#ifdef CONFIG_FB_OF
-void platinum_of_init(struct device_node *dp);
-#endif
-int platinum_setup(char*);
 
-static int platinum_open(struct fb_info *info, int user);
-static int platinum_release(struct fb_info *info, int user);
 static int platinum_get_fix(struct fb_fix_screeninfo *fix, int con,
 			    struct fb_info *fb);
 static int platinum_get_var(struct fb_var_screeninfo *var, int con,
 			    struct fb_info *fb);
 static int platinum_set_var(struct fb_var_screeninfo *var, int con,
 			    struct fb_info *fb);
-static int platinum_pan_display(struct fb_var_screeninfo *var, int con,
-				struct fb_info *fb);
-static int platinum_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			     struct fb_info *info);
 static int platinum_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                               u_int transp, struct fb_info *fb);
 static void platinum_blank(int blank, struct fb_info *fb);
+static int platinum_get_cmap(struct fb_cmap *cmap, int kspc, int con,
+			     struct fb_info *info);
+static int platinum_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			     struct fb_info *info);
 
 /*
  * Interface to the low level console driver
@@ -130,6 +125,7 @@ static int platinum_updatevar(int con, struct fb_info *fb);
 /*
  * internal functions
  */
+
 static inline int platinum_vram_reqd(int video_mode, int color_mode);
 static int read_platinum_sense(struct fb_info_platinum *info);
 static void set_platinum_clock(struct fb_info_platinum *info);
@@ -145,34 +141,32 @@ static int platinum_encode_fix(struct fb_fix_screeninfo *fix,
 			       const struct fb_info_platinum *info);
 static void platinum_set_disp(struct display *disp, struct fb_info_platinum *info,
 			      int cmode, int accel);
-static int platinum_getcolreg(u_int regno,u_int *red, u_int *green, u_int *blue,
+static int platinum_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
 			      u_int *transp, struct fb_info *fb);
 static void do_install_cmap(int con, struct fb_info *info);
 
+
+/*
+ * Interface used by the world
+ */
+
+int platinum_init(void);
+#ifdef CONFIG_FB_OF
+void platinum_of_init(struct device_node *dp);
+#endif
+int platinum_setup(char*);
+
+
 static struct fb_ops platinumfb_ops = {
-	fb_open:		platinum_open,
-	fb_release:		platinum_release,
-	fb_get_fix:		platinum_get_fix,
-	fb_get_var:		platinum_get_var,
-	fb_set_var:		platinum_set_var,
-	fb_get_cmap:		platinum_get_cmap,
-	fb_set_cmap:		fbgen_set_cmap,
-	fb_setcolreg:		platinum_setcolreg,
-	fb_blank:		platinum_blank,
-	fb_pan_display:		platinum_pan_display
+	owner:		THIS_MODULE,
+	fb_get_fix:	platinum_get_fix,
+	fb_get_var:	platinum_get_var,
+	fb_set_var:	platinum_set_var,
+	fb_get_cmap:	platinum_get_cmap,
+	fb_set_cmap:	platinum_set_cmap,
+	fb_setcolreg:	platinum_setcolreg,
+	fb_blank:	platinum_blank,
 };
-
-static int platinum_open(struct fb_info *info, int user)
-{
-	MOD_INC_USE_COUNT;
-	return 0;
-}
-
-static int platinum_release(struct fb_info *info, int user)
-{
-	MOD_DEC_USE_COUNT;
-	return 0;
-}
 
 static int platinum_get_fix(struct fb_fix_screeninfo *fix, int con,
 			    struct fb_info *fb)
@@ -282,8 +276,7 @@ static int platinum_set_var(struct fb_var_screeninfo *var, int con,
 	    display->inverse = 0;
 	    platinum_set_disp(display, info, par.cmode, 0);
 	    display->scrollmode = SCROLL_YREDRAW;
-	    if (info->fb_info.changevar)
-	      (*info->fb_info.changevar)(con);
+	    fbcon_changevar(con);
 	}
 
 	if (!info->fb_info.display_fg ||
@@ -299,20 +292,6 @@ static int platinum_set_var(struct fb_var_screeninfo *var, int con,
 	return 0;
 }
 
-static int platinum_pan_display(struct fb_var_screeninfo *var, int con,
-				struct fb_info *info)
-{
-    /*
-     *  Pan (or wrap, depending on the `vmode' field) the display using the
-     *  `xoffset' and `yoffset' fields of the `var' structure.
-     *  If the values don't fit, return -EINVAL.
-     */
-
-	if (var->xoffset != 0 || var->yoffset != 0)
-		return -EINVAL;
-	return 0;
-}
-
 static int platinum_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 			     struct fb_info *info)
 {
@@ -325,6 +304,30 @@ static int platinum_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 		int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
 		fb_copy_cmap(fb_default_cmap(size), cmap, kspc ? 0 : 2);
 	}
+	return 0;
+}
+
+static int platinum_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			     struct fb_info *info)
+{
+	int err;
+	struct display *disp;
+
+	if (con >= 0)
+		disp = &fb_display[con];
+	else
+		disp = info->disp;
+	if (!disp->cmap.len) {     /* no colormap allocated? */
+		int size = disp->var.bits_per_pixel == 16 ? 32 : 256;
+		if ((err = fb_alloc_cmap(&disp->cmap, size, 0)))
+			return err;
+	}
+
+	if (!info->display_fg ||
+	    info->display_fg->vc_num == con)	/* current console? */
+		return fb_set_cmap(cmap, kspc, info);
+	else
+		fb_copy_cmap(cmap, &disp->cmap, kspc ? 0 : 1);
 	return 0;
 }
 
@@ -593,7 +596,7 @@ static int __init init_platinum(struct fb_info_platinum *info)
 	info->fb_info.node = -1;
 	info->fb_info.fbops = &platinumfb_ops;
 	info->fb_info.disp = disp;
-	info->fb_info.changevar = NULL;
+	strcpy(info->fb_info.fontname, fontname);
 	info->fb_info.switch_con = &platinum_switch;
 	info->fb_info.updatevar = &platinum_updatevar;
 	info->fb_info.flags = FBINFO_FLAG_DEFAULT;
@@ -836,6 +839,17 @@ int __init platinum_setup(char *options)
 
 	for (this_opt = strtok(options, ","); this_opt;
 	     this_opt = strtok(NULL, ",")) {
+		if (!strncmp(this_opt, "font:", 5)) {
+			char *p;
+			int i;
+
+			p = this_opt + 5;
+			for (i = 0; i < sizeof(fontname) - 1; i++)
+				if (!*p || *p == ' ' || *p == ',')
+					break;
+			memcpy(fontname, this_opt + 5, i);
+			fontname[i] = 0;
+		}
 		if (!strncmp(this_opt, "vmode:", 6)) {
 	    		int vmode = simple_strtoul(this_opt+6, NULL, 0);
 	    	if (vmode > 0 && vmode <= VMODE_MAX)

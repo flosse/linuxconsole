@@ -27,12 +27,12 @@
 #include <linux/pci.h>
 #include <linux/vt_kern.h>
 #include <linux/capability.h>
-#include "sisfb.h"
+#include <linux/sisfb.h>
 
 #include <asm/io.h>
 #include <asm/mtrr.h>
 
-#include <video/fbcon.h>
+#include "fbcon.h"
 #include <video/fbcon-cfb8.h>
 #include <video/fbcon-cfb16.h>
 #include <video/fbcon-cfb24.h>
@@ -43,9 +43,10 @@
 #define FALSE   0
 #define TRUE    1
 
-/* Draw Function */
+/* Draw Function 
 #define FBIOGET_GLYPH        0x4620
 #define FBIOGET_HWCINFO      0x4621
+*/
 #define BR(x)   (0x8200 | (x) << 2)
 
 #define BITBLT               0x00000000
@@ -115,7 +116,8 @@
 #define MMIO_SIZE                 0x20000	/* 128K MMIO capability */
 #define MAX_ROM_SCAN              0x10000
 
-#define RESERVED_MEM_SIZE         0x400000	/* 4M */
+#define RESERVED_MEM_SIZE_4M      0x400000	/* 4M */
+#define RESERVED_MEM_SIZE_8M      0x800000	/* 8M */
 
 /* Mode set stuff */
 #define DEFAULT_MODE      0
@@ -173,9 +175,9 @@ static struct board {
 	const char *name;
 } dev_list[] = {
 	{
-	PCI_VENDOR_ID_SIS, PCI_DEVICE_ID_SIS_300, "SIS 300"}, {
-	PCI_VENDOR_ID_SIS, PCI_DEVICE_ID_SIS_540, "SIS 540"}, {
-	PCI_VENDOR_ID_SIS, PCI_DEVICE_ID_SIS_630, "SIS 630"}, {
+	PCI_VENDOR_ID_SI, PCI_DEVICE_ID_SI_300,	 "SIS 300"}, {
+	PCI_VENDOR_ID_SI, PCI_DEVICE_ID_SI_5300, "SIS 540"}, {
+	PCI_VENDOR_ID_SI, PCI_DEVICE_ID_SI_6300, "SIS 630"}, {
 	0, 0, NULL}
 };
 
@@ -184,10 +186,10 @@ unsigned long rom_base;
 unsigned long rom_vbase;
 
 /* mode */
-int video_type = FB_TYPE_PACKED_PIXELS;
-int video_linelength;
-int video_cmap_len;
-int sisfb_off = 0;
+static int video_type = FB_TYPE_PACKED_PIXELS;
+static int video_linelength;
+static int video_cmap_len;
+static int sisfb_off = 0;
 
 static struct fb_var_screeninfo default_var = {
 	0, 0, 0, 0, 0, 0, 0, 0,
@@ -422,8 +424,6 @@ u32 command_reg;
 
 /* Interface used by the world */
 int sisfb_setup(char *options);
-static int sisfb_open(struct fb_info *info, int user);
-static int sisfb_release(struct fb_info *info, int user);
 static int sisfb_get_fix(struct fb_fix_screeninfo *fix, int con,
 			 struct fb_info *info);
 static int sisfb_get_var(struct fb_var_screeninfo *var, int con,
@@ -434,8 +434,10 @@ static int sisfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 			  struct fb_info *info);
 static int sisfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
 			  struct fb_info *info);
-static int sisfb_pan_display(struct fb_var_screeninfo *var, int con,
-			     struct fb_info *info);
+static int sisfb_setcolreg(unsigned regno, unsigned red, unsigned green,
+                           unsigned blue, unsigned transp,
+                           struct fb_info *fb_info);
+static void sisfb_blank(int blank, struct fb_info *info);
 static int sisfb_ioctl(struct inode *inode, struct file *file,
 		       unsigned int cmd, unsigned long arg, int con,
 		       struct fb_info *info);
@@ -444,16 +446,12 @@ static int sisfb_ioctl(struct inode *inode, struct file *file,
 int sisfb_init(void);
 static int sisfb_update_var(int con, struct fb_info *info);
 static int sisfb_switch(int con, struct fb_info *info);
-static void sisfb_blank(int blank, struct fb_info *info);
 
 /* Internal routines */
 static void crtc_to_var(struct fb_var_screeninfo *var);
 static void sisfb_set_disp(int con, struct fb_var_screeninfo *var);
 static int sis_getcolreg(unsigned regno, unsigned *red, unsigned *green,
 			 unsigned *blue, unsigned *transp,
-			 struct fb_info *fb_info);
-static int sis_setcolreg(unsigned regno, unsigned red, unsigned green,
-			 unsigned blue, unsigned transp,
 			 struct fb_info *fb_info);
 static void do_install_cmap(int con, struct fb_info *info);
 static int do_set_var(struct fb_var_screeninfo *var, int isactive,
@@ -840,9 +838,9 @@ static int sis_getcolreg(unsigned regno, unsigned *red, unsigned *green,
  *    entries in the var structure). Return != 0 for invalid regno.
  */
 
-static int sis_setcolreg(unsigned regno, unsigned red, unsigned green,
-			 unsigned blue, unsigned transp,
-			 struct fb_info *fb_info)
+static int sisfb_setcolreg(unsigned regno, unsigned red, unsigned green,
+			   unsigned blue, unsigned transp,
+			   struct fb_info *fb_info)
 {
 
 	if (regno >= video_cmap_len)
@@ -897,10 +895,9 @@ static void do_install_cmap(int con, struct fb_info *info)
 		return;
 
 	if (fb_display[con].cmap.len)
-		fb_set_cmap(&fb_display[con].cmap, 1, sis_setcolreg, info);
+		fb_set_cmap(&fb_display[con].cmap, 1, info);
 	else
-		fb_set_cmap(fb_default_cmap(video_cmap_len), 1,
-			    sis_setcolreg, info);
+		fb_set_cmap(fb_default_cmap(video_cmap_len), 1, info);
 }
 
 static int do_set_var(struct fb_var_screeninfo *var, int isactive,
@@ -1022,8 +1019,11 @@ static int sisfb_heap_init(void)
 	struct OH *poh;
 	u8 jTemp, tq_state;
 
-	heap_start = (unsigned long) ivideo.video_vbase + RESERVED_MEM_SIZE;
-	//heap_start = (unsigned long)ivideo.video_vbase + (video_size - RESERVED_MEM_SIZE);
+	if(ivideo.video_size > 0x800000)   /* video ram is large than 8M */
+		heap_start = (unsigned long) ivideo.video_vbase + RESERVED_MEM_SIZE_8M;
+	else
+		heap_start = (unsigned long) ivideo.video_vbase + RESERVED_MEM_SIZE_4M;
+
 	heap_end = (unsigned long) ivideo.video_vbase + ivideo.video_size;
 	heap_size = heap_end - heap_start;
 
@@ -1400,6 +1400,7 @@ static u32 get_reg3(u16 port)
 
 static u16 get_modeID_length(unsigned long ROMAddr, u16 ModeNo)
 {
+#if 0
 	unsigned char ModeID;
 	u16 modeidlength;
 	u16 usModeIDOffset;
@@ -1413,6 +1414,8 @@ static u16 get_modeID_length(unsigned long ROMAddr, u16 ModeNo)
 		ModeID = *((unsigned char *) (ROMAddr + usModeIDOffset));
 	}
 	return (modeidlength);
+#endif
+	return(10);
 }
 
 static int search_modeID(unsigned long ROMAddr, u16 ModeNo)
@@ -2457,22 +2460,6 @@ static u8 search_refresh_rate(unsigned int rate)
 /* ------------------ Public Routines ------------------------------- */
 
 /*
- * Open/Release the frame buffer device
- */
-
-static int sisfb_open(struct fb_info *info, int user)
-{
-	MOD_INC_USE_COUNT;
-	return (0);
-}
-
-static int sisfb_release(struct fb_info *info, int user)
-{
-	MOD_DEC_USE_COUNT;
-	return (0);
-}
-
-/*
  *    Get the Fixed Part of the Display
  */
 
@@ -2485,7 +2472,11 @@ static int sisfb_get_fix(struct fb_fix_screeninfo *fix, int con,
 	strcpy(fix->id, fb_info.modename);
 
 	fix->smem_start = ivideo.video_base;
-	fix->smem_len = RESERVED_MEM_SIZE;	/* reserved for Xserver */
+	if(ivideo.video_size > 0x800000)
+		fix->smem_len = RESERVED_MEM_SIZE_8M;	/* reserved for Xserver */
+	else
+		fix->smem_len = RESERVED_MEM_SIZE_4M;	/* reserved for Xserver */
+
 	fix->type = video_type;
 	fix->type_aux = 0;
 	if (ivideo.video_bpp == 8)
@@ -2547,8 +2538,7 @@ static int sisfb_set_var(struct fb_var_screeninfo *var, int con,
 	/* update display of current console */
 	sisfb_set_disp(con, var);
 
-	if (info->changevar)
-		(*info->changevar) (con);
+	fbcon_changevar(con);
 
 	if ((err = fb_alloc_cmap(&fb_display[con].cmap, 0, 0)))
 		return err;
@@ -2598,21 +2588,10 @@ static int sisfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
 			return err;
 	}
 	if (con == currcon)	/* current console */
-		return fb_set_cmap(cmap, kspc, sis_setcolreg, info);
+		return fb_set_cmap(cmap, kspc, info);
 	else
 		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
 	return 0;
-}
-
-/*
- *    Pan or Wrap the Display
- */
-
-static int sisfb_pan_display(struct fb_var_screeninfo *var, int con,
-			     struct fb_info *info)
-{
-	/* not support virtual screen yet */
-	return -EINVAL;
 }
 
 static int sisfb_ioctl(struct inode *inode, struct file *file,
@@ -2694,16 +2673,16 @@ static int sisfb_mmap(struct fb_info *info, struct file *file,
 }
 
 static struct fb_ops sisfb_ops = {
-	fb_open:	sisfb_open,
-	fb_release:	sisfb_release,
+	owner:		THIS_MODULE,
 	fb_get_fix:	sisfb_get_fix,
 	fb_get_var:	sisfb_get_var,
 	fb_set_var:	sisfb_set_var,
 	fb_get_cmap:	sisfb_get_cmap,
 	fb_set_cmap:	sisfb_set_cmap,
-	fb_pan_display:	sisfb_pan_display,
+	fb_setcolreg:	sisfb_setcolreg,
+	fb_blank:	sisfb_blank,
 	fb_ioctl:	sisfb_ioctl,
-	fb_mmap:	sisfb_mmap
+	fb_mmap:	sisfb_mmap,
 };
 
 int sisfb_setup(char *options)
@@ -2920,13 +2899,11 @@ int __init sisfb_init(void)
 
 	crtc_to_var(&default_var);
 
-	fb_info.changevar = NULL;
 	fb_info.node = -1;
 	fb_info.fbops = &sisfb_ops;
 	fb_info.disp = &disp;
 	fb_info.switch_con = &sisfb_switch;
 	fb_info.updatevar = &sisfb_update_var;
-	fb_info.blank = &sisfb_blank;
 	fb_info.flags = FBINFO_FLAG_DEFAULT;
 
 	sisfb_set_disp(-1, &default_var);

@@ -4,7 +4,7 @@
  *  Created 8 August 1998 by Martin Costabel and Kevin Schoedel
  *
  *  Vmode-switching changes and vmode 15/17 modifications created 29 August
- *  1998 by Barry Nathan <barryn@pobox.com>.
+ *  1998 by Barry K. Nathan <barryn@pobox.com>.
  *
  *  Derived directly from:
  *
@@ -61,7 +61,7 @@
 #include <asm/prom.h>
 #include <asm/pgtable.h>
 
-#include <video/fbcon.h>
+#include "fbcon.h"
 #include <video/fbcon-cfb8.h>
 #include <video/fbcon-cfb16.h>
 #include <video/macmodes.h>
@@ -72,6 +72,7 @@ static int can_soft_blank = 1;
 
 static int default_vmode = VMODE_NVRAM;
 static int default_cmode = CMODE_NVRAM;
+static char fontname[40] __initdata = { 0 };
 
 static int currcon = 0;
 static int switching = 0;
@@ -116,16 +117,13 @@ int valkyriefb_init(void);
 void valkyrie_of_init(struct device_node *dp);
 int valkyriefb_setup(char*);
 
-static int valkyrie_open(struct fb_info *info, int user);
-static int valkyrie_release(struct fb_info *info, int user);
 static int valkyrie_get_fix(struct fb_fix_screeninfo *fix, int con,
 			 struct fb_info *info);
 static int valkyrie_get_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info);
 static int valkyrie_set_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info);
-static int valkyrie_pan_display(struct fb_var_screeninfo *var, int con,
-			     struct fb_info *info);
+static int valkyrie_setcolreg(u_int regno, u_int red, u_int green, u_int blue,                                u_int transp, struct fb_info *info);
 static int valkyrie_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 			  struct fb_info *info);
 static int valkyrie_set_cmap(struct fb_cmap *cmap, int kspc, int con,
@@ -148,34 +146,19 @@ static void valkyrie_par_to_fix(struct fb_par_valkyrie *par, struct fb_fix_scree
 static void valkyrie_init_fix(struct fb_fix_screeninfo *fix, struct fb_info_valkyrie *p);
 
 static struct fb_ops valkyriefb_ops = {
-	valkyrie_open,
-	valkyrie_release,
-	valkyrie_get_fix,
-	valkyrie_get_var,
-	valkyrie_set_var,
-	valkyrie_get_cmap,
-	valkyrie_set_cmap,
-	valkyrie_pan_display,
- 	NULL	
+	owner:		THIS_MODULE,
+	fb_get_fix:	valkyrie_get_fix,
+	fb_get_var:	valkyrie_get_var,
+	fb_set_var:	valkyrie_set_var,
+	fb_get_cmap:	valkyrie_get_cmap,
+	fb_set_cmap:	valkyrie_set_cmap,
+	fb_setcolreg:	valkyrie_setcolreg,
+	fb_blank:	valkyrie_blank,
 };
 
 static int valkyriefb_getcolreg(u_int regno, u_int *red, u_int *green,
 			     u_int *blue, u_int *transp, struct fb_info *info);
-static int valkyriefb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-			     u_int transp, struct fb_info *info);
 static void do_install_cmap(int con, struct fb_info *info);
-
-static int valkyrie_open(struct fb_info *info, int user)
-{
-	MOD_INC_USE_COUNT;
-	return 0;
-}
-
-static int valkyrie_release(struct fb_info *info, int user)
-{
-	MOD_DEC_USE_COUNT;
-	return 0;
-}
 
 static int valkyrie_get_fix(struct fb_fix_screeninfo *fix, int con,
 			 struct fb_info *info)
@@ -237,9 +220,9 @@ static int valkyrie_set_var(struct fb_var_screeninfo *var, int con,
 	valkyrie_par_to_display(&par, disp, &p->fix, p);
 	p->disp = *disp;
 	
-	if (info->changevar && !switching) {
+	if (!switching) {
 		/* Don't want to do this if just switching consoles. */
-		(*info->changevar)(con);
+		fbcon_changevar(con);
 	}
 	if (con == currcon)
 		valkyrie_set_par(&par, p);
@@ -248,14 +231,6 @@ static int valkyrie_set_var(struct fb_var_screeninfo *var, int con,
 			return err;
 	if (depthchange || switching)
 		do_install_cmap(con, info);
-	return 0;
-}
-
-static int valkyrie_pan_display(struct fb_var_screeninfo *var, int con,
-			     struct fb_info *info)
-{
-	if (var->xoffset != 0 || var->yoffset != 0)
-		return -EINVAL;
 	return 0;
 }
 
@@ -291,7 +266,7 @@ static int valkyrie_set_cmap(struct fb_cmap *cmap, int kspc, int con,
 	}
 
 	if (con == currcon) {
-		return fb_set_cmap(cmap, kspc, valkyriefb_setcolreg, info);
+		return fb_set_cmap(cmap, kspc, info);
 	}
 	fb_copy_cmap(cmap, &disp->cmap, kspc ? 0 : 1);
 	return 0;
@@ -311,7 +286,7 @@ static int valkyriefb_switch(int con, struct fb_info *fb)
 	valkyrie_set_par(&par, info);
 	do_install_cmap(con, fb);
 #else
-	/* I see no reason not to do this.  Minus info->changevar(). */
+	/* I see no reason not to do this.  Minus fbcon_changevar(). */
 	/* DOH.  This makes valkyrie_set_var compare, you guessed it, */
 	/* fb_display[con].var (first param), and fb_display[con].var! */
 	/* Perhaps I just fixed that... */
@@ -383,8 +358,8 @@ static int valkyriefb_getcolreg(u_int regno, u_int *red, u_int *green,
 	return 0;
 }
 
-static int valkyriefb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-			     u_int transp, struct fb_info *info)
+static int valkyrie_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+			      u_int transp, struct fb_info *info)
 {
 	struct fb_info_valkyrie *p = (struct fb_info_valkyrie *) info;
 	volatile struct cmap_regs *cmap_regs = p->cmap_regs;
@@ -421,13 +396,11 @@ static void do_install_cmap(int con, struct fb_info *info)
 	if (con != currcon)
 		return;
 	if (fb_display[con].cmap.len) {
-		fb_set_cmap(&fb_display[con].cmap, 1, valkyriefb_setcolreg,
-			    info);
+		fb_set_cmap(&fb_display[con].cmap, 1, info); 
 	}
 	else {
 		int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
-		fb_set_cmap(fb_default_cmap(size), 1, valkyriefb_setcolreg,
-			    info);
+		fb_set_cmap(fb_default_cmap(size), 1, info); 
 	}
 }
 
@@ -826,10 +799,9 @@ static void __init valkyrie_init_info(struct fb_info *info, struct fb_info_valky
 	info->node = -1;	/* ??? danj */
 	info->fbops = &valkyriefb_ops;
 	info->disp = &p->disp;
-	info->changevar = NULL;
+	strcpy(info->fontname, fontname);
 	info->switch_con = &valkyriefb_switch;
 	info->updatevar = &valkyriefb_updatevar;
-	info->blank = &valkyriefb_blank;
 	info->flags = FBINFO_FLAG_DEFAULT;
 }
 
@@ -846,7 +818,18 @@ int __init valkyriefb_setup(char *options)
 
 	for (this_opt = strtok(options, ","); this_opt;
 	     this_opt = strtok(NULL, ",")) {
-		if (!strncmp(this_opt, "vmode:", 6)) 
+		if (!strncmp(this_opt, "font:", 5)) {
+			char *p;
+			int i;
+
+			p = this_opt + 5;
+			for (i = 0; i < sizeof(fontname) - 1; i++)
+				if (!*p || *p == ' ' || *p == ',')
+					break;
+			memcpy(fontname, this_opt + 5, i);
+			fontname[i] = 0;
+		}
+		else if (!strncmp(this_opt, "vmode:", 6)) {
 	    		int vmode = simple_strtoul(this_opt+6, NULL, 0);
 	    	if (vmode > 0 && vmode <= VMODE_MAX)
 				default_vmode = vmode;

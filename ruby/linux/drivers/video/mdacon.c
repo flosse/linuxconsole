@@ -171,7 +171,7 @@ static inline void mda_set_cursor_size(int from, int to)
 #ifndef MODULE
 void __init mdacon_setup(char *str, int *ints)
 {
-	/* command line format: mdacon=<first>,<last> */
+	return;
 }
 #endif
 
@@ -223,7 +223,7 @@ static int __init mda_detect(void)
 	/* cursor low register */
 	if (! test_mda_b(0x66, 0x0f)) {
 		return 0;
-	} 
+	}
 
 	/* cursor low register */
 	if (! test_mda_b(0x99, 0x0f)) {
@@ -333,6 +333,7 @@ static const char __init *mdacon_startup(void)
 static void mdacon_init(struct vc_data *c, int init)
 {
 	c->vc_complement_mask = 0x0800;	 /* reverse video */
+	c->vc_display_fg = &mda_display_fg;
 
 	if (init) {
 		c->vc_cols = mda_num_columns;
@@ -340,14 +341,13 @@ static void mdacon_init(struct vc_data *c, int init)
 	} else {
 		vc_resize(c, mda_num_lines, mda_num_columns);
         }
-	
-	/* make the first MDA console visible */
 	MOD_INC_USE_COUNT;
 }
 
 static void mdacon_deinit(struct vc_data *c)
 {
 	/* con_set_default_unimap(c->vc_num); */
+
 	MOD_DEC_USE_COUNT;
 }
 
@@ -552,9 +552,9 @@ static int mdacon_scroll(struct vc_data *c, int t, int b, int dir, int lines)
  */
 
 struct consw mda_con = {
-	con_startup:		mdacon_startup,	
-	con_init:		mdacon_init,	
-	con_deinit:		mdacon_deinit,		
+	con_startup:		mdacon_startup,
+	con_init:		mdacon_init,
+	con_deinit:		mdacon_deinit,
 	con_clear:		mdacon_clear,
 	con_putc:		mdacon_putc,
 	con_putcs:		mdacon_putcs,
@@ -567,7 +567,7 @@ struct consw mda_con = {
 	con_set_palette:	mdacon_set_palette,
 	con_scrolldelta:	mdacon_scrolldelta,
 	con_build_attr:		mdacon_build_attr,
-	con_invert_region:	mdacon_invert_region
+	con_invert_region:	mdacon_invert_region,
 };
 
 #ifdef MODULE
@@ -576,24 +576,24 @@ void mda_console_init(void)
 void __init mda_console_init(void)
 #endif
 {
-	const char *display_desc = NULL;
-	struct vt_struct *vt;
-	int i;
+        const char *display_desc = NULL;
+        struct vt_struct *vt;
+        int i;
 
-	vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
-	if (!vt) return;
-	display_desc = create_vt(vt, &mda_con);	
-	if (!display_desc) {
-		kfree(vt);
-		return;
-	}
-	i = vc_allocate(vt->vcs.first_vc);
+        vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
+        if (!vt) return;
+        display_desc = create_vt(vt, &mda_con);
+        if (!display_desc) {
+                kfree(vt);
+                return;
+        }
+        i = vc_allocate(vt->vcs.first_vc);
         if (i)  {
-		kfree(vt);
-		return;
-	}
-	printk("Console: mono %s %dx%d",display_desc,vc->vc_cols,vc->vc_rows);
-	return;
+                kfree(vt);
+                return;
+        }
+        printk("Console: mono %s %dx%d",display_desc,vc->vc_cols,vc->vc_rows);
+        return;
 }
 
 #ifdef MODULE

@@ -4,11 +4,9 @@
  *
  *	Copyright (C) 1998 Steffen A. Mork (mork@ls7.cs.uni-dortmund.de)
  *	Copyright (C) 1999 Geert Uytterhoeven
- *      Copyright (C) 2000 James Simmons
  *
  *  Written for 2.0.x by Steffen A. Mork
  *  Ported to 2.1.x by Geert Uytterhoeven
- *  ported to 2.3.x by James Simmons
  *
  *  This file is subject to the terms and conditions of the GNU General Public
  *  License. See the file COPYING in the main directory of this archive for
@@ -23,7 +21,7 @@
 
 #include <asm/io.h>
 
-#include <video/fbcon.h>
+#include "fbcon.h"
 #include <video/fbcon-cfb32.h>
 
 
@@ -132,6 +130,18 @@
 #define FRAMEMASTER_COMPL	4
 #define FRAMEMASTER_ROM		8
 
+
+struct FrameMaster_fb_par
+{
+	int xres;
+	int yres;
+	int bpp;
+	int pixclock;
+};
+
+static unsigned long fm2fb_mem_phys;
+static void *fm2fb_mem;
+static unsigned long fm2fb_reg_phys;
 static volatile unsigned char *fm2fb_reg;
 
 #define arraysize(x)	(sizeof(x)/sizeof(*(x)))
@@ -139,14 +149,13 @@ static volatile unsigned char *fm2fb_reg;
 static int currcon = 0;
 static struct display disp;
 static struct fb_info fb_info;
+static struct { u_char red, green, blue, pad; } palette[16];
 #ifdef FBCON_HAS_CFB32
-static u32 pseudo_palette[17];
+static u32 fbcon_cfb32_cmap[16];
 #endif
 
-static struct fb_fix_screeninfo fb_fix __initdata = {
-    "", (unsigned long) NULL, FRAMEMASTER_REG, FB_TYPE_PACKED_PIXELS, 0,
-    FB_VISUAL_TRUECOLOR, 0, 0, 0, 768<<2, (unsigned long)NULL, 8, FB_ACCEL_NONE
-};
+static struct fb_fix_screeninfo fb_fix;
+static struct fb_var_screeninfo fb_var;
 
 static int fm2fb_mode __initdata = -1;
 
@@ -168,62 +177,76 @@ static struct fb_var_screeninfo fb_var_modes[] __initdata = {
 	33333, 10, 102, 10, 5, 80, 34, FB_SYNC_COMP_HIGH_ACT, 0
     }
 };
-    
+
+
     /*
      *  Interface used by the world
      */
-int fm2fb_init(void);
 
-static int fm2fb_open(struct fb_info *info, int user);
-static int fm2fb_release(struct fb_info *info, int user);
+static int fm2fb_get_fix(struct fb_fix_screeninfo *fix, int con,
+			 struct fb_info *info);
+static int fm2fb_get_var(struct fb_var_screeninfo *var, int con,
+			 struct fb_info *info);
 static int fm2fb_set_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info);
-static int fm2fb_pan_display(struct fb_var_screeninfo *var, int con,
-			     struct fb_info *info);
 static int fm2fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                            u_int transp, struct fb_info *info);
 static void fm2fb_blank(int blank, struct fb_info *info);
+static int fm2fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
+			  struct fb_info *info);
+static int fm2fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			  struct fb_info *info);
 
     /*
      *  Interface to the low level console driver
      */
 
+int fm2fb_init(void);
 static int fm2fbcon_switch(int con, struct fb_info *info);
 static int fm2fbcon_updatevar(int con, struct fb_info *info);
 
+    /*
+     *  Internal routines
+     */
+
+static int fm2fb_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
+			   u_int *transp, struct fb_info *info);
+static void do_install_cmap(int con, struct fb_info *info);
+
 
 static struct fb_ops fm2fb_ops = {
-    fb_open:		fm2fb_open, 
-    fb_release:		fm2fb_release, 
-    fb_get_fix:		fbgen_get_fix, 
-    fb_get_var:		fbgen_get_var, 
-    fb_set_var:		fm2fb_set_var,
-    fb_get_cmap: 	fbgen_get_cmap,	
-    fb_set_cmap:	fbgen_set_cmap,
-    fb_setcolreg:	fm2fb_setcolreg,
-    fb_blank:		fm2fb_blank,	 
-    fb_pan_display:	fm2fb_pan_display, 
+	owner:		THIS_MODULE,
+	fb_get_fix:	fm2fb_get_fix,
+	fb_get_var:	fm2fb_get_var,
+	fb_set_var:	fm2fb_set_var,
+	fb_get_cmap:	fm2fb_get_cmap,
+	fb_set_cmap:	fm2fb_set_cmap,
+	fb_blank:	fm2fb_blank,
 };
 
     /*
-     *  Open/Release the frame buffer device
+     *  Get the Fixed Part of the Display
      */
 
-static int fm2fb_open(struct fb_info *info, int user)
+static int fm2fb_get_fix(struct fb_fix_screeninfo *fix, int con,
+			 struct fb_info *info)
 {
-    /*                                                                     
-     *  Nothing, only a usage count for the moment                          
-     */                                                                    
+    memcpy(fix, &fb_fix, sizeof(fb_fix));
+    return 0;
+}
 
-    MOD_INC_USE_COUNT;
-    return(0);                              
-}
-        
-static int fm2fb_release(struct fb_info *info, int user)
+
+    /*
+     *  Get the User Defined Part of the Display
+     */
+
+static int fm2fb_get_var(struct fb_var_screeninfo *var, int con,
+			 struct fb_info *info)
 {
-    MOD_DEC_USE_COUNT;
-    return(0);                                                    
+    memcpy(var, &fb_var, sizeof(fb_var));
+    return 0;
 }
+
 
     /*
      *  Set the User Defined Part of the Display
@@ -240,39 +263,62 @@ static int fm2fb_set_var(struct fb_var_screeninfo *var, int con,
     else
 	display = &disp;	/* used during initialization */
 
-    if (var->xres > info->var.xres || var->yres > info->var.yres ||
-	var->xres_virtual > info->var.xres_virtual ||
-	var->yres_virtual > info->var.yres_virtual ||
-	var->bits_per_pixel > info->var.bits_per_pixel ||
+    if (var->xres > fb_var.xres || var->yres > fb_var.yres ||
+	var->xres_virtual > fb_var.xres_virtual ||
+	var->yres_virtual > fb_var.yres_virtual ||
+	var->bits_per_pixel > fb_var.bits_per_pixel ||
 	var->nonstd ||
 	(var->vmode & FB_VMODE_MASK) != FB_VMODE_NONINTERLACED)
 	return -EINVAL;
+    memcpy(var, &fb_var, sizeof(fb_var));
 
     if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
-	oldbpp = info->var.bits_per_pixel;
-	memcpy(var, &info->var, sizeof(var));
+	oldbpp = display->var.bits_per_pixel;
 	display->var = *var;
     }
     if (oldbpp != var->bits_per_pixel) {
-	if ((err = fb_set_cmap(&info->cmap, 1, info)))
-            return err;
+	if ((err = fb_alloc_cmap(&display->cmap, 0, 0)))
+	    return err;
+	do_install_cmap(con, info);
     }
     return 0;
 }
 
     /*
-     *  Pan or Wrap the Display
-     *
-     *  This call looks only at xoffset, yoffset and the FB_VMODE_YWRAP flag
+     *  Get the Colormap
      */
 
-static int fm2fb_pan_display(struct fb_var_screeninfo *var, int con,
-			     struct fb_info *info)
+static int fm2fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
+			  struct fb_info *info)
 {
-    if (var->xoffset || var->yoffset)
-	return -EINVAL;
+    if (con == currcon) /* current console? */
+	return fb_get_cmap(cmap, kspc, fm2fb_getcolreg, info);
+    else if (fb_display[con].cmap.len) /* non default colormap? */
+	fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
     else
-	return 0;
+	fb_copy_cmap(fb_default_cmap(256), cmap, kspc ? 0 : 2);
+    return 0;
+}
+
+    /*
+     *  Set the Colormap
+     */
+
+static int fm2fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			  struct fb_info *info)
+{
+    int err;
+
+    if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
+	if ((err = fb_alloc_cmap(&fb_display[con].cmap, 256, 0)))
+	    return err;
+    }
+    if (con == currcon) {		/* current console? */
+	err = fb_set_cmap(cmap, kspc, info);
+	return err;
+    } else
+	fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
+    return 0;
 }
 
     /*
@@ -297,15 +343,13 @@ int __init fm2fb_init(void)
 	    continue;
 
 	/* assigning memory to kernel space */
-	fb_fix.smem_start = z->resource.start;
-	fb_info.screen_base = ioremap(fb_fix.smem_start, FRAMEMASTER_SIZE);
-	fb_fix.mmio_start = fb_fix.smem_start + FRAMEMASTER_REG;
-	fm2fb_reg  = (unsigned char *)(fb_info.screen_base+FRAMEMASTER_REG);
-	
-	strcpy(fb_fix.id, is_fm ? "FrameMaster II" : "Rainbow II");
+	fm2fb_mem_phys = z->resource.start;
+	fm2fb_mem  = ioremap(fm2fb_mem_phys, FRAMEMASTER_SIZE);
+	fm2fb_reg_phys = fm2fb_mem_phys+FRAMEMASTER_REG;
+	fm2fb_reg  = (unsigned char *)(fm2fb_mem+FRAMEMASTER_REG);
 
 	/* make EBU color bars on display */
-	ptr = (unsigned long *)fb_fix.smem_start;
+	ptr = (unsigned long *)fm2fb_mem;
 	for (y = 0; y < 576; y++) {
 	    for (x = 0; x < 96; x++) *ptr++ = 0xffffff;	/* white */
 	    for (x = 0; x < 96; x++) *ptr++ = 0xffff00;	/* yellow */
@@ -321,12 +365,24 @@ int __init fm2fb_init(void)
 	if (fm2fb_mode == -1)
 	    fm2fb_mode = FM2FB_MODE_PAL;
 
-	disp.var = fb_info.var = fb_var_modes[fm2fb_mode];
+	fb_var = fb_var_modes[fm2fb_mode];
+
+	strcpy(fb_fix.id, is_fm ? "FrameMaster II" : "Rainbow II");
+	fb_fix.smem_start = fm2fb_mem_phys;
+	fb_fix.smem_len = FRAMEMASTER_REG;
+	fb_fix.type = FB_TYPE_PACKED_PIXELS;
+	fb_fix.type_aux = 0;
+	fb_fix.visual = FB_VISUAL_TRUECOLOR;
+	fb_fix.line_length = 768<<2;
+	fb_fix.mmio_start = fm2fb_reg_phys;
+	fb_fix.mmio_len = 8;
+	fb_fix.accel = FB_ACCEL_NONE;
+
+	disp.var = fb_var;
 	disp.cmap.start = 0;
 	disp.cmap.len = 0;
-	disp.cmap.red = disp.cmap.green = disp.cmap.blue = 
-			disp.cmap.transp = NULL;
-	disp.screen_base = (char *)fb_fix.smem_start;
+	disp.cmap.red = disp.cmap.green = disp.cmap.blue = disp.cmap.transp = NULL;
+	disp.screen_base = (char *)fm2fb_mem;
 	disp.visual = fb_fix.visual;
 	disp.type = fb_fix.type;
 	disp.type_aux = fb_fix.type_aux;
@@ -337,10 +393,9 @@ int __init fm2fb_init(void)
 	disp.inverse = 0;
     #ifdef FBCON_HAS_CFB32
 	disp.dispsw = &fbcon_cfb32;
-	disp.dispsw_data = fb_info.pseudo_palette = pseudo_palette;
+	disp.dispsw_data = &fbcon_cfb32_cmap;
     #else
 	disp.dispsw = &fbcon_dummy;
-	disp.dispsw_data = fb_info.pseudo_palette = NULL;
     #endif
 	disp.scrollmode = SCROLL_YREDRAW;
 
@@ -348,16 +403,12 @@ int __init fm2fb_init(void)
 	fb_info.node = -1;
 	fb_info.fbops = &fm2fb_ops;
 	fb_info.disp = &disp;
-	fb_info.fix = fb_fix;
-	fb_info.changevar = NULL;
-	fb_info.switch_con = &fbgen_switch;
-	fb_info.updatevar = &fbgen_updatevar;
+	fb_info.fontname[0] = '\0';
+	fb_info.switch_con = &fm2fbcon_switch;
+	fb_info.updatevar = &fm2fbcon_updatevar;
 	fb_info.flags = FBINFO_FLAG_DEFAULT;
 
-	fb_copy_cmap(fb_default_cmap(1<<fb_info.var.bits_per_pixel),
-                        &fb_info.cmap, 0);
-        fb_set_cmap(&fb_info.cmap, 1, &fb_info);
-	fm2fb_set_var(&fb_info.var, -1, &fb_info);
+	fm2fb_set_var(&fb_var, -1, &fb_info);
 
 	if (register_framebuffer(&fb_info) < 0)
 	    return -EINVAL;
@@ -386,6 +437,29 @@ int __init fm2fb_setup(char *options)
     return 0;
 }
 
+
+static int fm2fbcon_switch(int con, struct fb_info *info)
+{
+    /* Do we have to save the colormap? */
+    if (fb_display[currcon].cmap.len)
+	fb_get_cmap(&fb_display[currcon].cmap, 1, fm2fb_getcolreg, info);
+
+    currcon = con;
+    /* Install new colormap */
+    do_install_cmap(con, info);
+    return 0;
+}
+
+    /*
+     *  Update the `var' structure (called by fbcon.c)
+     */
+
+static int fm2fbcon_updatevar(int con, struct fb_info *info)
+{
+    /* Nothing */
+    return 0;
+}
+
     /*
      *  Blank the display.
      */
@@ -398,7 +472,25 @@ static void fm2fb_blank(int blank, struct fb_info *info)
 	t |= FRAMEMASTER_ENABLE | FRAMEMASTER_NOLACE;
     fm2fb_reg[0] = t;
 }
-    
+
+    /*
+     *  Read a single color register and split it into
+     *  colors/transparent. Return != 0 for invalid regno.
+     */
+
+static int fm2fb_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
+                         u_int *transp, struct fb_info *info)
+{
+    if (regno > 15)
+	return 1;
+    *red = (palette[regno].red<<8) | palette[regno].red;
+    *green = (palette[regno].green<<8) | palette[regno].green;
+    *blue = (palette[regno].blue<<8) | palette[regno].blue;
+    *transp = 0;
+    return 0;
+}
+
+
     /*
      *  Set a single color register. The values supplied are already
      *  rounded down to the hardware's capabilities (according to the
@@ -413,9 +505,23 @@ static int fm2fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
     red >>= 8;
     green >>= 8;
     blue >>= 8;
+    palette[regno].red = red;
+    palette[regno].green = green;
+    palette[regno].blue = blue;
 
 #ifdef FBCON_HAS_CFB32
-    ((u32*)(info->pseudo_palette))[regno] = (red << 16) | (green << 8) | blue;
+    fbcon_cfb32_cmap[regno] = (red << 16) | (green << 8) | blue;
 #endif
     return 0;
+}
+
+
+static void do_install_cmap(int con, struct fb_info *info)
+{
+    if (con != currcon)
+	return;
+    if (fb_display[con].cmap.len)
+	fb_set_cmap(&fb_display[con].cmap, 1, info);
+    else
+	fb_set_cmap(fb_default_cmap(256), 1, info);
 }

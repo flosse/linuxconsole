@@ -57,7 +57,6 @@
 #include <linux/config.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/version.h>
 #include <linux/errno.h>
 #include <linux/string.h>
 #include <linux/mm.h>
@@ -76,14 +75,166 @@
 #include <linux/vt_kern.h>
 #include <asm/io.h>
 #include <linux/timer.h>
-#include <linux/spinlock.h>
 
 #ifdef CONFIG_MTRR
 #include <asm/mtrr.h>
 #endif
 
-#include <video/tdfx.h>
 #include "fbcon.h"
+#include <video/fbcon-cfb8.h>
+#include <video/fbcon-cfb16.h>
+#include <video/fbcon-cfb24.h>
+#include <video/fbcon-cfb32.h>
+
+#include <linux/spinlock.h>
+
+/* membase0 register offsets */
+#define STATUS		0x00
+#define PCIINIT0	0x04
+#define SIPMONITOR	0x08
+#define LFBMEMORYCONFIG	0x0c
+#define MISCINIT0	0x10
+#define MISCINIT1	0x14
+#define DRAMINIT0	0x18
+#define DRAMINIT1	0x1c
+#define AGPINIT		0x20
+#define TMUGBEINIT	0x24
+#define VGAINIT0	0x28
+#define VGAINIT1	0x2c
+#define DRAMCOMMAND	0x30
+#define DRAMDATA	0x34
+/* reserved             0x38 */
+/* reserved             0x3c */
+#define PLLCTRL0	0x40
+#define PLLCTRL1	0x44
+#define PLLCTRL2	0x48
+#define DACMODE		0x4c
+#define DACADDR		0x50
+#define DACDATA		0x54
+#define RGBMAXDELTA	0x58
+#define VIDPROCCFG	0x5c
+#define HWCURPATADDR	0x60
+#define HWCURLOC	0x64
+#define HWCURC0		0x68
+#define HWCURC1		0x6c
+#define VIDINFORMAT	0x70
+#define VIDINSTATUS	0x74
+#define VIDSERPARPORT	0x78
+#define VIDINXDELTA	0x7c
+#define VIDININITERR	0x80
+#define VIDINYDELTA	0x84
+#define VIDPIXBUFTHOLD	0x88
+#define VIDCHRMIN	0x8c
+#define VIDCHRMAX	0x90
+#define VIDCURLIN	0x94
+#define VIDSCREENSIZE	0x98
+#define VIDOVRSTARTCRD	0x9c
+#define VIDOVRENDCRD	0xa0
+#define VIDOVRDUDX	0xa4
+#define VIDOVRDUDXOFF	0xa8
+#define VIDOVRDVDY	0xac
+/*  ... */
+#define VIDOVRDVDYOFF	0xe0
+#define VIDDESKSTART	0xe4
+#define VIDDESKSTRIDE	0xe8
+#define VIDINADDR0	0xec
+#define VIDINADDR1	0xf0
+#define VIDINADDR2	0xf4
+#define VIDINSTRIDE	0xf8
+#define VIDCUROVRSTART	0xfc
+
+#define INTCTRL		(0x00100000 + 0x04)
+#define CLIP0MIN	(0x00100000 + 0x08)
+#define CLIP0MAX	(0x00100000 + 0x0c)
+#define DSTBASE		(0x00100000 + 0x10)
+#define DSTFORMAT	(0x00100000 + 0x14)
+#define SRCBASE		(0x00100000 + 0x34)
+#define COMMANDEXTRA_2D	(0x00100000 + 0x38)
+#define CLIP1MIN	(0x00100000 + 0x4c)
+#define CLIP1MAX	(0x00100000 + 0x50)
+#define SRCFORMAT	(0x00100000 + 0x54)
+#define SRCSIZE		(0x00100000 + 0x58)
+#define SRCXY		(0x00100000 + 0x5c)
+#define COLORBACK	(0x00100000 + 0x60)
+#define COLORFORE	(0x00100000 + 0x64)
+#define DSTSIZE		(0x00100000 + 0x68)
+#define DSTXY		(0x00100000 + 0x6c)
+#define COMMAND_2D	(0x00100000 + 0x70)
+#define LAUNCH_2D	(0x00100000 + 0x80)
+
+#define COMMAND_3D	(0x00200000 + 0x120)
+
+/* register bitfields (not all, only as needed) */
+
+#define BIT(x) (1UL << (x))
+
+/* COMMAND_2D reg. values */
+#define ROP_COPY	0xcc     // src
+#define ROP_INVERT      0x55     // NOT dst
+#define ROP_XOR         0x66     // src XOR dst
+
+#define AUTOINC_DSTX                    BIT(10)
+#define AUTOINC_DSTY                    BIT(11)
+#define COMMAND_2D_FILLRECT		0x05
+#define COMMAND_2D_S2S_BITBLT		0x01      // screen to screen
+#define COMMAND_2D_H2S_BITBLT           0x03       // host to screen
+
+
+#define COMMAND_3D_NOP			0x00
+#define STATUS_RETRACE			BIT(6)
+#define STATUS_BUSY			BIT(9)
+#define MISCINIT1_CLUT_INV		BIT(0)
+#define MISCINIT1_2DBLOCK_DIS		BIT(15)
+#define DRAMINIT0_SGRAM_NUM		BIT(26)
+#define DRAMINIT0_SGRAM_TYPE		BIT(27)
+#define DRAMINIT1_MEM_SDRAM		BIT(30)
+#define VGAINIT0_VGA_DISABLE		BIT(0)
+#define VGAINIT0_EXT_TIMING		BIT(1)
+#define VGAINIT0_8BIT_DAC		BIT(2)
+#define VGAINIT0_EXT_ENABLE		BIT(6)
+#define VGAINIT0_WAKEUP_3C3		BIT(8)
+#define VGAINIT0_LEGACY_DISABLE		BIT(9)
+#define VGAINIT0_ALT_READBACK		BIT(10)
+#define VGAINIT0_FAST_BLINK		BIT(11)
+#define VGAINIT0_EXTSHIFTOUT		BIT(12)
+#define VGAINIT0_DECODE_3C6		BIT(13)
+#define VGAINIT0_SGRAM_HBLANK_DISABLE	BIT(22)
+#define VGAINIT1_MASK			0x1fffff
+#define VIDCFG_VIDPROC_ENABLE		BIT(0)
+#define VIDCFG_CURS_X11			BIT(1)
+#define VIDCFG_HALF_MODE		BIT(4)
+#define VIDCFG_DESK_ENABLE		BIT(7)
+#define VIDCFG_CLUT_BYPASS		BIT(10)
+#define VIDCFG_2X			BIT(26)
+#define VIDCFG_HWCURSOR_ENABLE          BIT(27)
+#define VIDCFG_PIXFMT_SHIFT		18
+#define DACMODE_2X			BIT(0)
+
+/* VGA rubbish, need to change this for multihead support */
+#define MISC_W 	0x3c2
+#define MISC_R 	0x3cc
+#define SEQ_I 	0x3c4
+#define SEQ_D	0x3c5
+#define CRT_I	0x3d4
+#define CRT_D	0x3d5
+#define ATT_IW	0x3c0
+#define IS1_R	0x3da
+#define GRA_I	0x3ce
+#define GRA_D	0x3cf
+
+#ifndef FB_ACCEL_3DFX_BANSHEE 
+#define FB_ACCEL_3DFX_BANSHEE 31
+#endif
+
+#define TDFXF_HSYNC_ACT_HIGH	0x01
+#define TDFXF_HSYNC_ACT_LOW	0x02
+#define TDFXF_VSYNC_ACT_HIGH	0x04
+#define TDFXF_VSYNC_ACT_LOW	0x08
+#define TDFXF_LINE_DOUBLE	0x10
+#define TDFXF_VIDEO_ENABLE	0x20
+
+#define TDFXF_HSYNC_MASK	0x03
+#define TDFXF_VSYNC_MASK	0x0c
 
 //#define TDFXFB_DEBUG 
 #ifdef TDFXFB_DEBUG
@@ -93,6 +244,7 @@
 #endif 
 
 #define PICOS2KHZ(a) (1000000000UL/(a))
+#define KHZ2PICOS(a) (1000000000UL/(a))
 
 #define BANSHEE_MAX_PIXCLOCK 270000.0
 #define VOODOO3_MAX_PIXCLOCK 300000.0
@@ -130,13 +282,17 @@ struct banshee_reg {
 };
 
 struct tdfxfb_par {
-  u32 max_pixclock;
+  u32 pixclock;
+
   u32 baseline;
 
-  unsigned long regbase_virt;
-  unsigned long iobase;
-
-  u32 width;	
+  u32 width;
+  u32 height;
+  u32 width_virt;
+  u32 height_virt;
+  u32 lpitch; /* line pitch, in bytes */
+  u32 ppitch; /* pixel pitch, in bits */
+  u32 bpp;    
 
   u32 hdispend;
   u32 hsyncsta;
@@ -149,100 +305,182 @@ struct tdfxfb_par {
   u32 vtotal;
 
   u32 video;
-  
-  struct {
-     int type;
-     int state;
-     int w,u,d;
+  u32 accel_flags;
+  u32 cmap_len;
+};
+
+struct fb_info_tdfx {
+  struct fb_info fb_info;
+
+  u16 dev;
+  u32 max_pixclock;
+
+  unsigned long regbase_phys;
+  void *regbase_virt;
+  unsigned long regbase_size;
+  unsigned long bufbase_phys;
+  void *bufbase_virt;
+  unsigned long bufbase_size;
+  unsigned long iobase;
+
+  struct { unsigned red, green, blue, pad; } palette[256];
+  struct tdfxfb_par default_par;
+  struct tdfxfb_par current_par;
+  struct display disp;
+  struct display_switch dispsw;
+#if defined(FBCON_HAS_CFB16) || defined(FBCON_HAS_CFB24) || defined(FBCON_HAS_CFB32)  
+  union {
+#ifdef FBCON_HAS_CFB16
+    u16 cfb16[16];
+#endif
+#ifdef FBCON_HAS_CFB24
+    u32 cfb24[16];
+#endif
+#ifdef FBCON_HAS_CFB32
+    u32 cfb32[16];
+#endif
+  } fbcon_cmap;
+#endif
+  struct { 
+     int type;             
+     int state;             
+     int w,u,d;             
      int x,y,redraw;
-     unsigned long enable,disable;
-     unsigned long cursorimage;
+     unsigned long enable,disable;    
+     unsigned long cursorimage;       
      struct timer_list timer;
   } cursor;
-
-  spinlock_t DAClock;
-};
-
-u32 pseudo_palette[17];
-static struct fb_info fb_info;
-static struct tdfxfb_par par;   
  
-static struct fb_var_screeninfo tdfx_var __initdata = {
-    /* "640x480, 8 bpp @ 60 Hz */
-    640, 480, 640, 1024, 0, 0, 8, 0,
-    {0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
-    0, FB_ACTIVATE_NOW, -1, -1, FB_ACCELF_TEXT,
-    39722, 40, 24, 32, 11, 96, 2,
-    0, FB_VMODE_NONINTERLACED
-};
-
-/* default modedb mode */
-static struct fb_videomode default_mode __initdata = {
-    /* 640x480, 60 Hz, Non-Interlaced (25.172 MHz dotclock) */
-    NULL, 60, 640, 480, 39722, 48, 16, 33, 10, 96, 2,
-    0, FB_VMODE_NONINTERLACED
-};
-
-static struct fb_fix_screeninfo tdfx_fix __initdata = {
-    "3Dfx", (unsigned long) NULL, 0, FB_TYPE_PACKED_PIXELS, 0,
-    FB_VISUAL_PSEUDOCOLOR, 0, 1, 1, 0, (unsigned long) NULL, 0, 
-    FB_ACCEL_3DFX_BANSHEE 
+  spinlock_t DAClock; 
+#ifdef CONFIG_MTRR
+  int mtrr_idx;
+#endif
 };
 
 /*
  *  Frame buffer device API
  */
-int tdfxfb_init(void);
-void tdfxfb_setup(char *options, int *ints);
-
-static int tdfxfb_open(struct fb_info *info, int user); 
-static int tdfxfb_release(struct fb_info *info, int user); 
-static int tdfxfb_check_var(struct fb_var_screeninfo *var,struct fb_info *info);
-static int tdfxfb_set_par(struct fb_info *info);
-static int tdfxfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-                            u_int transp, struct fb_info *info);
-static int tdfxfb_blank(int blank, struct fb_info *fb);
-static int tdfxfb_pan_display(struct fb_var_screeninfo *var, int con,	
-			      struct fb_info *fb);
-
-static struct fb_ops tdfxfb_ops = {
-        fb_open:        tdfxfb_open,
-        fb_release:     tdfxfb_release,
-        fb_get_fix:     fbgen_get_fix,
-        fb_get_var:     fbgen_get_var,
-        fb_set_var:     fbgen_set_var,
-        fb_check_var:	tdfxfb_check_var, 
-	fb_set_par:	tdfxfb_set_par,
-	fb_set_cmap:    fbgen_set_cmap,
-        fb_get_cmap:    fbgen_get_cmap,
-        fb_setcolreg:   tdfxfb_setcolreg,
-        fb_blank:       tdfxfb_blank,
-        fb_pan_display: tdfxfb_pan_display
-};
+static int tdfxfb_get_fix(struct fb_fix_screeninfo* fix, 
+			  int con,
+			  struct fb_info* fb);
+static int tdfxfb_get_var(struct fb_var_screeninfo* var, 
+			  int con,
+			  struct fb_info* fb);
+static int tdfxfb_set_var(struct fb_var_screeninfo* var,
+			  int con,
+			  struct fb_info* fb);
+static int  tdfxfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+                             u_int transp, struct fb_info* fb);
+static void tdfxfb_blank(int blank, struct fb_info* fb);
+static int tdfxfb_pan_display(struct fb_var_screeninfo* var, 
+			      int con,
+			      struct fb_info* fb);
+static int tdfxfb_get_cmap(struct fb_cmap *cmap, 
+			   int kspc, 
+			   int con,
+			   struct fb_info* info);
+static int tdfxfb_set_cmap(struct fb_cmap* cmap, 
+			   int kspc, 
+			   int con,
+			   struct fb_info* info);
 
 /*
  *  Interface to the low level console driver
  */
-static int tdfxfb_switch_con(int con, struct fb_info *fb);
+static int  tdfxfb_switch_con(int con, 
+			      struct fb_info* fb);
+static int  tdfxfb_updatevar(int con, 
+			     struct fb_info* fb);
+
+/*
+ *  Internal routines
+ */
+static void tdfxfb_set_par(const struct tdfxfb_par* par,
+			   struct fb_info_tdfx* 
+			   info);
+static int  tdfxfb_decode_var(const struct fb_var_screeninfo *var,
+			      struct tdfxfb_par *par,
+			      const struct fb_info_tdfx *info);
+static int  tdfxfb_encode_var(struct fb_var_screeninfo* var,
+			      const struct tdfxfb_par* par,
+			      const struct fb_info_tdfx* info);
+static int  tdfxfb_encode_fix(struct fb_fix_screeninfo* fix,
+			      const struct tdfxfb_par* par,
+			      const struct fb_info_tdfx* info);
+static void tdfxfb_set_disp(struct display* disp, 
+			    struct fb_info_tdfx* info,
+			    int bpp, 
+			    int accel);
+static int  tdfxfb_getcolreg(u_int regno,
+			     u_int* red, 
+			     u_int* green, 
+			     u_int* blue,
+			     u_int* transp, 
+			     struct fb_info* fb);
+static void  tdfxfb_install_cmap(struct display *d, 
+				 struct fb_info *info);
+
+static void tdfxfb_hwcursor_init(void);
+static void tdfxfb_createcursorshape(struct display* p);
+static void tdfxfb_createcursor(struct display * p);  
 
 /*
  * do_xxx: Hardware-specific functions
  */
+static void  do_pan_var(struct fb_var_screeninfo* var, struct fb_info_tdfx *i);
+static void  do_flashcursor(unsigned long ptr);
+static void  do_bitblt(u32 curx, u32 cury, u32 dstx,u32 dsty, 
+		      u32 width, u32 height,u32 stride,u32 bpp);
+static void  do_fillrect(u32 x, u32 y, u32 w,u32 h, 
+			u32 color,u32 stride,u32 bpp,u32 rop);
+static void  do_putc(u32 fgx, u32 bgx,struct display *p,
+			int c, int yy,int xx);
+static void  do_putcs(u32 fgx, u32 bgx,struct display *p,
+		     const unsigned short *s,int count, int yy,int xx);
 static u32 do_calc_pll(int freq, int* freq_out);
 static void  do_write_regs(struct banshee_reg* reg);
 static unsigned long do_lfb_size(void);
 
-/* 
- * Accel engine handling
+/*
+ *  Interface used by the world
  */
+int tdfxfb_init(void);
+void tdfxfb_setup(char *options, 
+		  int *ints);
 
-static void tdfx_fillrect(void *par, int x1, int y1, unsigned int width,
-                          unsigned int height, unsigned long color, int rop);
-static void tdfx_copyarea(void *par, int sx, int sy, unsigned int width,
-                          unsigned int height, int dx, int dy);
-static void tdfx_imageblit(void *par, int dx, int dy, unsigned int width,
-                           unsigned int height, unsigned long fgx, 
-			   unsigned long bgx, void *image);
+static int currcon = 0;
+
+static struct fb_ops tdfxfb_ops = {
+	owner:		THIS_MODULE,
+	fb_get_fix:	tdfxfb_get_fix,
+	fb_get_var:	tdfxfb_get_var,
+	fb_set_var:	tdfxfb_set_var,
+	fb_get_cmap:	tdfxfb_get_cmap,
+	fb_set_cmap:	tdfxfb_set_cmap,
+	fb_setcolreg:	tdfxfb_setcolreg,
+	fb_blank:	tdfxfb_blank,
+	fb_pan_display:	tdfxfb_pan_display,
+};
+
+struct mode {
+  char* name;
+  struct fb_var_screeninfo var;
+} mode;
+
+/* 2.3.x kernels have a fb mode database, so supply only one backup default */
+struct mode default_mode[] = {
+  { "640x480-8@60", /* @ 60 Hz */
+    {
+      640, 480, 640, 1024, 0, 0, 8, 0,
+      {0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+      0, FB_ACTIVATE_NOW, -1, -1, FB_ACCELF_TEXT, 
+      39722, 40, 24, 32, 11, 96, 2,
+      0, FB_VMODE_NONINTERLACED
+    }
+  }
+};
+
+static struct fb_info_tdfx fb_info;
 
 static int  noaccel = 0;
 static int  nopan   = 0;
@@ -252,6 +490,7 @@ static int  inverse = 0;
 static int  nomtrr = 0;
 #endif
 static int  nohwcursor = 0;
+static char __initdata fontname[40] = { 0 };
 static const char *mode_option __initdata = NULL;
 
 /* ------------------------------------------------------------------------- 
@@ -268,23 +507,23 @@ static inline void vga_outw(u32 reg, u16 val) { outw(val, reg); }
 static inline void vga_outl(u32 reg, u32 val) { outl(val, reg); }
 #else
 static inline  u8 vga_inb(u32 reg) { 
-  return inb(par.iobase + reg - 0x300); 
+  return inb(fb_info.iobase + reg - 0x300); 
 }
 static inline u16 vga_inw(u32 reg) { 
-  return inw(par.iobase + reg - 0x300); 
+  return inw(fb_info.iobase + reg - 0x300); 
 }
 static inline u16 vga_inl(u32 reg) { 
-  return inl(par.iobase + reg - 0x300); 
+  return inl(fb_info.iobase + reg - 0x300); 
 }
 
 static inline void vga_outb(u32 reg,  u8 val) { 
-  outb(val, par.iobase + reg - 0x300); 
+  outb(val, fb_info.iobase + reg - 0x300); 
 }
 static inline void vga_outw(u32 reg, u16 val) { 
-  outw(val, par.iobase + reg - 0x300); 
+  outw(val, fb_info.iobase + reg - 0x300); 
 }
 static inline void vga_outl(u32 reg, u32 val) { 
-  outl(val, par.iobase + reg - 0x300); 
+  outl(val, fb_info.iobase + reg - 0x300); 
 }
 #endif
 
@@ -353,11 +592,11 @@ static inline void vga_enable_palette(void) {
 }
 
 static inline u32 tdfx_inl(unsigned int reg) {
-  return readl(par.regbase_virt + reg);
+  return readl(fb_info.regbase_virt + reg);
 }
 
 static inline void tdfx_outl(unsigned int reg, u32 val) {
-  writel(val, par.regbase_virt + reg);
+  writel(val, fb_info.regbase_virt + reg);
 }
 
 static inline void banshee_make_room(int size) {
@@ -375,11 +614,224 @@ static inline void banshee_wait_idle(void) {
     if(i == 3) break;
   }
 }
+/*
+ * Set the color of a palette entry in 8bpp mode 
+ */
+static inline void do_setpalentry(unsigned regno, u32 c) {  
+   banshee_make_room(2); tdfx_outl(DACADDR,  regno); tdfx_outl(DACDATA,  c); }
+
+/* 
+ * Set the starting position of the visible screen to var->yoffset 
+ */
+static void do_pan_var(struct fb_var_screeninfo* var, struct fb_info_tdfx *i)
+{
+    u32 addr;
+    addr = var->yoffset*i->current_par.lpitch;
+    banshee_make_room(1);
+    tdfx_outl(VIDDESKSTART, addr);
+}
+   
+/*
+ * Invert the hardware cursor image (timerfunc)  
+ */
+static void do_flashcursor(unsigned long ptr)
+{
+   struct fb_info_tdfx* i=(struct fb_info_tdfx *)ptr;
+   spin_lock(&i->DAClock);
+   banshee_make_room(1);
+   tdfx_outl( VIDPROCCFG, tdfx_inl(VIDPROCCFG) ^ VIDCFG_HWCURSOR_ENABLE );
+   i->cursor.timer.expires=jiffies+HZ/2;
+   add_timer(&i->cursor.timer);
+   spin_unlock(&i->DAClock);
+}
+
+/*
+ * FillRect 2D command (solidfill or invert (via ROP_XOR))   
+ */
+static void do_fillrect(u32 x, u32 y, u32 w, u32 h, 
+			u32 color, u32 stride, u32 bpp, u32 rop) {
+
+   u32 fmt= stride | ((bpp+((bpp==8) ? 0 : 8)) << 13); 
+
+   banshee_make_room(5);
+   tdfx_outl(DSTFORMAT, fmt);
+   tdfx_outl(COLORFORE, color);
+   tdfx_outl(COMMAND_2D, COMMAND_2D_FILLRECT | (rop << 24));
+   tdfx_outl(DSTSIZE,    w | (h << 16));
+   tdfx_outl(LAUNCH_2D,  x | (y << 16));
+   banshee_wait_idle();
+}
+
+/*
+ * Screen-to-Screen BitBlt 2D command (for the bmove fb op.) 
+ */
+
+static void do_bitblt(u32 curx, 
+			   u32 cury, 
+			   u32 dstx,
+			   u32 dsty, 
+			   u32 width, 
+			   u32 height,
+			   u32 stride,
+			   u32 bpp) {
+
+   u32 blitcmd = COMMAND_2D_S2S_BITBLT | (ROP_COPY << 24);
+   u32 fmt= stride | ((bpp+((bpp==8) ? 0 : 8)) << 13); 
+   
+   if (curx <= dstx) {
+     //-X 
+     blitcmd |= BIT(14);
+     curx += width-1;
+     dstx += width-1;
+   }
+   if (cury <= dsty) {
+     //-Y  
+     blitcmd |= BIT(15);
+     cury += height-1;
+     dsty += height-1;
+   }
+   
+   banshee_make_room(6);
+
+   tdfx_outl(SRCFORMAT, fmt);
+   tdfx_outl(DSTFORMAT, fmt);
+   tdfx_outl(COMMAND_2D, blitcmd); 
+   tdfx_outl(DSTSIZE,   width | (height << 16));
+   tdfx_outl(DSTXY,     dstx | (dsty << 16));
+   tdfx_outl(LAUNCH_2D, curx | (cury << 16)); 
+   banshee_wait_idle();
+}
+
+static void do_putc(u32 fgx, u32 bgx,
+			 struct display *p,
+			 int c, int yy,int xx)
+{   
+   int i;
+   int stride=fb_info.current_par.lpitch;
+   u32 bpp=fb_info.current_par.bpp;
+   int fw=(fontwidth(p)+7)>>3;
+   u8 *chardata=p->fontdata+(c&p->charmask)*fontheight(p)*fw;
+   u32 fmt= stride | ((bpp+((bpp==8) ? 0 : 8)) << 13); 
+   
+   xx *= fontwidth(p);
+   yy *= fontheight(p);
+
+   banshee_make_room(8+((fontheight(p)*fw+3)>>2) );
+   tdfx_outl(COLORFORE, fgx);
+   tdfx_outl(COLORBACK, bgx);
+   tdfx_outl(SRCXY,     0);
+   tdfx_outl(DSTXY,     xx | (yy << 16));
+   tdfx_outl(COMMAND_2D, COMMAND_2D_H2S_BITBLT | (ROP_COPY << 24));
+   tdfx_outl(SRCFORMAT, 0x400000);
+   tdfx_outl(DSTFORMAT, fmt);
+   tdfx_outl(DSTSIZE,   fontwidth(p) | (fontheight(p) << 16));
+   i=fontheight(p);
+   switch (fw) {
+    case 1:
+     while (i>=4) {
+         tdfx_outl(LAUNCH_2D,*(u32*)chardata);
+	 chardata+=4;
+	 i-=4;
+     }
+     switch (i) {
+      case 0: break;
+      case 1:  tdfx_outl(LAUNCH_2D,*chardata); break;
+      case 2:  tdfx_outl(LAUNCH_2D,*(u16*)chardata); break;
+      case 3:  tdfx_outl(LAUNCH_2D,*(u16*)chardata | ((chardata[3]) << 24)); break;
+     }
+     break;
+   case 2:
+     while (i>=2) {
+         tdfx_outl(LAUNCH_2D,*(u32*)chardata);
+	 chardata+=4;
+	 i-=2;
+     }
+     if (i) tdfx_outl(LAUNCH_2D,*(u16*)chardata); 
+     break;
+   default:
+     // Is there a font with width more that 16 pixels ?
+     for (i=fontheight(p);i>0;i--) {
+	 tdfx_outl(LAUNCH_2D,*(u32*)chardata);
+	 chardata+=4;
+     }
+     break;
+   }
+   banshee_wait_idle();
+}
+
+static void do_putcs(u32 fgx, u32 bgx,
+			  struct display *p,
+			  const unsigned short *s,
+			  int count, int yy,int xx)
+{   
+   int i;
+   int stride=fb_info.current_par.lpitch;
+   u32 bpp=fb_info.current_par.bpp;
+   int fw=(fontwidth(p)+7)>>3;
+   int w=fontwidth(p);
+   int h=fontheight(p);
+   int regsneed=1+((h*fw+3)>>2);
+   u32 fmt= stride | ((bpp+((bpp==8) ? 0 : 8)) << 13); 
+
+   xx *= w;
+   yy = (yy*h) << 16;
+   banshee_make_room(8);
+
+   tdfx_outl(COMMAND_3D, COMMAND_3D_NOP);
+   tdfx_outl(COLORFORE, fgx);
+   tdfx_outl(COLORBACK, bgx);
+   tdfx_outl(SRCFORMAT, 0x400000);
+   tdfx_outl(DSTFORMAT, fmt);
+   tdfx_outl(DSTSIZE, w | (h << 16));
+   tdfx_outl(SRCXY,     0);
+   tdfx_outl(COMMAND_2D, COMMAND_2D_H2S_BITBLT | (ROP_COPY << 24));
+   
+   while (count--) {
+      u8 *chardata=p->fontdata+(scr_readw(s++) & p->charmask)*h*fw;
+   
+      banshee_make_room(regsneed);
+      tdfx_outl(DSTXY, xx | yy);
+      xx+=w;
+      
+      i=h;
+      switch (fw) {
+       case 1:
+        while (i>=4) {
+           tdfx_outl(LAUNCH_2D,*(u32*)chardata);
+	   chardata+=4;
+	   i-=4;
+        }
+        switch (i) {
+          case 0: break;
+          case 1:  tdfx_outl(LAUNCH_2D,*chardata); break;
+          case 2:  tdfx_outl(LAUNCH_2D,*(u16*)chardata); break;
+          case 3:  tdfx_outl(LAUNCH_2D,*(u16*)chardata | ((chardata[3]) << 24)); break;
+        }
+        break;
+       case 2:
+        while (i>=2) {
+         tdfx_outl(LAUNCH_2D,*(u32*)chardata);
+	 chardata+=4;
+	 i-=2;
+        }
+        if (i) tdfx_outl(LAUNCH_2D,*(u16*)chardata); 
+        break;
+       default:
+       // Is there a font with width more that 16 pixels ?
+        for (;i>0;i--) {
+	  tdfx_outl(LAUNCH_2D,*(u32*)chardata);
+	  chardata+=4;
+        }
+        break;
+     }
+   }
+   banshee_wait_idle();
+}
 
 static u32 do_calc_pll(int freq, int* freq_out) {
   int m, n, k, best_m, best_n, best_k, f_cur, best_error;
   int fref = 14318;
-
+  
   /* this really could be done with more intelligence --
      255*63*4 = 64260 iterations is silly */
   best_error = freq;
@@ -387,13 +839,13 @@ static u32 do_calc_pll(int freq, int* freq_out) {
   for(n = 1; n < 256; n++) {
     for(m = 1; m < 64; m++) {
       for(k = 0; k < 4; k++) {
-        f_cur = fref*(n + 2)/(m + 2)/(1 << k);
-        if(abs(f_cur - freq) < best_error) {
-          best_error = abs(f_cur-freq);
-          best_n = n;
-          best_m = m;
-          best_k = k;
-        }
+	f_cur = fref*(n + 2)/(m + 2)/(1 << k);
+	if(abs(f_cur - freq) < best_error) {
+	  best_error = abs(f_cur-freq);
+	  best_n = n;
+	  best_m = m;
+	  best_k = k;
+	}
       }
     }
   }
@@ -403,96 +855,6 @@ static u32 do_calc_pll(int freq, int* freq_out) {
   *freq_out = fref*(n + 2)/(m + 2)/(1 << k);
 
   return (n << 8) | (m << 2) | k;
-}
-
-/*
- * FillRect 2D command (solidfill or invert (via ROP_XOR))   
- */
-static void tdfx_fillrect(void *par, int x1, int y1, unsigned int width,
-                          unsigned int height, unsigned long color, int rop)
-{	
-   u32 bpp = fb_info.var.bits_per_pixel; 
-   u32 fmt = fb_info.fix.line_length | ((bpp+((bpp==8) ? 0 : 8)) << 13); 
-
-   banshee_make_room(5);
-   tdfx_outl(DSTFORMAT, fmt);
-   tdfx_outl(COLORFORE, color);
-   tdfx_outl(COMMAND_2D, COMMAND_2D_FILLRECT | ((TDFX_ROP_COPY >> rop) << 24));
-   tdfx_outl(DSTSIZE,    width | (height << 16));
-   tdfx_outl(LAUNCH_2D,  x1 | (y1 << 16));
-   banshee_wait_idle();
-}
-
-/*
- * Screen-to-Screen BitBlt 2D command  
- */
-static void tdfx_copyarea(void *par, int sx, int sy, unsigned int width,
-                          unsigned int height, int dx, int dy)
-{
-   u32 blitcmd = COMMAND_2D_S2S_BITBLT | (TDFX_ROP_COPY << 24);
-   u32 bpp = fb_info.var.bits_per_pixel;
-   u32 fmt = fb_info.fix.line_length | ((bpp + ((bpp == 8) ? 0 : 8)) << 13); 
-   
-   if (sx <= dx) {
-     //-X 
-     blitcmd |= BIT(14);
-     sx += width-1;
-     dx += width-1;
-   }
-   if (sy <= dy) {
-     //-Y  
-     blitcmd |= BIT(15);
-     sy += height-1;
-     dy += height-1;
-   }
-   
-   banshee_make_room(6);
-
-   tdfx_outl(SRCFORMAT, fmt);
-   tdfx_outl(DSTFORMAT, fmt);
-   tdfx_outl(COMMAND_2D, blitcmd); 
-   tdfx_outl(DSTSIZE,   width | (height << 16));
-   tdfx_outl(DSTXY,     dx | (dy << 16));
-   tdfx_outl(LAUNCH_2D, sx | (sy << 16)); 
-   banshee_wait_idle();
-}
-
-static void tdfx_imageblit(void *par, int dx, int dy, unsigned int width,
-                           unsigned int height, unsigned long fgx, 
-			   unsigned long bgx, void *drawing)
-{
-   int stride = fb_info.fix.line_length;
-   u32 bpp = fb_info.var.bits_per_pixel;
-   u8 *image = drawing;
-   int i, num_longs, left_overs, fw = (width + 7) >> 3;
-   u32 fmt = stride | ((bpp + ((bpp == 8) ? 0 : 8)) << 13); 
-
-   banshee_make_room(8+((height*fw + 3) >> 2));
-   tdfx_outl(COLORFORE, fgx);
-   tdfx_outl(COLORBACK, bgx);
-   tdfx_outl(SRCXY,     0);
-   tdfx_outl(DSTXY,     dx | (dy << 16));
-   tdfx_outl(COMMAND_2D, COMMAND_2D_H2S_BITBLT | (TDFX_ROP_COPY << 24));
-   tdfx_outl(SRCFORMAT, 0x400000);
-   tdfx_outl(DSTFORMAT, fmt);
-   tdfx_outl(DSTSIZE,   width | (height << 16));
-   
-   /* First we have to see how many longs (32 bits) the image is in length */ 
-   num_longs = (height * fw) >> 2; 			 
-   left_overs = (height * fw)%4;	
-
-   for (i = num_longs; i > 0; i--) {
-         tdfx_outl(LAUNCH_2D, *(u32*)image);
-         *image=+4;
-   }
-   switch (left_overs) {
-    case 0: break;
-    case 1:  tdfx_outl(LAUNCH_2D,*image); break;
-    case 2:  tdfx_outl(LAUNCH_2D,*(u16*)image); break;
-    case 3:  tdfx_outl(LAUNCH_2D,*(u16*)image | ((image[3]) << 24)); 
-      break;
-   }
-   banshee_wait_idle();
 }
 
 static void do_write_regs(struct banshee_reg* reg) {
@@ -571,6 +933,10 @@ static unsigned long do_lfb_size(void) {
   u32 lfbsize   = 0;
   int sgram_p     = 0;
 
+  if(!((fb_info.dev == PCI_DEVICE_ID_3DFX_BANSHEE) ||
+       (fb_info.dev == PCI_DEVICE_ID_3DFX_VOODOO3)))
+    return 0;
+
   draminit0 = tdfx_inl(DRAMINIT0);  
   draminit1 = tdfx_inl(DRAMINIT1);
    
@@ -592,139 +958,288 @@ static unsigned long do_lfb_size(void) {
   return lfbsize;
 }
 
-static int tdfxfb_open(struct fb_info *info, int user) 
+/* ------------------------------------------------------------------------- 
+ *              Hardware independent part, interface to the world
+ * ------------------------------------------------------------------------- */
+
+#define tdfx_cfb24_putc  tdfx_cfb32_putc
+#define tdfx_cfb24_putcs tdfx_cfb32_putcs
+#define tdfx_cfb24_clear tdfx_cfb32_clear
+
+static void tdfx_cfbX_clear_margins(struct vc_data* conp, struct display* p,
+				    int bottom_only)
 {
-  MOD_INC_USE_COUNT;
-  return(0);
+   unsigned int cw=fontwidth(p);
+   unsigned int ch=fontheight(p);
+   unsigned int rw=p->var.xres % cw;   // it be in a non-standard mode or not?
+   unsigned int bh=p->var.yres % ch;
+   unsigned int rs=p->var.xres - rw;
+   unsigned int bs=p->var.yres - bh;
+
+   if (!bottom_only && rw) { 
+      do_fillrect( p->var.xoffset+rs, 0, 
+		  rw, p->var.yres_virtual, 0, 
+		  fb_info.current_par.lpitch,
+		  fb_info.current_par.bpp, ROP_COPY);
+   }
+   
+   if (bh) { 
+      do_fillrect( p->var.xoffset, p->var.yoffset+bs, 
+		  rs, bh, 0, 
+		  fb_info.current_par.lpitch,
+		  fb_info.current_par.bpp, ROP_COPY);
+   }
+}
+static void tdfx_cfbX_bmove(struct display* p, 
+				int sy, 
+				int sx, 
+				int dy,
+				int dx, 
+				int height, 
+				int width) {
+   do_bitblt(fontwidth(p)*sx,
+		 fontheight(p)*sy, 
+		 fontwidth(p)*dx,
+		 fontheight(p)*dy, 
+		 fontwidth(p)*width, 
+		 fontheight(p)*height, 
+		 fb_info.current_par.lpitch, 
+		 fb_info.current_par.bpp);
+}
+static void tdfx_cfb8_putc(struct vc_data* conp,
+			       struct display* p,
+			       int c, int yy,int xx)
+{   
+   u32 fgx,bgx;
+   fgx=attr_fgcol(p, c);
+   bgx=attr_bgcol(p, c);
+   do_putc( fgx,bgx,p,c,yy,xx );
 }
 
-static int tdfxfb_release(struct fb_info *info, int user) 
-{
-  MOD_DEC_USE_COUNT;
-  return(0);
+static void tdfx_cfb16_putc(struct vc_data* conp,
+			       struct display* p,
+			       int c, int yy,int xx)
+{   
+   u32 fgx,bgx;
+   fgx=((u16*)p->dispsw_data)[attr_fgcol(p,c)];
+   bgx=((u16*)p->dispsw_data)[attr_bgcol(p,c)];
+   do_putc( fgx,bgx,p,c,yy,xx );
 }
 
-static int tdfxfb_check_var(struct fb_var_screeninfo *var,struct fb_info *info) 
+static void tdfx_cfb32_putc(struct vc_data* conp,
+			       struct display* p,
+			       int c, int yy,int xx)
+{   
+   u32 fgx,bgx;
+   fgx=((u32*)p->dispsw_data)[attr_fgcol(p,c)];
+   bgx=((u32*)p->dispsw_data)[attr_bgcol(p,c)];
+   do_putc( fgx,bgx,p,c,yy,xx );
+}
+static void tdfx_cfb8_putcs(struct vc_data* conp,
+			    struct display* p,
+			    const unsigned short *s,int count,int yy,int xx)
 {
-  struct tdfxfb_par *par = (struct tdfxfb_par *) info->par;	 	
-  u32 width, lpitch;	
-
-  if (var->bits_per_pixel != 8  && var->bits_per_pixel != 16 &&
-      var->bits_per_pixel != 24 && var->bits_per_pixel != 32) {
-    DPRINTK("depth not supported: %u\n", var->bits_per_pixel);
-    return -EINVAL;
-  }
-
-  if(var->xres != var->xres_virtual) {
-    DPRINTK("virtual x resolution != physical x resolution not supported\n");
-    return -EINVAL;
-  }
-
-  if(var->yres > var->yres_virtual) {
-    DPRINTK("virtual y resolution < physical y resolution not possible\n");
-    return -EINVAL;
-  }
-
-  if(var->xoffset) {
-    DPRINTK("xoffset not supported\n");
-    return -EINVAL;
-  }
-
-  /* fixme: does Voodoo3 support interlace? Banshee doesn't */
-  if((var->vmode & FB_VMODE_MASK) == FB_VMODE_INTERLACED) {
-    DPRINTK("interlace not supported\n");
-    return -EINVAL;
-  }
-
-  width  = (var->xres + 15) & ~15; /* could sometimes be 8 */
-  lpitch = width * ((var->bits_per_pixel + 7)>>3);
-
-  if (width < 320 || width > 2048) {
-     DPRINTK("width not supported: %u\n", width);
-     return -EINVAL;
-  }
-  if (var->yres < 200 || var->yres > 2048) {
-     DPRINTK("height not supported: %u\n", var->yres);
-     return -EINVAL;
-  }
-  if (lpitch * var->yres_virtual > info->fix.smem_len) {
-     DPRINTK("no memory for screen (%ux%ux%u)\n",
-     width, var->yres_virtual, var->bits_per_pixel);
-     return -EINVAL;
-  }
-  
-  if (PICOS2KHZ(var->pixclock) > par->max_pixclock) {
-     DPRINTK("pixclock too high (%uKHz)\n", PICOS2KHZ(var->pixclock));
-     return -EINVAL;
-  }
-
-  switch(var->bits_per_pixel) {
-  case 8:
-    var->red.length = var->green.length = var->blue.length = 8;
-    break;
-  case 16:
-    var->red.offset   = 11;
-    var->red.length   = 5;
-    var->green.offset = 5;
-    var->green.length = 6;
-    var->blue.offset  = 0;
-    var->blue.length  = 5;
-    break;
-  case 24:
-    var->red.offset=16;
-    var->green.offset=8;
-    var->blue.offset=0;
-    var->red.length = var->green.length = var->blue.length = 8;
-  case 32:
-    var->red.offset   = 16;
-    var->green.offset = 8;
-    var->blue.offset  = 0;
-    var->red.length = var->green.length = var->blue.length = 8;
-    break;                        	
-  }
-  var->height = var->width = -1;
-  return 0;
+   u32 fgx,bgx;
+   fgx=attr_fgcol(p, *s);
+   bgx=attr_bgcol(p, *s);
+   do_putcs( fgx,bgx,p,s,count,yy,xx );
+}
+static void tdfx_cfb16_putcs(struct vc_data* conp,
+			    struct display* p,
+			    const unsigned short *s,int count,int yy,int xx)
+{
+   u32 fgx,bgx;
+   fgx=((u16*)p->dispsw_data)[attr_fgcol(p,*s)];
+   bgx=((u16*)p->dispsw_data)[attr_bgcol(p,*s)];
+   do_putcs( fgx,bgx,p,s,count,yy,xx );
+}
+static void tdfx_cfb32_putcs(struct vc_data* conp,
+			    struct display* p,
+			    const unsigned short *s,int count,int yy,int xx)
+{
+   u32 fgx,bgx;
+   fgx=((u32*)p->dispsw_data)[attr_fgcol(p,*s)];
+   bgx=((u32*)p->dispsw_data)[attr_bgcol(p,*s)];
+   do_putcs( fgx,bgx,p,s,count,yy,xx );
 }
 
-static int tdfxfb_set_par(struct fb_info *info)
+static void tdfx_cfb8_clear(struct vc_data* conp, 
+				struct display* p, 
+				int sy,
+				int sx, 
+				int height, 
+				int width) {
+  u32 bg;
+
+  bg = attr_bgcol_ec(p,conp);
+  do_fillrect(fontwidth(p)*sx,
+		   fontheight(p)*sy,
+		   fontwidth(p)*width, 
+		   fontheight(p)*height,
+		   bg, 
+		   fb_info.current_par.lpitch, 
+		   fb_info.current_par.bpp,ROP_COPY);
+}
+
+static void tdfx_cfb16_clear(struct vc_data* conp, 
+				struct display* p, 
+				int sy,
+				int sx, 
+				int height, 
+				int width) {
+  u32 bg;
+
+  bg = ((u16*)p->dispsw_data)[attr_bgcol_ec(p,conp)];
+  do_fillrect(fontwidth(p)*sx,
+		   fontheight(p)*sy,
+		   fontwidth(p)*width, 
+		   fontheight(p)*height,
+		   bg, 
+		   fb_info.current_par.lpitch, 
+		   fb_info.current_par.bpp,ROP_COPY);
+}
+
+static void tdfx_cfb32_clear(struct vc_data* conp, 
+				struct display* p, 
+				int sy,
+				int sx, 
+				int height, 
+				int width) {
+  u32 bg;
+
+  bg = ((u32*)p->dispsw_data)[attr_bgcol_ec(p,conp)];
+  do_fillrect(fontwidth(p)*sx,
+		   fontheight(p)*sy,
+		   fontwidth(p)*width, 
+		   fontheight(p)*height,
+		   bg, 
+		   fb_info.current_par.lpitch, 
+		   fb_info.current_par.bpp,ROP_COPY);
+}
+static void tdfx_cfbX_revc(struct display *p, int xx, int yy)
 {
-  struct tdfxfb_par *par = (struct tdfxfb_par *) info->par;
+   int bpp=fb_info.current_par.bpp;
+   
+   do_fillrect( xx * fontwidth(p), yy * fontheight(p), 
+	        fontwidth(p), fontheight(p), 
+	        (bpp==8) ? 0x0f : 0xffffffff, 
+	        fb_info.current_par.lpitch, bpp, ROP_XOR);
+   
+}
+static void tdfx_cfbX_cursor(struct display *p, int mode, int x, int y) 
+{
+   unsigned long flags;
+   int tip;
+   struct fb_info_tdfx *info=(struct fb_info_tdfx *)p->fb_info;
+     
+   tip=p->conp->vc_cursor_type & CUR_HWMASK;
+   if (mode==CM_ERASE) {
+	if (info->cursor.state != CM_ERASE) {
+	     spin_lock_irqsave(&info->DAClock,flags);
+	     info->cursor.state=CM_ERASE;
+	     del_timer(&(info->cursor.timer));
+	     tdfx_outl(VIDPROCCFG,info->cursor.disable); 
+	     spin_unlock_irqrestore(&info->DAClock,flags);
+	}
+	return;
+   }
+   if ((p->conp->vc_cursor_type & CUR_HWMASK) != info->cursor.type)
+	 tdfxfb_createcursor(p);
+   x *= fontwidth(p);
+   y *= fontheight(p);
+   y -= p->var.yoffset;
+   spin_lock_irqsave(&info->DAClock,flags);
+   if ((x!=info->cursor.x) ||
+      (y!=info->cursor.y) ||
+      (info->cursor.redraw)) {
+          info->cursor.x=x;
+	  info->cursor.y=y;
+	  info->cursor.redraw=0;
+	  x += 63;
+	  y += 63;    
+          banshee_make_room(2);
+	  tdfx_outl(VIDPROCCFG, info->cursor.disable);
+	  tdfx_outl(HWCURLOC, (y << 16) + x);
+	  /* fix cursor color - XFree86 forgets to restore it properly */
+	  tdfx_outl(HWCURC0, 0);
+	  tdfx_outl(HWCURC1, 0xffffff);
+   }
+   info->cursor.state = CM_DRAW;
+   mod_timer(&info->cursor.timer,jiffies+HZ/2);
+   banshee_make_room(1);
+   tdfx_outl(VIDPROCCFG, info->cursor.enable);
+   spin_unlock_irqrestore(&info->DAClock,flags);
+   return;     
+}
+#ifdef FBCON_HAS_CFB8
+static struct display_switch fbcon_banshee8 = {
+   setup:		fbcon_cfb8_setup, 
+   bmove:		tdfx_cfbX_bmove, 
+   clear:		tdfx_cfb8_clear, 
+   putc:		tdfx_cfb8_putc,
+   putcs:		tdfx_cfb8_putcs, 
+   revc:		tdfx_cfbX_revc,   
+   cursor:		tdfx_cfbX_cursor, 
+   clear_margins:	tdfx_cfbX_clear_margins,
+   fontwidthmask:	FONTWIDTH(8)
+};
+#endif
+#ifdef FBCON_HAS_CFB16
+static struct display_switch fbcon_banshee16 = {
+   setup:		fbcon_cfb16_setup, 
+   bmove:		tdfx_cfbX_bmove, 
+   clear:		tdfx_cfb16_clear, 
+   putc:		tdfx_cfb16_putc,
+   putcs:		tdfx_cfb16_putcs, 
+   revc:		tdfx_cfbX_revc, 
+   cursor:		tdfx_cfbX_cursor, 
+   clear_margins:	tdfx_cfbX_clear_margins,
+   fontwidthmask:	FONTWIDTH(8)
+};
+#endif
+#ifdef FBCON_HAS_CFB24
+static struct display_switch fbcon_banshee24 = {
+   setup:		fbcon_cfb24_setup, 
+   bmove:		tdfx_cfbX_bmove, 
+   clear:		tdfx_cfb24_clear, 
+   putc:		tdfx_cfb24_putc,
+   putcs:		tdfx_cfb24_putcs, 
+   revc:		tdfx_cfbX_revc, 
+   cursor:		tdfx_cfbX_cursor, 
+   clear_margins:	tdfx_cfbX_clear_margins,
+   fontwidthmask:	FONTWIDTH(8)
+};
+#endif
+#ifdef FBCON_HAS_CFB32
+static struct display_switch fbcon_banshee32 = {
+   setup:		fbcon_cfb32_setup, 
+   bmove:		tdfx_cfbX_bmove, 
+   clear:		tdfx_cfb32_clear, 
+   putc:		tdfx_cfb32_putc,
+   putcs:		tdfx_cfb32_putcs, 
+   revc:		tdfx_cfbX_revc, 
+   cursor:		tdfx_cfbX_cursor, 
+   clear_margins:	tdfx_cfbX_clear_margins,
+   fontwidthmask:	FONTWIDTH(8)
+};
+#endif
+
+/* ------------------------------------------------------------------------- */
+
+static void tdfxfb_set_par(const struct tdfxfb_par* par,
+			   struct fb_info_tdfx*     info) {
+  struct fb_info_tdfx* i = (struct fb_info_tdfx*)info;
+  struct banshee_reg reg;
+  u32 cpp;
   u32 hd, hs, he, ht, hbs, hbe;
   u32 vd, vs, ve, vt, vbs, vbe;
-  struct banshee_reg reg;
-  u32 wd, cpp;
+  u32 wd;
   int fout;
   int freq;
-  
+   
   memset(&reg, 0, sizeof(reg));
 
-  par->width       = (info->var.xres + 15) & ~15; /* could sometimes be 8 */
-
-  par->hdispend = info->var.xres;
-  par->hsyncsta = par->hdispend + info->var.right_margin;
-  par->hsyncend = par->hsyncsta + info->var.hsync_len;
-  par->htotal   = par->hsyncend + info->var.left_margin;
-
-  par->vdispend = info->var.yres;
-  par->vsyncsta = par->vdispend + info->var.lower_margin;
-  par->vsyncend = par->vsyncsta + info->var.vsync_len;
-  par->vtotal   = par->vsyncend + info->var.upper_margin;
-  par->baseline = 0;	
-
-  if(info->var.sync & FB_SYNC_HOR_HIGH_ACT)
-    par->video |= TDFXF_HSYNC_ACT_HIGH;
-  else {
-    par->video |= TDFXF_HSYNC_ACT_LOW;
-    if(info->var.sync & FB_SYNC_VERT_HIGH_ACT)
-      par->video |= TDFXF_VSYNC_ACT_HIGH;
-    else
-      par->video |= TDFXF_VSYNC_ACT_LOW;
-    if((info->var.vmode & FB_VMODE_MASK) == FB_VMODE_DOUBLE)
-      par->video |= TDFXF_LINE_DOUBLE;
-    par->video |= TDFXF_VIDEO_ENABLE;
-  }
-
-  cpp = (info->var.bits_per_pixel + 7)/8;
+  cpp = (par->bpp + 7)/8;
   
   wd = (par->hdispend >> 3) - 1;
 
@@ -854,28 +1369,28 @@ static int tdfxfb_set_par(struct fb_info *info)
     ((cpp - 1) << VIDCFG_PIXFMT_SHIFT) |
     (cpp != 1 ? VIDCFG_CLUT_BYPASS : 0);
   
-  par->cursor.enable = reg.vidcfg | VIDCFG_HWCURSOR_ENABLE;
-  par->cursor.disable = reg.vidcfg;
+  fb_info.cursor.enable=reg.vidcfg | VIDCFG_HWCURSOR_ENABLE;
+  fb_info.cursor.disable=reg.vidcfg;
    
-  reg.stride    = par->width * cpp;
+  reg.stride    = par->width*cpp;
   reg.cursloc   = 0;
    
   reg.cursc0    = 0; 
   reg.cursc1    = 0xffffff;
    
-  reg.curspataddr = par->cursor.cursorimage;   
+  reg.curspataddr = fb_info.cursor.cursorimage;   
   
   reg.startaddr = par->baseline*reg.stride;
   reg.srcbase   = reg.startaddr;
   reg.dstbase   = reg.startaddr;
 
   /* PLL settings */
-  freq = PICOS2KHZ(info->var.pixclock); 
+  freq = par->pixclock;
 
   reg.dacmode &= ~DACMODE_2X;
   reg.vidcfg  &= ~VIDCFG_2X;
-  if(freq > par->max_pixclock/2) {
-    freq = freq > par->max_pixclock ? par->max_pixclock : freq;
+  if(freq > i->max_pixclock/2) {
+    freq = freq > i->max_pixclock ? i->max_pixclock : freq;
     reg.dacmode |= DACMODE_2X;
     reg.vidcfg  |= VIDCFG_2X;
   }
@@ -885,85 +1400,671 @@ static int tdfxfb_set_par(struct fb_info *info)
   reg.gfxpll = do_calc_pll(..., &fout);
 #endif
 
-  reg.screensize = par->width | (info->var.yres << 12);
+  reg.screensize = par->width | (par->height << 12);
   reg.vidcfg &= ~VIDCFG_HALF_MODE;
 
   do_write_regs(&reg);
 
-  if (info->var.bits_per_pixel == 8) {
-	info->fix.visual = FB_VISUAL_PSEUDOCOLOR;
-	info->cmap.len = 256;
-  } else {
-  	info->fix.visual = FB_VISUAL_DIRECTCOLOR;
-	info->cmap.len    = 16;	
-  }	
-  info->fix.ypanstep    = nopan ? 0 : 1;
-  info->fix.ywrapstep   = nowrap ? 0 : 1;
-  info->fix.line_length = par->width * ((info->var.bits_per_pixel+7)>>3); 
-  return 0;	
+  i->current_par = *par;
+
+}
+
+static int tdfxfb_decode_var(const struct fb_var_screeninfo* var,
+			     struct tdfxfb_par*              par,
+			     const struct fb_info_tdfx*      info) {
+  struct fb_info_tdfx* i = (struct fb_info_tdfx*)info;
+
+  if(var->bits_per_pixel != 8  &&
+     var->bits_per_pixel != 16 &&
+     var->bits_per_pixel != 24 &&
+     var->bits_per_pixel != 32) {
+    DPRINTK("depth not supported: %u\n", var->bits_per_pixel);
+    return -EINVAL;
+  }
+
+  if((var->vmode & FB_VMODE_MASK) == FB_VMODE_INTERLACED) {
+    DPRINTK("interlace not supported\n");
+    return -EINVAL;
+  }
+
+  if(var->xoffset) {
+    DPRINTK("xoffset not supported\n");
+    return -EINVAL;
+  }
+
+  if(var->xres != var->xres_virtual) {
+    DPRINTK("virtual x resolution != physical x resolution not supported\n");
+    return -EINVAL;
+  }
+
+  if(var->yres > var->yres_virtual) {
+    DPRINTK("virtual y resolution < physical y resolution not possible\n");
+    return -EINVAL;
+  }
+
+  /* fixme: does Voodoo3 support interlace? Banshee doesn't */
+  if((var->vmode & FB_VMODE_MASK) == FB_VMODE_INTERLACED) {
+    DPRINTK("interlace not supported\n");
+    return -EINVAL;
+  }
+
+  memset(par, 0, sizeof(struct tdfxfb_par));
+
+  switch(i->dev) {
+  case PCI_DEVICE_ID_3DFX_BANSHEE:
+  case PCI_DEVICE_ID_3DFX_VOODOO3:
+    par->width       = (var->xres + 15) & ~15; /* could sometimes be 8 */
+    par->width_virt  = par->width;
+    par->height      = var->yres;
+    par->height_virt = var->yres_virtual;
+    par->bpp         = var->bits_per_pixel;
+    par->ppitch      = var->bits_per_pixel;
+    par->lpitch      = par->width* ((par->ppitch+7)>>3);
+    par->cmap_len    = (par->bpp == 8) ? 256 : 16;
+     
+    par->baseline = 0;
+
+    if(par->width < 320 || par->width > 2048) {
+      DPRINTK("width not supported: %u\n", par->width);
+      return -EINVAL;
+    }
+    if(par->height < 200 || par->height > 2048) {
+      DPRINTK("height not supported: %u\n", par->height);
+      return -EINVAL;
+    }
+    if(par->lpitch*par->height_virt > i->bufbase_size) {
+      DPRINTK("no memory for screen (%ux%ux%u)\n",
+	      par->width, par->height_virt, par->bpp);
+      return -EINVAL;
+    }
+    par->pixclock = PICOS2KHZ(var->pixclock);
+    if(par->pixclock > i->max_pixclock) {
+      DPRINTK("pixclock too high (%uKHz)\n", par->pixclock);
+      return -EINVAL;
+    }
+
+    par->hdispend = var->xres;
+    par->hsyncsta = par->hdispend + var->right_margin;
+    par->hsyncend = par->hsyncsta + var->hsync_len;
+    par->htotal   = par->hsyncend + var->left_margin;
+
+    par->vdispend = var->yres;
+    par->vsyncsta = par->vdispend + var->lower_margin;
+    par->vsyncend = par->vsyncsta + var->vsync_len;
+    par->vtotal   = par->vsyncend + var->upper_margin;
+
+    if(var->sync & FB_SYNC_HOR_HIGH_ACT)
+      par->video |= TDFXF_HSYNC_ACT_HIGH;
+    else
+      par->video |= TDFXF_HSYNC_ACT_LOW;
+    if(var->sync & FB_SYNC_VERT_HIGH_ACT)
+      par->video |= TDFXF_VSYNC_ACT_HIGH;
+    else
+      par->video |= TDFXF_VSYNC_ACT_LOW;
+    if((var->vmode & FB_VMODE_MASK) == FB_VMODE_DOUBLE)
+      par->video |= TDFXF_LINE_DOUBLE;
+    if(var->activate == FB_ACTIVATE_NOW)
+      par->video |= TDFXF_VIDEO_ENABLE;
+  }
+
+  if(var->accel_flags & FB_ACCELF_TEXT)
+    par->accel_flags = FB_ACCELF_TEXT;
+  else
+    par->accel_flags = 0;
+
+  return 0;
+}
+
+static int tdfxfb_encode_var(struct fb_var_screeninfo* var,
+			    const struct tdfxfb_par* par,
+			    const struct fb_info_tdfx* info) {
+  struct fb_var_screeninfo v;
+
+  memset(&v, 0, sizeof(struct fb_var_screeninfo));
+  v.xres_virtual   = par->width_virt;
+  v.yres_virtual   = par->height_virt;
+  v.xres           = par->width;
+  v.yres           = par->height;
+  v.right_margin   = par->hsyncsta - par->hdispend;
+  v.hsync_len      = par->hsyncend - par->hsyncsta;
+  v.left_margin    = par->htotal   - par->hsyncend;
+  v.lower_margin   = par->vsyncsta - par->vdispend;
+  v.vsync_len      = par->vsyncend - par->vsyncsta;
+  v.upper_margin   = par->vtotal   - par->vsyncend;
+  v.bits_per_pixel = par->bpp;
+  switch(par->bpp) {
+  case 8:
+    v.red.length = v.green.length = v.blue.length = 8;
+    break;
+  case 16:
+    v.red.offset   = 11;
+    v.red.length   = 5;
+    v.green.offset = 5;
+    v.green.length = 6;
+    v.blue.offset  = 0;
+    v.blue.length  = 5;
+    break;
+  case 24:
+    v.red.offset=16;
+    v.green.offset=8;
+    v.blue.offset=0;
+    v.red.length = v.green.length = v.blue.length = 8;
+  case 32:
+    v.red.offset   = 16;
+    v.green.offset = 8;
+    v.blue.offset  = 0;
+    v.red.length = v.green.length = v.blue.length = 8;
+    break;
+  }
+  v.height = v.width = -1;
+  v.pixclock = KHZ2PICOS(par->pixclock);
+  if((par->video & TDFXF_HSYNC_MASK) == TDFXF_HSYNC_ACT_HIGH)
+    v.sync |= FB_SYNC_HOR_HIGH_ACT;
+  if((par->video & TDFXF_VSYNC_MASK) == TDFXF_VSYNC_ACT_HIGH)
+    v.sync |= FB_SYNC_VERT_HIGH_ACT;
+  if(par->video & TDFXF_LINE_DOUBLE)
+    v.vmode = FB_VMODE_DOUBLE;
+  *var = v;
+  return 0;
+}
+
+static int tdfxfb_encode_fix(struct fb_fix_screeninfo*  fix,
+			     const struct tdfxfb_par*   par,
+			     const struct fb_info_tdfx* info) {
+  memset(fix, 0, sizeof(struct fb_fix_screeninfo));
+
+  switch(info->dev) {
+  case PCI_DEVICE_ID_3DFX_BANSHEE:
+  case PCI_DEVICE_ID_3DFX_VOODOO3:
+    strcpy(fix->id, 
+	   info->dev == PCI_DEVICE_ID_3DFX_BANSHEE 
+	   ? "3Dfx Banshee"
+	   : "3Dfx Voodoo3");
+    fix->smem_start  = info->bufbase_phys;
+    fix->smem_len    = info->bufbase_size;
+    fix->mmio_start  = info->regbase_phys;
+    fix->mmio_len    = info->regbase_size;
+    fix->accel       = FB_ACCEL_3DFX_BANSHEE;
+    fix->type        = FB_TYPE_PACKED_PIXELS;
+    fix->type_aux    = 0;
+    fix->line_length = par->lpitch;
+    fix->visual      = (par->bpp == 8) 
+                       ? FB_VISUAL_PSEUDOCOLOR
+                       : FB_VISUAL_DIRECTCOLOR;
+
+    fix->xpanstep    = 0; 
+    fix->ypanstep    = nopan ? 0 : 1;
+    fix->ywrapstep   = nowrap ? 0 : 1;
+
+    break;
+  default:
+    return -EINVAL;
+  }
+
+  return 0;
+}
+
+static int tdfxfb_get_fix(struct fb_fix_screeninfo *fix, 
+			  int con,
+			  struct fb_info *fb) {
+  const struct fb_info_tdfx *info = (struct fb_info_tdfx*)fb;
+  struct tdfxfb_par par;
+
+  if(con == -1)
+    par = info->default_par;
+  else
+    tdfxfb_decode_var(&fb_display[con].var, &par, info);
+  tdfxfb_encode_fix(fix, &par, info);
+  return 0;
+}
+
+static int tdfxfb_get_var(struct fb_var_screeninfo *var, 
+			  int con,
+			  struct fb_info *fb) {
+  const struct fb_info_tdfx *info = (struct fb_info_tdfx*)fb;
+
+  if(con == -1)
+    tdfxfb_encode_var(var, &info->default_par, info);
+  else
+    *var = fb_display[con].var;
+  return 0;
 }
  
-static int tdfxfb_setcolreg(unsigned regno, unsigned red, unsigned green,
-			   unsigned blue,unsigned transp,struct fb_info *info) 
-{
-   u32 rgbcol;
+static void tdfxfb_set_disp(struct display *disp, 
+			    struct fb_info_tdfx *info,
+			    int bpp, 
+			    int accel) {
 
-   if (regno >= info->cmap.len) return 1;
+  if (disp->dispsw && disp->conp) 
+     fb_con.con_cursor(disp->conp, CM_ERASE);
+  switch(bpp) {
+#ifdef FBCON_HAS_CFB8
+  case 8:
+    info->dispsw = noaccel ? fbcon_cfb8 : fbcon_banshee8;
+    disp->dispsw = &info->dispsw;
+    if (nohwcursor) fbcon_banshee8.cursor = NULL;
+    break;
+#endif
+#ifdef FBCON_HAS_CFB16
+  case 16:
+    info->dispsw = noaccel ? fbcon_cfb16 : fbcon_banshee16;
+    disp->dispsw = &info->dispsw;
+    disp->dispsw_data = info->fbcon_cmap.cfb16;
+    if (nohwcursor) fbcon_banshee16.cursor = NULL;
+    break;
+#endif
+#ifdef FBCON_HAS_CFB24
+  case 24:
+    info->dispsw = noaccel ? fbcon_cfb24 : fbcon_banshee24; 
+    disp->dispsw = &info->dispsw;
+    disp->dispsw_data = info->fbcon_cmap.cfb24;
+    if (nohwcursor) fbcon_banshee24.cursor = NULL;
+    break;
+#endif
+#ifdef FBCON_HAS_CFB32
+  case 32:
+    info->dispsw = noaccel ? fbcon_cfb32 : fbcon_banshee32;
+    disp->dispsw = &info->dispsw;
+    disp->dispsw_data = info->fbcon_cmap.cfb32;
+    if (nohwcursor) fbcon_banshee32.cursor = NULL;
+    break;
+#endif
+  default:
+    info->dispsw = fbcon_dummy;
+    disp->dispsw = &info->dispsw;
+  }
+   
+}
 
-   /* grayscale works only partially under directcolor */
-   if (info->var.grayscale) {
-      /* grayscale = 0.30*R + 0.59*G + 0.11*B */
-      red = green = blue = (red * 77 + green * 151 + blue * 28) >> 8;
+static int tdfxfb_set_var(struct fb_var_screeninfo *var, 
+			  int con,
+			  struct fb_info *fb) {
+   struct fb_info_tdfx *info = (struct fb_info_tdfx*)fb;
+   struct tdfxfb_par par;
+   struct display *display;
+   int oldxres, oldyres, oldvxres, oldvyres, oldbpp, oldaccel, accel, err;
+   int activate = var->activate;
+   int j,k;
+   
+   if(con >= 0)
+     display = &fb_display[con];
+   else
+     display = fb->disp;	/* used during initialization */
+   
+   if((err = tdfxfb_decode_var(var, &par, info)))
+     return err;
+   
+   tdfxfb_encode_var(var, &par, info);
+   
+   if((activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
+      oldxres  = display->var.xres;
+      oldyres  = display->var.yres;
+      oldvxres = display->var.xres_virtual;
+      oldvyres = display->var.yres_virtual;
+      oldbpp   = display->var.bits_per_pixel;
+      oldaccel = display->var.accel_flags;
+      display->var = *var;
+      if(con < 0                         ||
+	 oldxres  != var->xres           || 
+	 oldyres  != var->yres           ||
+	 oldvxres != var->xres_virtual   || 
+	 oldvyres != var->yres_virtual   ||
+	 oldbpp   != var->bits_per_pixel || 
+	 oldaccel != var->accel_flags) {
+	 struct fb_fix_screeninfo fix;
+	 
+	 tdfxfb_encode_fix(&fix, &par, info);
+	 display->screen_base    = info->bufbase_virt;
+	 display->visual         = fix.visual;
+	 display->type           = fix.type;
+	 display->type_aux       = fix.type_aux;
+	 display->ypanstep       = fix.ypanstep;
+	 display->ywrapstep      = fix.ywrapstep;
+	 display->line_length    = fix.line_length;
+	 display->next_line      = fix.line_length;
+	 display->can_soft_blank = 1;
+	 display->inverse        = inverse;
+	 accel = var->accel_flags & FB_ACCELF_TEXT;
+	 tdfxfb_set_disp(display, info, par.bpp, accel);
+	 
+	 if(nopan) display->scrollmode = SCROLL_YREDRAW;
+	
+	 fbcon_changevar(con);
+      }
+      if (var->bits_per_pixel==8)
+	for(j = 0; j < 16; j++) {
+	   k = color_table[j];
+	   fb_info.palette[j].red   = default_red[k];
+	   fb_info.palette[j].green = default_grn[k];
+	   fb_info.palette[j].blue  = default_blu[k];
+	}
+      
+      del_timer(&(info->cursor.timer)); 
+      fb_info.cursor.state=CM_ERASE; 
+      if(!info->fb_info.display_fg ||
+	 info->fb_info.display_fg->vc_num == con ||
+	 con < 0)
+	tdfxfb_set_par(&par, info);
+      if (!nohwcursor) 
+	if (display && display->conp)
+	  tdfxfb_createcursor( display );
+      info->cursor.redraw=1;
+      if(oldbpp != var->bits_per_pixel || con < 0) {
+	 if((err = fb_alloc_cmap(&display->cmap, 0, 0)))
+	   return err;
+	 tdfxfb_install_cmap(display, &(info->fb_info));
+      }
    }
-
-   switch (info->fix.visual) {
-	case FB_VISUAL_PSEUDOCOLOR:
-		/* This is only 8 bpp colro depth */
-		rgbcol=(((u32) red   & 0xff00) << 8) |
-		       (((u32) green & 0xff00) << 0) |
-       		       (((u32) blue  & 0xff00) >> 8);
-		banshee_make_room(2);
-		tdfx_outl(DACADDR, regno);
-		tdfx_outl(DACDATA, rgbcol);
-		break;
-   	/* Truecolor has hardware independent palette. This is all other bpp
-	   for this video card */
-   	case FB_VISUAL_TRUECOLOR:
-	        rgbcol = (red << info->var.red.offset) |
-		         (green << info->var.green.offset) |
-		         (blue << info->var.blue.offset) |
-		         (transp << info->var.transp.offset);
-		if (info->var.bits_per_pixel <= 16)
-			((u16*)(info->pseudo_palette))[regno] = rgbcol;
-		else
-			((u32*)(info->pseudo_palette))[regno] = rgbcol;
-		return 0;
-   }
+  
    return 0;
 }
 
-static int tdfxfb_pan_display(struct fb_var_screeninfo *var, int con, 
-			      struct fb_info *info) 
-{
-  u32 addr;
+static int tdfxfb_pan_display(struct fb_var_screeninfo* var, 
+			      int con,
+			      struct fb_info* fb) {
+  struct fb_info_tdfx* i = (struct fb_info_tdfx*)fb;
 
   if(nopan)                return -EINVAL;
   if(var->xoffset)         return -EINVAL;
   if(var->yoffset > var->yres_virtual)   return -EINVAL;
   if(nowrap && 
      (var->yoffset + var->yres > var->yres_virtual)) return -EINVAL;
-  
-  addr = var->yoffset * info->fix.line_length;
-  banshee_make_room(1);
-  tdfx_outl(VIDDESKSTART, addr);
  
-  info->var.xoffset = var->xoffset;
-  info->var.yoffset = var->yoffset; 
+  if (con==currcon)
+    do_pan_var(var,i);
+   
+  fb_display[con].var.xoffset=var->xoffset;
+  fb_display[con].var.yoffset=var->yoffset; 
   return 0;
 }
 
+static int tdfxfb_get_cmap(struct fb_cmap *cmap, 
+			   int kspc, 
+			   int con,
+			   struct fb_info *fb) {
+
+   struct fb_info_tdfx* i = (struct fb_info_tdfx*)fb;
+   struct display *d=(con<0) ? fb->disp : fb_display + con;
+   
+   if(con == currcon) {
+      /* current console? */
+      return fb_get_cmap(cmap, kspc, tdfxfb_getcolreg, fb);
+   } else if(d->cmap.len) {
+      /* non default colormap? */
+      fb_copy_cmap(&d->cmap, cmap, kspc ? 0 : 2);
+   } else {
+      fb_copy_cmap(fb_default_cmap(i->current_par.cmap_len), cmap, kspc ? 0 : 2);
+   }
+   return 0;
+}
+
+static int tdfxfb_set_cmap(struct fb_cmap *cmap, 
+			   int kspc, 
+			   int con,
+			   struct fb_info *fb) {
+   struct display *d=(con<0) ? fb->disp : fb_display + con;
+   struct fb_info_tdfx *i = (struct fb_info_tdfx*)fb;
+
+   int cmap_len= (i->current_par.bpp == 8) ? 256 : 16;
+   if (d->cmap.len!=cmap_len) {
+      int err;
+      if((err = fb_alloc_cmap(&d->cmap, cmap_len, 0)))
+	return err;
+   }
+   if(con == currcon) {
+      /* current console? */
+      return fb_set_cmap(cmap, kspc, fb);
+   } else {
+      fb_copy_cmap(cmap, &d->cmap, kspc ? 0 : 1);
+   }
+   return 0;
+}
+
+int __init tdfxfb_init(void) {
+  struct pci_dev *pdev = NULL;
+  struct fb_var_screeninfo var;
+  
+  while ((pdev = pci_find_device(PCI_VENDOR_ID_3DFX, PCI_ANY_ID, pdev))) {
+    if(((pdev->class >> 16) == PCI_BASE_CLASS_DISPLAY) &&
+       ((pdev->device == PCI_DEVICE_ID_3DFX_BANSHEE) ||
+	(pdev->device == PCI_DEVICE_ID_3DFX_VOODOO3))) {
+      char* name = pdev->device == PCI_DEVICE_ID_3DFX_BANSHEE
+	? "Banshee"
+	: "Voodoo3";
+
+      fb_info.dev   = pdev->device;
+      fb_info.max_pixclock = 
+	pdev->device == PCI_DEVICE_ID_3DFX_BANSHEE 
+	? BANSHEE_MAX_PIXCLOCK
+	: VOODOO3_MAX_PIXCLOCK;
+
+      fb_info.regbase_phys = pci_resource_start(pdev, 0);
+      fb_info.regbase_size = 1 << 24;
+      fb_info.regbase_virt = ioremap_nocache(fb_info.regbase_phys, 1 << 24);
+      if(!fb_info.regbase_virt) {
+	printk("fb: Can't remap %s register area.\n", name);
+	return -ENXIO;
+      }
+      
+      fb_info.bufbase_phys = pci_resource_start (pdev, 1);
+      if(!(fb_info.bufbase_size = do_lfb_size())) {
+	iounmap(fb_info.regbase_virt);
+	printk("fb: Can't count %s memory.\n", name);
+	return -ENXIO;
+      }
+      fb_info.bufbase_virt = ioremap_nocache(fb_info.bufbase_phys, fb_info.bufbase_size);
+      if(!fb_info.regbase_virt) {
+	printk("fb: Can't remap %s framebuffer.\n", name);
+	iounmap(fb_info.regbase_virt);
+	return -ENXIO;
+      }
+
+      fb_info.iobase = pci_resource_start (pdev, 2);
+      
+      printk("fb: %s memory = %ldK\n", name, fb_info.bufbase_size >> 10);
+
+#ifdef CONFIG_MTRR
+       if (!nomtrr) {
+          fb_info.mtrr_idx = mtrr_add(fb_info.bufbase_phys, fb_info.bufbase_size,
+	  			      MTRR_TYPE_WRCOMB, 1);
+	    printk("fb: MTRR's  turned on\n");
+       }
+#endif
+
+      /* clear framebuffer memory */
+      memset_io(fb_info.bufbase_virt, 0, fb_info.bufbase_size);
+      currcon = -1;
+      if (!nohwcursor) tdfxfb_hwcursor_init();
+       
+      init_timer(&fb_info.cursor.timer);
+      fb_info.cursor.timer.function = do_flashcursor; 
+      fb_info.cursor.timer.data = (unsigned long)(&fb_info);
+      fb_info.cursor.state = CM_ERASE;
+      spin_lock_init(&fb_info.DAClock);
+       
+      strcpy(fb_info.fb_info.modename, "3Dfx "); 
+      strcat(fb_info.fb_info.modename, name);
+      fb_info.fb_info.node       = -1;
+      fb_info.fb_info.fbops      = &tdfxfb_ops;
+      fb_info.fb_info.disp       = &fb_info.disp;
+      strcpy(fb_info.fb_info.fontname, fontname);
+      fb_info.fb_info.switch_con = &tdfxfb_switch_con;
+      fb_info.fb_info.updatevar  = &tdfxfb_updatevar;
+      fb_info.fb_info.flags      = FBINFO_FLAG_DEFAULT;
+      
+      memset(&var, 0, sizeof(var));
+      if(!mode_option || 
+	 !fb_find_mode(&var, &fb_info.fb_info, mode_option, NULL, 0, NULL, 8))
+	var = default_mode[0].var;
+      
+      if(noaccel) var.accel_flags &= ~FB_ACCELF_TEXT;
+      else var.accel_flags |= FB_ACCELF_TEXT;
+      
+      if(tdfxfb_decode_var(&var, &fb_info.default_par, &fb_info)) {
+	/* ugh -- can't use the mode from the mode db. (or command line),
+	   so try the default */
+
+	printk("tdfxfb: "
+	       "can't decode the supplied video mode, using default\n");
+
+	var = default_mode[0].var;
+	if(noaccel) var.accel_flags &= ~FB_ACCELF_TEXT;
+	else var.accel_flags |= FB_ACCELF_TEXT;
+      
+	if(tdfxfb_decode_var(&var, &fb_info.default_par, &fb_info)) {
+	  /* this is getting really bad!... */
+	  printk("tdfxfb: can't decode default video mode\n");
+	  return -ENXIO;
+	}
+      }
+      
+      fb_info.disp.screen_base    = fb_info.bufbase_virt;
+      fb_info.disp.var            = var;
+      
+      if(tdfxfb_set_var(&var, -1, &fb_info.fb_info)) {
+	printk("tdfxfb: can't set default video mode\n");
+	return -ENXIO;
+      }
+      
+      if(register_framebuffer(&fb_info.fb_info) < 0) {
+	printk("tdfxfb: can't register framebuffer\n");
+	return -ENXIO;
+      }
+
+      printk("fb%d: %s frame buffer device\n", 
+	     GET_FB_IDX(fb_info.fb_info.node),
+	     fb_info.fb_info.modename);
+      
+      /* FIXME: module cannot be unloaded */
+      /* verify tdfxfb_exit before removing this */
+      MOD_INC_USE_COUNT;
+      
+      return 0;
+    }
+  }
+
+  /* hmm, no frame suitable buffer found ... */
+  return -ENXIO;
+}
+
+/**
+ *	tdfxfb_exit - Driver cleanup
+ *
+ *	Releases all resources allocated during the
+ *	course of the driver's lifetime.
+ *
+ *	FIXME - do results of fb_alloc_cmap need disposal?
+ */
+static void __exit tdfxfb_exit (void)
+{
+	unregister_framebuffer(&fb_info.fb_info);
+	del_timer_sync(&fb_info.cursor.timer);
+
+#ifdef CONFIG_MTRR
+       if (!nomtrr) {
+          mtrr_del(fb_info.mtrr_idx, fb_info.bufbase_phys, fb_info.bufbase_size);
+	    printk("fb: MTRR's  turned off\n");
+       }
+#endif
+
+	iounmap(fb_info.regbase_virt);
+	iounmap(fb_info.bufbase_virt);
+}
+
+MODULE_AUTHOR("Hannu Mallat <hmallat@cc.hut.fi>");
+MODULE_DESCRIPTION("3Dfx framebuffer device driver");
+
+#ifdef MODULE
+module_init(tdfxfb_init);
+#endif
+module_exit(tdfxfb_exit);
+
+
+#ifndef MODULE
+void tdfxfb_setup(char *options, 
+		  int *ints) {
+  char* this_opt;
+
+  if(!options || !*options)
+    return;
+
+  for(this_opt = strtok(options, ","); 
+      this_opt;
+      this_opt = strtok(NULL, ",")) {
+    if(!strcmp(this_opt, "inverse")) {
+      inverse = 1;
+      fb_invert_cmaps();
+    } else if(!strcmp(this_opt, "noaccel")) {
+      noaccel = nopan = nowrap = nohwcursor = 1; 
+    } else if(!strcmp(this_opt, "nopan")) {
+      nopan = 1;
+    } else if(!strcmp(this_opt, "nowrap")) {
+      nowrap = 1;
+    } else if (!strcmp(this_opt, "nohwcursor")) {
+      nohwcursor = 1;
+#ifdef CONFIG_MTRR
+    } else if (!strcmp(this_opt, "nomtrr")) {
+      nomtrr = 1;
+#endif
+    } else if (!strncmp(this_opt, "font:", 5)) {
+      strncpy(fontname, this_opt + 5, 40);
+    } else {
+      mode_option = this_opt;
+    }
+  } 
+}
+#endif
+
+static int tdfxfb_switch_con(int con, 
+			     struct fb_info *fb) {
+   struct fb_info_tdfx *info = (struct fb_info_tdfx*)fb;
+   struct tdfxfb_par par;
+   int old_con = currcon;
+   int set_par = 1;
+
+   /* Do we have to save the colormap? */
+   if (currcon>=0)
+     if(fb_display[currcon].cmap.len)
+       fb_get_cmap(&fb_display[currcon].cmap, 1, tdfxfb_getcolreg, fb);
+   
+   currcon = con;
+   fb_display[currcon].var.activate = FB_ACTIVATE_NOW; 
+   tdfxfb_decode_var(&fb_display[con].var, &par, info);
+   if (old_con>=0 && vt_cons[old_con]->vc_mode!=KD_GRAPHICS) {
+     /* check if we have to change video registers */
+     struct tdfxfb_par old_par;
+     tdfxfb_decode_var(&fb_display[old_con].var, &old_par, info);
+     if (!memcmp(&par,&old_par,sizeof(par)))
+	set_par = 0;	/* avoid flicker */
+   }
+   if (set_par)
+     tdfxfb_set_par(&par, info);
+
+   if (fb_display[con].dispsw && fb_display[con].conp)
+     fb_con.con_cursor(fb_display[con].conp, CM_ERASE);
+   
+   del_timer(&(info->cursor.timer));
+   fb_info.cursor.state=CM_ERASE; 
+   
+   if (!nohwcursor) 
+     if (fb_display[con].conp)
+       tdfxfb_createcursor( &fb_display[con] );
+   
+   info->cursor.redraw=1;
+   
+   tdfxfb_set_disp(&fb_display[con], 
+		   info, 
+		   par.bpp,
+		   par.accel_flags & FB_ACCELF_TEXT);
+   
+   tdfxfb_install_cmap(&fb_display[con], fb);
+   tdfxfb_updatevar(con, fb);
+   
+   return 1;
+}
+
 /* 0 unblank, 1 blank, 2 no vsync, 3 no hsync, 4 off */
-static int tdfxfb_blank(int blank, struct fb_info *fb) 
+static void tdfxfb_blank(int blank, struct fb_info *fb) 
 {
   u32 dacmode, state = 0, vgablank = 0;
 
@@ -1001,262 +2102,110 @@ static int tdfxfb_blank(int blank, struct fb_info *fb)
   else
     vga_enable_video();
 
-  return 0;
+  return;
 }
 
-int __init tdfxfb_init(void) 
-{
-  struct pci_dev *pdev = NULL;
+static int  tdfxfb_updatevar(int con, 
+			     struct fb_info* fb) {
 
-  while ((pdev = pci_find_device(PCI_VENDOR_ID_3DFX, PCI_ANY_ID, pdev))) {
-    if(((pdev->class >> 16) == PCI_BASE_CLASS_DISPLAY) &&
-       ((pdev->device == PCI_DEVICE_ID_3DFX_BANSHEE) ||
-	(pdev->device == PCI_DEVICE_ID_3DFX_VOODOO3))) {
-      /* Configure the default fb_screeninfo_fix first */
-      fb_info.fix = tdfx_fix; 
-      if (pdev->device == PCI_DEVICE_ID_3DFX_BANSHEE) {
-	 strcat(fb_info.fix.id, " Banshee");
-	 par.max_pixclock = BANSHEE_MAX_PIXCLOCK;
-      } else {	 	  
-	 strcat(fb_info.fix.id, " Voodoo3"); 
-   	 par.max_pixclock = VOODOO3_MAX_PIXCLOCK; 
-      }	
-
-      fb_info.fix.mmio_start = pdev->resource[0].start;
-      fb_info.fix.mmio_len = 1 << 24;
-      par.regbase_virt = 
-	(unsigned long)ioremap_nocache(pdev->resource[0].start, 1 << 24);
-      if(!par.regbase_virt) {
-	printk("fb: Can't remap %s register area.\n", fb_info.fix.id);
-	return -ENXIO;
-      }
-      
-      fb_info.fix.smem_start = pdev->resource[1].start;
-      if(!(fb_info.fix.smem_len = do_lfb_size())) {
-	iounmap((void*)par.regbase_virt);
-	printk("fb: Can't count %s memory.\n", fb_info.fix.id);
-	return -ENXIO;
-      }
-      fb_info.screen_base = ioremap_nocache(fb_info.fix.smem_start, 
-					    fb_info.fix.smem_len);
-      if(!fb_info.screen_base) {
-	printk("fb: Can't remap %s framebuffer.\n", fb_info.fix.id);
-	iounmap((void*)fb_info.screen_base);
-	return -ENXIO;
-      }
-
-      printk("fb: %s memory = %dK\n", fb_info.fix.id, 
-		fb_info.fix.smem_len >> 10);
-
-      par.iobase = pdev->resource[2].start;
-      
-#ifdef CONFIG_MTRR
-       if (!nomtrr) {
-	  if (mtrr_add(fb_info.fix.smem_start, fb_info.fix.smem_len, 
-		       MTRR_TYPE_WRCOMB, 1)>=0)
-	    printk("fb: MTRR's  turned on\n");
-       }
-#endif	  	 
-
-      /* clear framebuffer memory */
-      memset_io(fb_info.screen_base, 0, fb_info.fix.smem_len);
-     
-      /* Need to define a cursor API */
-#if 0
-      if (!nohwcursor) tdfxfb_hwcursor_init();
-       
-      par.cursor.timer.function = do_flashcursor; 
-      par.cursor.state = CM_ERASE;
-      par.cursor.timer.prev = par.cursor.timer.next=NULL;
-      par.cursor.timer.data = (unsigned long)(&info);
-      spin_lock_init(&par.DAClock);
-#endif
-      fb_info.node       = -1;
-      fb_info.fbops      = &tdfxfb_ops;
-      fb_info.pseudo_palette = pseudo_palette;
-      fb_info.switch_con = &fbgen_switch;
-      fb_info.updatevar  = &fbgen_update_var;
-      fb_info.flags      = FBINFO_FLAG_DEFAULT;
-      
-      if (!mode_option || !fb_find_mode(&fb_info.var, &fb_info, mode_option, 
-	   NULL, 0, &default_mode, 8)) {
-    	 fb_info.var = tdfx_var;
-      
-      if(tdfxfb_check_var(&fb_info.var, &fb_info)) {
-	/* ugh -- can't use the mode from the mode db. (or command line),
-	   so try the default */
-	
-	printk("tdfxfb: "
-	       "can't decode the supplied video mode, using default\n");
-	      
-	if(tdfxfb_check_var(&fb_info.var, &fb_info)) {
-	  /* this is getting really bad!... */
-	  printk("tdfxfb: can't decode default video mode\n");
-	  return -ENXIO;
-	}
-      }
-      fb_info.par = &par;	  
-      tdfxfb_set_par(&fb_info);
-      fb_alloc_cmap(&fb_info.cmap, 1<<fb_info.var.bits_per_pixel, 0);
-      fb_set_cmap(&fb_info.cmap, 1, &fb_info);
-    
-      if (noaccel) fb_info.var.accel_flags &= ~FB_ACCELF_TEXT;
-      else fb_info.var.accel_flags |= FB_ACCELF_TEXT;
-            
-      if(register_framebuffer(&fb_info) < 0) {
-	printk("tdfxfb: can't register framebuffer\n");
-	return -ENXIO;
-      }
-
-      printk("fb%d: %s frame buffer device\n", GET_FB_IDX(fb_info.node),
-	     fb_info.modename);
-      
-      MOD_INC_USE_COUNT;
-      return 0;
-      }
-    }
-  }
-  return -ENXIO;
+   struct fb_info_tdfx* i = (struct fb_info_tdfx*)fb;
+   if ((con==currcon) && (!nopan)) 
+     do_pan_var(&fb_display[con].var,i);
+   return 0;
 }
 
-void tdfxfb_setup(char *options, int *ints) 
-{
-  char *this_opt;
+static int tdfxfb_getcolreg(unsigned        regno, 
+			    unsigned*       red, 
+			    unsigned*       green,
+			    unsigned*       blue, 
+			    unsigned*       transp,
+			    struct fb_info* fb) {
+   struct fb_info_tdfx* i = (struct fb_info_tdfx*)fb;
 
-  if(!options || !*options)
-    return;
-
-  for(this_opt = strtok(options, ","); 
-      this_opt;
-      this_opt = strtok(NULL, ",")) {
-    if(!strcmp(this_opt, "inverse")) {
-      inverse = 1;
-      fb_invert_cmaps();
-    } else if(!strcmp(this_opt, "noaccel")) {
-      noaccel = nopan = nowrap = nohwcursor = 1; 
-    } else if(!strcmp(this_opt, "nopan")) {
-      nopan = 1;
-    } else if(!strcmp(this_opt, "nowrap")) {
-      nowrap = 1;
-    } else if (!strcmp(this_opt, "nohwcursor")) {
-      nohwcursor = 1;
-#ifdef CONFIG_MTRR
-    } else if (!strcmp(this_opt, "nomtrr")) {
-      nomtrr = 1;
-#endif
-    } else {	
-      mode_option = this_opt;
-    }
-  } 
-}
-
-static int tdfxfb_switch_con(int con, struct fb_info *info) 
-{
-   struct tdfxfb_par *par = (struct tdfxfb_par *) info->par;	
-
-   /* Do we have to save the colormap? */
-   if(fb_display[fg_console].cmap.len)
-       // fb_get_cmap(&fb_display[fg_console].cmap, 1, fb);
+   if (regno > i->current_par.cmap_len) return 1;
    
-   fb_display[fg_console].var.activate = FB_ACTIVATE_NOW; 
-   tdfxfb_check_var(&fb_display[con].var, info);
-   tdfxfb_set_par(info);
-   if (fb_display[fg_console].dispsw && fb_display[con].conp)
-     fb_con.con_cursor(fb_display[con].conp, CM_ERASE);
+   *red    = i->palette[regno].red; 
+   *green  = i->palette[regno].green; 
+   *blue   = i->palette[regno].blue; 
+   *transp = 0;
    
-   del_timer(&(par->cursor.timer));
-   par->cursor.state=CM_ERASE; 
-   
-#if 0
-   if (!nohwcursor) 
-     if (fb_display[con].conp)
-       tdfxfb_createcursor( &fb_display[con] );
-#endif   
-   par->cursor.redraw=1;
+   return 0;
+}
 
-#if 0   
-   tdfxfb_install_cmap(&fb_display[con], info);
+static int tdfxfb_setcolreg(unsigned        regno, 
+			    unsigned        red, 
+			    unsigned        green,
+			    unsigned        blue, 
+			    unsigned        transp,
+			    struct fb_info* info) {
+   struct fb_info_tdfx* i = (struct fb_info_tdfx*)info;
+   u32 rgbcol;
+   if (regno >= i->current_par.cmap_len) return 1;
+   
+   i->palette[regno].red    = red;
+   i->palette[regno].green  = green;
+   i->palette[regno].blue   = blue;
+   
+   switch(i->current_par.bpp) {
+#ifdef FBCON_HAS_CFB8
+    case 8:
+      rgbcol=(((u32)red   & 0xff00) << 8) |
+	(((u32)green & 0xff00) << 0) |
+	(((u32)blue  & 0xff00) >> 8);
+      do_setpalentry(regno,rgbcol);
+      break;
 #endif
-   fbgen_update_var(con, info);
-   return 1;
-}
-
-/* Hardware Cursor support */
-
-#if 0
-
-static void  do_flashcursor(unsigned long ptr);
-static void tdfxfb_hwcursor_init(void);
-static void tdfxfb_createcursorshape(struct display* p);
-static void tdfxfb_createcursor(struct display * p);
-
-/*
- * Invert the hardware cursor image (timerfunc)
- */
-static void do_flashcursor(unsigned long ptr)
-{
-   struct tdfx_par *i = (struct tdfx_par *)ptr;
-   spin_lock(&i->DAClock);
-   banshee_make_room(1);
-   tdfx_outl( VIDPROCCFG, tdfx_inl(VIDPROCCFG) ^ VIDCFG_HWCURSOR_ENABLE );
-   i->cursor.timer.expires=jiffies+HZ/2;
-   add_timer(&i->cursor.timer);
-   spin_unlock(&i->DAClock);
-}
-
-static void tdfx_cfbX_cursor(struct display *p, int mode, int x, int y) 
-{
-   unsigned long flags;
-   int tip;
-   struct fb_info *info=(struct fb_info *)p->fb_info;
-   struct tdfxfb_par *par = (struct tdfxfb_par *) fb_info->par; 
-     
-   tip = p->conp->vc_cursor_type & CUR_HWMASK;
-   if (mode == CM_ERASE) {
-	if (par->cursor.state != CM_ERASE) {
-	     spin_lock_irqsave(&par->DAClock, flags);
-	     par->cursor.state=CM_ERASE;
-	     del_timer(&(par->cursor.timer));
-	     tdfx_outl(VIDPROCCFG, par->cursor.disable); 
-	     spin_unlock_irqrestore(&par->DAClock, flags);
-	}
-	return;
+#ifdef FBCON_HAS_CFB16
+    case 16:
+      i->fbcon_cmap.cfb16[regno] =
+	(((u32)red   & 0xf800) >> 0) |
+	(((u32)green & 0xfc00) >> 5) |
+	(((u32)blue  & 0xf800) >> 11);
+	 break;
+#endif
+#ifdef FBCON_HAS_CFB24
+    case 24:
+      i->fbcon_cmap.cfb24[regno] =
+	(((u32)red & 0xff00) << 8) |
+	(((u32)green & 0xff00) << 0) |
+	(((u32)blue & 0xff00) >> 8);
+      break;
+#endif
+#ifdef FBCON_HAS_CFB32
+    case 32:
+      i->fbcon_cmap.cfb32[regno] =
+	(((u32)red   & 0xff00) << 8) |
+	(((u32)green & 0xff00) << 0) |
+	(((u32)blue  & 0xff00) >> 8);
+      break;
+#endif
+    default:
+      DPRINTK("bad depth %u\n", i->current_par.bpp);
+      break;
    }
-   if ((p->conp->vc_cursor_type & CUR_HWMASK) != par->cursor.type)
-	 tdfxfb_createcursor(p);
-   x *= fontwidth(p);
-   y *= fontheight(p);
-   y -= info->var.yoffset;
-   spin_lock_irqsave(&par->DAClock, flags);
-   if ((x! = par->cursor.x) || (y! = par->cursor.y) || (par->cursor.redraw)) {
-          par->cursor.x=x;
-	  par->cursor.y=y;
-	  par->cursor.redraw=0;
-	  x += 63;
-	  y += 63;    
-          banshee_make_room(2);
-	  tdfx_outl(VIDPROCCFG, par->cursor.disable);
-	  tdfx_outl(HWCURLOC, (y << 16) + x);
+   return 0;
+}
+
+static void tdfxfb_install_cmap(struct display *d,struct fb_info *info) 
+{
+   struct fb_info_tdfx* i = (struct fb_info_tdfx*)info;
+
+   if(d->cmap.len) {
+      fb_set_cmap(&(d->cmap), 1, info);
+   } else {
+      fb_set_cmap(fb_default_cmap(i->current_par.cmap_len), 1, info); 
    }
-   par->cursor.state = CM_DRAW;
-   mod_timer(&par->cursor.timer,jiffies+HZ/2);
-   banshee_make_room(1);
-   tdfx_outl(VIDPROCCFG, par->cursor.enable);
-   spin_unlock_irqrestore(&par->DAClock, flags);
-   return;     
 }
 
 static void tdfxfb_createcursorshape(struct display* p) 
 {
-   struct tdfxfb_par *par = (struct tdfxfb_par *) info.par;	
-
    unsigned int h,cu,cd;
    
    h=fontheight(p);
    cd=h;
    if (cd >= 10) cd --; 
-   par->cursor.type = p->conp->vc_cursor_type & CUR_HWMASK;
-   switch (par->cursor.type) {
+   fb_info.cursor.type=p->conp->vc_cursor_type & CUR_HWMASK;
+   switch (fb_info.cursor.type) {
       case CUR_NONE: 
 	cu=cd; 
 	break;
@@ -1278,25 +2227,24 @@ static void tdfxfb_createcursorshape(struct display* p)
 	cd = h;
 	break;
    }
-   par->cursor.w=fontwidth(p);
-   par->cursor.u=cu;
-   par->cursor.d=cd;
+   fb_info.cursor.w=fontwidth(p);
+   fb_info.cursor.u=cu;
+   fb_info.cursor.d=cd;
 }
    
 static void tdfxfb_createcursor(struct display *p)
 {
-   struct tdfxfb_par *par = (struct tdfxfb_par *) info.par;	
    u8 *cursorbase;
    u32 xline;
    unsigned int i;
    unsigned int h,to;
 
    tdfxfb_createcursorshape(p);
-   xline = (1 << par->cursor.w)-1;
-   cursorbase = (u8*) par->bufbase_virt;
-   h = par->cursor.cursorimage;     
+   xline = (1 << fb_info.cursor.w)-1;
+   cursorbase=(u8*)fb_info.bufbase_virt;
+   h=fb_info.cursor.cursorimage;     
    
-   to = par->cursor.u;
+   to=fb_info.cursor.u;
    for (i = 0; i < to; i++) {
 	writel(0, cursorbase+h);
 	writel(0, cursorbase+h+4);
@@ -1305,7 +2253,7 @@ static void tdfxfb_createcursor(struct display *p)
 	h += 16;
    }
    
-   to = par->cursor.d;
+   to = fb_info.cursor.d;
    
    for (; i < to; i++) {
 	writel(xline, cursorbase+h);
@@ -1326,13 +2274,12 @@ static void tdfxfb_createcursor(struct display *p)
    
 static void tdfxfb_hwcursor_init(void)
 {
-   struct tdfxfb_par *par = (struct tdfxfb_par *) info.par;
-
    unsigned int start;
-   start = (info.fix.smem_len - 1024) & PAGE_MASK;
-   info.fix.smem_len = start; 
-   par->cursor.cursorimage = info.fix.smem_len;
-   printk("tdfxfb: reserving 1024 bytes for the hwcursor at 0x%08lx\n",
-	  par->regbase_virt + par->cursor.cursorimage);
+   start = (fb_info.bufbase_size-1024) & PAGE_MASK;
+   fb_info.bufbase_size=start; 
+   fb_info.cursor.cursorimage=fb_info.bufbase_size;
+   printk("tdfxfb: reserving 1024 bytes for the hwcursor at %p\n",
+	  fb_info.regbase_virt+fb_info.cursor.cursorimage);
 }
-#endif
+
+ 

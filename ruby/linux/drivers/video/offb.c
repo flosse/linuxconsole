@@ -34,7 +34,7 @@
 #include <asm/prom.h>
 #include <asm/bootx.h>
 
-#include <video/fbcon.h>
+#include "fbcon.h"
 #include <video/fbcon-cfb8.h>
 #include <video/fbcon-cfb16.h>
 #include <video/fbcon-cfb32.h>
@@ -42,15 +42,24 @@
 
 static int currcon = 0;
 
-struct offb_par {
+struct fb_info_offb {
+    struct fb_info info;
+    struct fb_fix_screeninfo fix;
+    struct fb_var_screeninfo var;
+    struct display disp;
+    struct { u_char red, green, blue, pad; } palette[256];
     volatile unsigned char *cmap_adr;
     volatile unsigned char *cmap_data;
     int is_rage_128;
-};	
-
-static struct fb_info info;
-static struct display disp;
-static struct offb_par par;
+    union {
+#ifdef FBCON_HAS_CFB16
+	u16 cfb16[16];
+#endif
+#ifdef FBCON_HAS_CFB32
+	u32 cfb32[16];
+#endif
+    } fbcon_cmap;
+};
 
 #ifdef __powerpc__
 #define mach_eieio()	eieio()
@@ -67,15 +76,19 @@ static int ofonly = 0;
 int offb_init(void);
 int offb_setup(char*);
 
-static int offb_open(struct fb_info *info, int user);
-static int offb_release(struct fb_info *info, int user);
-static int offb_set_var(struct fb_var_screeninfo *var, int con,
+static int offb_get_fix(struct fb_fix_screeninfo *fix, int con,
 			struct fb_info *info);
-static int offb_pan_display(struct fb_var_screeninfo *var, int con,
+static int offb_get_var(struct fb_var_screeninfo *var, int con,
+			struct fb_info *info);
+static int offb_set_var(struct fb_var_screeninfo *var, int con,
 			struct fb_info *info);
 static int offb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                          u_int transp, struct fb_info *info);
-static int offb_blank(int blank, struct fb_info *info);
+static void offb_blank(int blank, struct fb_info *info);
+static int offb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
+			struct fb_info *info);
+static int offb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			struct fb_info *info);
 
 extern boot_infos_t *boot_infos;
 
@@ -92,38 +105,53 @@ static void offb_init_fb(const char *name, const char *full_name, int width,
 static int offbcon_switch(int con, struct fb_info *info);
 static int offbcon_updatevar(int con, struct fb_info *info);
 
+    /*
+     *  Internal routines
+     */
+
+static int offb_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
+			 u_int *transp, struct fb_info *info);
+static void do_install_cmap(int con, struct fb_info *info);
+
+
 static struct fb_ops offb_ops = {
-    fb_open:		offb_open, 
-    fb_release:		offb_release, 
-    fb_get_fix:		fbgen_get_fix, 
-    fb_get_var:		fbgen_get_var, 
-    fb_set_var:		offb_set_var,
-    fb_get_cmap:	fbgen_get_cmap, 
-    fb_set_cmap:	fbgen_set_cmap, 
-    fb_setcolreg:	offb_setcolreg,
-    fb_blank:		offb_blank,	
-    fb_pan_display:	offb_pan_display, 
+	owner:		THIS_MODULE,
+	fb_get_fix:	offb_get_fix,
+	fb_get_var:	offb_get_var,
+	fb_set_var:	offb_set_var,
+	fb_get_cmap:	offb_get_cmap,
+	fb_set_cmap:	offb_set_cmap,
+	fb_setcolreg:	offb_setcolreg,
+	fb_blank:	offb_blank,
 };
 
     /*
-     *  Open/Release the frame buffer device
+     *  Get the Fixed Part of the Display
      */
 
-static int offb_open(struct fb_info *info, int user)
+static int offb_get_fix(struct fb_fix_screeninfo *fix, int con,
+			struct fb_info *info)
 {
+    struct fb_info_offb *info2 = (struct fb_info_offb *)info;
+
+    memcpy(fix, &info2->fix, sizeof(struct fb_fix_screeninfo));
+    return 0;
+}
+
+
     /*
-     *  Nothing, only a usage count for the moment
+     *  Get the User Defined Part of the Display
      */
 
-    MOD_INC_USE_COUNT;
-    return(0);
+static int offb_get_var(struct fb_var_screeninfo *var, int con,
+			struct fb_info *info)
+{
+    struct fb_info_offb *info2 = (struct fb_info_offb *)info;
+
+    memcpy(var, &info2->var, sizeof(struct fb_var_screeninfo));
+    return 0;
 }
 
-static int offb_release(struct fb_info *info, int user)
-{
-    MOD_DEC_USE_COUNT;
-    return(0);
-}
 
     /*
      *  Set the User Defined Part of the Display
@@ -136,45 +164,76 @@ static int offb_set_var(struct fb_var_screeninfo *var, int con,
     unsigned int oldbpp = 0;
     int err;
     int activate = var->activate;
+    struct fb_info_offb *info2 = (struct fb_info_offb *)info;
 
     if (con >= 0)
 	display = &fb_display[con];
     else
-	display = disp;	/* used during initialization */
+	display = &info2->disp;	/* used during initialization */
 
-    if (var->xres > info->var.xres || var->yres > info->var.yres ||
-	var->xres_virtual > info->var.xres_virtual ||
-	var->yres_virtual > info->var.yres_virtual ||
-	var->bits_per_pixel > info->var.bits_per_pixel ||
+    if (var->xres > info2->var.xres || var->yres > info2->var.yres ||
+	var->xres_virtual > info2->var.xres_virtual ||
+	var->yres_virtual > info2->var.yres_virtual ||
+	var->bits_per_pixel > info2->var.bits_per_pixel ||
 	var->nonstd ||
 	(var->vmode & FB_VMODE_MASK) != FB_VMODE_NONINTERLACED)
 	return -EINVAL;
+    memcpy(var, &info2->var, sizeof(struct fb_var_screeninfo));
 
     if ((activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
-	oldbpp = info->var.bits_per_pixel;
-	memcpy(var, &info->var, sizeof(struct fb_var_screeninfo));
+	oldbpp = display->var.bits_per_pixel;
 	display->var = *var;
     }
-    if ((oldbpp != var->bits_per_pixel) || (info->cmap.len == 0)) {
-	if ((err = fb_set_cmap(&info->cmap, 1, info))) 
+    if ((oldbpp != var->bits_per_pixel) || (display->cmap.len == 0)) {
+	if ((err = fb_alloc_cmap(&display->cmap, 0, 0)))
 	    return err;
+	do_install_cmap(con, info);
     }
     return 0;
 }
 
     /*
-     *  Pan or Wrap the Display
-     *
-     *  This call looks only at xoffset, yoffset and the FB_VMODE_YWRAP flag
+     *  Get the Colormap
      */
 
-static int offb_pan_display(struct fb_var_screeninfo *var, int con,
-			    struct fb_info *info)
+static int offb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
+			 struct fb_info *info)
 {
-    if (var->xoffset || var->yoffset)
-	return -EINVAL;
+    if (con == currcon) /* current console? */
+	return fb_get_cmap(cmap, kspc, offb_getcolreg, info);
+    else if (fb_display[con].cmap.len) /* non default colormap? */
+	fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
     else
-	return 0;
+    {
+	int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
+	fb_copy_cmap(fb_default_cmap(size), cmap, kspc ? 0 : 2);
+    }
+    return 0;
+}
+
+    /*
+     *  Set the Colormap
+     */
+
+static int offb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			 struct fb_info *info)
+{
+    struct fb_info_offb *info2 = (struct fb_info_offb *)info;
+    int err;
+
+    if (!info2->cmap_adr)
+	return -ENOSYS;
+
+    if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
+	int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
+	if ((err = fb_alloc_cmap(&fb_display[con].cmap, size, 0)))
+	    return err;
+    }
+    if (con == currcon)			/* current console? */
+	return fb_set_cmap(cmap, kspc, info);
+    else
+	fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
+    return 0;
 }
 
 #ifdef CONFIG_FB_S3TRIO
@@ -186,9 +245,6 @@ extern void imsttfb_of_init(struct device_node *dp);
 #ifdef CONFIG_FB_CT65550
 extern void chips_of_init(struct device_node *dp);
 #endif /* CONFIG_FB_CT65550 */
-#ifdef CONFIG_FB_MATROX
-extern int matrox_of_init(struct device_node *dp);
-#endif /* CONFIG_FB_MATROX */
 #ifdef CONFIG_FB_CONTROL
 extern void control_of_init(struct device_node *dp);
 #endif /* CONFIG_FB_CONTROL */
@@ -201,6 +257,7 @@ extern void platinum_of_init(struct device_node *dp);
 #ifdef CONFIG_FB_CLGEN
 extern void clgen_of_init(struct device_node *dp);
 #endif /* CONFIG_FB_CLGEN */
+
 
     /*
      *  Initialisation
@@ -321,12 +378,6 @@ static int __init offb_init_driver(struct device_node *dp)
 	return 1;
     }
 #endif /* CONFIG_FB_CT65550 */
-#ifdef CONFIG_FB_MATROX
-    if (!strncmp(dp->name, "MTRX", 4)) {
-	matrox_of_init(dp);
-	return 1;
-    }
-#endif /* CONFIG_FB_MATROX */
 #ifdef CONFIG_FB_CONTROL
     if(!strcmp(dp->name, "control")) {
 	control_of_init(dp);
@@ -371,9 +422,11 @@ static void __init offb_init_nodriver(struct device_node *dp)
 	&& len == sizeof(int))
 	height = *pp;
     if ((pp = (int *)get_property(dp, "linebytes", &len)) != NULL
-	&& len == sizeof(int))
+	&& len == sizeof(int)) {
 	pitch = *pp;
-    else
+	if (pitch == 1)
+	    pitch = 0x1000;
+    } else
 	pitch = width;
     if ((up = (unsigned *)get_property(dp, "address", &len)) != NULL
 	&& len == sizeof(unsigned))
@@ -403,9 +456,13 @@ static void offb_init_fb(const char *name, const char *full_name,
 				    int pitch, unsigned long address,
 				    struct device_node *dp)
 {
+    int i;
+    struct fb_fix_screeninfo *fix;
+    struct fb_var_screeninfo *var;
+    struct display *disp;
+    struct fb_info_offb *info;
     unsigned long res_start = address;
     unsigned long res_size = pitch*height*depth/8;
-    int i;	
 
     if (!request_mem_region(res_start, res_size, "offb"))
 	return;
@@ -417,6 +474,13 @@ static void offb_init_fb(const char *name, const char *full_name,
 	release_mem_region(res_start, res_size);
 	return;
     }
+
+    info = kmalloc(sizeof(struct fb_info_offb), GFP_ATOMIC);
+    if (info == 0) {
+	release_mem_region(res_start, res_size);
+	return;
+    }
+    memset(info, 0, sizeof(*info));
 
     fix = &info->fix;
     var = &info->var;
@@ -435,27 +499,27 @@ static void offb_init_fb(const char *name, const char *full_name,
     fix->type = FB_TYPE_PACKED_PIXELS;
     fix->type_aux = 0;
 
-    par->is_rage_128 = 0;
+    info->is_rage_128 = 0;
     if (depth == 8)
     {
     	/* XXX kludge for ati */
 	if (strncmp(name, "ATY,Rage128", 11) == 0) {
 	    if (dp) {
 		unsigned long regbase = dp->addrs[2].address;
-		par->cmap_adr = ioremap(regbase, 0x1FFF) + 0x00b0;
-		par->cmap_data = info->cmap_adr + 4;
-		par->is_rage_128 = 1;
+		info->cmap_adr = ioremap(regbase, 0x1FFF) + 0x00b0;
+		info->cmap_data = info->cmap_adr + 4;
+		info->is_rage_128 = 1;
 	    }
 	} else if (strncmp(name, "ATY,", 4) == 0) {
 		unsigned long base = address & 0xff000000UL;
-		par->cmap_adr = ioremap(base + 0x7ff000, 0x1000) + 0xcc0;
-		par->cmap_data = par->cmap_adr + 1;
+		info->cmap_adr = ioremap(base + 0x7ff000, 0x1000) + 0xcc0;
+		info->cmap_data = info->cmap_adr + 1;
 	}
-        fix->visual = par->cmap_adr ? FB_VISUAL_PSEUDOCOLOR
+        fix->visual = info->cmap_adr ? FB_VISUAL_PSEUDOCOLOR
 				     : FB_VISUAL_STATIC_PSEUDOCOLOR;
     }
     else
-	fix->visual = /* par->cmap_adr ? FB_VISUAL_DIRECTCOLOR
+	fix->visual = /*info->cmap_adr ? FB_VISUAL_DIRECTCOLOR
 				     : */FB_VISUAL_TRUECOLOR;
 
     var->xoffset = var->yoffset = 0;
@@ -532,15 +596,15 @@ static void offb_init_fb(const char *name, const char *full_name,
 #ifdef FBCON_HAS_CFB16
         case 16:
             disp->dispsw = &fbcon_cfb16;
-            disp->dispsw_data = &pseudo_palette;
+            disp->dispsw_data = info->fbcon_cmap.cfb16;
             for (i = 0; i < 16; i++)
             	if (fix->visual == FB_VISUAL_TRUECOLOR)
-		    info->pseudo_palette[i] =
+		    info->fbcon_cmap.cfb16[i] =
 			    (((default_blu[i] >> 3) & 0x1f) << 10) |
 			    (((default_grn[i] >> 3) & 0x1f) << 5) |
 			    ((default_red[i] >> 3) & 0x1f);
 		else
-		    info->pseudo_palette[i] =
+		    info->fbcon_cmap.cfb16[i] =
 			    (i << 10) | (i << 5) | i;
             break;
 #endif
@@ -570,12 +634,17 @@ static void offb_init_fb(const char *name, const char *full_name,
     info->info.node = -1;
     info->info.fbops = &offb_ops;
     info->info.disp = disp;
-    info->info.changevar = NULL;
-    info->info.switch_con = &fbgen_switch;
-    info->info.updatevar = &fbgen_updatevar;
+    info->info.fontname[0] = '\0';
+    info->info.switch_con = &offbcon_switch;
+    info->info.updatevar = &offbcon_updatevar;
     info->info.flags = FBINFO_FLAG_DEFAULT;
 
-    /* Set color map */
+    for (i = 0; i < 16; i++) {
+	int j = color_table[i];
+	info->palette[i].red = default_red[j];
+	info->palette[i].green = default_grn[j];
+	info->palette[i].blue = default_blu[j];
+    }
     offb_set_var(var, -1, &info->info);
 
     if (register_framebuffer(&info->info) < 0) {
@@ -626,30 +695,74 @@ int offb_setup(char *options)
     return 0;
 }
 
-    /* 
+
+static int offbcon_switch(int con, struct fb_info *info)
+{
+    /* Do we have to save the colormap? */
+    if (fb_display[currcon].cmap.len)
+	fb_get_cmap(&fb_display[currcon].cmap, 1, offb_getcolreg, info);
+
+    currcon = con;
+    /* Install new colormap */
+    do_install_cmap(con, info);
+    return 0;
+}
+
+    /*
+     *  Update the `var' structure (called by fbcon.c)
+     */
+
+static int offbcon_updatevar(int con, struct fb_info *info)
+{
+    /* Nothing */
+    return 0;
+}
+
+    /*
      *  Blank the display.
      */
 
-static int offb_blank(int blank, struct fb_info *info)
+static void offb_blank(int blank, struct fb_info *info)
 {
-    struct offb_par *ofpar = (struct offb_par *)info->par;
+    struct fb_info_offb *info2 = (struct fb_info_offb *)info;
     int i, j;
 
-    if (!par->cmap_adr)
+    if (!info2->cmap_adr)
 	return;
 
     if (blank)
 	for (i = 0; i < 256; i++) {
-	    *par->cmap_adr = i;
+	    *info2->cmap_adr = i;
 	    mach_eieio();
 	    for (j = 0; j < 3; j++) {
-		*par->cmap_data = 0;
+		*info2->cmap_data = 0;
 		mach_eieio();
 	    }
 	}
     else
 	do_install_cmap(currcon, info);
 }
+
+    /*
+     *  Read a single color register and split it into
+     *  colors/transparent. Return != 0 for invalid regno.
+     */
+
+static int offb_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
+			  u_int *transp, struct fb_info *info)
+{
+    struct fb_info_offb *info2 = (struct fb_info_offb *)info;
+
+    if (!info2->cmap_adr || regno > 255)
+	return 1;
+    
+    *red = (info2->palette[regno].red<<8) | info2->palette[regno].red;
+    *green = (info2->palette[regno].green<<8) | info2->palette[regno].green;
+    *blue = (info2->palette[regno].blue<<8) | info2->palette[regno].blue;
+    *transp = 0;
+    return 0;
+}
+
 
     /*
      *  Set a single color register. The values supplied are already
@@ -660,46 +773,63 @@ static int offb_blank(int blank, struct fb_info *info)
 static int offb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 			 u_int transp, struct fb_info *info)
 {
-    struct fb_info_offb *par = (struct fb_info_offb *)info;
-    int i;
-
-    if (!par->cmap_adr)
-        return -ENOSYS;
+    struct fb_info_offb *info2 = (struct fb_info_offb *)info;
 	
-    if (!par->cmap_adr || regno > 255)
+    if (!info2->cmap_adr || regno > 255)
 	return 1;
 
     red >>= 8;
     green >>= 8;
     blue >>= 8;
 
-    *par->cmap_adr = regno;  /* On some chipsets, add << 3 in 15 bits */
+    info2->palette[regno].red = red;
+    info2->palette[regno].green = green;
+    info2->palette[regno].blue = blue;
+
+    *info2->cmap_adr = regno;/* On some chipsets, add << 3 in 15 bits */
     mach_eieio();
-    if (par->is_rage_128) {
-    	out_le32((unsigned int *)par->cmap_data,
+    if (info2->is_rage_128) {
+    	out_le32((unsigned int *)info2->cmap_data,
     		(red << 16 | green << 8 | blue));
     } else {
-	*par->cmap_data = red;
+	*info2->cmap_data = red;
     	mach_eieio();
-    	*par->cmap_data = green;
+    	*info2->cmap_data = green;
     	mach_eieio();
-    	*par->cmap_data = blue;
+    	*info2->cmap_data = blue;
     	mach_eieio();
     }
 
     if (regno < 16)
-	switch (info->var.bits_per_pixel) {
+	switch (info2->var.bits_per_pixel) {
 #ifdef FBCON_HAS_CFB16
 	    case 16:
-		((u16*)(info->pseudo_palette))[regno] = (regno << 10) | (regno << 5) | regno;
+		info2->fbcon_cmap.cfb16[regno] = (regno << 10) | (regno << 5) | regno;
 		break;
 #endif
 #ifdef FBCON_HAS_CFB32
 	    case 32:
-		i = (regno << 8) | regno;
-		((u32*)(info->pseudo_palette))[regno] = (i << 16) | i;
+	    {
+		int i = (regno << 8) | regno;
+		info2->fbcon_cmap.cfb32[regno] = (i << 16) | i;
 		break;
+	    }
 #endif
        }
+
     return 0;
+}
+
+
+static void do_install_cmap(int con, struct fb_info *info)
+{
+    if (con != currcon)
+	return;
+    if (fb_display[con].cmap.len)
+	fb_set_cmap(&fb_display[con].cmap, 1, info);
+    else
+    {
+	int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
+	fb_set_cmap(fb_default_cmap(size), 1, info);
+    }
 }

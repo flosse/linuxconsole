@@ -45,58 +45,33 @@
 #include <linux/console.h>
 #include <asm/io.h>
 
+#include "fbcon.h"
 #include <video/fbcon-cfb8.h>
 #include <video/fbcon-cfb32.h>
-#include <video/tga.h>
-#include "fbcon.h"
+#include "tgafb.h"
 
     /*
      *  Global declarations
      */
 
-static struct fb_info fb_info;
+static struct tgafb_info fb_info;
 static struct tgafb_par current_par;
+static int current_par_valid = 0;
 static struct display disp;
+
+static char default_fontname[40] = { 0 };
+static struct fb_var_screeninfo default_var;
+static int default_var_valid = 0;
+
 static int currcon = 0;
 
+#define arraysize(x)	(sizeof(x)/sizeof(*(x)))
+
+static struct { u_char red, green, blue, pad; } palette[256];
 #ifdef FBCON_HAS_CFB32
 static u32 fbcon_cfb32_cmap[16];
 #endif
 
-    /*
-     *  This structure defines a video mode.
-     */
-
-struct tgafb_par {
-    /* Device dependent information */
-    u32 xres, yres;                             /* resolution in pixels */
-    u32 htimings;                               /* horizontal timing register */    u32 vtimings;                               /* vertical timing register */
-    u32 pll_freq;                               /* pixclock in mhz */
-    u32 bits_per_pixel;                         /* bits per pixel */
-    u32 sync_on_green;                          /* set if sync is on green */
-    u8 tga_type;                                /* TGA_TYPE_XXX */
-    u8 tga_chip_rev;                            /* dc21030 revision */
-};
-
-static struct fb_fix_screeninfo tgafb_fix __initdata = {
-    "Digital ZLXp-", (unsigned long) NULL, 0, FB_TYPE_PACKED_PIXELS, 0,
-    FB_VISUAL_PSEUDOCOLOR, 0, 0, 0, 640, (unsigned long) NULL, 0x1000, 
-    FB_ACCEL_DEC_TGA
-};
-
-static struct fb_var_screeninfo default_var = {
-    /* 640x480-60 8 */
-    640, 480, 640, 480, 0, 0, 0, 0,
-    {0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
-    0, FB_ACTIVATE_NOW, -1, -1, FB_ACCELF_TEXT, 39722, 40, 24, 32, 11, 96, 2,
-    0, FB_VMODE_NONINTERLACED
-};
-
-static int currcon = 0;
-
-#ifdef FBCON_HAS_CFB32
-static u32 fbcon_cfb32_cmap[16];
-#endif
 
     /*
      *  Hardware presets
@@ -137,88 +112,247 @@ static unsigned int base_addr_presets[4] = {
   0x00000001
 };
 
+
+    /*
+     *  Predefined video modes
+     *  This is a subset of the standard VESA modes, recalculated from XFree86.
+     *
+     *  XXX Should we store these in terms of the encoded par structs? Even better,
+     *      fbcon should provide a general mechanism for doing something like this.
+     */
+
+static struct {
+    const char *name;
+    struct fb_var_screeninfo var;
+} tgafb_predefined[] __initdata = {
+    { "640x480-60", {
+	640, 480, 640, 480, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 39722, 40, 24, 32, 11, 96, 2,
+	0,
+	FB_VMODE_NONINTERLACED
+    }},
+    { "800x600-56", {
+	800, 600, 800, 600, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 27777, 128, 24, 22, 1, 72, 2,
+	0,
+	FB_VMODE_NONINTERLACED
+    }},
+    { "640x480-72", {
+	640, 480, 640, 480, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 31746, 144, 40, 30, 8, 40, 3,
+	0,
+	FB_VMODE_NONINTERLACED
+    }},
+    { "800x600-60", {
+	800, 600, 800, 600, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 25000, 88, 40, 23, 1, 128, 4,
+	FB_SYNC_HOR_HIGH_ACT|FB_SYNC_VERT_HIGH_ACT,
+	FB_VMODE_NONINTERLACED
+    }},
+    { "800x600-72", {
+	800, 600, 800, 600, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 20000, 64, 56, 23, 37, 120, 6,
+	FB_SYNC_HOR_HIGH_ACT|FB_SYNC_VERT_HIGH_ACT,
+	FB_VMODE_NONINTERLACED
+    }},
+    { "1024x768-60", {
+	1024, 768, 1024, 768, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 15384, 168, 8, 29, 3, 144, 6,
+	0,
+	FB_VMODE_NONINTERLACED
+    }},
+    { "1152x864-60", {
+	1152, 864, 1152, 864, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 11123, 208, 64, 16, 4, 256, 8,
+	0,
+	FB_VMODE_NONINTERLACED
+    }},
+    { "1024x768-70", {
+	1024, 768, 1024, 768, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 13333, 144, 24, 29, 3, 136, 6,
+	0,
+	FB_VMODE_NONINTERLACED
+    }},
+    { "1024x768-76", {
+	1024, 768, 1024, 768, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 11764, 208, 8, 36, 16, 120, 3,
+	0,
+	FB_VMODE_NONINTERLACED
+    }},
+    { "1152x864-70", {
+	1152, 864, 1152, 864, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 10869, 106, 56, 20, 1, 160, 10,
+	0,
+	FB_VMODE_NONINTERLACED
+    }},
+    { "1280x1024-61", {
+	1280, 1024, 1280, 1024, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 9090, 200, 48, 26, 1, 184, 3,
+	0,
+	FB_VMODE_NONINTERLACED
+    }},
+    { "1024x768-85", {
+	1024, 768, 1024, 768, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 10111, 192, 32, 34, 14, 160, 6,
+	0,
+	FB_VMODE_NONINTERLACED
+    }},
+    { "1280x1024-70", {
+	1280, 1024, 1280, 1024, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 7905, 224, 32, 28, 8, 160, 8,
+	0,
+	FB_VMODE_NONINTERLACED
+    }},
+    { "1152x864-84", {
+	1152, 864, 1152, 864, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 7407, 184, 312, 32, 0, 128, 12,
+	0,
+	FB_VMODE_NONINTERLACED
+    }},
+    { "1280x1024-76", {
+	1280, 1024, 1280, 1024, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 7407, 248, 32, 34, 3, 104, 3,
+	0,
+	FB_VMODE_NONINTERLACED
+    }},
+    { "1280x1024-85", {
+	1280, 1024, 1280, 1024, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 6349, 224, 64, 44, 1, 160, 3,
+	0,
+	FB_VMODE_NONINTERLACED
+    }},
+
+    /* These are modes used by the two fixed-frequency monitors I have at home. 
+     * You may or may not find these useful.
+     */
+
+    { "WYSE1", {			/* 1280x1024 @ 72 Hz, 130 Mhz clock */
+	1280, 1024, 1280, 1024, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 7692, 192, 32, 47, 0, 192, 5,
+	FB_SYNC_HOR_HIGH_ACT|FB_SYNC_VERT_HIGH_ACT,
+	FB_VMODE_NONINTERLACED
+    }},
+    { "IBM3", {				/* 1280x1024 @ 70 Hz, 120 Mhz clock */
+	1280, 1024, 1280, 1024, 0, 0, 0, 0,
+	{0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
+	0, 0, -1, -1, FB_ACCELF_TEXT, 8333, 192, 32, 47, 0, 192, 5,
+	0,
+	FB_VMODE_NONINTERLACED
+    }}
+};
+
+#define NUM_TOTAL_MODES    arraysize(tgafb_predefined)
+
+
     /*
      *  Interface used by the world
      */
 
+static void tgafb_detect(void);
+static int tgafb_encode_fix(struct fb_fix_screeninfo *fix, const void *fb_par,
+		        struct fb_info_gen *info);
+static int tgafb_decode_var(const struct fb_var_screeninfo *var, void *fb_par,
+		        struct fb_info_gen *info);
+static int tgafb_encode_var(struct fb_var_screeninfo *var, const void *fb_par,
+		        struct fb_info_gen *info);
+static void tgafb_get_par(void *fb_par, struct fb_info_gen *info);
+static void tgafb_set_par(const void *fb_par, struct fb_info_gen *info);
+static int tgafb_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue, 
+		u_int *transp, struct fb_info *info);
+static int tgafb_setcolreg(u_int regno, u_int red, u_int green, u_int blue, 
+		u_int transp, struct fb_info *info);
+static int tgafb_blank(int blank, struct fb_info_gen *info);
+static void tgafb_set_disp(const void *fb_par, struct display *disp, 
+		struct fb_info_gen *info);
+
 int tgafb_setup(char*);
 int tgafb_init(void);
+void tgafb_cleanup(struct fb_info *info);
 
-static int tgafb_open(struct fb_info *info, int user);
-static int tgafb_release(struct fb_info *info, int user);
-static int tgafb_check_var(const struct fb_var_screeninfo *var, void *fb_par,
-                           struct fb_info_gen *info);
-static int tgafb_set_par(const void *fb_par, struct fb_info *info);
-static int tgafb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-                u_int transp, struct fb_info *info);
-static int tgafb_blank(int blank, struct fb_info_gen *info);
-static int tgafb_pan_display(const struct fb_var_screeninfo *var,
-                struct fb_info_gen *info);
-
-static struct fb_ops tgafb_ops = {
-    fb_open:            tgafb_open,
-    fb_release:         tgafb_release,
-    fb_get_fix:         fbgen_get_fix,
-    fb_get_var:         fbgen_get_var,
-    fb_set_var:         fbgen_set_var,
-    fb_check_var:	tgafb_check_var,	
-    fb_set_par:		tgafb_set_par,	
-    fb_get_cmap:        fbgen_get_cmap,
-    fb_set_cmap:        tgafb_set_cmap,
-    fb_setcolreg:       tgafb_setcolreg,
-    fb_blank:           tgafb_blank,
-    fb_pan_display:     fbgen_pan_display
-};
-
-static int tgafb_decode_var(const struct fb_var_screeninfo *var, void *fb_par,
-                        struct fb_info_gen *info);
-static int tgafb_encode_var(struct fb_var_screeninfo *var, const void *fb_par,
-                        struct fb_info_gen *info);
-static void tgafb_set_disp(const void *fb_par, struct display *disp,
-                struct fb_info_gen *info);
 static void tgafb_set_pll(int f);
+#if 1
 static int tgafb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
 			  struct fb_info *info);
 static void tgafb_update_palette(void);
-void tgafb_cleanup(struct fb_info *info);
+#endif
+
 
     /*
-     *  Frame buffer operations
+     *  Chipset specific functions
      */
 
-static int tgafb_open(struct fb_info *info, int user)
+
+static void tgafb_detect(void)
 {
-    MOD_INC_USE_COUNT;
-    return(0);
+    return;
 }
 
 
-static int tgafb_release(struct fb_info *info, int user)
+static int tgafb_encode_fix(struct fb_fix_screeninfo *fix, const void *fb_par,
+	struct fb_info_gen *info)
 {
-    MOD_DEC_USE_COUNT;
-    return(0);
+    struct tgafb_par *par = (struct tgafb_par *)fb_par;
+
+    strcpy(fix->id, fb_info.gen.info.modename);
+
+    fix->type = FB_TYPE_PACKED_PIXELS;
+    fix->type_aux = 0;
+    if (fb_info.tga_type == TGA_TYPE_8PLANE) {
+	fix->visual = FB_VISUAL_PSEUDOCOLOR;
+    } else {
+	fix->visual = FB_VISUAL_TRUECOLOR;
+    }
+
+    fix->line_length = par->xres * (par->bits_per_pixel >> 3);
+    fix->smem_start = fb_info.tga_fb_base;
+    fix->smem_len = fix->line_length * par->yres;
+    fix->mmio_start = fb_info.tga_regs_base;
+    fix->mmio_len = 0x1000;		/* Is this sufficient? */
+    fix->xpanstep = fix->ypanstep = fix->ywrapstep = 0;
+    fix->accel = FB_ACCEL_DEC_TGA;
+
+    return 0;
 }
 
-static int tgafb_check_var(struct fb_var_screeninfo *var, void *fb_par,
-			   struct fb_info *info)
+
+static int tgafb_decode_var(const struct fb_var_screeninfo *var, void *fb_par,
+	struct fb_info_gen *info)
 {
     struct tgafb_par *par = (struct tgafb_par *)fb_par;
 
     /* round up some */
-    if (par->tga_type == TGA_TYPE_8PLANE) {
+    if (fb_info.tga_type == TGA_TYPE_8PLANE) {
 	if (var->bits_per_pixel > 8) {
 	    return -EINVAL;
 	}
-	var->bits_per_pixel = 8;
+	par->bits_per_pixel = 8;
     } else {
 	if (var->bits_per_pixel > 32) {
 	    return -EINVAL;
 	}
-	var->bits_per_pixel = 32;
+	par->bits_per_pixel = 32;
     }
 
     /* check the values for sanity */
-    if (var->xres_virtual != var->xres || var->yres_virtual != var->yres ||
+    if (var->xres_virtual != var->xres ||
+	var->yres_virtual != var->yres ||
 	var->nonstd || (1000000000/var->pixclock) > TGA_PLL_MAX_FREQ ||
 	(var->vmode & FB_VMODE_MASK) != FB_VMODE_NONINTERLACED
 #if 0	/* fbmon not done.  uncomment for 2.5.x -brad */
@@ -248,10 +382,16 @@ static int tgafb_check_var(struct fb_var_screeninfo *var, void *fb_par,
     } else {
 	par->sync_on_green = 0;
     }
+
     /* store other useful values in par */
+    par->xres = var->xres; 
+    par->yres = var->yres;
     par->pll_freq = 1000000000/var->pixclock;
+    par->bits_per_pixel = var->bits_per_pixel;
+
     return 0;
 }
+
 
 static int tgafb_encode_var(struct fb_var_screeninfo *var, const void *fb_par,
 	struct fb_info_gen *info)
@@ -280,7 +420,7 @@ static int tgafb_encode_var(struct fb_var_screeninfo *var, const void *fb_par,
     var->xoffset = var->yoffset = 0;
 
     /* depth-related */
-    if (par->tga_type == TGA_TYPE_8PLANE) {
+    if (fb_info.tga_type == TGA_TYPE_8PLANE) {
 	var->red.offset = 0;
 	var->green.offset = 0;
 	var->blue.offset = 0;
@@ -306,11 +446,38 @@ static int tgafb_encode_var(struct fb_var_screeninfo *var, const void *fb_par,
     return 0;
 }
 
-static void tgafb_set_par(const void *fb_par, struct fb_info *info)
+
+static void tgafb_get_par(void *fb_par, struct fb_info_gen *info)
 {
     struct tgafb_par *par = (struct tgafb_par *)fb_par;
-    int i, j;	
 
+    if (current_par_valid)
+	*par = current_par;
+    else {
+	if (fb_info.tga_type == TGA_TYPE_8PLANE)
+	    default_var.bits_per_pixel = 8;
+	else
+	    default_var.bits_per_pixel = 32;
+
+	tgafb_decode_var(&default_var, par, info);
+    }
+}
+
+
+static void tgafb_set_par(const void *fb_par, struct fb_info_gen *info)
+{
+    int i, j;
+    struct tgafb_par *par = (struct tgafb_par *)fb_par;
+
+#if 0
+    /* XXX this will break console switching with X11, maybe I need to test KD_GRAPHICS? */
+    /* if current_par is valid, check to see if we need to change anything */
+    if (current_par_valid) {
+	if (!memcmp(par, &current_par, sizeof current_par)) {
+	    return;
+	}
+    }
+#endif
     current_par = *par;
     current_par_valid = 1;
 
@@ -346,7 +513,7 @@ static void tgafb_set_par(const void *fb_par, struct fb_info *info)
     TGA_WRITE_REG(par->vtimings, TGA_VERT_REG);
 
     /* initalise RAMDAC */
-    if (par->tga_type == TGA_TYPE_8PLANE) { 
+    if (fb_info.tga_type == TGA_TYPE_8PLANE) { 
 
 	/* init BT485 RAMDAC registers */
 	BT485_WRITE(0xa2 | (par->sync_on_green ? 0x8 : 0x0), BT485_CMD_0);
@@ -434,14 +601,6 @@ static void tgafb_set_par(const void *fb_par, struct fb_info *info)
     /* finally, enable video scan
 	(and pray for the monitor... :-) */
     TGA_WRITE_REG(TGA_VALID_VIDEO, TGA_VALID_REG);
-
-    if (par->tga_type == TGA_TYPE_8PLANE) {
-        info->fix.visual = FB_VISUAL_PSEUDOCOLOR;
-    } else {
-        info->fix.visual = FB_VISUAL_TRUECOLOR;
-    }
-    info->fix.line_length = info->var.xres * (info->var.bits_per_pixel >> 3);
-    info->fix.smem_len = info->fix.line_length * info->var.yres;
 }
 
 
@@ -532,6 +691,20 @@ static void tgafb_set_pll(int f)
     TGA_WRITE_REG(((vr >> 7) & 1)|2, TGA_CLOCK_REG);
 }
 
+
+static int tgafb_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
+                         u_int *transp, struct fb_info *info)
+{
+    if (regno > 255)
+	return 1;
+    *red = (palette[regno].red<<8) | palette[regno].red;
+    *green = (palette[regno].green<<8) | palette[regno].green;
+    *blue = (palette[regno].blue<<8) | palette[regno].blue;
+    *transp = 0;
+    return 0;
+}
+
+
 static int tgafb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                          u_int transp, struct fb_info *info)
 {
@@ -540,13 +713,16 @@ static int tgafb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
     red >>= 8;
     green >>= 8;
     blue >>= 8;
+    palette[regno].red = red;
+    palette[regno].green = green;
+    palette[regno].blue = blue;
 
 #ifdef FBCON_HAS_CFB32
-    if (regno < 16 && info->par.tga_type != TGA_TYPE_8PLANE)
+    if (regno < 16 && fb_info.tga_type != TGA_TYPE_8PLANE)
 	fbcon_cfb32_cmap[regno] = (red << 16) | (green << 8) | blue;
 #endif
 
-    if (info->par.tga_type == TGA_TYPE_8PLANE) { 
+    if (fb_info.tga_type == TGA_TYPE_8PLANE) { 
         BT485_WRITE(regno, BT485_ADDR_PAL_WRITE);
         TGA_WRITE_REG(BT485_DATA_PAL, TGA_RAMDAC_SETUP_REG);
         TGA_WRITE_REG(red|(BT485_DATA_PAL<<8),TGA_RAMDAC_REG);
@@ -567,7 +743,6 @@ static int tgafb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 static int tgafb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
 			  struct fb_info *info)
 {
-    struct tgafb_par *fb_par = (struct tgafb_par *)info->par;	
     int err;
 
     if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
@@ -576,8 +751,10 @@ static int tgafb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
     }
     if (con == currcon) {		/* current console? */
 	err = fb_set_cmap(cmap, kspc, info);
-	if (fb_par->tga_type != TGA_TYPE_8PLANE)
+#if 1
+	if (fb_info.tga_type != TGA_TYPE_8PLANE)
 		tgafb_update_palette();
+#endif
 	return err;
     } else
 	fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
@@ -599,18 +776,7 @@ static void tgafb_update_palette(void)
 }
 #endif
 
-
-static int tgafb_pan_display(const struct fb_var_screeninfo *var, 
-	                             struct fb_info_gen *info)
-{
-    if (var->xoffset || var->yoffset)
-	return -EINVAL;
-    else
-	return 0;
-}
-
-
-static int tgafb_blank(int blank, struct fb_info *info)
+static int tgafb_blank(int blank, struct fb_info_gen *info)
 {
     static int tga_vesa_blanked = 0;
     u32 vhcr, vvcr, vvvr;
@@ -663,7 +829,7 @@ static int tgafb_blank(int blank, struct fb_info *info)
 
 
 static void tgafb_set_disp(const void *fb_par, struct display *disp,
-	struct fb_info *info)
+	struct fb_info_gen *info)
 {
     disp->screen_base = (char *)fb_info.tga_fb_base;
     switch (fb_info.tga_type) {
@@ -686,36 +852,67 @@ static void tgafb_set_disp(const void *fb_par, struct display *disp,
     disp->scrollmode = SCROLL_YREDRAW;
 }
 
-static struct fb_ops tgafb_ops = {
-    fb_open:		tgafb_open, 
-    fb_release:		tgafb_release, 
-    fb_get_fix:		fbgen_get_fix, 
-    fb_get_var:		fbgen_get_var, 
-    fb_set_var:		fbgen_set_var,
-    fb_get_cmap:	fbgen_get_cmap, 
-    fb_set_cmap:	tgafb_set_cmap, 
-    fb_setcolreg:	tgafb_setcolreg,
-    fb_blank:		tgafb_blank,	 
-    fb_pan_display:	fbgen_pan_display 
+
+struct fbgen_hwswitch tgafb_hwswitch = {
+    tgafb_detect, tgafb_encode_fix, tgafb_decode_var, tgafb_encode_var,
+    tgafb_get_par, tgafb_set_par, tgafb_getcolreg, NULL, tgafb_blank,
+    tgafb_set_disp
 };
+
+
+    /*
+     *  Hardware Independent functions
+     */
+
+
+    /* 
+     *  Frame buffer operations
+     */
+
+static struct fb_ops tgafb_ops = {
+	owner:		THIS_MODULE,
+	fb_get_fix:	fbgen_get_fix,
+	fb_get_var:	fbgen_get_var,
+	fb_set_var:	fbgen_set_var,
+	fb_get_cmap:	fbgen_get_cmap,
+	fb_set_cmap:	tgafb_set_cmap,
+	fb_set_colreg:	tgafb_setcolreg,
+	fb_blank:	fbgen_blank,
+};
+
 
     /*
      *  Setup
      */
 
-int __init tgafb_setup(char *options) 
-{
+int __init tgafb_setup(char *options) {
     char *this_opt;
     int i;
     
     if (options && *options) {
-    	for (this_opt=strtok(options,","); this_opt; 
-	     this_opt=strtok(NULL,",")) {
-      	     	mode_option = this_opt;		
-    	}
+    	for(this_opt=strtok(options,","); this_opt; this_opt=strtok(NULL,",")) {
+       	    if (!*this_opt) { continue; }
+        
+	    if (!strncmp(this_opt, "font:", 5)) {
+	     	strncpy(default_fontname, this_opt+5, sizeof default_fontname);
+	    }
+
+	    else if (!strncmp(this_opt, "mode:", 5)) {
+    		for (i = 0; i < NUM_TOTAL_MODES; i++) {
+    		    if (!strcmp(this_opt+5, tgafb_predefined[i].name))
+    			default_var = tgafb_predefined[i].var;
+		    	default_var_valid = 1;
+    		}
+    	    } 
+	    
+	    else {
+      		printk(KERN_ERR "tgafb: unknown parameter %s\n", this_opt);
+    	    }
+      	}
     }
     return 0;
 }
+
 
     /*
      *  Initialisation
@@ -724,60 +921,70 @@ int __init tgafb_setup(char *options)
 int __init tgafb_init(void)
 {
     struct pci_dev *pdev;
-    u64 tga_mem_base; 	
 
     pdev = pci_find_device(PCI_VENDOR_ID_DEC, PCI_DEVICE_ID_DEC_TGA, NULL);
     if (!pdev)
 	return -ENXIO;
 
     /* divine board type */
-    tga_mem_base = (unsigned long)ioremap(pdev->resource[0].start, 0);
-    par.tga_type = (readl(tga_mem_base) >> 12) & 0x0f;
-    tgafb_fix.mmio_start = tga_mem_base + TGA_REGS_OFFSET;
-    tgafb_fix.smem_start = (tga_mem_base + fb_offset_presets[par.tga_type]);
-    fb_info.screen_base = (char *) tgafb_fix.smem_start; 
-    pci_read_config_byte(pdev, PCI_REVISION_ID, &par.tga_chip_rev);
+
+    fb_info.tga_mem_base = (unsigned long)ioremap(pdev->resource[0].start, 0);
+    fb_info.tga_type = (readl(fb_info.tga_mem_base) >> 12) & 0x0f;
+    fb_info.tga_regs_base = fb_info.tga_mem_base + TGA_REGS_OFFSET;
+    fb_info.tga_fb_base = (fb_info.tga_mem_base
+			   + fb_offset_presets[fb_info.tga_type]);
+    pci_read_config_byte(pdev, PCI_REVISION_ID, &fb_info.tga_chip_rev);
 
     /* setup framebuffer */
 
-    fb_info.node = -1;
-    fb_info.flags = FBINFO_FLAG_DEFAULT;
-    fb_info.fbops = &tgafb_ops;
-    fb_info.disp = &disp;
-    fb_info.changevar = NULL;
-    fb_info.switch_con = &fbgen_switch;
-    fb_info.updatevar = &fbgen_update_var;
+    fb_info.gen.info.node = -1;
+    fb_info.gen.info.flags = FBINFO_FLAG_DEFAULT;
+    fb_info.gen.info.fbops = &tgafb_ops;
+    fb_info.gen.info.disp = &disp;
+    fb_info.gen.info.switch_con = &fbgen_switch;
+    fb_info.gen.info.updatevar = &fbgen_update_var;
+    strcpy(fb_info.gen.info.fontname, default_fontname);
+    fb_info.gen.parsize = sizeof (struct tgafb_par);
+    fb_info.gen.fbhw = &tgafb_hwswitch;
+    fb_info.gen.fbhw->detect();
 
-    printk (KERN_INFO "tgafb: DC21030 [TGA] detected, rev=0x%02x\n", 
-			par.tga_chip_rev);
+    printk (KERN_INFO "tgafb: DC21030 [TGA] detected, rev=0x%02x\n", fb_info.tga_chip_rev);
     printk (KERN_INFO "tgafb: at PCI bus %d, device %d, function %d\n", 
 	    pdev->bus->number, PCI_SLOT(pdev->devfn), PCI_FUNC(pdev->devfn));
 	    
-    switch (par.tga_type) 
+    switch (fb_info.tga_type) 
     { 
 	case TGA_TYPE_8PLANE:
-	    strcat(fb_info.fix.id,"E1"); 
+	    strcpy (fb_info.gen.info.modename,"Digital ZLXp-E1"); 
 	    break;
 
 	case TGA_TYPE_24PLANE:
-	    strcat(fb_info.fix.id,"E2"); 
+	    strcpy (fb_info.gen.info.modename,"Digital ZLXp-E2"); 
 	    break;
 
 	case TGA_TYPE_24PLUSZ:
-	    strcat(fb_info.fix.id,"E3"); 
+	    strcpy (fb_info.gen.info.modename,"Digital ZLXp-E3"); 
 	    break;
     }
 
+    /* This should give a reasonable default video mode */
+
+    if (!default_var_valid) {
+	default_var = tgafb_predefined[0].var;
+    }
+    fbgen_get_var(&disp.var, -1, &fb_info.gen.info);
     disp.var.activate = FB_ACTIVATE_NOW;
-    fbgen_do_set_var(&disp.var, 1, &fb_info);
-    fbgen_set_disp(-1, &fb_info);
-    fbgen_install_cmap(0, &fb_info);
-    if (register_framebuffer(&fb_info) < 0)
+    fbgen_do_set_var(&disp.var, 1, &fb_info.gen);
+    fbgen_set_disp(-1, &fb_info.gen);
+    fbgen_install_cmap(0, &fb_info.gen);
+    if (register_framebuffer(&fb_info.gen.info) < 0)
 	return -EINVAL;
     printk(KERN_INFO "fb%d: %s frame buffer device at 0x%lx\n", 
-	    GET_FB_IDX(fb_info.node), fb_info.fix.id, pdev->resource[0].start); 
+	    GET_FB_IDX(fb_info.gen.info.node), fb_info.gen.info.modename, 
+	    pdev->resource[0].start);
     return 0;
 }
+
 
     /*
      *  Cleanup

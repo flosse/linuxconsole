@@ -14,6 +14,8 @@
  * - Revision 0.1.3 (22 Jan 2000): modified for the new fb_info structure
  *                                 screen is cleared after rmmod
  *                                 virtual resolutions
+ *                                 kernel parameter 'video=hga:font:{fontname}'
+ *                                 module parameter 'font={fontname}'
  *                                 module parameter 'nologo={0|1}'
  *                                 the most important: boot logo :)
  * - Revision 0.1.0  (6 Dec 1999): faster scrolling and minor fixes
@@ -38,7 +40,7 @@
 #include <linux/ioport.h>
 #include <asm/io.h>
 #include <asm/vga.h>
-#include <video/fbcon.h>
+#include "fbcon.h"
 #include <video/fbcon-hga.h>
 
 #ifdef MODULE
@@ -375,21 +377,30 @@ static int __init hga_card_detect(void)
  *
  * ------------------------------------------------------------------------- */
 
-
 	/*
-	 *  Open/Release the frame buffer device
+	 * Get the Fixed Part of the Display
 	 */
 
-static int hgafb_open(struct fb_info *info, int user)
+int hga_get_fix(struct fb_fix_screeninfo *fix, int con, struct fb_info *info)
 {
-	/* Nothing, only a usage count for the moment */
-	MOD_INC_USE_COUNT;
+	CHKINFO(-EINVAL);
+	DPRINTK("hga_get_fix: con:%d, info:%x, fb_info:%x\n", con, (unsigned)info, (unsigned)&fb_info);
+
+	*fix = info->fix;
 	return 0;
 }
 
-static int hgafb_release(struct fb_info *info, int user)
+
+	/*
+	 *  Get the User Defined Part of the Display
+	 */
+
+int hga_get_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 {
-	MOD_DEC_USE_COUNT;
+	CHKINFO(-EINVAL);
+	DPRINTK("hga_get_var: con:%d, info:%x, fb_info:%x\n", con, (unsigned)info, (unsigned)&fb_info);
+
+	*var = info->var;
 	return 0;
 }
 
@@ -414,8 +425,7 @@ int hga_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 	}
 	if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
 		info->var = *var;
-		if (info->changevar) 
-			(*info->changevar)(con);
+		fbcon_changevar(con);
 	}
 	return 0;
 }
@@ -439,34 +449,34 @@ static int hga_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
 	return 0;
 }
 
+int hga_get_cmap(struct fb_cmap *cmap, int kspc, int con,
+                 struct fb_info *info)
+{
+	CHKINFO(-EINVAL);
+	DPRINTK("hga_get_cmap: con:%d\n", con);
+	return fb_get_cmap(cmap, kspc, hga_getcolreg, info);
+}
+	
 	/*
 	 * Set the Colormap
 	 */
 
 static int hga_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-			 u_int transp, struct fb_info *info)
+	    	         u_int transp, struct fb_info *info)
 {
 	if (regno > 1)
 		return 1;
 	return 0;
 }
 
-static void hgafb_blank(int blank_mode, struct fb_info *info)
+int hga_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+                 struct fb_info *info)
 {
-        /*
-         *  Blank the screen if blank_mode != 0, else unblank.
-         *  Implements VESA suspend and powerdown modes on hardware
-         *  that supports disabling hsync/vsync:
-         *    blank_mode == 2: suspend vsync
-         *    blank_mode == 3: suspend hsync
-         *    blank_mode == 4: powerdown
-         */
-
-        CHKINFO( );
-        DPRINTK("hga_blank: blank_mode:%d, info:%x, fb_info:%x\n", blank_mode, (unsigned)info, (unsigned)&fb_info);
-
-        hga_blank(blank_mode);
+	CHKINFO(-EINVAL);
+	DPRINTK("hga_set_cmap: con:%d\n", con);
+	return fb_set_cmap(cmap, kspc, info);
 }
+
 	/*
 	 *  Pan or Wrap the Display
 	 *
@@ -503,16 +513,15 @@ int hga_pan_display(struct fb_var_screeninfo *var, int con,
 }
 	
 static struct fb_ops hgafb_ops = {
-	fb_open:	hgafb_open, 
-	fb_release:	hgafb_release, 
-	fb_get_fix:	fbgen_get_fix, 
-	fb_get_var:	fbgen_get_var, 
+	owner:		THIS_MODULE,
+	fb_get_fix:	hga_get_fix,
+	fb_get_var:	hga_get_var,
 	fb_set_var:	hga_set_var,
-	fb_get_cmap:	fbgen_get_cmap, 
-	fb_set_cmap:	fbgen_set_cmap,
+	fb_get_cmap:	hga_get_cmap,
+	fb_set_cmap:	hga_set_cmap,
 	fb_setcolreg:	hga_setcolreg,
-	fb_blank:	hgafb_blank, 
-	fb_pan_display:	hga_pan_display 
+	fb_blank:	hgafb_blank,
+	fb_pan_display:	hga_pan_display,
 };
 		
 
@@ -561,6 +570,24 @@ static int hgafbcon_updatevar(int con, struct fb_info *info)
 	DPRINTK("hga_update_var: con:%d, info:%x, fb_info:%x\n", con, (unsigned)info, (unsigned)&fb_info);
 	return (con < 0) ? -EINVAL : hga_pan_display(&fb_display[con].var, con, info);
 }
+
+static void hgafb_blank(int blank_mode, struct fb_info *info)
+{
+	/*
+	 *  Blank the screen if blank_mode != 0, else unblank. 
+	 *  Implements VESA suspend and powerdown modes on hardware 
+	 *  that supports disabling hsync/vsync:
+	 *    blank_mode == 2: suspend vsync
+	 *    blank_mode == 3: suspend hsync
+	 *    blank_mode == 4: powerdown
+	 */
+
+	CHKINFO( );
+	DPRINTK("hga_blank: blank_mode:%d, info:%x, fb_info:%x\n", blank_mode, (unsigned)info, (unsigned)&fb_info);
+
+	hga_blank(blank_mode);
+}
+
 
 /* ------------------------------------------------------------------------- */
     
@@ -623,7 +650,7 @@ int __init hgafb_init(void)
 	fb_info.screen_base = (char *)hga_fix.smem_start;
 	fb_info.disp = &disp;
 /*	fb_info.display_fg = ??? */
-	fb_info.changevar = NULL;
+/*	fb_info.fontname initialized later */
 	fb_info.switch_con = hgafbcon_switch;
 	fb_info.updatevar = hgafbcon_updatevar;
 	fb_info.pseudo_palette = NULL; /* ??? */
@@ -645,9 +672,30 @@ int __init hgafb_init(void)
 #ifndef MODULE
 int __init hgafb_setup(char *options)
 {
+	/* 
+	 * Parse user speficied options
+	 * `video=hga:font:VGA8x16' or
+	 * `video=hga:font:SUN8x16' recommended
+	 * Other supported fonts: VGA8x8, Acorn8x8, PEARL8x8
+	 * More different fonts can be used with the `setfont' utility.
+	 */
+
+	char *this_opt;
+
+	fb_info.fontname[0] = '\0';
+
+	if (!options || !*options)
+		return 0;
+
+	for (this_opt = strtok(options, ","); this_opt;
+			this_opt = strtok(NULL, ",")) {
+		if (!strncmp(this_opt, "font:", 5))
+			strcpy(fb_info.fontname, this_opt+5);
+	}
 	return 0;
 }
 #endif /* !MODULE */
+
 
 	/*
 	 * Cleanup
@@ -675,6 +723,11 @@ static void hgafb_cleanup(struct fb_info *info)
 #ifdef MODULE
 int init_module(void)
 {
+	if (font)
+		strncpy(fb_info.fontname, font, sizeof(fb_info.fontname)-1);
+	else
+		fb_info.fontname[0] = '\0';
+
 	return hgafb_init();
 }
 
@@ -686,6 +739,8 @@ void cleanup_module(void)
 MODULE_AUTHOR("Ferenc Bakonyi (fero@drama.obuda.kando.hu)");
 MODULE_DESCRIPTION("FBDev driver for Hercules Graphics Adaptor");
 
+MODULE_PARM(font, "s");
+MODULE_PARM_DESC(font, "Specifies one of the compiled-in fonts (VGA8x8, VGA8x16, SUN8x16, Acorn8x8, PEARL8x8) (default=none)");
 MODULE_PARM(nologo, "i");
 MODULE_PARM_DESC(nologo, "Disables startup logo if != 0 (default=0)");
 

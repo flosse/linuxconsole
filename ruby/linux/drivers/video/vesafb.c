@@ -25,11 +25,12 @@
 #include <asm/io.h>
 #include <asm/mtrr.h>
 
-#include <video/fbcon.h>
+#include "fbcon.h"
 #include <video/fbcon-cfb8.h>
 #include <video/fbcon-cfb16.h>
 #include <video/fbcon-cfb24.h>
 #include <video/fbcon-cfb32.h>
+#include "fbcon-mac.h"
 
 #define dac_reg	(0x3c8)
 #define dac_val	(0x3c9)
@@ -46,14 +47,14 @@ int   video_size;
 char *video_vbase;        /* mapped */
 
 /* mode */
-int  video_bpp;
-int  video_width;
-int  video_height;
-int  video_height_virtual;
-int  video_type = FB_TYPE_PACKED_PIXELS;
-int  video_visual;
-int  video_linelength;
-int  video_cmap_len;
+static int  video_bpp;
+static int  video_width;
+static int  video_height;
+static int  video_height_virtual;
+static int  video_type = FB_TYPE_PACKED_PIXELS;
+static int  video_visual;
+static int  video_linelength;
+static int  video_cmap_len;
 
 /* --------------------------------------------------------------------- */
 
@@ -104,25 +105,6 @@ static void            (*pmi_pal)(void);
 static struct display_switch vesafb_sw;
 
 /* --------------------------------------------------------------------- */
-
-	/*
-	 * Open/Release the frame buffer device
-	 */
-
-static int vesafb_open(struct fb_info *info, int user)
-{
-	/*
-	 * Nothing, only a usage count for the moment
-	 */
-	MOD_INC_USE_COUNT;
-	return(0);
-}
-
-static int vesafb_release(struct fb_info *info, int user)
-{
-	MOD_DEC_USE_COUNT;
-	return(0);
-}
 
 static int vesafb_pan_display(struct fb_var_screeninfo *var, int con,
                               struct fb_info *info)
@@ -239,8 +221,13 @@ static void vesafb_set_disp(int con)
 		break;
 #endif
 	default:
+#ifdef FBCON_HAS_MAC
+		sw = &fbcon_mac;
+		break;
+#else
 		sw = &fbcon_dummy;
 		return;
+#endif
 	}
 	memcpy(&vesafb_sw, sw, sizeof(*sw));
 	display->dispsw = &vesafb_sw;
@@ -278,7 +265,7 @@ static int vesafb_set_var(struct fb_var_screeninfo *var, int con,
 			vesafb_defined.yres_virtual = var->yres_virtual;
 			if (con != -1) {
 				fb_display[con].var = vesafb_defined;
-				info->changevar(con);
+				fbcon_changevar(con);
 			}
 		}
 
@@ -343,7 +330,7 @@ static void vesa_setpalette(int regno, unsigned red, unsigned green, unsigned bl
 #endif
 
 static int vesafb_setcolreg(unsigned regno, unsigned red, unsigned green,
-	      		    unsigned blue, unsigned transp,
+			    unsigned blue, unsigned transp,
 			    struct fb_info *fb_info)
 {
 	/*
@@ -417,7 +404,7 @@ static void do_install_cmap(int con, struct fb_info *info)
 	if (fb_display[con].cmap.len)
 		fb_set_cmap(&fb_display[con].cmap, 1, info);
 	else
-		fb_set_cmap(fb_default_cmap(video_cmap_len), 1, info);
+		fb_set_cmap(fb_default_cmap(video_cmap_len), 1, info); 
 }
 
 static int vesafb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
@@ -433,21 +420,39 @@ static int vesafb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 	return 0;
 }
 
+static int vesafb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			   struct fb_info *info)
+{
+	int err;
+
+	if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
+		err = fb_alloc_cmap(&fb_display[con].cmap,video_cmap_len,0);
+		if (err)
+			return err;
+	}
+	if (con == currcon)			/* current console? */
+		return fb_set_cmap(cmap, kspc, info);
+	else
+		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
+	return 0;
+}
+
 static struct fb_ops vesafb_ops = {
-	fb_open:	vesafb_open,
-	fb_release:	vesafb_release,
+	owner:		THIS_MODULE,
 	fb_get_fix:	vesafb_get_fix,
 	fb_get_var:	vesafb_get_var,
 	fb_set_var:	vesafb_set_var,
 	fb_get_cmap:	vesafb_get_cmap,
-	fb_set_cmap:	fbgen_set_cmap,
+	fb_set_cmap:	vesafb_set_cmap,
 	fb_setcolreg:	vesafb_setcolreg,
-	fb_pan_display:	vesafb_pan_display
+	fb_pan_display:	vesafb_pan_display,
 };
 
 int vesafb_setup(char *options)
 {
 	char *this_opt;
+	
+	fb_info.fontname[0] = '\0';
 	
 	if (!options || !*options)
 		return 0;
@@ -469,6 +474,8 @@ int vesafb_setup(char *options)
 			pmi_setpal=1;
 		else if (! strcmp(this_opt, "mtrr"))
 			mtrr=1;
+		else if (!strncmp(this_opt, "font:", 5))
+			strcpy(fb_info.fontname, this_opt+5);
 	}
 	return 0;
 }
@@ -516,7 +523,7 @@ int __init vesafb_init(void)
 	if (!video_vbase) {
 		release_mem_region(video_base, video_size);
 		printk(KERN_ERR
-		       "vesafb: abort, cannot ioremap video memory 0x%lx @ 0x%lx\n",
+		       "vesafb: abort, cannot ioremap video memory 0x%x @ 0x%lx\n",
 			video_size, video_base);
 		return -EIO;
 	}
@@ -627,7 +634,6 @@ int __init vesafb_init(void)
 	}
 	
 	strcpy(fb_info.modename, "VESA VGA");
-	fb_info.changevar = NULL;
 	fb_info.node = -1;
 	fb_info.fbops = &vesafb_ops;
 	fb_info.disp=&disp;

@@ -11,8 +11,8 @@
 #include <linux/module.h>
 #include <linux/tty.h>
 #include <linux/fb.h>
+#include <linux/vt_kern.h>
 #include <linux/sched.h>
-
 #include "fbcon.h"
 
 #undef DEBUG

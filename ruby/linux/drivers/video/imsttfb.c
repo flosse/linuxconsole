@@ -41,7 +41,7 @@
 #include <video/macmodes.h>
 #endif
 
-#include <video/fbcon.h>
+#include "fbcon.h"
 #include <video/fbcon-cfb8.h>
 #include <video/fbcon-cfb16.h>
 #include <video/fbcon-cfb24.h>
@@ -377,6 +377,7 @@ enum {
 #define CURSOR_DRAW_DELAY	2
 
 static int currcon = 0;
+static char fontname[40] __initdata = { 0 };
 static char curblink __initdata = 1;
 static char noaccel __initdata = 0;
 #if defined(CONFIG_PPC)
@@ -1114,30 +1115,58 @@ imsttfbcon_revc (struct display *disp, int sx, int sy)
 
 #ifdef FBCON_HAS_CFB8
 static struct display_switch fbcon_imstt8 = {
-	fbcon_cfb8_setup, imsttfbcon_bmove, imsttfbcon_clear, fbcon_cfb8_putc,
-	fbcon_cfb8_putcs, imsttfbcon_revc, imsttfbcon_cursor, imsttfbcon_set_font, fbcon_cfb8_clear_margins,
-	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
+	setup:		fbcon_cfb8_setup,
+	bmove:		imsttfbcon_bmove,
+	clear:		imsttfbcon_clear,
+	putc:		fbcon_cfb8_putc,
+	putcs:		fbcon_cfb8_putcs,
+	revc:		imsttfbcon_revc,
+	cursor:		imsttfbcon_cursor,
+	set_font:	imsttfbcon_set_font,
+	clear_margins:	fbcon_cfb8_clear_margins,
+	fontwidthmask:	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
 };
 #endif
 #ifdef FBCON_HAS_CFB16
 static struct display_switch fbcon_imstt16 = {
-	fbcon_cfb16_setup, imsttfbcon_bmove, imsttfbcon_clear, fbcon_cfb16_putc,
-	fbcon_cfb16_putcs, imsttfbcon_revc, imsttfbcon_cursor, imsttfbcon_set_font, fbcon_cfb16_clear_margins,
-	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
+	setup:		fbcon_cfb16_setup,
+	bmove:		imsttfbcon_bmove,
+	clear:		imsttfbcon_clear,
+	putc:		fbcon_cfb16_putc,
+	putcs:		fbcon_cfb16_putcs,
+	revc:		imsttfbcon_revc,
+	cursor:		imsttfbcon_cursor,
+	set_font:	imsttfbcon_set_font,
+	clear_margins:	fbcon_cfb16_clear_margins,
+	fontwidthmask:	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
 };
 #endif
 #ifdef FBCON_HAS_CFB24
 static struct display_switch fbcon_imstt24 = {
-	fbcon_cfb24_setup, imsttfbcon_bmove, imsttfbcon_clear, fbcon_cfb24_putc,
-	fbcon_cfb24_putcs, imsttfbcon_revc, imsttfbcon_cursor, imsttfbcon_set_font, fbcon_cfb24_clear_margins,
-	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
+	setup:		fbcon_cfb24_setup,
+	bmove:		imsttfbcon_bmove,
+	clear:		imsttfbcon_clear,
+	putc:		fbcon_cfb24_putc,
+	putcs:		fbcon_cfb24_putcs,
+	revc:		imsttfbcon_revc,
+	cursor:		imsttfbcon_cursor,
+	set_font:	imsttfbcon_set_font,
+	clear_margins:	fbcon_cfb24_clear_margins,
+	fontwidthmask:	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
 };
 #endif
 #ifdef FBCON_HAS_CFB32
 static struct display_switch fbcon_imstt32 = {
-	fbcon_cfb32_setup, imsttfbcon_bmove, imsttfbcon_clear, fbcon_cfb32_putc,
-	fbcon_cfb32_putcs, imsttfbcon_revc, imsttfbcon_cursor, imsttfbcon_set_font, fbcon_cfb32_clear_margins,
-	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
+	setup:		fbcon_cfb32_setup,
+	bmove:		imsttfbcon_bmove,
+	clear:		imsttfbcon_clear,
+	putc:		fbcon_cfb32_putc,
+	putcs:		fbcon_cfb32_putcs,
+	revc:		imsttfbcon_revc,
+	cursor:		imsttfbcon_cursor,
+	set_font:	imsttfbcon_set_font,
+	clear_margins:	fbcon_cfb32_clear_margins,
+	fontwidthmask:	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
 };
 #endif
 
@@ -1199,8 +1228,9 @@ imsttfb_getcolreg (u_int regno, u_int *red, u_int *green,
 	return 0;
 }
 
-static int imsttfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-          		     u_int transp, struct fb_info *info)
+static int
+imsttfb_setcolreg (u_int regno, u_int red, u_int green, u_int blue,
+		   u_int transp, struct fb_info *info)
 {
 	struct fb_info_imstt *p = (struct fb_info_imstt *)info;
 	u_int bpp = fb_display[currcon].var.bits_per_pixel;
@@ -1260,20 +1290,6 @@ do_install_cmap (int con, struct fb_info *info)
 		u_int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
 		fb_set_cmap(fb_default_cmap(size), 1, info);
 	}
-}
-
-static int
-imsttfb_open (struct fb_info *info, int user)
-{
-	MOD_INC_USE_COUNT;
-	return 0;
-}
-
-static int
-imsttfb_release (struct fb_info *info, int user)
-{
-	MOD_DEC_USE_COUNT;
-	return 0;
 }
 
 static int
@@ -1466,8 +1482,7 @@ imsttfb_set_var (struct fb_var_screeninfo *var, int con, struct fb_info *info)
 
 	set_disp(disp, p);
 
-	if (info->changevar)
-		(*info->changevar)(con);
+	fbcon_changevar(con);
 
 	if (con == currcon) {
 		if (oldgreenlen != disp->var.green.length) {
@@ -1522,6 +1537,24 @@ imsttfb_get_cmap (struct fb_cmap *cmap, int kspc, int con, struct fb_info *info)
 		u_int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
 		fb_copy_cmap(fb_default_cmap(size), cmap, kspc ? 0 : 2);
 	}
+
+	return 0;
+}
+
+static int
+imsttfb_set_cmap (struct fb_cmap *cmap, int kspc, int con, struct fb_info *info)
+{
+	int err;
+
+	if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
+		int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
+		if ((err = fb_alloc_cmap(&fb_display[con].cmap, size, 0)))
+			return err;
+	}
+	if (con == currcon)			/* current console? */
+		return fb_set_cmap(cmap, kspc, info);
+	else
+		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
 
 	return 0;
 }
@@ -1588,17 +1621,16 @@ imsttfb_ioctl (struct inode *inode, struct file *file, u_int cmd,
 }
 
 static struct fb_ops imsttfb_ops = {
-	fb_open:	imsttfb_open,
-	fb_release:	imsttfb_release,
+	owner:		THIS_MODULE,
 	fb_get_fix:	imsttfb_get_fix,
 	fb_get_var:	imsttfb_get_var,
 	fb_set_var:	imsttfb_set_var,
 	fb_get_cmap:	imsttfb_get_cmap,
-	fb_set_cmap:	fbgen_set_cmap,
+	fb_set_cmap:	imsttfb_set_cmap,
 	fb_setcolreg:	imsttfb_setcolreg,
 	fb_blank:	imsttfb_blank,
 	fb_pan_display:	imsttfb_pan_display,
-	fb_ioctl:	imsttfb_ioctl
+	fb_ioctl:	imsttfb_ioctl,
 };
 
 static int
@@ -1658,7 +1690,8 @@ out:
 	return 0;
 }
 
-static int imsttfb_blank(int blank, struct fb_info *info)
+static void
+imsttfb_blank (int blank, struct fb_info *info)
 {
 	struct fb_info_imstt *p = (struct fb_info_imstt *)info;
 	__u32 ctrl;
@@ -1808,10 +1841,10 @@ init_imstt(struct fb_info_imstt *p)
 	p->disp.var.pixclock = 1000000 / getclkMHz(p);
 
 	strcpy(p->info.modename, p->fix.id);
+	strcpy(p->info.fontname, fontname);
 	p->info.node = -1;
 	p->info.fbops = &imsttfb_ops;
 	p->info.disp = &p->disp;
-	p->info.changevar = 0;
 	p->info.switch_con = &imsttfbcon_switch;
 	p->info.updatevar = &imsttfbcon_updatevar;
 	p->info.flags = FBINFO_FLAG_DEFAULT;
@@ -1958,7 +1991,17 @@ imsttfb_setup(char *options)
 
 	for (this_opt = strtok(options, ","); this_opt;
 	     this_opt = strtok(NULL, ",")) {
-		if (!strncmp(this_opt, "noblink", 7)) {
+		if (!strncmp(this_opt, "font:", 5)) {
+			char *p;
+			int i;
+
+			p = this_opt + 5;
+			for (i = 0; i < sizeof(fontname) - 1; i++)
+				if (!*p || *p == ' ' || *p == ',')
+					break;
+			memcpy(fontname, this_opt + 5, i);
+			fontname[i] = 0;
+		} else if (!strncmp(this_opt, "noblink", 7)) {
 			curblink = 0;
 		} else if (!strncmp(this_opt, "noaccel", 7)) {
 			noaccel = 1;

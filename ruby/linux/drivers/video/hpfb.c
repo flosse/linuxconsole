@@ -22,7 +22,7 @@
 #include <asm/blinken.h>
 #include <asm/hwtest.h>
 
-#include <video/fbcon.h>
+#include "fbcon.h"
 #include <video/fbcon-mfb.h>
 #include <video/fbcon-cfb2.h>
 #include <video/fbcon-cfb4.h>
@@ -33,7 +33,7 @@
 static struct display disp;
 static struct fb_info fb_info;
 
-unsigned long fb_start;
+unsigned long fb_start, fb_size = 1024*768, fb_line_length = 1024;
 unsigned long fb_regs;
 unsigned char fb_bitmask;
 
@@ -53,27 +53,21 @@ unsigned char fb_bitmask;
 #define WWIDTH		0x4102
 #define WMOVE		0x409c
 
-static int currcon = 0;
-
-static struct fb_fix_screeninfo hpfb_fix __initdata = {
-    "HP300 Topcat", (unsigned long) NULL, 1024*768, FB_TYPE_PACKED_PIXELS, 0,
-    FB_VISUAL_PSEUDOCOLOR, 0, 0, 0, 1024, (unsigned long) NULL, 0, FB_ACCEL_NONE};
-
-static struct fb_var_screeninfo hpfb_var = {
-	1024,768,1024,768,	/* W,H, W, H (virtual) load xres,xres_virtual*/
-	0,0,			/* virtual -> visible no offset */
-	8,			/* depth -> load bits_per_pixel */
-	0,			/* greyscale ? */
-	{0,2,0},		/* R */
-	{0,2,0},		/* G */
-	{0,2,0},		/* B */
-	{0,0,0},		/* transparency */
-	0,			/* standard pixel format */
+static struct fb_var_screeninfo hpfb_defined = {
+	0,0,0,0,	/* W,H, W, H (virtual) load xres,xres_virtual*/
+	0,0,		/* virtual -> visible no offset */
+	0,		/* depth -> load bits_per_pixel */
+	0,		/* greyscale ? */
+	{0,2,0},	/* R */
+	{0,2,0},	/* G */
+	{0,2,0},	/* B */
+	{0,0,0},	/* transparency */
+	0,		/* standard pixel format */
 	FB_ACTIVATE_NOW,
-	274,195,		/* 14" monitor */
+	274,195,	/* 14" monitor */
 	FB_ACCEL_NONE,
 	0L,0L,0L,0L,0L,
-	0L,0L,0,		/* No sync info */
+	0L,0L,0,	/* No sync info */
 	FB_VMODE_NONINTERLACED,
 	{0,0,0,0,0,0}
 };
@@ -82,78 +76,180 @@ struct hpfb_par
 {
 };
 
-/* frame buffer operations */
-int hpfb_init(void);
+static int currcon = 0;
+struct hpfb_par current_par;
 
-static int hpfb_open(struct fb_info *info, int user);
-static int hpfb_release(struct fb_info *info, int user);
-static int hpfb_set_var(struct fb_var_screeninfo *var, int con,
-                        struct fb_info *info);
-static int hpfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-                          u_int transp, struct fb_info *info);
-
-    /*
-     *  Interface to the low level console driver
-     */
-
-static int hpfb_switch(int con, struct fb_info *info);
-static int hpfb_update_var(int con, struct fb_info *info);
-		
-static struct fb_ops hpfb_ops = {
-        fb_open:        hpfb_open,
-        fb_release:     hpfb_release,
-        fb_get_fix:     fbgen_get_fix,
-        fb_get_var:     fbgen_get_var,
-        fb_set_var:     hpfb_set_var,
-        fb_get_cmap:    fbgen_get_cmap,
-        fb_set_cmap:    fbgen_set_cmap,
-	fb_setcolreg:	hpfb_setcolreg
-};
-
-static int hpfb_open(struct fb_info *info, int user)
+static void hpfb_encode_var(struct fb_var_screeninfo *var, 
+				struct hpfb_par *par)
 {
-        /*
-         * Nothing, only a usage count for the moment
-         */
-        MOD_INC_USE_COUNT;
-        return(0);
+	int i=0;
+	var->xres=1024;
+	var->yres=768;
+	var->xres_virtual=1024;
+	var->yres_virtual=768;
+	var->xoffset=0;
+	var->yoffset=0;
+	var->bits_per_pixel = 1;
+	var->grayscale=0;
+	var->transp.offset=0;
+	var->transp.length=0;
+	var->transp.msb_right=0;
+	var->nonstd=0;
+	var->activate=0;
+	var->height= -1;
+	var->width= -1;
+	var->vmode=FB_VMODE_NONINTERLACED;
+	var->pixclock=0;
+	var->sync=0;
+	var->left_margin=0;
+	var->right_margin=0;
+	var->upper_margin=0;
+	var->lower_margin=0;
+	var->hsync_len=0;
+	var->vsync_len=0;
+	for(i=0;i<arraysize(var->reserved);i++)
+		var->reserved[i]=0;
 }
 
-static int hpfb_release(struct fb_info *info, int user)
+static void hpfb_get_par(struct hpfb_par *par)
 {
-        MOD_DEC_USE_COUNT;
-        return(0);
+	*par=current_par;
 }
 
-static int hpfb_set_var(struct fb_var_screeninfo *var, int con,
-                         struct fb_info *info)
+static int fb_update_var(int con, struct fb_info *info)
 {
-	return -EINVAL;        
+	return 0;
+}
+
+static int do_fb_set_var(struct fb_var_screeninfo *var, int isactive)
+{
+	struct hpfb_par par;
+	
+	hpfb_get_par(&par);
+	hpfb_encode_var(var, &par);
+	return 0;
+}
+
+static int hpfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
+			  struct fb_info *info)
+{
+	return 0;
 }
 
 /*
- * Set the palette.  This may not work on all boards but only experimentation
- * will tell. XXX Doesn't work at all.
+ * Set the palette.  This may not work on all boards but only experimentation will tell.
+ * XXX Doesn't work at all.
  */
 
-static int hpfb_setcolreg(unsigned regno, unsigned red, unsigned green,
-                           unsigned blue, unsigned transp,
-                           struct fb_info *info)
+static int hpfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			  struct fb_info *info)
 {
-	while (readw(fb_regs + 0x6002) & 0x4) udelay(1);
-        writew(0, fb_regs + 0x60f0);
-        writew(regno, fb_regs + 0x60b8);
-        writew(red, fb_regs + 0x60b2);
-        writew(green, fb_regs + 0x60b4);
-        writew(blue, fb_regs + 0x60b6);
-        writew(0xff, fb_regs + 0x60f0);
-        udelay(100);
-	writew(0xffff, fb_regs + 0x60ba);	
-	return 0; 
+	unsigned int i;
+	for (i = 0; i < cmap->len; i++)
+	{
+		while (readw(fb_regs + 0x6002) & 0x4) udelay(1);
+		writew(0, fb_regs + 0x60f0);
+		writew(cmap->start + i, fb_regs + 0x60b8);
+		writew(cmap->red[i], fb_regs + 0x60b2);
+		writew(cmap->green[i], fb_regs + 0x60b4);
+		writew(cmap->blue[i], fb_regs + 0x60b6);
+		writew(0xff, fb_regs + 0x60f0);
+		udelay(100);
+	}
+	writew(0xffff, fb_regs + 0x60ba);
+	return 0;
 }
 
-static void hpfb_set_disp(int con, struct fb_info *info)
+static int hpfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+                          u_int transp, struct fb_info *info)
 {
+        while (readw(fb_regs + 0x6002) & 0x4) udelay(1);
+        writew(0, fb_regs + 0x60f0);
+        writew(regno, fb_regs + 0x60b8);
+        writew(cmap->red[regno], fb_regs + 0x60b2);
+        writew(cmap->green[regno], fb_regs + 0x60b4);
+        writew(cmap->blue[regno], fb_regs + 0x60b6);
+        writew(0xff, fb_regs + 0x60f0);
+        udelay(100);
+        writew(0xffff, fb_regs + 0x60ba);
+        return 0;
+}
+
+static int hpfb_get_var(struct fb_var_screeninfo *var, int con,
+			 struct fb_info *info)
+{
+	struct hpfb_par par;
+	if(con==-1)
+	{
+		hpfb_get_par(&par);
+		hpfb_encode_var(var, &par);
+	}
+	else
+		*var=fb_display[con].var;
+	return 0;
+}
+
+static int hpfb_set_var(struct fb_var_screeninfo *var, int con,
+			 struct fb_info *info)
+{
+	int err;
+	
+	if ((err=do_fb_set_var(var, 1)))
+		return err;
+	return 0;
+}
+
+static void hpfb_encode_fix(struct fb_fix_screeninfo *fix, 
+				struct hpfb_par *par)
+{
+	memset(fix, 0, sizeof(struct fb_fix_screeninfo));
+	strcpy(fix->id, "HP300 Topcat");
+
+	/*
+	 * X works, but screen wraps ... 
+	 */
+	fix->smem_start=fb_start;
+	fix->smem_len=fb_size;
+	fix->type = FB_TYPE_PACKED_PIXELS;
+	fix->visual = FB_VISUAL_PSEUDOCOLOR;
+	fix->xpanstep=0;
+	fix->ypanstep=0;
+	fix->ywrapstep=0;
+	fix->line_length=fb_line_length;
+}
+
+static int hpfb_get_fix(struct fb_fix_screeninfo *fix, int con,
+			 struct fb_info *info)
+{
+	struct hpfb_par par;
+	hpfb_get_par(&par);
+	hpfb_encode_fix(fix, &par);
+	return 0;
+}
+
+static void topcat_blit(int x0, int y0, int x1, int y1, int w, int h)
+{
+	while (readb(fb_regs + BUSY) & fb_bitmask);
+	writeb(0x3, fb_regs + WMRR);
+	writew(x0, fb_regs + SOURCE_X);
+	writew(y0, fb_regs + SOURCE_Y);
+	writew(x1, fb_regs + DEST_X);
+	writew(y1, fb_regs + DEST_Y);
+	writew(h, fb_regs + WHEIGHT);
+	writew(w, fb_regs + WWIDTH);
+	writeb(fb_bitmask, fb_regs + WMOVE);
+}
+
+static int hpfb_switch(int con, struct fb_info *info)
+{
+	do_fb_set_var(&fb_display[con].var,1);
+	currcon=con;
+	return 0;
+}
+
+static void hpfb_set_disp(int con)
+{
+	struct fb_fix_screeninfo fix;
 	struct display *display;
 	
 	if (con >= 0)
@@ -161,19 +257,31 @@ static void hpfb_set_disp(int con, struct fb_info *info)
 	else
 		display = &disp;	/* used during initialization */
 
-	display->screen_base = (char *) info->fix.smem_start;
-	display->visual = info->fix.visual;
-	display->type = info->fix.type;
-	display->type_aux = info->fix.type_aux;
-	display->ypanstep = info->fix.ypanstep;
-	display->ywrapstep = info->fix.ywrapstep;
-	display->line_length = info->fix.line_length;
-	display->next_line = info->fix.line_length;
+	hpfb_get_fix(&fix, con, 0);
+
+	display->screen_base = fix.smem_start;
+	display->visual = fix.visual;
+	display->type = fix.type;
+	display->type_aux = fix.type_aux;
+	display->ypanstep = fix.ypanstep;
+	display->ywrapstep = fix.ywrapstep;
+	display->line_length = fix.line_length;
+	display->next_line = fix.line_length;
 	display->can_soft_blank = 0;
 	display->inverse = 0;
 
 	display->dispsw = &fbcon_cfb8;
 }
+
+static struct fb_ops hpfb_ops = {
+	owner:		THIS_MODULE,
+	fb_get_fix:	hpfb_get_fix,
+	fb_get_var:	hpfb_get_var,
+	fb_set_var:	hpfb_set_var,
+	fb_get_cmap:	hpfb_get_cmap,
+	fb_set_cmap:	hpfb_set_cmap,
+	fb_setcolreg:	hpfb_setcolreg,
+};
 
 #define TOPCAT_FBOMSB	0x5d
 #define TOPCAT_FBOLSB	0x5f
@@ -185,7 +293,7 @@ int __init hpfb_init_one(unsigned long base)
 	fboff = (readb(base + TOPCAT_FBOMSB) << 8) 
 		| readb(base + TOPCAT_FBOLSB);
 
-	hpfb_fix.smem_start = 0xf0000000 | (readb(base + fboff) << 16);
+	fb_start = 0xf0000000 | (readb(base + fboff) << 16);
 	fb_regs = base;
 
 #if 0
@@ -198,6 +306,16 @@ int __init hpfb_init_one(unsigned long base)
 	writeb(0x90, base+0x4206);
 #endif
 
+	/*
+	 *	Fill in the available video resolution
+	 */
+	 
+	hpfb_defined.xres = 1024;
+	hpfb_defined.yres = 768;
+	hpfb_defined.xres_virtual = 1024;
+	hpfb_defined.yres_virtual = 768;
+	hpfb_defined.bits_per_pixel = 8;
+
 	/* 
 	 *	Give the hardware a bit of a prod and work out how many bits per
 	 *	pixel are supported.
@@ -205,8 +323,8 @@ int __init hpfb_init_one(unsigned long base)
 	
 	writeb(0xff, base + TC_WEN);
 	writeb(0xff, base + TC_FBEN);
-	writeb(0xff, hpfb_fix.smem_start);
-	fb_bitmask = readb(hpfb_fix.smem_start);
+	writeb(0xff, fb_start);
+	fb_bitmask = readb(fb_start);
 
 	/*
 	 *	Enable reading/writing of all the planes.
@@ -220,21 +338,16 @@ int __init hpfb_init_one(unsigned long base)
 	 *	Let there be consoles..
 	 */
 	strcpy(fb_info.modename, "Topcat");
-	fb_info.changevar = NULL;
 	fb_info.node = -1;
 	fb_info.fbops = &hpfb_ops;
 	fb_info.disp = &disp;
-	fb_info.var = hpfb_var;
-	fb_info.fix = hpfb_fix;
-	fb_info.switch_con = &fbgen_switch;
-	fb_info.updatevar = &fbgen_update_var;
+	fb_info.switch_con = &hpfb_switch;
+	fb_info.updatevar = &fb_update_var;
 	fb_info.flags = FBINFO_FLAG_DEFAULT;
+	do_fb_set_var(&hpfb_defined, 1);
 
-	fb_copy_cmap(fb_default_cmap(1<<fb_info.var.bits_per_pixel),
-                        &fb_info.cmap, 0);
-        fb_set_cmap(&fb_info.cmap, 1, &fb_info);
-	hpfb_set_var(&fb_info.var, -1, &fb_info);
-	hpfb_set_disp(-1, &fb_info);
+	hpfb_get_var(&disp.var, -1, &fb_info);
+	hpfb_set_disp(-1);
 
 	if (register_framebuffer(&fb_info) < 0)
 		return 1;
@@ -297,17 +410,4 @@ int __init hpfb_init(void)
 int __init hpfb_setup(char *options)
 {
 	return 0;
-}
-
-static void topcat_blit(int x0, int y0, int x1, int y1, int w, int h)
-{
-        while (readb(fb_regs + BUSY) & fb_bitmask);
-        writeb(0x3, fb_regs + WMRR);
-        writew(x0, fb_regs + SOURCE_X);
-        writew(y0, fb_regs + SOURCE_Y);
-        writew(x1, fb_regs + DEST_X);
-        writew(y1, fb_regs + DEST_Y);
-        writew(h, fb_regs + WHEIGHT);
-        writew(w, fb_regs + WWIDTH);
-        writeb(fb_bitmask, fb_regs + WMOVE);
 }

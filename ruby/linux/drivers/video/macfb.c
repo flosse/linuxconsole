@@ -40,7 +40,7 @@
 #include <asm/io.h>
 #include <asm/machw.h>
 
-#include <video/fbcon.h>
+#include "fbcon.h"
 #include <video/fbcon-mfb.h>
 #include <video/fbcon-cfb2.h>
 #include <video/fbcon-cfb4.h>
@@ -157,18 +157,17 @@ struct jet_cmap_regs {
 
 static char* video_base;
 static int   video_size;
+static char* video_vbase;        /* mapped */
 
 /* mode */
 static int  video_bpp;
 static int  video_width;
 static int  video_height;
+static int  video_type = FB_TYPE_PACKED_PIXELS;
+static int  video_visual;
 static int  video_linelength;
+static int  video_cmap_len;
 static int  video_slot = 0;
-
-static struct fb_fix_screeninfo macfb_fix __initdata = {
-    "Mac Generic", (unsigned long) NULL, 0, FB_TYPE_PACKED_PIXELS, 0,
-    0, 0, 0, 0, 0, (unsigned long) NULL, 0, FB_ACCEL_NONE
-};
 
 static struct fb_var_screeninfo macfb_defined={
 	0,0,0,0,	/* W,H, W, H (virtual) load xres,xres_virtual*/
@@ -183,49 +182,150 @@ static struct fb_var_screeninfo macfb_defined={
 	FB_ACTIVATE_NOW,
 	-1, -1,
 	FB_ACCEL_NONE,	/* The only way to accelerate a mac is .. */
-	0L,             /* Pixclock */
-	0L,32L,16L,4L,  /* Margins */   
-	0L,4L,0,	/* No sync info */
+	0L,0L,0L,0L,0L,
+	0L,0L,0,	/* No sync info */
 	FB_VMODE_NONINTERLACED,
 	{0,0,0,0,0,0}
 };
 
 static struct display disp;
 static struct fb_info fb_info;
-static u32 pseudo_palette[17];
+static struct { u_short blue, green, red, pad; } palette[256];
+static union {
+#ifdef FBCON_HAS_CFB16
+    u16 cfb16[16];
+#endif
+#ifdef FBCON_HAS_CFB24
+    u32 cfb24[16];
+#endif
+#ifdef FBCON_HAS_CFB32
+    u32 cfb32[16];
+#endif
+} fbcon_cmap;
 
 static int             inverse   = 0;
 static int             vidtest   = 0;
 static int             currcon   = 0;
 
-/*
- * Open/Release the frame buffer device
- */
-
-static int macfb_open(struct fb_info *info, int user)
+static int macfb_update_var(int con, struct fb_info *info)
 {
-	/*
-	 * Nothing, only a usage count for the moment
-	 */
-	MOD_INC_USE_COUNT;
-	return(0);
+	return 0;
 }
 
-static int macfb_release(struct fb_info *info, int user)
+static int macfb_get_fix(struct fb_fix_screeninfo *fix, int con,
+			 struct fb_info *info)
 {
-	MOD_DEC_USE_COUNT;
-	return(0);
+	memset(fix, 0, sizeof(struct fb_fix_screeninfo));
+	strcpy(fix->id, "Mac Generic");
+
+	fix->smem_start = video_base;
+	fix->smem_len = video_size;
+	fix->type = video_type;
+	fix->visual = video_visual;
+	fix->xpanstep = 0;
+	fix->ypanstep = 0;
+	fix->line_length=video_linelength;
+	return 0;
+}
+
+static int macfb_get_var(struct fb_var_screeninfo *var, int con,
+			 struct fb_info *info)
+{
+	if(con==-1)
+		memcpy(var, &macfb_defined, sizeof(struct fb_var_screeninfo));
+	else
+		*var=fb_display[con].var;
+	return 0;
+}
+
+static void macfb_set_disp(int con)
+{
+	struct fb_fix_screeninfo fix;
+	struct display *display;
+	
+	if (con >= 0)
+		display = &fb_display[con];
+	else
+		display = &disp;	/* used during initialization */
+
+	macfb_get_fix(&fix, con, &fb_info);
+
+	memset(display, 0, sizeof(struct display));
+	display->screen_base = video_vbase;
+	display->visual = fix.visual;
+	display->type = fix.type;
+	display->type_aux = fix.type_aux;
+	display->ypanstep = fix.ypanstep;
+	display->ywrapstep = fix.ywrapstep;
+	display->line_length = fix.line_length;
+	display->next_line = fix.line_length;
+	display->can_soft_blank = 0;
+	display->inverse = inverse;
+	display->scrollmode = SCROLL_YREDRAW;
+	macfb_get_var(&display->var, -1, &fb_info);
+
+	switch (video_bpp) {
+#ifdef FBCON_HAS_MFB
+	case 1:
+		display->dispsw = &fbcon_mfb;
+		break;
+#endif
+#ifdef FBCON_HAS_CFB2
+	case 2:
+		display->dispsw = &fbcon_cfb2;
+		break;
+#endif
+#ifdef FBCON_HAS_CFB4
+	case 4:
+		display->dispsw = &fbcon_cfb4;
+		break;
+#endif
+#ifdef FBCON_HAS_CFB8
+	case 8:
+		display->dispsw = &fbcon_cfb8;
+		break;
+#endif
+#ifdef FBCON_HAS_CFB16
+	case 15:
+	case 16:
+		display->dispsw = &fbcon_cfb16;
+		display->dispsw_data = fbcon_cmap.cfb16;
+		break;
+#endif
+#ifdef FBCON_HAS_CFB24
+	case 24:
+		display->dispsw = &fbcon_cfb24;
+		display->dispsw_data = fbcon_cmap.cfb24;
+		break;
+#endif
+#ifdef FBCON_HAS_CFB32
+	case 32:
+		display->dispsw = &fbcon_cfb32;
+		display->dispsw_data = fbcon_cmap.cfb32;
+		break;
+#endif
+	default:
+		display->dispsw = &fbcon_dummy;
+		return;
+	}
 }
 
 static int macfb_set_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info)
 {
-	if (var->xres != info->var.xres || var->yres != info->var.yres ||
-	    var->xres_virtual != info->var.xres_virtual ||
-	    var->yres_virtual != info->var.yres || var->xoffset ||
-	    var->bits_per_pixel != info->var.bits_per_pixel ||
+	static int first = 1;
+
+	if (var->xres           != macfb_defined.xres           ||
+	    var->yres           != macfb_defined.yres           ||
+	    var->xres_virtual   != macfb_defined.xres_virtual   ||
+	    var->yres_virtual   != macfb_defined.yres           ||
+	    var->xoffset                                        ||
+	    var->bits_per_pixel != macfb_defined.bits_per_pixel ||
 	    var->nonstd) {
-		printk("macfb does not support changing the video mode\n");
+		if (first) {
+			printk("macfb does not support changing the video mode\n");
+			first = 0;
+		}
 		return -EINVAL;
 	}
 
@@ -296,11 +396,11 @@ static int dafb_setpalette (unsigned int regno, unsigned int red,
 		
 		/* Loop until we get to the register we want */
 		for (i = 0; i < regno; i++) {
-			writeb(fb_info.cmap.red[i] >> 8, &dafb_cmap_regs->lut);
+			writeb(palette[i].red >> 8, &dafb_cmap_regs->lut);
 			nop();
-			writeb(fb_info.cmap.green[i] >> 8,&dafb_cmap_regs->lut);
+			writeb(palette[i].green >> 8, &dafb_cmap_regs->lut);
 			nop();
-			writeb(fb_info.cmap.blue[i] >> 8, &dafb_cmap_regs->lut);
+			writeb(palette[i].blue >> 8, &dafb_cmap_regs->lut);
 			nop();
 		}
 	}
@@ -583,9 +683,28 @@ static int csc_setpalette (unsigned int regno, unsigned int red,
 
 #endif /* FBCON_HAS_CFB8 || FBCON_HAS_CFB4 || FBCON_HAS_CFB2 */
 
+static int macfb_getcolreg(unsigned regno, unsigned *red, unsigned *green,
+			   unsigned *blue, unsigned *transp,
+			   struct fb_info *fb_info)
+{
+	/*
+	 *  Read a single color register and split it into colors/transparent.
+	 *  Return != 0 for invalid regno.
+	 */
+
+	if (regno >= video_cmap_len)
+		return 1;
+
+	*red   = palette[regno].red;
+	*green = palette[regno].green;
+	*blue  = palette[regno].blue;
+	*transp = 0;
+	return 0;
+}
+
 static int macfb_setcolreg(unsigned regno, unsigned red, unsigned green,
 			   unsigned blue, unsigned transp,
-			   struct fb_info *info)
+			   struct fb_info *fb_info)
 {
 	/*
 	 *  Set a single color register. The values supplied are
@@ -594,10 +713,14 @@ static int macfb_setcolreg(unsigned regno, unsigned red, unsigned green,
 	 *  != 0 for invalid regno.
 	 */
 	
-	if (regno >= info->cmap.len)
+	if (regno >= video_cmap_len)
 		return 1;
 
-	switch (info->var.bits_per_pixel) {
+	palette[regno].red   = red;
+	palette[regno].green = green;
+	palette[regno].blue  = blue;
+
+	switch (video_bpp) {
 #ifdef FBCON_HAS_MFB
 	case 1:
 		/* We shouldn't get here */
@@ -631,7 +754,7 @@ static int macfb_setcolreg(unsigned regno, unsigned red, unsigned green,
 	case 15:
 	case 16:
 		/* 1:5:5:5 */
-		((u16*)(info->pseudo_palette))[regno] =
+		fbcon_cmap.cfb16[regno] =
 			((red   & 0xf800) >>  1) |
 			((green & 0xf800) >>  6) |
 			((blue  & 0xf800) >> 11) |
@@ -645,10 +768,10 @@ static int macfb_setcolreg(unsigned regno, unsigned red, unsigned green,
 		red   >>= 8;
 		green >>= 8;
 		blue  >>= 8;
-		((u32*)(info->pseudo_palette))[regno] =
-			(red   << info->var.red.offset)   |
-			(green << info->var.green.offset) |
-			(blue  << info->var.blue.offset);
+		fbcon_cmap.cfb24[regno] =
+			(red   << macfb_defined.red.offset)   |
+			(green << macfb_defined.green.offset) |
+			(blue  << macfb_defined.blue.offset);
 		break;
 #endif
 #ifdef FBCON_HAS_CFB32
@@ -656,39 +779,82 @@ static int macfb_setcolreg(unsigned regno, unsigned red, unsigned green,
 		red   >>= 8;
 		green >>= 8;
 		blue  >>= 8;
-		((u32*)(info->pseudo_palette))[regno] =
-			(red   << info->var.red.offset)   |
-			(green << info->var.green.offset) |
-			(blue  << info->var.blue.offset);
+		fbcon_cmap.cfb32[regno] =
+			(red   << macfb_defined.red.offset)   |
+			(green << macfb_defined.green.offset) |
+			(blue  << macfb_defined.blue.offset);
 		break;
 #endif
     }
     return 0;
 }
 
+static void do_install_cmap(int con, struct fb_info *info)
+{
+	if (con != currcon)
+		return;
+	if (fb_display[con].cmap.len)
+		fb_set_cmap(&fb_display[con].cmap, 1, info);
+	else
+		fb_set_cmap(fb_default_cmap(video_cmap_len), 1, info);
+}
+
+static int macfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
+			  struct fb_info *info)
+{
+	if (con == currcon) /* current console? */
+		return fb_get_cmap(cmap, kspc, macfb_getcolreg, info);
+	else if (fb_display[con].cmap.len) /* non default colormap? */
+		fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
+	else
+		fb_copy_cmap(fb_default_cmap(video_cmap_len),
+		     cmap, kspc ? 0 : 2);
+	return 0;
+}
+
+static int macfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			  struct fb_info *info)
+{
+	int err;
+
+	if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
+		err = fb_alloc_cmap(&fb_display[con].cmap,video_cmap_len,0);
+		if (err)
+			return err;
+	}
+	if (con == currcon)			/* current console? */
+		return fb_set_cmap(cmap, kspc, info);
+	else
+		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
+	return 0;
+}
+
 static struct fb_ops macfb_ops = {
-	fb_open:	macfb_open,
-	fb_release:	macfb_release,
-	fb_get_fix:	fbgen_get_fix,
-	fb_get_var:	fbgen_get_var,
+	owner:		THIS_MODULE,
+	fb_get_fix:	macfb_get_fix,
+	fb_get_var:	macfb_get_var,
 	fb_set_var:	macfb_set_var,
-	fb_get_cmap:	fbgen_get_cmap,
-	fb_set_cmap:	fbgen_set_cmap,
-	fb_setcolreg:	macfb_setcolreg
+	fb_get_cmap:	macfb_get_cmap,
+	fb_set_cmap:	macfb_set_cmap,
+	fb_setcolreg:	macfb_setcolreg,
 };
 
 void macfb_setup(char *options, int *ints)
 {
 	char *this_opt;
 	
+	fb_info.fontname[0] = '\0';
+	
 	if (!options || !*options)
 		return;
 	
-	for(this_opt=strtok(options,","); this_opt;this_opt=strtok(NULL,",")) {
+	for(this_opt=strtok(options,","); this_opt; this_opt=strtok(NULL,",")) {
 		if (!*this_opt) continue;
 		
 		if (! strcmp(this_opt, "inverse"))
 			inverse=1;
+		else if (!strncmp(this_opt, "font:", 5))
+			strcpy(fb_info.fontname, this_opt+5);
 		/* This means "turn on experimental CLUT code" */
 		else if (!strcmp(this_opt, "vidtest"))
 			vidtest=1;
@@ -697,84 +863,16 @@ void macfb_setup(char *options, int *ints)
 
 static int macfb_switch(int con, struct fb_info *info)
 {
-	struct display *prev = &fb_display[currcon];
-        struct display *new = &fb_display[con];
-
-        currcon = con;
-        /* Save current colormap */
-        fb_copy_cmap(&prev->fb_info->cmap, &prev->cmap, 0);
-        /* Install new colormap */
-        new->fb_info->fbops->fb_set_cmap(&new->cmap, 0, con, new->fb_info);
+	/* Do we have to save the colormap? */
+	if (fb_display[currcon].cmap.len)
+		fb_get_cmap(&fb_display[currcon].cmap, 1, macfb_getcolreg,
+			    info);
+	
+	currcon = con;
+	/* Install new colormap */
+	do_install_cmap(con, info);
 	macfb_update_var(con, info);
 	return 1;
-}
-
-static void macfb_set_disp(int con)
-{
-	struct display *display;
-	
-	if (con >= 0)
-		display = &fb_display[con];
-	else
-		display = &disp;	/* used during initialization */
-
-	memset(display, 0, sizeof(struct display));
-	display->screen_base = fb_info.screen_base;
-	display->visual = fb_info.fix.visual;
-	display->type = fb_info.fix.type;
-	display->type_aux = fb_info.fix.type_aux;
-	display->ypanstep = fb_info.fix.ypanstep;
-	display->ywrapstep = fb_info.fix.ywrapstep;
-	display->line_length = fb_info.fix.line_length;
-	display->next_line = fb_info.fix.line_length;
-	display->can_soft_blank = 0;
-	display->inverse = inverse;
-	display->scrollmode = SCROLL_YREDRAW;
-
-	switch (video_bpp) {
-#ifdef FBCON_HAS_MFB
-	case 1:
-		display->dispsw = &fbcon_mfb;
-		break;
-#endif
-#ifdef FBCON_HAS_CFB2
-	case 2:
-		display->dispsw = &fbcon_cfb2;
-		break;
-#endif
-#ifdef FBCON_HAS_CFB4
-	case 4:
-		display->dispsw = &fbcon_cfb4;
-		break;
-#endif
-#ifdef FBCON_HAS_CFB8
-	case 8:
-		display->dispsw = &fbcon_cfb8;
-		break;
-#endif
-#ifdef FBCON_HAS_CFB16
-	case 15:
-	case 16:
-		display->dispsw = &fbcon_cfb16;
-		display->dispsw_data = pseudo_palette;
-		break;
-#endif
-#ifdef FBCON_HAS_CFB24
-	case 24:
-		display->dispsw = &fbcon_cfb24;
-		display->dispsw_data = pseudo_palette;
-		break;
-#endif
-#ifdef FBCON_HAS_CFB32
-	case 32:
-		display->dispsw = &fbcon_cfb32;
-		display->dispsw_data = pseudo_palette;
-		break;
-#endif
-	default:
-		display->dispsw = &fbcon_dummy;
-		return;
-	}
 }
 
 void __init macfb_init(void)
@@ -799,10 +897,10 @@ void __init macfb_init(void)
 	   those mappings are set up, so this is in fact the safest
 	   way to ensure that this driver will work on every possible
 	   Mac */
-	fb_info.screen_base = ioremap(mac_bi_data.videoaddr, video_size);
+	video_vbase	 = ioremap(mac_bi_data.videoaddr, video_size);
 	
 	printk("macfb: framebuffer at 0x%p, mapped to 0x%p, size %dk\n",
-	       video_base, fb_info.screen_base, video_size/1024);
+	       video_base, video_vbase, video_size/1024);
 	printk("macfb: mode is %dx%dx%d, linelength=%d\n",
 	       video_width, video_height, video_bpp, video_linelength);
 	
@@ -822,20 +920,20 @@ void __init macfb_init(void)
 	macfb_defined.yres_virtual = video_height;
 
 	/* some dummy values for timing to make fbset happy */
-	macfb_defined.pixclock     = 10000000/video_width * 1000/video_height;
+	macfb_defined.pixclock     = 10000000 / video_width * 1000 / video_height;
 	macfb_defined.left_margin  = (video_width / 8) & 0xf8;
+	macfb_defined.right_margin = 32;
+	macfb_defined.upper_margin = 16;
+	macfb_defined.lower_margin = 4;
 	macfb_defined.hsync_len    = (video_width / 8) & 0xf8;
+	macfb_defined.vsync_len    = 4;
 
-	macfb_fix.smem_start = (unsigned long) video_base;
-        macfb_fix.smem_len = video_size;
-        macfb_fix.line_length = video_linelength;
-
-	switch (macfb_defined.bits_per_pixel) {
+	switch (video_bpp) {
 	case 1:
 		/* XXX: I think this will catch any program that tries
 		   to do FBIO_PUTCMAP when the visual is monochrome */
-		fb_info.cmap.len = 0;
-		macfb_fix.visual = FB_VISUAL_MONO01;
+		video_cmap_len = 0;
+		video_visual = FB_VISUAL_MONO01;
 		break;
 	case 2:
 	case 4:
@@ -843,8 +941,8 @@ void __init macfb_init(void)
 		macfb_defined.red.length = video_bpp;
 		macfb_defined.green.length = video_bpp;
 		macfb_defined.blue.length = video_bpp;
-		fb_info.cmap.len = 1 << video_bpp;
-		macfb_fix.visual = FB_VISUAL_PSEUDOCOLOR;
+		video_cmap_len = 1 << video_bpp;
+		video_visual = FB_VISUAL_PSEUDOCOLOR;
 		break;
 	case 16:
 		macfb_defined.transp.offset = 15;
@@ -857,10 +955,10 @@ void __init macfb_init(void)
 		macfb_defined.blue.length = 5;
 		printk("macfb: directcolor: "
 		       "size=1:5:5:5, shift=15:10:5:0\n");
-		fb_info.cmap.len = 16;
+		video_cmap_len = 16;
 		/* Should actually be FB_VISUAL_DIRECTCOLOR, but this
 		   works too */
-		macfb_fix.visual = FB_VISUAL_TRUECOLOR;
+		video_visual = FB_VISUAL_TRUECOLOR;
 		break;
 	case 24:
 	case 32:
@@ -874,11 +972,11 @@ void __init macfb_init(void)
 		macfb_defined.blue.length = 8;
 		printk("macfb: truecolor: "
 		       "size=0:8:8:8, shift=0:16:8:0\n");
-		fb_info.cmap.len = 16;
-		macfb_fix.visual = FB_VISUAL_TRUECOLOR;
+		video_cmap_len = 16;
+		video_visual = FB_VISUAL_TRUECOLOR;
 	default:
-		fb_info.cmap.len= 0;
-		macfb_fix.visual = FB_VISUAL_MONO01;
+		video_cmap_len = 0;
+		video_visual = FB_VISUAL_MONO01;
 		printk("macfb: unknown or unsupported bit depth: %d\n", video_bpp);
 		break;
 	}
@@ -1117,20 +1215,14 @@ void __init macfb_init(void)
 			break;
 		}
 	
-	fb_info.changevar  = NULL;
 	fb_info.node       = -1;
 	fb_info.fbops      = &macfb_ops;
 	fb_info.disp       = &disp;
-	fb_info.var	   = macfb_defined;
-	fb_info.fix 	   = macfb_fix;
 	fb_info.switch_con = &macfb_switch;
-	fb_info.updatevar  = &fbgen_update_var;
+	fb_info.updatevar  = &macfb_update_var;
 	fb_info.flags      = FBINFO_FLAG_DEFAULT;
-	
 	macfb_set_disp(-1);
-	fb_copy_cmap(fb_default_cmap(1<<fb_info.var.bits_per_pixel),
-                        &fb_info.cmap, 0);
-        fb_set_cmap(&fb_info.cmap, 1, macfb_setcolreg, &fb_info);
+	do_install_cmap(0, &fb_info);
 	
 	if (register_framebuffer(&fb_info) < 0)
 		return;

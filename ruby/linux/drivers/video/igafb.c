@@ -54,7 +54,7 @@
 #include <asm/pcic.h>
 #endif
 
-#include <video/fbcon.h>
+#include "fbcon.h"
 #include <video/fbcon-cfb8.h>
 #include <video/fbcon-cfb16.h>
 #include <video/fbcon-cfb24.h>
@@ -63,6 +63,7 @@
 #include "iga.h"
 
 static char igafb_name[16] = "IGA 1682";
+static char fontname[40] __initdata = { 0 };
 
 struct pci_mmap_map {
     unsigned long voff;
@@ -193,25 +194,6 @@ static void iga_blank_border(struct fb_info_iga *info)
 /*
  *  Frame buffer device API
  */
-
-/*
- * Open/Release the frame buffer device
- */
-
-static int igafb_open(struct fb_info *info, int user)
-{
-        /*
-         * Nothing, only a usage count for the moment
-         */
-        MOD_INC_USE_COUNT;
-        return(0);
-}
-
-static int igafb_release(struct fb_info *info, int user)
-{
-        MOD_DEC_USE_COUNT;
-        return(0);
-}
 
 static int igafb_update_var(int con, struct fb_info *info)
 {
@@ -374,7 +356,7 @@ static int igafb_setcolreg(unsigned regno, unsigned red, unsigned green,
 	pci_outb(info, green, DAC_DATA);
 	pci_outb(info, blue,  DAC_DATA);
 
-	if (regno < 16)
+	if (regno < 16) {
 		switch (default_var.bits_per_pixel) {
 #ifdef FBCON_HAS_CFB16
 		case 16:
@@ -390,11 +372,14 @@ static int igafb_setcolreg(unsigned regno, unsigned red, unsigned green,
 #endif
 #ifdef FBCON_HAS_CFB32
 		case 32:
+			{ int i;
 			i = (regno << 8) | regno;
 			info->fbcon_cmap.cfb32[regno] = (i << 16) | i;
+			}
 			break;
 #endif
 		}
+	}
 	return 0;
 }
 
@@ -405,8 +390,7 @@ static void do_install_cmap(int con, struct fb_info *fb_info)
         if (con != info->currcon)
                 return;
         if (fb_display[con].cmap.len)
-                fb_set_cmap(&fb_display[con].cmap, 1,
-                            &info->fb_info);
+                fb_set_cmap(&fb_display[con].cmap, 1, &info->fb_info);
         else
                 fb_set_cmap(fb_default_cmap(info->video_cmap_len), 1, 
 			    &info->fb_info);
@@ -427,21 +411,38 @@ static int igafb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
         return 0;
 }
 
+static int igafb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+	                  struct fb_info *info)
+{
+        int err;
+	struct fb_info_iga *fb = (struct fb_info_iga*) info;
+
+        if (!fb_display[con].cmap.len) {        /* no colormap allocated? */
+                err = fb_alloc_cmap(&fb_display[con].cmap,
+				    fb->video_cmap_len,0);
+                if (err)
+                        return err;
+        }
+        if (con == fb->currcon)                     /* current console? */
+                return fb_set_cmap(cmap, kspc, info);
+        else
+                fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
+        return 0;
+}
+
 /*
  * Framebuffer option structure
  */
 static struct fb_ops igafb_ops = {
-    fb_open:		igafb_open, 
-    fb_release:		igafb_release, 
-    fb_get_fix:		igafb_get_fix, 
-    fb_get_var:		igafb_get_var, 
-    fb_set_var:		igafb_set_var,
-    fb_get_cmap:	igafb_get_cmap, 
-    fb_set_cmap:	fbgen_set_cmap, 
-    fb_setcolreg:	igafb_setcolreg,
-    fb_pan_display:	igafb_pan_display, 
+	owner:		THIS_MODULE,
+	fb_get_fix:	igafb_get_fix,
+	fb_get_var:	igafb_get_var,
+	fb_set_var:	igafb_set_var,
+	fb_get_cmap:	igafb_get_cmap,
+	fb_set_cmap:	igafb_set_cmap,
+	fb_setcolreg:	igafb_setcolreg,
 #ifdef __sparc__
-    fb_mmap:		igafb_mmap
+	fb_mmap:	igafb_mmap,
 #endif
 };
 
@@ -497,6 +498,8 @@ static void igafb_set_disp(int con, struct fb_info_iga *info)
                 break;
 #endif
         default:
+		printk(KERN_WARNING "igafb_set_disp: unknown resolution %d\n",
+		    default_var.bits_per_pixel);
                 return;
         }
         memcpy(&info->dispsw, sw, sizeof(*sw));
@@ -558,7 +561,7 @@ static int __init iga_init(struct fb_info_iga *info)
 	info->fb_info.node = -1;
 	info->fb_info.fbops = &igafb_ops;
 	info->fb_info.disp = &info->disp;
-	info->fb_info.changevar = NULL;
+	strcpy(info->fb_info.fontname, fontname);
 	info->fb_info.switch_con = &igafb_switch;
 	info->fb_info.updatevar = &igafb_update_var;
 	info->fb_info.flags=FBINFO_FLAG_DEFAULT;
@@ -753,5 +756,24 @@ int __init igafb_init(void)
 
 int __init igafb_setup(char *options)
 {
+    char *this_opt;
+
+    if (!options || !*options)
+        return 0;
+
+    for (this_opt = strtok(options, ","); this_opt;
+         this_opt = strtok(NULL, ",")) {
+        if (!strncmp(this_opt, "font:", 5)) {
+                char *p;
+                int i;
+
+                p = this_opt + 5;
+                for (i = 0; i < sizeof(fontname) - 1; i++)
+                        if (!*p || *p == ' ' || *p == ',')
+                                break;
+                memcpy(fontname, this_opt + 5, i);
+                fontname[i] = 0;
+        }
+    }
     return 0;
 }

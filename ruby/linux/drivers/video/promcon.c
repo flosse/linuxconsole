@@ -578,16 +578,12 @@ struct consw prom_con = {
 	con_switch:		promcon_switch,
 	con_blank:		promcon_blank,
 	con_font_op:		promcon_font_op,
+	con_resize:		DUMMY,
 	con_set_palette:	DUMMY,
 	con_scrolldelta:	DUMMY,
-	con_set_origin:		NULL,
-	con_save_screen:	NULL,
-#if PROMCON_COLOR
-	con_build_attr:		NULL,
-#else
+#if !(PROMCON_COLOR)
 	con_build_attr:		promcon_build_attr,
 #endif
-	con_invert_region:	NULL,
 };
 
 void __init prom_con_init(void)

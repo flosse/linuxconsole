@@ -841,7 +841,7 @@ vgacon_do_font_op(struct vc_data *vc, char *arg, int set, int ch512)
  * Adjust the screen to fit a font of a certain height
  */
 static int
-vgacon_adjust_height(struct vc_data *c, unsigned fontheight)
+vgacon_adjust_height(struct vc_data *vc, unsigned fontheight)
 {
 	int rows, maxscan, i;
 	unsigned char ovr, vde, fsr;
@@ -886,10 +886,11 @@ vgacon_adjust_height(struct vc_data *c, unsigned fontheight)
 	outb_p( vde, vga_video_port_val );
 	sti();
 
+	/* Adjust console size */
 	for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
-		struct vc_data *tmp = vc->display_fg->vcs.vc_cons[i];
-		vc_resize(tmp, rows, 0);   /* Adjust console size */
-	}
+                struct vc_data *tmp = vc->display_fg->vcs.vc_cons[i];
+                vc_resize(tmp, rows, 0);   /* Adjust console size */
+        }
 	return 0;
 }
 
@@ -903,7 +904,7 @@ static int vgacon_font_op(struct vc_data *c, struct console_font_op *op)
 	if (op->op == KD_FONT_OP_SET) {
 		if (op->width != 8 || (op->charcount != 256 && op->charcount != 512))
 			return -EINVAL;
-		rc = vgacon_do_font_op(vc, op->data, 1, op->charcount == 512);
+		rc = vgacon_do_font_op(c, op->data, 1, op->charcount == 512);
 		if (!rc && !(op->flags & KD_FONT_FLAG_DONT_RECALC))
 			rc = vgacon_adjust_height(c, op->height);
 	} else if (op->op == KD_FONT_OP_GET) {
@@ -911,7 +912,7 @@ static int vgacon_font_op(struct vc_data *c, struct console_font_op *op)
 		op->height = vga_video_font_height;
 		op->charcount = vga_512_chars ? 512 : 256;
 		if (!op->data) return 0;
-		rc = vgacon_do_font_op(vc, op->data, 0, 0);
+		rc = vgacon_do_font_op(c, op->data, 0, 0);
 	} else
 		rc = -ENOSYS;
 	return rc;
@@ -956,11 +957,11 @@ static int vgacon_scrolldelta(struct vc_data *c, int lines)
 
 static int vgacon_set_origin(struct vc_data *c)
 {
-	/* 
-	 * We don't play origin tricks in graphic modes,
-	 * Nor we write to blanked screens 
-	 */
-	if (vga_is_gfx || (c->display_fg->vt_blanked && !vga_palette_blanked))	
+        /*
+         * We don't play origin tricks in graphic modes,
+         * Nor we write to blanked screens
+         */
+        if (vga_is_gfx || (c->display_fg->vt_blanked && !vga_palette_blanked))
 		return 0;
 	c->vc_origin = c->vc_visible_origin = vga_vram_base;
 	vga_set_mem_top(c);
@@ -1050,16 +1051,15 @@ struct consw vga_con = {
 	con_putc:		DUMMY,
 	con_putcs:		DUMMY,
 	con_cursor:		vgacon_cursor,
+	con_scroll:		vgacon_scroll,
 	con_bmove:		DUMMY,
-	con_scroll:		vgacon_scroll,	
 	con_switch:		vgacon_switch,
 	con_blank:		vgacon_blank,
 	con_font_op:		vgacon_font_op,
-	con_resize:		DUMMY,
 	con_set_palette:	vgacon_set_palette,
 	con_scrolldelta:	vgacon_scrolldelta,
 	con_set_origin:		vgacon_set_origin,
 	con_save_screen:	vgacon_save_screen,
 	con_build_attr:		vgacon_build_attr,
-	con_invert_region:	vgacon_invert_region
+	con_invert_region:	vgacon_invert_region,
 };

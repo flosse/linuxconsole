@@ -38,7 +38,7 @@
 #include <asm/pgtable.h>
 #include <asm/io.h>
 
-#include <video/fbcon.h>
+#include "fbcon.h"
 #include <video/fbcon-cfb8.h>
 #include <video/fbcon-cfb16.h>
 
@@ -115,8 +115,12 @@ struct retz3_fb_info {
 	unsigned char color_table [256][3];
 };
 
+
+static char fontname[40] __initdata = { 0 };
+
 #define retz3info(info) ((struct retz3_fb_info *)(info))
 #define fbinfo(info) ((struct fb_info *)(info))
+
 
 /*
  *    Frame Buffer Name
@@ -260,11 +264,9 @@ static int z3fb_mode __initdata = 0;
 /*
  *    Interface used by the world
  */
-int retz3fb_init(void);
+
 int retz3fb_setup(char *options);
 
-static int retz3fb_open(struct fb_info *info, int user);
-static int retz3fb_release(struct fb_info *info, int user);
 static int retz3fb_get_fix(struct fb_fix_screeninfo *fix, int con,
 			   struct fb_info *info);
 static int retz3fb_get_var(struct fb_var_screeninfo *var, int con,
@@ -273,17 +275,18 @@ static int retz3fb_set_var(struct fb_var_screeninfo *var, int con,
 			   struct fb_info *info);
 static int retz3fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 			    struct fb_info *info);
+static int retz3fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			    struct fb_info *info);
 static int retz3fb_setcolreg(unsigned int regno, unsigned int red,
                              unsigned int green, unsigned int blue,
                              unsigned int transp, struct fb_info *info);
-static int retz3fb_blank(int blank, struct fb_info *info);
-static int retz3fb_pan_display(struct fb_var_screeninfo *var, int con,
-			       struct fb_info *info);
+static void retz3fb_blank(int blank, struct fb_info *info);
 
 /*
  *    Interface to the low level console driver
  */
 
+int retz3fb_init(void);
 static int z3fb_switch(int con, struct fb_info *info);
 static int z3fb_updatevar(int con, struct fb_info *info);
 
@@ -894,7 +897,7 @@ static int retz3_encode_var(struct fb_var_screeninfo *var,
  */
 
 static int retz3fb_setcolreg(unsigned int regno, unsigned int red,
-	        	     unsigned int green, unsigned int blue,
+			     unsigned int green, unsigned int blue,
 			     unsigned int transp, struct fb_info *info)
 {
 	struct retz3_fb_info *zinfo = retz3info(info);
@@ -1110,28 +1113,6 @@ static void do_install_cmap(int con, struct fb_info *info)
 					    1, info);
 }
 
-
-/*
- *    Open/Release the frame buffer device
- */
-
-static int retz3fb_open(struct fb_info *info, int user)
-{
-	/*
-	 * Nothing, only a usage count for the moment
-	 */
-
-	MOD_INC_USE_COUNT;
-	return 0;
-}
-
-static int retz3fb_release(struct fb_info *info, int user)
-{
-	MOD_DEC_USE_COUNT;
-	return 0;
-}
-
-
 /*
  *    Get the Fixed Part of the Display
  */
@@ -1292,8 +1273,7 @@ static int retz3fb_set_var(struct fb_var_screeninfo *var, int con,
 			 */
 			retz3_set_video(info, var, &zinfo->current_par);
 
-			if (info->changevar)
-				(*info->changevar)(con);
+			fbcon_changevar(con);
 		}
 
 		if (oldbpp != var->bits_per_pixel) {
@@ -1325,16 +1305,38 @@ static int retz3fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 	return 0;
 }
 
+
+/*
+ *    Set the Colormap
+ */
+
+static int retz3fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			    struct fb_info *info)
+{
+	int err;
+	struct retz3_fb_info *zinfo = retz3info(info);
+
+	if (!fb_display[con].cmap.len) {       /* no colormap allocated? */
+		if ((err = fb_alloc_cmap(&fb_display[con].cmap,
+					 1<<fb_display[con].var.bits_per_pixel,
+					 0)))
+			return err;
+	}
+	if (con == zinfo->currcon)              /* current console? */
+		return(fb_set_cmap(cmap, kspc, info));
+	else
+		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
+	return 0;
+}
+
 static struct fb_ops retz3fb_ops = {
-	fb_open:	retz3fb_open, 
-	fb_release:	retz3fb_release, 
-	fb_get_fix:	retz3fb_get_fix, 
+	owner:		THIS_MODULE,
+	fb_get_fix:	retz3fb_get_fix,
 	fb_get_var:	retz3fb_get_var,
-	fb_set_var:	retz3fb_set_var, 
-	fb_get_cmap:	retz3fb_get_cmap, 
-	fb_set_cmap:	fbgen_set_cmap,
+	fb_set_var:	retz3fb_set_var,
+	fb_get_cmap:	retz3fb_get_cmap,
+	fb_set_cmap:	retz3fb_set_cmap,
 	fb_setcolreg:	retz3fb_setcolreg,
-	fb_blank:	retz3fb_blank
 };
 
 int __init retz3fb_setup(char *options)
@@ -1349,6 +1351,9 @@ int __init retz3fb_setup(char *options)
 		if (!strcmp(this_opt, "inverse")) {
 			z3fb_inverse = 1;
 			fb_invert_cmaps();
+		} else if (!strncmp(this_opt, "font:", 5)) {
+			strncpy(fontname, this_opt+5, 39);
+			fontname[39] = '\0';
 		} else
 			z3fb_mode = get_video_mode(this_opt);
 	}
@@ -1414,13 +1419,13 @@ int __init retz3fb_init(void)
 		retz3fb_setcolreg (254, 0, 0, 0, 0, fb_info);
 
 		strcpy(fb_info->modename, retz3fb_name);
-		fb_info->changevar = NULL;
 		fb_info->node = -1;
 		fb_info->fbops = &retz3fb_ops;
 		fb_info->disp = &zinfo->disp;
 		fb_info->switch_con = &z3fb_switch;
 		fb_info->updatevar = &z3fb_updatevar;
 		fb_info->flags = FBINFO_FLAG_DEFAULT;
+		strncpy(fb_info->fontname, fontname, 40);
 
 		if (z3fb_mode == -1)
 			retz3fb_default = retz3fb_predefined[0].var;
@@ -1485,7 +1490,7 @@ static int z3fb_updatevar(int con, struct fb_info *info)
  *    Blank the display.
  */
 
-static int retz3fb_blank(int blank, struct fb_info *info)
+static void retz3fb_blank(int blank, struct fb_info *info)
 {
 	struct retz3_fb_info *zinfo = retz3info(info);
 	volatile unsigned char *regs = retz3info(info)->regs;
@@ -1626,8 +1631,13 @@ static void retz3_clear_margins(struct vc_data* conp, struct display* p,
 
 
 static struct display_switch fbcon_retz3_8 = {
-    fbcon_cfb8_setup, retz3_8_bmove, retz3_8_clear,
-    retz3_putc, retz3_putcs, retz3_revc, NULL, NULL,
-    retz3_clear_margins, FONTWIDTH(8)
+    setup:		fbcon_cfb8_setup,
+    bmove:		retz3_8_bmove,
+    clear:		retz3_8_clear,
+    putc:		retz3_putc,
+    putcs:		retz3_putcs,
+    revc:		retz3_revc,
+    clear_margins:	retz3_clear_margins,
+    fontwidthmask:	FONTWIDTH(8)
 };
 #endif

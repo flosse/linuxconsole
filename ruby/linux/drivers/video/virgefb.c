@@ -35,7 +35,7 @@
 #include <asm/io.h>
 
 #include <video/s3blit.h>
-#include <video/fbcon.h>
+#include "fbcon.h"
 #include <video/fbcon-cfb8.h>
 #include <video/fbcon-cfb16.h>
 
@@ -138,6 +138,7 @@ static struct fb_hwswitch {
    int (*encode_var)(struct fb_var_screeninfo *var, struct virgefb_par *par);
    int (*getcolreg)(u_int regno, u_int *red, u_int *green, u_int *blue,
                     u_int *transp, struct fb_info *info);
+   void (*blank)(int blank);
 } *fbhw;
 
 static int blit_maybe_busy = 0;
@@ -292,11 +293,9 @@ static struct fb_var_screeninfo virgefb_default;
 /*
  *    Interface used by the world
  */
-int virgefb_init(void);
+
 int virgefb_setup(char*);
 
-static int virgefb_open(struct fb_info *info, int user);
-static int virgefb_release(struct fb_info *info, int user);
 static int virgefb_get_fix(struct fb_fix_screeninfo *fix, int con, struct
 fb_info *info);
 static int virgefb_get_var(struct fb_var_screeninfo *var, int con, struct
@@ -305,16 +304,17 @@ static int virgefb_set_var(struct fb_var_screeninfo *var, int con, struct
 fb_info *info);
 static int virgefb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 			    struct fb_info *info);
+static int virgefb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			    struct fb_info *info);
 static int virgefb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-                         u_int transp, struct fb_info *info);
-static int virgefb_blank(int blank, struct fb_info *info);
-static int virgefb_pan_display(struct fb_var_screeninfo *var, int con,
-			       struct fb_info *info);
+                             u_int transp, struct fb_info *info);
+static void virgefb_blank(int blank, struct fb_info *info);
 
 /*
  *    Interface to the low level console driver
  */
 
+int virgefb_init(void);
 static int Cyberfb_switch(int con, struct fb_info *info);
 static int Cyberfb_updatevar(int con, struct fb_info *info);
 
@@ -343,6 +343,8 @@ static int Cyber_encode_var(struct fb_var_screeninfo *var,
                           struct virgefb_par *par);
 static int Cyber_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
                          u_int *transp, struct fb_info *info);
+static void Cyber_blank(int blank);
+
 
 /*
  *    Internal routines
@@ -632,6 +634,36 @@ static int Cyber_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
 
 
 /*
+ *    (Un)Blank the screen
+ */
+
+void Cyber_blank(int blank)
+{
+	int i;
+
+	if (blank)
+	{
+		for (i = 0; i < 256; i++)
+		{
+			vgawb_3d(0x3c8, (unsigned char) i);
+			vgawb_3d(0x3c9, 0);
+			vgawb_3d(0x3c9, 0);
+			vgawb_3d(0x3c9, 0);
+		}
+	}
+	else
+	{
+		for (i = 0; i < 256; i++)
+		{
+			vgawb_3d(0x3c8, (unsigned char) i);
+			vgawb_3d(0x3c9, Cyber_colour_table[i][0]);
+			vgawb_3d(0x3c9, Cyber_colour_table[i][1]);
+			vgawb_3d(0x3c9, Cyber_colour_table[i][2]);
+		}
+	}
+}
+
+/*
  * CV3D low-level support
  */
 
@@ -783,7 +815,7 @@ static void Cyber_MoveCursor (u_short x, u_short y)
 
 static struct fb_hwswitch Cyber_switch = {
 	Cyber_init, Cyber_encode_fix, Cyber_decode_var, Cyber_encode_var,
-	Cyber_getcolreg, NULL, NULL 
+	Cyber_getcolreg, Cyber_blank
 };
 
 
@@ -855,28 +887,6 @@ static void do_install_cmap(int con, struct fb_info *info)
 		fb_set_cmap(fb_default_cmap(1<<fb_display[con].var.bits_per_pixel),
 			    1, info);
 }
-
-
-/*
- *  Open/Release the frame buffer device
- */
-
-static int virgefb_open(struct fb_info *info, int user)
-{
-	/*
-	 * Nothing, only a usage count for the moment
-	 */
-
-	MOD_INC_USE_COUNT;
-	return(0);
-}
-
-static int virgefb_release(struct fb_info *info, int user)
-{
-	MOD_DEC_USE_COUNT;
-	return(0);
-}
-
 
 /*
  *    Get the Fixed Part of the Display
@@ -1004,7 +1014,7 @@ static int virgefb_set_var(struct fb_var_screeninfo *var, int con,
 		    oldbpp != var->bits_per_pixel ||
 		    oldaccel != var->accel_flags) {
 			virgefb_set_disp(con, info);
-			(*fb_info.changevar)(con);
+			fbcon_changevar(con);
 			fb_alloc_cmap(&fb_display[con].cmap, 0, 0);
 			do_install_cmap(con, info);
 		}
@@ -1031,23 +1041,44 @@ static int virgefb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 	return(0);
 }
 
+
+/*
+ *    Set the Colormap
+ */
+
+static int virgefb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
+			    struct fb_info *info)
+{
+	int err;
+
+	if (!fb_display[con].cmap.len) {       /* no colormap allocated? */
+		if ((err = fb_alloc_cmap(&fb_display[con].cmap,
+				1<<fb_display[con].var.bits_per_pixel, 0)))
+			return(err);
+	}
+	if (con == currcon)		 /* current console? */
+		return(fb_set_cmap(cmap, kspc, info));
+	else
+		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
+	return(0);
+}
+
 static struct fb_ops virgefb_ops = {
-	fb_open:	virgefb_open, 
-	fb_close:	virgefb_release, 
-	fb_get_fix:	virgefb_get_fix, 
+	owner:		THIS_MODULE,
+	fb_get_fix:	virgefb_get_fix,
 	fb_get_var:	virgefb_get_var,
-	fb_set_var:	virgefb_set_var, 
-	fb_get_cmap:	virgefb_get_cmap, 
-	fb_set_cmap:	fbgen_set_cmap,
+	fb_set_var:	virgefb_set_var,
+	fb_get_cmap:	virgefb_get_cmap,
+	fb_set_cmap:	virgefb_set_cmap,
 	fb_setcolreg:	virgefb_setcolreg,
 	fb_blank:	virgefb_blank,
-	fb_display:	virgefb_pan_display 
 };
-
 
 int __init virgefb_setup(char *options)
 {
 	char *this_opt;
+
+	fb_info.fontname[0] = '\0';
 
 	if (!options || !*options)
 		return 0;
@@ -1056,7 +1087,9 @@ int __init virgefb_setup(char *options)
 		if (!strcmp(this_opt, "inverse")) {
 			Cyberfb_inverse = 1;
 			fb_invert_cmaps();
-		} else if (!strcmp (this_opt, "virge8")){
+		} else if (!strncmp(this_opt, "font:", 5))
+			strcpy(fb_info.fontname, this_opt+5);
+		else if (!strcmp (this_opt, "virge8")){
 			virgefb_default = virgefb_predefined[VIRGE8_DEFMODE].var;
 		}
 		else if (!strcmp (this_opt, "virge16")){
@@ -1130,7 +1163,6 @@ int __init virgefb_init(void)
 	    fbhw = &Cyber_switch;
 
 	    strcpy(fb_info.modename, virgefb_name);
-	    fb_info.changevar = NULL;
 	    fb_info.node = -1;
 	    fb_info.fbops = &virgefb_ops;
 	    fb_info.disp = &disp;
@@ -1196,31 +1228,9 @@ static int Cyberfb_updatevar(int con, struct fb_info *info)
  *    Blank the display.
  */
 
-static int virgefb_blank(int blank, struct fb_info *info)
+static void virgefb_blank(int blank, struct fb_info *info)
 {
-        int i;
-
-        if (blank)
-        {
-                for (i = 0; i < 256; i++)
-                {
-                        vgawb_3d(0x3c8, (unsigned char) i);
-                        vgawb_3d(0x3c9, 0);
-                        vgawb_3d(0x3c9, 0);
-                        vgawb_3d(0x3c9, 0);
-                }
-        }
-        else
-        {
-                for (i = 0; i < 256; i++)
-                {
-                        vgawb_3d(0x3c8, (unsigned char) i);
-                        vgawb_3d(0x3c9, Cyber_colour_table[i][0]);
-                        vgawb_3d(0x3c9, Cyber_colour_table[i][1]);
-                        vgawb_3d(0x3c9, Cyber_colour_table[i][2]);
-                }
-        }
-	return 0;
+	fbhw->blank(blank);
 }
 
 
@@ -1302,9 +1312,14 @@ static void fbcon_virge8_clear_margins(struct vc_data *conp, struct display *p,
 }
 
 static struct display_switch fbcon_virge8 = {
-   fbcon_cfb8_setup, fbcon_virge8_bmove, fbcon_virge8_clear, fbcon_virge8_putc,
-   fbcon_virge8_putcs, fbcon_virge8_revc, NULL, NULL, fbcon_virge8_clear_margins,
-   FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
+   setup:		fbcon_cfb8_setup,
+   bmove:		fbcon_virge8_bmove,
+   clear:		fbcon_virge8_clear,
+   putc:		fbcon_virge8_putc,
+   putcs:		fbcon_virge8_putcs,
+   revc:		fbcon_virge8_revc,
+   clear_margins:	fbcon_virge8_clear_margins,
+   fontwidthmask:	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
 };
 #endif
 
@@ -1362,9 +1377,14 @@ static void fbcon_virge16_clear_margins(struct vc_data *conp, struct display *p,
 }
 
 static struct display_switch fbcon_virge16 = {
-   fbcon_cfb16_setup, fbcon_virge16_bmove, fbcon_virge16_clear, fbcon_virge16_putc,
-   fbcon_virge16_putcs, fbcon_virge16_revc, NULL, NULL, fbcon_virge16_clear_margins,
-   FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
+   setup:		fbcon_cfb16_setup,
+   bmove:		fbcon_virge16_bmove,
+   clear:		fbcon_virge16_clear,
+   putc:		fbcon_virge16_putc,
+   putcs:		fbcon_virge16_putcs,
+   revc:		fbcon_virge16_revc,
+   clear_margins:	fbcon_virge16_clear_margins,
+   fontwidthmask:	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
 };
 #endif
 
