@@ -299,7 +299,7 @@ static void grip_connect(struct gameport *gameport, struct gameport_dev *dev)
 	}
 
 	for (i = 0; i < 2; i++) 
-		if (!grip_name[grip->mode[i]]) {
+		if (grip->mode[i] && !grip_name[grip->mode[i]]) {
 			printk(KERN_WARNING "grip.c: Unknown joystick ID %d on gameport%d.%d\n",
 				grip->mode[i], gameport->number, i);
 			grip->mode[i] = 0;
@@ -335,7 +335,7 @@ static void grip_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 			for (j = 0; (t = grip_btn[grip->mode[i]][j]) >= 0; j++)
 				if (t > 0)
-					set_bit(t, grip->dev[i].absbit);
+					set_bit(t, grip->dev[i].keybit);
 
 			input_register_device(grip->dev + i);
 
