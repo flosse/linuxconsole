@@ -63,8 +63,8 @@ void putconsxy(struct vc_data *vc, char *p)
 
 u16 vcs_scr_readw(struct vc_data *vc, const u16 *org)
 {
-        if ((unsigned long)org == vc->vc_pos && softcursor_original != -1)
-                return softcursor_original;
+        if ((unsigned long)org == vc->vc_pos && vc->display_fg->cursor_original != -1)
+                return vc->display_fg->cursor_original;
         return scr_readw(org);
 }
 
@@ -72,7 +72,7 @@ void vcs_scr_writew(struct vc_data *vc, u16 val, u16 *org)
 {
         scr_writew(val, org);
         if ((unsigned long)org == vc->vc_pos) {
-                softcursor_original = -1;
+                vc->display_fg->cursor_original = -1;
                 add_softcursor(vc);
         }
 }
@@ -91,7 +91,7 @@ static int vcs_size(struct inode *inode)
 	if (!vc)
 		return -ENXIO;
 
-	size = video_num_lines * video_num_columns;
+	size = vc->vc_rows * vc->vc_cols;
 
 	if (MINOR(inode->i_rdev) & 128)
 		size = 2*size + HEADER_SIZE;
@@ -191,7 +191,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 
 		con_buf_start = con_buf0 = con_buf;
 		orig_count = this_round;
-		maxcol = video_num_columns;
+		maxcol = vc->vc_cols;
 		if (!attr) {
 			org = screen_pos(vc, p, viewed);
 			col = p % maxcol;
@@ -208,8 +208,8 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 			if (p < HEADER_SIZE) {
 				size_t tmp_count;
 
-				con_buf0[0] = (char) video_num_lines;
-				con_buf0[1] = (char) video_num_columns;
+				con_buf0[0] = (char) vc->vc_rows;
+				con_buf0[1] = (char) vc->vc_cols;
 				getconsxy(vc, con_buf0 + 2);
 
 				con_buf_start += p;
@@ -380,7 +380,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 
 		con_buf0 = con_buf;
 		orig_count = this_round;
-		maxcol = video_num_columns;
+		maxcol = vc->vc_cols;
 		p = pos;
 		if (!attr) {
 			org0 = org = screen_pos(vc, p, viewed);
