@@ -432,6 +432,7 @@ extern int fbmon_dpms(const struct fb_info *fb_info);
 
 /* drivers/video/fbcmap.c */
 extern int fb_alloc_cmap(struct fb_cmap *cmap, int len, int transp);
+extern void fb_dealloc_cmap(struct fb_cmap *cmap);
 extern void fb_copy_cmap(struct fb_cmap *from, struct fb_cmap *to,
 			 int fsfromto);
 extern int fb_get_cmap(struct fb_cmap *cmap, int kspc,struct fb_info *fb_info);
