@@ -236,7 +236,6 @@ static struct ff_init_data {
 	{ FF_CMD_INIT_0_A, { 0x04, 0x00, 0x6D } },
 	{ FF_CMD_INIT_2,   { 0x01, 0x69 } },
 	{ FF_CMD_INIT_2,   { 0x00, 0x68 } },
-#endif
 
 	{ FF_CMD_INIT_F,   { 0x4F, 0x9A } },
 	{ FF_CMD_INIT_F,   { 0x56, 0x83 } },
@@ -255,6 +254,10 @@ static struct ff_init_data {
 	{ FF_CMD_INIT_2,   { 0x05, 0x6D } },
 	{ FF_CMD_INIT_0_A, { 0x04, 0x00, 0x6D } },
 	{ FF_CMD_INIT_3,   { 0x80, 0xE9 } },
+#endif
+
+	/* Disable auto-centering */
+	{ FF_CMD_INIT_2,   { 0x04, 0x6C } },
 	{ 0, }
  };
 
