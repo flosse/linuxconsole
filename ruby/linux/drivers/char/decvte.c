@@ -493,9 +493,9 @@ static void set_mode(struct vc_data *vc, int on_off)
                 if (priv4) switch(par[i]) {
                         case 1: /* DECCKM - Cursor keys mode */
                                 if (on_off)
-                                        set_vc_kbd_mode(&vc->kbd_table, VC_CKMODE);
+                                        set_kbd_mode(&vc->kbd_table, VC_CKMODE);
                                 else
-                                        clr_vc_kbd_mode(&vc->kbd_table, VC_CKMODE);
+                                        clr_kbd_mode(&vc->kbd_table, VC_CKMODE);
                                 break;
                         case 2: /* DECANM - ANSI mode */
                                 break;
@@ -527,9 +527,9 @@ static void set_mode(struct vc_data *vc, int on_off)
                         case 8: /* DECARM - Autorepeat mode */
                                 decarm = on_off;
                                 if (on_off)
-                                        set_vc_kbd_mode(&vc->kbd_table, VC_REPEAT);
+                                        set_kbd_mode(&vc->kbd_table, VC_REPEAT);
                                 else
-                                        clr_vc_kbd_mode(&vc->kbd_table, VC_REPEAT);
+                                        clr_kbd_mode(&vc->kbd_table, VC_REPEAT);
                                 break;
                         case 9:
                                 report_mouse = on_off ? 1 : 0;
@@ -547,9 +547,9 @@ static void set_mode(struct vc_data *vc, int on_off)
                         case 66: /* DECNKM - Numeric keybad mode */
                                 decnkm = on_off;
                                 if (on_off)
-                                        set_vc_kbd_mode(&vc->kbd_table, VC_APPLIC);
+                                        set_kbd_mode(&vc->kbd_table, VC_APPLIC);
                                 else
-                                        clr_vc_kbd_mode(&vc->kbd_table, VC_APPLIC);
+                                        clr_kbd_mode(&vc->kbd_table, VC_APPLIC);
                                 break;
                         case 67:        /* DECBKM - Backarrow key mode */
                                 break;
@@ -574,9 +574,9 @@ static void set_mode(struct vc_data *vc, int on_off)
                                 break;
                         case 20:                /* Lf, Enter == CrLf/Lf */
                                 if (on_off)
-                                        set_vc_kbd_mode(&vc->kbd_table, VC_CRLF);
+                                        set_kbd_mode(&vc->kbd_table, VC_CRLF);
                                 else
-                                        clr_vc_kbd_mode(&vc->kbd_table, VC_CRLF);
+                                        clr_kbd_mode(&vc->kbd_table, VC_CRLF);
                                 break;
                 }
 }
@@ -971,10 +971,10 @@ void vte_ris(struct vc_data *vc, int do_clear)
         irm             = 0;    /* replace */
         lnm             = 0;    /* line feed */
 
-        set_vc_kbd_mode(&vc->kbd_table, VC_REPEAT);
-        clr_vc_kbd_mode(&vc->kbd_table, VC_CKMODE);
-        clr_vc_kbd_mode(&vc->kbd_table, VC_APPLIC);
-        clr_vc_kbd_mode(&vc->kbd_table, VC_CRLF);
+        set_kbd_mode(&vc->kbd_table, VC_REPEAT);
+        clr_kbd_mode(&vc->kbd_table, VC_CKMODE);
+        clr_kbd_mode(&vc->kbd_table, VC_APPLIC);
+        clr_kbd_mode(&vc->kbd_table, VC_CRLF);
         vc->kbd_table.lockstate = KBD_DEFLOCK; 
         vc->kbd_table.slockstate = 0;
         vc->kbd_table.ledmode = LED_SHOW_FLAGS;
@@ -1098,7 +1098,7 @@ void terminal_emulation(struct tty_struct *tty, int c)
                  * DEC VT series processes FF as LF.
                  */
                 vte_lf(vc);
-                if (!vc_kbd_mode(&vc->kbd_table, VC_CRLF))
+                if (!get_kbd_mode(&vc->kbd_table, VC_CRLF))
                         return;
         case 0x0d:      /* CR - Carriage return */
                 vte_cr(vc);
@@ -1272,11 +1272,11 @@ void terminal_emulation(struct tty_struct *tty, int c)
                         return;
                 case '=':       /* DECKPAM - Keypad application mode */
                         decnkm = 1;
-                        set_vc_kbd_mode(&vc->kbd_table, VC_APPLIC);
+                        set_kbd_mode(&vc->kbd_table, VC_APPLIC);
                         return;
                 case '>':       /* DECKPNM - Keypad numeric mode */
                         decnkm = 0;
-                        clr_vc_kbd_mode(&vc->kbd_table, VC_APPLIC);
+                        clr_kbd_mode(&vc->kbd_table, VC_APPLIC);
                         return;
 
                 /* ===== C1 control functions ===== */

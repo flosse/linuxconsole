@@ -996,7 +996,7 @@ void kbd_keycode(void  *private, unsigned int keycode, int down)
 
 	rep = (down == 2);
 
-	if (rep && (!vc_kbd_mode(&vc->kbd_table, VC_REPEAT) || (tty && 
+	if (rep && (!get_kbd_mode(&vc->kbd_table, VC_REPEAT) || (tty && 
 		(!L_ECHO(tty) && tty->driver.chars_in_buffer(tty))))) {
 		/*
 		 * Don't repeat a key if the input buffers are not empty and the
@@ -1030,7 +1030,7 @@ void kbd_keycode(void  *private, unsigned int keycode, int down)
 
 	if (type == KT_LETTER) {
 		type = KT_LATIN;
-		if (vc_kbd_led(&vc->kbd_table, VC_CAPSLOCK)) {
+		if (get_kbd_led(&vc->kbd_table, VC_CAPSLOCK)) {
 			key_map = key_maps[shift_final ^ (1 << KG_SHIFT)];
 			if (key_map)
 				keysym = key_map[keycode];

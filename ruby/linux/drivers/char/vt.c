@@ -103,11 +103,6 @@ void respond_string(const char * p, struct tty_struct * tty)
  */
 int (*console_blank_hook)(int);
 
-/* keyboard macros */
-#define set_kbd(kbd_table, x) set_vc_kbd_mode(kbd_table, x)
-#define clr_kbd(kbd_table, x) clr_vc_kbd_mode(kbd_table, x)
-#define is_kbd(kbd_table, x) vc_kbd_mode(kbd_table, x)
-
 /*
  * Console cursor handling
  */
@@ -1292,7 +1287,7 @@ static void vt_stop(struct tty_struct *tty)
         
 	if (!tty || !vc)
                 return;
-        set_vc_kbd_led(&vc->kbd_table, VC_SCROLLOCK);
+        set_kbd_led(&vc->kbd_table, VC_SCROLLOCK);
         set_leds();
 }
 
@@ -1305,7 +1300,7 @@ static void vt_start(struct tty_struct *tty)
         
 	if (!tty || !vc)
                 return;
-        clr_vc_kbd_led(&vc->kbd_table, VC_SCROLLOCK);
+        clr_kbd_led(&vc->kbd_table, VC_SCROLLOCK);
         set_leds();
 }
 

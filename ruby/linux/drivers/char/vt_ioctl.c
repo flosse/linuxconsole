@@ -786,10 +786,10 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	case KDSKBMETA:
 		switch(arg) {
 		  case K_METABIT:
-			clr_vc_kbd_mode(kbd, VC_META);
+			clr_kbd_mode(kbd, VC_META);
 			break;
 		  case K_ESCPREFIX:
-			set_vc_kbd_mode(kbd, VC_META);
+			set_kbd_mode(kbd, VC_META);
 			break;
 		  default:
 			return -EINVAL;
@@ -797,7 +797,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		return 0;
 
 	case KDGKBMETA:
-		ucval = (vc_kbd_mode(kbd, VC_META) ? K_ESCPREFIX : K_METABIT);
+		ucval = (get_kbd_mode(kbd, VC_META) ? K_ESCPREFIX : K_METABIT);
 	setint:
 		return put_user(ucval, (int *)arg); 
 
