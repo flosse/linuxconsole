@@ -254,7 +254,6 @@ struct tty_struct {
 	char name[64];
 	int pgrp;
 	int session;
-	dev_t	device;
 	unsigned long flags;
 	int count;
 	struct winsize winsize;
@@ -333,29 +332,11 @@ extern void tty_write_flush(struct tty_struct *);
 
 extern struct termios tty_std_termios;
 extern struct tty_ldisc ldiscs[];
-
 extern void console_init(void);
-
-extern int lp_init(void);
-extern int pty_init(void);
-extern void tty_init(void);
-extern int mxser_init(void);
-extern int moxa_init(void);
-extern int ip2_init(void);
-extern int pcxe_init(void);
-extern int pc_init(void);
 extern int vcs_init(void);
-extern int rp_init(void);
-extern int cy_init(void);
-extern int stl_init(void);
-extern int stli_init(void);
-extern int specialix_init(void);
-extern int espserial_init(void);
-extern int macserial_init(void);
-extern int a2232board_init(void);
 extern int vty_init(void);
 
-extern int tty_paranoia_check(struct tty_struct *tty, kdev_t device,
+extern int tty_paranoia_check(struct tty_struct *tty, struct inode *inode,
 			      const char *routine);
 extern char *tty_name(struct tty_struct *tty, char *buf);
 extern void tty_wait_until_sent(struct tty_struct * tty, long timeout);
@@ -407,6 +388,11 @@ extern void console_print(const char *);
 
 extern int vt_ioctl(struct tty_struct *tty, struct file * file,
 		    unsigned int cmd, unsigned long arg);
+
+static inline dev_t tty_devnum(struct tty_struct *tty)
+{
+	return MKDEV(tty->driver->major, tty->driver->minor_start) + tty->index;
+}
 
 #endif /* __KERNEL__ */
 #endif

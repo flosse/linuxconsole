@@ -55,6 +55,13 @@ DECLARE_WAIT_QUEUE_HEAD(input_devices_poll_wait);
 static int input_devices_state;
 #endif
 
+static inline unsigned int ms_to_jiffies(unsigned int ms)
+{
+        unsigned int j;
+        j = (ms * HZ + 500) / 1000;
+        return (j > 0) ? j : 1;
+}
+
 
 void input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {
@@ -93,9 +100,9 @@ void input_event(struct input_dev *dev, unsigned int type, unsigned int code, in
 
 			change_bit(code, dev->key);
 
-			if (test_bit(EV_REP, dev->evbit) && dev->rep[REP_PERIOD] && value) {
+			if (test_bit(EV_REP, dev->evbit) && dev->rep[REP_PERIOD] && dev->timer.data && value) {
 				dev->repeat_key = code;
-				mod_timer(&dev->timer, jiffies + dev->rep[REP_DELAY]);
+				mod_timer(&dev->timer, jiffies + ms_to_jiffies(dev->rep[REP_DELAY]));
 			}
 
 			break;
@@ -162,7 +169,7 @@ void input_event(struct input_dev *dev, unsigned int type, unsigned int code, in
 
 		case EV_REP:
 
-			if (code > REP_MAX || dev->rep[code] == value) return;
+			if (code > REP_MAX || value < 0 || dev->rep[code] == value) return;
 
 			dev->rep[code] = value;
 			if (dev->event) dev->event(dev, type, code, value);
@@ -195,7 +202,7 @@ static void input_repeat_key(unsigned long data)
 	input_event(dev, EV_KEY, dev->repeat_key, 2);
 	input_sync(dev);
 
-	mod_timer(&dev->timer, jiffies + dev->rep[REP_PERIOD]);
+	mod_timer(&dev->timer, jiffies + ms_to_jiffies(dev->rep[REP_PERIOD]));
 }
 
 int input_accept_process(struct input_handle *handle, struct file *file)
@@ -280,7 +287,7 @@ static struct input_device_id *input_match_device(struct input_device_id *id, st
 			if (id->id.product != dev->id.product)
 				continue;
 		
-		if (id->flags & INPUT_DEVICE_ID_MATCH_BUS)
+		if (id->flags & INPUT_DEVICE_ID_MATCH_VERSION)
 			if (id->id.version != dev->id.version)
 				continue;
 
@@ -423,11 +430,18 @@ void input_register_device(struct input_dev *dev)
 
 	set_bit(EV_SYN, dev->evbit);
 
+	/*
+	 * If delay and period are pre-set by the driver, then autorepeating
+	 * is handled by the driver itself and we don't do it in input.c.
+	 */
+
 	init_timer(&dev->timer);
-	dev->timer.data = (long) dev;
-	dev->timer.function = input_repeat_key;
-	dev->rep[REP_DELAY] = HZ/4;
-	dev->rep[REP_PERIOD] = HZ/33;
+	if (!dev->rep[REP_DELAY] && !dev->rep[REP_PERIOD]) {
+		dev->timer.data = (long) dev;
+		dev->timer.function = input_repeat_key;
+		dev->rep[REP_DELAY] = 250;
+		dev->rep[REP_PERIOD] = 33;
+	}
 
 	INIT_LIST_HEAD(&dev->h_list);
 	list_add_tail(&dev->node, &input_dev_list);
@@ -527,7 +541,7 @@ void input_unregister_handler(struct input_handler *handler)
 
 static int input_open_file(struct inode *inode, struct file *file)
 {
-	struct input_handler *handler = input_table[minor(inode->i_rdev) >> 5];
+	struct input_handler *handler = input_table[iminor(inode) >> 5];
 	struct file_operations *old_fops, *new_fops = NULL;
 	int err;
 
@@ -676,8 +690,33 @@ static int input_handlers_read(char *buf, char **start, off_t pos, int count, in
 	return (count > cnt) ? cnt : count;
 }
 
-struct input_handle *input_find_handle(char *phys_descr)
+static int __init input_proc_init(void)
 {
+	struct proc_dir_entry *entry;
+
+	proc_bus_input_dir = proc_mkdir("input", proc_bus);
+	if (proc_bus_input_dir == NULL)
+		return -ENOMEM;
+	proc_bus_input_dir->owner = THIS_MODULE;
+	entry = create_proc_read_entry("devices", 0, proc_bus_input_dir, input_devices_read, NULL);
+	if (entry == NULL) {
+		remove_proc_entry("input", proc_bus);
+		return -ENOMEM;
+	}
+	entry->owner = THIS_MODULE;
+	entry->proc_fops->poll = input_devices_poll;
+	entry = create_proc_read_entry("handlers", 0, proc_bus_input_dir, input_handlers_read, NULL);
+	if (entry == NULL) {
+		remove_proc_entry("devices", proc_bus_input_dir);
+		remove_proc_entry("input", proc_bus);
+		return -ENOMEM;
+	}
+	entry->owner = THIS_MODULE;
+	return 0;
+}
+
+struct input_handle *input_find_handle(char *phys_descr)
+{                               
         struct input_dev *dev;
         struct input_handle *handle;
 
@@ -685,12 +724,14 @@ struct input_handle *input_find_handle(char *phys_descr)
                 list_for_each_entry(handle, &dev->h_list, d_node) {
                         if(!strcmp(handle->name,"kbd") && !strcmp(phys_descr,dev->phys) )
                                 return handle;
-                }
-        }
+                }       
+        }               
         printk(KERN_WARNING "input: no matching device for \"%s\"\n", phys_descr);
-        return NULL;
-}
+        return NULL;            
+}               
 
+#else /* !CONFIG_PROC_FS */
+static inline int input_proc_init(void) { return 0; }
 #endif
 
 struct class input_class = {
@@ -699,38 +740,37 @@ struct class input_class = {
 
 static int __init input_init(void)
 {
-	struct proc_dir_entry *entry;
+	int retval = -ENOMEM;
 
 	class_register(&input_class);
-
-#ifdef CONFIG_PROC_FS
-	proc_bus_input_dir = proc_mkdir("input", proc_bus);
-	proc_bus_input_dir->owner = THIS_MODULE;
-	entry = create_proc_read_entry("devices", 0, proc_bus_input_dir, input_devices_read, NULL);
-	entry->owner = THIS_MODULE;
-	entry->proc_fops->poll = input_devices_poll;
-	entry = create_proc_read_entry("handlers", 0, proc_bus_input_dir, input_handlers_read, NULL);
-	entry->owner = THIS_MODULE;
-#endif
-	if (register_chrdev(INPUT_MAJOR, "input", &input_fops)) {
+	input_proc_init();
+	retval = register_chrdev(INPUT_MAJOR, "input", &input_fops);
+	if (retval) {
 		printk(KERN_ERR "input: unable to register char major %d", INPUT_MAJOR);
-		return -EBUSY;
+		remove_proc_entry("devices", proc_bus_input_dir);
+		remove_proc_entry("handlers", proc_bus_input_dir);
+		remove_proc_entry("input", proc_bus);
+		return retval;
 	}
 
-	devfs_mk_dir("input");
-	return 0;
+	retval = devfs_mk_dir("input");
+	if (retval) {
+		remove_proc_entry("devices", proc_bus_input_dir);
+		remove_proc_entry("handlers", proc_bus_input_dir);
+		remove_proc_entry("input", proc_bus);
+		unregister_chrdev(INPUT_MAJOR, "input");
+	}
+	return retval;
 }
 
 static void __exit input_exit(void)
 {
-#ifdef CONFIG_PROC_FS
 	remove_proc_entry("devices", proc_bus_input_dir);
 	remove_proc_entry("handlers", proc_bus_input_dir);
 	remove_proc_entry("input", proc_bus);
-#endif
+
 	devfs_remove("input");
-        if (unregister_chrdev(INPUT_MAJOR, "input"))
-                printk(KERN_ERR "input: can't unregister char major %d", INPUT_MAJOR);
+	unregister_chrdev(INPUT_MAJOR, "input");
 	class_unregister(&input_class);
 }
 

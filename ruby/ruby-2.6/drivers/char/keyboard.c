@@ -154,7 +154,7 @@ int setkeycode(struct input_handle *handle, unsigned int scancode, unsigned int 
 	INPUT_KEYCODE(dev, scancode) = keycode;
 
 	for (i = 0; i < dev->keycodemax; i++)
-		if (INPUT_KEYCODE(dev, scancode) == oldkey)
+		if (keycode == oldkey)
 			break;
 	if (i == dev->keycodemax)
 		clear_bit(oldkey, dev->keybit);
@@ -205,14 +205,6 @@ void kd_mksound(struct input_handle *handle, unsigned int hz, unsigned int ticks
 /*
  * Setting the keyboard rate.
  */
-static inline unsigned int ms_to_jiffies(unsigned int ms)
-{
-	unsigned int j;
-
-	j = (ms * HZ + 500) / 1000;
-	return (j > 0) ? j : 1;
-}
-
 int kbd_rate(struct input_handle *handle, struct kbd_repeat *rep)
 {
 	struct input_dev *dev = handle->dev;
@@ -220,11 +212,11 @@ int kbd_rate(struct input_handle *handle, struct kbd_repeat *rep)
 
 	if (test_bit(EV_REP, dev->evbit)) {
 		if (rep->delay > 0)
-			dev->rep[REP_DELAY] = ms_to_jiffies(rep->delay);
+			input_event(dev, EV_REP, REP_DELAY, rep->delay);
 		if (rep->period > 0)
-			dev->rep[REP_PERIOD] = ms_to_jiffies(rep->period);
-		d = dev->rep[REP_DELAY]  * 1000 / HZ;
-		p = dev->rep[REP_PERIOD] * 1000 / HZ;
+			input_event(dev, EV_REP, REP_PERIOD, rep->period);
+		d = dev->rep[REP_DELAY];
+		p = dev->rep[REP_PERIOD];
 	}
 	rep->delay  = d;
 	rep->period = p;
@@ -607,9 +599,12 @@ static void k_cons(struct vc_data *vc, unsigned char value, char up_flag)
 
 static void k_fn(struct vc_data *vc, unsigned char value, char up_flag)
 {
+        unsigned v;
+
 	if (up_flag)
 		return;
-	if (value < ARRAY_SIZE(func_table)) {
+	v = value;
+	if (v < ARRAY_SIZE(func_table)) {
 		if (func_table[value])
 			puts_queue(vc, func_table[value]);
 	} else

@@ -56,12 +56,10 @@
 #include <linux/elevator.h>
 #include <linux/rtc.h>
 #include <linux/pci.h>
-#include <linux/rtc.h>
 #include <linux/module.h>
 #include <linux/serial.h>
 #include <linux/reiserfs_fs.h>
 #include <linux/if_tun.h>
-#include <linux/dirent.h>
 #include <linux/ctype.h>
 #include <linux/ioctl32.h>
 #include <linux/ncp_fs.h>
@@ -1573,7 +1571,7 @@ static int vt_check(struct file *file)
 		return -EINVAL;
 	                
 	tty = (struct tty_struct *)file->private_data;
-	if (tty_paranoia_check(tty, inode->i_rdev, "tty_ioctl"))
+	if (tty_paranoia_check(tty, inode, "tty_ioctl"))
 		return -EINVAL;
 	                                                
 	if (tty->driver->ioctl != vt_ioctl)

@@ -32,6 +32,7 @@
 #include <linux/initrd.h>
 #include <linux/bootmem.h>
 #include <linux/seq_file.h>
+#include <linux/console.h>
 #include <linux/root_dev.h>
 #include <linux/highmem.h>
 #include <linux/module.h>
@@ -42,6 +43,8 @@
 #include <asm/setup.h>
 #include <asm/arch_hooks.h>
 #include <asm/sections.h>
+#include <asm/io_apic.h>
+#include <asm/ist.h>
 #include "setup_arch_pre.h"
 #include "mach_resources.h"
 
@@ -61,12 +64,20 @@ struct cpuinfo_x86 boot_cpu_data = { 0, 0, 0, 0, -1, 1, 0, 0, -1 };
 unsigned long mmu_cr4_features;
 EXPORT_SYMBOL_GPL(mmu_cr4_features);
 
-#ifdef CONFIG_ACPI_HT_ONLY
-int acpi_disabled = 1;
+#ifdef	CONFIG_ACPI
+	int acpi_disabled __initdata = 0;
 #else
-int acpi_disabled = 0;
+	int acpi_disabled __initdata = 1;
 #endif
 EXPORT_SYMBOL(acpi_disabled);
+
+#ifdef	CONFIG_ACPI_BOOT
+	int acpi_irq __initdata = 1;	/* enable IRQ */
+	int acpi_ht __initdata = 1;	/* enable HT */
+#endif
+
+int acpi_force __initdata = 0;
+
 
 int MCA_bus;
 /* for MCA, but anyone else can use it if they want */
@@ -92,6 +103,7 @@ struct sys_desc_table_struct {
 	unsigned char table[0];
 };
 struct edid_info edid_info;
+struct ist_info ist_info;
 struct e820map e820;
 
 unsigned char aux_device_present;
@@ -515,13 +527,37 @@ static void __init parse_cmdline_early (char ** cmdline_p)
 			}
 		}
 
-		/* "acpi=off" disables both ACPI table parsing and interpreter init */
-		if (c == ' ' && !memcmp(from, "acpi=off", 8))
+#ifdef CONFIG_ACPI_BOOT
+		/* "acpi=off" disables both ACPI table parsing and interpreter */
+		else if (!memcmp(from, "acpi=off", 8)) {
+			acpi_ht = 0;
 			acpi_disabled = 1;
+		}
 
-		/* "acpismp=force" turns on ACPI again */
-		if (c == ' ' && !memcmp(from, "acpismp=force", 13))
+		/* acpi=force to over-ride black-list */
+		else if (!memcmp(from, "acpi=force", 10)) {
+			acpi_force = 1;
+			acpi_ht=1;
 			acpi_disabled = 0;
+		}
+
+		/* Limit ACPI just to boot-time to enable HT */
+		else if (!memcmp(from, "acpi=ht", 7)) {
+			acpi_ht = 1;
+			if (!acpi_force) acpi_disabled = 1;
+		}
+
+		/* "pci=noacpi" disables ACPI interrupt routing */
+		else if (!memcmp(from, "pci=noacpi", 10)) {
+			acpi_irq = 0;
+		}
+
+#ifdef CONFIG_X86_LOCAL_APIC
+		/* disable IO-APIC */
+		else if (!memcmp(from, "noapic", 6))
+			disable_ioapic_setup();
+#endif /* CONFIG_X86_LOCAL_APIC */
+#endif /* CONFIG_ACPI_BOOT */
 
 		/*
 		 * highmem=size forces highmem to be exactly 'size' bytes.
@@ -921,11 +957,12 @@ void __init setup_arch(char **cmdline_p)
 	pre_setup_arch_hook();
 	early_cpu_init();
 
- 	ROOT_DEV = ORIG_ROOT_DEV;
+ 	ROOT_DEV = old_decode_dev(ORIG_ROOT_DEV);
  	drive_info = DRIVE_INFO;
  	screen_info = SCREEN_INFO;
 	edid_info = EDID_INFO;
 	apm_info.bios = APM_BIOS_INFO;
+	ist_info = IST_INFO;
 	saved_videomode = VIDEO_MODE;
 	printk("Video mode to be used for restore is %lx\n", saved_videomode);
 	if( SYS_DESC_TABLE.length != 0 ) {
@@ -977,23 +1014,17 @@ void __init setup_arch(char **cmdline_p)
 	generic_apic_probe(*cmdline_p);
 #endif	
 
-#ifdef CONFIG_ACPI
 	/*
 	 * Parse the ACPI tables for possible boot-time SMP configuration.
 	 */
-	if (!acpi_disabled)
-		acpi_boot_init();
-#endif
+	acpi_boot_init();
+
 #ifdef CONFIG_X86_LOCAL_APIC
 	if (smp_found_config)
 		get_smp_config();
 #endif
-#ifdef CONFIG_X86_SUMMIT
-	setup_summit();
-#endif
 
 	register_memory(max_low_pfn);
-
 }
 
 #include "setup_arch_post.h"
