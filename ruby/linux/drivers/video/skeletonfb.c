@@ -220,7 +220,7 @@ static int xxxfb_blank(int blank_mode, const struct fb_info *info)
  * or non packed pixel format layouts.  
  */
 
-void xxxfb_rectfill(struct fb_info *p, int x1, int y1, unsigned int width,
+void xxxfb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,
                     unsigned int height, unsigned long color, int rop)
 {
 }
@@ -332,9 +332,9 @@ static struct fb_ops xxxfb_ops = {
 	fb_setcolreg:	xxxfb_setcolreg,
 	fb_blank:	xxxfb_blank,
 	fb_pan_display:	xxxfb_pan_display,
-	fb_rectfill:	xxxfb_rectfill,  /* optional */
-	fb_copyarea:	xxxfb_copyarea,  /* optional */
-	fb_imageblit:	xxxfb_imageblit, /* optional */
+	fb_fillrect:	xxxfb_fillrect,  
+	fb_copyarea:	xxxfb_copyarea,  
+	fb_imageblit:	xxxfb_imageblit, 
 	fb_ioctl:       xxxfb_ioctl,     /* optional */
 	fb_mmap:	xxxfb_mmap,      /* optional */	
 };
