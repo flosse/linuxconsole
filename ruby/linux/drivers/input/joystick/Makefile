@@ -33,9 +33,6 @@ obj-$(CONFIG_JOYSTICK_TURBOGRAFX)	+= turbografx.o
 obj-$(CONFIG_JOYSTICK_TWIDJOY)		+= twidjoy.o
 obj-$(CONFIG_JOYSTICK_WARRIOR)		+= warrior.o
 
-ifeq ($(CONFIG_JOYSTICK_IFORCE),y)
-	obj-y	+= iforce/iforcedrv.o
-endif
 subdir-$(CONFIG_JOYSTICK_IFORCE)	+= iforce
 
 # The global Rules.make.
