@@ -291,7 +291,7 @@ fb_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 	if (! fb || ! info->disp)
 		return -ENODEV;
 
-	fb->fb_get_fix(&fix,PROC_CONSOLE(info), info);
+	fb->fb_get_fix(&fix, info);
 	if (p >= fix.smem_len)
 	    return 0;
 	if (count >= fix.smem_len)
@@ -324,7 +324,7 @@ fb_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	if (! fb || ! info->disp)
 		return -ENODEV;
 
-	fb->fb_get_fix(&fix, PROC_CONSOLE(info), info);
+	fb->fb_get_fix(&fix, info);
 	if (p > fix.smem_len)
 	    return -ENOSPC;
 	if (count >= fix.smem_len)
@@ -373,7 +373,7 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 		return -ENODEV;
 	switch (cmd) {
 	case FBIOGET_VSCREENINFO:
-		if ((i = fb->fb_get_var(&var, PROC_CONSOLE(info), info)))
+		if ((i = fb->fb_get_var(&var, info)))
 			return i;
 		return copy_to_user((void *) arg, &var,
 				    sizeof(var)) ? -EFAULT : 0;
@@ -382,29 +382,29 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 			return -EFAULT;
 		i = var.activate & FB_ACTIVATE_ALL
 			    ? set_all_vcs(fbidx, fb, &var, info)
-			    : fb->fb_set_var(&var, PROC_CONSOLE(info), info);
+			    : fb->fb_set_var(&var, info);
 		if (i)
 			return i;
 		if (copy_to_user((void *) arg, &var, sizeof(var)))
 			return -EFAULT;
 		return 0;
 	case FBIOGET_FSCREENINFO:
-		if ((i = fb->fb_get_fix(&fix, PROC_CONSOLE(info), info)))
+		if ((i = fb->fb_get_fix(&fix, info)))
 			return i;
 		return copy_to_user((void *) arg, &fix, sizeof(fix)) ?
 			-EFAULT : 0;
 	case FBIOPUTCMAP:
 		if (copy_from_user(&cmap, (void *) arg, sizeof(cmap)))
 			return -EFAULT;
-		return (fb->fb_set_cmap(&cmap, 0, PROC_CONSOLE(info), info));
+		return (fb->fb_set_cmap(&cmap, 0, info));
 	case FBIOGETCMAP:
 		if (copy_from_user(&cmap, (void *) arg, sizeof(cmap)))
 			return -EFAULT;
-		return (fb->fb_get_cmap(&cmap, 0, PROC_CONSOLE(info), info));
+		return (fb->fb_get_cmap(&cmap, 0, info));
 	case FBIOPAN_DISPLAY:
 		if (copy_from_user(&var, (void *) arg, sizeof(var)))
 			return -EFAULT;
-		if ((i=fb->fb_pan_display(&var, PROC_CONSOLE(info), info)))
+		if ((i=fb->fb_pan_display(&var, info)))
 			return i;
 		if (copy_to_user((void *) arg, &var, sizeof(var)))
 			return -EFAULT;
@@ -416,8 +416,7 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 		return 0;
 	default:
 		if (fb->fb_ioctl)
-			return fb->fb_ioctl(inode, file, cmd, arg, 
-					    PROC_CONSOLE(info), info);
+			return fb->fb_ioctl(inode, file, cmd, arg, info); 
 		return -EINVAL;
 	}
 }
@@ -457,7 +456,7 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 	/* !sparc32... */
 
 	lock_kernel();
-	fb->fb_get_fix(&fix, PROC_CONSOLE(info), info);
+	fb->fb_get_fix(&fix, info);
 
 	/* frame buffer memory */
 	start = fix.smem_start;
@@ -465,7 +464,7 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 	if (off >= len) {
 		/* memory mapped io */
 		off -= len;
-		fb->fb_get_var(&var, PROC_CONSOLE(info), info);
+		fb->fb_get_var(&var, info);
 		if (var.accel_flags)
 			return -EINVAL;
 		start = fix.mmio_start;
