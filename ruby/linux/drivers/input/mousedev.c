@@ -225,7 +225,14 @@ static int mousedev_release(struct inode * inode, struct file * file)
 static int mousedev_open(struct inode * inode, struct file * file)
 {
 	struct mousedev_list *list;
-	int i = minor(inode->i_rdev) - MOUSEDEV_MINOR_BASE;
+	int i;
+
+#ifdef CONFIG_INPUT_MOUSEDEV_PSAUX
+	if (major(inode->i_rdev) == MISC_MAJOR))
+		i = MOUSEDEV_MIX;
+	else
+#endif
+		i = minor(inode->i_rdev) - MOUSEDEV_MINOR_BASE;
 
 	if (i >= MOUSEDEV_MINORS || !mousedev_table[i])
 		return -ENODEV;
@@ -494,6 +501,12 @@ static struct input_handler mousedev_handler = {
 	id_table:	mousedev_ids,
 };
 
+#ifdef CONFIG_INPUT_MOUSEDEV_PSAUX
+static struct miscdevice psaux_mouse = {
+	PSMOUSE_MINOR, "psaux", &mousedev_fops
+};
+#endif
+
 static int __init mousedev_init(void)
 {
 	input_register_handler(&mousedev_handler);
@@ -504,6 +517,9 @@ static int __init mousedev_init(void)
 	mousedev_mix.exist = 1;
 	mousedev_mix.minor = MOUSEDEV_MIX;
 	mousedev_mix.devfs = input_register_minor("mice", MOUSEDEV_MIX, MOUSEDEV_MINOR_BASE);
+#ifdef CONFIG_INPUT_MOUSEDEV_PSAUX
+	misc_register(&psaux_mouse)
+#endif
 
 	printk(KERN_INFO "mice: PS/2 mouse device common for all mice\n");
 
@@ -512,6 +528,9 @@ static int __init mousedev_init(void)
 
 static void __exit mousedev_exit(void)
 {
+#ifdef CONFIG_INPUT_MOUSEDEV_PSAUX
+	misc_deregister(&psaux_mouse)
+#endif
 	input_unregister_minor(mousedev_mix.devfs);
 	input_unregister_handler(&mousedev_handler);
 }
