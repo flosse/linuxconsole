@@ -52,6 +52,9 @@ MODULE_DESCRIPTION("USB/RS232 I-Force joysticks and wheels driver");
 #define USB_VENDOR_ID_LOGITECH		0x046d
 #define USB_DEVICE_ID_LOGITECH_WMFORCE	0xc281
 #define USB_DEVICE_ID_LOGITECH_FORMULA	0xc291
+#define USB_VENDOR_ID_AVB		0x05ef
+#define USB_DEVICE_ID_AVB_PEGASUS	0x020a
+#define USB_DEVICE_ID_AVB_MAGTURBO	0x8884
 
 #define IFORCE_MAX_LENGTH               16
  
@@ -1077,6 +1080,8 @@ static void iforce_usb_disconnect(struct usb_device *dev, void *ptr)
 static struct usb_device_id iforce_usb_ids [] = {
 	{ USB_DEVICE(USB_VENDOR_ID_LOGITECH, USB_DEVICE_ID_LOGITECH_WMFORCE) },
 	{ USB_DEVICE(USB_VENDOR_ID_LOGITECH, USB_DEVICE_ID_LOGITECH_FORMULA) },
+	{ USB_DEVICE(USB_VENDOR_ID_AVB, USB_DEVICE_ID_AVB_PEGASUS) },
+	{ USB_DEVICE(USB_VENDOR_ID_AVB, USB_DEVICE_ID_AVB_MAGTURBO) },
 	{ }						/* Terminating entry */
 };
 
