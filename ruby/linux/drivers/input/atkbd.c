@@ -206,6 +206,9 @@ static int atkbd_sendbyte(struct atkbd *atkbd, unsigned char byte)
 	int timeout = 1000; /* 10 msec */
 	atkbd->ack = 0;
 
+#ifdef ATKBD_DEBUG
+	printk(KERN_DEBUG "atkbd.c: Sent: %02x\n", byte);
+#endif
 	serio_write(atkbd->serio, byte);
 	while (!atkbd->ack && timeout--) udelay(10);
 
