@@ -74,7 +74,7 @@ if [ "$CONFIG_INPUT" != "n" ]; then
       comment 'USB devices'
          tristate '  USB Human Interface Device (HID)' CONFIG_INPUT_HID
          if [ "$CONFIG_INPUT_HID" != "n" ]; then
-            dep_mbool '    /dev/hiddev raw HID device support', CONFIG_INPUT_HIDDEV $CONFIG_INPUT_HID
+            bool '    /dev/hiddev raw HID device support' CONFIG_INPUT_HIDDEV
          fi
       	 if [ "$CONFIG_INPUT_HID" != "y" ]; then
             tristate '  USB HIDBP keyboard' CONFIG_INPUT_USBKBD
