@@ -907,7 +907,7 @@ inline void set_console(struct vc_data *vc)
  */
 static void visual_init(struct vc_data *vc, int init)
 {
-	struct vc_data *default_mode = vc->display_fg->default_mode;	
+	/*struct vc_data *default_mode = vc->display_fg->default_mode;*/
 
 	/* ++Geert: sw->con_startup determines console size */
 	vc->vc_uni_pagedir_loc = &vc->vc_uni_pagedir;
@@ -1772,6 +1772,12 @@ const char *vt_map_display(struct vt_struct *vt, int init, int vc_count)
 	update_screen(vt->fg_console);
 	current_vc += vc_count;
 	current_vt += 1;
+	if (vt->vt_kmalloced) {
+		vt_create_sysfs_dev_files(vt);
+#ifdef CONFIG_PROC_FS
+		vt_proc_attach(vt);
+#endif
+	}
 	return display_desc;
 }
 
@@ -1839,6 +1845,10 @@ int __init vty_init(void)
 	if (tty_register_driver(console_driver))
 		panic("Couldn't register console driver\n");
 
+	vt_sysfs_init();
+#ifdef CONFIG_PROC_FS
+        vt_proc_init();
+#endif
 #if defined (CONFIG_PROM_CONSOLE)
 	prom_con_init();
 #endif
@@ -1848,10 +1858,6 @@ int __init vty_init(void)
 	kbd_init();
 	console_map_init();
 	vcs_init();
-#ifdef CONFIG_PROC_FS
-        vt_proc_init();
-#endif
-	vt_sysfs_init();
 	return 0;
 }
 

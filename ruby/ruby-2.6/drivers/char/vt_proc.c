@@ -193,17 +193,11 @@ EXPORT_SYMBOL(vt_proc_detach);
 
 int __init vt_proc_init(void)
 {
-        struct vt_struct *vt;
-        
-        if (list_empty(&vt_list))
-                return 0;
-        
-        proc_bus_console_dir = proc_mkdir(VT_PROC_DIR, proc_bus);
-        list_for_each_entry (vt, &vt_list, node) {
-                vt_proc_attach(vt);
-        }
+	/* we have only one boot time console - admin_vt*/
+	proc_bus_console_dir = proc_mkdir(VT_PROC_DIR, proc_bus);
+	vt_proc_attach(admin_vt);
 
-        return 0;
+	return 0;
 }
 
 #endif /* CONFIG_PROC_FS */

@@ -246,7 +246,7 @@ struct vt_struct {
 	unsigned char vt_ledstate;
 	unsigned char vt_ledioctl;
 	char *display_desc;
-	struct	device	dev;		/* Generic device interface */
+	struct	class_device	dev;		/* Generic device interface */
 };
 
 extern struct list_head vt_list;
@@ -330,4 +330,9 @@ void change_console(struct vc_data *new_vc, struct vc_data *old_vc);
 /* vt_sysfs.c*/
 int __init vt_create_sysfs_dev_files (struct vt_struct *vt);
 void __init vt_sysfs_init(void);
+/* vt_proc.c */
+#ifdef CONFIG_PROC_FS
+extern int vt_proc_attach(struct vt_struct *vt);
+extern int vt_proc_detach(struct vt_struct *vt);
+#endif
 #endif				/* _VT_KERN_H */

@@ -37,6 +37,7 @@ struct display {
 };
 
 /* drivers/video/console/fbcon.c */
+extern char vt2fb[FB_MAX];
 extern char con2fb_map[MAX_NR_CONSOLES];
 extern int set_con2fb_map(int unit, int newidx);
 
@@ -105,5 +106,9 @@ extern int set_con2fb_map(int unit, int newidx);
 
 extern int fb_console_init(void);
 extern const struct consw fb_con;
+extern int fbcon_add(int unit, int vc_count);
+
+/* drivers/video/fbmem.c */
+extern void fb_console_active(int active);
 
 #endif /* _VIDEO_FBCON_H */

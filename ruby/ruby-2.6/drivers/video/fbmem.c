@@ -1280,6 +1280,9 @@ register_framebuffer(struct fb_info *fb_info)
 
 	devfs_mk_cdev(MKDEV(FB_MAJOR, i),
 			S_IFCHR | S_IRUGO | S_IWUGO, "fb/%d", i);
+#ifdef CONFIG_FRAMEBUFFER_CONSOLE
+	fbcon_add(i, vt2fb[i]);
+#endif
 	return 0;
 }
 

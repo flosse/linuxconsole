@@ -2278,6 +2278,12 @@ int fbcon_add(int unit, int vc_count)
         struct vt_struct *vt;
 	struct vc_data *vc;
 
+	if(vt2fb[unit] == TAKE_OVER_CONSOLE) {
+	        admin_vt->data_hook = (void *)registered_fb[unit];
+		take_over_console(admin_vt, &fb_con);
+		return 0;
+	}
+
         vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
 
         if (!vt) return -ENOMEM;
@@ -2301,8 +2307,6 @@ int fbcon_add(int unit, int vc_count)
 		kfree(vc);
 	        return -ENODEV;
 	}
-	vt_proc_attach(vt);
-	vt_create_sysfs_dev_files(vt);
 	printk("Console: %s %s %dx%d vc:%d-%d\n",
 	        vt->default_mode->vc_can_do_color ? "Colour" : "Mono",
 	        display_desc,
@@ -2316,9 +2320,6 @@ int __init fb_console_init(void)
 {
         int unit;
 
-	if (!num_registered_fb)
-		return -ENODEV;
-
 	if(!vt2fb[0])
 		vt2fb[0] = TAKE_OVER_CONSOLE;
 
@@ -2326,14 +2327,12 @@ int __init fb_console_init(void)
 		if(!vt2fb[unit])
 			vt2fb[unit] = MAX_NR_USER_CONSOLES;
 
-	for(unit = 0; unit < num_registered_fb; unit++)
-		if(vt2fb[unit] == TAKE_OVER_CONSOLE) {
-	                admin_vt->data_hook = (void *)registered_fb[unit];
-			take_over_console(admin_vt, &fb_con);
-		}
-	  	else
-			fbcon_add(unit, vt2fb[unit]);
 	fb_console_active(1);
+	if (!num_registered_fb)
+		return -ENODEV;
+
+	for(unit = 0; unit < num_registered_fb; unit++)
+		fbcon_add(unit, vt2fb[unit]);
 	return 0;
 }
 
