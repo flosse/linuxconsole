@@ -283,6 +283,7 @@ struct fb_image {
 #define GET_FB_IDX(node)	(MINOR(node))
 
 #include <linux/fs.h>
+#include <linux/poll.h>
 #include <linux/init.h>
 #include <linux/devfs_fs_kernel.h>
 
@@ -323,6 +324,8 @@ struct fb_ops {
                         unsigned int height, int dx, int dy);
     /* Draws a image to the display */ 		 	
     void (*fb_imageblit)(struct fb_info *p, struct fb_image *image);
+    /* perform polling on fb device */
+    int (*fb_poll)(struct fb_info *info, poll_table *wait);	
     /* perform fb specific ioctl */
     int (*fb_ioctl)(struct inode *inode, struct file *file, unsigned int cmd,
 		    unsigned long arg, struct fb_info *info);
@@ -343,6 +346,7 @@ struct fb_info {
    struct fb_ops *fbops;
    struct pm_dev *pm_fb;
    char *screen_base;                   /* Virtual address */
+   wait_queue_head_t wait;		/* Sync methof for fbdev */
    devfs_handle_t devfs_handle;         /* Devfs handle for new name         */
    devfs_handle_t devfs_lhandle;        /* Devfs handle for compat. symlink  */
    void *pseudo_palette;                /* Fake palette of 16 colors and 
@@ -351,7 +355,6 @@ struct fb_info {
 #ifdef CONFIG_MTRR
    int mtrr_handle;			/* MTRR handle */
 #endif
-
    /* From here on everything is device dependent */
    void *par;	
 };

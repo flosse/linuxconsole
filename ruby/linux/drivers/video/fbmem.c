@@ -24,6 +24,7 @@
 #include <linux/mman.h>
 #include <linux/tty.h>
 #include <linux/init.h>
+#include <linux/poll.h>
 #include <linux/proc_fs.h>
 #ifdef CONFIG_KMOD
 #include <linux/kmod.h>
@@ -441,6 +442,21 @@ fb_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	return err;
 }
 
+static unsigned int
+fb_poll(struct file *file, poll_table *wait)
+{
+	struct inode *inode = file->f_dentry->d_inode;
+        int fbidx = GET_FB_IDX(inode->i_rdev);
+        struct fb_info *info = registered_fb[fbidx];
+       	struct fb_ops *fb = info->fbops;
+
+        poll_wait(file, &info->wait, wait);
+
+       	if (fb->fb_poll)
+               	return (fb->fb_poll)(info, wait);
+        return 0;
+}
+
 #ifdef CONFIG_KMOD
 static void try_to_load(int fb)
 {
@@ -681,6 +697,7 @@ static struct file_operations fb_fops = {
 	owner:		THIS_MODULE,
 	read:		fb_read,
 	write:		fb_write,
+	poll:		fb_poll,
 	ioctl:		fb_ioctl,
 	mmap:		fb_mmap,
 	open:		fb_open,
@@ -739,6 +756,7 @@ register_framebuffer(struct fb_info *fb_info)
 			break;
 	fb_info->node = MKDEV(FB_MAJOR, i);
 	registered_fb[i] = fb_info;
+	init_waitqueue_head(&fb_info->wait);
 	sprintf (name_buf, "%d", i);
 	fb_info->devfs_handle =
 	    devfs_register (devfs_handle, name_buf, DEVFS_FL_DEFAULT,
@@ -759,7 +777,6 @@ register_framebuffer(struct fb_info *fb_info)
 		printk("%s: MTRR turned on\n", fb_info->fix.id);
 	}
 #endif
-
 	return 0;
 }
 
