@@ -247,7 +247,6 @@ extern int GET_FB_IDX(kdev_t rdev);
 
 
 struct fb_info;
-struct fb_info_gen;
 struct vm_area_struct;
 struct file;
 
@@ -260,12 +259,6 @@ struct fb_ops {
     struct module *owner;
     int (*fb_open)(struct fb_info *info, int user);
     int (*fb_release)(struct fb_info *info, int user);
-    /* get non settable parameters */
-    int (*fb_get_fix)(struct fb_fix_screeninfo *fix, struct fb_info *info);
-    /* get settable parameters */
-    int (*fb_get_var)(struct fb_var_screeninfo *var, struct fb_info *info); 
-    /* set settable parameters */
-    int (*fb_set_var)(struct fb_var_screeninfo *var, struct fb_info *info); 
     /* checks var and creates a par based on it */
     int (*fb_check_var)(struct fb_var_screeninfo *var, struct fb_info *info);
     /* set the video mode according to par */
@@ -298,14 +291,9 @@ struct fb_info {
    struct fb_cmap cmap;                 /* Current cmap */
    struct fb_ops *fbops;
    char *screen_base;                   /* Virtual address */
-   struct display *disp;		/* initial display variable */
    char fontname[40];			/* default font name */
    devfs_handle_t devfs_handle;         /* Devfs handle for new name         */
    devfs_handle_t devfs_lhandle;        /* Devfs handle for compat. symlink  */
-   int (*switch_con)(int, struct fb_info*);
-					/* tell fb to switch consoles */
-   int (*updatevar)(int, struct fb_info*);
-					/* tell fb to update the vars */
    void *pseudo_palette;                /* Fake palette of 16 colors and 
 					   the cursor's color for non
                                            palette mode */
