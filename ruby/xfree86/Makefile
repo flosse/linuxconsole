@@ -4,7 +4,7 @@ LDFLAGS = -shared
 DEBUG_CFLAGS = -g -O0
 OPT_CFLAGS = 
 WARN_CFLAGS = -Wall  -pedantic
-XCROOT = /usr/src/xc
+XCROOT = /usr/src/xc 
 
 CFLAGS = $(DEBUG_CFLAGS) $(OPT_CFLAGS) $(WARN_CFLAGS) -fPIC -DDEBUG -DORFLOG $(INCLUDES)
 INCLUDES = -I$(XCROOT)/include -I$(XCROOT)/include/extensions	\

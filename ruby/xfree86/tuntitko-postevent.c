@@ -60,6 +60,7 @@ tunPostMotionEvent(DeviceIntPtr	device)
   int				dx, dy;
   float				mult;
 
+#if 0
   TLOG ("%d %d %d", tun->avaluators [0].value, tun->avaluators [1].value,
 	tun->avaluators [2].value);
   TLOG ("Indices: %p %p %p", 
@@ -74,7 +75,40 @@ tunPostMotionEvent(DeviceIntPtr	device)
   xf86PostMotionEvent (device, TRUE, 0, 3,
 		       tun->avaluators [0].value, tun->avaluators [1].value,
 		       tun->avaluators [2].value);
+#endif
 
+  TLOG( "%d xvaluators starting with %d", tun->nof_xvaluators, tun->first_avaluator );
+  switch( tun->nof_xvaluators ) { 
+  case 6: xf86PostMotionEvent (device, TRUE, 0, 6,
+			       tun->xval_to_lval_tbl[0]->value, 
+			       tun->xval_to_lval_tbl[1]->value, 
+			       tun->xval_to_lval_tbl[2]->value, 
+			       tun->xval_to_lval_tbl[3]->value, 
+			       tun->xval_to_lval_tbl[4]->value, 
+			       tun->xval_to_lval_tbl[5]->value ); return;
+  case 5: xf86PostMotionEvent (device, TRUE, 0, 5,
+			       tun->xval_to_lval_tbl[0]->value, 
+			       tun->xval_to_lval_tbl[1]->value, 
+			       tun->xval_to_lval_tbl[2]->value, 
+			       tun->xval_to_lval_tbl[3]->value, 
+			       tun->xval_to_lval_tbl[4]->value ); return;
+  case 4: xf86PostMotionEvent (device, TRUE, 0, 4,
+			       tun->xval_to_lval_tbl[0]->value, 
+			       tun->xval_to_lval_tbl[1]->value, 
+			       tun->xval_to_lval_tbl[2]->value, 
+			       tun->xval_to_lval_tbl[3]->value ); return;
+  case 3: xf86PostMotionEvent (device, TRUE, 0, 3,
+			       tun->xval_to_lval_tbl[0]->value, 
+			       tun->xval_to_lval_tbl[1]->value, 
+			       tun->xval_to_lval_tbl[2]->value ); return;
+  case 2: xf86PostMotionEvent (device, TRUE, 0, 2,
+			       tun->xval_to_lval_tbl[0]->value, 
+			       tun->xval_to_lval_tbl[1]->value ); return;
+  case 1: xf86PostMotionEvent (device, TRUE, 0, 1,
+			       tun->xval_to_lval_tbl[0]->value ); return;
+  default: TLOG( "can't deal with this whole valuator situation.." );
+  }
+  
 return;
 
 
@@ -307,7 +341,7 @@ return;
 }
 
 void
-blablaPostButtonEvent(DeviceIntPtr	device,
+NOTblablaPostButtonEvent(DeviceIntPtr	device,
 		    int			is_absolute,
 		    int			button,
 		    int			is_down,
@@ -433,7 +467,7 @@ tunPostButtonEvent (DeviceIntPtr device, int button, int is_down)
 
 
 
-  blablaPostButtonEvent (device, TRUE, button, is_down, 0, 3,
+  xf86PostButtonEvent (device, TRUE, button, is_down, 0, 3,
 			 tun->xval_to_lval_tbl[0]->value,
 			 tun->xval_to_lval_tbl[1]->value,
 			 tun->xval_to_lval_tbl[2]->value);
