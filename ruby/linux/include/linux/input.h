@@ -542,25 +542,24 @@ struct ff_constant_effect {
 	struct ff_shape shape;
 };
 
+/* FF_RAMP */
+struct ff_ramp_effect {
+	__s16 start_level;
+	__s16 end_level;
+	struct ff_shape shape;
+};
+
 /* FF_SPRING of FF_FRICTION */
 struct ff_interactive_effect {
-/* Axis along which effect must be created. If null, the field named direction
- * is used
- * It is a bit array (ie to enable axes X and Y, use BIT(ABS_X) | BIT(ABS_Y)
- * It overrides the value of ff_effect::direction, which is used only if
- * axis == 0
- */
-	__u16 axis;
+	__u16 right_saturation[2]; /* Max level when joystick is on the right */
+	__u16 left_saturation[2];  /* Max level when joystick in on the left */
 
-	__u16 right_saturation; /* Max level when joystick is on the right */
-	__u16 left_saturation;	/* Max level when joystick in on the left */
-
-	__s16 right_coeff;	/* Indicates how fast the force grows when the
+	__s16 right_coeff[2];	/* Indicates how fast the force grows when the
 				   joystick moves to the right */
-	__s16 left_coeff;	/* Same for left side */
+	__s16 left_coeff[2];	/* Same for left side */
 
-	__u16 deadband;		/* Size of area where no force is produced */
-	__s16 center;		/* Position of dead dead zone */
+	__u16 deadband[2];	/* Size of area where no force is produced */
+	__s16 center[2];	/* Position of dead zone */
 
 };
 
@@ -573,6 +572,12 @@ struct ff_periodic_effect {
 	__u16 phase;		/* 'Horizontal' shift */
 
 	struct ff_shape shape;
+
+/* Only used if waveform == FF_CUSTOM */
+	__u32 custom_len;	/* Number of samples  */	
+	__s16 *custom_data;	/* Buffer of samples */
+/* Note: the data pointed by custom_data is copied by the driver. You can
+ * therefore dispose of the memory after the upload/update */
 };
 
 /*
@@ -597,6 +602,7 @@ struct ff_effect {
 
 	union {
 		struct ff_constant_effect constant;
+		struct ff_ramp_effect ramp;
 		struct ff_periodic_effect periodic;
 		struct ff_interactive_effect interactive;
 	} u;
@@ -626,6 +632,9 @@ struct ff_effect {
 #define FF_CONSTANT	0x52
 #define FF_SPRING	0x53
 #define FF_FRICTION	0x54
+#define FF_DAMPER	0x55
+#define FF_INERTIA	0x56
+#define FF_RAMP		0x57
 
 /*
  * Force feedback periodic effect types
