@@ -225,7 +225,7 @@ static void grip_timer(unsigned long private)
 				input_report_abs(dev, ABS_HAT0Y, ((data[2] >> 6) & 1) - ((data[2] >> 7) & 1));
 
 				for (j = 0; j < 11; j++)
-					input_report_key(dev, grip_btn_xt[i], (data[3] >> i) & 1);
+					input_report_key(dev, grip_btn_xt[i], (data[3] >> (i + 3)) & 1);
 				break;
 
 			case GRIP_MODE_BD:
