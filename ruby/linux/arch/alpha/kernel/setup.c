@@ -438,12 +438,6 @@ static kdev_t srm_console_device(struct console *c)
         return mk_kdev(TTY_MAJOR, 64 + c->index);
 }
 
-static int srm_console_wait_key(struct console *co)
-{
-  /* Huh? */
-	return 1;
-}
-
 static int __init srm_console_setup(struct console *co, char *options)
 {
 	return 1;
@@ -453,7 +447,6 @@ static struct console srmcons = {
 	name:		"srm0",
 	write:		srm_console_write,
 	device:		srm_console_device,
-	wait_key:	srm_console_wait_key,
 	setup:		srm_console_setup,
 	flags:		CON_PRINTBUFFER | CON_ENABLED, /* fake it out */
 	index:		-1,
