@@ -242,6 +242,9 @@ static int evdev_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 					return -EINVAL;
 				}
 				dev->upload_effect(dev, &effect);
+				if (put_user(effect.id, &(((struct ff_effect*)arg)->id))) {
+					return -EINVAL;
+				}
 				return 0;
 			}
 			else return -ENOSYS;
