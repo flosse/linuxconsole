@@ -200,7 +200,7 @@ void to_utf8(ushort c)
 	if (c < 0x80)
 		put_queue(c);				/* 0*******  */
 	else if (c < 0x800) {
-		put_queue(0xc0 | (c >> 6)); 		/* 110***** 10****** */
+		put_queue(0xc0 | (c >> 6));		/* 110***** 10****** */
 		put_queue(0x80 | (c & 0x3f));
 	} else {
 		put_queue(0xe0 | (c >> 12));		/* 1110**** 10****** 10****** */
@@ -253,6 +253,7 @@ void compute_shiftstate(void)
  * Otherwise, conclude that DIACR was not combining after all,
  * queue it and return CH.
  */
+
 unsigned char handle_diacr(unsigned char ch)
 {
 	int d = diacr;
@@ -334,6 +335,7 @@ static void fn_num(void)
 /*
  * NumLock code version unaffected by application keypad mode
  */
+
 static void fn_bare_num(void)
 {
 	if (!rep)
@@ -348,7 +350,7 @@ static void fn_lastcons(void)
 static void fn_dec_console(void)
 {
 	int i;
- 
+
 	for (i = fg_console-1; i != fg_console; i--) {
 		if (i == -1)
 			i = MAX_NR_CONSOLES-1;
@@ -396,7 +398,7 @@ static void fn_compose(void)
 
 static void fn_spawn_con(void)
 {
-        if (spawnpid)
+	if (spawnpid)
 		if (kill_proc(spawnpid, spawnsig, 1))
 			spawnpid = 0;
 }
@@ -637,9 +639,9 @@ static void k_ascii(unsigned char value, char up_flag)
 	if (up_flag)
 		return;
 
-	if (value < 10)    /* decimal input of code, while Alt depressed */
+	if (value < 10)		/* decimal input of code, while Alt depressed */
 		base = 10;
-	else {       /* hexadecimal input of code, while AltGr depressed */
+	else {			/* hexadecimal input of code, while AltGr depressed */
 		value -= 10;
 		base = 16;
 	}
@@ -872,7 +874,7 @@ void kbd_keycode(unsigned int keycode, int down)
 		/*
 		 * We touch the tty structure via the the ttytab array
 		 * without knowing whether or not tty is open, which
-		 * is inherently dangerous.  We currently rely on that
+		 * is inherently dangerous. We currently rely on that
 		 * fact that console_open sets tty->driver_data when
 		 * it opens it, and clears it when it closes it.
 		 */
@@ -910,9 +912,9 @@ void kbd_keycode(unsigned int keycode, int down)
 	if (rep && (!vc_kbd_mode(kbd, VC_REPEAT) || !tty || 
 		(!L_ECHO(tty) && tty->driver.chars_in_buffer(tty)))) {
 		/*
-		 *  Don't repeat a key if the input buffers are not empty and the
-		 *  characters get aren't echoed locally. This makes key repeat usable
-		 *  with slow applications and under heavy loads.
+		 * Don't repeat a key if the input buffers are not empty and the
+		 * characters get aren't echoed locally. This makes key repeat usable
+		 * with slow applications and under heavy loads.
 		 */
 		return;
 	}
@@ -934,7 +936,7 @@ void kbd_keycode(unsigned int keycode, int down)
 		return;
 	}
 
-    	type -= 0xf0;
+	type -= 0xf0;
 
 	if (raw_mode && type != KT_SPEC && type != KT_SHIFT)
 		return;
@@ -1006,7 +1008,7 @@ int __init kbd_init(void)
 	kbd0.slockstate = 0;
 	kbd0.modeflags = KBD_DEFMODE;
 	kbd0.kbdmode = VC_XLATE;
- 
+
 	for (i = 0 ; i < MAX_NR_CONSOLES ; i++)
 		kbd_table[i] = kbd0;
 
