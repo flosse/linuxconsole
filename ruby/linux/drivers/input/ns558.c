@@ -154,7 +154,9 @@ static struct ns558* ns558_isa_probe(int io, struct ns558 *next)
 
 #ifdef CONFIG_PCI
 static struct pci_device_id ns558_pci_tbl[] __devinitdata = {
-	{ 0x1102, 0x7002, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0 }, /* SBLive! Gameport */
+	{ 0x1102, 0x7002, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0 }, /* SB Live! gameport */
+	{ 0x125d, 0x1969, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 4 }, /* ESS Solo 1 */
+	{ 0x5333, 0xca00, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 4 }, /* S3 SonicVibes */
 	{ 0, }
 };
 MODULE_DEVICE_TABLE(pci, ns558_pci_tbl);
@@ -171,8 +173,9 @@ static int __devinit ns558_pci_probe(struct pci_dev *pdev, const struct pci_devi
 			pdev->bus->number, pdev->devfn, rc);
 		return rc;
 	}
-	ioport = pci_resource_start(pdev, 0);
-	iolen = pci_resource_len(pdev, 0);
+
+	ioport = pci_resource_start(pdev, ent->driver_data);
+	iolen = pci_resource_len(pdev, ent->driver_data);
 
 	if (!request_region(ioport, iolen, "ns558-pci"))
 		return -EBUSY;
