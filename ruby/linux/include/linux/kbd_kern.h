@@ -66,8 +66,6 @@ struct kbd_struct {
 #define VC_META		4	/* 0 - meta, 1 - meta=prefix with ESC */
 };
 
-extern struct kbd_struct kbd_table[];
-
 extern int kbd_init(void);
 
 extern unsigned char getledstate(void);
@@ -82,12 +80,6 @@ extern void (*kbd_ledfunc)(unsigned int led);
 extern inline void show_console(void)
 {
 	do_poke_blanked_console = 1;
-	tasklet_schedule(&console_tasklet);
-}
-
-extern inline void set_console(int nr)
-{
-	want_console = nr;
 	tasklet_schedule(&console_tasklet);
 }
 
