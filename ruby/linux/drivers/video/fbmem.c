@@ -775,7 +775,7 @@ fb_disable_mtrrs(void)
 }
 #endif
 
-static void __init fbcon_show_logo(struct fb_info *info)
+static void fbcon_show_logo(struct fb_info *info)
 {
     u16 palette_red[16], palette_green[16], palette_blue[16];
     int depth = info->var.bits_per_pixel;		
@@ -885,7 +885,7 @@ register_framebuffer(struct fb_info *fb_info)
 		printk("%s: MTRR turned on\n", fb_info->fix.id);
 	}
 #endif
-	
+	fbcon_show_logo(fb_info);
 	return 0;
 }
 
