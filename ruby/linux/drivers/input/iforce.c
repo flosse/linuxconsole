@@ -49,13 +49,6 @@
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>, Johann Deneux <deneux@ifrance.com>");
 MODULE_DESCRIPTION("USB/RS232 I-Force joysticks and wheels driver");
 
-#define USB_VENDOR_ID_LOGITECH		0x046d
-#define USB_DEVICE_ID_LOGITECH_WMFORCE	0xc281
-#define USB_DEVICE_ID_LOGITECH_FORMULA	0xc291
-#define USB_VENDOR_ID_AVB		0x05ef
-#define USB_DEVICE_ID_AVB_PEGASUS	0x020a
-#define USB_DEVICE_ID_AVB_MAGTURBO	0x8884
-
 #define IFORCE_MAX_LENGTH               16
  
 #if defined(CONFIG_INPUT_IFORCE_232) || defined(CONFIG_INPUT_IFORCE_232_MODULE)
@@ -119,7 +112,7 @@ static struct iforce_device {
 	{ 0x05ef, 0x020a, "AVB Top Shot Pegasus",			btn_joystick, abs_joystick, ff_joystick },
 	{ 0x05ef, 0x8884, "AVB Mag Turbo Force",			btn_wheel, abs_wheel, ff_wheel },
 	{ 0x06f8, 0x0001, "Guillemot Race Leader Force Feedback",	btn_wheel, abs_wheel, ff_wheel },
-	{ 0x0000, 0x0000, "Unknown I-Force Device %04x:%04x",		btn_joystick, abs_joystick, ff_joystick }
+	{ 0x0000, 0x0000, "Unknown I-Force Device [%04x:%04x]",		btn_joystick, abs_joystick, ff_joystick }
 };		
 
 struct iforce {
@@ -1068,11 +1061,11 @@ static void iforce_usb_disconnect(struct usb_device *dev, void *ptr)
 }
 
 static struct usb_device_id iforce_usb_ids [] = {
-	{ USB_DEVICE(USB_VENDOR_ID_LOGITECH, USB_DEVICE_ID_LOGITECH_WMFORCE) },
-	{ USB_DEVICE(USB_VENDOR_ID_LOGITECH, USB_DEVICE_ID_LOGITECH_FORMULA) },
-	{ USB_DEVICE(USB_VENDOR_ID_AVB, USB_DEVICE_ID_AVB_PEGASUS) },
-	{ USB_DEVICE(USB_VENDOR_ID_AVB, USB_DEVICE_ID_AVB_MAGTURBO) },
-	{ }						/* Terminating entry */
+	{ USB_DEVICE(0x046d, 0xc281) },		/* Logitech WingMan Force */
+	{ USB_DEVICE(0x046d, 0xc291) },		/* Logitech WingMan Formula Force */
+	{ USB_DEVICE(0x05ef, 0x020a) },		/* AVB Top Shot Pegasus */
+	{ USB_DEVICE(0x05ef, 0x8884) },		/* AVB Mag Turbo Force */
+	{ }					/* Terminating entry */
 };
 
 MODULE_DEVICE_TABLE (usb, iforce_usb_ids);
