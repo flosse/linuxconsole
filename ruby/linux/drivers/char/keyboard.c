@@ -1048,6 +1048,7 @@ static void kbd_event(struct input_handle *handle, unsigned int event_type,
 }
 
 static char kbd_name[] = "kbd";
+static int first_time;
 
 /*
  * When a keyboard (or other input device) is found, the kbd_connect
@@ -1073,6 +1074,11 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 		return NULL;
 
 	memset(handle, 0, sizeof(struct input_handle));
+
+	if (!first_time) {
+		first_time = 1;
+		vt = admin_vt;
+	}
 
 	while (vt) {
                 if (!vt->keyboard) {
