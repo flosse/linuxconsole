@@ -1169,10 +1169,8 @@
 
 #if defined(PM3FB_MASTER_DEBUG) && (PM3FB_MASTER_DEBUG >= 2)
 #define PM3_SHOW_CUR_MODE pm3fb_show_cur_mode(l_fb_info)
-#define PM3_SHOW_CUR_TIMING pm3fb_show_cur_timing(l_fb_info)
 #else
 #define PM3_SHOW_CUR_MODE /* pm3fb_show_cur_mode() */
-#define PM3_SHOW_CUR_TIMING /* pm3fb_show_cur_timing() */
 #endif
 
 /* ******************************************** */

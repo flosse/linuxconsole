@@ -1007,14 +1007,16 @@ static void pm3fb_detect(void)
 			
 			l_fb_info->fb_size =
 				pm3fb_size_memory(l_fb_info);
-			
-			(void) pci_enable_device(l_fb_info->dev);
-			
-			pm3fb_common_init(l_fb_info);			
+
+			if (l_fb_info->fb_size) {
+				(void) pci_enable_device(l_fb_info->dev);
+				pm3fb_common_init(l_fb_info);
+			} else
+				printk(KERN_ERR "pm3fb: memory problem, not enabling board #%ld\n", l_fb_info->board_num);
 		}
 	}
 }
-
+ 
 /* common initialisation */
 static void pm3fb_common_init(struct pm3fb_info *l_fb_info)
 {
@@ -2259,6 +2261,8 @@ static void pm3fb_real_setup(char *options)
 		} else if (!strncmp(options, "depth:", 6)) {
 			options = pm3fb_boardnum_setup(options + 6, &bn);
 			pm3fb_bootdepth_setup(options, bn);
+		} else if (!strncmp(options, "printtimings", 12)) {
+			printtimings = 1;
 		}
 		options = next;
 	}
@@ -2341,6 +2345,8 @@ MODULE_PARM(font,PM3_MAX_BOARD_MODULE_ARRAY_STRING);
 MODULE_PARM_DESC(font,"choose font");
 MODULE_PARM(depth,PM3_MAX_BOARD_MODULE_ARRAY_SHORT);
 MODULE_PARM_DESC(depth,"boot-time depth");
+MODULE_PARM(printtimings, "h");
+MODULE_PARM_DESC(printtimings, "print the memory timngs of the card(s)");
 /*
 MODULE_SUPPORTED_DEVICE("Permedia3 PCI boards")
 MODULE_GENERIC_TABLE(gtype,name)
