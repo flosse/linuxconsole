@@ -301,6 +301,7 @@ struct input_event {
 #define BTN_BASE3		0x128
 #define BTN_BASE4		0x129
 #define BTN_BASE5		0x12a
+#define BTN_BASE6		0x12b
 
 #define BTN_GAMEPAD		0x130
 #define BTN_A			0x130
