@@ -1,16 +1,16 @@
 /*
- *  joy-db9.c  Version 0.6V
+ * $Id$
  *
- *  Copyright (c) 1998 Andree Borrmann
  *  Copyright (c) 1999 Vojtech Pavlik
+ *
+ *  Based on the work of:
+ *	Andree Borrmann		Mats Sjövall
  *
  *  Sponsored by SuSE
  */
 
 /*
- * This is a module for the Linux joystick driver, supporting
- * console (Atari, Amstrad, Commodore, Amiga, Sega) joysticks
- * and gamepads connected to the parallel port.
+ * Atari, Amstrad, Commodore, Amiga, Sega, etc. joystick driver for Linux
  */
 
 /*
@@ -33,411 +33,390 @@
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
  */
 
-#include <asm/io.h>
-#include <asm/system.h>
-#include <linux/errno.h>
-#include <linux/ioport.h>
-#include <linux/joystick.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/string.h>
 #include <linux/delay.h>
 #include <linux/init.h>
+#include <linux/parport.h>
+#include <linux/input.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
-MODULE_PARM(js_db9, "2i");
-MODULE_PARM(js_db9_2, "2i");
-MODULE_PARM(js_db9_3, "2i");
+MODULE_PARM(db9, "2i");
+MODULE_PARM(db9_2, "2i");
+MODULE_PARM(db9_3, "2i");
 
-#define JS_MULTI_STICK	0x01
-#define JS_MULTI2_STICK 0x02
-#define JS_GENESIS_PAD  0x03
-#define JS_GENESIS5_PAD 0x05
-#define JS_GENESIS6_PAD	0x06
-#define JS_SATURN_PAD	0x07
-#define JS_MULTI_0802	0x08
-#define JS_MULTI_0802_2	0x09
-#define JS_CD32	        0x0A
-#define JS_MAX_PAD	0x0B
+#define DB9_MULTI_STICK		0x01
+#define DB9_MULTI2_STICK	0x02
+#define DB9_GENESIS_PAD		0x03
+#define DB9_GENESIS5_PAD	0x05
+#define DB9_GENESIS6_PAD	0x06
+#define DB9_SATURN_PAD		0x07
+#define DB9_MULTI_0802		0x08
+#define DB9_MULTI_0802_2	0x09
+#define DB9_CD32_PAD		0x0A
+#define DB9_MAX_PAD		0x0B
 
-#define JS_DB9_UP	0x01
-#define JS_DB9_DOWN	0x02
-#define JS_DB9_LEFT	0x04
-#define JS_DB9_RIGHT	0x08
-#define JS_DB9_FIRE1	0x10
-#define JS_DB9_FIRE2	0x20
-#define JS_DB9_FIRE3	0x40
-#define JS_DB9_FIRE4	0x80
+#define DB9_UP			0x01
+#define DB9_DOWN		0x02
+#define DB9_LEFT		0x04
+#define DB9_RIGHT		0x08
+#define DB9_FIRE1		0x10
+#define DB9_FIRE2		0x20
+#define DB9_FIRE3		0x40
+#define DB9_FIRE4		0x80
 
-#define JS_DB9_NORMAL	0x2a
-#define JS_DB9_NOSELECT	0x28
+#define DB9_NORMAL		0x0a
+#define DB9_NOSELECT		0x08
 
-#define JS_DB9_SATURN0	0x20
-#define JS_DB9_SATURN1	0x22
-#define JS_DB9_SATURN2	0x24
-#define JS_DB9_SATURN3	0x26
+#define DB9_SATURN0		0x00
+#define DB9_SATURN1		0x02
+#define DB9_SATURN2		0x04
+#define DB9_SATURN3		0x06
 
-#define JS_GENESIS6_DELAY	14
+#define DB9_GENESIS6_DELAY	14
+#define DB9_REFRESH_TIME	HZ/100
 
-static struct js_port* js_db9_port = NULL;
+static int db9[] __initdata = { -1, 0 };
+static int db9_2[] __initdata = { -1, 0 };
+static int db9_3[] __initdata = { -1, 0 };
 
-static int js_db9[] __initdata = { -1, 0 };
-static int js_db9_2[] __initdata = { -1, 0 };
-static int js_db9_3[] __initdata = { -1, 0 };
-
-struct js_db9_info {
-	struct pardevice *port;	/* parport device */
-	int mode;		/* pad mode */
+struct db9 {
+	struct input_device dev[2];
+	struct timer_list timer;
+	struct pardevice *pd;	
+	int mode;
+	int used;
 };
 
-/*
- * js_db9_read() reads and analyzes db9 joystick data.
- */
+static struct db9 db9_base[3];
 
-static int js_db9_read(void *xinfo, int **axes, int **buttons)
+static unsigned char db9_multi_btn = { BTN_TRIGGER, BTN_THUMB };
+static unsigned char db9_genesis_btn = { BTN_START, BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_MODE };
+static unsigned char db9_cd32_btn = { BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_TL, BTN_TR, BTN_START };
+
+static char db9_buttons[DB9_MAX_PAD] = { 0, 1, 2, 4, 0, 6, 8, 8, 1, 1, 7 };
+static char *db9_btn[DB9_MAX_PAD] = { db9_multi_btn, db9_multi_btn, db9_genesis_btn, NULL, db9_genesis_btn, db9_genesis_btn,
+				     db9_cd32_btn, db9_multi_btn, db9_multi_btn, db9_cd32_btn };
+static char *db9_name[DB9_MAX_PAD] = { NULL, "Multisystem joystick", "Multisystem joystick (2 fire)", "Genesis pad",
+				      NULL, "Genesis 5 pad", "Genesis 6 pad", "Saturn pad", "Multisystem (0.8.0.2) joystick",
+				     "Multisystem (0.8.0.2-dual) joystick", "Amiga CD-32 pad" };
+
+static void db9_timer(unsigned long private)
 {
-	struct js_db9_info *info = xinfo;
-	int data;
+	struct db9 *db9 = (void *) private;
+	struct parport *port = db9->pd->port;
+	int data, i;
 
-	switch(info->mode)
-	{
-	  case JS_MULTI_0802_2:
+	switch(db9->mode) {
+		case DB9_MULTI_0802_2:
 
-		data = JS_PAR_DATA_IN(info->port) >> 3;
+			data = parport_read_data(port) >> 3;
 
-		axes[1][1] = (data&JS_DB9_DOWN ?0:1) - (data&JS_DB9_UP  ?0:1);
-		axes[1][0] = (data&JS_DB9_RIGHT?0:1) - (data&JS_DB9_LEFT?0:1);
+			input_report_abs(dev + 1, ABS_X, (data&DB9_DOWN ?0:1) - (data&DB9_UP  ?0:1));
+			input_report_abs(dev + 1, ABS_Y, (data&DB9_RIGHT?0:1) - (data&DB9_LEFT?0:1));
+			input_report_key(dev + 1, BTN_TRIGGER, ~data&DB9_FIRE1);
 
-		buttons[1][0] = (data&JS_DB9_FIRE1?0:1);
+		case DB9_MULTI_0802:
 
-	  case JS_MULTI_0802:
+			data = parport_read_status(port) >> 3;
 
-		data = JS_PAR_STATUS(info->port) >> 3;
+			input_report_abs(dev, ABS_X, (data&DB9_DOWN ?0:1) - (data&DB9_UP  ?0:1));
+			input_report_abs(dev, ABS_Y, (data&DB9_RIGHT?0:1) - (data&DB9_LEFT?0:1));
+			input_report_key(dev, BTN_TRIGGER, data&DB9_FIRE1);
+			break;
 
-		axes[0][1] = (data&JS_DB9_DOWN ?0:1) - (data&JS_DB9_UP  ?0:1);
-		axes[0][0] = (data&JS_DB9_RIGHT?0:1) - (data&JS_DB9_LEFT?0:1);
+		case DB9_MULTI_STICK:
 
-		buttons[0][0] = (data&JS_DB9_FIRE1?1:0);
+			data = parport_read_data(port);
 
-		break;
+			input_report_abs(dev, ABS_X, (data&DB9_DOWN ?0:1) - (data&DB9_UP  ?0:1));
+			input_report_abs(dev, ABS_Y, (data&DB9_RIGHT?0:1) - (data&DB9_LEFT?0:1));
+			input_report_key(dev, BTN_TRIGGER, ~data&DB9_FIRE1);
+			break;
 
-	  case JS_MULTI_STICK:
+		case DB9_MULTI2_STICK:
 
-		data = JS_PAR_DATA_IN(info->port);
+			data = parport_read_data(port);
 
-		axes[0][1] = (data&JS_DB9_DOWN ?0:1) - (data&JS_DB9_UP  ?0:1);
-		axes[0][0] = (data&JS_DB9_RIGHT?0:1) - (data&JS_DB9_LEFT?0:1);
+			input_report_abs(dev, ABS_X, (data&DB9_DOWN ?0:1) - (data&DB9_UP  ?0:1));
+			input_report_abs(dev, ABS_Y, (data&DB9_RIGHT?0:1) - (data&DB9_LEFT?0:1));
+			input_report_key(dev, BTN_TRIGGER, ~data&DB9_FIRE1);
+			input_report_key(dev, BTN_THUMB,   ~data&DB9_FIRE2);
+			break;
 
-		buttons[0][0] = (data&JS_DB9_FIRE1?0:1);
+		case DB9_GENESIS_PAD:
 
-		break;
+			parport_write_control(DB9_NOSELECT, port);
+			data = parport_read_data(port);
 
-	  case JS_MULTI2_STICK:
+			input_report_abs(dev, ABS_X, (data&DB9_DOWN ?0:1) - (data&DB9_UP  ?0:1));
+			input_report_abs(dev, ABS_Y, (data&DB9_RIGHT?0:1) - (data&DB9_LEFT?0:1));
+			input_report_key(dev, BTN_B, ~data&DB9_FIRE1);
+			input_report_key(dev, BTN_C, ~data&DB9_FIRE2);
 
-		data=JS_PAR_DATA_IN(info->port);
+			parport_write_control(DB9_NORMAL, port);
+			data=parport_read_data(port);
 
-		axes[0][1] = (data&JS_DB9_DOWN ?0:1) - (data&JS_DB9_UP  ?0:1);
-		axes[0][0] = (data&JS_DB9_RIGHT?0:1) - (data&JS_DB9_LEFT?0:1);
+			input_report_key(dev, BTN_A,     ~data&DB9_FIRE1);
+			input_report_key(dev, BTN_START, ~data&DB9_FIRE2);
+			break;
 
-		buttons[0][0] = (data&JS_DB9_FIRE1?0:1) | (data&JS_DB9_FIRE2?0:2);
+		case DB9_GENESIS5_PAD:
 
-		break;
+			parport_write_control(DB9_NOSELECT, port);
+			data=parport_read_data(port);
 
-	  case JS_GENESIS_PAD:
+			input_report_abs(dev, ABS_X, (data&DB9_DOWN ?0:1) - (data&DB9_UP  ?0:1));
+			input_report_abs(dev, ABS_Y, (data&DB9_RIGHT?0:1) - (data&DB9_LEFT?0:1));
+			input_report_key(dev, BTN_B, ~data&DB9_FIRE1);
+			input_report_key(dev, BTN_C, ~data&DB9_FIRE2);
 
-		JS_PAR_CTRL_OUT(JS_DB9_NOSELECT, info->port);
-		data = JS_PAR_DATA_IN(info->port);
+			parport_write_control(DB9_NORMAL, port);
+			data=parport_read_data(port);
 
-		axes[0][1] = (data&JS_DB9_DOWN ?0:1) - (data&JS_DB9_UP  ?0:1);
-		axes[0][0] = (data&JS_DB9_RIGHT?0:1) - (data&JS_DB9_LEFT?0:1);
+			input_report_key(dev, BTN_A,     ~data&DB9_FIRE1);
+			input_report_key(dev, BTN_X,     ~data&DB9_FIRE2);
+			input_report_key(dev, BTN_Y,     ~data&DB9_LEFT);
+			input_report_key(dev, BTN_START, ~data&DB9_RIGHT);
+			break;
 
-		buttons[0][0] = (data&JS_DB9_FIRE1?0:2) | (data&JS_DB9_FIRE2?0:4);
+		case DB9_GENESIS6_PAD:
 
-		JS_PAR_CTRL_OUT(JS_DB9_NORMAL,info->port);
-		data=JS_PAR_DATA_IN(info->port);
+			parport_write_control(DB9_NOSELECT, port); /* 1 */
+			udelay(DB9_GENESIS6_DELAY);
+			data=parport_read_data(port);
 
-		buttons[0][0] |= (data&JS_DB9_FIRE1?0:1) | (data&JS_DB9_FIRE2?0:8);
+			input_report_abs(dev, ABS_X, (data&DB9_DOWN ?0:1) - (data&DB9_UP  ?0:1));
+			input_report_abs(dev, ABS_Y, (data&DB9_RIGHT?0:1) - (data&DB9_LEFT?0:1));
+			input_report_key(dev, BTN_B, ~data&DB9_FIRE1);
+			input_report_key(dev, BTN_C, ~data&DB9_FIRE2);
 
-		break;
+			parport_write_control(DB9_NORMAL, port);
+			udelay(DB9_GENESIS6_DELAY);
+			data=parport_read_data(port);
 
-	  case JS_GENESIS5_PAD:
+			input_report_key(dev, BTN_A, ~data&DB9_FIRE1);
+			input_report_key(dev, BTN_X, ~data&DB9_FIRE2);
 
-		JS_PAR_CTRL_OUT(JS_DB9_NOSELECT,info->port);
-		data=JS_PAR_DATA_IN(info->port);
+			parport_write_control(DB9_NOSELECT, port); /* 2 */
+			udelay(DB9_GENESIS6_DELAY);
+			parport_write_control(DB9_NORMAL, port);
+			udelay(DB9_GENESIS6_DELAY);
+			parport_write_control(DB9_NOSELECT, port); /* 3 */
+			udelay(DB9_GENESIS6_DELAY);
+			data=parport_read_data(port);
 
-		axes[0][1] = (data&JS_DB9_DOWN ?0:1) - (data&JS_DB9_UP  ?0:1);
-		axes[0][0] = (data&JS_DB9_RIGHT?0:1) - (data&JS_DB9_LEFT?0:1);
+			input_report_key(dev, BTN_Y,     ~data&DB9_LEFT);
+			input_report_key(dev, BTN_Z,     ~data&DB9_DOWN);
+			input_report_key(dev, BTN_MODE,  ~data&DB9_UP);
+			input_report_key(dev, BTN_START  ~data&DB9_RIGHT);
 
-		buttons[0][0] = (data&JS_DB9_FIRE1?0:0x02) | (data&JS_DB9_FIRE2?0:0x04);
+			parport_write_control(DB9_NORMAL, port);
+			udelay(DB9_GENESIS6_DELAY);
+			parport_write_control(DB9_NOSELECT, port); /* 4 */
+			udelay(DB9_GENESIS6_DELAY);
+			parport_write_control(DB9_NORMAL, port);
+			break;
 
-		JS_PAR_CTRL_OUT(JS_DB9_NORMAL, info->port);
-		data=JS_PAR_DATA_IN(info->port);
+		case DB9_SATURN_PAD:
 
-		buttons[0][0] |= (data&JS_DB9_FIRE1?0:0x01) | (data&JS_DB9_FIRE2?0:0x08) |
-				 (data&JS_DB9_LEFT ?0:0x10) | (data&JS_DB9_RIGHT?0:0x20);
-		break;
+			parport_write_control(DB9_SATURN0, port);
+			data = parport_read_data(port);
 
-	  case JS_GENESIS6_PAD:
+			input_report_key(dev, BTN_Y, ~data&DB9_LEFT);
+			input_report_key(dev, BTN_Z, ~data&DB9_DOWN);
+			input_report_key(dev, BTN_TL,~data&DB9_UP);
+			input_report_key(dev, BTN_TR,~data&DB9_RIGHT);
 
-		JS_PAR_CTRL_OUT(JS_DB9_NOSELECT,info->port); /* 1 */
-		udelay(JS_GENESIS6_DELAY);
-		data=JS_PAR_DATA_IN(info->port);
+			parport_write_control(DB9_SATURN2, port);
+			data = parport_read_data(port);
 
-		axes[0][1] = (data&JS_DB9_DOWN ?0:1) - (data&JS_DB9_UP  ?0:1);
-		axes[0][0] = (data&JS_DB9_RIGHT?0:1) - (data&JS_DB9_LEFT?0:1);
+			input_report_abs(dev, ABS_X, (data&DB9_DOWN ?0:1) - (data&DB9_UP  ?0:1));
+			input_report_abs(dev, ABS_Y, (data&DB9_RIGHT?0:1) - (data&DB9_LEFT?0:1));
+			
+			parport_write_control(DB9_NORMAL, port);
+			data = parport_read_data(port);
 
-		buttons[0][0] = (data&JS_DB9_FIRE1?0:0x02) | (data&JS_DB9_FIRE2?0:0x04);
+			input_report_key(dev, BTN_A, ~data&DB9_LEFT);
+			input_report_key(dev, BTN_B, ~data&DB9_UP);
+			input_report_key(dev, BTN_C, ~data&DB9_DOWN);
+			input_report_key(dev, BTN_X, ~data&DB9_RIGHT);
+			break;
 
-		JS_PAR_CTRL_OUT(JS_DB9_NORMAL, info->port);
-		udelay(JS_GENESIS6_DELAY);
-		data=JS_PAR_DATA_IN(info->port);
+		case DB9_CD32_PAD:
 
-		buttons[0][0] |= (data&JS_DB9_FIRE1?0:0x01) | (data&JS_DB9_FIRE2?0:0x08);
+			data=parport_read_data(port);
 
-		JS_PAR_CTRL_OUT(JS_DB9_NOSELECT, info->port); /* 2 */
-		udelay(JS_GENESIS6_DELAY);
-		JS_PAR_CTRL_OUT(JS_DB9_NORMAL, info->port);
-		udelay(JS_GENESIS6_DELAY);
-		JS_PAR_CTRL_OUT(JS_DB9_NOSELECT, info->port); /* 3 */
-		udelay(JS_GENESIS6_DELAY);
-		data=JS_PAR_DATA_IN(info->port);
+			input_report_abs(dev, ABS_X, (data&DB9_DOWN ?0:1) - (data&DB9_UP  ?0:1));
+			input_report_abs(dev, ABS_Y, (data&DB9_RIGHT?0:1) - (data&DB9_LEFT?0:1));
 
-		buttons[0][0] |= (data&JS_DB9_LEFT?0:0x10) | (data&JS_DB9_DOWN ?0:0x20) |
-				 (data&JS_DB9_UP  ?0:0x40) | (data&JS_DB9_RIGHT?0:0x80);
+			parport_write_control(0x0a, port); 
 
-		JS_PAR_CTRL_OUT(JS_DB9_NORMAL, info->port);
-		udelay(JS_GENESIS6_DELAY);
-		JS_PAR_CTRL_OUT(JS_DB9_NOSELECT, info->port); /* 4 */
-		udelay(JS_GENESIS6_DELAY);
-		JS_PAR_CTRL_OUT(JS_DB9_NORMAL, info->port);
-
-		break;
-
-	  case JS_SATURN_PAD:
-
-		JS_PAR_CTRL_OUT(JS_DB9_SATURN0, info->port);
-		data = JS_PAR_DATA_IN(info->port);
-
-		buttons[0][0] = (data&JS_DB9_UP  ?0:0x20) | (data&JS_DB9_DOWN ?0:0x10) |
-				(data&JS_DB9_LEFT?0:0x08) | (data&JS_DB9_RIGHT?0:0x40);
-
-		JS_PAR_CTRL_OUT(JS_DB9_SATURN2, info->port);
-		data = JS_PAR_DATA_IN(info->port);
-
-		axes[0][1] = (data&JS_DB9_DOWN ?0:1) - (data&JS_DB9_UP  ?0:1);
-		axes[0][0] = (data&JS_DB9_RIGHT?0:1) - (data&JS_DB9_LEFT?0:1);
-
-		JS_PAR_CTRL_OUT(JS_DB9_NORMAL, info->port);
-		data = JS_PAR_DATA_IN(info->port);
-
-		buttons[0][0] |= (data&JS_DB9_UP  ?0:0x02) | (data&JS_DB9_DOWN ?0:0x04) |
-				 (data&JS_DB9_LEFT?0:0x01) | (data&JS_DB9_RIGHT?0:0x80);
-
-
-		break;
-
-	case JS_CD32:
-		data=JS_PAR_DATA_IN(info->port);
-		axes[0][1] = (data&JS_DB9_DOWN ?0:1) - (data&JS_DB9_UP  ?0:1);
-		axes[0][0] = (data&JS_DB9_RIGHT?0:1) - (data&JS_DB9_LEFT?0:1);
-		buttons[0][0] = 0;
-		
-		JS_PAR_CTRL_OUT(0x2a, info->port); 
-		{
-			int i;
-			for (i=1; i<=64; i*=2) { 
-				data = JS_PAR_DATA_IN(info->port);
-				JS_PAR_CTRL_OUT(0x22, info->port); 
-				JS_PAR_CTRL_OUT(0x2a, info->port); 
-				buttons[0][0] |= (data&JS_DB9_FIRE2?0:i);
+				int i;
+				for (i = 0; i < 7; i++) { 
+					data = parport_read_data(port);
+					parport_write_control(0x02, port); 
+					parport_write_control(0x0a, port); 
+					input_report_key(dev, db9_cd32_btn[i], ~data&DB9_FIRE2);
+				}
 			}
+
+			parport_write_control(0x00, port); 
+			break;
 		}
-		JS_PAR_CTRL_OUT(0x20, info->port); 
-		
-		if (buttons[0][0] & 0xf) buttons[0][0] &= 0xf;
-		
-		break;
 
-	  default:
-		return -1;
-	}
-
-	return 0;
+	mod_timer(&db9->timer, jiffies + DB9_REFRESH_TIME);
 }
 
-/*
- * open callback: claim parport.
- */
-
-int js_db9_open(struct js_dev *dev)
+static int db9_open(struct input_dev *dev)
 {
-	struct js_db9_info *info = dev->port->info;
+	struct db9 *db9 = dev->private;
+	struct parport *port = db9->pd->port;
 
-	if (!MOD_IN_USE) {
-		if (parport_claim(info->port)) return -EBUSY;
-
-		JS_PAR_DATA_OUT(0xff, info->port);
-		if (info->mode != JS_MULTI_0802)
-			JS_PAR_ECTRL_OUT(0x35,info->port);	/* enable PS/2 mode: */
-		JS_PAR_CTRL_OUT(JS_DB9_NORMAL,info->port);	/* reverse direction, enable Select signal */
-	}
-		
-	MOD_INC_USE_COUNT;
-	return 0;
-}
-
-/*
- * close callback: release parport
- */
-
-int js_db9_close(struct js_dev *dev)
-{
-	struct js_db9_info *info = dev->port->info;
-
-	MOD_DEC_USE_COUNT;
-
-	if (!MOD_IN_USE) {
-
-		JS_PAR_CTRL_OUT(0x00,info->port);		/* normal direction */
-		if (info->mode != JS_MULTI_0802)
-			JS_PAR_ECTRL_OUT(0x15,info->port);	/* enable normal mode */
-
-		parport_release(info->port);
+	if (!db9->used++) {
+		if (parport_claim(db9->pd)) return -EBUSY;
+		parport_write_data(0xff, port);
+		parport_data_reverse(port);
+		parport_write_control(DB9_NORMAL, port);
+		mod_timer(&db9->timer, jiffies + DB9_REFRESH_TIME);
 	}
 	return 0;
 }
 
-#ifdef MODULE
-void cleanup_module(void)
+static void db9_close(struct input_dev *dev)
 {
-	struct js_db9_info *info;
-	int i;
-
-	while (js_db9_port) {
-		info = js_db9_port->info;
-
-		for (i = 0; i < js_db9_port->ndevs; i++)
-			if (js_db9_port->devs[i])
-				js_unregister_device(js_db9_port->devs[i]);
-		parport_unregister_device(info->port);
-		js_db9_port = js_unregister_port(js_db9_port);
+	struct db9 *db9 = dev->private;
+	if (!--db9->used) {
+		del_timer(&db9->timer);
+		parport_write_control(port, 0x00);
+		parport_data_forward(port);
+		parport_release(db9->pd);
 	}
-
-}
-#endif
-
-/*
- * js_db9_init_corr() initializes correction values of
- * db9 gamepads.
- */
-
-static void __init js_db9_init_corr(struct js_corr *corr)
-{
-	int i;
-
-	for (i = 0; i < 2; i++) {
-		corr[i].type = JS_CORR_BROKEN;
-		corr[i].prec = 0;
-		corr[i].coef[0] = 0;
-		corr[i].coef[1] = 0;
-		corr[i].coef[2] = (1 << 29);
-		corr[i].coef[3] = (1 << 29);
-	}
+	return 0;
 }
 
-/*
- * js_db9_probe() probes for db9 gamepads.
- */
-
-static struct js_port __init *js_db9_probe(int *config, struct js_port *port)
+static struct db9 __init *db9_probe(int *config)
 {
-	struct js_db9_info info;
+	struct db9 *db9;
 	struct parport *pp;
 	int i;
-	char buttons[JS_MAX_PAD] = {0,1,2,4,0,6,8,8,1,1,7};
-	char *name[JS_MAX_PAD] = {NULL, "Multisystem joystick", "Multisystem joystick (2 fire)", "Genesis pad",
-					NULL, "Genesis 5 pad", "Genesis 6 pad", "Saturn pad", "Multisystem (0.8.0.2) joystick",
-					"Multisystem (0.8.0.2-dual) joystick","CD-32 pad"};
 
-	if (config[0] < 0) return port;
-	if (config[1] < 0 || config[1] >= JS_MAX_PAD || !name[config[1]]) return port;
+	if (config[0] < 0)
+		return NULL;
+	if (config[1] < 1 || config[1] >= DB9_MAX_PAD || !db9_buttons[config[1]]) {
+		printk(KERN_ERR "db9.c: bad config\n");
+		return NULL;
+	}
 
-	info.mode = config[1];
-
-	if (config[0] > 0x10)
-		for (pp=parport_enumerate(); pp && (pp->base!=config[0]); pp=pp->next);
-	else
-		for (pp=parport_enumerate(); pp && (config[0]>0); pp=pp->next) config[0]--;
+	for (pp = parport_enumerate(); pp && (config[0] > 0); pp = pp->next)
+		config[0]--;
 
 	if (!pp) {
-		printk(KERN_ERR "joy-db9: no such parport\n");
-		return port;
+		printk(KERN_ERR "db9.c: no such parport\n");
+		return NULL;
 	}
 
-	if (!(pp->modes & (PARPORT_MODE_PCPS2 | PARPORT_MODE_PCECPPS2)) && info.mode != JS_MULTI_0802) {
+	if (!(pp->modes & (PARPORT_MODE_PCPS2 | PARPORT_MODE_PCECPPS2)) && db9->mode != DB9_MULTI_0802) {
 		printk(KERN_ERR "js-db9: specified parport is not bidirectional\n");
-		return port;
+		return NULL;
+	}
+	
+	if (!(db9 = kmalloc(sizeof(struct db9), GFP_KERNEL)))
+		return NULL;
+	memset(db9, 0, sizeof(struct db9));
+
+	db9->mode = config[1];
+	init_timer(&db9->timer);
+	db9->timer.data = (long) db9;
+	db9->timer.function = db9_timer;
+
+	db9->pd = parport_register_device(pp, "db9", NULL, NULL, NULL, PARPORT_DEV_EXCL, NULL);
+
+	if (!db9->pd) {
+		printk(KERN_ERR "db9.c: parport busy already - lp.o loaded?\n");
+		kfree(db9);
+		return NULL;
 	}
 
-	info.port = parport_register_device(pp, "joystick (db9)", NULL, NULL, NULL, PARPORT_DEV_EXCL, NULL);
-	if (!info.port)
-		return port;
+	for (i = 0; i < 1 + (db9->mode == DB9_MULTI_0802_2); i++) {
 
-	port = js_register_port(port, &info, 1 + (info.mode == JS_MULTI_0802_2), sizeof(struct js_db9_info), js_db9_read);
+		db9->dev[i].private = db9;
+		db9->dev[i].open = db9_open;
+		db9->dev[i].close = db9_close;
 
-	for (i = 0; i < 1 + (info.mode == JS_MULTI_0802_2); i++) {
-		printk(KERN_INFO "js%d: %s on %s\n",
-			js_register_device(port, i, 2, buttons[info.mode], name[info.mode], js_db9_open, js_db9_close),
-			name[info.mode], info.port->port->name);
+		db9->dev[i].name = db9_name[db9->mode];
+		db9->dev[i].idbus = BUS_PARPORT;
+		db9->dev[i].idvendor = 0x0002;
+		db9->dev[i].idproduct = config[1];
+		db9->dev[i].idversion = 0x0100;
 
-		js_db9_init_corr(port->corr[i]);
+		db9->dev[i].evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
+		db9->dev[i].absbit[0] = BIT(ABS_X) | BIT(ABS_Y);
+
+		for (j = 0; j < db9_buttons[db9->mode]; j++)
+			set_bit(db9_btn[db9->mode][j], db9->dev[i].keybit); 
+
+		db9->dev[i].absmin[ABS_X] = -1; db9->dev[i].absmax[ABS_X] = 1;
+		db9->dev[i].absmin[ABS_Y] = -1; db9->dev[i].absmax[ABS_Y] = 1;
+
+		input_register_device(db9->dev + i);
+		printk(KERN_INFO "input%d: %s on %s\n",
+			db9->dev[i].number, db9_name[db9->mode], db9->pd->port->name);
 	}
 
-
-	return port;
+	return pd;
 }
 
 #ifndef MODULE
-int __init js_db9_setup(SETUP_PARAM)
+int __init db9_setup(char *str)
 {
-	int i;
-	SETUP_PARSE(2);
-	for (i = 0; i <= ints[0] && i < 2; i++) js_db9[i] = ints[i+1];
+	int i, ints[3];
+	get_options(str, ARRAY_SIZE(ints), ints);
+	for (i = 0; i <= ints[0] && i < 2; i++) db9[i] = ints[i + 1];
 	return 1;
 }
-int __init js_db9_setup_2(SETUP_PARAM)
+int __init db9_setup_2(char *str)
 {
-	int i;
-	SETUP_PARSE(2);
-	for (i = 0; i <= ints[0] && i < 2; i++) js_db9_2[i] = ints[i+1];
+	int i, ints[3];
+	get_options(str, ARRAY_SIZE(ints), ints);
+	for (i = 0; i <= ints[0] && i < 2; i++) db9_2[i] = ints[i + 1];
 	return 1;
 }
-int __init js_db9_setup_3(SETUP_PARAM)
+int __init db9_setup_3(char *str)
 {
-	int i;
-	SETUP_PARSE(2);
-	for (i = 0; i <= ints[0] && i < 2; i++) js_db9_3[i] = ints[i+1];
+	int i, ints[3];
+	get_options(str, ARRAY_SIZE(ints), ints);
+	for (i = 0; i <= ints[0] && i < 2; i++) db9_3[i] = ints[i + 1];
 	return 1;
 }
-__setup("js_db9=", js_db9_setup);
-__setup("js_db9_2=", js_db9_setup_2);
-__setup("js_db9_3=", js_db9_setup_3);
+__setup("db9=", db9_setup);
+__setup("db9_2=", db9_setup_2);
+__setup("db9_3=", db9_setup_3);
 #endif
 
-#ifdef MODULE
-int init_module(void)
-#else
-int __init js_db9_init(void)
-#endif
+int __init db9_init(void)
 {
-	js_db9_port = js_db9_probe(js_db9, js_db9_port);
-	js_db9_port = js_db9_probe(js_db9_2, js_db9_port);
-	js_db9_port = js_db9_probe(js_db9_3, js_db9_port);
+	db9_base[0] = db9_probe(db9);
+	db9_base[1] = db9_probe(db9_2);
+	db9_base[2] = db9_probe(db9_3);
 
-	if (js_db9_port) return 0;
+	if (db9_base[0] || db9_base[1] || db9_base[2])
+		return 0;
 
-#ifdef MODULE
-	printk(KERN_WARNING "joy-db9: no joysticks specified\n");
-#endif
 	return -ENODEV;
 }
+
+void __exit db9_exit(void)
+{
+	int i, j;
+
+	for (i = 0; i < 3; i++) 
+		if (db9_base[i]) {
+			for (j = 0; j < 1 + (db9->mode == DB9_MULTI_0802_2); j++)
+				input_unregister_device(db9_base[i]->dev + j);
+		parport_unregister_device(db9_base[i]->pd);
+	}
+}
+
+module_init(db9_init);
+module_exit(db9_exit);

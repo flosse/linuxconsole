@@ -207,21 +207,21 @@ int __init tgfx_setup(char *str)
 {
 	int i, ints[9];
 	get_options(str, ARRAY_SIZE(ints), ints);
-	for (i = 0; i <= ints[0] && i < 2; i++) tgfx[i] = ints[i + 1];
+	for (i = 0; i <= ints[0] && i < 8; i++) tgfx[i] = ints[i + 1];
 	return 1;
 }
 int __init tgfx_setup_2(char *str)
 {
 	int i, ints[9];
 	get_options(str, ARRAY_SIZE(ints), ints);
-	for (i = 0; i <= ints[0] && i < 2; i++) tgfx_2[i] = ints[i + 1];
+	for (i = 0; i <= ints[0] && i < 8; i++) tgfx_2[i] = ints[i + 1];
 	return 1;
 }
 int __init tgfx_setup_3(char *str)
 {
 	int i, ints[9];
 	get_options(str, ARRAY_SIZE(ints), ints);
-	for (i = 0; i <= ints[0] && i < 2; i++) tgfx_3[i] = ints[i + 1];
+	for (i = 0; i <= ints[0] && i < 8; i++) tgfx_3[i] = ints[i + 1];
 	return 1;
 }
 __setup("tgfx=", tgfx_setup);
