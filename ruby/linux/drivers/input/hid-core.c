@@ -724,6 +724,7 @@ static __inline__ int search(__s32 *array, __s32 value, unsigned n)
 
 static void hid_process_event(struct hid_device *hid, struct hid_field *field, struct hid_usage *usage, __s32 value)
 {
+	hid_dump_input(usage, value);
 	if (hid->claimed & HID_CLAIMED_INPUT)
 		hidinput_hid_event(hid, field, usage, value);
 #ifdef CONFIG_INPUT_HIDDEV

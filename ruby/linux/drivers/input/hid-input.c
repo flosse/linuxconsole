@@ -32,11 +32,8 @@
 #include <linux/slab.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
-
 #include <linux/input.h>
 #include <linux/usb.h>
-
-#undef DEBUG
 
 #include "hid.h"
 
@@ -304,8 +301,6 @@ void hidinput_hid_event(struct hid_device *hid, struct hid_field *field, struct 
 {
 	struct input_dev *input = &hid->input;
 	int *quirks = &hid->quirks;
-
-	hid_dump_input(usage, value);
 
 	if (usage->hat) {
 		if (usage->hat == 2) value = value * 2;
