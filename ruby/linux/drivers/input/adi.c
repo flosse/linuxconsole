@@ -7,8 +7,7 @@
  */
 
 /*
- * This is a module for the Linux input driver, supporting
- * Logitech ADI joystick family.
+ * Logitech ADI joystick family driver for Linux.
  */
 
 /*
