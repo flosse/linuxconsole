@@ -225,16 +225,35 @@ void reset_palette(struct vc_data *vc)
  */
 void scroll_up(struct vc_data *vc, int lines)
 {
-        if (!lines)
+	unsigned short *d, *s;
+
+	if (!lines)
 		return;
-//        scrolldelta(vc, -lines);
+
+	d = (unsigned short *) origin;
+        s = (unsigned short *) origin + video_num_columns*lines;
+        scr_memcpyw(d, s, (bottom-lines) * video_size_row);
+        scr_memsetw(d + (bottom-lines) * video_num_columns, video_erase_char, video_size_row*lines);
+       	if (IS_VISIBLE)
+		do_update_region(vc, origin, screensize);
+//               sw->con_scroll(vc, -lines);
 }
 
 void scroll_down(struct vc_data *vc, int lines)
 {
-        if (!lines)
-		return;
-//        scrolldelta(vc, lines);
+	unsigned short *s = (unsigned short *) origin;
+	unsigned int step;
+
+	if (!lines)
+		return;        
+
+        step = video_num_columns * lines;
+        scr_memmovew(s + step, s, (bottom-lines)*video_size_row);
+        scr_memsetw(s, video_erase_char, 2*step);
+
+       	if (IS_VISIBLE)
+		do_update_region(vc, origin, screensize);
+       // 	sw->con_scroll(vc, lines);
 }
 
 void scroll_region_up(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
@@ -245,12 +264,13 @@ void scroll_region_up(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
                 nr = b - t;
         if (b > video_num_lines || t >= b || nr < 1)
                 return;
-        d = (unsigned short *) (origin+video_size_row*t);
-        s = (unsigned short *) (origin+video_size_row*(t+nr));
+        d = (unsigned short *) (origin + video_size_row*t);
+        s = (unsigned short *) (origin + video_size_row*(t+nr));
         scr_memcpyw(d, s, (b-t-nr) * video_size_row);
         scr_memsetw(d + (b-t-nr) * video_num_columns, video_erase_char, video_size_row*nr);
 	if (IS_VISIBLE)
-		sw->con_scroll_region(vc, t, b, SM_UP, nr);
+		do_update_region(vc, origin, screensize);
+//		sw->con_scroll_region(vc, t, b, SM_UP, nr);
 }
 
 void scroll_region_down(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
@@ -262,12 +282,13 @@ void scroll_region_down(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
                 nr = b - t;
         if (b > video_num_lines || t >= b || nr < 1)
                 return;
-        s = (unsigned short *) (origin+video_size_row*t);
+        s = (unsigned short *) (origin + video_num_columns*t);
         step = video_num_columns * nr;
         scr_memmovew(s + step, s, (b-t-nr)*video_size_row);
         scr_memsetw(s, video_erase_char, 2*step);
 	if (IS_VISIBLE)
-		sw->con_scroll_region(vc, t, b, SM_DOWN, nr);
+		do_update_region(vc, origin, screensize);
+//		sw->con_scroll_region(vc, t, b, SM_DOWN, nr);
 }
 
 /*
@@ -463,7 +484,7 @@ void update_screen(struct vc_data *vc)
 
         if (vcmode != KD_GRAPHICS) {
                /* Update the screen contents */
-               do_update_region(vc, origin, video_num_columns*video_num_lines);
+               do_update_region(vc, origin, screensize);
         }
         set_cursor(vc);
 }
@@ -708,6 +729,7 @@ static void visual_init(struct vc_data *vc)
     can_do_color = vc->display_fg->default_mode->vc_can_do_color;
     video_num_columns = vc->display_fg->default_mode->vc_cols;
     video_num_lines = vc->display_fg->default_mode->vc_rows;
+    screensize = video_num_columns * video_num_lines;
     vc->vc_font = vc->display_fg->default_mode->vc_font;	
     sw->con_init(vc);
     if (!complement_mask)
