@@ -107,7 +107,7 @@ static int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned
 {
 	struct serio* serio = ((struct iforce*)(dev->private))->serio;
 
-printk(KERN_DEBUG "iforce feedback: input event %d %d %d\n", type, code, value);
+printk(KERN_DEBUG "iforce ff: input event %d %d %d\n", type, code, value);
 
 	if (code & FF_PLAY) {
 		unsigned char data[6] = {0x2b, 0x41, 0x03, 0x00, 0x00, 0x00};
@@ -138,8 +138,9 @@ printk(KERN_DEBUG "iforce feedback: input event %d %d %d\n", type, code, value);
 
 /*
  * Set the magnitude of a constant force effect
+ * Return the id of the modifier
  */
-static int make_magnitude_modifier(struct iforce* iforce, __u16 dummy, __s16 level)
+static int make_magnitude_modifier(struct iforce* iforce, __s16 level)
 {
         unsigned char data[6] = {0x2b, 0x03, 0x03, 0x00, 0x00, 0x00};
         struct serio* serio = iforce->serio;
@@ -158,7 +159,7 @@ static int make_magnitude_modifier(struct iforce* iforce, __u16 dummy, __s16 lev
  * Upload the component of an effect dealing with the period, phase and magnitude
  */
 static int make_period_modifier(struct iforce* iforce,
-	__u16 dummy, __s16 magnitude, __s16 offset, __u16 period, __u16 phase)
+	__s16 magnitude, __s16 offset, __u16 period, __u16 phase)
 {
 	unsigned char data[10] = {0x2b, 0x04, 0x07,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -187,7 +188,7 @@ static int make_period_modifier(struct iforce* iforce,
 /*
  * Uploads the part of an effect setting the shape of the force
  */
-static int make_shape_modifier(struct iforce* iforce, __u16 dummy,
+static int make_shape_modifier(struct iforce* iforce,
         __u16 attack_duration, __s16 initial_level,
         __u16 fade_duration, __s16 final_level)
 {
@@ -214,6 +215,37 @@ static int make_shape_modifier(struct iforce* iforce, __u16 dummy,
 
 	iforce->ff_next_id += 0x0e;
 
+	return id;
+}
+
+/*
+ * Component of spring, friction, inertia... effects
+ */
+static int make_interactive_modifier(struct iforce* iforce, __s16 rsat,
+	__s16 lsat, __s16 rk, __s16 lk, __u16 db, __s16 center)
+{
+        unsigned char data[13] = {0x2b, 0x05, 0x0a,
+                0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00};
+	int id = iforce->ff_next_id;
+
+        data[3] = (unsigned char)LOW(iforce->ff_next_id);
+        data[4] = (unsigned char)HI(iforce->ff_next_id);
+
+        data[5] = (unsigned char)(rk>>8);
+        data[6] = (unsigned char)(lk>>8);
+
+        data[7] = (unsigned char)(center>>8);
+
+        data[9] = (unsigned char)LOW(db);
+        data[10] = (unsigned char)HI(db);
+
+        data[11] = (unsigned char)(rsat>>8);
+        data[12] = (unsigned char)(lsat>>8);
+
+        send_serio(iforce->serio, data);
+
+	iforce->ff_next_id += 0x08;
 	return id;
 }
 
@@ -269,11 +301,11 @@ static void iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effe
 	int period_id, shape_id;
  
 	printk(KERN_DEBUG "iforce ff: make periodic effect \n"); 
-	period_id = make_period_modifier(iforce, effect->id,
+	period_id = make_period_modifier(iforce,
 		effect->u.periodic.magnitude, effect->u.periodic.offset,
 		effect->u.periodic.period, effect->u.periodic.phase);
  
-        shape_id = make_shape_modifier(iforce, effect->id,
+        shape_id = make_shape_modifier(iforce,
                 effect->u.periodic.shape.attack_length,
 		effect->u.periodic.shape.attack_level,
                 effect->u.periodic.shape.fade_length,
@@ -292,10 +324,10 @@ static void iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effe
                 period_id,
                 shape_id,
                 wave_code,
-                effect->u.periodic.replay.length,
-		effect->u.periodic.replay.delay,
-		effect->u.periodic.trigger.button,
-		effect->u.periodic.trigger.interval,
+                effect->replay.length,
+		effect->replay.delay,
+		effect->trigger.button,
+		effect->trigger.interval,
 		effect->u.periodic.direction);
  
 }
@@ -310,9 +342,9 @@ static int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effec
 
 	printk(KERN_DEBUG "iforce ff: make constant effect\n");
  
-	magnitude_id = make_magnitude_modifier(iforce, effect->id, effect->u.constant.level);
+	magnitude_id = make_magnitude_modifier(iforce, effect->u.constant.level);
  
-	shape_id = make_shape_modifier(iforce, effect->id,
+	shape_id = make_shape_modifier(iforce,
 		effect->u.constant.shape.attack_length,
 		effect->u.constant.shape.attack_level,
 		effect->u.constant.shape.fade_length,
@@ -322,13 +354,48 @@ static int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effec
 		magnitude_id,
 		shape_id,
 		0x00,
-		effect->u.constant.replay.length,
-		effect->u.constant.replay.delay,
-		effect->u.constant.trigger.button,
-		effect->u.constant.trigger.interval,
+		effect->replay.length,
+		effect->replay.delay,
+		effect->trigger.button,
+		effect->trigger.interval,
 		effect->u.constant.direction);
  
 	return 0;                                                               
+}
+
+/*
+ * Upload an interactive effect. Those are for example friction, inertia, springs...
+ */
+static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* effect)
+{
+	int interactive_id;
+	__u8 type;
+
+	printk(KERN_DEBUG "iforce ff: make interactive effect");
+
+	switch (effect->type) {
+	case FF_SPRING:      type = 0x40; break;
+	case FF_FRICTION:    type = 0x41; break;
+	default: return -1;
+	}
+
+	interactive_id = make_interactive_modifier(iforce,
+		effect->u.interactive.right_saturation,
+		effect->u.interactive.left_saturation,
+		effect->u.interactive.right_coeff,
+		effect->u.interactive.left_coeff,
+		effect->u.interactive.deadband,
+		effect->u.interactive.center);
+
+	make_core(iforce, effect->id, 
+		(effect->u.interactive.axis & BIT(FF_X))?interactive_id:0xffff,
+		(effect->u.interactive.axis & BIT(FF_Y))?interactive_id:0xffff,
+		type,
+		effect->replay.length, effect->replay.delay,
+		effect->trigger.button, effect->trigger.interval,
+		0);
+
+	return 0;
 }
 
 /*
@@ -359,7 +426,7 @@ static void iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect
 
 	case FF_SPRING:
 	case FF_FRICTION:
-/*		iforce_upload_position(serio, effect);*/
+		iforce_upload_interactive(iforce, effect);
 		break;
 	};
 }
