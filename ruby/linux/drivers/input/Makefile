@@ -45,6 +45,7 @@ obj-$(CONFIG_INPUT_SERPORT)	+= serport.o serio.o
 obj-$(CONFIG_INPUT_NS558)	+= ns558.o gameport.o
 obj-$(CONFIG_INPUT_LIGHTNING)	+= lightning.o gameport.o
 obj-$(CONFIG_INPUT_PCIGAME)	+= pcigame.o gameport.o
+obj-$(CONFIG_INPUT_CS461X)	+= cs461x.o gameport.o
 
 obj-$(CONFIG_INPUT_ATKBD)	+= atkbd.o serio.o
 obj-$(CONFIG_INPUT_XTKBD)	+= xtkbd.o serio.o
