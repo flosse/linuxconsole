@@ -103,9 +103,9 @@ if [ "$CONFIG_PARPORT" != "n" ]; then
 fi
 
 source drivers/i2c/Config.in
-if [ "$CONFIG_ARM" = "y" ]; then
-   source drivers/l3/Config.in
-fi	 
+#if [ "$CONFIG_ARM" = "y" ]; then
+#   source drivers/l3/Config.in
+#fi	 
 
 tristate 'QIC-02 tape support' CONFIG_QIC02_TAPE
 if [ "$CONFIG_QIC02_TAPE" != "n" ]; then
