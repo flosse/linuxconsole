@@ -37,7 +37,8 @@
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/ioport.h>
-#include <linux/interrupt.h>
+#include <linux/input.h>
+#include <linux/init.h>
 
 #include <asm/io.h>
 #include <asm/irq.h>
@@ -53,32 +54,6 @@ static int pc110pad_data[3];
 static int pc110pad_count;
 static int pc110pad_used;
 
-static int pc110pad_close(struct input_dev *dev)
-{
-	if (!--pc110pad_used)
-		outb(PC110PAD_OFF, pc110pad_io + 2);
-	return 0;
-}
-
-static int pc110pad_open(struct input_dev *dev)
-{
-	unsigned long flags;
-	
-	if (pc110pad_used++)
-		return 0;
-
-	save_flags(flags);
-	cli();
-	pad_irq(0,0,0);
-	pad_irq(0,0,0);
-	pad_irq(0,0,0);
-	outb(PC110PAD_ON, pc110pad_io + 2);
-	pc110pad_count = 0;
-	restore_flags(flags);
-
-	return 0;
-}
-
 static void pc110pad_interrupt(int irq, void *ptr, struct pt_regs *regs)
 {
 	int value     = inb_p(pc110pad_io);
@@ -88,7 +63,7 @@ static void pc110pad_interrupt(int irq, void *ptr, struct pt_regs *regs)
 	outb_p(handshake & ~1, pc110pad_io + 2);
 	inb_p(0x64);
 
-	pc110pad_data[pc110_count++] = value;
+	pc110pad_data[pc110pad_count++] = value;
 
 	if (pc110pad_count < 3) return;
 	
@@ -102,6 +77,31 @@ static void pc110pad_interrupt(int irq, void *ptr, struct pt_regs *regs)
 	pc110pad_count = 0;
 }
 
+static void pc110pad_close(struct input_dev *dev)
+{
+	if (!--pc110pad_used)
+		outb(PC110PAD_OFF, pc110pad_io + 2);
+}
+
+static int pc110pad_open(struct input_dev *dev)
+{
+	unsigned long flags;
+	
+	if (pc110pad_used++)
+		return 0;
+
+	save_flags(flags);
+	cli();
+	pc110pad_interrupt(0,0,0);
+	pc110pad_interrupt(0,0,0);
+	pc110pad_interrupt(0,0,0);
+	outb(PC110PAD_ON, pc110pad_io + 2);
+	pc110pad_count = 0;
+	restore_flags(flags);
+
+	return 0;
+}
+
 static int __init pc110pad_init(void)
 {
 	if (request_region(pc110pad_io, 4, "pc110pad"))
@@ -112,7 +112,7 @@ static int __init pc110pad_init(void)
 
 	outb(PC110PAD_OFF, pc110pad_io + 2);
 
-	if (request_irq(pc110pad_irq, pad_irq, 0, "pc110pad", 0))
+	if (request_irq(pc110pad_irq, pc110pad_interrupt, 0, "pc110pad", 0))
 	{
 		release_region(pc110pad_io, 4);
 		printk("pc110pad: Unable to get irq %d.\n", pc110pad_irq);
@@ -129,7 +129,7 @@ static int __init pc110pad_init(void)
 	pc110pad_dev.open = pc110pad_open;
         pc110pad_dev.close = pc110pad_close;
 
-	register_input_device(&pc110pad_dev);	
+	input_register_device(&pc110pad_dev);	
 
 	printk("input%d: IBM PC110 digitizer pad at %#x irq %d\n",
 		pc110pad_dev.number, pc110pad_io, pc110pad_irq);
@@ -139,7 +139,7 @@ static int __init pc110pad_init(void)
  
 static void __exit pc110pad_exit(void)
 {
-	unregister_input_device(&pc110pad_dev);	
+	input_unregister_device(&pc110pad_dev);	
 
 	outb(PC110PAD_OFF, pc110pad_io + 2);
 
