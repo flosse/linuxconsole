@@ -674,7 +674,7 @@ static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
 {
 	  switch (rqst) {
  		case PM_RESUME:
-                        unblank_screen(vt_cons);
+                        /* unblank_screen(); */
                         break;
   		case PM_SUSPEND:
                         /* blank_screen(); */
@@ -686,11 +686,6 @@ static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
 /*
  *      Allocation, freeing and resizing of VTs.
  */
-
-int vc_cons_allocated(unsigned int i)
-{
-        return (i < MAX_NR_USER_CONSOLES && vt_cons->vcs.vc_cons[i]);
-}
 
 void create_vt(struct vt_struct *vt, struct consw *vt_sw)
 {
@@ -826,7 +821,6 @@ int vc_allocate(unsigned int currcons)
                 return -ENOMEM;
             }
             screenbuf = (unsigned short *) q;
-            kmalloced = 1;
             vc_init(vc, 1);
 	    if (currcons - pool->first_vc == 0)
 	    	vt->last_console = vt->fg_console = vc;
@@ -845,7 +839,7 @@ void vc_disallocate(unsigned int currcons)
 	struct vc_data *vc = find_vc(currcons);
         if (vc) {
             sw->con_deinit(vc);
-            if (kmalloced)
+            if (vc->display_fg->kmalloced)
                 kfree_s(screenbuf, screenbuf_size);
             if (currcons >= MIN_NR_CONSOLES)
                 kfree_s(vc, sizeof(struct vc_data));
@@ -872,7 +866,7 @@ int vc_resize(unsigned int lines, unsigned int cols,
         ss = sr * ll;
 
         for (currcons = first; currcons <= last; currcons++) {
-                if (!vc_cons_allocated(currcons) ||
+                if (!find_vc(currcons) ||
                     (cc == video_num_columns && ll == video_num_lines))
                         newscreens[currcons] = NULL;
                 else {
@@ -893,9 +887,9 @@ int vc_resize(unsigned int lines, unsigned int cols,
         for (currcons = first; currcons <= last; currcons++) {
                 unsigned int occ, oll, oss, osr;
                 unsigned long ol, nl, nlend, rlth, rrem;
-                if (!newscreens[currcons] || !vc_cons_allocated(currcons))
+                if (!newscreens[currcons] || !find_vc(currcons))
                         continue;
-		vc = vt_cons->vcs.vc_cons[currcons];
+		vc = find_vc(currcons);
 	
                 oll = video_num_lines;
                 occ = video_num_columns;
@@ -926,10 +920,10 @@ int vc_resize(unsigned int lines, unsigned int cols,
                 }
                 if (nlend > nl)
                         scr_memsetw((void *) nl, video_erase_char, nlend - nl);
-                if (kmalloced)
+                if (vc->display_fg->kmalloced)
                         kfree_s(screenbuf, oss);
                 screenbuf = newscreens[currcons];
-                kmalloced = 1;
+                vc->display_fg->kmalloced = 1; 
                 screenbuf_size = ss;
                 set_origin(vc);
 
@@ -1006,12 +1000,12 @@ static int do_con_write(struct tty_struct * tty, int from_user,
         const unsigned char *orig_buf = NULL;
         int orig_count;
 
-        if (!vc_cons_allocated(cons_num)) {
+        if (!vc) {
             /* could this happen? */
             static int error = 0;
             if (!error) {
                 error = 1;
-                printk("con_write: tty %d not allocated\n", cons_num + 1);
+                printk("con_write: tty %d not allocated\n", cons_num);
             }
             return 0;
         }
@@ -1193,6 +1187,8 @@ out:
  */
 static void console_softint(unsigned long ignored)
 {
+	if  (!want_vc)	return;
+
         /* Runs the task queue outside of the console lock.  These
          * callbacks can come back into the console code and thus
          * will perform their own locking.
@@ -1201,8 +1197,8 @@ static void console_softint(unsigned long ignored)
 
         spin_lock_irq(&console_lock);
 
-        if (want_vc && !want_vc->display_fg->vt_dont_switch &&
-	    want_vc->vc_num != want_vc->display_fg->fg_console->vc_num) { 
+	if (want_vc->vc_num != want_vc->display_fg->fg_console->vc_num &&
+	    !want_vc->display_fg->vt_dont_switch) { 
 		hide_cursor(want_vc->display_fg->fg_console);
 		/* New console, old console */
                 change_console(want_vc, want_vc->display_fg->fg_console);
@@ -1364,14 +1360,10 @@ static int con_chars_in_buffer(struct tty_struct *tty)
  */
 static void con_stop(struct tty_struct *tty)
 {
-	struct vc_data *vc;
-        int console_num;
-        if (!tty)
+	struct vc_data *vc = (struct vc_data *) tty->driver_data;
+        
+	if (!tty || !vc)
                 return;
-        console_num = MINOR(tty->device) - (tty->driver.minor_start);
-        if (!vc_cons_allocated(console_num))
-                return;
-	vc = (struct vc_data *) tty->driver_data;
         set_vc_kbd_led(&vc->kbd_table, VC_SCROLLOCK);
         set_leds();
 }
@@ -1381,14 +1373,10 @@ static void con_stop(struct tty_struct *tty)
  */
 static void con_start(struct tty_struct *tty)
 {
-	struct vc_data *vc;
-        int console_num;
-        if (!tty)
+	struct vc_data *vc = (struct vc_data *) tty->driver_data;
+        
+	if (!tty || !vc)
                 return;
-        console_num = MINOR(tty->device) - (tty->driver.minor_start);
-        if (!vc_cons_allocated(console_num))
-                return;
-	vc = (struct vc_data *) tty->driver_data;
         clr_vc_kbd_led(&vc->kbd_table, VC_SCROLLOCK);
         set_leds();
 }
@@ -1419,13 +1407,13 @@ static void con_unthrottle(struct tty_struct *tty)
 
 void vt_console_print(struct console *co, const char * b, unsigned count)
 {
-        int currcons = vt_cons->fg_console->vc_num;
-        unsigned char c;
         static unsigned long printing = 0;
-	struct vc_data *vc;
         const ushort *start;
-        ushort cnt = 0;
+	struct vc_data *vc;
+        unsigned char c;
+	ushort cnt = 0;
         ushort myx;
+	int currcons = vt_cons->fg_console->vc_num;
 
         /* console busy or not yet initialized */
         if (!printable || test_and_set_bit(0, &printing))
@@ -1433,17 +1421,17 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
 
         pm_access(pm_con);
 
-        if (kmsg_redirect && vc_cons_allocated(kmsg_redirect - 1))
-                currcons = kmsg_redirect - 1;
+        if (kmsg_redirect && find_vc(kmsg_redirect-1))
+                currcons = kmsg_redirect -1;
 
-	vc = vt_cons->vcs.vc_cons[currcons];
+	vc = find_vc(currcons);
 
         /* read `x' only after setting currecons properly (otherwise
            the `x' macro will read the x of the foreground console). */
         myx = x;
 
-        if (!vc) {
-                /* impossible */
+	if (!vc) {
+		/* impossible */
                 /* printk("vt_console_print: tty %d not allocated ??\n", currcons); */
                 goto quit;
         }
@@ -1593,6 +1581,7 @@ void __init vt_console_init(void)
          * kmalloc is not running yet - we use the bootmem allocator.
          */
 	vt = (struct vt_struct *) alloc_bootmem(sizeof(struct vt_struct));
+	vt->kmalloced = 0;
 	create_vt(vt, conswitchp);
 	vc = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
 	vt->last_console = vt->fg_console = vt->vcs.vc_cons[0] = vc; 
@@ -1600,7 +1589,6 @@ void __init vt_console_init(void)
         vc->display_fg = vt;
 	visual_init(vc, 1);
         screenbuf = (unsigned short *) alloc_bootmem(screenbuf_size);
-        kmalloced = 0;
         vc_init(vc, !sw->con_save_screen); 
         
         set_origin(vc);
