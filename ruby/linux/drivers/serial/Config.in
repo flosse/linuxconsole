@@ -9,7 +9,7 @@ mainmenu_option next_comment
 comment 'Serial port support'
 
 tristate 'Serial port support' CONFIG_UART
-if ["$CONFIG_UART" = "y" ]; then
+if [ "$CONFIG_UART" = "y" ]; then
    dep_bool 'DC21285 serial port support' CONFIG_SERIAL_21285 $CONFIG_FOOTBRIDGE
    dep_bool '  Use /dev/ttyS0 device (OBSOLETE)' CONFIG_SERIAL_21285_OLD $CONFIG_SERIAL_21285 $CONFIG_OBSOLETE
    dep_bool '  Console on DC21285 serial port' CONFIG_SERIAL_21285_CONSOLE $CONFIG_SERIAL_21285
