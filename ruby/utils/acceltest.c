@@ -74,7 +74,7 @@ main(int argc, char **argv)
 			color = atoi(optarg);
 			break;
 		case '?':
-			printf("Usage: %s [-f <fb_device>] [-x <initial_X>] [-y <initial_Y>] [-w <width>] [-h <height>] [-c <colour>]", argv[0]);
+			printf("Usage: %s [-f <fb_device>] [-x <initial_X>] [-y <initial_Y>] [-w <width>] [-h <height>] [-c <colour>]\n", argv[0]);
 			return(0);
 		default:
 			fprintf(stderr, "Warning: Unknown option \"%c\", try %s -?\n", opnu, argv[0]);
