@@ -9,17 +9,18 @@
 
 				Abstract
 
-		This documentation describes a proposal for a new console system	for linux. The goal of the new design is break the interdepenancy of 
+		This documentation describes a proposal for a new console system
+	for linux. The goal of the new design is to break the interdepenancy of 
 	many subsystems on the console system. In this model the console system
-	instead is a abstract layer constructed of seperate hardware subsystems 
+	instead is an abstract layer constructed of separate hardware subsystems 
 	that can function on their own. Such a design allows for much more 
-	flexability.
+	flexibility.
 
 1. Introduction
 
 	As linux is ported to more and more different flavors of hardware we
 are beginning to see the need to redesign many parts of the kernel. The reason
-being that linux was originally done on the 32 bit intel platform. Thus many
+is that linux was originally done on the 32 bit intel platform. Thus many
 parts of the kernel design was ix86 centeric. Over time this has changed and
 still continues to change. The console redesign is another such a change to 
 support the needs of these many new devices to linux. 
