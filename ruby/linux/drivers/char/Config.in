@@ -79,21 +79,6 @@ fi
 
 source drivers/i2c/Config.in
 
-mainmenu_option next_comment
-comment 'Mice'
-tristate 'Bus Mouse Support' CONFIG_BUSMOUSE
-if [ "$CONFIG_BUSMOUSE" != "n" ]; then
-   if [ "$CONFIG_ADB" = "y" ]; then
-      dep_tristate '  Apple Desktop Bus mouse support' CONFIG_ADBMOUSE $CONFIG_BUSMOUSE
-   fi
-fi
-
-tristate 'Mouse Support (not serial and bus mice)' CONFIG_MOUSE
-if [ "$CONFIG_MOUSE" != "n" ]; then
-   tristate '  PC110 digitizer pad support' CONFIG_PC110_PAD
-fi
-endmenu
-
 tristate 'QIC-02 tape support' CONFIG_QIC02_TAPE
 if [ "$CONFIG_QIC02_TAPE" != "n" ]; then
    bool '  Do you want runtime configuration for QIC-02' CONFIG_QIC02_DYNCONF

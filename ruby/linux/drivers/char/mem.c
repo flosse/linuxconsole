@@ -18,7 +18,6 @@
 #include <linux/mman.h>
 #include <linux/random.h>
 #include <linux/init.h>
-#include <linux/joystick.h>
 #include <linux/raw.h>
 #include <linux/capability.h>
 
@@ -61,9 +60,6 @@ extern void adbdev_init(void);
 #endif
 #ifdef CONFIG_PHONE
 extern void telephony_init(void);
-#endif
-#ifdef CONFIG_INPUT
-extern int input_init(void);
 #endif
      
 static ssize_t do_write_mem(struct file * file, void *p, unsigned long realp,
@@ -612,9 +608,6 @@ int __init chr_dev_init(void)
 	memory_devfs_register();
 	rand_initialize();
 	raw_init();
-#ifdef CONFIG_INPUT
-	input_init();
-#endif
 #ifdef CONFIG_I2C
 	i2c_init_all();
 #endif
@@ -647,13 +640,6 @@ int __init chr_dev_init(void)
 #ifdef CONFIG_SPARCAUDIO
 	sparcaudio_init();
 #endif
-#ifdef CONFIG_JOYSTICK
-	/*
-	 *	Some joysticks only appear when the sound card they are
-	 *	connected to is configured. Keep the sound/joystick ordering.
-	 */
-	js_init();
-#endif	
 #if CONFIG_QIC02_TAPE
 	qic02_tape_init();
 #endif
