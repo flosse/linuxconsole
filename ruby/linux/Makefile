@@ -1,7 +1,7 @@
 VERSION = 2
 PATCHLEVEL = 4
 SUBLEVEL = 0
-EXTRAVERSION = -test4-ruby
+EXTRAVERSION = -test5-ruby
 
 KERNELRELEASE=$(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
 
@@ -36,6 +36,7 @@ OBJDUMP		= $(CROSS_COMPILE)objdump
 MAKEFILES	= $(TOPDIR)/.config
 GENKSYMS	= /sbin/genksyms
 MODFLAGS	= -DMODULE
+CFLAGS_KERNEL	=
 PERL		= perl
 
 export	VERSION PATCHLEVEL SUBLEVEL EXTRAVERSION KERNELRELEASE ARCH \
@@ -191,7 +192,7 @@ Version: dummy
 	@rm -f include/linux/compile.h
 
 boot: vmlinux
-	@$(MAKE) -C arch/$(ARCH)/boot
+	@$(MAKE) CFLAGS="$(CFLAGS) $(CFLAGS_KERNEL)" -C arch/$(ARCH)/boot
 
 vmlinux: $(CONFIGURATION) init/main.o init/version.o linuxsubdirs
 	$(LD) $(LINKFLAGS) $(HEAD) init/main.o init/version.o \
@@ -231,8 +232,8 @@ include/config/MARKER: scripts/split-include include/linux/autoconf.h
 
 linuxsubdirs: $(patsubst %, _dir_%, $(SUBDIRS))
 
-$(patsubst %, _dir_%, $(SUBDIRS)) : dummy include/config/MARKER
-	$(MAKE) -C $(patsubst _dir_%, %, $@)
+$(patsubst %, _dir_%, $(SUBDIRS)) : dummy include/linux/version.h include/config/MARKER
+	$(MAKE) CFLAGS="$(CFLAGS) $(CFLAGS_KERNEL)" -C $(patsubst _dir_%, %, $@)
 
 $(TOPDIR)/include/linux/version.h: include/linux/version.h
 $(TOPDIR)/include/linux/compile.h: include/linux/compile.h
@@ -269,13 +270,13 @@ include/linux/version.h: ./Makefile
 	@mv -f .ver $@
 
 init/version.o: init/version.c include/linux/compile.h include/config/MARKER
-	$(CC) $(CFLAGS) -DUTS_MACHINE='"$(ARCH)"' -c -o init/version.o init/version.c
+	$(CC) $(CFLAGS) $(CFLAGS_KERNEL) -DUTS_MACHINE='"$(ARCH)"' -c -o init/version.o init/version.c
 
 init/main.o: init/main.c include/config/MARKER
-	$(CC) $(CFLAGS) $(PROFILING) -c -o $*.o $<
+	$(CC) $(CFLAGS) $(CFLAGS_KERNEL) $(PROFILING) -c -o $*.o $<
 
 fs lib mm ipc kernel drivers net: dummy
-	$(MAKE) $(subst $@, _dir_$@, $@)
+	$(MAKE) CFLAGS="$(CFLAGS) $(CFLAGS_KERNEL)" $(subst $@, _dir_$@, $@)
 
 TAGS: dummy
 	etags `find include/asm-$(ARCH) -name '*.h'`
@@ -306,13 +307,15 @@ $(patsubst %, _mod_%, $(SUBDIRS)) : include/linux/version.h include/config/MARKE
 modules_install:
 	@( \
 	MODLIB=$(INSTALL_MOD_PATH)/lib/modules/$(KERNELRELEASE); \
+	mkdir -p $$MODLIB; \
+	rm -f $$MODLIB/build; \
+	ln -s $TOPDIR $$MODLIB/build; \
 	cd modules; \
 	MODULES=""; \
 	inst_mod() { These="`cat $$1`"; MODULES="$$MODULES $$These"; \
 		mkdir -p $$MODLIB/$$2; cp $$These $$MODLIB/$$2; \
 		echo Installing modules under $$MODLIB/$$2; \
 	}; \
-	mkdir -p $$MODLIB; \
 	\
 	if [ -f BLOCK_MODULES ]; then inst_mod BLOCK_MODULES block; fi; \
 	if [ -f NET_MODULES   ]; then inst_mod NET_MODULES   net;   fi; \
