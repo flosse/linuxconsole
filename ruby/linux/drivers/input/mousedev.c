@@ -254,7 +254,7 @@ static void mousedev_packet(struct mousedev_list *list, unsigned char off)
 	list->bufsiz = off + 3;
 
 	if (list->mode == 2) {
-		list->ps2[off + 3] = (list->dz > 7 ? 7 : (list->dz < -7 ? -7 : list->dz));
+		list->ps2[off + 3] = (list->dz > 7 ? 7 : (list->dz < -7 ? -7 : list->dz)) & 0x0f;
 		list->dz -= list->ps2[off + 3];
 		list->ps2[off + 3] |= ((list->buttons & 0x18) << 1);
 		list->bufsiz++;
