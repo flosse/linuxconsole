@@ -33,7 +33,6 @@
 #include <asm/io.h>
 #include <linux/module.h>
 #include <linux/ioport.h>
-#include <linux/config.h>
 #include <linux/init.h>
 #include <linux/gameport.h>
 #include <linux/malloc.h>
