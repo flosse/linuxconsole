@@ -211,11 +211,6 @@ static int  nomtrr __initdata = 0;
 
 static const char *mode_option __initdata = NULL;
 
-#ifdef CONFIG_PPC
-static int default_vmode __initdata = VMODE_1024_768_60;
-static int default_cmode __initdata = CMODE_8;
-#endif
-
 #ifdef CONFIG_MTRR
 static int mtrr = 1;
 #endif
@@ -1118,30 +1113,6 @@ aty128fb_setup(char *options)
             mtrr = 0;
         }
 #endif
-#ifdef CONFIG_PPC
-        /* vmode and cmode depreciated */
-	else if (!strncmp(this_opt, "vmode:", 6)) {
-            unsigned int vmode = simple_strtoul(this_opt+6, NULL, 0);
-            if (vmode > 0 && vmode <= VMODE_MAX)
-                default_vmode = vmode;
-        } else if (!strncmp(this_opt, "cmode:", 6)) {
-            unsigned int cmode = simple_strtoul(this_opt+6, NULL, 0);
-            switch (cmode) {
-	    case 0:
-	    case 8:
-		default_cmode = CMODE_8;
-		break;
-	    case 15:
-	    case 16:
-		default_cmode = CMODE_16;
-		break;
-	    case 24:
-	    case 32:
-		default_cmode = CMODE_32;
-		break;
-            }
-        }
-#endif /* CONFIG_PPC */
         else
             mode_option = this_opt;
     }
@@ -1191,15 +1162,6 @@ aty128_init(struct fb_info *info, struct pci_dev *pdev, const char *name)
     if (_machine == _MACH_Pmac) {
         if (mode_option) {
             if (!mac_find_mode(&var, info, mode_option, 8))
-                var = default_var;
-        } else {
-            if (default_vmode <= 0 || default_vmode > VMODE_MAX)
-                default_vmode = VMODE_1024_768_60;
-
-            if (default_cmode < CMODE_8 || default_cmode > CMODE_32)
-                default_cmode = CMODE_8;
-
-            if (mac_vmode_to_var(default_vmode, default_cmode, &var))
                 var = default_var;
         }
     } else
