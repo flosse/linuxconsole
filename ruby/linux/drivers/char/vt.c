@@ -393,11 +393,12 @@ void delete_line(struct vc_data *vc, unsigned int nr)
  */
 void set_origin(struct vc_data *vc)
 {
-        if (!IS_VISIBLE || !sw->con_set_origin || !sw->con_set_origin(vc))
-                origin = (unsigned long) screenbuf;
+        origin = (unsigned long) screenbuf;
         // visible_origin = origin;
         scr_end = origin + screenbuf_size;
         pos = origin + video_size_row*y + 2*x;
+	if (IS_VISIBLE && sw->con_set_origin)
+		sw->con_set_origin(vc);
 }
 
 inline void clear_region(struct vc_data *vc,int sx,int sy,int height,int width) 
@@ -473,10 +474,9 @@ void update_screen(struct vc_data *vc)
 
         hide_cursor(vc);
         set_origin(vc);
-        update = sw->con_switch(vc);
         set_palette(vc);
 
-        if (update && vcmode != KD_GRAPHICS) {
+        if (vcmode != KD_GRAPHICS) {
                /* Update the screen contents */
                do_update_region(vc, origin, screenbuf_size/2);
         }
