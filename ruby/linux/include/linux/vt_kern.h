@@ -31,12 +31,25 @@
 #define CM_ERASE    (2)
 #define CM_MOVE     (3)
 
+#define CUR_DEF         0
+#define CUR_NONE        1
+#define CUR_UNDERLINE   2
+#define CUR_LOWER_THIRD 3
+#define CUR_LOWER_HALF  4
+#define CUR_TWO_THIRDS  5
+#define CUR_BLOCK       6
+#define CUR_HWMASK      0x0f
+#define CUR_SWMASK      0xfff0
+
+#define CUR_DEFAULT CUR_UNDERLINE
+
 /*
  *      Low-Level Functions
  */
 
 #define IS_FG (cons_num == fg_console)
-#define IS_VISIBLE CON_IS_VISIBLE(vc_cons[currcons])
+#define CON_IS_VISIBLE(vc) (vc->vc_num == fg_console)
+#define IS_VISIBLE CON_IS_VISIBLE(vc)
 
 #ifdef VT_BUF_VRAM_ONLY
 #define DO_UPDATE 0
@@ -46,6 +59,7 @@
 
 int softcursor_original;
 struct console_font_op; 
+extern int fg_console, want_console, kmsg_redirect;
 
 extern unsigned char color_table[];
 extern int default_red[];
@@ -181,22 +195,6 @@ r Set */
 #endif /* CONFIG_VT_EXTENDED */
 };                                 
 
-extern struct vc_data *vc_cons[MAX_NR_CONSOLES];
-
-#define CUR_DEF         0
-#define CUR_NONE        1
-#define CUR_UNDERLINE   2
-#define CUR_LOWER_THIRD 3
-#define CUR_LOWER_HALF  4
-#define CUR_TWO_THIRDS  5
-#define CUR_BLOCK       6
-#define CUR_HWMASK      0x0f
-#define CUR_SWMASK      0xfff0
-
-#define CUR_DEFAULT CUR_UNDERLINE
-
-#define CON_IS_VISIBLE(vc) (vc->vc_num == fg_console)        
-
 struct consw {
         const char *(*con_startup)(void);
         void    (*con_init)(struct vc_data *, int);
@@ -222,20 +220,28 @@ struct consw {
 
 extern struct consw *conswitchp;
 
-extern struct consw dummy_con;  /* dummy console buffer */
-extern struct consw fb_con;     /* frame buffer based console */
-extern struct consw vga_con;    /* VGA text console */
-extern struct consw newport_con;        /* SGI Newport console  */
-extern struct consw prom_con;   /* SPARC PROM console */
+extern struct consw dummy_con;   /* dummy console buffer */
+extern struct consw fb_con;      /* frame buffer based console */
+extern struct consw vga_con;     /* VGA text console */
+extern struct consw newport_con; /* SGI Newport console  */
+extern struct consw prom_con;    /* SPARC PROM console */
 
 void take_over_console(struct consw *sw, int first, int last, int deflt);
 void give_up_console(struct consw *sw);
 
+struct vc_pool {
+	unsigned int first_vc;		/* First VC attached to VT */
+	unsigned int last_vc;		/* Last VC attached to VT */
+	struct vc_data *vc_cons[MAX_NR_USER_CONSOLES];	/* VT's VC pool */
+};
+
 extern struct vt_struct {
 	unsigned char	vc_mode;		/* KD_TEXT, ... */
+        unsigned int 	last_console;     	/* VC we last switched from */
 	char            vt_blanked;             /* Is this display blanked */
 	struct consw	*sw;			/* Display driver for VT */
-} *vt_cons;
+	struct vc_pool  vcs;			 
+} *vt_cons; 
 
 void (*kd_mksound)(unsigned int hz, unsigned int ticks);
 
@@ -275,10 +281,10 @@ struct unimapinit;
 struct unipair;
 
 void console_map_init(void);
-int con_set_trans_old(unsigned char * table);
-int con_get_trans_old(unsigned char * table);
-int con_set_trans_new(unsigned short * table);
-int con_get_trans_new(unsigned short * table);
+int con_set_trans_old(struct vc_data *vc, unsigned char * table);
+int con_get_trans_old(struct vc_data *vc, unsigned char * table);
+int con_set_trans_new(struct vc_data *vc, unsigned short * table);
+int con_get_trans_new(struct vc_data *vc, unsigned short * table);
 int con_clear_unimap(struct vc_data *vc, struct unimapinit *ui);
 int con_set_unimap(struct vc_data *vc, ushort ct, struct unipair *list);
 int con_get_unimap(struct vc_data *vc, ushort ct, ushort *uct, struct unipair *list);
