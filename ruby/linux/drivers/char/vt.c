@@ -87,6 +87,7 @@ static void con_flush_chars(struct tty_struct *tty);
 static void set_vesa_blanking(unsigned long arg);
 static void set_cursor(int currcons);
 static void hide_cursor(int currcons);
+extern void console_map_init(void);
 
 static int printable = 0;		/* Is console ready for printing? */
 
@@ -2888,11 +2889,11 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 
 /* This is a temporary buffer used to prepare a tty console write
  * so that we can easily avoid touching user space while holding the
- * console spinlock.  It is allocated in con_init and is shared by
+ * console spinlock.  It is allocated in vt_console_init and is shared by
  * this code and the vc_screen read/write tty calls.
  *
  * We have to allocate this statically in the kernel data section
- * since console_init (and thus con_init) are called before any
+ * since console_init (and thus vt_console_init) are called before any
  * kernel memory allocation is available.
  */
 char con_buf[PAGE_SIZE];
@@ -3468,7 +3469,7 @@ static int console_refcount;
 
 DECLARE_TASKLET_DISABLED(console_tasklet, console_softint, 0);
 
-void __init con_init(void)
+void __init vt_console_init(void)
 {
 	const char *display_desc = NULL;
 	unsigned int currcons = 0;
@@ -3560,6 +3561,7 @@ void __init con_init(void)
 #ifdef CONFIG_VT_CONSOLE
 	register_console(&vt_console_driver);
 #endif
+	console_map_init();
 
 	tasklet_enable(&console_tasklet);
 	tasklet_schedule(&console_tasklet);
