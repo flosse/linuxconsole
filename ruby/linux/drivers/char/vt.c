@@ -88,28 +88,13 @@ int default_blu[] = {0x00,0x00,0x00,0x00,0xaa,0xaa,0xaa,0xaa,
 unsigned char color_table[] = { 0, 4, 2, 6, 1, 5, 3, 7,
                                        8,12,10,14, 9,13,11,15 };  
 
-/*
- * Unfortunately, we need to delay tty echo when we're currently writing to the
- * console since the code is (and always was) not re-entrant, so we insert
- * all filp requests to con_task_queue instead of tq_timer and run it from
- * the console_tasklet.  The console_tasklet is protected by the IRQ
- * protected console_lock.
- */
-DECLARE_TASK_QUEUE(con_task_queue);
-
-inline void con_schedule_flip(struct tty_struct *t)
-{
-        queue_task(&t->flip.tqueue, &con_task_queue);
-        tasklet_schedule(&console_tasklet);
-}
-
 void respond_string(const char * p, struct tty_struct * tty)
 {
         while (*p) {
                 tty_insert_flip_char(tty, *p, 0);
                 p++;
         }
-        con_schedule_flip(tty);
+        tty_schedule_flip(tty);
 }
 
 /*
@@ -165,7 +150,7 @@ void hide_cursor(struct vc_data *vc)
 
 void set_cursor(struct vc_data *vc)
 {
-    if (!IS_FG || vc->display_fg->vt_blanked || vcmode == KD_GRAPHICS)
+    if (!IS_VISIBLE || vc->display_fg->vt_blanked || vcmode == KD_GRAPHICS)
         return;
     spin_lock_irq(&console_lock); 		
     if (dectcem) {
@@ -704,6 +689,7 @@ const char *create_vt(struct vt_struct *vt, struct consw *vt_sw)
         vt->vt_blanked = 0;
         vt->blank_interval = 10*60*HZ;
         vt->off_interval = 0;
+	init_MUTEX(&vt->lock);
 	vt->keyboard = NULL;
 	vt->vcs.first_vc = current_vc;  
 	vt->vcs.next = NULL;
@@ -959,18 +945,7 @@ int mouse_reporting(struct tty_struct *tty)
         return report_mouse;
 }
 
-/* This is a temporary buffer used to prepare a tty console write
- * so that we can easily avoid touching user space while holding the
- * console spinlock.  It is allocated in vt_console_init and is shared by
- * this code and the vc_screen read/write tty calls.
- *
- * We have to allocate this statically in the kernel data section
- * since console_init (and thus vt_console_init) are called before any
- * kernel memory allocation is available.
- */
-char con_buf[PAGE_SIZE];
 #define CON_BUF_SIZE    PAGE_SIZE
-DECLARE_MUTEX(con_buf_sem);
 
 static int do_con_write(struct tty_struct * tty, int from_user,
                         const unsigned char *buf, int count)
@@ -1005,17 +980,17 @@ static int do_con_write(struct tty_struct * tty, int from_user,
         orig_count = count;
 
         if (from_user) {
-                down(&con_buf_sem);
+                down(&vc->display_fg->lock);
 
 again:
                 if (count > CON_BUF_SIZE)
                         count = CON_BUF_SIZE;
-                if (copy_from_user(con_buf, buf, count)) {
+                if (copy_from_user(&vc->display_fg->con_buf, buf, count)) {
                         n = 0; /* ?? are error codes legal here ?? */
                         goto out;
                 }
 
-                buf = con_buf;
+                buf = vc->display_fg->con_buf;
         }
 
         /* At this point 'buf' is guarenteed to be a kernel buffer
@@ -1031,7 +1006,7 @@ again:
         charmask = himask ? 0x1ff : 0xff;
 
         /* undraw cursor first */
-        if (IS_FG)
+        if (IS_VISIBLE)
                 hide_cursor(vc);
 
         while (!tty->stopped && count) {
@@ -1160,9 +1135,8 @@ out:
                         goto again;
                 }
 
-                up(&con_buf_sem);
+                up(&vc->display_fg->lock);
         }
-
         return n;
 #undef FLUSH
 }
@@ -1179,12 +1153,6 @@ out:
 static void console_softint(unsigned long ignored)
 {
 	if  (!want_vc)	return;
-
-        /* Runs the task queue outside of the console lock.  These
-         * callbacks can come back into the console code and thus
-         * will perform their own locking.
-         */
-        run_task_queue(&con_task_queue);
 
         spin_lock_irq(&console_lock);
 
@@ -1429,7 +1397,7 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
                 goto quit;
 
         /* undraw cursor first */
-        if (IS_FG)
+        if (IS_VISIBLE)
                 hide_cursor(vc);
 
         start = (ushort *)pos;

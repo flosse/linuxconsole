@@ -156,7 +156,7 @@ static void put_queue(struct tty_struct *tty, int ch)
 	wake_up(&keypress_wait);
 	if (tty) {
 		tty_insert_flip_char(tty, ch, 0);
-		con_schedule_flip(tty);
+		tty_schedule_flip(tty);
 	}
 }
 
@@ -167,7 +167,7 @@ static void puts_queue(struct tty_struct *tty, char *cp)
 		return;
 	while (*cp)
 		tty_insert_flip_char(tty, *cp++, 0);
-	con_schedule_flip(tty);
+	tty_schedule_flip(tty);
 }
 
 static void applkey(struct tty_struct *tty, int key, char mode)
@@ -389,7 +389,7 @@ static void fn_send_intr(struct tty_struct *tty)
 	if (!tty)
 		return;
 	tty_insert_flip_char(tty, 0, TTY_BREAK);
-	con_schedule_flip(tty);
+	tty_schedule_flip(tty);
 }
 
 static void fn_scroll_forw(struct tty_struct *tty)

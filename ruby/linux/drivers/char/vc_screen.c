@@ -112,17 +112,12 @@ static loff_t vcs_lseek(struct file *file, loff_t offset, int orig)
 	return file->f_pos;
 }
 
-/* We share this temporary buffer with the console write code
- * so that we can easily avoid touching user space while holding the
- * console spinlock.
- */
-extern char con_buf[PAGE_SIZE];
 #define CON_BUF_SIZE	PAGE_SIZE
-extern struct semaphore con_buf_sem;
 
 static ssize_t
 vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 {
+	struct vc_data *vc = (struct vc_data *) file->private_data;
 	struct inode *inode = file->f_dentry->d_inode;
 	unsigned int currcons = MINOR(inode->i_rdev);
 	long pos = *ppos;
@@ -131,7 +126,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 	unsigned short *org = NULL;
 	ssize_t ret;
 
-	down(&con_buf_sem);
+	down(&vc->display_fg->lock);
 
 	/* Select the proper current console and verify
 	 * sanity of the situation under the console lock.
@@ -180,12 +175,12 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 		if (this_round > CON_BUF_SIZE)
 			this_round = CON_BUF_SIZE;
 
-		/* Perform the whole read into the local con_buf.
+		/* Perform the whole read into the current VT's con_buf.
 		 * Then we can drop the console spinlock and safely
 		 * attempt to move it to userspace.
 		 */
 
-		con_buf_start = con_buf0 = con_buf;
+		con_buf_start = con_buf0 = vc->display_fg->con_buf;
 		orig_count = this_round;
 		maxcol = vc->vc_cols;
 		if (!attr) {
@@ -222,7 +217,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 				/* Advance state pointers and move on. */
 				this_round -= tmp_count;
 				p = HEADER_SIZE;
-				con_buf0 = con_buf + HEADER_SIZE;
+				con_buf0 = vc->display_fg->con_buf+HEADER_SIZE;
 				/* If this_round >= 0, then p is even... */
 			} else if (p & 1) {
 				/* Skip first byte for output if start address is odd
@@ -286,16 +281,16 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 		ret = read;
 unlock_out:
 	spin_unlock_irq(&console_lock);
-	up(&con_buf_sem);
+	up(&vc->display_fg->lock);
 	return ret;
 }
 
 static ssize_t
 vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 {
+	struct vc_data *vc = (struct vc_data *) file->private_data;
 	struct inode *inode = file->f_dentry->d_inode;
 	unsigned int currcons = MINOR(inode->i_rdev);
-	struct vc_data *vc;
 	long pos = *ppos;
 	long viewed, attr, size, written;
 	char *con_buf0;
@@ -303,7 +298,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	u16 *org0 = NULL, *org = NULL;
 	size_t ret;
 
-	down(&con_buf_sem);
+	down(&vc->display_fg->lock);
 
 	/* Select the proper current console and verify
 	 * sanity of the situation under the console lock.
@@ -347,7 +342,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 		 * in the write data from userspace safely.
 		 */
 		spin_unlock_irq(&console_lock);
-		ret = copy_from_user(con_buf, buf, this_round);
+		ret = copy_from_user(&vc->display_fg->con_buf, buf, this_round);
 		spin_lock_irq(&console_lock);
 
 		if (ret) {
@@ -380,7 +375,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 		 * under the lock using the local kernel buffer.
 		 */
 
-		con_buf0 = con_buf;
+		con_buf0 = vc->display_fg->con_buf;
 		orig_count = this_round;
 		maxcol = vc->vc_cols;
 		p = pos;
@@ -475,7 +470,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 unlock_out:
 	spin_unlock_irq(&console_lock);
 
-	up(&con_buf_sem);
+	up(&vc->display_fg->lock);
 
 	return ret;
 }
