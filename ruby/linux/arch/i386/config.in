@@ -352,7 +352,7 @@ endmenu
 source drivers/input/Config.in
 source drivers/usb/Config.in
 source drivers/media/Config.in
-soruce drivers/video/Config.in
+source drivers/video/Config.in
 
 mainmenu_option next_comment
 comment 'Kernel hacking'
