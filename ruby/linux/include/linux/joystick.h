@@ -47,7 +47,7 @@
 #define JS_EVENT_INIT		0x80	/* initial state of device */
 
 struct js_event {
-	__u32 time;	/* event timestamp in miliseconds */
+	__u32 time;	/* event timestamp in milliseconds */
 	__s16 value;	/* value */
 	__u8 type;	/* event type */
 	__u8 number;	/* axis/button number */
