@@ -336,7 +336,7 @@ static struct input_device_id *input_match_device(struct input_device_id *id, st
 		envp[i++] = scratch; \
 		scratch += sprintf(scratch, name); \
 		for (j = 0; j < NBITS(max); j++) \
-			scratch += sprintf(scratch, "%ld", dev->bit[j]); \
+			scratch += sprintf(scratch, "%lx ", dev->bit[j]); \
 		scratch++; \
 	} while (0)
 
@@ -405,13 +405,16 @@ static void input_call_hotplug(char *verb, struct input_dev *dev)
 
 	envp[i++] = 0;
 
+	printk(KERN_DEBUG "input.c: calling %s %s [%s %s %s %s %s]\n",
+		argv[0], argv[1], envp[0], envp[1], envp[2], envp[3], envp[4]);
+
 	value = call_usermodehelper(argv [0], argv, envp);
 
 	kfree(buf);
 	kfree(envp);
 
 	if (value != 0)
-		printk(KERN_WARNING "hotplug returned 0x%x", value);
+		printk(KERN_WARNING "input.c: hotplug returned %d\n", value);
 }
 
 #else
