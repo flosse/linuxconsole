@@ -73,6 +73,8 @@ struct input_event {
 
 #define EVIOCSFF		_IOC(_IOC_WRITE, 'E', 0x80, sizeof(struct ff_effect))	/* send a force effect to a force feedback device */
 #define EVIOCRMFF		_IOW('E', 0x81, int)			/* Erase a force effect */
+#define EVIOCSGAIN		_IOW('E', 0x82, unsigned short)		/* Set overall gain */
+#define EVIOCSAUTOCENTER	_IOW('E', 0x83, unsigned short)		/* Enable or disable auto-centering */
 
 /*
  * Event types
@@ -649,6 +651,8 @@ struct input_dev {
 	int (*event)(struct input_dev *dev, unsigned int type, unsigned int code, int value);
 	int (*upload_effect)(struct input_dev *dev, struct ff_effect *effect);
 	int (*erase_effect)(struct input_dev *dev, int effect_id);
+	int (*set_autocenter)(struct input_dev *dev, unsigned short strength);
+	int (*set_forcegain)(struct input_dev *dev, unsigned short gain);
 
 	struct input_handle *handle;
 	struct input_dev *next;
