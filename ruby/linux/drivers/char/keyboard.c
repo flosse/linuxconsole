@@ -49,7 +49,6 @@
 #include <linux/tty_flip.h>
 #include <linux/vt_kern.h>
 #include <linux/kbd_diacr.h>
-#include <linux/console.h>
 #include <linux/sysrq.h>
 #include <linux/input.h>
 
@@ -191,12 +190,15 @@ static void applkey(struct tty_struct *tty, int key, char mode)
 void to_utf8(struct tty_struct *tty, ushort c)
 {
 	if (c < 0x80)
-		put_queue(tty, c);			/* 0*******  */
+		/* 0*******  */
+		put_queue(tty, c);
 	else if (c < 0x800) {
-		put_queue(tty, 0xc0 | (c >> 6));	/* 110***** 10****** */
+		/* 110***** 10****** */
+		put_queue(tty, 0xc0 | (c >> 6));	
 		put_queue(tty, 0x80 | (c & 0x3f));
 	} else {
-		put_queue(tty, 0xe0 | (c >> 12));	/* 1110**** 10****** 10****** */
+		/* 1110**** 10****** 10****** */
+		put_queue(tty, 0xe0 | (c >> 12));
 		put_queue(tty, 0x80 | ((c >> 6) & 0x3f));
 		put_queue(tty, 0x80 | (c & 0x3f));
 	}
@@ -354,6 +356,7 @@ static void fn_lastcons(struct tty_struct *tty)
 
 static void fn_dec_console(struct tty_struct *tty)
 {
+       struct vc_data *vc = (struct vc_data *) tty->driver_data;  	
        int i;
 
        for (i = fg_console-1; i != fg_console; i--) {
@@ -362,11 +365,12 @@ static void fn_dec_console(struct tty_struct *tty)
                if (vc_cons_allocated(i))
                        break;
        }
-       set_console(i);
+       set_console(vc->display_fg->vcs.vc_cons[i]);
 }
 
 static void fn_inc_console(struct tty_struct *tty)
 {
+       struct vc_data *vc = (struct vc_data *) tty->driver_data; 	
        int i;
 
        for (i = fg_console+1; i != fg_console; i++) {
@@ -375,7 +379,7 @@ static void fn_inc_console(struct tty_struct *tty)
                if (vc_cons_allocated(i))
                        break;
        }
-       set_console(i);
+       set_console(vc->display_fg->vcs.vc_cons[i]);
 }
 
 static void fn_send_intr(struct tty_struct *tty)
@@ -509,9 +513,11 @@ static void k_dead(struct tty_struct *tty, unsigned char value, char up_flag)
 
 static void k_cons(struct tty_struct *tty, unsigned char value, char up_flag)
 {
+	struct vc_data *vc = (struct vc_data *) tty->driver_data;
+
 	if (up_flag)
 		return;	
-	set_console(value);
+	set_console(vc->display_fg->vcs.vc_cons[value]);
 }
 
 static void k_fn(struct tty_struct *tty, unsigned char value, char up_flag)
@@ -716,10 +722,9 @@ void setledstate(struct kbd_struct *kbd, unsigned int led)
 	set_leds();
 }
 
-void register_leds(int console, unsigned int led, unsigned int *addr, unsigned int mask)
+void register_leds(struct kbd_struct *kbd, unsigned int led,unsigned int *addr,
+		   unsigned int mask)
 {
-	struct kbd_struct *kbd = &vt_cons->vcs.vc_cons[fg_console]->kbd_table;
-
 	if (led < 3) {
 		ledptrs[led].addr = addr;
 		ledptrs[led].mask = mask;
@@ -771,18 +776,19 @@ static struct input_handler kbd_handler;
 static void kbd_bh(unsigned long dummy)
 {
 	struct input_handle *handle;	
-	unsigned char leds = getleds(vt_cons);
+	unsigned char leds;
 
-	if (leds != ledstate) {
-                ledstate = leds;
 #ifdef CONFIG_INPUT
-		for (handle = kbd_handler.handle; handle; handle = handle->hnext) {
+	for (handle = kbd_handler.handle; handle; handle = handle->hnext) {
+		leds = getleds(vt_cons);
+		if (leds != ledstate) {
+                	ledstate = leds;
 			input_event(handle->dev, EV_LED, LED_SCROLLL, !!(leds & 0x01));
 			input_event(handle->dev, EV_LED, LED_NUML,    !!(leds & 0x02));
 			input_event(handle->dev, EV_LED, LED_CAPSL,   !!(leds & 0x04));
 		}
-#endif
 	}
+#endif
 }
 
 DECLARE_TASKLET_DISABLED(keyboard_tasklet, kbd_bh, 0);
@@ -890,8 +896,6 @@ void kbd_keycode(unsigned int keycode, int down)
 
 	pm_access(pm_kbd);
 
-	do_poke_blanked_console = 1;
-	tasklet_schedule(&console_tasklet);
 	add_keyboard_randomness(keycode ^ (down << 7));
 
 	tty = ttytab ? ttytab[fg_console] : NULL;
@@ -907,6 +911,9 @@ void kbd_keycode(unsigned int keycode, int down)
 		tty = NULL;
 	}
 	vc = (struct vc_data *) tty->driver_data;
+
+	do_poke_blanked_console = 1;
+        tasklet_schedule(&console_tasklet);
 
 	if ((raw_mode = (vc->kbd_table.kbdmode == VC_RAW)))
 		if (emulate_raw(tty, keycode, !down << 7))
