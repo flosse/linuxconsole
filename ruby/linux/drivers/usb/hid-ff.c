@@ -119,7 +119,6 @@ struct hid_ff_logitech {
 	spinlock_t lock;             /* device-level lock. Having locks on
 					a per-effect basis could be nice, but
 					isn't really necessary */
-	wait_queue_head_t wait;
 };
 
 
@@ -150,7 +149,6 @@ static int hid_lgff_init(struct hid_device* hid)
 	hid->ff_private = private;
 
 	spin_lock_init(&private->lock);
-	init_waitqueue_head(&private->wait);
 
 	/* Event and exit callbacks */
 	hid->ff_exit = hid_lgff_exit;
@@ -182,24 +180,9 @@ static int hid_lgff_init(struct hid_device* hid)
 static void hid_lgff_exit(struct hid_device* hid)
 {
 	struct hid_ff_logitech *lgff = hid->ff_private;
-	DECLARE_WAITQUEUE(wait, current);
-	int timeout = 5*HZ; /* 5 seconds */
 
 	if (lgff->urbffout) {
 		usb_unlink_urb(lgff->urbffout);
-		
-		set_current_state(TASK_INTERRUPTIBLE);
-		add_wait_queue(&lgff->wait, &wait);
-
-		if (lgff->urbffout->status == -EINPROGRESS)
-			timeout = schedule_timeout(timeout);
-
-		if (!timeout)
-			warn("ff control urb still in use. Unlinking anyway\n");
-
-		set_current_state(TASK_RUNNING);
-		remove_wait_queue(&lgff->wait, &wait);
-
 		usb_free_urb(lgff->urbffout);
 	}
 }
@@ -379,8 +362,6 @@ static void hid_lgff_ctrl_out(struct urb *urb)
 
 	if (urb->status)
 		warn("hid_irq_ffout status %d received", urb->status);
-
-	wake_up(&((struct hid_ff_logitech *)(hid->ff_private))->wait);
 }
 
 /* Lock must be held by caller */
