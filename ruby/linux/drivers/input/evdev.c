@@ -42,6 +42,7 @@
 struct evdev {
 	int exist;
 	int open;
+	int open_for_write;
 	int minor;
 	struct input_handle handle;
 	wait_queue_head_t wait;
@@ -102,6 +103,10 @@ static int evdev_release(struct inode * inode, struct file * file)
 		listptr = &((*listptr)->next);
 	*listptr = (*listptr)->next;
 
+	if (file->f_mode & FMODE_WRITE) {
+		list->evdev->open_for_write--;
+	}
+
 	if (!--list->evdev->open) {
 		if (list->evdev->exist) {
 			input_close_device(&list->evdev->handle);
@@ -126,6 +131,10 @@ static int evdev_open(struct inode * inode, struct file * file)
 	if (i >= EVDEV_MINORS || !evdev_table[i])
 		return -ENODEV;
 
+	/* For some devices, only one process can open a device with write access */
+	if ( (evdev_table[i]->handle.dev->only_one_writer) && (file->f_mode & FMODE_WRITE) && (evdev_table[i]->open_for_write) )
+		return -EBUSY;
+
 	if (!(list = kmalloc(sizeof(struct evdev_list), GFP_KERNEL)))
 		return -ENOMEM;
 	memset(list, 0, sizeof(struct evdev_list));
@@ -139,6 +148,10 @@ static int evdev_open(struct inode * inode, struct file * file)
 	if (!list->evdev->open++)
 		if (list->evdev->exist)
 			input_open_device(&list->evdev->handle);
+
+	if (file->f_mode & FMODE_WRITE) {
+		list->evdev->open_for_write++;
+	}
 
 	return 0;
 }
