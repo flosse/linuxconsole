@@ -120,8 +120,8 @@ main(int argc, char **argv)
 		exit(1);
 	}
 	fprintf(stderr, "Filling rect with color 0x%x\n", color);
-	fbfr.x1 = sx;
-	fbfr.y1 = sy;
+	fbfr.dx = sx;
+	fbfr.dy = sy;
 	fbfr.width = wi;
 	fbfr.height = he;
 	fbfr.color = color;

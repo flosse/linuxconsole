@@ -39,6 +39,7 @@
 #include <getopt.h>
 #include <string.h>
 #include <fcntl.h>
+#include <stdlib.h>
 
 #include <asm/param.h>
 #include <linux/joystick.h>
