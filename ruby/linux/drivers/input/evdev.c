@@ -300,7 +300,7 @@ static struct input_handle *evdev_connect(struct input_handler *handler, struct 
 	int minor;
 
 	for (minor = 0; minor < EVDEV_MINORS && evdev_table[minor]; minor++);
-	if (evdev_table[minor]) {
+	if (minor < EVDEV_MINORS) {
 		printk(KERN_ERR "evdev: no more free evdev devices\n");
 		return NULL;
 	}

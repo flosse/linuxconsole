@@ -410,7 +410,7 @@ static struct input_handle *mousedev_connect(struct input_handler *handler, stru
 		return NULL;
 
 	for (minor = 0; minor < MOUSEDEV_MINORS && mousedev_table[minor]; minor++);
-	if (mousedev_table[minor]) {
+	if (minor == MOUSEDEV_MINORS) {
 		printk(KERN_ERR "mousedev: no more free mousedev devices\n");
 		return NULL;
 	}
