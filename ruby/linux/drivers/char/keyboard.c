@@ -347,7 +347,9 @@ static void fn_bare_num(struct tty_struct *tty)
 
 static void fn_lastcons(struct tty_struct *tty)
 {
-       set_console(last_console);
+       struct vc_data *vc = (struct vc_data *) tty->driver_data;
+	
+       set_console(vc->display_fg->last_console);
 }
 
 static void fn_dec_console(struct tty_struct *tty)
@@ -716,7 +718,7 @@ void setledstate(struct kbd_struct *kbd, unsigned int led)
 
 void register_leds(int console, unsigned int led, unsigned int *addr, unsigned int mask)
 {
-	struct kbd_struct *kbd = &vc_cons[console]->kbd_table;
+	struct kbd_struct *kbd = &vt_cons->vcs.vc_cons[fg_console]->kbd_table;
 
 	if (led < 3) {
 		ledptrs[led].addr = addr;
@@ -727,9 +729,9 @@ void register_leds(int console, unsigned int led, unsigned int *addr, unsigned i
 		kbd->ledmode = LED_SHOW_FLAGS;
 }
 
-static inline unsigned char getleds(void)
+static inline unsigned char getleds(struct vt_struct *vt)
 {
-	struct kbd_struct *kbd = &vc_cons[fg_console]->kbd_table;
+	struct kbd_struct *kbd = &vt->vcs.vc_cons[fg_console]->kbd_table;
 	unsigned char leds;
 	int i;
 
@@ -769,7 +771,7 @@ static struct input_handler kbd_handler;
 static void kbd_bh(unsigned long dummy)
 {
 	struct input_handle *handle;	
-	unsigned char leds = getleds();
+	unsigned char leds = getleds(vt_cons);
 
 	if (leds != ledstate) {
                 ledstate = leds;
