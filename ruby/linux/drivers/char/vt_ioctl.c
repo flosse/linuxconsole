@@ -1010,7 +1010,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 
 				i = vc_allocate(vc->vt_newvt);
 				if (i) {
-					vt->vt_newvt = -1;
+					vc->vt_newvt = -1;
 					return i;
 				}
 				tmp = find_vc(vc->vt_newvt);
