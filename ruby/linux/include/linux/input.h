@@ -322,6 +322,8 @@ struct input_event {
 #define KEY_FINANCE		219
 #define KEY_SPORT		220
 #define KEY_SHOP		221
+#define KEY_ALTERASE		222
+#define KEY_CANCEL		223
 
 #define KEY_UNKNOWN		240
 
@@ -442,6 +444,7 @@ struct input_event {
  */
 
 #define MSC_SERIAL		0x00
+#define MSC_PULSELED		0x01
 #define MSC_MAX			0x07
 
 /*
