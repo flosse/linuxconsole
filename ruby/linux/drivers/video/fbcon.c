@@ -214,7 +214,11 @@ static const char *fbcon_startup(struct vt_struct *vt, int init)
         __MOD_INC_USE_COUNT(owner);
     if (info->fbops->fb_open && info->fbops->fb_open(info, 0) && owner)
          __MOD_DEC_USE_COUNT(owner);
-	
+
+    info->fbops->fb_set_par(info);
+    if (fb_set_cmap(&info->cmap, 1, info))
+    	return NULL;
+
     DPRINTK("mode:   %s\n", info->fix.id);
     DPRINTK("visual: %d\n", info->fix.visual);
     DPRINTK("res:    %dx%d-%d\n",info->var.xres, info->var.yres, info->var.bits_per_pixel); 
@@ -464,6 +468,53 @@ const struct consw fb_con = {
     con_set_origin: 	fbcon_set_origin,
     con_invert_region:	fbcon_invert_region,
 };
+
+void __init fb_console_init(void)
+{
+   const char *display_desc = NULL;
+   struct vt_struct *vt;
+   struct vc_data *vc;	
+   long q;
+
+   /* Allocate the memory we need for this VT */
+   vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
+   if (!vt) return;
+   memset(vt, 0, sizeof(struct vt_struct));
+
+   vt->default_mode = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
+   if (!vt->default_mode) {
+        kfree(vt);
+        return;
+   }
+
+   vc = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
+   if (!vc) {
+       kfree(vt->default_mode);
+       kfree(vt);
+       return;
+   }
+   vt->kmalloced = 1;
+   vt->vt_sw = &fb_con;
+   vt->vc_cons[0] = vc;
+   display_desc = create_vt(vt, 0);
+ 
+   q = (long) kmalloc(vc->vc_screenbuf_size, GFP_KERNEL);
+   if (!display_desc || !q) {
+       kfree(vt->vc_cons[0]);
+       kfree(vt->default_mode);
+       kfree(vt);
+       if (q)
+           kfree((char *) q);
+           return;
+       }
+   vc->vc_screenbuf = (unsigned short *) q;
+   vc_init(vc, 1);
+   tasklet_enable(&vt->vt_tasklet);
+   tasklet_schedule(&vt->vt_tasklet);
+
+   printk("Console: %s %s %dx%d", vc->vc_can_do_color ? "colour" : "mono",
+           display_desc, vc->vc_cols, vc->vc_rows);
+}
 
 /*
  *  Visible symbols for modules
