@@ -85,14 +85,8 @@ struct lgff_effect {
 struct hid_ff_logitech {
 	struct hid_device* hid;
 
-	struct urb* urbffout;        /* Output URB used to send ff commands */
-	struct usb_ctrlrequest ffcr; /* ff commands use control URBs */
-	char buf[8];
-
-	spinlock_t xmit_lock;
-	unsigned int xmit_head, xmit_tail;
-	struct lgff_magnitudes xmit_data[LGFF_BUFFER_SIZE];
-	long xmit_flags[1];
+	struct hid_report report;
+	__s32 value[8];
 
 	struct lgff_effect effects[LGFF_EFFECTS];
 	spinlock_t lock;             /* device-level lock. Having locks on
@@ -100,7 +94,6 @@ struct hid_ff_logitech {
 					isn't really necessary */
 };
 
-static void hid_lgff_ctrl_out(struct urb *urb);
 static void hid_lgff_exit(struct hid_device* hid);
 static int hid_lgff_event(struct hid_device *hid, struct input_dev *input,
 			  unsigned int type, unsigned int code, int value);
@@ -118,22 +111,40 @@ static void hid_lgff_timer(unsigned long timer_data);
 int hid_lgff_init(struct hid_device* hid)
 {
 	struct hid_ff_logitech *private;
+	struct hid_report* report;
+	struct hid_field* field;
 	int i;
 
-	/* Private data */
+	/* Find the report to use */
+	if (list_empty(&hid->report_enum[HID_OUTPUT_REPORT].report_list)) {
+		err("No output report found");
+		return -1;
+	}
+	/* Check the report looks ok */
+	report = (struct hid_report*)hid->report_enum[HID_OUTPUT_REPORT].report_list.next;
+	if (!report) {
+		err("NULL output report");
+		return -1;
+	}
+	field = report->field[0];
+	if (!field) {
+		err("NULL field");
+		return -1;
+	}
+	if (!field->value) {
+		err("No space allocated for values");
+		return -1;
+	}
+
 	private = kmalloc(sizeof(struct hid_ff_logitech), GFP_KERNEL);
 	if (!private) return -1;
-
 	memset(private, 0, sizeof(struct hid_ff_logitech));
-
 	hid->ff_private = private;
 
+	private->report = *(struct hid_report*)(hid->report_enum[HID_OUTPUT_REPORT].report_list.next);
 	private->hid = hid;
-	spin_lock_init(&private->lock);
-	spin_lock_init(&private->xmit_lock);
 
-	private->buf[0] = 0x03;
-	private->buf[1] = 0x42;
+	spin_lock_init(&private->lock);
 
 	for (i=0; i<LGFF_EFFECTS; ++i) {
 		struct lgff_effect* effect = &private->effects[i];
@@ -149,17 +160,6 @@ int hid_lgff_init(struct hid_device* hid)
 	/* Event and exit callbacks */
 	hid->ff_exit = hid_lgff_exit;
 	hid->ff_event = hid_lgff_event;
-
-	/* USB init */
-	if (!(private->urbffout = usb_alloc_urb(0, GFP_KERNEL))) {
-		kfree(hid->ff_private);
-		return -1;
-	}
-
-	usb_fill_control_urb(private->urbffout, hid->dev, 0,
-			     (void*) &private->ffcr, private->buf, 8,
-			     hid_lgff_ctrl_out, hid);
-	dbg("Created ff output control urb");
 
 	/* Input init */
 	hid->input.upload_effect = hid_lgff_upload_effect;
@@ -177,10 +177,8 @@ static void hid_lgff_exit(struct hid_device* hid)
 {
 	struct hid_ff_logitech *lgff = hid->ff_private;
 
-	if (lgff->urbffout) {
-		usb_unlink_urb(lgff->urbffout);
-		usb_free_urb(lgff->urbffout);
-	}
+	/* At this point, all effects were erased by hid_lgff_flush.
+	   No need to do anything */
 }
 
 static int hid_lgff_event(struct hid_device *hid, struct input_dev* input,
@@ -345,48 +343,11 @@ static int hid_lgff_upload_effect(struct input_dev* input,
 	return 0;
 }
 
-static void hid_lgff_xmit(struct hid_device* hid)
-{
-	struct hid_ff_logitech *lgff = hid->ff_private;
-	int err;
-	int tail;
-	unsigned long flags;
-
-	spin_lock_irqsave(&lgff->xmit_lock, flags);
-
-	tail = lgff->xmit_tail;
-	if (lgff->xmit_head == tail) {
-		clear_bit(XMIT_RUNNING, lgff->xmit_flags);
-		spin_unlock_irqrestore(&lgff->xmit_lock, flags);
-		return;
-	}
-	lgff->buf[3] = lgff->xmit_data[tail].left;
-	lgff->buf[4] = lgff->xmit_data[tail].right;
-	tail++; tail &= LGFF_BUFFER_SIZE -1;
-	lgff->xmit_tail = tail;
-
-	spin_unlock_irqrestore(&lgff->xmit_lock, flags);
-
-	lgff->urbffout->pipe = usb_sndctrlpipe(hid->dev, 0);
-	lgff->ffcr.bRequestType = USB_TYPE_CLASS | USB_DIR_OUT | USB_RECIP_INTERFACE;
-	lgff->urbffout->transfer_buffer_length = lgff->ffcr.wLength = 8;
-	lgff->ffcr.bRequest = 9;
-	lgff->ffcr.wValue = 0x0203;    /*NOTE: Potential problem with 
-					 little/big endian */
-	lgff->ffcr.wIndex = 0;
-	
-	lgff->urbffout->dev = hid->dev;
-	
-	if ((err=usb_submit_urb(lgff->urbffout, GFP_ATOMIC)))
-		warn("usb_submit_urb returned %d", err);
-}
-
 static void hid_lgff_make_rumble(struct hid_device* hid)
 {
 	struct hid_ff_logitech *lgff = hid->ff_private;
 	int left = 0, right = 0;
 	int i;
-	int head, tail;
 	unsigned long flags;
 
 	for (i=0; i<LGFF_EFFECTS; ++i) {
@@ -397,38 +358,11 @@ static void hid_lgff_make_rumble(struct hid_device* hid)
 		}
 	}
 
-	spin_lock_irqsave(&lgff->xmit_lock, flags);
-
-	head = lgff->xmit_head;
-	tail = lgff->xmit_tail;	
-
-	if (CIRC_SPACE(head, tail, LGFF_BUFFER_SIZE) < 1) {
-		warn("not enough space in xmit buffer to send new packet");
-		spin_unlock_irqrestore(&lgff->xmit_lock, flags);
-		return;
-	}
-
-	lgff->xmit_data[head].left = left > 0x7f ? 0x7f : left;
-	lgff->xmit_data[head].right = right > 0x7f ? 0x7f : right;
-	head++; head &= LGFF_BUFFER_SIZE -1;
-	lgff->xmit_head = head;
-
-	if (test_and_set_bit(XMIT_RUNNING, lgff->xmit_flags))
-		spin_unlock_irqrestore(&lgff->xmit_lock, flags);
-	else {
-		spin_unlock_irqrestore(&lgff->xmit_lock, flags);
-		hid_lgff_xmit(hid);
-	}
-}
-
-static void hid_lgff_ctrl_out(struct urb *urb)
-{
-	struct hid_device *hid = urb->context;
-
-	if (urb->status)
-		warn("hid_irq_ffout status %d received", urb->status);
-
-	hid_lgff_xmit(hid);
+	lgff->report.field[0]->value[0] = 0x03;
+	lgff->report.field[0]->value[1] = 0x42;
+	lgff->report.field[0]->value[3] = left;
+	lgff->report.field[0]->value[4] = right;
+	hid_submit_report(hid, &lgff->report, USB_DIR_OUT);
 }
 
 /* Lock must be held by caller */
@@ -471,8 +405,11 @@ static void hid_lgff_timer(unsigned long timer_data)
 		clear_bit(EFFECT_STARTED, effect->flags);
 		set_bit(EFFECT_PLAYING, effect->flags);
 		hid_lgff_ctrl_playback(lgff->hid, effect, 1);
-		effect->timer.expires = RUN_AT(effect->replay.length * HZ / 1000);
-		add_timer(&effect->timer);
+		if (effect->replay.length) {
+			effect->timer.expires = RUN_AT(effect->replay.length * HZ / 1000);
+			add_timer(&effect->timer);
+		}
+		/* else { play for ever } */
 
 		dbg("Effect %d starts playing", id);
 	} else if (test_bit(EFFECT_PLAYING, effect->flags)) {
