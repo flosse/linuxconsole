@@ -1630,9 +1630,11 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
                 if (IS_VISIBLE)
                         update_screen(vc);
         }
+/*
         printk("Console: switching to %s %s %dx%d\n", 
                 vc->vc_can_do_color ? "colour" : "mono",
                 desc, vc->vc_cols, vc->vc_rows);
+*/	
 }
 
 /* We can't register the console with devfs during con_init(), because it
