@@ -44,16 +44,16 @@ extern struct tty_driver console_driver;
  * Console (vt and kd) routines, as defined by USL SVR4 manual, and by
  * experimentation and study of X386 SYSV handling.
  *
- * One point of difference: SYSV vt's are /dev/vtX, which X >= 0, and
- * /dev/console is a separate ttyp. Under Linux, /dev/tty0 is /dev/console,
- * and the vc start at /dev/ttyX, X >= 1. We maintain that here, so we will
- * always treat our set of vt as numbered 1..MAX_NR_CONSOLES (corresponding to
- * ttys 0..MAX_NR_CONSOLES-1). Explicitly naming VT 0 is illegal, but using
- * /dev/tty0 (fg_console) as a target is legal, since an implicit aliasing
- * to the current console is done by the main ioctl code.
+ * SYSV vt's are /dev/vtX, which X >= 0, and /dev/console is a separate ttyp.
+ * Linux used to followed a different method but now that we support multihead
+ * VT 0 as the foreground console no longer makes sense. Now Linux follows
+ * SYSV where, /dev/tty is equal to /dev/console, and the vc start at
+ * /dev/ttyX, X >= 0. So we will always treat our set of vt as numbered ttys
+ * 0..MAX_NR_CONSOLES-1. Using using /dev/tty as a target is legal, since an
+ * implicit aliasing to the current console is done by the main ioctl code.
  */
 
-struct vt_struct *vt_cons;
+struct vt_struct *vt_cons = NULL;
 
 /* Keyboard type: Default is KB_101, but can be set by machine
  * specific code.
@@ -141,6 +141,40 @@ _kd_mksound(unsigned int hz, unsigned int ticks)
 #endif
 
 void (*kd_mksound)(unsigned int hz, unsigned int ticks) = _kd_mksound;
+
+/*
+ * Sometimes we want to wait until a particular VT has been activated. We
+ * do it in a very simple manner. Everybody waits on a single queue and
+ * get woken up at once. Those that are satisfied go on with their business,
+ * while those not ready go back to sleep. Seems overkill to add a wait
+ * to each vt just for this - usually this does nothing!
+ */
+static DECLARE_WAIT_QUEUE_HEAD(vt_activate_queue);
+
+/*
+ * Sleeps until a vt is activated, or the task is interrupted. Returns
+ * 0 if activation, -EINTR if interrupted.
+ */
+int vt_waitactive(struct vc_data *vc)
+{
+	int retval;
+	DECLARE_WAITQUEUE(wait, current);
+
+	add_wait_queue(&vt_activate_queue, &wait);
+	for (;;) {
+		set_current_state(TASK_INTERRUPTIBLE);
+		retval = 0;
+		if (vc->vc_num == vc->display_fg->fg_console->vc_num)
+			break;
+		retval = -EINTR;
+		if (signal_pending(current))
+			break;
+		schedule();
+	}
+	remove_wait_queue(&vt_activate_queue, &wait);
+	current->state = TASK_RUNNING;
+	return retval;
+}
 
 #define i (tmp.kb_index)
 #define s (tmp.kb_table)
@@ -855,13 +889,12 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	}
 
 	case VT_GETMODE:
-		return copy_to_user((void*)arg, &(vc->vt_mode), 
-							sizeof(struct vt_mode)) ? -EFAULT : 0; 
+		return copy_to_user((void*)arg, &(vc->vt_mode), sizeof(struct vt_mode)) ? -EFAULT : 0;
 
 	/*
-	 * Returns global vt state. Note that VT 0 is always open, since
-	 * it's an alias for the current VT, and people can't use it here.
-	 * We cannot return state for more than 16 VTs, since v_state is short.
+         * Returns global vt state. Note that /dev/tty is always open, since
+         * it's an alias for the current VT, and people can't use it here.
+         * We cannot return state for more than 16 VTs, since v_state is short.
 	 */
 	case VT_GETSTATE:
 	{
@@ -871,9 +904,8 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		i = verify_area(VERIFY_WRITE,(void *)vtstat, sizeof(struct vt_stat));
 		if (i)
 			return i;
-		put_user(vc->display_fg->fg_console->vc_num + 1,
-			 &vtstat->v_active);
-		state = 1;	/* /dev/tty0 is always open */
+		put_user(vc->display_fg->fg_console->vc_num, &vtstat->v_active);
+		state = 1;	/* /dev/tty is always open */
 		for (i = 0, mask = 2; i < MAX_NR_USER_CONSOLES && mask; ++i, mask <<= 1)
 			if (VT_IS_IN_USE(i))
 				state |= mask;
@@ -884,40 +916,58 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	 * Returns the first available (non-opened) console.
 	 */
 	case VT_OPENQRY:
-		for (i = 0; i < MAX_NR_CONSOLES; ++i)
-			if (! VT_IS_IN_USE(i))
+	{
+		struct vc_data *tmp;	
+
+		for (i = 0; i < MAX_NR_USER_CONSOLES; ++i) {
+			tmp = vc->display_fg->vcs.vc_cons[i];
+			if (tmp && !VT_IS_IN_USE(tmp->vc_num))
 				break;
-		ucval = i < MAX_NR_CONSOLES ? (i+1) : -1;
+		} 
+		ucval = i < MAX_NR_USER_CONSOLES ? (tmp->vc_num) : -1;
 		goto setint;		 
+	}
 
 	/*
 	 * ioctl(fd, VT_ACTIVATE, num) will cause us to switch to vt # num,
-	 * with num >= 1 (switches to vt 0, our console, are not allowed, just
-	 * to preserve sanity).
+	 * with num >= 0. Switches to the foreground console, are not allowed,
+         * nor is switching to another physical VT just to preserve sanity.
+         * The first VC of each VC pool is always allocated.
 	 */
 	case VT_ACTIVATE:
 	{
+		struct vc_data *tmp;		
+
 		if (!perm)
 			return -EPERM;
-		if (arg == 0 || arg > MAX_NR_CONSOLES)
+		if (arg == vc->display_fg->fg_console->vc_num || 
+		    arg > MAX_NR_CONSOLES)
 			return -ENXIO;
-		arg--;
+
 		i = vc_allocate(arg);
 		if (i)
 			return i;
-		set_console(vc->display_fg->vcs.vc_cons[arg]);
+		tmp = find_vc(arg);
+		if (tmp->display_fg == vc->display_fg)
+			return -ENXIO; 
+		set_console(tmp);
 		return 0;
 	}
 	/*
 	 * wait until the specified VT has been activated
 	 */
 	case VT_WAITACTIVE:
+	{
+		struct vc_data *tmp = find_vc(arg);	
+
 		if (!perm)
 			return -EPERM;
-		if (arg == 0 || arg > MAX_NR_CONSOLES)
+		if (arg == vc->display_fg->fg_console->vc_num || 
+		    arg > MAX_NR_CONSOLES || !tmp)
 			return -ENXIO;
-		return vt_waitactive(arg-1);
-
+		
+		return vt_waitactive(tmp);
+	}
 	/*
 	 * If a vt is under process control, the kernel will not switch to it
 	 * immediately, but postpone the operation until the process calls this
@@ -937,58 +987,53 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		/*
 		 * Switching-from response
 		 */
-		if (vc->vt_newvt >= 0)
-		{
-			if (arg == 0)
+		if (vc->vt_newvt >= 0) {
+			if (arg == vc->display_fg->fg_console->vc_num)
 				/*
 				 * Switch disallowed, so forget we were trying
 				 * to do it.
 				 */
 				vc->vt_newvt = -1;
 
-			else
-			{
+			else {
 				/*
 				 * The current vt has been released, so
 				 * complete the switch.
 				 */
-				int newvt = vc->vt_newvt;
-				i = vc_allocate(newvt);
+				struct vc_data *tmp;
+
+				i = vc_allocate(vc->vt_newvt);
 				vc->vt_newvt = -1;
 				if (i)
 					return i;
+				tmp = find_vc(vc->vt_newvt);
+
 				/*
 				 * When we actually do the console switch,
 				 * make sure we are atomic with respect to
 				 * other console switches..
 				 */
 				spin_lock_irq(&console_lock);
-				complete_change_console(vc->display_fg->vcs.vc_cons[newvt], vc->display_fg->fg_console);
+				complete_change_console(tmp, vc->display_fg->fg_console);
 				spin_unlock_irq(&console_lock);
 			}
-		}
-
-		/*
-		 * Switched-to response
-		 */
-		else
-		{
+		} else {
 			/*
-			 * If it's just an ACK, ignore it
-			 */
+		 	 * Switched-to response. If it's just an ACK, ignore it
+		 	 */
 			if (arg != VT_ACKACQ)
 				return -EINVAL;
 		}
-
 		return 0;
 
+
 	 /*
-	  * Disallocate memory associated to VT (but leave VT1)
+	  * Disallocate memory associated to VCs (but leave all VTs)
 	  */
 	 case VT_DISALLOCATE:
 		if (arg > MAX_NR_CONSOLES)
 			return -ENXIO;
-		if (arg == 0) {
+		if (arg == vc->display_fg->fg_console->vc_num) {
 		    /* disallocate all unused consoles for a VT, 
 		       but leave the active VC */
 		    for (i=1; i < MAX_NR_USER_CONSOLES; i++)
@@ -997,14 +1042,12 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 			vc_disallocate(i);
 		} else {
 		    /* disallocate a single console, if possible */
-		    arg--;
 		    if (VT_BUSY(arg))
 		      return -EBUSY;
-		    if (arg)			      /* leave 0 */
+		    if (arg)			      /* leave displayed VC */
 		      vc_disallocate(arg);
 		}
 		return 0;
-
 	case VT_RESIZE:
 	{
 		struct vt_sizes *vtsizes = (struct vt_sizes *) arg;
@@ -1254,42 +1297,6 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	}
 }
 
-/*
- * Sometimes we want to wait until a particular VT has been activated. We
- * do it in a very simple manner. Everybody waits on a single queue and
- * get woken up at once. Those that are satisfied go on with their business,
- * while those not ready go back to sleep. Seems overkill to add a wait
- * to each vt just for this - usually this does nothing!
- */
-static DECLARE_WAIT_QUEUE_HEAD(vt_activate_queue);
-
-/*
- * Sleeps until a vt is activated, or the task is interrupted. Returns
- * 0 if activation, -EINTR if interrupted.
- */
-int vt_waitactive(int vt)
-{
-	int retval;
-	DECLARE_WAITQUEUE(wait, current);
-
-	add_wait_queue(&vt_activate_queue, &wait);
-	for (;;) {
-		set_current_state(TASK_INTERRUPTIBLE);
-		retval = 0;
-		if (vt == vt_cons->fg_console->vc_num)
-			break;
-		retval = -EINTR;
-		if (signal_pending(current))
-			break;
-		schedule();
-	}
-	remove_wait_queue(&vt_activate_queue, &wait);
-	current->state = TASK_RUNNING;
-	return retval;
-}
-
-#define vt_wake_waitactive() wake_up(&vt_activate_queue)
-
 void reset_vc(struct vc_data *vc)
 {
 	vc->display_fg->vc_mode = KD_TEXT;
@@ -1450,6 +1457,6 @@ void complete_change_console(struct vc_data *new_vc, struct vc_data *old_vc)
 	/*
 	 * Wake anyone waiting for their VT to activate
 	 */
-	vt_wake_waitactive();
+	wake_up(&vt_activate_queue);
 	return;
 }
