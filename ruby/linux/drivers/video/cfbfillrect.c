@@ -25,7 +25,7 @@
 void cfb_fillrect(struct fb_info *p, struct fb_fillrect *rect)  
 {
   unsigned long start_index, end_index, start_mask = 0, end_mask = 0;
-  unsigned long height, ppw, fg;
+  unsigned long height, ppw, fg, fgcolor;
   int i, n, x2, y2, linesize = p->fix.line_length;
   int bpl = sizeof(unsigned long);	
   unsigned long *dst;
@@ -54,11 +54,14 @@ void cfb_fillrect(struct fb_info *p, struct fb_fillrect *rect)
  // printk("end_index is %ld\n", end_index);	
  // printk("width is %d\n", width);	
 
-  fg = rect->color;
+  if (p->fix.visual == FB_VISUAL_TRUECOLOR) 
+	fg = fgcolor = ((u32 *)(p->pseudo_palette))[rect->color];
+  else		
+  	fg = fgcolor = rect->color;
   
-  for (i = 0; i < ppw; i++) {
-    fg <<= p->var.bits_per_pixel;
-    fg |= rect->color;
+  for (i = 0; i < ppw-1; i++) {
+	fg <<= p->var.bits_per_pixel;
+	fg |= fgcolor;	
   }
 
   if (start_index) {

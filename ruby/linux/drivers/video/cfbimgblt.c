@@ -31,6 +31,8 @@
 #include <linux/fb.h>
 #include <asm/types.h>
 
+#include <video/fbcon.h>
+
 #define DEBUG
 
 #ifdef DEBUG
@@ -41,59 +43,65 @@
 
 void cfb_imageblit(struct fb_info *p, struct fb_image *image)
 {
-  unsigned long end_index, end_mask, mask, fgx, bgx, eorx;
-  int ppw, shift, shift_right, shift_left, x2, y2, n, i, j, k;
-  int linesize = p->fix.line_length;
-  unsigned long *dst, *src = NULL;
-  long tmp = -1 >> (BITS_PER_LONG - p->var.bits_per_pixel);
-  u8 *dst1, *src1;
+	unsigned long end_index, end_mask, mask, eorx;
+	int ppw, shift, shift_right, shift_left, x2, y2, n, i, j, k, l;
+	int linesize = p->fix.line_length;
+	unsigned long fgx, bgx, fgcolor, bgcolor;	
+	unsigned long *dst, *src = NULL;
+	long tmp = -1 >> (BITS_PER_LONG - p->var.bits_per_pixel);
+	u8 *dst1, *src1;
   
-  /* We could use hardware clipping but on many cards you get around hardware
-     clipping by writing to framebuffer directly like we are doing here. */
-  x2 = image->x + image->width;
-  y2 = image->y + image->height;
-  image->x = image->x > 0 ? image->x : 0;
-  image->y = image->y > 0 ? image->y : 0;
-  x2 = x2 < p->var.xres_virtual ? x2 : p->var.xres_virtual;
-  y2 = y2 < p->var.yres_virtual ? y2 : p->var.yres_virtual;
-  image->width  = x2 - image->x;
-  image->height = y2 - image->y;
+	/* 
+	 * We could use hardware clipping but on many cards you get around hardware
+	 * clipping by writing to framebuffer directly like we are doing here. 
+	 */
+	x2 = image->dx + image->width;
+	y2 = image->dy + image->height;
+	image->dx = image->dx > 0 ? image->dx : 0;
+	image->dy = image->dy > 0 ? image->dy : 0;
+	x2 = x2 < p->var.xres_virtual ? x2 : p->var.xres_virtual;
+	y2 = y2 < p->var.yres_virtual ? y2 : p->var.yres_virtual;
+	image->width  = x2 - image->dx;
+	image->height = y2 - image->dy;
   
-  dst1 = p->screen_base + image->y * linesize + 
-		((image->x * p->var.bits_per_pixel) >> 3);
+	dst1 = p->screen_base + image->dy * linesize + 
+		((image->dx * p->var.bits_per_pixel) >> 3);
   
-  ppw = BITS_PER_LONG/p->var.bits_per_pixel;
+	ppw = BITS_PER_LONG/p->var.bits_per_pixel;
 
-  src1 = image->data;	
-  
-  fgx = image->fg_color;
+	src1 = image->data;	
+
+	if (p->fix.visual == FB_VISUAL_TRUECOLOR) {
+		fgx = fgcolor = ((u32 *)(p->pseudo_palette))[image->fg_color];
+		bgx = bgcolor = ((u32 *)(p->pseudo_palette))[image->bg_color];
+	} else {
+		fgx = fgcolor = image->fg_color;
+		bgx = bgcolor = image->bg_color;
+	}	
  
-  for (i = 0; i < ppw; i++) {
-    fgx <<= p->var.bits_per_pixel;
-    fgx |= image->fg_color;
-  }
-
-  bgx = image->bg_color;
- 
-  for (i = 0; i < ppw; i++) {
-    bgx <<= p->var.bits_per_pixel;
-    bgx |= image->bg_color;
-  }
-  eorx = fgx ^ bgx;
-
-  for (i = 0; i < image->height; i++) {
-	dst = (unsigned long *) dst1; 
-	for (j = image->width; j > 0; j--) {
-		mask = 0;
-		for (k = 0; k < ppw; k++) {
-			if (test_bit(j-k, src1))
-				mask |= (tmp << (p->var.bits_per_pixel*k));
-		}
-		fb_writel((mask & eorx)^bgx, dst);
-		j -= (k-1);
-		dst++;
+	for (i = 0; i < ppw-1; i++) {
+		fgx <<= p->var.bits_per_pixel;
+		bgx <<= p->var.bits_per_pixel;
+		fgx |= fgcolor;
+		bgx |= bgcolor;
 	}
-	dst1 += p->fix.line_length;	
-	src1++;	
-  }	
+	eorx = fgx ^ bgx;
+	l = 8;
+
+	for (i = 0; i < image->height; i++) {
+		dst = (unsigned long *) dst1;
+		
+		for (j = image->width/ppw; j > 0; j--) {
+			mask = 0;
+			for (k = ppw; k > 0; k--) {
+				if (test_bit(l, src1))
+					mask |= (tmp << (p->var.bits_per_pixel*(ppw-k)));
+				l--;
+				if (!l) { l = 8; src1++; }
+			}
+			fb_writel((mask & eorx)^bgx, dst);
+			dst++;
+		}
+		dst1 += p->fix.line_length;	
+	}	
 }
