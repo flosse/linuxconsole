@@ -404,9 +404,9 @@ void delete_line(struct vc_data *vc, unsigned int nr)
  */
 void set_origin(struct vc_data *vc)
 {
-        origin = (unsigned long) screenbuf;
-        // visible_origin = origin;
-        scr_end = origin + screenbuf_size;
+	scr_end = (unsigned long) screenbuf + screenbuf_size;
+        origin = scr_end - 2*screensize; 
+        visible_origin = origin;
         pos = origin + video_size_row*y + 2*x;
 	if (IS_VISIBLE && sw->con_set_origin)
 		sw->con_set_origin(vc);
@@ -426,7 +426,7 @@ void do_update_region(struct vc_data *vc, unsigned long start, int count)
 
         p = (u16 *) start;
         if (!sw->con_getxy) {
-                offset = (start - origin) / 2;
+                offset = (start - visible_origin) / 2;
                 xx = offset % video_num_columns;
                 yy = offset / video_num_columns;
         } else {
@@ -492,10 +492,8 @@ inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed)
 
         if (!viewed || !sw->con_screen_pos)
                 p = (unsigned short *)(origin + offset);
-	/*
         else if (!sw->con_screen_pos)
                 p = (unsigned short *)(visible_origin + offset);
-	*/ 
         else
                 p = sw->con_screen_pos(vc, offset);
         return p;
@@ -723,6 +721,7 @@ static void visual_init(struct vc_data *vc)
     vc->vc_uni_pagedir = 0;
     hi_font_mask = 0;
     complement_mask = 0;
+    scrollback = 0;
     can_do_color = vc->display_fg->default_mode->vc_can_do_color;
     video_num_columns = vc->display_fg->default_mode->vc_cols;
     video_num_lines = vc->display_fg->default_mode->vc_rows;
@@ -732,8 +731,10 @@ static void visual_init(struct vc_data *vc)
     if (!complement_mask)
         complement_mask = can_do_color ? 0x7700 : 0x0800;
     s_complement_mask = complement_mask;
+    if (!scrollback)	
+	scrollback = 2;
     video_size_row = video_num_columns<<1;
-    screenbuf_size = video_num_lines*video_size_row;
+    screenbuf_size = scrollback*video_num_lines*video_size_row;
 }
 
 const char *create_vt(struct vt_struct *vt, int init)
