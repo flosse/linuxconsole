@@ -773,10 +773,11 @@ static void hid_input_field(struct hid_device *hid, struct hid_field *field, __u
 
 		if (HID_MAIN_ITEM_VARIABLE & field->flags) {
 
-			if ((field->flags & HID_MAIN_ITEM_RELATIVE) && !value[n])
-				continue;
-			if (value[n] == field->value[n])
-				continue;
+			if (field->flags & HID_MAIN_ITEM_RELATIVE) {
+				if (!value[n]) continue;
+			} else {
+				if (value[n] == field->value[n]) continue;
+			}	
 			hid_process_event(hid, field, &field->usage[n], value[n]);
 			continue;
 		}
@@ -1101,8 +1102,8 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 		if ((hid_blacklist[n].idVendor == dev->descriptor.idVendor) &&
 			(hid_blacklist[n].idProduct == dev->descriptor.idProduct)) return NULL;
 
-	if (usb_get_extra_descriptor(interface, USB_DT_HID, &hdesc)
-		&& usb_get_extra_descriptor(&interface->endpoint[0], USB_DT_HID, &hdesc)) {
+	if (usb_get_extra_descriptor(interface, USB_DT_HID, &hdesc) && ((!interface->bNumEndpoints) ||
+		usb_get_extra_descriptor(&interface->endpoint[0], USB_DT_HID, &hdesc))) {
 			dbg("class descriptor not present\n");
 			return NULL;
 	}
@@ -1264,7 +1265,7 @@ static void hid_disconnect(struct usb_device *dev, void *ptr)
 }
 
 static struct usb_device_id hid_usb_ids [] = {
-	{ bInterfaceClass: USB_INTERFACE_CLASS_HID},
+	{ bInterfaceClass: USB_INTERFACE_CLASS_HID },
 	{ }						/* Terminating entry */
 };
 
