@@ -802,23 +802,37 @@ static int tdfxfb_cursor(struct fb_info *info, struct fbcursor *cursor)
          * (128 bits) which is the maximum cursor width times two for
          * the two monochrome patterns. 
 	 */
-	unsigned long bitmap = (unsigned long) cursor->image;
-	unsigned long mask = (unsigned long) cursor->mask;
 	u8 *cursorbase = (u8 *) info->cursor.image;
-	int i, h = 0;
+	char *bitmap = cursor->image;
+	char *mask = cursor->mask;
+	int i, j, k, h = 0;
 
 	for (i = 0; i < 64; i++) {
-		/* Pattern 0. Copy the cursor bitmap to it */
-		fb_writel(bitmap, cursorbase + h);	
-		bitmap++;
-		fb_writel(bitmap, cursorbase + h + 4);
-		bitmap++;
-		/* Pattern 1. Copy the cursor mask to it */
-		fb_writel(mask, cursorbase + h + 8);
-		mask++;
-		fb_writel(mask, cursorbase + h + 12);
-		mask++;
-		h += 16;
+		if (i < cursor->size.y) {
+			j = (cursor->size.x + 7) >> 3;
+			k = 8 - j;			
+
+			for (;j > 0; j--) {
+				/* Pattern 0. Copy the cursor bitmap to it */
+				fb_writeb(*bitmap, cursorbase + h);	
+				bitmap++;
+				/* Pattern 1. Copy the cursor mask to it */
+				fb_writeb(*mask, cursorbase + h + 8);
+				mask++;
+				h++;
+			}
+			for (;k > 0; k--) {
+				fb_writeb(0, cursorbase + h);
+				fb_writeb(~0, cursorbase + h + 8);
+				h++;
+			}
+		} else {
+			fb_writel(0, cursorbase + h);
+			fb_writel(0, cursorbase + h + 4);
+			fb_writel(~0, cursorbase + h + 8);
+			fb_writel(~0, cursorbase + h + 12);
+			h += 16;
+		}	
 	}
    }
    /* Turn the cursor on */
