@@ -38,6 +38,10 @@
 #include <linux/config.h>
 #include <linux/smp_lock.h>
 #include <linux/random.h>
+#include <linux/major.h>
+#ifdef CONFIG_INPUT_MOUSEDEV_PSAUX
+#include <linux/miscdevice.h>
+#endif
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
 MODULE_DESCRIPTION("Mouse (ExplorerPS/2) device interfaces");
@@ -228,7 +232,7 @@ static int mousedev_open(struct inode * inode, struct file * file)
 	int i;
 
 #ifdef CONFIG_INPUT_MOUSEDEV_PSAUX
-	if (major(inode->i_rdev) == MISC_MAJOR))
+	if (major(inode->i_rdev) == MISC_MAJOR)
 		i = MOUSEDEV_MIX;
 	else
 #endif
@@ -518,7 +522,7 @@ static int __init mousedev_init(void)
 	mousedev_mix.minor = MOUSEDEV_MIX;
 	mousedev_mix.devfs = input_register_minor("mice", MOUSEDEV_MIX, MOUSEDEV_MINOR_BASE);
 #ifdef CONFIG_INPUT_MOUSEDEV_PSAUX
-	misc_register(&psaux_mouse)
+	misc_register(&psaux_mouse);
 #endif
 
 	printk(KERN_INFO "mice: PS/2 mouse device common for all mice\n");
@@ -529,7 +533,7 @@ static int __init mousedev_init(void)
 static void __exit mousedev_exit(void)
 {
 #ifdef CONFIG_INPUT_MOUSEDEV_PSAUX
-	misc_deregister(&psaux_mouse)
+	misc_deregister(&psaux_mouse);
 #endif
 	input_unregister_minor(mousedev_mix.devfs);
 	input_unregister_handler(&mousedev_handler);

@@ -1066,6 +1066,7 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 {
 	struct input_handle *handle;
 	struct vt_struct *vt = vt_cons;
+	struct vc_data *vc;
 	int i;
 
 	for (i = KEY_RESERVED; i < BTN_MISC; i++)
@@ -1112,6 +1113,7 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 static void kbd_disconnect(struct input_handle *handle)
 {
 	struct vt_struct *vt = handle->private;
+	struct vc_data *vc;
  	int i;
 
 	if (vt && vt->keyboard == handle) {
