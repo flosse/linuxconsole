@@ -1468,7 +1468,8 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
         }
 	/* I think this is wrong. Only should happen when visible? */
         set_cursor(vc);
-        poke_blanked_console(vc->display_fg);
+	if (!oops_in_progress)
+        	poke_blanked_console(vc->display_fg);
 quit:
         clear_bit(0, &printing);
 }
