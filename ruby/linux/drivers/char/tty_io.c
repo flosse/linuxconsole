@@ -368,6 +368,8 @@ int tty_check_change(struct tty_struct * tty)
 	return -ERESTARTSYS;
 }
 
+EXPORT_SYMBOL(tty_check_change);
+
 static ssize_t hung_up_tty_read(struct file * file, char * buf,
 				size_t count, loff_t *ppos)
 {
@@ -535,6 +537,8 @@ void tty_hangup(struct tty_struct * tty)
 	schedule_work(&tty->hangup_work);
 }
 
+EXPORT_SYMBOL(tty_hangup);
+
 void tty_vhangup(struct tty_struct * tty)
 {
 #ifdef TTY_DEBUG_HANGUP
@@ -550,6 +554,8 @@ int tty_hung_up_p(struct file * filp)
 {
 	return (filp->f_op == &hung_up_tty_fops);
 }
+
+EXPORT_SYMBOL(tty_hung_up_p);
 
 /*
  * This function is typically called only by the session leader, when
@@ -1881,6 +1887,8 @@ void do_SAK(struct tty_struct *tty)
 	schedule_work(&tty->SAK_work);
 }
 
+EXPORT_SYMBOL(do_SAK);
+
 /*
  * This routine is called out of the software interrupt to flush data
  * from the flip buffer to the line discipline.
@@ -1941,33 +1949,43 @@ static int baud_table[] = {
 #endif
 };
 
-static int n_baud_table = sizeof(baud_table)/sizeof(int);
+static int n_baud_table = ARRAY_SIZE(baud_table);
+
+int tty_termios_baud_rate(struct termios *termios)
+{
+	unsigned int cbaud = termios->c_cflag & CBAUD;
+
+	if (cbaud & CBAUDEX) {
+		cbaud &= ~CBAUDEX;
+
+		if (cbaud < 1 || cbaud + 15 > n_baud_table)
+			termios->c_cflag &= ~CBAUDEX;
+		else
+			cbaud += 15;
+	}
+
+	return baud_table[cbaud];
+}
+
+EXPORT_SYMBOL(tty_termios_baud_rate);
 
 int tty_get_baud_rate(struct tty_struct *tty)
 {
-	unsigned int cflag, i;
+	int baud = tty_termios_baud_rate(tty->termios);
 
-	cflag = tty->termios->c_cflag;
-
-	i = cflag & CBAUD;
-	if (i & CBAUDEX) {
-		i &= ~CBAUDEX;
-		if (i < 1 || i+15 >= n_baud_table) 
-			tty->termios->c_cflag &= ~CBAUDEX;
-		else
-			i += 15;
-	}
-	if (i==15 && tty->alt_speed) {
+	if (baud == 38400 && tty->alt_speed) {
 		if (!tty->warned) {
 			printk(KERN_WARNING "Use of setserial/setrocket to "
 					    "set SPD_* flags is deprecated\n");
 			tty->warned = 1;
 		}
-		return(tty->alt_speed);
+		baud = tty->alt_speed;
 	}
 	
-	return baud_table[i];
+	return baud;
 }
+
+EXPORT_SYMBOL(tty_get_baud_rate);
 
 void tty_flip_buffer_push(struct tty_struct *tty)
 {
@@ -2199,7 +2217,7 @@ void __init console_init(void)
 #ifdef CONFIG_TN3270_CONSOLE
 	tub3270_con_init();
 #endif
-#ifdef CONFIG_TN3215
+#ifdef CONFIG_TN3215_CONSOLE
 	con3215_init();
 #endif
 #ifdef CONFIG_SCLP_CONSOLE
@@ -2329,10 +2347,7 @@ void __init tty_init(void)
 #ifdef CONFIG_TN3270
 	tub3270_init();
 #endif
-#ifdef CONFIG_TN3215
-	tty3215_init();
-#endif
-#ifdef CONFIG_SCLP
+#ifdef CONFIG_SCLP_TTY
 	sclp_tty_init();
 #endif
 #ifdef CONFIG_A2232
