@@ -10,6 +10,3 @@ obj-$(CONFIG_ARCH_ACORN)	+= i2c.o pcf8583.o
 obj-y		+= $(obj-$(MACHINE))
 
 include $(TOPDIR)/Rules.make
-
-%.c: %.map
-	loadkeys --mktable $< > $@

@@ -386,7 +386,6 @@ if [ "$CONFIG_CD_NO_IDESCSI" != "n" ]; then
 fi
 endmenu
 
-source drivers/usb/Config.in
 source drivers/input/Config.in
 source drivers/char/Config.in
 
@@ -412,12 +411,14 @@ if [ "$CONFIG_DECSTATION" = "y" ]; then
 #      bool 'MAXINE Access.Bus mouse (VSXXX-BB/GB) support' CONFIG_DTOP_MOUSE
 #   fi
    bool 'Enhanced Real Time Clock Support' CONFIG_RTC
+
    endmenu
 fi
 
 if [ "$CONFIG_SGI_IP22" = "y" ]; then
    mainmenu_option next_comment
    comment 'SGI Character devices'
+   
    bool 'Unix98 PTY support' CONFIG_UNIX98_PTYS
    if [ "$CONFIG_UNIX98_PTYS" = "y" ]; then
       int 'Maximum number of Unix98 PTYs in use (0-2048)' CONFIG_UNIX98_PTY_COUNT 256
@@ -426,6 +427,7 @@ if [ "$CONFIG_SGI_IP22" = "y" ]; then
 fi
 
 source fs/Config.in
+
 source drivers/video/Config.in
 
 if [ "$CONFIG_DECSTATION" != "y" ]; then
@@ -442,6 +444,8 @@ fi
 if [ "$CONFIG_SGI_IP22" = "y" ]; then
    source drivers/sgi/Config.in
 fi
+
+source drivers/usb/Config.in
 
 mainmenu_option next_comment
 comment 'Kernel hacking'
