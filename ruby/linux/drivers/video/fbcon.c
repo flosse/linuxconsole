@@ -196,16 +196,79 @@ __setup("fbcon=", fbcon_setup);
  */
 
 /* NOTE: fbcon cannot be __init: it may be called from take_over_console later */
-
 static const char *fbcon_startup(struct vt_struct *vt, int init)
 {
     const char *display_desc = "frame buffer device";
-    
+    struct vc_data *vc = vt->default_mode;
+    struct fbcon_font_desc *font = NULL;
+    struct fb_info *info;
+    struct module *owner;	
+    int index;	
+
+    /*
+     *  If num_registered_fb is zero, this is a call for the dummy part.
+     *  The frame buffer devices weren't initialized yet.
+     */
+    if (!num_registered_fb)
+        return display_desc;
+
+    index = num_registered_fb--;
+//    info = kmalloc(sizeof(struct fb_info), GFP_KERNEL);
+    info = registered_fb[index]; 			   
+    owner = info->fbops->owner;	
+
+    if (owner)
+        __MOD_INC_USE_COUNT(owner);
+    if (info->fbops->fb_open && info->fbops->fb_open(info, 0) && owner)
+         __MOD_DEC_USE_COUNT(owner);
+	
+    DPRINTK("mode:   %s\n", info->fix.id);
+    DPRINTK("visual: %d\n", info->fix.visual);
+    DPRINTK("res:    %dx%d-%d\n",info->var.xres, info->var.yres, info->var.bits_per_pixel); 
+
+    if (info->flags & FBINFO_FLAG_MODULE)
+        logo = 0;
+
+    p->var.xoffset = p->var.yoffset = 0;  /* reset wrap/pan */
+
+    if (!fontname[0] || !(font = fbcon_find_font(fontname[0]))) 
+	font = fbcon_get_default_font(info->var.xres, info->var.yres);
+
+    if (!font)
+	prinkt(KERN_ERR "fbcon_startup: No default font detect.\n");	
+
+    vc->vc_font.width = font->width;
+    vc->vc_font.height = font->height;
+    vc->vc_font.data = font->data;
+	
+    if (!fontwidthvalid(p, vc->vc_font.width)) {
+        /* ++Geert: changed from panic() to `correct and continue' */
+        printk(KERN_ERR "fbcon_startup: No support for fontwidth %d\n", fontwidth(p));
+    }
+
+    vc->vc_cols = info->var.xres/vc->vc_font.width;
+    vc->vc_rows = info->var.yres/vc->vc_font.height;
+    	
+    vrows = info->var.yres_virtual/vc->vc_font.height;
+    if ((info->var.yres % vc->vc_font.height) &&
+    	(info->var.yres_virtual % vc->vc_font.height < info->var.yres % vc->vc_font.height))
+        p->vrows--;
+
+    if (logo) {
+	/* Need to make room for the logo */
+    }	
+
+    vt->data_hook = par;  
+
     return display_desc;
 }
 
 static void fbcon_init(struct vc_data *vc)
 {
+    vc->vc_can_do_color = p->var.bits_per_pixel != 1;
+    vc->vc_complement_mask = vc->vc_can_do_color ? 0x7700 : 0x0800;
+    if (charcnt == 256) 
+        vc->vc_hi_font_mask = 0;
 }
 
 static void fbcon_deinit(struct vc_data *vc)
@@ -219,6 +282,7 @@ static void fbcon_clear(struct vc_data *vc, int sy, int sx, int height,
 
 static void fbcon_putc(struct vc_data *vc, int c, int ypos, int xpos)
 {
+    	
 }
 
 static void fbcon_putcs(struct vc_data *vc, const unsigned short *s, 
