@@ -51,7 +51,7 @@ struct usb_mouse {
 	char phys[64];
 	struct usb_device *usbdev;
 	struct input_dev dev;
-	struct urb irq;
+	struct urb *irq;
 	int open;
 };
 
@@ -81,8 +81,8 @@ static int usb_mouse_open(struct input_dev *dev)
 	if (mouse->open++)
 		return 0;
 
-	mouse->irq.dev = mouse->usbdev;
-	if (usb_submit_urb(&mouse->irq))
+	mouse->irq->dev = mouse->usbdev;
+	if (usb_submit_urb(mouse->irq, GFP_KERNEL))
 		return -EIO;
 
 	return 0;
@@ -93,7 +93,7 @@ static void usb_mouse_close(struct input_dev *dev)
 	struct usb_mouse *mouse = dev->private;
 
 	if (!--mouse->open)
-		usb_unlink_urb(&mouse->irq);
+		usb_unlink_urb(mouse->irq);
 }
 
 static void *usb_mouse_probe(struct usb_device *dev, unsigned int ifnum,
@@ -121,6 +121,12 @@ static void *usb_mouse_probe(struct usb_device *dev, unsigned int ifnum,
 
 	if (!(mouse = kmalloc(sizeof(struct usb_mouse), GFP_KERNEL))) return NULL;
 	memset(mouse, 0, sizeof(struct usb_mouse));
+
+	mouse->irq = usb_alloc_urb(0, GFP_KERNEL);
+	if (!mouse->irq) {
+		kfree(mouse);
+		return NULL;
+	}
 
 	mouse->usbdev = dev;
 
@@ -162,7 +168,7 @@ static void *usb_mouse_probe(struct usb_device *dev, unsigned int ifnum,
 
 	kfree(buf);
 
-	FILL_INT_URB(&mouse->irq, dev, pipe, mouse->data, maxp > 8 ? 8 : maxp,
+	FILL_INT_URB(mouse->irq, dev, pipe, mouse->data, maxp > 8 ? 8 : maxp,
 		usb_mouse_irq, mouse, endpoint->bInterval);
 
 	input_register_device(&mouse->dev);
@@ -175,8 +181,9 @@ static void *usb_mouse_probe(struct usb_device *dev, unsigned int ifnum,
 static void usb_mouse_disconnect(struct usb_device *dev, void *ptr)
 {
 	struct usb_mouse *mouse = ptr;
-	usb_unlink_urb(&mouse->irq);
+	usb_unlink_urb(mouse->irq);
 	input_unregister_device(&mouse->dev);
+	usb_free_urb(mouse->irq);
 	kfree(mouse);
 }
 
