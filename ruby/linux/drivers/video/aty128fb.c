@@ -40,8 +40,6 @@
 #include <asm/uaccess.h>
 #include <linux/fb.h>
 #include <linux/init.h>
-#include <linux/selection.h>
-#include <linux/console.h>
 #include <linux/pci.h>
 #include <linux/ioport.h>
 #include <asm/io.h>
@@ -67,12 +65,6 @@
 #ifdef CONFIG_FB_COMPAT_XPMAC
 #include <asm/vc_ioctl.h>
 #endif
-
-#include <video/fbcon.h>
-#include <video/fbcon-cfb8.h>
-#include <video/fbcon-cfb16.h>
-#include <video/fbcon-cfb24.h>
-#include <video/fbcon-cfb32.h>
 
 #ifdef CONFIG_MTRR
 #include <asm/mtrr.h>
@@ -218,7 +210,6 @@ static const struct aty128_meminfo ddr_sgram =
 static char fontname[40] __initdata = { 0 };
 
 static int  noaccel __initdata = 0;
-static char *font __initdata = NULL;
 static char *mode __initdata = NULL;
 static int  nomtrr __initdata = 0;
 
@@ -290,32 +281,13 @@ struct fb_info_aty128 {
 
 static struct fb_info_aty128 *board_list = NULL;
 static u32 aty128fb_pseudo_palette[17];
-static struct display disp;
 static struct aty128fb_par default_par;
-static struct fb_info info;
 
 #define round_div(n, d) ((n+(d/2))/d)
 
     /*
-     *  Interface used by the world
-     */
-int aty128fb_init(void);
-int aty128fb_setup(char *options);
-
-static int aty128fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info);
-static int aty128fb_set_var(struct fb_var_screeninfo *var, int con,
-		       struct fb_info *info);
-static int aty128fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-				u_int transp, struct fb_info *info);
-static int aty128fb_pan_display(struct fb_var_screeninfo *var, int con,
-			   struct fb_info *fb);
-static void aty128fb_blank(int blank, struct fb_info *fb);
-
-    /*
      *  Internal routines
      */
-static void aty128_set_dispsw(struct display *disp,
-			struct fb_info *info);
 static int aty128_pci_register(struct pci_dev *pdev,
                                const struct aty128_chip_info *aci);
 static struct fb_info_aty128 *aty128_board_list_add(struct fb_info_aty128
@@ -334,48 +306,31 @@ static void wait_for_fifo(u16 entries, struct aty128fb_par *par);
 static void wait_for_idle(struct aty128fb_par *par);
 static u32 bpp_to_depth(u32 bpp);
 
-#ifdef FBCON_HAS_CFB8
-static struct display_switch fbcon_aty128_8;
-static void fbcon_aty8_putc(struct vc_data *conp, struct display *p,
-                            int c, int yy, int xx);
-static void fbcon_aty8_putcs(struct vc_data *conp, struct display *p,
-                             const unsigned short *s, int count,
-                             int yy, int xx);
-#endif
-#ifdef FBCON_HAS_CFB16
-static struct display_switch fbcon_aty128_16;
-static void fbcon_aty16_putc(struct vc_data *conp, struct display *p,
-                            int c, int yy, int xx);
-static void fbcon_aty16_putcs(struct vc_data *conp, struct display *p,
-                             const unsigned short *s, int count,
-                             int yy, int xx);
-#endif
-#ifdef FBCON_HAS_CFB24
-static struct display_switch fbcon_aty128_24;
-static void fbcon_aty24_putc(struct vc_data *conp, struct display *p,
-                            int c, int yy, int xx);
-static void fbcon_aty24_putcs(struct vc_data *conp, struct display *p,
-                             const unsigned short *s, int count,
-                             int yy, int xx);
-#endif
-#ifdef FBCON_HAS_CFB32
-static struct display_switch fbcon_aty128_32;
-static void fbcon_aty32_putc(struct vc_data *conp, struct display *p,
-                            int c, int yy, int xx);
-static void fbcon_aty32_putcs(struct vc_data *conp, struct display *p,
-                             const unsigned short *s, int count,
-                             int yy, int xx);
-#endif
+    /*
+     *  Interface used by the world
+     */
+int aty128fb_init(void);
+int aty128fb_setup(char *options);
+
+static int aty128fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info);
+static int aty128fb_set_par(struct fb_info *info);
+static int aty128fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+				u_int transp, struct fb_info *info);
+static int aty128fb_pan_display(struct fb_var_screeninfo *var, 
+			   	struct fb_info *fb);
+static int aty128fb_blank(int blank, struct fb_info *fb);
+
 
 static struct fb_ops aty128fb_ops = {
 	owner:		THIS_MODULE,
+	fb_check_var:	aty128fb_check_var,
+	fb_set_par:	aty128fb_set_par,
 	fb_setcolreg:	aty128fb_setcolreg,
-	fb_get_fix:	fbgen_get_fix,
-	fb_get_var:	fbgen_get_var,
-	fb_set_var:	aty128fb_set_var,
-	fb_get_cmap:	fbgen_get_cmap,
-	fb_set_cmap:	fbgen_set_cmap,
 	fb_pan_display:	aty128fb_pan_display,
+	fb_blank:	aty128fb_blank,
+	fb_fillrect:	cfb_fillrect,
+	fb_copyarea:    cfb_copyarea,
+   	fb_imageblit:   cfb_imageblit,
 };
 
 #ifdef CONFIG_PMAC_BACKLIGHT
@@ -1055,8 +1010,7 @@ aty128fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 /*
  * This actually sets the video mode.
  */
-static void
-aty128_set_par(struct fb_info *info)
+static int aty128fb_set_par(struct fb_info *info)
 { 
     struct aty128fb_par *par;
     u32 config;
@@ -1128,96 +1082,7 @@ aty128_set_par(struct fb_info *info)
 	display_info.disp_reg_address = info->mmio_start;
     }
 #endif /* CONFIG_FB_COMPAT_XPMAC */
-}
-
-    /*
-     *  Set the User Defined Part of the Display
-     */
-
-static int
-aty128fb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
-{
-    struct display *display;
-    int oldbpp, err;
-
-    display = (con >= 0) ? &fb_display[con] : info->disp;
-
-    if (memcmp(&info->var, var, sizeof(var)) || con < 0) {
-    	if ((err = aty128fb_check_var(var, info)))
-        	return err;
-    
-    	if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
-    		oldbpp = display->var.bits_per_pixel;
-    
-		info->var = *var;
-	
-		aty128_set_par(info);
-
-        	display->screen_base = info->screen_base;
-    		display->var = *var;
-		display->visual = info->fix.visual;
-		display->type = info->fix.type;
-		display->type_aux = info->fix.type_aux;
-		display->ypanstep = info->fix.ypanstep;
-		display->ywrapstep = info->fix.ywrapstep;
-		display->line_length = info->fix.line_length;
-		display->can_soft_blank = 1;
-		display->inverse = 0;
-
-        	aty128_set_dispsw(display, info);
-
-		if (var->accel_flags & FB_ACCELF_TEXT)
-	    		display->scrollmode = SCROLL_YNOMOVE;
-		else
-	    		display->scrollmode = SCROLL_YREDRAW;
-
-		if (info->changevar)
-	    		(*info->changevar)(con);
-    	
-		if (oldbpp != var->bits_per_pixel) {
-			if ((err = fb_alloc_cmap(&info->cmap, 0, 0)))
-	    			return err;
-    			fb_set_cmap(&info->cmap, 1, 
-				info->fbops->fb_setcolreg, info);
-		}
-	}
-    }		 
-    return 0;
-}
-
-static void
-aty128_set_dispsw(struct display *disp, struct fb_info *info)
-{
-    int accel = info->var.accel_flags & FB_ACCELF_TEXT;
-
-    switch (info->var.bits_per_pixel) {
-#ifdef FBCON_HAS_CFB8
-    case 8:
-	disp->dispsw = accel ? &fbcon_aty128_8 : &fbcon_cfb8;
-	break;
-#endif
-#ifdef FBCON_HAS_CFB16
-    case 15:
-    case 16:
-	disp->dispsw = accel ? &fbcon_aty128_16 : &fbcon_cfb16;
-	disp->dispsw_data = info->pseudo_palette;
-	break;
-#endif
-#ifdef FBCON_HAS_CFB24
-    case 24:
-	disp->dispsw = accel ? &fbcon_aty128_24 : &fbcon_cfb24;
-	disp->dispsw_data = info->pseudo_palette; 
-	break;
-#endif
-#ifdef FBCON_HAS_CFB32
-    case 32:
-	disp->dispsw = accel ? &fbcon_aty128_32 : &fbcon_cfb32;
-	disp->dispsw_data = info->pseudo_palette; 
-	break;
-#endif
-    default:
-	disp->dispsw = &fbcon_dummy;
-    }
+    return 0;	
 }
 
     /*
@@ -1226,8 +1091,7 @@ aty128_set_dispsw(struct display *disp, struct fb_info *info)
      *  Not supported (yet!)
      */
 static int
-aty128fb_pan_display(struct fb_var_screeninfo *var, int con,
-			   struct fb_info *info)
+aty128fb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 {
     struct aty128fb_par *par = (struct aty128fb_par *) info->par;
     u32 xoffset, yoffset;
@@ -1342,15 +1206,8 @@ aty128_init(struct fb_info *info, struct pci_dev *pdev, const char *name)
 	printk("%dk %s\n", info->fix.smem_len / 1024, default_par.mem->name);
 
     /* fill in info */
-    strcpy(info->modename, info->fix.id);
     info->node  = -1;
     info->fbops = &aty128fb_ops;
-    info->disp  = &disp;
-    strcpy(info->fontname, fontname);
-    info->changevar  = NULL;
-    info->switch_con = &fbgen_switch;
-    info->updatevar  = NULL;
-    info->blank = &aty128fb_blank;
     info->flags = FBINFO_FLAG_DEFAULT;
 
     var = default_var;
@@ -1398,9 +1255,6 @@ aty128_init(struct fb_info *info, struct pci_dev *pdev, const char *name)
 
     /* turn off bus mastering, just in case */
     aty_st_le32(BUS_CNTL, aty_ld_le32(BUS_CNTL) | BUS_MASTER_DIS);
-
-    aty128fb_set_var(&var, -1, info);
-    aty128_init_engine(info);
 
     //board_list = aty128_board_list_add(board_list, info);
 
@@ -1504,8 +1358,6 @@ aty128_pci_register(struct pci_dev *pdev,
 
 	/* Copy PCI device info into info->pdev */
 	default_par.pdev = pdev;
-
-	info->currcon = -1;
 
 	info->fix = aty128fb_fix;
 	
@@ -1753,8 +1605,7 @@ aty128_timings(struct aty128fb_par *par)
     /*
      *  Blank the display.
      */
-static void
-aty128fb_blank(int blank, struct fb_info *info)
+static int aty128fb_blank(int blank, struct fb_info *info)
 {
     struct aty128fb_par *par = (struct aty128fb_par *) info->par;
     u8 state = 0;
@@ -1777,6 +1628,7 @@ aty128fb_blank(int blank, struct fb_info *info)
     if ((_machine == _MACH_Pmac) && !blank)
     	set_backlight_enable(1);
 #endif /* CONFIG_PMAC_BACKLIGHT */
+    return 0;	
 }
 
     /*
@@ -1946,218 +1798,6 @@ aty128_rectcopy(int srcx, int srcy, int dstx, int dsty,
     aty_st_le32(DP_DATATYPE, save_dp_datatype);
     aty_st_le32(DP_CNTL, save_dp_cntl); 
 }
-
-    /*
-     * Text mode accelerated functions
-     */
-
-static void
-fbcon_aty128_bmove(struct display *p, int sy, int sx, int dy, int dx,
-			int height, int width)
-{
-    sx     *= fontwidth(p);
-    sy     *= fontheight(p);
-    dx     *= fontwidth(p);
-    dy     *= fontheight(p);
-    width  *= fontwidth(p);
-    height *= fontheight(p);
-
-    aty128_rectcopy(sx, sy, dx, dy, width, height, p->fb_info);
-}
-
-
-#ifdef FBCON_HAS_CFB8
-static void fbcon_aty8_putc(struct vc_data *conp, struct display *p,
-                            int c, int yy, int xx)
-{
-    struct aty128fb_par *par = (struct aty128fb_par *) p->fb_info->par;	
-
-    if (par->blitter_may_be_busy)
-        wait_for_idle(par);
-
-    fbcon_cfb8_putc(conp, p, c, yy, xx);
-}
-
-
-static void fbcon_aty8_putcs(struct vc_data *conp, struct display *p,
-                             const unsigned short *s, int count,
-                             int yy, int xx)
-{
-    struct aty128fb_par *par = (struct aty128fb_par *) p->fb_info->par;	
-
-    if (par->blitter_may_be_busy)
-        wait_for_idle(par);
-
-    fbcon_cfb8_putcs(conp, p, s, count, yy, xx);
-}
-
-
-static void fbcon_aty8_clear_margins(struct vc_data *conp,
-                                     struct display *p, int bottom_only)
-{
-    struct aty128fb_par *par = (struct aty128fb_par *) p->fb_info->par;	
-
-    if (par->blitter_may_be_busy)
-        wait_for_idle(par);
-
-    fbcon_cfb8_clear_margins(conp, p, bottom_only);
-}
-
-static struct display_switch fbcon_aty128_8 = {
-    setup:		fbcon_cfb8_setup,
-    bmove:		fbcon_aty128_bmove,
-    clear:		fbcon_cfb8_clear,
-    putc:		fbcon_aty8_putc,
-    putcs:		fbcon_aty8_putcs,
-    revc:		fbcon_cfb8_revc,
-    clear_margins:	fbcon_aty8_clear_margins,
-    fontwidthmask:	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
-};
-#endif
-#ifdef FBCON_HAS_CFB16
-static void fbcon_aty16_putc(struct vc_data *conp, struct display *p,
-                            int c, int yy, int xx)
-{
-    struct aty128fb_par *par = (struct aty128fb_par *) p->fb_info->par;	
-
-    if (par->blitter_may_be_busy)
-        wait_for_idle(par);
-
-    fbcon_cfb16_putc(conp, p, c, yy, xx);
-}
-
-
-static void fbcon_aty16_putcs(struct vc_data *conp, struct display *p,
-                             const unsigned short *s, int count,
-                             int yy, int xx)
-{
-    struct aty128fb_par *par = (struct aty128fb_par *) p->fb_info->par;	
-
-    if (par->blitter_may_be_busy)
-        wait_for_idle(par);
-
-    fbcon_cfb16_putcs(conp, p, s, count, yy, xx);
-}
-
-
-static void fbcon_aty16_clear_margins(struct vc_data *conp,
-                                     struct display *p, int bottom_only)
-{
-    struct aty128fb_par *par = (struct aty128fb_par *) p->fb_info->par;	
-
-    if (par->blitter_may_be_busy)
-        wait_for_idle(par);
-
-    fbcon_cfb16_clear_margins(conp, p, bottom_only);
-}
-
-static struct display_switch fbcon_aty128_16 = {
-    setup:		fbcon_cfb16_setup,
-    bmove:		fbcon_aty128_bmove,
-    clear:		fbcon_cfb16_clear,
-    putc:		fbcon_aty16_putc,
-    putcs:		fbcon_aty16_putcs,
-    revc:		fbcon_cfb16_revc,
-    clear_margins:	fbcon_aty16_clear_margins,
-    fontwidthmask:	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
-};
-#endif
-#ifdef FBCON_HAS_CFB24
-static void fbcon_aty24_putc(struct vc_data *conp, struct display *p,
-                            int c, int yy, int xx)
-{
-    struct aty128fb_par *par = (struct aty128fb_par *) p->fb_info->par;	
-
-    if (par->blitter_may_be_busy)
-        wait_for_idle(par);
-
-    fbcon_cfb24_putc(conp, p, c, yy, xx);
-}
-
-
-static void fbcon_aty24_putcs(struct vc_data *conp, struct display *p,
-                             const unsigned short *s, int count,
-                             int yy, int xx)
-{
-    struct aty128fb_par *par = (struct aty128fb_par *) p->fb_info->par;	
-
-    if (par->blitter_may_be_busy)
-        wait_for_idle(par);
-
-    fbcon_cfb24_putcs(conp, p, s, count, yy, xx);
-}
-
-
-static void fbcon_aty24_clear_margins(struct vc_data *conp,
-                                     struct display *p, int bottom_only)
-{
-    struct aty128fb_par *par = (struct aty128fb_par *) p->fb_info->par;	
-
-    if (par->blitter_may_be_busy)
-        wait_for_idle(par);
-
-    fbcon_cfb24_clear_margins(conp, p, bottom_only);
-}
-
-static struct display_switch fbcon_aty128_24 = {
-    setup:		fbcon_cfb24_setup,
-    bmove:		fbcon_aty128_bmove,
-    clear:		fbcon_cfb24_clear,
-    putc:		fbcon_aty24_putc,
-    putcs:		fbcon_aty24_putcs,
-    revc:		fbcon_cfb24_revc,
-    clear_margins:	fbcon_aty24_clear_margins,
-    fontwidthmask:	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
-};
-#endif
-#ifdef FBCON_HAS_CFB32
-static void fbcon_aty32_putc(struct vc_data *conp, struct display *p,
-                            int c, int yy, int xx)
-{
-    struct aty128fb_par *par = (struct aty128fb_par *) p->fb_info->par;	
-
-    if (par->blitter_may_be_busy)
-        wait_for_idle(par);
-
-    fbcon_cfb32_putc(conp, p, c, yy, xx);
-}
-
-
-static void fbcon_aty32_putcs(struct vc_data *conp, struct display *p,
-                             const unsigned short *s, int count,
-                             int yy, int xx)
-{
-    struct aty128fb_par *par = (struct aty128fb_par *) p->fb_info->par;	
-
-    if (par->blitter_may_be_busy)
-        wait_for_idle(par);
-
-    fbcon_cfb32_putcs(conp, p, s, count, yy, xx);
-}
-
-
-static void fbcon_aty32_clear_margins(struct vc_data *conp,
-                                     struct display *p, int bottom_only)
-{
-    struct aty128fb_par *par = (struct aty128fb_par *) p->fb_info->par;	
-
-    if (par->blitter_may_be_busy)
-        wait_for_idle(par);
-
-    fbcon_cfb32_clear_margins(conp, p, bottom_only);
-}
-
-static struct display_switch fbcon_aty128_32 = {
-    setup:		fbcon_cfb32_setup,
-    bmove:		fbcon_aty128_bmove,
-    clear:		fbcon_cfb32_clear,
-    putc:		fbcon_aty32_putc,
-    putcs:		fbcon_aty32_putcs,
-    revc:		fbcon_cfb32_revc,
-    clear_margins:	fbcon_aty32_clear_margins,
-    fontwidthmask:	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16)
-};
-#endif
 
 #ifdef MODULE
 MODULE_AUTHOR("(c)1999-2000 Brad Douglas <brad@neruo.com>");
