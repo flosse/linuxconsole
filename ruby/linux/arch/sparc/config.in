@@ -185,6 +185,11 @@ if [ "$CONFIG_NET" = "y" ]; then
    if [ "$CONFIG_NETDEVICES" = "y" ]; then
       tristate '  Dummy net driver support' CONFIG_DUMMY
       tristate '  Bonding driver support' CONFIG_BONDING
+      if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
+        if [ "$CONFIG_NETLINK" = "y" ]; then
+          tristate '  Ethertap network tap (EXPERIMENTAL)' CONFIG_ETHERTAP
+        fi
+      fi
       tristate '  PPP (point-to-point) support' CONFIG_PPP
       if [ ! "$CONFIG_PPP" = "n" ]; then
         dep_tristate '  PPP support for async serial ports' CONFIG_PPP_ASYNC $CONFIG_PPP
