@@ -269,6 +269,10 @@ static int evdev_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 			}
 			else return -ENOSYS;
 
+		case EVIOCGEFFECTS:
+			put_user(dev->ff_effects_max, (int*) arg);
+			return 0;
+
 		default:
 
 			if (_IOC_TYPE(cmd) != 'E' || _IOC_DIR(cmd) != _IOC_READ)
