@@ -172,7 +172,7 @@ static inline void write_vga(unsigned char reg, unsigned int val)
 #define blackwmap 0xa0000
 #define cmapsz 8192
 
-int vga_do_font_op(char *arg, int set, int ch512)
+int vga_do_font_op(struct vc_data *vc, char *arg, int set, int ch512)
 {
         int beg, i, font_select = 0x00;
         char *charmap;
@@ -268,10 +268,9 @@ int vga_do_font_op(char *arg, int set, int ch512)
 
         /* if 512 char mode is already enabled don't re-enable it. */
         if ((set)&&(ch512!=vga_512_chars)) {    /* attribute controller */
-                vga_512_chars=ch512;
                 /* 256-char: enable intensity bit
-                   512-char: disable intensity bit */
-
+		   512-char: disable intensity bit */
+		vga_512_chars=ch512;
                 /* clear address flip-flop */
                 vga_io_r(vc->vc_can_do_color ? VGA_IS1_RC : VGA_IS1_RM);
                 /* color plane enable register */
@@ -439,9 +438,9 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 
 	if (init) {
 		if (vga_512_chars)
-			vga_do_font_op(vga_fonts, 0, 0);
+			vga_do_font_op(vc, vga_fonts, 0, 0);
 		else 
-			vga_do_font_op(vga_fonts, 0, 1);
+			vga_do_font_op(vc, vga_fonts, 0, 1);
 	} else {
         	int i;
 
@@ -452,9 +451,9 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
                	vga_clock_chip(&vgacon_state, 0, 1, 1);
                	vga_set_mode(&vgacon_state, 0);
                	if (vga_512_chars)
-                	vga_do_font_op(vga_fonts, 1, 1);
+                	vga_do_font_op(vc, vga_fonts, 1, 1);
                 else
-                        vga_do_font_op(vga_fonts, 1, 0);
+                        vga_do_font_op(vc, vga_fonts, 1, 0);
                	/* now set the DAC registers back to their
                    default values */
               	for (i=0; i<16; i++) {
@@ -732,7 +731,7 @@ static int vgacon_font_op(struct vc_data *vc, struct console_font_op *op)
 	if (op->op == KD_FONT_OP_SET) {
 		if (op->width != 8 || (op->charcount != 256 && op->charcount != 512))
 			return -EINVAL;
-		rc = vga_do_font_op(op->data, 1, op->charcount == 512);
+		rc = vga_do_font_op(vc, op->data, 1, op->charcount == 512);
 		if (!rc && !(op->flags & KD_FONT_FLAG_DONT_RECALC))
 			rc = vgacon_adjust_height(vc, op->height);
 	} else if (op->op == KD_FONT_OP_GET) {
@@ -740,7 +739,7 @@ static int vgacon_font_op(struct vc_data *vc, struct console_font_op *op)
 		op->height = vc->vc_font.height;
 		op->charcount = vga_512_chars ? 512 : 256;
 		if (!op->data) return 0;
-		rc = vga_do_font_op(op->data, 0, vga_512_chars);
+		rc = vga_do_font_op(vc, op->data, 0, vga_512_chars);
 	} else
 		rc = -ENOSYS;
 	return rc;
