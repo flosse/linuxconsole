@@ -885,7 +885,7 @@ register_framebuffer(struct fb_info *fb_info)
 		printk("%s: MTRR turned on\n", fb_info->fix.id);
 	}
 #endif
-	fbcon_show_logo(fb_info);
+	//fbcon_show_logo(fb_info);
 	return 0;
 }
 
