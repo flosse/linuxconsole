@@ -40,6 +40,28 @@
 /* Driver name */
 static const char permedia3_name[16] = "Permedia3";
 
+/* the fb_info struct, mandatory */
+struct pm3fb_info {
+	unsigned long board_num; /* internal board number */
+	unsigned long use_current;
+	struct pm3fb_par *current_par;
+	struct pci_dev *dev;    /* PCI device */
+	unsigned long board_type; /* index in the cardbase */
+	unsigned char *fb_base;	/* framebuffer memory base */
+	u32 fb_size;		/* framebuffer memory size */
+	unsigned char *p_fb;	/* physical address of frame buffer */
+	unsigned char *v_fb;	/* virtual address of frame buffer */
+	unsigned char *pIOBase;	/* physical address of registers region, must be rg_base or rg_base+PM2_REGS_SIZE depending on the host endianness */
+	unsigned char *vIOBase;	/* address of registers after ioremap() */
+	u32 pseudo_palette[17];
+
+	unsigned long memcaps;
+	unsigned long memtimings;
+	unsigned long memcontrol;
+	unsigned long memrefresh;
+	unsigned long mempowerdown;
+};
+
 /* the fb_par struct, mandatory */
 struct pm3fb_par {
 	u32 pixclock;		/* pixclock in KHz */
@@ -62,33 +84,15 @@ struct pm3fb_par {
 	/* NOTE : unlike other pm3 stuff above, stored *after* shiftbpp. don't ask */
 	u32 depth;		/* screen depth (8, 12, 15, 16 or 32) */
 	u32 video;		/* video control (hsync,vsync) */
+	struct pm3fb_info *l_fb_info;
+	struct fb_info *f_fb_info;
 };
 
-/* the fb_info struct, mandatory */
-struct pm3fb_info {
-	struct fb_info gen;
-	unsigned long board_num; /* internal board number */
-	unsigned long use_current;
-	struct pm3fb_par *current_par;
-	struct pci_dev *dev;    /* PCI device */
-	unsigned long board_type; /* index in the cardbase */
-	unsigned char *fb_base;	/* framebuffer memory base */
-	u32 fb_size;		/* framebuffer memory size */
-	unsigned char *p_fb;	/* physical address of frame buffer */
-	unsigned char *v_fb;	/* virtual address of frame buffer */
-	unsigned char *pIOBase;	/* physical address of registers region, must be rg_base or rg_base+PM2_REGS_SIZE depending on the host endianness */
-	unsigned char *vIOBase;	/* address of registers after ioremap() */
-	u32 pseudo_palette[17];
 
-	unsigned long memcaps;
-	unsigned long memtimings;
-	unsigned long memcontrol;
-	unsigned long memrefresh;
-	unsigned long mempowerdown;
-};
 
 /* more mandatory stuff (see skeletonfb.c + framebuffer driver HOWTO */
-static struct pm3fb_info fb_info[PM3_MAX_BOARD];
+static struct pm3fb_info pm3fb_fb_info[PM3_MAX_BOARD];
+static struct fb_info fbcon_fb_info[PM3_MAX_BOARD];
 static struct pm3fb_par current_par[PM3_MAX_BOARD];
 static int current_par_valid[PM3_MAX_BOARD];
 /* to allow explicit filtering of board */
@@ -133,9 +137,9 @@ static void pm3fb_common_init(struct pm3fb_info *l_fb_info);
 static void pm3fb_decode_var(const struct fb_var_screeninfo *var,
 			     struct pm3fb_par *p, struct fb_info *info);
 static void pm3fb_encode_var(struct fb_var_screeninfo *var,
-			    struct pm3fb_par *p, struct fb_info *info);
+			    struct pm3fb_par *p, struct pm3fb_info *l_fb_info);
 static void pm3fb_encode_fix(struct fb_fix_screeninfo *fix,
-			     struct pm3fb_par *p, struct fb_info *info);
+			     struct pm3fb_par *p, struct pm3_fb_info *l_fb_info);
 static void pm3fb_set_color(struct pm3fb_info *l_fb_info,
 			    unsigned char regno, unsigned char r,
 			    unsigned char g, unsigned char b);
@@ -814,14 +818,14 @@ static void pm3fb_detect(void)
 {
 	struct pci_dev *dev_array[PM3_MAX_BOARD];
 	struct pci_dev *dev = NULL;
-	struct pm3fb_info *l_fb_info = &(fb_info[0]);
+	struct pm3fb_info *l_fb_info = &(pm3fb_fb_info[0]);
 	unsigned long i, j, done;
 
 	DTRACE;
 
 	for (i = 0; i < PM3_MAX_BOARD; i++) {
 		dev_array[i] = NULL;
-		fb_info[i].dev = NULL;
+		pm3fb_fb_info[i].dev = NULL;
 	}
 
 	dev =
@@ -854,7 +858,7 @@ static void pm3fb_detect(void)
 					slot[i])
 				    && (PCI_FUNC(dev_array[j]->devfn) ==
 					func[i])) {
-					fb_info[i].dev = dev_array[j];
+					pm3fb_fb_info[i].dev = dev_array[j];
 					dev_array[j] = NULL;
 				}
 			}
@@ -862,11 +866,11 @@ static void pm3fb_detect(void)
 	}
 	/* allocate remaining boards */
 	for (i = 0; i < PM3_MAX_BOARD; i++) {
-		if (fb_info[i].dev == NULL) {
+		if (pm3fb_fb_info[i].dev == NULL) {
 			done = 0;
 			for (j = 0; ((j < PM3_MAX_BOARD) && (!done)); j++) {
 				if (dev_array[j] != NULL) {
-					fb_info[i].dev = dev_array[j];
+					pm3fb_fb_info[i].dev = dev_array[j];
 					dev_array[j] = NULL;
 					done = 1;
 				}
@@ -877,7 +881,7 @@ static void pm3fb_detect(void)
 	/* at that point, all PCI Permedia3 are detected and allocated */
 	/* now, initialize... or not */
 	for (i = 0; i < PM3_MAX_BOARD; i++) {
-		l_fb_info = &(fb_info[i]);
+		l_fb_info = &(pm3fb_fb_info[i]);
 		if ((l_fb_info->dev) && (!disable[i])) {	/* PCI device was found and not disabled by user */
 			DPRINTK(2,
 				"found @%lx Vendor %lx Device %lx ; base @ : %lx - %lx - %lx - %lx - %lx - %lx, irq %ld\n",
@@ -955,14 +959,14 @@ static void pm3fb_common_init(struct pm3fb_info *l_fb_info)
 		(unsigned long) l_fb_info);
 
 
-	l_fb_info->gen.node = -1;
-	l_fb_info->gen.fbops = &pm3fb_ops;
-	l_fb_info->gen.pseudo_palette = l_fb_info->pseudo_palette;
-	l_fb_info->gen.flags = FBINFO_FLAG_DEFAULT;
-	l_fb_info->gen.par = &(l_fb_info->current_par);
+	l_fb_info->current_par->f_fb_info->node = -1;
+	l_fb_info->current_par->f_fb_info->fbops = &pm3fb_ops;
+	l_fb_info->current_par->f_fb_info->pseudo_palette = l_fb_info->pseudo_palette;
+	l_fb_info->current_par->f_fb_info->flags = FBINFO_FLAG_DEFAULT;
+	l_fb_info->current_par->f_fb_info->par = &(l_fb_info->current_par);
 
 	pm3fb_mapIO(l_fb_info);
-	l_fb_info->gen.screen_base = l_fb_info->v_fb;
+	l_fb_info->current_par->f_fb_info->screen_base = l_fb_info->v_fb;
 	
 /*
 	if (fontn[l_fb_info->board_num][0])
@@ -977,23 +981,23 @@ static void pm3fb_common_init(struct pm3fb_info *l_fb_info)
 		else
 		{
 			pm3fb_read_mode(l_fb_info, l_fb_info->current_par);
-			pm3fb_encode_var(&(l_fb_info->gen.var),
+			pm3fb_encode_var(&(l_fb_info->current_par->f_fb_info->var),
 					 l_fb_info->current_par,
-					 (struct fb_info*)l_fb_info);
+					 l_fb_info);
 		}
 	}
 
 	if (depth[l_fb_info->board_num]) /* override mode-defined depth */
 	{
-		pm3fb_encode_depth(&(l_fb_info->gen.var), depth[l_fb_info->board_num]);
-		l_fb_info->gen.var.bits_per_pixel = depth2bpp(depth[l_fb_info->board_num]);
+		pm3fb_encode_depth(&(l_fb_info->current_par->f_fb_info->var), depth[l_fb_info->board_num]);
+		l_fb_info->current_par->f_fb_info->var.bits_per_pixel = depth2bpp(depth[l_fb_info->board_num]);
 	}
 
-	fb_copy_cmap(fb_default_cmap(16),&(l_fb_info->gen.cmap), 0);
+	fb_copy_cmap(fb_default_cmap(16),&(l_fb_info->current_par->f_fb_info->cmap), 0);
 	
 	pm3fb_set_par((struct fb_info*)l_fb_info);
 
-	if (register_framebuffer(&l_fb_info->gen) < 0) {
+	if (register_framebuffer(l_fb_info->current_par->f_fb_info) < 0) {
 		DPRINTK(1, "Couldn't register framebuffer\n");
 		return;
 	}
@@ -1007,7 +1011,7 @@ static void pm3fb_common_init(struct pm3fb_info *l_fb_info)
 	pm3fb_write_mode(l_fb_info);
 
 	printk("fb%d: %s, using %uK of video memory (%s)\n",
-	       GET_FB_IDX(l_fb_info->gen.node),
+	       GET_FB_IDX(l_fb_info->current_par->f_fb_info->node),
 	       permedia3_name, (u32) (l_fb_info->fb_size >> 10),
 	       cardbase[l_fb_info->board_type].cardname);
 }
@@ -1016,7 +1020,7 @@ static void pm3fb_common_init(struct pm3fb_info *l_fb_info)
 static void pm3fb_decode_var(const struct fb_var_screeninfo *var,
 			     struct pm3fb_par *p, struct fb_info *info)
 {
-	struct pm3fb_info *l_fb_info = (struct pm3fb_info *) info;
+	struct pm3fb_info *l_fb_info = ((struct pm3fb_par*)info->par)->l_fb_info;
 	struct pm3fb_par temp_p;
 	u32 xres;
 
@@ -1132,10 +1136,8 @@ static void pm3fb_decode_var(const struct fb_var_screeninfo *var,
 }
 
 static void pm3fb_encode_var(struct fb_var_screeninfo *var,
-			    struct pm3fb_par *p, struct fb_info *info)
+			     struct pm3fb_par *p, struct pm3fb_info *l_fb_info)
 {
-	struct pm3fb_info *l_fb_info = (struct pm3fb_info *) info;
-
 	u32 base;
 
 	DTRACE;
@@ -1189,10 +1191,8 @@ static void pm3fb_encode_var(struct fb_var_screeninfo *var,
 
 /* helper for pm3fb_set_par */
 static void pm3fb_encode_fix(struct fb_fix_screeninfo *fix,
-			     struct pm3fb_par *p, struct fb_info *info)
+			     struct pm3fb_par *p, struct pm3fb_info *l_fb_info)
 {
-	struct pm3fb_info *l_fb_info = (struct pm3fb_info *) info;
-	
 	DTRACE;
 	
 	strcpy(fix->id, permedia3_name);
@@ -1609,10 +1609,10 @@ static void pm3fb_fillrect_32bpp(struct pm3fb_info *l_fb_info, int x1, int y1, u
 	pm3fb_wait_pm3(l_fb_info);
 }
 
-void pm3fb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,
+void pm3fb_fillrect(struct fb_info *info, int x1, int y1, unsigned int width,
                     unsigned int height, unsigned long color, int rop)
 {
-	struct pm3fb_info *l_fb_info = (struct pm3fb_info *) p;
+	struct pm3fb_info *l_fb_info = ((struct pm3fb_par*)info->par)->l_fb_info;
 	int GXrop;
 	unsigned long c = color;
 	
@@ -1652,10 +1652,10 @@ void pm3fb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,
 
 }
 
-void pm3fb_copyarea(struct fb_info *p, int sx, int sy, unsigned int width,
+void pm3fb_copyarea(struct fb_info *info, int sx, int sy, unsigned int width,
 		    unsigned int height, int dx, int dy)
 {
-       	struct pm3fb_info *l_fb_info = (struct pm3fb_info *) p;
+       	struct pm3fb_info *l_fb_info = ((struct pm3fb_par*)info->par)->l_fb_info;
 	int x_align, o_x, o_y;
 	
 	o_x = sx - dx;		/*(sx > dx ) ? (sx - dx) : (dx - sx); */
@@ -1710,9 +1710,9 @@ void pm3fb_copyarea(struct fb_info *p, int sx, int sy, unsigned int width,
  *	mono image (needed for font handling) or a color image (needed for
  *	tux). 
  */
-void fb_imageblit(struct fb_info *p, struct fb_image *image) 
+void fb_imageblit(struct fb_info *info, struct fb_image *image) 
 {
-	struct pm3fb_info *l_fb_info = (struct pm3fb_info *) p;
+	struct pm3fb_info *l_fb_info = ((struct pm3fb_par*)info->par)->l_fb_info;
 	unsigned long fgx, bgx, asx, asy, o_x = 0, o_y = 0, wm, ldat;
 	int i;
 	
@@ -1794,7 +1794,7 @@ void fb_imageblit(struct fb_info *p, struct fb_image *image)
 
 static int pm3fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 {
-	struct pm3fb_info *l_fb_info = (struct pm3fb_info *) info;
+	struct pm3fb_info *l_fb_info = ((struct pm3fb_par*)info->par)->l_fb_info;
 	u32 xres;
 	
 	DTRACE;
@@ -1855,13 +1855,13 @@ static int pm3fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 
 static int pm3fb_set_par(struct fb_info *info)
 {
-	struct pm3fb_info *l_fb_info = (struct pm3fb_info *) info;
+	struct pm3fb_info *l_fb_info = ((struct pm3fb_par*)info->par)->l_fb_info;
 	struct pm3fb_par par;
 	
 	DTRACE;
 
-	pm3fb_decode_var(&(info->var), &par, info);
-	pm3fb_encode_fix(&(info->fix), &par, info);
+	pm3fb_decode_var(&(info->var), &par, l_fb_info);
+	pm3fb_encode_fix(&(info->fix), &par, l_fb_info);
 	
 	*(l_fb_info->current_par) = par;
 	current_par_valid[l_fb_info->board_num] = 1;
@@ -1879,7 +1879,7 @@ static int pm3fb_setcolreg(unsigned regno, unsigned red, unsigned green,
 			   unsigned blue, unsigned transp,
 			   struct fb_info *info)
 {
-	struct pm3fb_info *l_fb_info = (struct pm3fb_info *) info;
+	struct pm3fb_info *l_fb_info = ((struct pm3fb_par*)info->par)->l_fb_info;
 
 	DTRACE;
 
@@ -1940,7 +1940,7 @@ static int pm3fb_setcolreg(unsigned regno, unsigned red, unsigned green,
 static int pm3fb_pan_display(struct fb_var_screeninfo *var,
 			     struct fb_info *info)
 {
-	struct pm3fb_info *l_fb_info = (struct pm3fb_info *) info;
+	struct pm3fb_info *l_fb_info = ((struct pm3fb_par*)info->par)->l_fb_info;
 	
 	DTRACE;
 	
@@ -1958,7 +1958,7 @@ static int pm3fb_pan_display(struct fb_var_screeninfo *var,
 
 static int pm3fb_blank(int blank_mode, struct fb_info *info)
 {
-	struct pm3fb_info *l_fb_info = (struct pm3fb_info *) info;
+	struct pm3fb_info *l_fb_info = ((struct pm3fb_par*)info->par)->l_fb_infoo;
 	u32 video;
 
 	DTRACE;
@@ -2007,7 +2007,7 @@ static int pm3fb_blank(int blank_mode, struct fb_info *info)
 
 static void pm3fb_mode_setup(char *mode, unsigned long board_num)
 {
-	struct pm3fb_info *l_fb_info = &(fb_info[board_num]);
+	struct pm3fb_info *l_fb_info = &(pm3fb_fb_info[board_num]);
 /*
 	struct pm3fb_par *l_fb_par = &(current_par[board_num]);
 	unsigned long i = 0;
@@ -2034,15 +2034,15 @@ static void pm3fb_mode_setup(char *mode, unsigned long board_num)
 			i++;
 */
 		int retval;
-		retval = fb_find_mode(&(l_fb_info->gen.var), &(l_fb_info->gen), mode, NULL, 0, NULL, 8);
+		retval = fb_find_mode(&(l_fb_info->current_par->f_fb_info->var), &(l_fb_info->gen), mode, NULL, 0, NULL, 8);
 		if (!retval || retval == 4)
 			current_par_valid[board_num] = 0;
 		else
 		{
 			current_par_valid[board_num] = 1;
-			pm3fb_decode_var(&(l_fb_info->gen.var),
+			pm3fb_decode_var(&(l_fb_info->current_par->f_fb_info->var),
 					 l_fb_info->current_par,
-					 (struct fb_info*)l_fb_info);
+					 l_fb_info);
 		}
 	}
 	DASSERT(current_par_valid[board_num],
@@ -2137,7 +2137,7 @@ static void pm3fb_real_setup(char *options)
 	DPRINTK(2, "Options : %s\n", options);
 
 	for (i = 0; i < PM3_MAX_BOARD; i++) {
-		l_fb_info = &(fb_info[i]);
+		l_fb_info = &(pm3fb_fb_info[i]);
 		memset(l_fb_info, 0, sizeof(struct pm3fb_info));
 		l_fb_info->board_num = i;
 		current_par_valid[i] = 0;
@@ -2149,6 +2149,8 @@ static void pm3fb_real_setup(char *options)
 		fontn[i][0] = '\0';
 		depth[i] = 0;
 		l_fb_info->current_par = &(current_par[i]);
+		l_fb_info->current_par->l_fb_info = l_fb_info;
+		l_fb_info->current_par->f_fb_info = &(fbcon_fb_info[i]);
 	}
 
 	/* eat up prefix pm3fb and whatever is used as separator i.e. :,= */
@@ -2212,7 +2214,7 @@ int __init pm3fb_init(void)
 	
 	pm3fb_detect();
 
-	if (!fb_info[0].dev) {	/* not even one board ??? */
+	if (!pm3fb_fb_info[0].dev) {	/* not even one board ??? */
 		DPRINTK(1, "No PCI Permedia3 board detected\n");
 	}
 	
@@ -2343,7 +2345,7 @@ void pm3fb_cleanup_module(void)
 		unsigned long i;
 		struct pm3fb_info *l_fb_info;
 		for (i = 0; i < PM3_MAX_BOARD; i++) {
-			l_fb_info = &(fb_info[i]);
+			l_fb_info = &(pm3fb_fb_info[i]);
 			if ((l_fb_info->dev != NULL)
 			    && (!(disable[l_fb_info->board_num]))) {
 				if (l_fb_info->vIOBase !=
@@ -2356,8 +2358,7 @@ void pm3fb_cleanup_module(void)
 							   pIOBase,
 							   PM3_REGS_SIZE);
 				}
-				unregister_framebuffer(&l_fb_info->gen.
-						       info);
+				unregister_framebuffer(l_fb_info->current_par->f_fb_info);
 			}
 		}
 	}
