@@ -90,10 +90,9 @@ static int wmforce_open(struct input_dev *dev)
 	if (wmforce->open++)
 		return 0;
 
-	 if (usb_submit_urb(&wmforce->irq)) {
-		kfree(wmforce);
+	if (usb_submit_urb(&wmforce->irq))
 		return -EIO;
-	}
+
 	return 0;
 }
 

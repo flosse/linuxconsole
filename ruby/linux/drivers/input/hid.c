@@ -1259,6 +1259,27 @@ static int hid_event(struct input_dev *dev, unsigned int type, unsigned int code
 	return 0;
 }
 
+static int hid_open(struct input_dev *dev)
+{
+	struct hid_device *hid = dev->private;
+
+	if (hid->open++)
+		return 0;
+
+	 if (usb_submit_urb(&hid->urb))
+		return -EIO;
+
+	return 0;
+}
+
+static void hid_close(struct input_dev *dev)
+{
+	struct hid_device *hid = dev->private;
+
+	if (!--hid->open)
+		usb_unlink_urb(&hid->urb);
+}
+
 /*
  * Configure the input layer interface
  * Read all reports and initalize the absoulte field values.
@@ -1272,6 +1293,8 @@ static void hid_init_input(struct hid_device *hid)
 
 	hid->input.private = hid;
 	hid->input.event = hid_event;
+	hid->input.open = hid_open;
+	hid->input.close = hid_close;
 
 	for (k = HID_INPUT_REPORT; k <= HID_OUTPUT_REPORT; k++) {
 
@@ -1380,11 +1403,6 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 
 		FILL_INT_URB(&hid->urb, dev, pipe, hid->buffer, maxp > 32 ? 32 : maxp, hid_irq, hid, endpoint->bInterval);
 	
-		if (usb_submit_urb(&hid->urb)) {
-			dbg("submitting interrupt URB failed");
-			continue;
-		}
-
 		break;
 	}
 

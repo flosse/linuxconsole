@@ -235,10 +235,9 @@ static int wacom_open(struct input_dev *dev)
 	if (wacom->open++)
 		return 0;
 
-	 if (usb_submit_urb(&wacom->irq)) {
-		kfree(wacom);
+	if (usb_submit_urb(&wacom->irq)
 		return -EIO;
-	}
+
 	return 0;
 }
 

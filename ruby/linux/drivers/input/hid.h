@@ -292,6 +292,7 @@ struct hid_device {							/* device report descriptor */
 	struct urb urb;							/* USB URB structure */
 	struct urb urbout;						/* Output URB */
 	struct input_dev input;						/* input device structure */
+	int open;							/* is the device open by input? */
 	int quirks;							/* Various nasty tricks the device can pull on us */
 };
 

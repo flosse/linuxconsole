@@ -70,10 +70,9 @@ static int usb_mouse_open(struct input_dev *dev)
 	if (mouse->open++)
 		return 0;
 
-	 if (usb_submit_urb(&mouse->irq)) {
-		kfree(mouse);
+	if (usb_submit_urb(&mouse->irq))
 		return -EIO;
-	}
+
 	return 0;
 }
 

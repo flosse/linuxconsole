@@ -133,10 +133,9 @@ static int usb_kbd_open(struct input_dev *dev)
 	if (kbd->open++)
 		return 0;
 
-	 if (usb_submit_urb(&kbd->irq)) {
-		kfree(kbd);
+	if (usb_submit_urb(&kbd->irq))
 		return -EIO;
-	}
+
 	return 0;
 }
 
