@@ -727,10 +727,10 @@ static int tdfxfb_decode_var(struct fb_var_screeninfo *var,
   return 0;
 }
 
-static int  tdfxfb_encode_var(struct fb_var_screeninfo *var,
-                              struct tdfxfb_par *par,
-                              struct fb_info *info)
+static int  tdfxfb_encode_var(struct fb_var_screeninfo *var, void *par, 
+			      struct fb_info *info)
 {
+  struct tdfxfb_par *par = (struct tdfxfb_par *) par;
   struct fb_var_screeninfo v;
 
   memset(&v, 0, sizeof(struct fb_var_screeninfo));
@@ -784,8 +784,9 @@ static int  tdfxfb_encode_var(struct fb_var_screeninfo *var,
   return 0;
 }
 
-static void tdfxfb_set_par(struct tdfxfb_par* par,
-			   struct fb_info *info) {
+static void tdfxfb_set_par(void *par, struct fb_info *info)
+{
+  struct tdfxfb_par *par = (struct tdfxfb_par *) par;
   struct banshee_reg reg;
   u32 cpp;
   u32 hd, hs, he, ht, hbs, hbe;
