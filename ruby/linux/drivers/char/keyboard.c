@@ -52,6 +52,7 @@
 #include <linux/sysrq.h>
 #include <linux/input.h>
 
+static void kbd_disconnect(struct input_handle *handle);
 extern void ctrl_alt_del(void);
 
 #define SIZE(x)		(sizeof(x)/sizeof((x)[0]))
@@ -128,6 +129,7 @@ int keyboard_wait_for_keypress(struct console *console)
  * Internal data.
  */
 
+static struct input_handler kbd_handler;
 static struct tty_struct **ttytab;
 
 static unsigned long key_down[256/BITS_PER_LONG];
@@ -440,11 +442,16 @@ static void fn_show_state(struct tty_struct *tty)
 static void fn_boot_it(struct tty_struct *tty)
 {
 	struct vc_data *vc = (struct vc_data *) tty->driver_data;
+	struct input_handle *handle;
 
-	/*
-	if (vc->display_fg == admin_vt)
+	if (vc->display_fg == admin_vt) {
+		for (handle = kbd_handler.handle; handle; 
+		     handle = handle->hnext) {		 
+			if (handle->private) 
+				kbd_disconnect(handle);	
+		}
 		ctrl_alt_del(); 
-	*/
+	}
 }
 
 static void fn_null(struct tty_struct *tty)
@@ -765,8 +772,6 @@ static inline unsigned char getleds(struct vt_struct *vt)
 	return leds;
 }
 
-static struct input_handler kbd_handler;
-
 /*
  * This routine is the bottom half of the keyboard interrupt
  * routine, and runs with all interrupts enabled. It does
@@ -1046,16 +1051,14 @@ static struct input_handle *kbd_connect(struct input_handler *handler, struct in
 
 static void kbd_disconnect(struct input_handle *handle)
 {
-	struct vt_struct *vt = vt_cons;
+	struct vt_struct *vt = handle->private;
 
-	printk(KERN_INFO "keyboard.c: Removing keyboard: input%d\n", handle->dev->number);
-	while (vt) {
-		if (vt->keyboard == handle) {
-			vt->keyboard = NULL;
-			break;
-		}
-		vt = vt->next;	
-	}	
+	printk(KERN_INFO "keyboard.c: Removing keyboard: input%d\n", 
+	       handle->dev->number);
+
+	if (vt->keyboard == handle) 
+		vt->keyboard = NULL;
+	handle->private = NULL;
 	input_close_device(handle);
 	kfree(handle);
 }
