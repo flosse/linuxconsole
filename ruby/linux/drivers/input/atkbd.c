@@ -144,15 +144,14 @@ static void atkbd_interrupt(struct serio *serio, unsigned char data, unsigned in
 	printk(KERN_DEBUG "atkbd.c: Received %02x\n", data);
 #endif
 
-	if (!atkbd->ack)
-		switch (code) {
-			case ATKBD_RET_ACK:
-				atkbd->ack = 1;
-				return;
-			case ATKBD_RET_NAK:
-				atkbd->ack = -1;
-				return;
-		}
+	switch (code) {
+		case ATKBD_RET_ACK:
+			atkbd->ack = 1;
+			return;
+		case ATKBD_RET_NAK:
+			atkbd->ack = -1;
+			return;
+	}
 
 	if (atkbd->cmdcnt) {
 		atkbd->cmdbuf[--atkbd->cmdcnt] = code;
@@ -164,10 +163,16 @@ static void atkbd_interrupt(struct serio *serio, unsigned char data, unsigned in
 			queue_task(&atkbd->tq, &tq_immediate);
 			mark_bh(IMMEDIATE_BH);
 			return;
+		case ATKBD_KEY_EMUL0:
+			atkbd->emul = 1;
+			return;
+		case ATKBD_KEY_EMUL1:
+			atkbd->emul = 2;
+			return;
 		case ATKBD_KEY_RELEASE:
 			atkbd->release = 1;
 			return;
-	}
+		}
 
 	if (atkbd->emul) {
 		if (--atkbd->emul) return;
@@ -175,12 +180,6 @@ static void atkbd_interrupt(struct serio *serio, unsigned char data, unsigned in
 	}
 
 	switch (atkbd->keycode[code]) {
-		case ATKBD_KEY_EMUL0:
-			atkbd->emul = 1;
-			return;
-		case ATKBD_KEY_EMUL1:
-			atkbd->emul = 2;
-			return;
 		case ATKBD_KEY_NULL:
 			break;
 		case ATKBD_KEY_UNKNOWN:
@@ -468,8 +467,6 @@ static void atkbd_connect(struct serio *serio, struct serio_dev *dev)
 
 	atkbd->tq.routine = atkbd_powerup;
 	atkbd->tq.data = atkbd;
-
-	atkbd->ack = 1;
 
 	serio->private = atkbd;
 
