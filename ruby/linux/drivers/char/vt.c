@@ -252,7 +252,7 @@ void scrup(struct vc_data *vc, unsigned int t, unsigned int b, int nr)
                 nr = b - t;
         if (b > video_num_lines || t >= b || nr < 1)
                 return;
-        if (IS_VISIBLE && sw->con_scroll(vc, t, b, SM_UP, nr))
+        if (IS_VISIBLE && sw->con_scroll_region(vc, t, b, SM_UP, nr))
                 return;
         d = (unsigned short *) (origin+video_size_row*t);
         s = (unsigned short *) (origin+video_size_row*(t+nr));
@@ -269,7 +269,7 @@ void scrdown(struct vc_data *vc, unsigned int t, unsigned int b, int nr)
                 nr = b - t;
         if (b > video_num_lines || t >= b || nr < 1)
                 return;
-        if (IS_VISIBLE && sw->con_scroll(vc, t, b, SM_DOWN, nr))
+        if (IS_VISIBLE && sw->con_scroll_region(vc, t, b, SM_DOWN, nr))
                 return;
         s = (unsigned short *) (origin+video_size_row*t);
         step = video_num_columns * nr;
@@ -470,15 +470,13 @@ inline void save_screen(struct vc_data *vc)
 /*      Redrawing of screen */
 void update_screen(struct vc_data *vc)
 {
-	int update;
-
         hide_cursor(vc);
         set_origin(vc);
         set_palette(vc);
 
         if (vcmode != KD_GRAPHICS) {
                /* Update the screen contents */
-               do_update_region(vc, origin, screenbuf_size/2);
+               do_update_region(vc, origin, video_num_columns*video_num_lines);
         }
         set_cursor(vc);
 }
@@ -705,7 +703,7 @@ static void console_softint(unsigned long private)
                 struct vc_data *vc = vt->fg_console;
                 clear_selection();
                 if (vcmode == KD_TEXT)
-                      sw->con_scrolldelta(vt->fg_console,vt->scrollback_delta);
+                      sw->con_scroll(vt->fg_console,vt->scrollback_delta);
                 vt->scrollback_delta = 0;
         }
         spin_unlock_irq(&console_lock);
