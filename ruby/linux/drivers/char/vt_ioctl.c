@@ -361,7 +361,7 @@ do_kdgkb_ioctl(int cmd, struct kbsentry *user_kdgkb, int perm)
 int con_font_op(struct vc_data *vc, struct console_font_op *op)
 {
         int rc = -EINVAL;
-        int size = max_font_size, set;
+        int size = max_font_size, set = 0;
         u8 *temp = NULL;
         struct console_font_op old_op;
 
@@ -403,7 +403,7 @@ int con_font_op(struct vc_data *vc, struct console_font_op *op)
         } else if (op->op == KD_FONT_OP_GET)
                 set = 0;
         else
-                return vc->display_fg->sw->con_font_op(vc, op);
+                return vc->display_fg->vt_sw->con_font_op(vc, op);
         if (op->data) {
                 temp = kmalloc(size, GFP_KERNEL);
                 if (!temp)
@@ -416,7 +416,7 @@ int con_font_op(struct vc_data *vc, struct console_font_op *op)
         }                                                          
 
         spin_lock_irq(&console_lock);
-        rc = vc->display_fg->sw->con_font_op(vc, op);
+        rc = vc->display_fg->vt_sw->con_font_op(vc, op);
         spin_unlock_irq(&console_lock);
 
         op->data = old_op.data;
@@ -516,8 +516,9 @@ do_unimap_ioctl(struct vc_data *vc,int cmd, struct unimapdesc *user_ud,int perm)
  * Load palette into the DAC registers. arg points to a colour
  * map, 3 bytes per colour, 16 colours, range from 0 to 255.
  */
-int con_set_cmap(unsigned char *arg)
+int con_set_cmap(struct vc_data *vc, unsigned char *arg)
 {
+	struct vt_struct *vt = vc->display_fg;
         int i, j, k;
 
         for (i = 0; i < 16; i++) {
@@ -525,15 +526,15 @@ int con_set_cmap(unsigned char *arg)
                 get_user(default_grn[i], arg++);
                 get_user(default_blu[i], arg++);
         }
-        for (i = 0; i < MAX_NR_CONSOLES; i++) {
+        for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
                 if (vc_cons_allocated(i)) {
-			struct vc_data *vc = vt_cons->vcs.vc_cons[i];
+			struct vc_data *tmp = vt->vcs.vc_cons[i];
                         for (j = k = 0; j < 16; j++) {
-                                vc->vc_palette[k++] = default_red[j];
-                                vc->vc_palette[k++] = default_grn[j];
-                                vc->vc_palette[k++] = default_blu[j];
+                                tmp->vc_palette[k++] = default_red[j];
+                                tmp->vc_palette[k++] = default_grn[j];
+                                tmp->vc_palette[k++] = default_blu[j];
                         }
-                        set_palette(vc);
+                        set_palette(tmp);
                 }                                                       
         }
         return 0;
@@ -551,17 +552,15 @@ int con_get_cmap(unsigned char *arg)
         return 0;
 }
               
-void do_blank_screen(void)
+void do_blank_screen(struct vc_data *vc)
 {
-        struct vc_data *vc = vt_cons->fg_console;
-
         if (vc->display_fg->vt_blanked)
                 return;
 
         /* entering graphics mode? */
         hide_cursor(vc);
         save_screen(vc);
-        vc->display_fg->sw->con_blank(vc, -1);
+        vc->display_fg->vt_sw->con_blank(vc, -1);
         vc->display_fg->vt_blanked = 1;
         set_origin(vc);
         return;
@@ -674,9 +673,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		 * explicitly blank/unblank the screen if switching modes
 		 */
 		if (arg == KD_TEXT)
-			unblank_screen();
+			unblank_screen(vc->display_fg);
 		else
-			do_blank_screen();
+			do_blank_screen(vc);
 		return 0;
 
 	case KDGETMODE:
@@ -875,7 +874,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		put_user(vc->display_fg->fg_console->vc_num + 1,
 			 &vtstat->v_active);
 		state = 1;	/* /dev/tty0 is always open */
-		for (i = 0, mask = 2; i < MAX_NR_CONSOLES && mask; ++i, mask <<= 1)
+		for (i = 0, mask = 2; i < MAX_NR_USER_CONSOLES && mask; ++i, mask <<= 1)
 			if (VT_IS_IN_USE(i))
 				state |= mask;
 		return put_user(state, &vtstat->v_state);
@@ -990,8 +989,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		if (arg > MAX_NR_CONSOLES)
 			return -ENXIO;
 		if (arg == 0) {
-		    /* disallocate all unused consoles, but leave 0 */
-		    for (i=1; i<MAX_NR_CONSOLES; i++)
+		    /* disallocate all unused consoles for a VT, 
+		       but leave the active VC */
+		    for (i=1; i < MAX_NR_USER_CONSOLES; i++)
 		      if (i == vc->display_fg->fg_console->vc_num ||
 				!VT_BUSY(i)) 
 			vc_disallocate(i);
@@ -1094,7 +1094,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	case PIO_CMAP:
                 if (!perm)
 			return -EPERM;
-                return con_set_cmap((char *)arg);
+                return con_set_cmap(vc, (char *)arg);
 
 	case GIO_CMAP:
                 return con_get_cmap((char *)arg);
@@ -1319,9 +1319,10 @@ void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
                 set_origin(old_vc);               
 		
 		set_origin(new_vc);		
-                if (new_vc->display_fg->sw->con_switch(new_vc) && new_vc->display_fg->vc_mode != KD_GRAPHICS) {
+                if (new_vc->display_fg->vt_sw->con_switch(new_vc) && 
+		    new_vc->display_fg->vc_mode != KD_GRAPHICS) {
                         /* Change the palette after a VT switch. */
-                        new_vc->display_fg->sw->con_set_palette(new_vc, color_table);
+                        new_vc->display_fg->vt_sw->con_set_palette(new_vc, color_table);
                         /* Update the screen contents */
                         do_update_region(new_vc, new_vc->vc_origin, 
 					 new_vc->vc_screenbuf_size/2);
@@ -1441,9 +1442,9 @@ void complete_change_console(struct vc_data *new_vc, struct vc_data *old_vc)
 	 */
 	if (old_vc_mode != new_vc->display_fg->vc_mode) {
 		if (new_vc->display_fg->vc_mode == KD_TEXT)
-			unblank_screen();
+			unblank_screen(new_vc->display_fg);
 		else
-			do_blank_screen();
+			do_blank_screen(new_vc);
 	}
 
 	/*
