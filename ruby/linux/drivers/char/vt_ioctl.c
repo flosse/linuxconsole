@@ -27,7 +27,6 @@
 #include <asm/io.h>
 #include <asm/uaccess.h>
 
-#include <linux/kbd_kern.h>
 #include <linux/vt_kern.h>
 #include <linux/kbd_diacr.h>
 #include <linux/selection.h>
@@ -505,12 +504,66 @@ do_unimap_ioctl(int cmd, struct unimapdesc *user_ud,int perm)
 	case PIO_UNIMAP:
 		if (!perm)
 			return -EPERM;
-		return con_set_unimap(fg_console, tmp.entry_ct, tmp.entries);
+		return con_set_unimap(vc_cons[fg_console], tmp.entry_ct, tmp.entries);
 	case GIO_UNIMAP:
-		return con_get_unimap(fg_console, tmp.entry_ct, &(user_ud->entry_ct), tmp.entries);
+		return con_get_unimap(vc_cons[fg_console], tmp.entry_ct, &(user_ud->entry_ct), tmp.entries);
 	}
 	return 0;
 }
+
+/*
+ * Load palette into the DAC registers. arg points to a colour
+ * map, 3 bytes per colour, 16 colours, range from 0 to 255.
+ */
+int con_set_cmap(unsigned char *arg)
+{
+        int i, j, k;
+
+        for (i = 0; i < 16; i++) {
+                get_user(default_red[i], arg++);
+                get_user(default_grn[i], arg++);
+                get_user(default_blu[i], arg++);
+        }
+        for (i = 0; i < MAX_NR_CONSOLES; i++) {
+                if (vc_cons_allocated(i)) {
+                        for (j = k = 0; j < 16; j++) {
+                                vc_cons[i]->vc_palette[k++] = default_red[j];
+                                vc_cons[i]->vc_palette[k++] = default_grn[j];
+                                vc_cons[i]->vc_palette[k++] = default_blu[j];
+                        }
+                        set_palette(vc_cons[i]);
+                }                                                       
+        }
+        return 0;
+}
+
+int con_get_cmap(unsigned char *arg)
+{
+        int i;
+
+        for (i = 0; i < 16; i++) {
+                put_user(default_red[i], arg++);
+                put_user(default_grn[i], arg++);
+                put_user(default_blu[i], arg++);
+        }
+        return 0;
+}
+              
+void do_blank_screen()
+{
+        struct vc_data *vc = vc_cons[fg_console];
+
+        if (console_blanked)
+                return;
+
+        /* entering graphics mode? */
+        hide_cursor(vc);
+        save_screen(vc);
+        vc->display_fg->sw->con_blank(vc, -1);
+        console_blanked = fg_console + 1;
+        set_origin(vc);
+        return;
+}                               
 
 /*
  * We handle the console-specific ioctl's here.  We allow the
@@ -538,7 +591,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	if (current->tty == tty || suser())
 		perm = 1;
  
-	kbd = kbd_table + console;
+	kbd = &vc->kbd_table;
 	switch (cmd) {
 	case KIOCSOUND:
 		if (!perm)
@@ -624,7 +677,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		if (arg == KD_TEXT)
 			unblank_screen();
 		else
-			do_blank_screen(1);
+			do_blank_screen();
 		return 0;
 
 	case KDGETMODE:
@@ -794,17 +847,17 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 			return -EFAULT;
 		if (tmp.mode != VT_AUTO && tmp.mode != VT_PROCESS)
 			return -EINVAL;
-		vt_cons->vt_mode = tmp;
+		vc->vt_mode = tmp;
 		/* the frsig is ignored, so we set it to 0 */
-		vt_cons->vt_mode.frsig = 0;
-		vt_cons->vt_pid = current->pid;
+		vc->vt_mode.frsig = 0;
+		vc->vt_pid = current->pid;
 		/* no switch is required -- saw@shade.msu.ru */
-		vt_cons->vt_newvt = -1; 
+		vc->vt_newvt = -1; 
 		return 0;
 	}
 
 	case VT_GETMODE:
-		return copy_to_user((void*)arg, &(vt_cons->vt_mode), 
+		return copy_to_user((void*)arg, &(vc->vt_mode), 
 							sizeof(struct vt_mode)) ? -EFAULT : 0; 
 
 	/*
@@ -878,20 +931,20 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	case VT_RELDISP:
 		if (!perm)
 			return -EPERM;
-		if (vt_cons->vt_mode.mode != VT_PROCESS)
+		if (vc->vt_mode.mode != VT_PROCESS)
 			return -EINVAL;
 
 		/*
 		 * Switching-from response
 		 */
-		if (vt_cons->vt_newvt >= 0)
+		if (vc->vt_newvt >= 0)
 		{
 			if (arg == 0)
 				/*
 				 * Switch disallowed, so forget we were trying
 				 * to do it.
 				 */
-				vt_cons->vt_newvt = -1;
+				vc->vt_newvt = -1;
 
 			else
 			{
@@ -899,8 +952,8 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 				 * The current vt has been released, so
 				 * complete the switch.
 				 */
-				int newvt = vt_cons->vt_newvt;
-				vt_cons->vt_newvt = -1;
+				int newvt = vc->vt_newvt;
+				vc->vt_newvt = -1;
 				i = vc_allocate(newvt);
 				if (i)
 					return i;
@@ -1064,7 +1117,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		op.data = NULL;
 		i = con_font_op(fg_console, &op);
 		if (i) return i;
-		con_set_default_unimap(fg_console);
+		con_set_default_unimap(vc_cons[fg_console]);
 		return 0;
 		}
 #endif
@@ -1105,7 +1158,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 			return -EPERM;
 		i = copy_from_user(&ui, (void *)arg, sizeof(struct unimapinit));
 		if (i) return -EFAULT;
-		con_clear_unimap(fg_console, &ui);
+		con_clear_unimap(vc_cons[fg_console], &ui);
 		return 0;
 	      }
 
@@ -1236,16 +1289,18 @@ int vt_waitactive(int vt)
 
 void reset_vc(unsigned int new_console)
 {
-	vt_cons->vc_mode = KD_TEXT;
-	kbd_table[new_console].kbdmode = VC_XLATE;
-	vt_cons->vt_mode.mode = VT_AUTO;
-	vt_cons->vt_mode.waitv = 0;
-	vt_cons->vt_mode.relsig = 0;
-	vt_cons->vt_mode.acqsig = 0;
-	vt_cons->vt_mode.frsig = 0;
-	vt_cons->vt_pid = -1;
-	vt_cons->vt_newvt = -1;
-	reset_palette(vc_cons[new_console]);
+	struct vc_data *vc = vc_cons[new_console];
+
+	vc->display_fg->vc_mode = KD_TEXT;
+	vc->kbd_table.kbdmode = VC_XLATE;
+	vc->vt_mode.mode = VT_AUTO;
+	vc->vt_mode.waitv = 0;
+	vc->vt_mode.relsig = 0;
+	vc->vt_mode.acqsig = 0;
+	vc->vt_mode.frsig = 0;
+	vc->vt_pid = -1;
+	vc->vt_newvt = -1;
+	reset_palette(vc);
 }
 
 /*
@@ -1271,23 +1326,21 @@ void change_console(unsigned int new_console)
 	 * the user waits just the right amount of time :-) and revert the
 	 * vt to auto control.
 	 */
-	if (vt_cons->vt_mode.mode == VT_PROCESS)
+	if (vc_cons[fg_console]->vt_mode.mode == VT_PROCESS)
 	{
 		/*
 		 * Send the signal as privileged - kill_proc() will
 		 * tell us if the process has gone or something else
 		 * is awry
 		 */
-		if (kill_proc(vt_cons->vt_pid,
-			      vt_cons->vt_mode.relsig,
-			      1) == 0)
-		{
+		if (kill_proc(vc_cons[fg_console]->vt_pid,
+			      vc_cons[fg_console]->vt_mode.relsig, 1) == 0) {
 			/*
 			 * It worked. Mark the vt to switch to and
 			 * return. The process needs to send us a
 			 * VT_RELDISP ioctl to complete the switch.
 			 */
-			vt_cons->vt_newvt = new_console;
+			vc_cons[fg_console]->vt_newvt = new_console;
 			return;
 		}
 
@@ -1338,17 +1391,15 @@ void complete_change_console(unsigned int new_console)
 	 * telling it that it has acquired. Also check if it has died and
 	 * clean up (similar to logic employed in change_console())
 	 */
-	if (vt_cons->vt_mode.mode == VT_PROCESS)
+	if (vc_cons[new_console]->vt_mode.mode == VT_PROCESS)
 	{
 		/*
 		 * Send the signal as privileged - kill_proc() will
 		 * tell us if the process has gone or something else
 		 * is awry
 		 */
-		if (kill_proc(vt_cons->vt_pid,
-			      vt_cons->vt_mode.acqsig,
-			      1) != 0)
-		{
+		if (kill_proc(vc_cons[new_console]->vt_pid, 
+			      vc_cons[new_console]->vt_mode.acqsig, 1) != 0) {
 		/*
 		 * The controlling process has died, so we revert back to
 		 * normal operation. In this case, we'll also change back
@@ -1371,7 +1422,7 @@ void complete_change_console(unsigned int new_console)
 		if (vt_cons->vc_mode == KD_TEXT)
 			unblank_screen();
 		else
-			do_blank_screen(1);
+			do_blank_screen();
 	}
 
 	/*
