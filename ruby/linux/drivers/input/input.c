@@ -124,6 +124,13 @@ void input_event(struct input_dev *dev, unsigned int type, unsigned int code, in
 
 			break;
 
+		case EV_MSC:
+
+			if (code > MSC_MAX || !test_bit(code, dev->mscbit)
+				return;
+	
+			break;
+
 		case EV_LED:
 	
 			if (code > LED_MAX || !test_bit(code, dev->ledbit) || !!test_bit(code, dev->led) == value)
@@ -153,13 +160,6 @@ void input_event(struct input_dev *dev, unsigned int type, unsigned int code, in
 
 			break;
 	}
-/*
- * Add randomness.
- */
-
-#if 0 /* BUG */
-	add_input_randomness(((unsigned long) dev) ^ (type << 24) ^ (code << 16) ^ value);
-#endif
 
 /*
  * Distribute the event to handler modules.
