@@ -38,6 +38,7 @@
 #include <linux/proc_fs.h>
 #include <linux/kmod.h>
 #include <linux/interrupt.h>
+#include <linux/poll.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 MODULE_DESCRIPTION("Input layer module");
@@ -65,6 +66,8 @@ static int input_number;
 static long input_devices[NBITS(INPUT_DEVICES)];
 
 static struct proc_dir_entry *proc_bus_input_dir;
+static wait_queue_head_t input_devices_poll_wait;
+static int input_devices_state;
 
 void input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {
@@ -475,6 +478,13 @@ void input_register_device(struct input_dev *dev)
  */
 
 	input_call_hotplug("add", dev);
+
+/*
+ * Notify /proc.
+ */
+
+	input_devices_state++;
+	wake_up_interruptible(&input_devices_poll_wait);
 }
 
 void input_unregister_device(struct input_dev *dev)
@@ -521,6 +531,13 @@ void input_unregister_device(struct input_dev *dev)
 
 	if (dev->number < INPUT_DEVICES)
 		clear_bit(dev->number, input_devices);
+
+/*
+ * Notify /proc.
+ */
+
+	input_devices_state++;
+	wake_up_interruptible(&input_devices_poll_wait);
 }
 
 void input_register_handler(struct input_handler *handler)
@@ -554,6 +571,13 @@ void input_register_handler(struct input_handler *handler)
 				input_link_handle(handle);
 		dev = dev->next;
 	}
+
+/*
+ * Notify /proc.
+ */
+
+	input_devices_state++;
+	wake_up_interruptible(&input_devices_poll_wait);
 }
 
 void input_unregister_handler(struct input_handler *handler)
@@ -581,9 +605,15 @@ void input_unregister_handler(struct input_handler *handler)
 /*
  * Remove minors.
  */
-
 	if (handler->fops != NULL)
 		input_table[handler->minor >> 5] = NULL;
+
+/*
+ * Notify /proc.
+ */
+
+	input_devices_state++;
+	wake_up_interruptible(&input_devices_poll_wait);
 }
 
 static int input_open_file(struct inode *inode, struct file *file)
@@ -651,7 +681,17 @@ void input_unregister_minor(devfs_handle_t handle)
 		len += sprintf(buf + len, "\n"); \
 	} while (0)
 
-static int input_devices_info(char *buf, char **start, off_t pos, int count)
+
+static unsigned int input_devices_poll(struct file *file, poll_table *wait)
+{
+	int state = input_devices_state;
+	poll_wait(file, &input_devices_poll_wait, wait);
+	if (state != input_devices_state)
+		return POLLIN | POLLRDNORM;
+	return 0;
+}
+
+static int input_devices_read(char *buf, char **start, off_t pos, int count, int *eof, void *data)
 {
 	struct input_dev *dev = input_dev;
 	struct input_handle *handle;
@@ -718,10 +758,12 @@ static int input_devices_info(char *buf, char **start, off_t pos, int count)
 		dev = dev->next;
 	}
 
+	if (!dev) *eof = 1;
+
 	return (count > cnt) ? cnt : count;
 }
 
-static int input_handlers_info(char *buf, char **start, off_t pos, int count)
+static int input_handlers_read(char *buf, char **start, off_t pos, int count, int *eof, void *data)
 {
 	struct input_handler *handler = input_handler;
 
@@ -756,14 +798,24 @@ static int input_handlers_info(char *buf, char **start, off_t pos, int count)
 		handler = handler->next;
 	}
 
+	if (!handler) *eof = 1;
+
 	return (count > cnt) ? cnt : count;
 }
 
 static int __init input_init(void)
 {
+	struct proc_dir_entry *entry;
+
+	init_waitqueue_head(&input_devices_poll_wait);
+
 	proc_bus_input_dir = proc_mkdir("input", proc_bus);
-	create_proc_info_entry("devices", 0, proc_bus_input_dir, input_devices_info);
-	create_proc_info_entry("handlers", 0, proc_bus_input_dir, input_handlers_info);
+	proc_bus_input_dir->owner = THIS_MODULE;
+	entry = create_proc_read_entry("devices", 0, proc_bus_input_dir, input_devices_read, NULL);
+	entry->owner = THIS_MODULE;
+	entry->proc_fops->poll = input_devices_poll;
+	entry = create_proc_read_entry("handlers", 0, proc_bus_input_dir, input_handlers_read, NULL);
+	entry->owner = THIS_MODULE;
 
 	if (devfs_register_chrdev(INPUT_MAJOR, "input", &input_fops)) {
 		printk(KERN_ERR "input: unable to register char major %d", INPUT_MAJOR);
