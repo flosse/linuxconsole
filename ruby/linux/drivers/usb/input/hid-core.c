@@ -1356,7 +1356,6 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 				goto fail;
 			pipe = usb_sndbulkpipe(dev, endpoint->bEndpointAddress);
 			FILL_BULK_URB(hid->urbout, dev, pipe, hid->outbuf, 0, hid_irq_out, hid);
-			hid->urbout->transfer_flags |= USB_ASYNC_UNLINK;
 		}
 	}
 
@@ -1397,7 +1396,6 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 
 	hid->urbctrl = usb_alloc_urb(0, GFP_KERNEL);
 	FILL_CONTROL_URB(hid->urbctrl, dev, 0, (void*) &hid->cr, hid->ctrlbuf, 1, hid_ctrl, hid);
-	hid->urbctrl->transfer_flags |= USB_ASYNC_UNLINK;
 
 	return hid;
 
