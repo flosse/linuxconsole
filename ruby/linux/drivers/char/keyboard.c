@@ -917,7 +917,8 @@ void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down)
 
 	pm_access(pm_kbd);
 
-	add_keyboard_randomness(keycode ^ (down << 7));
+	if (down != 2)
+		add_keyboard_randomness((keycode << 1) ^ down);
 
 	tty = ttytab ? ttytab[vc->vc_num] : NULL;
 
