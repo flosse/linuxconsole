@@ -66,8 +66,8 @@
  *  Interface used by the world
  */
 
-static const char *vgacon_startup(struct vt_struct *vt);
-static void vgacon_init(struct vc_data *vc, int init);
+static const char *vgacon_startup(struct vt_struct *vt, int init);
+static void vgacon_init(struct vc_data *vc);
 static void vgacon_deinit(struct vc_data *vc);
 static void vgacon_cursor(struct vc_data *vc, int mode);
 static int vgacon_switch(struct vc_data *vc);
@@ -292,7 +292,7 @@ int vga_do_font_op(char *arg, int set, int ch512)
         return 0;
 }
 
-static const char __init *vgacon_startup(struct vt_struct *vt)
+static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 {
 	const char *display_desc = NULL;
 	u16 saved1, saved2;
@@ -452,11 +452,10 @@ static const char __init *vgacon_startup(struct vt_struct *vt)
 	return display_desc;
 }
 
-static void vgacon_init(struct vc_data *vc, int init)
+static void vgacon_init(struct vc_data *vc)
 {
 	unsigned long p;
 	
-	/* We cannot be loaded as a module, therefore init is always 1 */
 	vc->vc_can_do_color = vga_can_do_color;
 	vc->vc_cols = vga_video_num_columns;
 	vc->vc_rows = vga_video_num_lines;
