@@ -42,6 +42,7 @@
 #include <asm/pgtable.h>
 
 #include <linux/fb.h>
+#include <linux/vt_kern.h>
 
 #ifdef CONFIG_FRAMEBUFFER_CONSOLE
 #include "console/fbcon.h"
@@ -960,6 +961,37 @@ fb_blank(struct fb_info *info, int blank)
 	return fb_set_cmap(&cmap, 1, info);
 }
 
+int fbcon_in_use;
+DECLARE_MUTEX(fbcon_sem);
+
+int
+fb_resize_vt(struct fb_info *info)
+{
+	struct vt_struct *vt = info->display_fg;
+	struct vc_data *vc;
+	int i;
+	
+	down(&fbcon_sem);
+	if(!fbcon_in_use || !vt)
+		return -ENODEV;
+
+	vc = vt->default_mode;
+	vc->vc_cols = info->var.xres/vc->vc_font.width;
+	vc->vc_rows = info->var.yres/vc->vc_font.height;
+	for(i = 0; i < vt->vc_count; i++)
+		vc_resize(vt->vc_cons[i], vc->vc_cols, vc->vc_rows);
+	up(&fbcon_sem);
+	return 0;
+}
+
+void
+fb_console_active(int active)
+{
+	down(&fbcon_sem);
+	fbcon_in_use = active;
+	up(&fbcon_sem);
+}
+
 static int 
 fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 	 unsigned long arg)
@@ -986,9 +1018,7 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 			return -EFAULT;
 		i = fb_set_var(info, &var);
 		if (i) return i;
-#ifdef CONFIG_FRAMEBUFFER_CONSOLE
-		fbcon_resize_all(info);
-#endif
+		fb_resize_vt(info);
 		if (copy_to_user((void *) arg, &var, sizeof(var)))
 			return -EFAULT;
 		return 0;
@@ -1390,5 +1420,6 @@ EXPORT_SYMBOL(fb_pan_display);
 EXPORT_SYMBOL(fb_get_buffer_offset);
 EXPORT_SYMBOL(move_buf_unaligned);
 EXPORT_SYMBOL(move_buf_aligned);
+EXPORT_SYMBOL(fb_console_active);
 
 MODULE_LICENSE("GPL");

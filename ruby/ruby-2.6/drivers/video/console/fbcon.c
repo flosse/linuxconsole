@@ -2272,23 +2272,6 @@ const struct consw fb_con = {
 	.con_resize             = fbcon_resize,
 };
 
-int fbcon_resize_all(struct fb_info *info)
-{
-	struct vt_struct *vt = info->display_fg;
-	struct vc_data *vc;
-	int i;
-	
-	if(!vt)
-		return -ENODEV;
-
-	vc = vt->default_mode;
-	vc->vc_cols = info->var.xres/vc->vc_font.width;
-	vc->vc_rows = info->var.yres/vc->vc_font.height;
-	for(i = 0; i < vt->vc_count; i++)
-		vc_resize(vt->vc_cons[i], vc->vc_cols, vc->vc_rows);
-	return 0;
-}
-
 int fbcon_add(int unit, int vc_count)
 {
         const char *display_desc = NULL;
@@ -2349,12 +2332,14 @@ int __init fb_console_init(void)
 		}
 	  	else
 			fbcon_add(unit, vt2fb[unit]);
+	fb_console_active(1);
 	return 0;
 }
 
 void __exit fb_console_exit(void)
 {
   //	give_up_console(&fb_con);
+        fb_console_active(0);
 }	
 
 module_init(fb_console_init);
