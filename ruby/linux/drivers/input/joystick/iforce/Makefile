@@ -21,3 +21,7 @@ endif
 iforce.o: $(IFORCEOBJS) 
 	$(LD) -i $(IFORCEOBJS) -o $@
 
+# The global Rules.make.
+
+include $(TOPDIR)/Rules.make
+
