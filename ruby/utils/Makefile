@@ -32,7 +32,7 @@
 CC		= gcc
 CFLAGS		= -O2 -Wall -I../linux/include
 
-PROGRAMS	= evtest inputattach jstest jscal fftest ffmvforce
+PROGRAMS	= evtest inputattach jstest jscal fftest ffmvforce ffset
 
 compile: $(PROGRAMS)
 
