@@ -437,27 +437,24 @@ static void vga16fb_copyarea(struct fb_info *info, int sx, int sy,
 	return;
 }
 
-static void vga16fb_imageblit(struct fb_info *info, unsigned int width, 
-			      unsigned int height, unsigned long *image,
-                   	      int image_depth, int dx, int dy)
+static void vga16fb_imageblit(struct fb_info *info, struct fb_image *image)
 {
-	char *dest = info->screen_base+dx + dy * info->fix.line_length * height;
 	struct vga_hw_state *par = (struct vga_hw_state *)info->par;
+	unsigned int height = image->height, width = image->width;
+	int x1, y1, dx = image->x, dy = image->y;
+	char *dest, *pic = image->data;
 	caddr_t regs = par->regsbase;
-	char *pic = (char *) image;
-	int x1, y1;
+	
+	dest = info->screen_base+dx + dy * info->fix.line_length * height;
 
-	if (image_depth == 1) {
-		int fg = 0; //attr_fgcol(p,c);
-	        int bg = 1; //attr_bgcol(p,c);
-
+	if (image->depth == 1) {
 		vga_wgfx(regs, VGA_GFX_MODE, 2);
 	        vga_wgfx(regs, VGA_GFX_DATA_ROTATE, 0);
         	vga_wgfx(regs, VGA_GFX_SR_ENABLE, 0xf);
-        	vga_wgfx(regs, VGA_GFX_SR_VALUE, fg);
+        	vga_wgfx(regs, VGA_GFX_SR_VALUE, image->fg_color);
        	 	vga_wgfx(regs, VGA_GFX_BIT_MASK, 0xff);
 
-        	writeb(bg, dest);
+        	writeb(image->bg_color, dest);
         	rmb();
         	fb_readb(dest); /* fill latches */
 		vga_wgfx(regs, VGA_GFX_MODE, 3);
@@ -475,7 +472,6 @@ static void vga16fb_imageblit(struct fb_info *info, unsigned int width,
                 	for (y1 = dy; y1 < (dy + height); y1++) {
                         	for (x1 = dx; x1 < (dx + width); x1++) {
                                 	dest = info->screen_base + y1*info->fix.line_length + x1/4 + dx/8;
-                                
 					vga_wgfx(regs,VGA_GFX_SR_VALUE,*pic>>4);
                                 	vga_wgfx(regs,VGA_GFX_BIT_MASK, 1 << (7 - x1%4*2));
                                 	fb_readb(dest);
