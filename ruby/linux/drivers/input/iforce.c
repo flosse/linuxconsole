@@ -89,18 +89,44 @@ struct iforce_core_effect {
 #define FF_CMD_PERIOD		0x0407
 #define FF_CMD_INTERACT		0x050a
 
-#define FF_CMD_DEF_SPRING	0x4002
+#define FF_CMD_AUTOCENTER	0x4002
 #define FF_CMD_PLAY		0x4103
 #define FF_CMD_ENABLE		0x4201
 #define FF_CMD_GAIN		0x4301
 
 #define FF_CMD_QUERY		0xff01
-#define FF_CMD_RESPONSE		0xffff
+
+static signed short btn_joystick[] = { BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_TOP2, BTN_BASE,
+	BTN_BASE2, BTN_BASE3, BTN_BASE4, BTN_BASE5, BTN_A, BTN_B, BTN_C, -1 };
+static signed short btn_wheel[] =    { BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_TOP2, BTN_BASE,
+	BTN_BASE2, BTN_BASE3, BTN_BASE4, BTN_BASE5, BTN_A, BTN_B, BTN_C, -1 };
+static signed short abs_joystick[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, -1 };
+static signed short abs_wheel[]    = { ABS_WHEEL, ABS_GAS, ABS_BRAKE, ABS_HAT0X, ABS_HAT0Y };
+static signed short ff_joystick[] = { FF_X, FF_Y, -1 };
+static signed short ff_wheel[]    = { FF_X, -1 };
+
+static struct iforce_device {
+	u16 idvendor;
+	u16 idproduct;
+	char *name;
+	signed short *btn;
+	signed short *abs;
+	signed short *ff;
+} iforce_device[] = {
+
+	{ 0x046d, 0xc281, "Logitech WingMan Force",			btn_joystick, abs_joystick, ff_joystick },
+	{ 0x046d, 0xc291, "Logitech WingMan Formula Force",		btn_wheel, abs_wheel, ff_wheel },
+	{ 0x05ef, 0x020a, "AVB Top Shot Pegasus",			btn_joystick, abs_joystick, ff_joystick },
+	{ 0x05ef, 0x8884, "AVB Mag Turbo Force",			btn_wheel, abs_wheel, ff_wheel },
+	{ 0x06f8, 0x0001, "Guillemot Race Leader Force Feedback",	btn_wheel, abs_wheel, ff_wheel },
+	{ 0x0000, 0x0000, "Unknown I-Force Device %04x:%04x",		btn_joystick, abs_joystick, ff_joystick }
+};		
 
 struct iforce {
 	struct input_dev dev;		/* Input device interface */
+	struct iforce_device *type;
+	char name[64];
         int open;
-	int type;
 
         unsigned char data[IFORCE_MAX_LENGTH];
         unsigned char edata[IFORCE_MAX_LENGTH];
@@ -128,10 +154,6 @@ static struct {
         __s32 x;
         __s32 y;
 } iforce_hat_to_axis[16] = {{ 0,-1}, { 1,-1}, { 1, 0}, { 1, 1}, { 0, 1}, {-1, 1}, {-1, 0}, {-1,-1}};
-
-
-static char *iforce_name_joystick = "I-Force joystick";
-static char *iforce_name_wheel = "I-Force wheel";
 
 /* Get hi and low bytes of a 16-bits int */
 #define HI(a)	((unsigned char)((a) >> 8))
@@ -193,7 +215,6 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 			if ((status = usb_submit_urb(&iforce->out))) {
 				set_current_state(TASK_RUNNING);
 				remove_wait_queue(&iforce->wait, &wait);
-				printk(KERN_WARNING "iforce.c: Failed to submit output urb. (%d)\n", status);
 				return;
 			}
 
@@ -203,10 +224,8 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 			set_current_state(TASK_RUNNING);
 			remove_wait_queue(&iforce->wait, &wait);
 
-			if (!timeout) {
-				printk(KERN_WARNING "iforce.c: Output urb: timeout\n");
+			if (!timeout)
 				usb_unlink_urb(&iforce->out);
-			}
 
 			return;
 		}
@@ -214,30 +233,150 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 	}
 } 
 
-static void expect_packet(struct iforce *iforce, u16 cmd)
+static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char *data)
 {
-	iforce->expect_packet = cmd;
-}
+	struct input_dev *dev = &iforce->dev;
 
-static int wait_packet(struct iforce *iforce, int timeout)
-{ 
-	DECLARE_WAITQUEUE(wait, current);
-
-	set_current_state(TASK_INTERRUPTIBLE);
-	add_wait_queue(&iforce->wait, &wait);
-
-	while (timeout && iforce->expect_packet)
-		timeout = schedule_timeout(timeout);
-
-	set_current_state(TASK_RUNNING);
-	remove_wait_queue(&iforce->wait, &wait);
-
-	if (!timeout) {
+	if (HI(iforce->expect_packet) == HI(cmd)) {
 		iforce->expect_packet = 0;
-		return -1;
+		iforce->ecmd = cmd;
+		memcpy(iforce->edata, data, IFORCE_MAX_LENGTH);
+		if (waitqueue_active(&iforce->wait))
+			wake_up(&iforce->wait);
 	}
 
+	switch (HI(cmd)) {
+
+		case 0x01:	/* joystick position data */
+		case 0x03:	/* wheel position data */
+
+			if (HI(cmd) == 1) {
+				input_report_abs(dev, ABS_X, (__s16) (((__s16)data[1] << 8) | data[0]));
+				input_report_abs(dev, ABS_Y, (__s16) (((__s16)data[3] << 8) | data[2]));
+				input_report_abs(dev, ABS_THROTTLE, 255 - data[4]);
+			} else {
+				input_report_abs(dev, ABS_WHEEL, (__s16) (((__s16)data[1] << 8) | data[0]));
+				input_report_abs(dev, ABS_GAS,   255 - data[2]);
+				input_report_abs(dev, ABS_BRAKE, 255 - data[3]);
+			}
+
+			input_report_abs(dev, ABS_HAT0X, iforce_hat_to_axis[data[6] >> 4].x);
+			input_report_abs(dev, ABS_HAT0Y, iforce_hat_to_axis[data[6] >> 4].y);
+
+			input_report_key(dev, BTN_TRIGGER, data[5] & 0x01);
+			input_report_key(dev, BTN_TOP,     data[5] & 0x02);
+			input_report_key(dev, BTN_THUMB,   data[5] & 0x04);
+			input_report_key(dev, BTN_TOP2,    data[5] & 0x08);
+			input_report_key(dev, BTN_BASE,    data[5] & 0x10);
+			input_report_key(dev, BTN_BASE2,   data[5] & 0x20);
+			input_report_key(dev, BTN_BASE3,   data[5] & 0x40);
+			input_report_key(dev, BTN_BASE4,   data[5] & 0x80);
+			input_report_key(dev, BTN_BASE5,   data[6] & 0x01);
+			input_report_key(dev, BTN_A,       data[6] & 0x02);
+			input_report_key(dev, BTN_B,       data[6] & 0x04);
+			input_report_key(dev, BTN_C,       data[6] & 0x08);
+			break;
+
+		case 0x02:	/* status report */
+
+			input_report_key(dev, BTN_DEAD, data[0] & 0x02);
+			break;
+	}
+}
+
+static int get_id_packet(struct iforce *iforce, char *packet)
+{
+	DECLARE_WAITQUEUE(wait, current);
+	int status, timeout = HZ; /* 1 second */
+
+
+	switch (iforce->dev.idbus) {
+
+#ifdef IFORCE_USB
+		case BUS_USB:
+
+			iforce->dr.request = packet[0];	
+			iforce->ctrl.dev = iforce->usbdev;
+
+			set_current_state(TASK_INTERRUPTIBLE);
+			add_wait_queue(&iforce->wait, &wait);
+
+			if ((status = usb_submit_urb(&iforce->ctrl))) {
+				set_current_state(TASK_RUNNING);
+				remove_wait_queue(&iforce->wait, &wait);
+				return -1;
+			}
+
+			while (timeout && iforce->ctrl.status == -EINPROGRESS)
+				timeout = schedule_timeout(timeout);
+
+			set_current_state(TASK_RUNNING);
+			remove_wait_queue(&iforce->wait, &wait);
+
+			if (!timeout) {
+				usb_unlink_urb(&iforce->ctrl);
+				return -1;
+			}
+
+			break;
+#endif
+#ifdef IFORCE_232
+		case BUS_RS232:
+
+			iforce->expect_packet = FF_CMD_QUERY;
+			send_packet(iforce, FF_CMD_QUERY, packet);
+
+			set_current_state(TASK_INTERRUPTIBLE);
+			add_wait_queue(&iforce->wait, &wait);
+
+			while (timeout && iforce->expect_packet)
+				timeout = schedule_timeout(timeout);
+
+			set_current_state(TASK_RUNNING);
+			remove_wait_queue(&iforce->wait, &wait);
+
+			if (!timeout) {
+				iforce->expect_packet = 0;
+				return -1;
+			}
+
+			break;
+#endif
+	}
+
+	return -(iforce->edata[0] != packet[0]);
+}
+
+static int iforce_open(struct input_dev *dev)
+{
+	struct iforce *iforce = dev->private;
+
+	switch (dev->idbus) {
+#ifdef IFORCE_USB
+		case BUS_USB:
+			if (iforce->open++)
+				break;
+			iforce->irq.dev = iforce->usbdev;
+			if (usb_submit_urb(&iforce->irq))
+					return -EIO;
+			break;
+#endif
+	}
 	return 0;
+}
+
+static void iforce_close(struct input_dev *dev)
+{
+	struct iforce *iforce = dev->private;
+
+	switch (dev->idbus) {
+#ifdef IFORCE_USB
+		case BUS_USB:
+			if (!--iforce->open)
+				usb_unlink_urb(&iforce->irq);
+			break;
+#endif
+	}
 }
 
 /*
@@ -680,7 +819,7 @@ static int iforce_set_forcegain(struct input_dev *dev, unsigned short gain)
 	struct iforce* iforce = (struct iforce*)(dev->private);
 	unsigned char data = gain>>9;
 	
-printk(KERN_DEBUG "iforce.c: set gain %02x\n", (unsigned int)data);
+	printk(KERN_DEBUG "iforce.c: set gain %02x\n", (unsigned int)data);
 	send_packet(iforce, FF_CMD_GAIN, &data);                                               
 
 	return 0;
@@ -699,154 +838,17 @@ static int iforce_set_autocenter(struct input_dev *dev, unsigned short strength)
 	data[0] = 0x03;
 	data[1] = strength>>9;
 
-printk(KERN_DEBUG "iforce.c: set auto-center %02x\n", (unsigned int)data[1]);
-	send_packet(iforce, FF_CMD_DEF_SPRING, data);
+	printk(KERN_DEBUG "iforce.c: set auto-center %02x\n", (unsigned int)data[1]);
+	send_packet(iforce, FF_CMD_AUTOCENTER, data);
 
 	data[0] = 0x04;
 	data[1] = 0x01;
 
-	send_packet(iforce, FF_CMD_DEF_SPRING, data);
+	send_packet(iforce, FF_CMD_AUTOCENTER, data);
 
 	return 0;
 }
-	
-static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char *data)
-{
-	struct input_dev *dev = &iforce->dev;
 
-	if (HI(iforce->expect_packet) == HI(cmd) || LO(iforce->expect_packet) == HI(cmd)) {
-		iforce->expect_packet = 0;
-		iforce->ecmd = cmd;
-		memcpy(iforce->edata, data, IFORCE_MAX_LENGTH);
-		if (waitqueue_active(&iforce->wait))
-			wake_up(&iforce->wait);
-	}
-
-	switch (HI(cmd)) {
-
-		case 0x01:	/* joystick position data */
-		case 0x03:	/* wheel position data */
-
-			if (!iforce->type)
-				iforce->type = HI(cmd);
-
-			if (HI(cmd) == 1) {
-				input_report_abs(dev, ABS_X, (__s16) (((__s16)data[1] << 8) | data[0]));
-				input_report_abs(dev, ABS_Y, (__s16) (((__s16)data[3] << 8) | data[2]));
-				input_report_abs(dev, ABS_THROTTLE, 255 - data[4]);
-			} else {
-				input_report_abs(dev, ABS_WHEEL, (__s16) (((__s16)data[1] << 8) | data[0]));
-				input_report_abs(dev, ABS_GAS,   255 - data[2]);
-				input_report_abs(dev, ABS_BRAKE, 255 - data[3]);
-			}
-
-			input_report_abs(dev, ABS_HAT0X, iforce_hat_to_axis[data[6] >> 4].x);
-			input_report_abs(dev, ABS_HAT0Y, iforce_hat_to_axis[data[6] >> 4].y);
-
-			input_report_key(dev, BTN_TRIGGER, data[5] & 0x01);
-			input_report_key(dev, BTN_TOP,     data[5] & 0x02);
-			input_report_key(dev, BTN_THUMB,   data[5] & 0x04);
-			input_report_key(dev, BTN_TOP2,    data[5] & 0x08);
-			input_report_key(dev, BTN_BASE,    data[5] & 0x10);
-			input_report_key(dev, BTN_BASE2,   data[5] & 0x20);
-			input_report_key(dev, BTN_BASE3,   data[5] & 0x40);
-			input_report_key(dev, BTN_BASE4,   data[5] & 0x80);
-			input_report_key(dev, BTN_BASE5,   data[6] & 0x01);
-			input_report_key(dev, BTN_A,       data[6] & 0x02);
-			input_report_key(dev, BTN_B,       data[6] & 0x04);
-			input_report_key(dev, BTN_C,       data[6] & 0x08);
-			break;
-
-		case 0x02:	/* status report */
-
-			input_report_key(dev, BTN_DEAD, data[0] & 0x02);
-			break;
-	}
-}
-
-static int iforce_open(struct input_dev *dev)
-{
-	struct iforce *iforce = dev->private;
-
-	switch (dev->idbus) {
-#ifdef IFORCE_USB
-		case BUS_USB:
-			if (iforce->open++)
-				break;
-			iforce->irq.dev = iforce->usbdev;
-			if (usb_submit_urb(&iforce->irq))
-					return -EIO;
-			break;
-#endif
-	}
-	return 0;
-}
-
-static void iforce_close(struct input_dev *dev)
-{
-	struct iforce *iforce = dev->private;
-
-	switch (dev->idbus) {
-#ifdef IFORCE_USB
-		case BUS_USB:
-			if (!--iforce->open)
-				usb_unlink_urb(&iforce->irq);
-			break;
-#endif
-	}
-}
-
-static int get_ff_packet(struct iforce *iforce, char *packet)
-{
-	switch (iforce->dev.idbus) {
-
-#ifdef IFORCE_USB
-		case BUS_USB: {
-
-			DECLARE_WAITQUEUE(wait, current);
-			int status, timeout = HZ; /* 1 second */
-
-			iforce->dr.request = packet[0];	
-			iforce->ctrl.dev = iforce->usbdev;
-
-			set_current_state(TASK_INTERRUPTIBLE);
-			add_wait_queue(&iforce->wait, &wait);
-
-			if ((status = usb_submit_urb(&iforce->ctrl))) {
-				set_current_state(TASK_RUNNING);
-				remove_wait_queue(&iforce->wait, &wait);
-				printk(KERN_WARNING "iforce.c: Failed to submit control urb. (%d)\n", status);
-				return -1;
-			}
-
-			while (timeout && iforce->ctrl.status == -EINPROGRESS)
-				timeout = schedule_timeout(timeout);
-
-			set_current_state(TASK_RUNNING);
-			remove_wait_queue(&iforce->wait, &wait);
-
-			if (!timeout) {
-				printk(KERN_WARNING "iforce.c: Control urb: timeout\n");
-				usb_unlink_urb(&iforce->ctrl);
-				return -1;
-			}
-
-			break;
-		}
-#endif
-#ifdef IFORCE_232
-		case BUS_RS232: {
-			expect_packet(iforce, FF_CMD_RESPONSE);
-			send_packet(iforce, FF_CMD_QUERY, packet);
-			if (wait_packet(iforce, HZ/4))
-				return -1;
-			break;
-		}
-#endif
-	}
-
-	return -(iforce->edata[0] != packet[0]);
-}
 
 static int iforce_init_device(struct iforce *iforce)
 {
@@ -861,6 +863,7 @@ static int iforce_init_device(struct iforce *iforce)
  */
 
 	iforce->dev.private = iforce;
+	iforce->dev.name = iforce->name;
 	iforce->dev.open = iforce_open;
 	iforce->dev.close = iforce_close;
 	iforce->dev.event = iforce_input_event;
@@ -886,11 +889,11 @@ static int iforce_init_device(struct iforce *iforce)
  */
 
 	for (i = 0; i < 20; i++) 
-		if (!get_ff_packet(iforce, "O"))
+		if (!get_id_packet(iforce, "O"))
 			break;
 
 	if (i == 20) { /* 5 seconds */
-		printk(KERN_INFO "iforce.c: Timeout waiting for response from device.\n");
+		printk(KERN_ERR "iforce.c: Timeout waiting for response from device.\n");
 		iforce_close(&iforce->dev);
 		return -1;
 	}
@@ -899,13 +902,13 @@ static int iforce_init_device(struct iforce *iforce)
  * Get device info.
  */
 
-	if (!get_ff_packet(iforce, "M"))
+	if (!get_id_packet(iforce, "M"))
 		iforce->dev.idvendor = (iforce->edata[2] << 8) | iforce->edata[1];
-	if (!get_ff_packet(iforce, "P"))		
+	if (!get_id_packet(iforce, "P"))		
 		iforce->dev.idproduct = (iforce->edata[2] << 8) | iforce->edata[1];
-	if (!get_ff_packet(iforce, "B"))
+	if (!get_id_packet(iforce, "B"))
 		iforce->device_memory.end = (iforce->edata[2] << 8) | iforce->edata[1];
-	if (!get_ff_packet(iforce, "N"))
+	if (!get_id_packet(iforce, "N"))
 		iforce->n_effects_max = iforce->edata[1];
 
 /*
@@ -913,74 +916,72 @@ static int iforce_init_device(struct iforce *iforce)
  */
 
 	for (i = 0; c[i]; i++)
-		if (!get_ff_packet(iforce, c + i))
+		if (!get_id_packet(iforce, c + i))
 			dump_packet("info", iforce->ecmd, iforce->edata);
 
 /*
  * Disable spring, enable force feedback.
+ * FIXME: We should use iforce_set_autocenter() et al here.
  */
 
-	send_packet(iforce, FF_CMD_DEF_SPRING, "\004\000");
+	send_packet(iforce, FF_CMD_AUTOCENTER, "\004\000");
 	send_packet(iforce, FF_CMD_ENABLE, "\004");
 
 /*
- * Detect if the device is a wheel or a joystick.
+ * Find appropriate device entry
  */
 
-	iforce_open(&iforce->dev);
-	expect_packet(iforce, 0x0103);
-	if (wait_packet(iforce, HZ * 4)) {
-		printk(KERN_WARNING "iforce.c: Couldn't detect whether the device is a wheel or a joystick.\n");
-		printk(KERN_WARNING "iforce.c: Assuming joystick.\n");
-		iforce->ecmd = 0x0100;
-	}
-	iforce->type = HI(iforce->ecmd);
-	iforce_close(&iforce->dev);
+	for (i = 0; iforce_device[i].idvendor; i++)
+		if (iforce_device[i].idvendor == iforce->dev.idvendor &&
+		    iforce_device[i].idproduct == iforce->dev.idproduct)
+			break;
+
+	iforce->type = iforce_device + i;
+
+	sprintf(iforce->name, iforce->type->name,
+		iforce->dev.idproduct, iforce->dev.idvendor);
 
 /*
  * Set input device bitfields and ranges.
  */
 
 	iforce->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS) | BIT(EV_FF);
-	iforce->dev.keybit[LONG(BTN_JOYSTICK)] |= BIT(BTN_TRIGGER) | BIT(BTN_TOP) | BIT(BTN_THUMB) | BIT(BTN_TOP2) |
-					BIT(BTN_BASE) | BIT(BTN_BASE2) | BIT(BTN_BASE3) | BIT(BTN_BASE4) | BIT(BTN_BASE5);
-	iforce->dev.keybit[LONG(BTN_GAMEPAD)] |= BIT(BTN_A) | BIT(BTN_B) | BIT(BTN_C);
 
-	switch (iforce->type) {
+	for (i = 0; iforce->type->btn[i] >= 0; i++)
+		set_bit(iforce->type->btn[i], iforce->dev.keybit);
 
-		case 0x01: /* Joystick */
-			iforce->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y) | BIT(ABS_THROTTLE) | BIT(ABS_HAT0X) | BIT(ABS_HAT0Y);
-			iforce->dev.ffbit[0] = BIT(FF_X) | BIT(FF_Y);
-			iforce->dev.name = iforce_name_joystick;
-			break;
+	for (i = 0; iforce->type->abs[i] >= 0; i++) {
 
-		case 0x03: /* Wheel */
-			iforce->dev.absbit[0] = BIT(ABS_WHEEL) | BIT(ABS_GAS) | BIT(ABS_BRAKE) | BIT(ABS_HAT0X) | BIT(ABS_HAT0Y);
-			iforce->dev.ffbit[0] = BIT(FF_X);
-			iforce->dev.name = iforce_name_wheel;
-			break;
+		signed short t = iforce->type->abs[i];
+
+		set_bit(t, iforce->dev.absbit);
+		
+		if (t >= ABS_X && t <= ABS_Y) {
+			iforce->dev.absmax[i] =  1920;
+			iforce->dev.absmin[i] = -1920;
+			iforce->dev.absflat[i] = 128;
+			iforce->dev.absfuzz[i] = 16;
+		}
+
+		if (t >= ABS_THROTTLE && t <= ABS_RUDDER) {
+			iforce->dev.absmax[i] = 255;
+			iforce->dev.absmin[i] = 0;
+		}
+
+		if (t >= ABS_HAT0X && t <= ABS_HAT0Y) {
+			iforce->dev.absmax[i] =  1;
+			iforce->dev.absmin[i] = -1;
+		}
 	}
-	/* Supported effects: no idea how to auto-detect those */
+
+	for (i = 0; iforce->type->ff[i] >= 0; i++)
+		set_bit(iforce->type->ff[i], iforce->dev.ffbit);
+
+	/* Supported effects: Hopefully all I-Force devices support these */
 	iforce->dev.ffbit[0] |= BIT(FF_PERIODIC) | BIT(FF_CONSTANT) | BIT(FF_SPRING) | BIT(FF_FRICTION);
+
 	/* Number of effects that can be played at the same time */
 	iforce->dev.ffbit[0] |= iforce->n_effects_max<<FF_N_EFFECTS_0;
-
-	for (i = ABS_X; i <= ABS_Y; i++) {
-		iforce->dev.absmax[i] =  1920;
-		iforce->dev.absmin[i] = -1920;
-		iforce->dev.absflat[i] = 128;
-		iforce->dev.absfuzz[i] = 16;
-	}
-
-	for (i = ABS_THROTTLE; i <= ABS_RUDDER; i++) {
-		iforce->dev.absmax[i] = 255;
-		iforce->dev.absmin[i] = 0;
-	}
-
-	for (i = ABS_HAT0X; i <= ABS_HAT0Y; i++) {
-		iforce->dev.absmax[i] =  1;
-		iforce->dev.absmin[i] = -1;
-	}
 
 /*
  * Register input device.
@@ -1004,23 +1005,16 @@ static void iforce_usb_irq(struct urb *urb)
 static void iforce_usb_out(struct urb *urb)
 {
 	 struct iforce *iforce = urb->context;
-
-	if (urb->status)
-		printk(KERN_WARNING "iforce.c: nonzero output urb status %d\n", urb->status);
-
+	if (urb->status) return;
 	if (waitqueue_active(&iforce->wait))
 		wake_up(&iforce->wait);
 }
 
 static void iforce_usb_ctrl(struct urb *urb)
 {
-	 struct iforce *iforce = urb->context;
-
-	if (urb->status)
-		printk(KERN_WARNING "iforce.c: nonzero ctrl urb status %d\n", urb->status);
-
+	struct iforce *iforce = urb->context;
+	if (urb->status) return;
 	iforce->ecmd = 0xff00 | urb->actual_length; 
-
 	if (waitqueue_active(&iforce->wait))
 		wake_up(&iforce->wait);
 }
@@ -1038,15 +1032,11 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	memset(iforce, 0, sizeof(struct iforce));
 
 	iforce->dev.idbus = BUS_USB;
-	iforce->dev.idvendor = dev->descriptor.idVendor;
-	iforce->dev.idproduct = dev->descriptor.idProduct;
-	iforce->dev.idversion = dev->descriptor.bcdDevice;
+	iforce->usbdev = dev;
 
 	iforce->dr.requesttype = USB_TYPE_VENDOR | USB_DIR_IN | USB_RECIP_INTERFACE;
         iforce->dr.index = 0;
         iforce->dr.length = 16;
-
-	iforce->usbdev = dev;
 
 	FILL_INT_URB(&iforce->irq, dev, usb_rcvintpipe(dev, epirq->bEndpointAddress),
 			iforce->data, 16, iforce_usb_irq, iforce, epirq->bInterval);
@@ -1062,9 +1052,9 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 		return NULL;
 	}
 
-	printk(KERN_INFO "input%d: %s [%04x:%04x, %d effects, %ld bytes memory] on usb%d:%d.%d\n",
-		 iforce->dev.number, iforce->dev.name, iforce->dev.idvendor, iforce->dev.idproduct,
-		 iforce->n_effects_max, iforce->device_memory.end, dev->bus->busnum, dev->devnum, ifnum);
+	printk(KERN_INFO "input%d: %s [%d effects, %ld bytes memory] on usb%d:%d.%d\n",
+		 iforce->dev.number, iforce->dev.name, iforce->n_effects_max,
+		iforce->device_memory.end, dev->bus->busnum, dev->devnum, ifnum);
 
 	return iforce;
 }
@@ -1153,11 +1143,7 @@ static void iforce_serio_connect(struct serio *serio, struct serio_dev *dev)
 	if (!(iforce = kmalloc(sizeof(struct iforce), GFP_KERNEL))) return;
 	memset(iforce, 0, sizeof(struct iforce));
 
-	iforce->dev.idbus = BUS_RS232;
-	iforce->dev.idvendor = SERIO_IFORCE;
-	iforce->dev.idproduct = 0x0001;
-	iforce->dev.idversion = 0x0100;
-
+	iforce->dev.idbus = BUS_RS232; /* FIXME - need to specify I-Force namespace */
 	iforce->serio = serio;
 	serio->private = iforce;
 
@@ -1172,9 +1158,9 @@ static void iforce_serio_connect(struct serio *serio, struct serio_dev *dev)
 		return;
 	}
 
-	printk(KERN_INFO "input%d: %s [%04x:%04x, %d effects, %ld bytes memory] on serio%d\n",
-		iforce->dev.number, iforce->dev.name, iforce->dev.idvendor, iforce->dev.idproduct,
-		iforce->n_effects_max, iforce->device_memory.end, serio->number);
+	printk(KERN_INFO "input%d: %s [%d effects, %ld bytes memory] on serio%d\n",
+		iforce->dev.number, iforce->dev.name, iforce->n_effects_max,
+		iforce->device_memory.end, serio->number);
 }
 
 static void iforce_serio_disconnect(struct serio *serio)
