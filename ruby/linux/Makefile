@@ -132,7 +132,8 @@ DRIVERS-y += drivers/char/char.o \
 	drivers/block/block.o \
 	drivers/misc/misc.o \
 	drivers/net/net.o \
-	drivers/media/media.o
+	drivers/media/media.o \
+	drivers/video/video.o
 DRIVERS-$(CONFIG_AGP) += drivers/char/agp/agp.o
 DRIVERS-$(CONFIG_DRM) += drivers/char/drm/drm.o
 DRIVERS-$(CONFIG_NUBUS) += drivers/nubus/nubus.a
@@ -167,7 +168,6 @@ DRIVERS-$(CONFIG_ALL_PPC) += drivers/macintosh/macintosh.o
 DRIVERS-$(CONFIG_MAC) += drivers/macintosh/macintosh.o
 DRIVERS-$(CONFIG_ISAPNP) += drivers/pnp/pnp.o
 DRIVERS-$(CONFIG_SGI_IP22) += drivers/sgi/sgi.a
-DRIVERS-$(CONFIG_VT) += drivers/video/video.o
 DRIVERS-$(CONFIG_PARIDE) += drivers/block/paride/paride.a
 DRIVERS-$(CONFIG_HAMRADIO) += drivers/net/hamradio/hamradio.o
 DRIVERS-$(CONFIG_TC) += drivers/tc/tc.a
