@@ -40,9 +40,6 @@
 #include <asm/byteorder.h>
 #include <asm/unaligned.h>
 
-#undef attr
-#undef org
-#undef addr
 #define HEADER_SIZE	4
 
 unsigned short *screen_pos(struct vc_data *vc, int w_offset, int viewed)
@@ -78,36 +75,28 @@ void vcs_scr_writew(struct vc_data *vc, u16 val, u16 *org)
 	}
 }
 
-
 static int
-vcs_size(struct inode *inode)
+vcs_size(struct vc_data *vc, unsigned long attr)
 {
-	int minor = iminor(inode);
-	int currcons = minor & 127;
-	struct vc_data *vc;
-	int size;
+	int size = vc->vc_rows * vc->vc_cols; 
 
-	vc = find_vc(currcons);
-		
-	if (!vc)
-		return -ENXIO;
-
-	size = vc->vc_rows * vc->vc_cols; 
-
-	if (minor & 128)
+	if (attr)
 		size = 2*size + HEADER_SIZE;
 	return size;
 }
 
 static loff_t vcs_lseek(struct file *file, loff_t offset, int orig)
 {
+	struct inode *inode = file->f_dentry->d_inode;
+	struct vc_data *vc = file->private_data;
+	long attr = iminor(inode) & 128;
 	int size;
 
-	down(&con_buf_sem);
-	size = vcs_size(file->f_dentry->d_inode);
+	down(&vc->display_fg->lock);
+	size = vcs_size(vc, attr);
 	switch (orig) {
 		default:
-			up(&con_buf_sem);
+			up(&vc->display_fg->lock);
 			return -EINVAL;
 		case 2:
 			offset += size;
@@ -118,11 +107,11 @@ static loff_t vcs_lseek(struct file *file, loff_t offset, int orig)
 			break;
 	}
 	if (offset < 0 || offset > size) {
-		up(&con_buf_sem);
+		up(&vc->display_fg->lock);
 		return -EINVAL;
 	}
 	file->f_pos = offset;
-	up(&con_buf_sem);
+	up(&vc->display_fg->lock);
 	return file->f_pos;
 }
 
@@ -130,36 +119,29 @@ static ssize_t
 vcs_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 {
 	struct inode *inode = file->f_dentry->d_inode;
-	unsigned int currcons = iminor(inode);
-	struct vc_data *vc;
-	long pos;
-	long viewed, attr, read;
-	int col, maxcol;
+	struct vc_data *vc = file->private_data;
+	long attr = iminor(inode) & 128;
 	unsigned short *org = NULL;
-	ssize_t ret;
+	long viewed, read, pos;
+	ssize_t ret = -ENXIO;
+	int col, maxcol;
 
-	down(&con_buf_sem);
-
+	if (!vc)
+		return ret;
+	down(&vc->display_fg->lock);
+	
 	pos = *ppos;
-
-	/* Select the proper current console and verify
+	/* 
+	 * Select the proper current console and verify
 	 * sanity of the situation under the console lock.
 	 */
 	acquire_console_sem();
 
-	attr = (currcons & 128);
-	currcons = (currcons & 127);
-	if (currcons == 0) {
+	if (IS_VISIBLE) {
 		viewed = 1;
 	} else {
 		viewed = 0;
 	}
-	ret = -ENXIO;
-
-	vc = find_vc(currcons);
-
-	if (!vc)
-		goto unlock_out;
 
 	ret = -EINVAL;
 	if (pos < 0)
@@ -176,15 +158,15 @@ vcs_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 		 * as copy_to_user at the end of this loop
 		 * could sleep.
 		 */
-		size = vcs_size(inode);
+		size = vcs_size(vc, attr);
 		if (pos >= size)
 			break;
 		if (count > size - pos)
 			count = size - pos;
 
 		this_round = count;
-		if (this_round > CON_BUF_SIZE)
-			this_round = CON_BUF_SIZE;
+		if (this_round > BUF_SIZE)
+			this_round = BUF_SIZE;
 
 		/* Perform the whole read into the local con_buf.
 		 * Then we can drop the console spinlock and safely
@@ -216,8 +198,8 @@ vcs_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 
 				con_buf_start += p;
 				this_round += p;
-				if (this_round > CON_BUF_SIZE) {
-					this_round = CON_BUF_SIZE;
+				if (this_round > BUF_SIZE) {
+					this_round = BUF_SIZE;
 					orig_count = this_round - p;
 				}
 
@@ -236,7 +218,7 @@ vcs_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 				 * space in buffer.
 				 */
 				con_buf_start++;
-				if (this_round < CON_BUF_SIZE)
+				if (this_round < BUF_SIZE)
 					this_round++;
 				else
 					orig_count--;
@@ -295,7 +277,7 @@ vcs_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 		ret = read;
 unlock_out:
 	release_console_sem();
-	up(&con_buf_sem);
+	up(&vc->display_fg->lock);
 	return ret;
 }
 
@@ -303,40 +285,32 @@ static ssize_t
 vcs_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 {
 	struct inode *inode = file->f_dentry->d_inode;
-	unsigned int currcons = iminor(inode);
-	struct vc_data *vc;
-	long pos;
-	long viewed, attr, size, written;
-	char *con_buf0;
-	int col, maxcol;
+	struct vc_data *vc = file->private_data;
+	long viewed, size, written, pos;
+	long attr = iminor(inode) & 128;
 	u16 *org0 = NULL, *org = NULL;
-	size_t ret;
+	size_t ret = -ENXIO;
+	int col, maxcol;
+	char *con_buf0;
 
-	down(&con_buf_sem);
+	if (!vc)
+		return ret;
+	down(&vc->display_fg->lock);
 
-	pos = *ppos;
-
-	/* Select the proper current console and verify
+	/* 
+	 * Select the proper current console and verify
 	 * sanity of the situation under the console lock.
 	 */
 	acquire_console_sem();
 
-	attr = (currcons & 128);
-	currcons = (currcons & 127);
-
-	if (currcons == 0) {
+	pos = *ppos;
+	if (IS_VISIBLE) {
 		viewed = 1;
 	} else {
 		viewed = 0;
 	}
-	ret = -ENXIO;
 
-	vc = find_vc(currcons);
-
-	if (!vc)
-		goto unlock_out;
-
-	size = vcs_size(inode);
+	size = vcs_size(vc, attr);
 	ret = -EINVAL;
 	if (pos < 0 || pos > size)
 		goto unlock_out;
@@ -348,8 +322,8 @@ vcs_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 		size_t orig_count;
 		long p;
 
-		if (this_round > CON_BUF_SIZE)
-			this_round = CON_BUF_SIZE;
+		if (this_round > BUF_SIZE)
+			this_round = BUF_SIZE;
 
 		/* Temporarily drop the console lock so that we can read
 		 * in the write data from userspace safely.
@@ -371,11 +345,12 @@ vcs_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 			}
 		}
 
-		/* The vcs_size might have changed while we slept to grab
+		/* 
+		 * The vcs_size might have changed while we slept to grab
 		 * the user buffer, so recheck.
 		 * Return data written up to now on failure.
 		 */
-		size = vcs_size(inode);
+		size = vcs_size(vc, attr);
 		if (pos >= size)
 			break;
 		if (this_round > size - pos)
@@ -481,9 +456,7 @@ vcs_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 
 unlock_out:
 	release_console_sem();
-
-	up(&con_buf_sem);
-
+	up(&vc->display_fg->lock);
 	return ret;
 }
 
@@ -491,9 +464,11 @@ static int
 vcs_open(struct inode *inode, struct file *filp)
 {
 	unsigned int currcons = iminor(inode) & 127;
+	struct vc_data *vc = find_vc(currcons);
 
-	if (currcons && !find_vc(currcons))
+	if (!vc)
 		return -ENXIO;
+	filp->private_data = vc;
 	return 0;
 }
 
