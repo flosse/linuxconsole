@@ -282,7 +282,7 @@ void delete_char(struct vc_data *vc, unsigned int nr);
 void insert_line(struct vc_data *vc, unsigned int nr);
 void delete_line(struct vc_data *vc, unsigned int nr);
 void set_origin(struct vc_data *vc);
-inline void clear_region(struct vc_data *vc,int x,int y,int height,int width);
+inline void clear_region(struct vc_data *vc,int x,int y,int width,int height);
 void do_update_region(struct vc_data *vc, unsigned long start, int count);
 void update_region(struct vc_data *vc, unsigned long start, int count);
 void update_screen(struct vc_data *vc);
