@@ -851,8 +851,10 @@ found_pool:
 			return NULL;
 		}			
 	}
-        vc_init(vc, 1);
 	vt->vc_cons[currcons - vt->first_vc] = vc;		
+	if (vt->first_vc == currcons)
+		vt->want_vc= vt->fg_console= vt->last_console = vc;
+        vc_init(vc, 1);
         return vc;
 }
 
@@ -984,10 +986,7 @@ const char *create_vt(struct vt_struct *vt, int init)
 	if (vt->pm_con)
 		vt->pm_con->data = vt;
 	vt->default_mode->display_fg = vt;
-
 	vt->vc_cons[0] = vc_allocate(current_vc);
-	if (vt->vc_cons[0])
-		vt->want_vc= vt->fg_console= vt->last_console = vt->vc_cons[0];
 	vt->keyboard = NULL;
 	if (!admin_vt) {
 		admin_vt = vt;
