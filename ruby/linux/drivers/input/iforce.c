@@ -406,13 +406,14 @@ static int make_interactive_modifier(struct iforce* iforce,
         data[2] = HI(rk);
         data[3] = HI(lk);
 
-        data[4] = HI(center);
+        data[4] = LO(center);
+	data[5] = HI(center);
 
-        data[5] = LO(db);
-        data[6] = HI(db);
+        data[6] = LO(db);
+        data[7] = HI(db);
 
-        data[7] = HI(rsat);
-        data[8] = HI(lsat);
+        data[8] = HI(rsat);
+        data[9] = HI(lsat);
 
         send_packet(iforce, FF_CMD_INTERACT, data);
 
