@@ -5,12 +5,10 @@
  *
  * Author: Matt Porter <mporter@mvista.com>
  *
- * Copyright 2001 MontaVista Software Inc.
- *
- * This program is free software; you can redistribute  it and/or modify it
- * under  the terms of  the GNU General  Public License as published by the
- * Free Software Foundation;  either version 2 of the  License, or (at your
- * option) any later version.
+ * 2001 (c) MontaVista, Software, Inc.  This file is licensed under
+ * the terms of the GNU General Public License version 2.1.  This program
+ * is licensed "as is" without any warranty of any kind, whether express
+ * or implied.
  */
 
 #include <linux/config.h>
@@ -314,12 +312,6 @@ k2_init_irq(void)
 	i8259_init(NULL);
 }
 
-static int
-k2_get_irq(struct pt_regs *regs)
-{
-	return i8259_poll();
-}
-
 void __init platform_init(unsigned long r3, unsigned long r4,
 		unsigned long r5, unsigned long r6, unsigned long r7)
 {
@@ -332,7 +324,7 @@ void __init platform_init(unsigned long r3, unsigned long r4,
 	ppc_md.setup_arch = k2_setup_arch;
 	ppc_md.show_cpuinfo = k2_show_cpuinfo;
 	ppc_md.init_IRQ = k2_init_irq;
-	ppc_md.get_irq = k2_get_irq;
+	ppc_md.get_irq = i8259_irq;
 
 	ppc_md.find_end_of_memory = k2_find_end_of_memory;
 	ppc_md.setup_io_mappings = k2_map_io;

@@ -9,16 +9,10 @@
  * Cort Dougan, Johnnie Peters, Matt Porter, and
  * Troy Benjegerdes.
  *
- * Copyright 2001-2002 MontaVista Software Inc.
- *
- * This program is free software; you can redistribute  it and/or modify it
- * under  the terms of  the GNU General  Public License as published by the
- * Free Software Foundation;  either version 2 of the  License, or (at your
- * option) any later version.
- *
- * You should have received a copy of the  GNU General Public License along
- * with this program; if not, write  to the Free Software Foundation, Inc.,
- * 675 Mass Ave, Cambridge, MA 02139, USA.
+ * 2001-2002 (c) MontaVista, Software, Inc.  This file is licensed under
+ * the terms of the GNU General Public License version 2.1.  This program
+ * is licensed "as is" without any warranty of any kind, whether express
+ * or implied.
  */
 
 #include <linux/config.h>
@@ -219,12 +213,6 @@ pplus_irq_cannonicalize(u_int irq)
 		return irq;
 	}
 }
-
-static int
-pplus_get_irq(struct pt_regs *regs)
-{
-	return i8259_poll();
-}		
 
 static void __init
 pplus_init_IRQ(void)
@@ -480,7 +468,7 @@ platform_init(unsigned long r3, unsigned long r4, unsigned long r5,
 	ppc_md.irq_cannonicalize = pplus_irq_cannonicalize;
 	ppc_md.init_IRQ       = pplus_init_IRQ;
 	/* this gets changed later on if we have an OpenPIC -- Cort */
-	ppc_md.get_irq        = pplus_get_irq;
+	ppc_md.get_irq        = i8259_irq;
 	ppc_md.init           = pplus_init2;
 
 	ppc_md.restart        = pplus_restart;

@@ -82,12 +82,11 @@ obj-$(CONFIG_MWAVE) += mwave/
 obj-$(CONFIG_AGP) += agp/
 obj-$(CONFIG_DRM) += drm/
 obj-$(CONFIG_PCMCIA) += pcmcia/
+obj-$(CONFIG_IPMI_HANDLER) += ipmi/
 
 
 # Files generated that shall be removed upon make clean
 clean-files := consolemap_deftbl.c defkeymap.c qtronixmap.c
-
-include $(TOPDIR)/Rules.make
 
 $(obj)/consolemap_deftbl.c: $(src)/$(FONTMAPFILE)
 	$(call do_cmd,CONMK  $@,$(objtree)/scripts/conmakehash $< > $@)

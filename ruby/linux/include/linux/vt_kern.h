@@ -99,6 +99,8 @@ struct vc_data {
 	unsigned int vc_saved_y;
 	unsigned int vc_state;		/* Escape sequence parser state */
 	unsigned int vc_npar, vc_par[NPAR];	/* Parameters of current escape sequence */
+	unsigned char ledstate;
+	unsigned char ledioctl;
 	struct kbd_struct kbd_table;	/* VC keyboard state */
 	unsigned short vc_hi_font_mask;	/* [#] Attribute set for upper 256 chars of font or 0 if not supported */
 	struct console_font_op vc_font;	/* VC current font set */

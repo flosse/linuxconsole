@@ -89,6 +89,7 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/smp_lock.h>
+#include <linux/device.h>
 
 #include <asm/uaccess.h>
 #include <asm/system.h>
@@ -153,13 +154,6 @@ extern void sci_console_init(void);
 extern void tx3912_console_init(void);
 extern void tx3912_rs_init(void);
 extern void hvc_console_init(void);
-
-#ifndef MIN
-#define MIN(a,b)	((a) < (b) ? (a) : (b))
-#endif
-#ifndef MAX
-#define MAX(a,b)	((a) < (b) ? (b) : (a))
-#endif
 
 static struct tty_struct *alloc_tty_struct(void)
 {
@@ -708,7 +702,7 @@ static inline ssize_t do_tty_write(
 		unlock_kernel();
 	} else {
 		for (;;) {
-			unsigned long size = MAX(PAGE_SIZE*2,16384);
+			unsigned long size = max((unsigned long)PAGE_SIZE*2, 16384UL);
 			if (size > count)
 				size = count;
 			lock_kernel();
@@ -832,6 +826,11 @@ static int init_dev(kdev_t device, struct tty_struct **ret_tty)
 	 * and the allocated memory released.  (Except that the termios 
 	 * and locked termios may be retained.)
 	 */
+
+	if (!try_module_get(driver->owner)) {
+		retval = -ENODEV;
+		goto end_init;
+	}
 
 	o_tty = NULL;
 	tp = o_tp = NULL;
@@ -991,6 +990,7 @@ free_mem_out:
 	free_tty_struct(tty);
 
 fail_no_mem:
+	module_put(driver->owner);
 	retval = -ENOMEM;
 	goto end_init;
 
@@ -1033,6 +1033,7 @@ static void release_mem(struct tty_struct *tty, int idx)
 	tty->magic = 0;
 	(*tty->driver.refcount)--;
 	list_del(&tty->tty_files);
+	module_put(tty->driver.owner);
 	free_tty_struct(tty);
 }
 
@@ -1339,7 +1340,7 @@ retry_open:
 		set_bit(TTY_PTY_LOCK, &tty->flags); /* LOCK THE SLAVE */
 		minor -= driver->minor_start;
 		devpts_pty_new(driver->other->name_base + minor, MKDEV(driver->other->major, minor + driver->other->minor_start));
-		tty_register_devfs(&pts_driver[major], DEVFS_FL_DEFAULT,
+		tty_register_device(&pts_driver[major],
 				   pts_driver[major].minor_start + minor);
 		noctty = 1;
 		goto init_dev_done;
@@ -1830,6 +1831,8 @@ static void __do_SAK(void *arg)
 #else
 	struct tty_struct *tty = arg;
 	struct task_struct *p;
+	struct list_head *l;
+	struct pid *pid;
 	int session;
 	int		i;
 	struct file	*filp;
@@ -1842,9 +1845,8 @@ static void __do_SAK(void *arg)
 	if (tty->driver.flush_buffer)
 		tty->driver.flush_buffer(tty);
 	read_lock(&tasklist_lock);
-	for_each_process(p) {
-		if ((p->tty == tty) ||
-		    ((session > 0) && (p->session == session))) {
+	for_each_task_pid(session, PIDTYPE_SID, p, l, pid) {
+		if (p->tty == tty || session > 0) {
 			printk(KERN_NOTICE "SAK: killed process %d"
 			    " (%s): p->session==tty->session\n",
 			    p->pid, p->comm);
@@ -2026,9 +2028,6 @@ void tty_default_put_char(struct tty_struct *tty, unsigned char ch)
 	tty->driver.write(tty, 0, &ch, 1);
 }
 
-/*
- * Register a tty device described by <driver>, with minor number <minor>.
- */
 void tty_register_devfs (struct tty_driver *driver, unsigned int flags, unsigned minor)
 {
 #ifdef CONFIG_DEVFS_FS
@@ -2065,8 +2064,21 @@ void tty_unregister_devfs (struct tty_driver *driver, unsigned minor)
 	devfs_remove(driver->name, minor-driver->minor_start+driver->name_base);
 }
 
-EXPORT_SYMBOL(tty_register_devfs);
-EXPORT_SYMBOL(tty_unregister_devfs);
+/*
+ * Register a tty device described by <driver>, with minor number <minor>.
+ */
+void tty_register_device (struct tty_driver *driver, unsigned minor)
+{
+	tty_register_devfs(driver, 0, minor);
+}
+
+void tty_unregister_device (struct tty_driver *driver, unsigned minor)
+{
+	tty_unregister_devfs(driver, minor);
+}
+
+EXPORT_SYMBOL(tty_register_device);
+EXPORT_SYMBOL(tty_unregister_device);
 
 /*
  * Called by a tty driver to register itself.
@@ -2092,7 +2104,7 @@ int tty_register_driver(struct tty_driver *driver)
 	
 	if ( !(driver->flags & TTY_DRIVER_NO_DEVFS) ) {
 		for(i = 0; i < driver->num; i++)
-		    tty_register_devfs(driver, 0, driver->minor_start + i);
+		    tty_register_device(driver, driver->minor_start + i);
 	}
 	proc_tty_register_driver(driver);
 	return error;
@@ -2147,7 +2159,7 @@ int tty_unregister_driver(struct tty_driver *driver)
 			driver->termios_locked[i] = NULL;
 			kfree(tp);
 		}
-		tty_unregister_devfs(driver, driver->minor_start + i);
+		tty_unregister_device(driver, driver->minor_start + i);
 	}
 	proc_tty_unregister_driver(driver);
 	return 0;
@@ -2248,12 +2260,19 @@ static struct tty_driver dev_ptmx_driver;
 extern int vty_init(void);
 #endif
 
+struct device_class tty_devclass = {
+	.name	= "tty",
+};
+EXPORT_SYMBOL(tty_devclass);
+
 /*
  * Ok, now we can initialize the rest of the tty devices and can count
  * on memory allocations, interrupts etc..
  */
 void __init tty_init(void)
 {
+	devclass_register(&tty_devclass);
+
 	/*
 	 * dev_tty_driver are a actually magic device which 
 	 * get redirected at open time.  Nevertheless,

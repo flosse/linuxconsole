@@ -1,8 +1,8 @@
 VERSION = 2
 PATCHLEVEL = 5
-SUBLEVEL = 51
+SUBLEVEL = 59
 EXTRAVERSION = -ruby
-
+ 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
 # More info can be located in ./Documentation/kbuild
@@ -157,6 +157,7 @@ OBJCOPY		= $(CROSS_COMPILE)objcopy
 OBJDUMP		= $(CROSS_COMPILE)objdump
 AWK		= awk
 GENKSYMS	= /sbin/genksyms
+DEPMOD		= /sbin/depmod
 KALLSYMS	= scripts/kallsyms
 PERL		= perl
 MODFLAGS	= -DMODULE
@@ -202,7 +203,7 @@ scripts/docproc scripts/fixdep scripts/split-include : scripts ;
 
 .PHONY: scripts
 scripts:
-	$(Q)$(MAKE) -f scripts/Makefile.build obj=scripts
+	$(Q)$(MAKE) $(build)=scripts
 
 # Objects we will link into vmlinux / subdirs we need to visit
 # ---------------------------------------------------------------------------
@@ -312,9 +313,9 @@ define rule_vmlinux__
 	set -e
 	$(if $(filter .tmp_kallsyms%,$^),,
 	  echo '  Generating build number'
-	  . scripts/mkversion > .tmp_version
+	  . $(src)/scripts/mkversion > .tmp_version
 	  mv -f .tmp_version .version
-	  $(Q)$(MAKE) -f scripts/Makefile.build obj=init
+	  $(Q)$(MAKE) $(build)=init
 	)
 	$(call cmd,vmlinux__)
 	echo 'cmd_$@ := $(cmd_vmlinux__)' > $(@D)/.$(@F).cmd
@@ -328,7 +329,7 @@ endef
 ifdef CONFIG_SMP
 define rule_vmlinux
 	$(rule_vmlinux_no_percpu)
-	$(AWK) -f scripts/per-cpu-check.awk < System.map
+	$(AWK) -f $(srctree)/scripts/per-cpu-check.awk < System.map
 endef
 else
 define rule_vmlinux
@@ -384,7 +385,7 @@ $(sort $(vmlinux-objs)): $(SUBDIRS) ;
 
 .PHONY: $(SUBDIRS)
 $(SUBDIRS): .hdepend prepare
-	$(Q)$(MAKE) -f scripts/Makefile.build obj=$@
+	$(Q)$(MAKE) $(build)=$@
 
 #	Things we need done before we descend to build or make
 #	module versions are listed in "prepare"
@@ -392,6 +393,17 @@ $(SUBDIRS): .hdepend prepare
 .PHONY: prepare
 prepare: include/linux/version.h include/asm include/config/MARKER
 	@echo '  Starting the build. KBUILD_BUILTIN=$(KBUILD_BUILTIN) KBUILD_MODULES=$(KBUILD_MODULES)'
+
+#	We need to build init/vermagic.o before descending since all modules
+#	(*.ko) need it already
+
+ifdef CONFIG_MODULES
+
+prepare: init/vermagic.o
+
+init/vermagic.o: include/linux/version.h
+
+endif
 
 #	This can be used by arch/$ARCH/Makefile to preprocess
 #	their vmlinux.lds.S file
@@ -407,17 +419,19 @@ targets += arch/$(ARCH)/vmlinux.lds.s
 # ---------------------------------------------------------------------------
 
 %.s: %.c scripts FORCE
-	$(Q)$(MAKE) -f scripts/Makefile.build obj=$(@D) $@
+	$(Q)$(MAKE) $(build)=$(@D) $@
 %.i: %.c scripts FORCE
-	$(Q)$(MAKE) -f scripts/Makefile.build obj=$(@D) $@
+	$(Q)$(MAKE) $(build)=$(@D) $@
 %.o: %.c scripts FORCE
-	$(Q)$(MAKE) -f scripts/Makefile.build obj=$(@D) $@
+	$(Q)$(MAKE) $(build)=$(@D) $@
+%.ko: scripts FORCE
+	$(Q)$(MAKE) $(build)=$(@D) $@
 %.lst: %.c scripts FORCE
-	$(Q)$(MAKE) -f scripts/Makefile.build obj=$(@D) $@
+	$(Q)$(MAKE) $(build)=$(@D) $@
 %.s: %.S scripts FORCE
-	$(Q)$(MAKE) -f scripts/Makefile.build obj=$(@D) $@
+	$(Q)$(MAKE) $(build)=$(@D) $@
 %.o: %.S scripts FORCE
-	$(Q)$(MAKE) -f scripts/Makefile.build obj=$(@D) $@
+	$(Q)$(MAKE) $(build)=$(@D) $@
 
 # 	FIXME: The asm symlink changes when $(ARCH) changes. That's
 #	hard to detect, but I suppose "make mrproper" is a good idea
@@ -438,7 +452,7 @@ include/config/MARKER: scripts/split-include include/linux/autoconf.h
 # 	with it and forgot to run make oldconfig
 
 include/linux/autoconf.h: .config
-	$(Q)$(MAKE) -f scripts/Makefile.build obj=scripts/kconfig scripts/kconfig/conf
+	$(Q)$(MAKE) $(build)=scripts/kconfig scripts/kconfig/conf
 	./scripts/kconfig/conf -s arch/$(ARCH)/Kconfig
 
 # Generate some files
@@ -534,7 +548,7 @@ modules: $(SUBDIRS)
 #	Install modules
 
 .PHONY: modules_install
-modules_install: _modinst_ $(patsubst %, _modinst_%, $(SUBDIRS))
+modules_install: _modinst_ $(patsubst %, _modinst_%, $(SUBDIRS)) _modinst_post
 
 .PHONY: _modinst_
 _modinst_:
@@ -542,6 +556,20 @@ _modinst_:
 	@rm -f $(MODLIB)/build
 	@mkdir -p $(MODLIB)/kernel
 	@ln -s $(TOPDIR) $(MODLIB)/build
+
+# If System.map exists, run depmod.  This deliberately does not have a
+# dependency on System.map since that would run the dependency tree on
+# vmlinux.  This depmod is only for convenience to give the initial
+# boot a modules.dep even before / is mounted read-write.  However the
+# boot script depmod is the master version.
+ifeq "$(strip $(INSTALL_MOD_PATH))" ""
+depmod_opts	:=
+else
+depmod_opts	:= -b $(INSTALL_MOD_PATH) -r
+endif
+.PHONY: _modinst_post
+_modinst_post:
+	if [ -r System.map ]; then $(DEPMOD) -ae -F System.map $(depmod_opts) $(KERNELRELEASE); fi
 
 .PHONY: $(patsubst %, _modinst_%, $(SUBDIRS))
 $(patsubst %, _modinst_%, $(SUBDIRS)) :
@@ -604,7 +632,7 @@ rpm:	clean spec
 	tar -cvz $(RCS_TAR_IGNORE) -f $(KERNELPATH).tar.gz $(KERNELPATH)/. ; \
 	rm $(KERNELPATH) ; \
 	cd $(TOPDIR) ; \
-	. scripts/mkversion > .version ; \
+	$(CONFIG_SHELL) $(srctree)/scripts/mkversion > .version ; \
 	rpm -ta $(TOPDIR)/../$(KERNELPATH).tar.gz ; \
 	rm $(TOPDIR)/../$(KERNELPATH).tar.gz
 
@@ -642,13 +670,13 @@ ifeq ($(filter-out $(noconfig_targets),$(MAKECMDGOALS)),)
 	make_with_config
 
 scripts/kconfig/conf scripts/kconfig/mconf scripts/kconfig/qconf: scripts/fixdep FORCE
-	$(Q)$(MAKE) -f scripts/Makefile.build obj=scripts/kconfig $@
+	$(Q)$(MAKE) $(build)=scripts/kconfig $@
 
 xconfig: scripts/kconfig/qconf
 	./scripts/kconfig/qconf arch/$(ARCH)/Kconfig
 
 menuconfig: scripts/kconfig/mconf
-	$(Q)$(MAKE) -f scripts/Makefile.build obj=scripts/lxdialog
+	$(Q)$(MAKE) $(build)=scripts/lxdialog
 	./scripts/kconfig/mconf arch/$(ARCH)/Kconfig
 
 config: scripts/kconfig/conf
@@ -704,7 +732,7 @@ MRPROPER_DIRS += \
 clean-dirs += $(ALL_SUBDIRS) Documentation/DocBook scripts
 
 $(addprefix _clean_,$(clean-dirs)):
-	$(Q)$(MAKE) -f scripts/Makefile.clean obj=$(patsubst _clean_%,%,$@)
+	$(Q)$(MAKE) $(clean)=$(patsubst _clean_%,%,$@)
 
 quiet_cmd_rmclean = RM  $$(CLEAN_FILES)
 cmd_rmclean	  = rm -f $(CLEAN_FILES)
@@ -795,7 +823,8 @@ help:
 	@$(MAKE) --no-print-directory -f Documentation/DocBook/Makefile dochelp
 	@echo  ''
 	@echo  'Architecture specific targets ($(ARCH)):'
-	@$(MAKE) --no-print-directory -f arch/$(ARCH)/boot/Makefile archhelp
+	@$(if $(archhelp),$(archhelp),\
+		echo '  No architecture specific help defined for $(ARCH)')
 	@echo  ''
 	@echo  'Execute "make" or "make all" to build all targets marked with [*] '
 	@echo  'For further info browse Documentation/kbuild/*'
@@ -804,7 +833,7 @@ help:
 # Documentation targets
 # ---------------------------------------------------------------------------
 sgmldocs psdocs pdfdocs htmldocs: scripts
-	$(Q)$(MAKE) -f scripts/Makefile.build obj=Documentation/DocBook $@
+	$(Q)$(MAKE) $(build)=Documentation/DocBook $@
 
 # Scripts to check various things for consistency
 # ---------------------------------------------------------------------------
@@ -839,7 +868,7 @@ endif # ifdef include_config
 # FIXME Should go into a make.lib or something 
 # ===========================================================================
 
-a_flags = -Wp,-MD,$(depfile) $(AFLAGS) $(NOSTDINC_FLAGS) \
+a_flags = -Wp,-MD,$(depfile) $(AFLAGS) $(AFLAGS_KERNEL) $(NOSTDINC_FLAGS) \
 	  $(modkern_aflags) $(EXTRA_AFLAGS) $(AFLAGS_$(*F).o)
 
 quiet_cmd_as_s_S = CPP     $@
@@ -892,9 +921,20 @@ define update-if-changed
 		mv -f $@.tmp $@; \
 	fi
 endef
+
+# Shorthand for $(Q)$(MAKE) -f scripts/Makefile.build obj=
+# Usage:
+# $(Q)$(MAKE) $(build)=dir
+build := -f scripts/Makefile.build obj
+
+# Shorthand for $(Q)$(MAKE) scripts/Makefile.clean obj=dir
+# Usage:
+# $(Q)$(MAKE) $(clean)=dir
+clean := -f scripts/Makefile.clean obj
+
 #	$(call descend,<dir>,<target>)
 #	Recursively call a sub-make in <dir> with target <target>
-
+# Usage is deprecated, because make do not see this as an invocation of make.
 descend =$(Q)$(MAKE) -f scripts/Makefile.build obj=$(1) $(2)
 
 FORCE:

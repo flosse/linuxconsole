@@ -6,7 +6,7 @@ menu "Character devices"
 
 config VT
 	bool "Virtual terminal"
-	depends on INPUT=y 
+	requires INPUT=y
 	---help---
 	  If you say Y here, you will get support for terminal devices with
 	  display and keyboard devices. These are called "virtual" because you
@@ -34,9 +34,12 @@ config VT
 	  If unsure, say Y, or else you won't be able to do much with your new
 	  shiny Linux system :-)
 
-#     if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
-#        bool '  ISO6429 bidirectional support (EXPERIMENTAL)' CONFIG_VT_BDSM
-#     fi
+config VT_BDSM
+	bool "  ISO6429 bidirectional support"
+	depends on VT
+	---help---
+	  If you say Y here, you will get support for the ability to type left
+	  to right or right to left. 
 
 config VT_CONSOLE
 	bool "Support for console on virtual terminal"
@@ -641,6 +644,8 @@ comment "from the tpqic02-support package.  It is available at"
 comment "metalab.unc.edu or ftp://titus.cfw.com/pub/Linux/util/"
 	depends on QIC02_TAPE && QIC02_DYNCONF
 
+source "drivers/char/ipmi/Kconfig"
+
 source "drivers/char/watchdog/Kconfig"
 
 config DS1620
@@ -776,6 +781,7 @@ config NVRAM
 
 config RTC
 	tristate "Enhanced Real Time Clock Support"
+	depends on !PPC32 && !PARISC && !IA64
 	---help---
 	  If you say Y here and create a character special file /dev/rtc with
 	  major number 10 and minor number 135 using mknod ("man mknod"), you
@@ -820,7 +826,7 @@ config GEN_RTC
 	  inserted in and removed from the running kernel whenever you want).
 	  The module is called genrtc.o. If you want to compile it as a module,
 	  say M here and read <file:Documentation/modules.txt>. To load the
-	  module automaticaly add 'alias char-major-10-135 genrtc' to your
+	  module automatically add 'alias char-major-10-135 genrtc' to your
 	  /etc/modules.conf
 
 config GEN_RTC_X

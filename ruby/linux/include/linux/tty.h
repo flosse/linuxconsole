@@ -367,9 +367,8 @@ extern int tty_register_ldisc(int disc, struct tty_ldisc *new_ldisc);
 extern int tty_register_driver(struct tty_driver *driver);
 extern int tty_unregister_driver(struct tty_driver *driver);
 extern struct tty_driver *get_tty_driver(kdev_t device);
-extern void tty_register_devfs (struct tty_driver *driver, unsigned int flags,
-				unsigned minor);
-extern void tty_unregister_devfs (struct tty_driver *driver, unsigned minor);
+extern void tty_register_device(struct tty_driver *driver, unsigned minor);
+extern void tty_unregister_device(struct tty_driver *driver, unsigned minor);
 extern int tty_read_raw_data(struct tty_struct *tty, unsigned char *bufp,
 			     int buflen);
 extern void tty_write_message(struct tty_struct *tty, char *msg);
@@ -385,6 +384,7 @@ extern void do_SAK(struct tty_struct *tty);
 extern void disassociate_ctty(int priv);
 extern void tty_flip_buffer_push(struct tty_struct *tty);
 extern int tty_get_baud_rate(struct tty_struct *tty);
+extern int tty_termios_baud_rate(struct termios *termios);
 
 /* n_tty.c */
 extern struct tty_ldisc tty_ldisc_N_TTY;

@@ -442,13 +442,13 @@ struct ifreq32 {
                 struct  ifmap32 ifru_map;
                 char    ifru_slave[IFNAMSIZ];   /* Just fits the size */
 		char	ifru_newname[IFNAMSIZ];
-                __kernel_caddr_t32 ifru_data;
+                compat_caddr_t ifru_data;
         } ifr_ifru;
 };
 
 struct ifconf32 {
         int     ifc_len;                        /* size of buffer       */
-        __kernel_caddr_t32  ifcbuf;
+        compat_caddr_t  ifcbuf;
 };
 
 #ifdef CONFIG_NET
@@ -884,7 +884,7 @@ struct floppy_struct32 {
 	unsigned char	rate;
 	unsigned char	spec1;
 	unsigned char	fmt_gap;
-	const __kernel_caddr_t32 name;
+	const compat_caddr_t name;
 };
 
 struct floppy_drive_params32 {
@@ -923,7 +923,7 @@ struct floppy_drive_struct32 {
 	int		fd_ref;
 	int		fd_device;
 	int		last_checked;
-	__kernel_caddr_t32 dmabuf;
+	compat_caddr_t dmabuf;
 	int		bufblocks;
 };
 
@@ -1413,7 +1413,7 @@ out:
 }
 
 struct ppp_option_data32 {
-	__kernel_caddr_t32	ptr;
+	compat_caddr_t	ptr;
 	__u32			length;
 	int			transmit;
 };
@@ -1494,8 +1494,8 @@ struct mtget32 {
 	__u32	mt_dsreg;
 	__u32	mt_gstat;
 	__u32	mt_erreg;
-	__kernel_daddr_t32	mt_fileno;
-	__kernel_daddr_t32	mt_blkno;
+	compat_daddr_t	mt_fileno;
+	compat_daddr_t	mt_blkno;
 };
 #define MTIOCGET32	_IOR('m', 2, struct mtget32)
 
@@ -1613,7 +1613,7 @@ static int mt_ioctl_trans(unsigned int fd, unsigned int cmd, unsigned long arg)
 
 struct cdrom_read32 {
 	int			cdread_lba;
-	__kernel_caddr_t32	cdread_bufaddr;
+	compat_caddr_t	cdread_bufaddr;
 	int			cdread_buflen;
 };
 
@@ -1621,16 +1621,16 @@ struct cdrom_read_audio32 {
 	union cdrom_addr	addr;
 	u_char			addr_format;
 	int			nframes;
-	__kernel_caddr_t32	buf;
+	compat_caddr_t	buf;
 };
 
 struct cdrom_generic_command32 {
 	unsigned char		cmd[CDROM_PACKET_SIZE];
-	__kernel_caddr_t32	buffer;
+	compat_caddr_t	buffer;
 	unsigned int		buflen;
 	int			stat;
-	__kernel_caddr_t32	sense;
-	__kernel_caddr_t32	reserved[3];
+	compat_caddr_t	sense;
+	compat_caddr_t	reserved[3];
 };
 
 static int cdrom_ioctl_trans(unsigned int fd, unsigned int cmd, unsigned long arg)
@@ -1639,7 +1639,7 @@ static int cdrom_ioctl_trans(unsigned int fd, unsigned int cmd, unsigned long ar
 	struct cdrom_read cdread;
 	struct cdrom_read_audio cdreadaudio;
 	struct cdrom_generic_command cgc;
-	__kernel_caddr_t32 addr;
+	compat_caddr_t addr;
 	char *data = 0;
 	void *karg;
 	int err = 0;
@@ -1722,9 +1722,9 @@ out:	if (data)
 
 struct loop_info32 {
 	int			lo_number;      /* ioctl r/o */
-	__kernel_dev_t32	lo_device;      /* ioctl r/o */
+	compat_dev_t	lo_device;      /* ioctl r/o */
 	unsigned int		lo_inode;       /* ioctl r/o */
-	__kernel_dev_t32	lo_rdevice;     /* ioctl r/o */
+	compat_dev_t	lo_rdevice;     /* ioctl r/o */
 	int			lo_offset;
 	int			lo_encrypt_type;
 	int			lo_encrypt_key_size;    /* ioctl w/o */
@@ -2061,7 +2061,7 @@ static int do_smb_getmountuid(unsigned int fd, unsigned int cmd, unsigned long a
 	set_fs(old_fs);
 
 	if (err >= 0)
-		err = put_user(kuid, (__kernel_uid_t32 *)arg);
+		err = put_user(kuid, (compat_uid_t *)arg);
 
 	return err;
 }
@@ -2069,7 +2069,7 @@ static int do_smb_getmountuid(unsigned int fd, unsigned int cmd, unsigned long a
 struct ncp_ioctl_request_32 {
 	unsigned int function;
 	unsigned int size;
-	__kernel_caddr_t32 data;
+	compat_caddr_t data;
 };
 
 struct ncp_fs_info_v2_32 {
@@ -2090,13 +2090,13 @@ struct ncp_objectname_ioctl_32
 {
 	int		auth_type;
 	unsigned int	object_name_len;
-	__kernel_caddr_t32	object_name;	/* an userspace data, in most cases user name */
+	compat_caddr_t	object_name;	/* an userspace data, in most cases user name */
 };
 
 struct ncp_privatedata_ioctl_32
 {
 	unsigned int	len;
-	__kernel_caddr_t32	data;		/* ~1000 for NDS */
+	compat_caddr_t	data;		/* ~1000 for NDS */
 };
 
 #define	NCP_IOC_NCPREQUEST_32		_IOR('n', 1, struct ncp_ioctl_request_32)
@@ -2369,12 +2369,12 @@ static int do_ncp_setprivatedata(unsigned int fd, unsigned int cmd, unsigned lon
 struct atmif_sioc32 {
         int                number;
         int                length;
-        __kernel_caddr_t32 arg;
+        compat_caddr_t arg;
 };
 
 struct atm_iobuf32 {
 	int                length;
-	__kernel_caddr_t32 buffer;
+	compat_caddr_t buffer;
 };
 
 #define ATM_GETLINKRATE32 _IOW('a', ATMIOC_ITF+1, struct atmif_sioc32)
@@ -2435,7 +2435,7 @@ static int do_atm_iobuf(unsigned int fd, unsigned int cmd, unsigned long arg)
 
 	iobuf.length = iobuf32.length;
 
-	if (iobuf32.buffer == (__kernel_caddr_t32) NULL || iobuf32.length == 0) {
+	if (iobuf32.buffer == (compat_caddr_t) NULL || iobuf32.length == 0) {
 		iobuf.buffer = (void*)(unsigned long)iobuf32.buffer;
 	} else {
 		iobuf.buffer = kmalloc(iobuf.length, GFP_KERNEL);
@@ -2489,7 +2489,7 @@ static int do_atmif_sioc(unsigned int fd, unsigned int cmd, unsigned long arg)
         sioc.number = sioc32.number;
         sioc.length = sioc32.length;
         
-	if (sioc32.arg == (__kernel_caddr_t32) NULL || sioc32.length == 0) {
+	if (sioc32.arg == (compat_caddr_t) NULL || sioc32.length == 0) {
 		sioc.arg = (void*)(unsigned long)sioc32.arg;
         } else {
                 sioc.arg = kmalloc(sioc.length, GFP_KERNEL);
@@ -3620,21 +3620,9 @@ mtd_rw_oob(unsigned int fd, unsigned int cmd, unsigned long arg)
 }	
 
 /* Fix sizeof(sizeof()) breakage */
-#define BLKELVGET_32	_IOR(0x12,106,int)
-#define BLKELVSET_32	_IOW(0x12,107,int)
 #define BLKBSZGET_32	_IOR(0x12,112,int)
 #define BLKBSZSET_32	_IOW(0x12,113,int)
 #define BLKGETSIZE64_32	_IOR(0x12,114,int)
-
-static int do_blkelvget(unsigned int fd, unsigned int cmd, unsigned long arg)
-{
-	return sys_ioctl(fd, BLKELVGET, arg);
-}
-
-static int do_blkelvset(unsigned int fd, unsigned int cmd, unsigned long arg)
-{
-	return sys_ioctl(fd, BLKELVSET, arg);
-}
 
 static int do_blkbszget(unsigned int fd, unsigned int cmd, unsigned long arg)
 {
@@ -3663,7 +3651,7 @@ struct ioctl_trans {
 #define HANDLE_IOCTL(cmd,handler) { cmd, (unsigned long)handler, 0 }
 
 #define AUTOFS_IOC_SETTIMEOUT32 _IOWR(0x93,0x64,unsigned int)
-#define SMB_IOC_GETMOUNTUID_32 _IOR('u', 1, __kernel_uid_t32)
+#define SMB_IOC_GETMOUNTUID_32 _IOR('u', 1, compat_uid_t)
 
 static struct ioctl_trans ioctl_translations[] = {
     /* List here explicitly which ioctl's need translation,
@@ -3716,11 +3704,6 @@ COMPATIBLE_IOCTL(TIOCSLTC),
 COMPATIBLE_IOCTL(FBIOGET_VSCREENINFO),
 COMPATIBLE_IOCTL(FBIOPUT_VSCREENINFO),
 COMPATIBLE_IOCTL(FBIOPAN_DISPLAY),
-COMPATIBLE_IOCTL(FBIOGET_FCURSORINFO),
-COMPATIBLE_IOCTL(FBIOGET_VCURSORINFO),
-COMPATIBLE_IOCTL(FBIOPUT_VCURSORINFO),
-COMPATIBLE_IOCTL(FBIOGET_CURSORSTATE),
-COMPATIBLE_IOCTL(FBIOPUT_CURSORSTATE),
 COMPATIBLE_IOCTL(FBIOGET_CON2FBMAP),
 COMPATIBLE_IOCTL(FBIOPUT_CON2FBMAP),
 #if 0
@@ -3772,6 +3755,8 @@ COMPATIBLE_IOCTL(BLKRRPART),
 COMPATIBLE_IOCTL(BLKFLSBUF),
 COMPATIBLE_IOCTL(BLKSECTSET),
 COMPATIBLE_IOCTL(BLKSSZGET),
+COMPATIBLE_IOCTL(BLKRASET),
+COMPATIBLE_IOCTL(BLKFRASET),
 /* RAID */
 COMPATIBLE_IOCTL(RAID_VERSION),
 COMPATIBLE_IOCTL(GET_ARRAY_INFO),
@@ -4363,6 +4348,8 @@ HANDLE_IOCTL(SIOCGSTAMP, do_siocgstamp),
 HANDLE_IOCTL(HDIO_GETGEO, hdio_getgeo),
 HANDLE_IOCTL(HDIO_GETGEO_BIG_RAW, hdio_getgeo_big),
 HANDLE_IOCTL(BLKGETSIZE, w_long),
+HANDLE_IOCTL(BLKRAGET, w_long),
+HANDLE_IOCTL(BLKFRAGET, w_long),
 HANDLE_IOCTL(0x1260, broken_blkgetsize),
 HANDLE_IOCTL(BLKSECTGET, w_long),
 HANDLE_IOCTL(BLKPG, blkpg_ioctl_trans),
@@ -4475,9 +4462,6 @@ HANDLE_IOCTL(USBDEVFS_REAPURB32, do_usbdevfs_reapurb),
 HANDLE_IOCTL(USBDEVFS_REAPURBNDELAY32, do_usbdevfs_reapurb),
 HANDLE_IOCTL(USBDEVFS_DISCSIGNAL32, do_usbdevfs_discsignal),
 /* take care of sizeof(sizeof()) breakage */
-/* elevator */
-HANDLE_IOCTL(BLKELVGET_32, do_blkelvget),
-HANDLE_IOCTL(BLKELVSET_32, do_blkelvset),
 /* block stuff */
 HANDLE_IOCTL(BLKBSZGET_32, do_blkbszget),
 HANDLE_IOCTL(BLKBSZSET_32, do_blkbszset),
@@ -4526,10 +4510,9 @@ int register_ioctl32_conversion(unsigned int cmd, int (*handler)(unsigned int, u
 {
 	int i;
 	if (!additional_ioctls) {
-		additional_ioctls = module_map(PAGE_SIZE);
+		additional_ioctls = get_zeroed_page(GFP_KERNEL);
 		if (!additional_ioctls)
 			return -ENOMEM;
-		memset(additional_ioctls, 0, PAGE_SIZE);
 	}
 	for (i = 0; i < PAGE_SIZE/sizeof(struct ioctl_trans); i++) {
 		if (!additional_ioctls[i].cmd)

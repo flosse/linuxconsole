@@ -26,6 +26,7 @@
 #include <linux/vt_kern.h>
 #include <linux/quotaops.h>
 #include <linux/smp_lock.h>
+#include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/suspend.h>
 #include <linux/writeback.h>
@@ -34,10 +35,6 @@
 #include <linux/spinlock.h>
 
 #include <asm/ptrace.h>
-
-#ifdef CONFIG_VOYAGER
-#include <asm/voyager.h>
-#endif
 
 extern struct list_head super_blocks;
 
@@ -323,14 +320,6 @@ static struct sysrq_key_op sysrq_term_op = {
 	.action_msg	= "Terminate All Tasks",
 };
 
-#ifdef CONFIG_VOYAGER
-static struct sysrq_key_op sysrq_voyager_dump_op = {
-	.handler	= voyager_dump,
-	.help_msg	= "voyager",
-	.action_msg	= "Dump Voyager Status\n",
-};
-#endif
-
 static void sysrq_handle_kill(int key, struct pt_regs *pt_regs,
 			      struct tty_struct *tty) 
 {
@@ -364,11 +353,7 @@ static struct sysrq_key_op *sysrq_key_table[SYSRQ_KEY_TABLE_LENGTH] = {
 		 it is handled specially on the sparc
 		 and will never arrive */
 /* b */	&sysrq_reboot_op,
-#ifdef CONFIG_VOYAGER
-/* c */ &sysrq_voyager_dump_op,
-#else
-/* c */	NULL,
-#endif
+/* c */ NULL,
 /* d */	NULL,
 /* e */	&sysrq_term_op,
 /* f */	NULL,
@@ -396,7 +381,7 @@ static struct sysrq_key_op *sysrq_key_table[SYSRQ_KEY_TABLE_LENGTH] = {
 /* s */	&sysrq_sync_op,
 /* t */	&sysrq_showstate_op,
 /* u */	&sysrq_mountro_op,
-/* v */	NULL,
+/* v */	NULL, /* May be assigned at init time by SMP VOYAGER */
 /* w */	NULL,
 /* x */	NULL,
 /* y */	NULL,

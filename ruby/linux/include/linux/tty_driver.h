@@ -120,6 +120,7 @@
 
 struct tty_driver {
 	int	magic;		/* magic number for this structure */
+	struct module	*owner;
 	const char	*driver_name;
 	const char	*name;
 	int	name_base;	/* offset of printed name */
@@ -226,5 +227,7 @@ extern struct list_head tty_drivers;
 /* serial subtype definitions */
 #define SERIAL_TYPE_NORMAL	1
 #define SERIAL_TYPE_CALLOUT	2
+
+extern struct device_class tty_devclass;
 
 #endif /* #ifdef _LINUX_TTY_DRIVER_H */

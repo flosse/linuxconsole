@@ -375,7 +375,6 @@ void __init setup_arch(char **cmdline_p)
 #ifdef CONFIG_GART_IOMMU
        iommu_hole_init();
 #endif
-	exception_table_check(); 
 }
 
 #ifndef CONFIG_X86_TSC

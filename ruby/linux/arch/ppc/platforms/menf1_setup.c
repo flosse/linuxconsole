@@ -1,16 +1,14 @@
 /*
  * arch/ppc/platforms/menf1_setup.c
- 
+ *
  * Board setup routines for MEN F1
  *
  * Author: Matt Porter <mporter@mvista.com>
  *
- * Copyright 2001 MontaVista Software Inc.
- *
- * This program is free software; you can redistribute  it and/or modify it
- * under  the terms of  the GNU General  Public License as published by the
- * Free Software Foundation;  either version 2 of the  License, or (at your
- * option) any later version.
+ * 2001 (c) MontaVista, Software, Inc.  This file is licensed under
+ * the terms of the GNU General Public License version 2.1.  This program
+ * is licensed "as is" without any warranty of any kind, whether express
+ * or implied.
  */
 
 #include <linux/config.h>
@@ -144,11 +142,6 @@ menf1_init_IRQ(void)
 	i8259_init(NULL);
 }
 
-static int menf1_get_irq(struct pt_regs *regs)
-{
-	return i8259_poll();
-}
-
 /*
  * Set BAT 3 to map 0xF0000000.
  */
@@ -253,7 +246,7 @@ platform_init(unsigned long r3, unsigned long r4, unsigned long r5,
 	ppc_md.setup_arch	= menf1_setup_arch;
 	ppc_md.show_cpuinfo	= menf1_show_cpuinfo;
 	ppc_md.init_IRQ		= menf1_init_IRQ;
-	ppc_md.get_irq		= menf1_get_irq;
+	ppc_md.get_irq		= i8259_irq;
 
 	ppc_md.find_end_of_memory = menf1_find_end_of_memory;
 	ppc_md.setup_io_mappings = menf1_map_io;
