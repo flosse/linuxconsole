@@ -667,6 +667,8 @@ struct input_dev {
 
 	int (*open)(struct input_dev *dev);
 	void (*close)(struct input_dev *dev);
+	int (*accept)(struct input_dev *dev, struct file *file);
+	int (*flush)(struct input_dev *dev, struct file *file);
 	int (*event)(struct input_dev *dev, unsigned int type, unsigned int code, int value);
 	int (*upload_effect)(struct input_dev *dev, struct ff_effect *effect);
 	int (*erase_effect)(struct input_dev *dev, int effect_id);
@@ -711,6 +713,9 @@ void input_unregister_handler(struct input_handler *);
 
 int input_open_device(struct input_handle *);
 void input_close_device(struct input_handle *);
+
+int input_accept_device(struct input_handle *handle, struct file *file);
+int input_flush_device(struct input_handle* handle, struct file* file);
 
 devfs_handle_t input_register_minor(char *name, int minor, int minor_base);
 void input_unregister_minor(devfs_handle_t handle);
