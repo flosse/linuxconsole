@@ -6,11 +6,11 @@
 #
 
 
-mod-subdirs :=	dio mtd sbus video macintosh usb input telephony sgi ide \
+mod-subdirs :=	dio mtd sbus macintosh usb input telephony sgi ide \
 		message/i2o message/fusion scsi md ieee1394 pnp isdn atm \
 		fc4 net/hamradio i2c acpi bluetooth input/serio input/gameport
 
-subdir-y :=	base parport char block net misc media cdrom hotplug
+subdir-y :=	base parport char block net misc media cdrom hotplug video 
 subdir-m :=	$(subdir-y)
 
 

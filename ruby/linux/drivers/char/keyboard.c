@@ -1110,6 +1110,7 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 static void kbd_disconnect(struct input_handle *handle)
 {
 	struct vt_struct *vt = handle->private;
+ 	int i;
 
 	if (vt && vt->keyboard == handle) {
 		/* disable receieving key events for each VC */
