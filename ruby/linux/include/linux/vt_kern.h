@@ -188,7 +188,6 @@ struct consw {
         int     (*con_set_origin)(struct vc_data *);
         u8      (*con_build_attr)(struct vc_data *, u8, u8, u8, u8, u8);
         void    (*con_invert_region)(struct vc_data *, u16 *, int);
-        u16    *(*con_screen_pos)(struct vc_data *, int);
 };
 
 extern const struct consw dummy_con;   	/* dummy console buffer */
