@@ -37,8 +37,6 @@
 #include <asm/uaccess.h>
 #include <asm/bitops.h>
 
-#include <asm/linux_logo.h>
-
 #include "console_macros.h"
 
 /* A bitmap for codes <32. A bit of 1 indicates that the code
