@@ -917,14 +917,13 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	 */
 	case VT_OPENQRY:
 	{
-		struct vc_data *tmp;	
+		int j = vc->display_fg->vcs.first_vc;	
 
-		for (i = 0; i < MAX_NR_USER_CONSOLES; ++i) {
-			tmp = vc->display_fg->vcs.vc_cons[i];
-			if (tmp && !VT_IS_IN_USE(tmp->vc_num))
+		for (i = 0; i < MAX_NR_USER_CONSOLES; ++i,j++) {
+			if (!VT_IS_IN_USE(j))
 				break;
 		} 
-		ucval = i < MAX_NR_USER_CONSOLES ? (tmp->vc_num) : -1;
+		ucval = i < MAX_NR_USER_CONSOLES ? (j) : -1;
 		goto setint;		 
 	}
 
@@ -932,7 +931,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	 * ioctl(fd, VT_ACTIVATE, num) will cause us to switch to vt # num,
 	 * with num >= 0. Switches to the foreground console, are not allowed,
          * nor is switching to another physical VT just to preserve sanity.
-         * The first VC of each VC pool is always allocated.
+         * The first VC of a VC pool is always allocated.
 	 */
 	case VT_ACTIVATE:
 	{
@@ -948,7 +947,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		if (i)
 			return i;
 		tmp = find_vc(arg);
-		if (tmp->display_fg == vc->display_fg)
+		if (tmp->display_fg != vc->display_fg)
 			return -ENXIO; 
 		set_console(tmp);
 		return 0;
