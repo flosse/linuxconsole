@@ -1,5 +1,5 @@
 # Makefile for the Linux video drivers.
-# 5 Aug 1999, James Simmons, <mailto:jsimmons@edgeglobal.com>
+# 5 Aug 1999, James Simmons, <mailto:jsimmons@linux-fbdev.org>
 # Rewritten to use lists instead of if-statements.
 
 SUB_DIRS        :=
@@ -36,6 +36,7 @@ obj-$(CONFIG_PROM_CONSOLE)        += promcon.o promcon_tbl.o
 obj-$(CONFIG_VGA_CONSOLE)         += vgacon.o vga.o
 obj-$(CONFIG_MDA_CONSOLE)         += mdacon.o
 obj-$(CONFIG_NVIDIA_CONSOLE)      += nvvgacon.o
+obj-$(CONFIG_FRAMEBUFFER_CONSOLE) += fbcon.c fonts.o 
 
 obj-$(CONFIG_FONT_SUN8x16)        += font_sun8x16.o
 obj-$(CONFIG_FONT_SUN12x22)       += font_sun12x22.o
@@ -45,7 +46,7 @@ obj-$(CONFIG_FONT_6x11)           += font_6x11.o
 obj-$(CONFIG_FONT_PEARL_8x8)      += font_pearl_8x8.o
 obj-$(CONFIG_FONT_ACORN_8x8)      += font_acorn_8x8.o
 
-obj-$(CONFIG_FB)		  += fbmem.o fbcmap.o fbgen.o modedb.o fbcon.o fonts.o fbmon.o
+obj-$(CONFIG_FB)		  += fbmem.o fbcmap.o fbgen.o modedb.o fbmon.o
 # Only include macmodes.o if we have FB support and are PPC
 #ifeq ($(CONFIG_FB),y)
 obj-$(CONFIG_PPC)                 += macmodes.o
