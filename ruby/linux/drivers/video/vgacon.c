@@ -730,13 +730,13 @@ static void vgacon_bmove(struct vc_data *vc, int sy, int sx, int dy, int dx,
 
          if (sx == 0 && dx == 0 && width == vc->vc_cols) {
                  scr_memmovew(VGA_ADDR(vc, 0, dy), VGA_ADDR(vc, 0, sy),
-                              height*width);
+                              height*width*2);
          } else if (dy < sy || (dy == sy && dx < sx)) {
                  src = VGA_ADDR(vc, sx, sy);
                  dest = VGA_ADDR(vc, dx, dy);
 
                  for (; height > 0; height--) {
-                         scr_memmovew(dest, src, width);
+                         scr_memmovew(dest, src, width*2);
                          src  += vc->vc_cols;
                          dest += vc->vc_cols;
                  }
@@ -745,7 +745,7 @@ static void vgacon_bmove(struct vc_data *vc, int sy, int sx, int dy, int dx,
                  dest = VGA_ADDR(vc, dx, dy+height-1);
  
                  for (; height > 0; height--) {
-                         scr_memmovew(dest, src, width);
+                         scr_memmovew(dest, src, width*2);
                          src  -= vc->vc_cols;
                          dest -= vc->vc_cols;
                  }
