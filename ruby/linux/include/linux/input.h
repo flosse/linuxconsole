@@ -324,6 +324,8 @@ struct input_event {
 #define KEY_SHOP		221
 #define KEY_ALTERASE		222
 #define KEY_CANCEL		223
+#define KEY_BRIGHTNESSDOWN	224
+#define KEY_BRIGHTNESSUP	225
 
 #define KEY_UNKNOWN		240
 
