@@ -39,7 +39,6 @@
 #define decim		(vc->vc_decim)
 #define deccolm		(vc->vc_deccolm)
 #define need_wrap	(vc->vc_need_wrap)
-#define kmalloced	(vc->vc_kmalloced)
 #define report_mouse	(vc->vc_report_mouse)
 #define color		(vc->vc_color)
 #define s_color		(vc->vc_s_color)
