@@ -25,17 +25,17 @@
 
 static const char *dummycon_startup(struct vt_struct *vt, int init)
 {
-    vt->default_mode.vc_can_do_color = 1;
-    vt->default_mode.vc_cols = DUMMY_COLUMNS;
-    vt->default_mode.vc_rows = DUMMY_ROWS;
+    vt->default_mode->vc_can_do_color = 1;
+    vt->default_mode->vc_cols = DUMMY_COLUMNS;
+    vt->default_mode->vc_rows = DUMMY_ROWS;
     return "dummy device";
 }
 
 static void dummycon_init(struct vc_data *vc)
 {
-    vc = vc->display_fg->default_mode.vc_can_do_color = 1;
-    vc->vc_cols = vc->display_fg->default_mode.vc_cols;
-    vc->vc_rows = vc->display_fg->default_mode.vc_rows;
+    vc->vc_can_do_color = vc->display_fg->default_mode->vc_can_do_color = 1;
+    vc->vc_cols = vc->display_fg->default_mode->vc_cols;
+    vc->vc_rows = vc->display_fg->default_mode->vc_rows;
 }
 
 static int dummycon_dummy(void)
