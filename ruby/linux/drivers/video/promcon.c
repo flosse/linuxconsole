@@ -102,11 +102,12 @@ promcon_end(struct vc_data *vc, char *b)
 	return b - p;
 }
 
-const char __init *promcon_startup(void)
+const char __init *promcon_startup(struct vt_struct *vt, int init)
 {
+	struct vc_data *vc = vt->default_mode;
 	const char *display_desc = "PROM";
-	int node;
 	char buf[40];
+	int node;
 	
 	node = prom_getchild(prom_root_node);
 	node = prom_searchsiblings(node, "options");
@@ -123,6 +124,11 @@ const char __init *promcon_startup(void)
 		ph--;
 	}
 	promcon_puts("\033[H\033[J", 6);
+	vc->vc_can_do_color = PROMCON_COLOR;
+	if (init) {
+		vc->vc_cols = pw + 1;
+		vc->vc_rows = ph + 1;
+	}
 	return display_desc;
 }
 
@@ -156,28 +162,21 @@ promcon_init_unimap(struct vc_data *vc)
 }
 
 static void
-promcon_init(struct vc_data *vc, int init)
+promcon_init(struct vc_data *vc)
 {
 	unsigned long p;
 	
 	vc->vc_can_do_color = PROMCON_COLOR;
-	if (init) {
-		vc->vc_cols = pw + 1;
-		vc->vc_rows = ph + 1;
-	}
+	vc->vc_cols = vc->display_fg->default_mode->vc_cols;
+	vc->vc_rows = vc->display_fg->default_mode->vc_rows;
 	p = *vc->vc_uni_pagedir_loc;
 	if (vc->vc_uni_pagedir_loc == &vc->vc_uni_pagedir ||
 	    !--vc->vc_uni_pagedir_loc[1])
 		con_free_unimap(vc);
 	vc->vc_uni_pagedir_loc = promcon_uni_pagedir;
 	promcon_uni_pagedir[1]++;
-	if (!promcon_uni_pagedir[0] && p) {
+	if (!promcon_uni_pagedir[0] && p) 
 		promcon_init_unimap(vc);
-	}
-	if (!init) {
-		if (vc->vc_cols != pw + 1 || vc->vc_rows != ph + 1)
-			vc_resize(vc, ph + 1, pw + 1);
-	}
 }
 
 static void
@@ -589,24 +588,34 @@ void __init prom_con_init(void)
 {
 	const char *display_desc = NULL;
         struct vt_struct *vt;
-        int i;
+	struct vc_data *vc;
+	long q;
 
-#ifdef CONFIG_DUMMY_CONSOLE
-	if (conswitchp == &dummy_con)
-		take_over_console(vt, &prom_con);
-	else
-#endif
-        vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
+        /* Alloc the mem we need */
+	vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
         if (!vt) return;
-        display_desc = create_vt(vt, &prom_con);
-        if (!display_desc) {
+	vt->default_mode = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
+	if (!vt->default_mode) {
+		kfree(vt);
+		return;
+	}
+	vc = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
+	vt->kmalloced = 1;
+	vt->vt_sw = &prom_con;
+	vt->vcs.vc_cons[0] = vc;
+        display_desc = create_vt(vt, 0);
+	q = (long) kmalloc(vc->vc_screenbuf_size, GFP_KERNEL);       
+	if (!display_desc || !q) {
+		kfree(vt->vcs.vc_cons[0]);
+		kfree(vt->default_mode);
                 kfree(vt);
+		if (q)
+			kfree((char *) q);		
                 return;
         }
-        i = vc_allocate(vt->vcs.first_vc);
-        if (i)  {
-                kfree(vt);
-                return;
-        }
+	vc->vc_screenbuf = (unsigned short *) q;
+	vc_init(vc, 1);
+	tasklet_enable(&vt->vt_tasklet);
+	tasklet_schedule(&vt->vt_tasklet);
 	promcon_init_unimap(vt->fg_console);
 }
