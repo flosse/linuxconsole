@@ -46,9 +46,6 @@ MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
 MODULE_DESCRIPTION("Aureal Vortex and Vortex2 gameport driver");
 MODULE_LICENSE("GPL");
 
-#define VORTEX_GCR		0x0c	/* Gameport control register */
-#define VORTEX_LEG		0x08	/* Legacy port location */
-#define VORTEX_AXD		0x10	/* Axes start */
 #define VORTEX_DATA_WAIT	20	/* 20 ms */
 
 struct vortex {
@@ -93,7 +90,7 @@ static int vortex_open(struct gameport *gameport, int mode)
 	switch (mode) {
 		case GAMEPORT_MODE_COOKED:
 			writeb(0x40, vortex->io + VORTEX_GCR);
-			wait_ms(VORTEX_DATA_WAIT);
+			wait_ms(PCIGAME_DATA_WAIT);
 			return 0;
 		case GAMEPORT_MODE_RAW:
 			writeb(0x00, vortex->io + VORTEX_GCR);
@@ -160,8 +157,8 @@ static void __devexit vortex_remove(struct pci_dev *dev)
 }
 
 static struct pci_device_id vortex_id_table[] __devinitdata =
-{{ 0x12eb, 0x0001, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0x11000 },
- { 0x12eb, 0x0002, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0x28800 },
+{{ 0x12eb, 0x0001, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0x1100c },
+ { 0x12eb, 0x0002, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0x2880c },
  { 0 }};
 
 static struct pci_driver vortex_driver = {

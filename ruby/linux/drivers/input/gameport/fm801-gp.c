@@ -39,6 +39,8 @@
 struct fm801_gp {
 	struct gameport gameport;
 	struct resource *res_port;
+	char phys[32];
+	char name[32];
 };
 
 #ifdef HAVE_COOKED
@@ -96,19 +98,26 @@ static int __devinit fm801_gp_probe(struct pci_dev *pci, const struct pci_device
 	pci_enable_device(pci);
 	gp->gameport.io = pci_resource_start(pci, 0);
 	if ((gp->res_port = request_region(gp->gameport.io, 0x10, "FM801 GP")) == NULL) {
+		kfree(gp);
 		printk("unable to grab region 0x%x-0x%x\n", gp->gameport.io, gp->gameport.io + 0x0f);
 		return -1;
 	}
 
+	gp->gameport.phys = gp->phys;
+	gp->gameport.name = gp->name;
+	gp->gameport.idbus = BUS_PCI;
+	gp->gameport.idvendor = pci->vendor;
+	gp->gameport.idproduct = pci->device;
+
 	pci_set_drvdata(pci, gp);
-	gameport_register_port(&gp->gameport);
-	
+
 	outb(0x60, gp->gameport.io + 0x0d); /* enable joystick 1 and 2 */ 
 
-	printk(KERN_INFO "gameport%d: %s at pci%02x:%02x.%x speed %d kHz\n",
-	       gp->gameport.number, pci->name, pci->bus->number,
-	       PCI_SLOT(pci->devfn), PCI_FUNC(pci->devfn), gp->gameport.speed);
-	
+	gameport_register_port(&gp->gameport);
+
+	printk(KERN_INFO "gameport: %s at pci%s speed %d kHz\n",
+		pci->name, pci->slot_name, gp->gameport.speed);
+
 	return 0;
 }
 
