@@ -37,27 +37,6 @@ obj-m	:=
 obj-n	:=
 obj-	:=
 
-# Object files in subdirectories
-
-ifeq ($(CONFIG_USB_SERIAL),y)
-	SUB_DIRS += serial
-	obj-y += serial/usb-serial.o
-else
-	ifeq ($(CONFIG_USB_SERIAL),m)
-		MOD_IN_SUB_DIRS += serial
-	endif
-endif
-
-ifeq ($(CONFIG_USB_STORAGE),y)
-	SUB_DIRS += storage
-	obj-y += storage/usb-storage.o
-else
-	ifeq ($(CONFIG_USB_STORAGE),m)
-		MOD_IN_SUB_DIRS += storage
-	endif
-endif
-
-
 # Each configuration option enables a list of files.
 
 obj-$(CONFIG_USB)		+= usbcore.o
@@ -82,6 +61,26 @@ obj-$(CONFIG_USB_DSBR)		+= dsbr100.o
 obj-$(CONFIG_USB_MICROTEK)	+= microtek.o
 obj-$(CONFIG_USB_BLUETOOTH)	+= bluetooth.o
 
+# Object files in subdirectories
+
+ifeq ($(CONFIG_USB_SERIAL),y)
+       SUB_DIRS += serial
+       obj-y += serial/usb-serial.o
+else
+       ifeq ($(CONFIG_USB_SERIAL),m)
+               MOD_IN_SUB_DIRS += serial
+       endif
+endif
+
+ifeq ($(CONFIG_USB_STORAGE),y)
+       SUB_DIRS += storage
+       obj-y += storage/usb-storage.o
+else
+       ifeq ($(CONFIG_USB_STORAGE),m)
+               MOD_IN_SUB_DIRS += storage
+       endif
+endif
+
 # Extract lists of the multi-part drivers.
 # The 'int-*' lists are the intermediate files used to build the multi's.
 
@@ -101,8 +100,8 @@ obj-y		:= $(filter-out $(list-multi), $(obj-y)) $(int-y)
 
 # Translate to Rules.make lists.
 
-O_OBJS		:= $(sort $(filter-out $(export-objs), $(obj-y)))
-OX_OBJS		:= $(sort $(filter     $(export-objs), $(obj-y)))
+O_OBJS		:= $(filter-out $(export-objs), $(obj-y)))
+OX_OBJS		:= $(filter     $(export-objs), $(obj-y)))
 M_OBJS		:= $(sort $(filter-out $(export-objs), $(obj-m)))
 MX_OBJS		:= $(sort $(filter     $(export-objs), $(obj-m)))
 MI_OBJS		:= $(sort $(filter-out $(export-objs), $(int-m)))

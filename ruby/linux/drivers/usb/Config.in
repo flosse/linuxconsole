@@ -68,7 +68,7 @@ comment 'USB Devices'
    dep_tristate '  DABUSB driver' CONFIG_USB_DABUSB $CONFIG_USB
    if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
       dep_tristate '  PLUSB Prolific USB-Network driver (EXPERIMENTAL)' CONFIG_USB_PLUSB $CONFIG_USB $CONFIG_NET
-      dep_tristate '  USB ADMtek Pegasus-based device support (EXPERIMENTAL)' CONFIG_USB_PEGASUS $CONFIG_USB $CONFIG_NET
+      dep_tristate '  USB ADMtek Pegasus-based ethernet device support (EXPERIMENTAL)' CONFIG_USB_PEGASUS $CONFIG_USB $CONFIG_NET
       dep_tristate '  USB Diamond Rio500 support (EXPERIMENTAL)' CONFIG_USB_RIO500 $CONFIG_USB
       dep_tristate '  D-Link USB FM radio support (EXPERIMENTAL)' CONFIG_USB_DSBR $CONFIG_USB $CONFIG_VIDEO_DEV
       dep_tristate '  USB Bluetooth support (EXPERIMENTAL)' CONFIG_USB_BLUETOOTH $CONFIG_USB
