@@ -41,6 +41,9 @@
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 
+MODULE_PARM(js, "2-24i");
+static int js[24] = { -1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0 };
+
 /*
  * Times, feature definitions.
  */
@@ -451,7 +454,7 @@ static int analog_init_device(struct analog_port *port, struct analog *analog)
 
 static int analog_init_masks(struct analog_port *port)
 {
-	int i;
+	int i, j;
 	int mask = port->mask;
 	struct analog *analog = port->analog;
 
@@ -464,11 +467,15 @@ static int analog_init_masks(struct analog_port *port)
 		return -1;
 	}
 
-	if (0 /* Parse user options */) {
-	} else {
-		analog[0].mask = 0xff;
-		analog[0].buttons = analog_joy_btn;
-	}
+	analog[0].mask = 0xff;
+	analog[0].buttons = analog_joy_btn;
+
+	for (i = 0; i < 24; i += 3)
+		if (js[i] == port->gameport->number) {
+			analog[j].mask = js[i + j + 1];
+			analog[j].buttons = (analog[j].mask & ANALOG_BTNS_GAMEPAD) ? analog_pad_btn : analog_joy_btn;
+			break;
+		}
 
 	analog[0].mask &= ~(ANALOG_AXES_STD | ANALOG_HAT_FCS | ANALOG_BTNS_GAMEPAD)
 			| port->mask | ((port->mask & 0x80) << 4)
@@ -561,6 +568,16 @@ static struct gameport_dev analog_dev = {
 	connect:	analog_connect,
 	disconnect:	analog_disconnect,
 };
+
+static int __init analog_setup(char *str)
+{
+	int i;
+	int ints[25]
+	str = get_options(str, ARRAY_SIZE(ints), ints);
+	for (i = 0; i <= ints[0] && i < 24; i++) js[i] = ints[i+1];
+	return 1;
+}
+__setup("js=", analog_setup);
 
 int __init analog_init(void)
 {
