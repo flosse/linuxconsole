@@ -3,6 +3,7 @@
  *
  * 01/2000 ghozlane Toumi  <gtoumi@messel.emse.fr>
  * 03/2001 James Simmons   <jsimmons@linux-fbdev.org>
+ * 04/2001 Paul Mundt      <lethal@chaoticdreams.org>
  *
  * $Id$
  */
@@ -35,7 +36,6 @@ exec by dac-type : 1 detection, 2 pll calc, 3 video setting, 4 bpp setting ? or
 -TODO: check and recheck the use of sst_wait_idle : we dont flush the fifo via 
 a nop command . so it's ok as long as the commands we pass don't go trou the fi
 fo. warning: issuing a nop command seems to need pci_fifo enabled 
--TODO: get rid of the C++ style comments //
 -TODO: check the error paths . if something get wrong, the error doesn't seem t
 o be very well handled...if handled at all.. not good.
 -ASK: the 24 bits mode is NOT packed . how do i differenciate from a packed mod
@@ -66,6 +66,10 @@ ate.
 #include <asm/io.h>
 #include <asm/ioctl.h>
 
+#ifdef CONFIG_MTRR
+  #include <asm/mtrr.h>
+#endif
+
 /*
  * debug info 
  * SST_DEBUG : enable debugging
@@ -88,7 +92,7 @@ ate.
  */
 
 #undef SST_DEBUG
-//#define SST_DEBUG
+/* #define SST_DEBUG */
 
 #ifdef SST_DEBUG
 #  define dprintk(X...)         printk(KERN_DEBUG "sstfb: " X)
@@ -285,11 +289,12 @@ struct pll_timing {
 static void sstfb_test(struct fb_info *info);
 
 static int configured = 0;
+static int inverse = 0;
 
 static u_long membase_phys; /* begining of physical adress space */
 static u_long regbase_virt; /* mem mapped registers (4Mb)*/  
 static int dactype;
-static struct pci_dev * sst_dev;
+static struct pci_dev * sst_dev = NULL;
 static u8 revision;
 
 static struct fb_info fb_info;
@@ -319,11 +324,18 @@ static struct fb_fix_screeninfo sstfb_fix __initdata = {
     FB_VISUAL_TRUECOLOR, 1, 0, 0, 0, (unsigned long) NULL, 0, FB_ACCEL_NONE
 };
 
+#ifdef CONFIG_MTRR
+static int enable_mtrr = 1;
+static int mtrr_handle;
+#endif
+
+static const char *mode_option __initdata = NULL;
+
 /* 
  * Framebuffer API 
  */
-int  sstfb_init(void);
-void sstfb_setup(char *options, int *ints);
+int sstfb_init(void);
+int sstfb_setup(char *options);
 
 static int sstfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info);
 static int sstfb_set_par(struct fb_info *info);
@@ -357,7 +369,7 @@ static struct fb_ops sstfb_ops = {
 
 /* Internal low level routines */
 static int sst_get_memsize(struct fb_info *info, u_long memsize);
-//static int sst_is_idle(void);
+/* static int sst_is_idle(void); */
 static int sst_wait_idle(void);
 static int sst_detect_dactype(void);
 static int sst_detect_att_ti(void);
@@ -516,7 +528,7 @@ static int sstfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
         
         if (var->bits_per_pixel <= 16)
                 var->bits_per_pixel = 16;
-//XXX
+/* XXX */
 #if 0
         else if (var->bits_per_pixel <= 24)
                 var->bits_per_pixel = 24;
@@ -552,7 +564,7 @@ static int sstfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
                 var->transp.offset = 0;
                 var->transp.length = 0;
                 break;
-//XXX
+/* XXX */
 #if 0
         case 24:        /* RGB 888 LfbMode 4 */
                 var->red.offset    = 16;
@@ -614,7 +626,7 @@ static int sstfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
         case 16:
                 ((u16*)(info->pseudo_palette))[regno] = col;
                 break;
-//XXX
+/* XXX */
 #if 0
 #ifdef FBCON_HAS_CFB24
         case 24:
@@ -1084,7 +1096,7 @@ static int sst_set_vidmod(struct fb_var_screeninfo *var)
 /* FIXME: recheck  the specs/glide ... vclk_sel,slave, 2xdiv2_2x...doh! */
                 sst_set_bits(FBIINIT1, SEL_SOURCE_VCLK_2X_SEL);
                 break;
-//XXX
+/* XXX */
 #if 0
         case 24:
         case 32:
@@ -1108,7 +1120,7 @@ static int sst_set_vidmod(struct fb_var_screeninfo *var)
         case 16:
                 sst_write(LFBMODE, LFB_565);
                 break;
-//XXX
+/* XXX */
 #if 0
         case 24:
                 sst_write(LFBMODE, LFB_888);
@@ -1150,7 +1162,7 @@ static void  sst_set_vidmod_att_ti(int bpp)
         case 16:
                 sst_dac_write(DACREG_RMR, (cr0 & 0x0f) | DACREG_CR0_16BPP);
                 break;
-//XXX
+/* XXX */
 #if 0
         case 24:
         case 32:
@@ -1171,7 +1183,7 @@ static void sst_set_vidmod_ics(int bpp)
         case 16:
                 sst_dac_write(DACREG_ICS_CMD, DACREG_ICS_CMD_16BPP);
                 break;
-//XXX
+/* XXX */
 #if 0
         case 24:
         case 32:
@@ -1288,25 +1300,41 @@ static void  sst_shutdown(void)
 /*
  * Interface to the world
  */
-
-/* TODO */
-void sstfb_setup(char *options, int *ints)
+int __init sstfb_setup(char *options)
 {
+	char *this_opt;
+
 	printk("sstfb_setup\n");
-        return;
+
+	if (!options || !*options)
+		return 0;
+
+	for (this_opt = strtok(options, ","); this_opt;
+	     this_opt = strtok(NULL, ",")) {
+		if (!strcmp(this_opt, "inverse")) {
+			inverse = 1;
+			fb_invert_cmaps();
+#ifdef CONFIG_MTRR
+		} else if (!strcmp(this_opt, "nomtrr")) {
+			enable_mtrr = 0;
+#endif
+		} else {
+			mode_option = this_opt;
+		}
+	}
+
+        return 0;
 }
 
-int sstfb_init(void)
+int __init sstfb_init(void)
 {
-        struct pci_dev *pdev = NULL;
-
         printk("sstfb_init\n");
         printk("Compile date: "__DATE__" "__TIME__"\n");
 
-        while ((pdev = pci_find_device(PCI_VENDOR_ID_3DFX, 
-                                      PCI_DEVICE_ID_3DFX_VOODOO, pdev))) {
-                sst_dev = pdev;
-                membase_phys = pdev->resource[0].start;
+        while ((sst_dev = pci_find_device(PCI_VENDOR_ID_3DFX, 
+                                      PCI_DEVICE_ID_3DFX_VOODOO, sst_dev))) {
+		pci_enable_device(sst_dev);
+                membase_phys = sst_dev->resource[0].start;
                 printk("membase_phys: %#lx\n", membase_phys);
                 pci_read_config_byte(sst_dev,
                                      PCI_REVISION_ID, &revision);
@@ -1357,6 +1385,15 @@ int sstfb_init(void)
                 /* print some squares ... */
                 sstfb_test(&fb_info);
 
+#ifdef CONFIG_MTRR
+		/* enable MTRR */
+		if (enable_mtrr) {
+			mtrr_handle = mtrr_add(fb_info.fix.smem_start,
+					       fb_info.fix.smem_len,
+					       MTRR_TYPE_WRCOMB, 1);
+			printk("sstfb: MTRR turned on\n");
+		}
+#endif
                 /* register fb */
                 if (register_framebuffer(&fb_info) < 0) {
                         printk("can't register framebuffer.\n");
@@ -1421,6 +1458,14 @@ static void __exit sstfb_cleanup(void)
                 sst_shutdown();
                 iounmap((void*)regbase_virt);
                 iounmap((void*)info->screen_base);
+#ifdef CONFIG_MTRR
+		/* disable MTRR */
+		if (enable_mtrr) {
+			mtrr_del(mtrr_handle, fb_info.fix.smem_start,
+				 fb_info.fix.smem_len);
+			printk("sstfb: MTRR turned off\n");
+		}
+#endif
                 unregister_framebuffer(&fb_info);
         }
 }

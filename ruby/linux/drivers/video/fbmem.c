@@ -121,6 +121,8 @@ extern int stifb_init(void);
 extern int stifb_setup(char*);
 extern int radeonfb_init(void);
 extern int radeonfb_setup(char*);
+extern int sstfb_init(void);
+extern int sstfb_setup(char*);
 
 static struct {
 	const char *name;
@@ -199,6 +201,9 @@ static struct {
 #endif 
 #ifdef CONFIG_FB_SIS
 	{ "sisfb", sisfb_init, sisfb_setup },
+#endif
+#ifdef CONFIG_FB_SST
+	{ "sstfb", sstfb_init, sstfb_setup },
 #endif
 
 	/*
