@@ -9,8 +9,7 @@ obj-y	+= dummycon.o
 # All of the (potential) objects that export symbols.
 # This list comes from 'grep -l EXPORT_SYMBOL *.[hc]'.
 
-export-objs    := fbmem.o fbcmap.o fbcon.o fbmon.o modedb.o \
-		  vga.o vgacon.o cyber2000fb.o
+export-objs    := fbmem.o fbcmap.o fbmon.o modedb.o vga.o cyber2000fb.o
 
 mod-subdirs	:= matrox
 
