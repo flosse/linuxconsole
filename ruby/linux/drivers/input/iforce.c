@@ -756,7 +756,7 @@ static int get_ff_packet(struct iforce *iforce, char *packet)
 	return -(iforce->edata[0] != packet[0]);
 }
 
-static void iforce_init_device(struct iforce *iforce)
+static int iforce_init_device(struct iforce *iforce)
 {
 	unsigned char c[] = "CEOV";
 	int i;
@@ -794,24 +794,31 @@ static void iforce_init_device(struct iforce *iforce)
 	iforce_open(&iforce->dev);
 
 /*
- * Wait until device ready - half a second or until it sends its first packet.
+ * Wait until device ready - until it sends its first response.
  */
 
-	expect_packet(iforce, 0x00ff);
-	wait_packet(iforce, HZ/2);
+	for (i = 0; i < 20; i++) 
+		if (!get_ff_packet(iforce, "O"))
+			break;
+
+	if (i == 20) { /* 5 seconds */
+		printk(KERN_INFO "iforce.c: Timeout waiting for response from device.\n");
+		iforce_close(&iforce->dev);
+		return -1;
+	}
 
 /*
  * Get device info.
  */
 
-	if (!get_ff_packet(iforce, "B"))
-		iforce->device_memory.end = (iforce->edata[2] << 8) | iforce->edata[1];
-	if (!get_ff_packet(iforce, "N"))
-		iforce->n_effects_max = iforce->edata[1];
 	if (!get_ff_packet(iforce, "M"))
 		iforce->dev.idvendor = (iforce->edata[2] << 8) | iforce->edata[1];
 	if (!get_ff_packet(iforce, "P"))		
 		iforce->dev.idproduct = (iforce->edata[2] << 8) | iforce->edata[1];
+	if (!get_ff_packet(iforce, "B"))
+		iforce->device_memory.end = (iforce->edata[2] << 8) | iforce->edata[1];
+	if (!get_ff_packet(iforce, "N"))
+		iforce->n_effects_max = iforce->edata[1];
 
 /*
  * Display additional info.
@@ -890,6 +897,8 @@ static void iforce_init_device(struct iforce *iforce)
  */
 
 	input_register_device(&iforce->dev);
+
+	return 0;
 }
 
 #ifdef IFORCE_USB
@@ -938,7 +947,10 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	FILL_BULK_URB(&iforce->out, dev, usb_sndbulkpipe(dev, epout->bEndpointAddress),
                         iforce + 1, 32, iforce_usb_out, iforce);
 
-	iforce_init_device(iforce);
+	if (iforce_init_device(iforce)) {
+		kfree(iforce);
+		return NULL;
+	}
 
 	printk(KERN_INFO "input%d: %s [%04x:%04x, %d effects, %ld bytes memory] on usb%d:%d.%d\n",
 		 iforce->dev.number, iforce->dev.name, iforce->dev.idvendor, iforce->dev.idproduct,
@@ -1042,7 +1054,11 @@ static void iforce_serio_connect(struct serio *serio, struct serio_dev *dev)
 		return;
 	}
 
-	iforce_init_device(iforce);
+	if (iforce_init_device(iforce)) {
+		serio_close(serio);
+		kfree(iforce);
+		return;
+	}
 
 	printk(KERN_INFO "input%d: %s [%04x:%04x, %d effects, %ld bytes memory] on serio%d\n",
 		iforce->dev.number, iforce->dev.name, iforce->dev.idvendor, iforce->dev.idproduct,
