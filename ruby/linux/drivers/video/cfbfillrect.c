@@ -97,7 +97,11 @@ int cfb_fillrect(struct fb_info *p, unsigned int x1, unsigned int y1,
 	dst = (unsigned long *) (dst1 - start_index);
 	
 	if (start_mask) {
+#if BITS_PER_LONG == 32
 		fb_writel(fb_readl(dst) | start_mask, dst);
+#else
+#warning 64 bits not supported yet 
+#endif
 		dst++;
 	}
   	
