@@ -284,7 +284,7 @@ static void grip_connect(struct gameport *gameport, struct gameport_dev *dev)
 	grip->timer.data = (long) grip;
 	grip->timer.function = grip_timer;
 
-	 if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW));
+	 if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW))
 		goto fail1;
 
 	for (i = 0; i < 2; i++) {

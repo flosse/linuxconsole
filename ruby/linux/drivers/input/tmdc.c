@@ -243,7 +243,7 @@ static void tmdc_connect(struct gameport *gameport, struct gameport_dev *dev)
 	tmdc->timer.data = (long) tmdc;
 	tmdc->timer.function = tmdc_timer;
 
-	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW));
+	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW))
 		goto fail1;
 
 	if (tmdc_read_packet(gameport, data))
