@@ -116,6 +116,7 @@
  */
 
 #include <linux/fs.h>
+#include <linux/list.h>
 
 struct tty_driver {
 	int	magic;		/* magic number for this structure */
@@ -129,10 +130,7 @@ struct tty_driver {
 	short	subtype;	/* subtype of tty driver */
 	struct termios init_termios; /* Initial termios */
 	int	flags;		/* tty driver flags */
-	int 	may_schedule;	/* when we can schedule */
 	int	*refcount;	/* for loadable tty drivers */
-	struct semaphore *tty_lock;/* access control for printk and tty layer */
-	struct console *console;/* console attached to this tty hardware */
 	struct proc_dir_entry *proc_entry; /* /proc fs entry */
 	struct tty_driver *other; /* only used for the PTY driver */
 
@@ -173,13 +171,10 @@ struct tty_driver {
 			  int count, int *eof, void *data);
 	int (*write_proc)(struct file *file, const char *buffer,
 			  unsigned long count, void *data);
-
-	/*
-	 * linked list pointers
-	 */
-	struct tty_driver *next;
-	struct tty_driver *prev;
+	struct list_head tty_drivers;
 };
+
+extern struct list_head tty_drivers;
 
 /* tty driver magic number */
 #define TTY_DRIVER_MAGIC		0x5402
@@ -204,14 +199,11 @@ struct tty_driver {
  * TTY_DRIVER_NO_DEVFS --- if set, do not create devfs entries. This
  *	is only used by tty_register_driver().
  *
- * TTY_DRIVER_CONSOLE --- if set, indicates that this driver is also 
- *	used by printk. It is set by register_console. 
  */
 #define TTY_DRIVER_INSTALLED		0x0001
 #define TTY_DRIVER_RESET_TERMIOS	0x0002
 #define TTY_DRIVER_REAL_RAW		0x0004
 #define TTY_DRIVER_NO_DEVFS		0x0008
-#define TTY_DRIVER_CONSOLE		0x0010
 
 /* tty driver types */
 #define TTY_DRIVER_TYPE_SYSTEM		0x0001

@@ -10,8 +10,6 @@
 
 struct vc_data;
 
-extern unsigned short *get_acm(int m);
-extern unsigned char inverse_translate(int m, int ucs);
-extern u16 inverse_convert(struct vc_data *conp, int glyph);
-extern void set_translate(struct vc_data *conp, int m);
+extern unsigned char inverse_translate(struct vc_data *vc, int glyph);
+extern void set_translate(struct vc_data *vc, int m);
 extern int conv_uni_to_pc(struct vc_data *vc, long ucs);

@@ -45,20 +45,21 @@ struct console
 	void	(*write)(struct console *, const char *, unsigned);
 	int	(*read)(struct console *, const char *, unsigned);
 	kdev_t	(*device)(struct console *);
+	void	(*unblank)(void);
 	int	(*setup)(struct console *, char *);
-	struct  semaphore lock;
-	unsigned long con_start;
 	short	flags;
 	short	index;
 	int	cflag;
 	struct	 console *next;
 };
 
-extern void acquire_console_sem(kdev_t device);
-extern void release_console_sem(kdev_t device);
 extern void register_console(struct console *);
 extern int unregister_console(struct console *);
 extern struct console *console_drivers;
+extern void acquire_console_sem(void);
+extern void release_console_sem(void);
+extern void console_conditional_schedule(void);
+extern void console_unblank(void);
 
 /* VESA Blanking Levels */
 #define VESA_NO_BLANKING	0
