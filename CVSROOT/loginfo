@@ -25,4 +25,4 @@
 # or
 #DEFAULT (echo ""; id; echo %{sVv}; date; cat) >> $CVSROOT/CVSROOT/commitlog
 CVSROOT $CVSROOT/CVSROOT/syncmail %{sVv} jsimmons@transvirtual.com
-DEFAULT $CVSROOT/CVSROOT/syncmail %{sVv} linuxconsole-commits@lists.sf.net
+DEFAULT $CVSROOT/CVSROOT/syncmail %{sVv} linuxconsole-commit@lists.sf.net
