@@ -1,5 +1,5 @@
 /*
- * BK Id: SCCS/s.chrp_setup.c 1.38 11/13/01 21:26:07 paulus
+ * BK Id: SCCS/s.chrp_setup.c 1.40 12/19/01 09:45:54 trini
  */
 /*
  *  linux/arch/ppc/kernel/setup.c
@@ -69,9 +69,12 @@ void chrp_event_scan(void);
 void rtas_display_progress(char *, unsigned short);
 void rtas_indicator_progress(char *, unsigned short);
 void btext_progress(char *, unsigned short);
+
 extern unsigned long pmac_find_end_of_memory(void);
+extern int of_show_percpuinfo(struct seq_file *, int);
 
 extern kdev_t boot_dev;
+
 extern PTE *Hash, *Hash_end;
 extern unsigned long Hash_size, Hash_mask;
 extern int probingmem;
@@ -350,7 +353,7 @@ void __init chrp_init_IRQ(void)
 	openpic_init(1, NUM_8259_INTERRUPTS, chrp_int_ack_special, nmi_irq);
 	for ( i = 0 ; i < NUM_8259_INTERRUPTS  ; i++ )
 		irq_desc[i].handler = &i8259_pic;
-	i8259_init();
+	i8259_init(NULL);
 }
 
 void __init

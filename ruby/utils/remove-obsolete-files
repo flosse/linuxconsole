@@ -61,9 +61,7 @@ rm -fv drivers/char/pc110pad.h
 rm -fv drivers/char/pc_keyb.c
 rm -fv drivers/char/q40_keyb.c
 rm -fv drivers/char/qpmouse.c
-rm -fv drivers/macintosh/adbhid.c
 rm -fv drivers/macintosh/mac_keyb.c
-rm -fv drivers/macintosh/mac_hid.c
 rm -fv drivers/sbus/char/pcikbd.c
 rm -fv drivers/sbus/char/pcikbd.h
 rm -fv drivers/sbus/char/sunkbd.c

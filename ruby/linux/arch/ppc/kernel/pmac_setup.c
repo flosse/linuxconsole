@@ -1,5 +1,5 @@
 /*
- * BK Id: SCCS/s.pmac_setup.c 1.43 11/13/01 21:26:07 paulus
+ * BK Id: SCCS/s.pmac_setup.c 1.45 12/01/01 20:09:06 benh
  */
 /*
  *  linux/arch/ppc/kernel/setup.c
@@ -59,13 +59,13 @@
 #include <asm/pci-bridge.h>
 #include <asm/ohare.h>
 #include <asm/mediabay.h>
-#include <asm/feature.h>
 #include <asm/machdep.h>
 #include <asm/dma.h>
 #include <asm/bootx.h>
 #include <asm/cputable.h>
 #include <asm/btext.h>
 
+#include <asm/pmac_feature.h>
 #include <asm/time.h>
 #include "local_irq.h"
 #include "pmac_pic.h"
@@ -80,6 +80,11 @@ extern void pmac_read_rtc_time(void);
 extern void pmac_calibrate_decr(void);
 extern void pmac_pcibios_fixup(void);
 extern void pmac_find_bridges(void);
+extern int pmac_ide_check_base(ide_ioreg_t base);
+extern ide_ioreg_t pmac_ide_get_base(int index);
+extern void pmac_ide_init_hwif_ports(hw_regs_t *hw,
+	ide_ioreg_t data_port, ide_ioreg_t ctrl_port, int *irq);
+
 extern void pmac_nvram_update(void);
 
 extern int pmac_pci_enable_device_hook(struct pci_dev *dev, int initial);
@@ -406,7 +411,8 @@ pmac_init2(void)
 #endif
 #ifdef CONFIG_PMAC_PBOOK
 	media_bay_init();
-#endif	
+#endif
+	pmac_feature_late_init();
 }
 
 #ifdef CONFIG_SCSI
@@ -574,14 +580,11 @@ pmac_halt(void)
 static int __pmac
 pmac_ide_check_region(ide_ioreg_t from, unsigned int extent)
 {
-	/*
-	 * We only do the check_region if `from' looks like a genuine
-	 * I/O port number.  If it actually refers to a memory-mapped
-	 * register, it should be OK.
-	 */
-	if (from < ~_IO_BASE)
-		return check_region(from, extent);
-	return 0;
+#ifdef CONFIG_BLK_DEV_IDE_PMAC
+	if (pmac_ide_check_base(from) >= 0)
+		return 0;
+#endif
+	return check_region(from, extent);
 }
 
 static void __pmac
@@ -589,24 +592,31 @@ pmac_ide_request_region(ide_ioreg_t from,
 			unsigned int extent,
 			const char *name)
 {
-	if (from < ~_IO_BASE)
-		request_region(from, extent, name);
+#ifdef CONFIG_BLK_DEV_IDE_PMAC
+	if (pmac_ide_check_base(from) >= 0)
+		return;
+#endif
+	request_region(from, extent, name);
 }
 
 static void __pmac
 pmac_ide_release_region(ide_ioreg_t from,
 			unsigned int extent)
 {
-	if (from < ~_IO_BASE)
-		release_region(from, extent);
+#ifdef CONFIG_BLK_DEV_IDE_PMAC
+	if (pmac_ide_check_base(from) >= 0)
+		return;
+#endif
+	release_region(from, extent);
 }
 
+#ifndef CONFIG_BLK_DEV_IDE_PMAC
 /*
  * This is only used if we have a PCI IDE controller, not
  * for the IDE controller in the ohare/paddington/heathrow/keylargo.
  */
 static void __pmac
-pmac_ide_init_hwif_ports(hw_regs_t *hw, ide_ioreg_t data_port,
+pmac_ide_pci_init_hwif_ports(hw_regs_t *hw, ide_ioreg_t data_port,
 		ide_ioreg_t ctrl_port, int *irq)
 {
 	ide_ioreg_t reg = data_port;
@@ -618,7 +628,8 @@ pmac_ide_init_hwif_ports(hw_regs_t *hw, ide_ioreg_t data_port,
 	}
 	hw->io_ports[IDE_CONTROL_OFFSET] = ctrl_port;
 }
-#endif
+#endif /* CONFIG_BLK_DEV_IDE_PMAC */
+#endif /* defined(CONFIG_BLK_DEV_IDE) || defined(CONFIG_BLK_DEV_IDE_MODULE) */
 
 /*
  * Read in a property describing some pieces of memory.
@@ -738,12 +749,19 @@ pmac_init(unsigned long r3, unsigned long r4, unsigned long r5,
 
 	ppc_md.find_end_of_memory = pmac_find_end_of_memory;
 
-#if defined(CONFIG_BLK_DEV_IDE) && defined(CONFIG_BLK_DEV_IDE_PMAC)
+	ppc_md.feature_call   = pmac_do_feature_call;
+
+#if defined(CONFIG_BLK_DEV_IDE) || defined(CONFIG_BLK_DEV_IDE_MODULE)
         ppc_ide_md.ide_check_region	= pmac_ide_check_region;
         ppc_ide_md.ide_request_region	= pmac_ide_request_region;
         ppc_ide_md.ide_release_region	= pmac_ide_release_region;
+#ifdef CONFIG_BLK_DEV_IDE_PMAC
         ppc_ide_md.ide_init_hwif	= pmac_ide_init_hwif_ports;
-#endif /* CONFIG_BLK_DEV_IDE && CONFIG_BLK_DEV_IDE_PMAC */
+        ppc_ide_md.default_io_base	= pmac_ide_get_base;
+#else /* CONFIG_BLK_DEV_IDE_PMAC */
+        ppc_ide_md.ide_init_hwif	= pmac_ide_pci_init_hwif_ports;
+#endif /* CONFIG_BLK_DEV_IDE_PMAC */
+#endif /* defined(CONFIG_BLK_DEV_IDE) || defined(CONFIG_BLK_DEV_IDE_MODULE) */
 
 #ifdef CONFIG_BOOTX_TEXT
 	ppc_md.progress = pmac_progress;

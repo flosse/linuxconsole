@@ -15,7 +15,7 @@ O_TARGET	:= macintosh.o
 
 # Objects that export symbols.
 
-export-objs	:= adb.o rtc.o via-pmu.o
+export-objs	:= adb.o rtc.o mac_hid.o via-pmu.o
 
 # Object file lists.
 
@@ -29,10 +29,14 @@ obj-	:=
 obj-$(CONFIG_PMAC_PBOOK)	+= mediabay.o
 obj-$(CONFIG_MAC_SERIAL)	+= macserial.o
 obj-$(CONFIG_NVRAM)		+= nvram.o
+obj-$(CONFIG_MAC_EMUMOUSEBTN)	+= mac_hid.o
+obj-$(CONFIG_INPUT_ADBHID)	+= adbhid.o
 obj-$(CONFIG_PPC_RTC)		+= rtc.o
+obj-$(CONFIG_ANSLCD)		+= ans-lcd.o
 
 obj-$(CONFIG_ADB_PMU)		+= via-pmu.o
 obj-$(CONFIG_ADB_CUDA)		+= via-cuda.o
+obj-$(CONFIG_PMAC_APM_EMU)	+= apm_emu.o
 
 obj-$(CONFIG_ADB)		+= adb.o
 obj-$(CONFIG_ADB_MACII)		+= via-macii.o

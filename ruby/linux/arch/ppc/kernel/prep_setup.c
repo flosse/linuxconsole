@@ -1,5 +1,5 @@
 /*
- * BK Id: SCCS/s.prep_setup.c 1.44 11/13/01 21:26:07 paulus
+ * BK Id: SCCS/s.prep_setup.c 1.47 12/19/01 09:45:54 trini
  */
 /*
  *  linux/arch/ppc/kernel/setup.c
@@ -170,7 +170,7 @@ prep_show_cpuinfo(struct seq_file *m)
 
 no_l2:
 #ifdef CONFIG_PREP_RESIDUAL
-	if (res->ResidualLength == 0) {
+	if (res->ResidualLength != 0) {
 		/* print info about SIMMs */
 		seq_printf(m, "simms\t\t: ");
 		for (i = 0; (res->ActualNumMemories) && (i < MAX_MEMS); i++) {
@@ -617,7 +617,7 @@ prep_irq_cannonicalize(u_int irq)
 static int __prep
 prep_get_irq(struct pt_regs *regs)
 {
-	return i8259_irq(smp_processor_id());
+	return i8259_irq();
 }		
 
 static void __init
@@ -629,7 +629,7 @@ prep_init_IRQ(void)
 		openpic_init(1, NUM_8259_INTERRUPTS, 0, -1);
 	for ( i = 0 ; i < NUM_8259_INTERRUPTS ; i++ )
 		irq_desc[i].handler = &i8259_pic;
-	i8259_init();	
+	i8259_init(0xbffffff0); /* PCI interrupt ack address for MPC105 and 106 */
 }
 
 #if defined(CONFIG_BLK_DEV_IDE) || defined(CONFIG_BLK_DEV_IDE_MODULE)
