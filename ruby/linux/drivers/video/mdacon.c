@@ -475,22 +475,37 @@ static int mdacon_scroll(struct vc_data *vc, int lines)
 
 static void mdacon_cursor(struct vc_data *vc, int mode)
 {
-	if (mode == CM_ERASE) {
-		mda_set_cursor(mda_vram_len - 1);
-		return;
-	}
-
-	mda_set_cursor(vc->vc_y * vc->vc_cols*2 + vc->vc_x*2);
-
-	switch (vc->vc_cursor_type & 0x0f) {
-
-		case CUR_LOWER_THIRD:	mda_set_cursor_size(10, 13); break;
-		case CUR_LOWER_HALF:	mda_set_cursor_size(7,  13); break;
-		case CUR_TWO_THIRDS:	mda_set_cursor_size(4,  13); break;
-		case CUR_BLOCK:		mda_set_cursor_size(1,  13); break;
-		case CUR_NONE:		mda_set_cursor_size(14, 13); break;
-		default:		mda_set_cursor_size(12, 13); break;
-	}
+	switch (mode) {
+		case CM_ERASE:
+			mda_set_cursor(mda_vram_len - 1);
+			break;
+		case CM_MOVE:
+		case CM_DRAW:
+			mda_set_cursor(vc->vc_y * vc->vc_cols*2 + vc->vc_x*2);
+			break;
+		case CM_CHANGE:
+			switch (vc->vc_cursor_type & 0x0f) {
+			case CUR_LOWER_THIRD:
+				mda_set_cursor_size(10, 13); 
+				break;
+			case CUR_LOWER_HALF:	
+				mda_set_cursor_size(7,  13); 
+				break;
+			case CUR_TWO_THIRDS:	
+				mda_set_cursor_size(4,  13); 
+				break;
+			case CUR_BLOCK:		
+				mda_set_cursor_size(1,  13); 
+				break;
+			case CUR_NONE:		
+				mda_set_cursor_size(14, 13); 
+				break;
+			case CUR_UNDERLINE:
+			default:		
+				mda_set_cursor_size(12, 13); 
+				break;
+			}
+		}
 }
 
 static int mdacon_scroll_region(struct vc_data *vc, int t, int b, int dir, 

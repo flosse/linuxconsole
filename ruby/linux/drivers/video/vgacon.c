@@ -664,12 +664,11 @@ static void vgacon_cursor(struct vc_data *vc, int mode)
 	    vga_wcrt(regs, VGA_CRTC_CURSOR_LO, v1);
 	    spin_unlock_irqrestore(&vga_lock, flags);
 	    break;
- 
+	
+	case CM_CHANGE:	
 	    switch (vc->vc_cursor_type & 0x0f) {
-		case CUR_UNDERLINE:
-			vgacon_set_cursor_size(vc->vc_x, 
-					vc->vc_font.height - (vc->vc_font.height < 10 ? 2 : 3),
-					vc->vc_font.height - (vc->vc_font.height < 10 ? 1 : 2));
+		case CUR_BLOCK:
+			vgacon_set_cursor_size(vc->vc_x, 1,vc->vc_font.height);
 			break;
 		case CUR_TWO_THIRDS:
 			vgacon_set_cursor_size(vc->vc_x, vc->vc_font.height/3,
@@ -687,8 +686,11 @@ static void vgacon_cursor(struct vc_data *vc, int mode)
 		case CUR_NONE:
 			vgacon_set_cursor_size(vc->vc_x, 31, 30);
 			break;
-          	default:
-			vgacon_set_cursor_size(vc->vc_x, 1,vc->vc_font.height);
+		case CUR_UNDERLINE:
+		default:
+			vgacon_set_cursor_size(vc->vc_x, 
+					vc->vc_font.height - (vc->vc_font.height < 10 ? 2 : 3),
+					vc->vc_font.height - (vc->vc_font.height < 10 ? 1 : 2));
 			break;
 		}
 	    break;
