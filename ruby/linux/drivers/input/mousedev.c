@@ -212,7 +212,7 @@ static int mousedev_open(struct inode * inode, struct file * file)
 	struct mousedev_list *list;
 	int i = MINOR(inode->i_rdev) - MOUSEDEV_MINOR_BASE;
 
-	if (i > MOUSEDEV_MINORS || !mousedev_table[i])
+	if (i >= MOUSEDEV_MINORS || !mousedev_table[i])
 		return -ENODEV;
 
 	if (!(list = kmalloc(sizeof(struct mousedev_list), GFP_KERNEL)))
