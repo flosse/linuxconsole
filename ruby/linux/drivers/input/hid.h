@@ -161,6 +161,7 @@ struct hid_item {
 #define HID_UP_CONSUMER		0x000c0000
 #define HID_UP_DIGITIZER 	0x000d0000
 #define HID_UP_PID 		0x000f0000
+#define HID_UP_HPVENDOR         0xff7f0000
 
 #define HID_USAGE		0x0000ffff
 
@@ -364,7 +365,9 @@ void hidinput_disconnect(struct hid_device *);
 
 #endif
 
-#define IS_INPUT_APPLICATION(a) ((a >= 0x00010000) && (a <= 0x00010008))
+/* Applications from HID Usage Tables 4/8/99 Version 1.1 */
+/* We ignore a few input applications that are not widely used */
+#define IS_INPUT_APPLICATION(a) (((a >= 0x00010000) && (a <= 0x00010008)) || ( a == 0x00010080) || ( a == 0x000c0001))
 
 int hid_open(struct hid_device *);
 void hid_close(struct hid_device *);

@@ -303,8 +303,23 @@ struct input_event {
 #define KEY_PROG4		203
 #define KEY_SUSPEND		205
 #define KEY_CLOSE		206
+#define KEY_PLAY                207
+#define KEY_FASTFORWARD         208
+#define KEY_BASSBOOST           209
+#define KEY_PRINT               210
+#define KEY_HP                  211
+#define KEY_CAMERA              212
+#define KEY_SOUND               213
+#define KEY_QUESTION            214
+#define KEY_EMAIL               215
+#define KEY_CHAT                216
+#define KEY_SEARCH              217
+#define KEY_CONNECT             218
+#define KEY_FINANCE             219
+#define KEY_SPORT               220
+#define KEY_SHOP                221
 
-#define KEY_UNKNOWN		220
+#define KEY_UNKNOWN		240
 
 #define BTN_MISC		0x100
 #define BTN_0			0x100
@@ -414,8 +429,9 @@ struct input_event {
 #define ABS_DISTANCE		0x19
 #define ABS_TILT_X		0x1a
 #define ABS_TILT_Y		0x1b
-#define ABS_MISC		0x1c
-#define ABS_MAX			0x1f
+#define ABS_VOLUME              0x20
+#define ABS_MISC		0x28
+#define ABS_MAX			0x2f
 
 /*
  * Misc events
@@ -678,16 +694,63 @@ struct input_dev {
 	struct input_dev *next;
 };
 
+/*
+ * Structure for hotplug & device<->driver matching.
+ */
+
+#define INPUT_DEVICE_ID_MATCH_BUS	1
+#define INPUT_DEVICE_ID_MATCH_VENDOR	2
+#define INPUT_DEVICE_ID_MATCH_PRODUCT	4
+#define INPUT_DEVICE_ID_MATCH_VERSION	8
+
+#define INPUT_DEVICE_ID_MATCH_EVBIT	0x010
+#define INPUT_DEVICE_ID_MATCH_KEYBIT	0x020
+#define INPUT_DEVICE_ID_MATCH_RELBIT	0x040
+#define INPUT_DEVICE_ID_MATCH_ABSBIT	0x080
+#define INPUT_DEVICE_ID_MATCH_MSCIT	0x100
+#define INPUT_DEVICE_ID_MATCH_LEDBIT	0x200
+#define INPUT_DEVICE_ID_MATCH_SNDBIT	0x400
+#define INPUT_DEVICE_ID_MATCH_FFBIT	0x800
+
+#define INPUT_DEVICE_ID_MATCH_DEVICE\
+	(INPUT_DEVICE_ID_MATCH_BUS | INPUT_DEVICE_ID_MATCH_VENDOR | INPUT_DEVICE_ID_MATCH_PRODUCT)
+#define INPUT_DEVICE_ID_MATCH_DEVICE_AND_VERSION\
+	(INPUT_DEVICE_ID_MATCH_DEVICE | INPUT_DEVICE_ID_MATCH_VERSION)
+
+struct input_device_id {
+
+	unsigned long flags;
+
+	unsigned short idbus;
+	unsigned short idvendor;
+	unsigned short idproduct;
+	unsigned short idversion;
+
+	unsigned long evbit[NBITS(EV_MAX)];
+	unsigned long keybit[NBITS(KEY_MAX)];
+	unsigned long relbit[NBITS(REL_MAX)];
+	unsigned long absbit[NBITS(ABS_MAX)];
+	unsigned long mscbit[NBITS(MSC_MAX)];
+	unsigned long ledbit[NBITS(LED_MAX)];
+	unsigned long sndbit[NBITS(SND_MAX)];
+	unsigned long ffbit[NBITS(FF_MAX)];
+
+	unsigned long driver_info;
+};
+
 struct input_handler {
 
 	void *private;
 
 	void (*event)(struct input_handle *handle, unsigned int type, unsigned int code, int value);
-	struct input_handle* (*connect)(struct input_handler *handler, struct input_dev *dev);
+	struct input_handle* (*connect)(struct input_handler *handler, struct input_dev *dev, struct input_device_id *id);
 	void (*disconnect)(struct input_handle *handle);
 
 	struct file_operations *fops;
 	int minor;
+	char *name;
+
+	struct input_device_id *id_table;
 
 	struct input_handle *handle;
 	struct input_handler *next;
@@ -698,6 +761,7 @@ struct input_handle {
 	void *private;
 
 	int open;
+	char *name;
 
 	struct input_dev *dev;
 	struct input_handler *handler;

@@ -41,7 +41,7 @@
 #include <asm/unaligned.h>
 #include <linux/input.h>
 
-#undef DEBUG
+#define DEBUG
 #undef DEBUG_DATA
 
 #include <linux/usb.h>
@@ -963,6 +963,8 @@ static int hid_submit_ctrl(struct hid_device *hid)
 	hid->dr.request = dir ? USB_REQ_GET_REPORT : USB_REQ_SET_REPORT;
 	hid->dr.index = cpu_to_le16(hid->ifnum);
 	hid->dr.value = ((report->type + 1) << 8) | report->id;
+
+	dbg("submitting ctrl urb");
 
 	if (usb_submit_urb(&hid->urbctrl)) {
 		err("usb_submit_urb(ctrl) failed");
