@@ -111,7 +111,10 @@
 #define LOGO_W			80
 #define LOGO_LINE	(LOGO_W/8)
 
-struct display fb_display[MAX_NR_CONSOLES];
+struct fbcon_vt_data {
+	struct display fb_display[MAX_NR_USER_CONSOLES];
+};
+
 static int logo_lines;
 static int logo_shown = -1;
 /* Software scrollback */
@@ -198,7 +201,6 @@ static int fbcon_scrolldelta(struct vc_data *vc, int lines);
 static int __init fbcon_setup(char *options);
 static void fbcon_set_disp(struct vc_data *vc, int init, int logo);
 static __inline__ int real_y(struct display *p, int ypos);
-static void fbcon_vbl_handler(int irq, void *dummy, struct pt_regs *fp);
 static __inline__ void updatescrollmode(struct display *p);
 static __inline__ void ywrap_up(struct vc_data *vc,struct display *p,int count);
 static __inline__ void ywrap_down(struct vc_data *vc, struct display *p, 
@@ -222,6 +224,22 @@ static void fbcon_vbl_detect(int irq, void *dummy, struct pt_regs *fp)
 }
 #endif
 
+static void fbcon_vbl_handler(int irq, void *dummy, struct pt_regs *fp)
+{
+    struct display *p;
+
+    if (!cursor_on)
+        return;
+
+    if (vbl_cursor_cnt && --vbl_cursor_cnt == 0) {
+        p = &fb_display[fg_console];
+        if (p->dispsw->revc)
+                p->dispsw->revc(p, p->cursor_x, real_y(p, p->cursor_y));
+        cursor_drawn ^= 1;
+        vbl_cursor_cnt = cursor_blink_rate;
+    }
+}
+
 static void cursor_timer_handler(unsigned long dev_addr);
 
 static struct timer_list cursor_timer = {
@@ -230,31 +248,9 @@ static struct timer_list cursor_timer = {
 
 static void cursor_timer_handler(unsigned long dev_addr)
 {
-      fbcon_vbl_handler(0, NULL, NULL);
+      fbcon_vbl_handler(0, dev_addr, NULL);
       cursor_timer.expires = jiffies+HZ/50;
       add_timer(&cursor_timer);
-}
-
-int PROC_CONSOLE(const struct fb_info *info)
-{
-        int fgc;
-        
-        if (info->display_fg != NULL)
-                fgc = info->display_fg->vc_num;
-        else
-                return -1;
-                
-        if (!current->tty)
-                return fgc;
-
-        if (current->tty->driver.type != TTY_DRIVER_TYPE_CONSOLE)
-                /* XXX Should report error here? */
-                return fgc;
-
-        if (MINOR(current->tty->device) < 1)
-                return fgc;
-
-        return MINOR(current->tty->device) - 1;
 }
 
 int set_all_vcs(int fbidx, struct fb_ops *fb, struct fb_var_screeninfo *var,
@@ -263,14 +259,14 @@ int set_all_vcs(int fbidx, struct fb_ops *fb, struct fb_var_screeninfo *var,
     int unit, err;
 
     var->activate |= FB_ACTIVATE_TEST;
-    err = fb->fb_set_var(var, PROC_CONSOLE(info), info);
+    err = fb->fb_set_var(var, info);
     var->activate &= ~FB_ACTIVATE_TEST;
     if (err)
             return err;
     for (unit = 0; unit < MAX_NR_USER_CONSOLES; unit++)
             if (fb_display[unit].conp)
-                    fb->fb_set_var(var, unit, info);
-    return 0;
+                    fb_display[unit].var = *var;
+    return fb->fb_set_var(var, info);
 }
 
 static int __init fbcon_setup(char *options)
@@ -822,22 +818,6 @@ static void fbcon_cursor(struct vc_data *vc, int mode)
             cursor_on = 1;
             break;
         }
-}
-
-static void fbcon_vbl_handler(int irq, void *dummy, struct pt_regs *fp)
-{
-    struct display *p;
-
-    if (!cursor_on)
-	return;
-
-    if (vbl_cursor_cnt && --vbl_cursor_cnt == 0) {
-	p = &fb_display[fg_console];
-	if (p->dispsw->revc)
-		p->dispsw->revc(p, p->cursor_x, real_y(p, p->cursor_y));
-	cursor_drawn ^= 1;
-	vbl_cursor_cnt = cursor_blink_rate;
-    }
 }
 
 static int scrollback_phys_max = 0;
@@ -1766,8 +1746,7 @@ static int fbcon_resize(struct vc_data *vc,unsigned int rows,unsigned int cols)
    
     p->var.xres = cols * fontwidth(p);
     p->var.yres = rows * fontheight(p);
-    err = p->fb_info->fbops->fb_set_var(&p->var, PROC_CONSOLE(p->fb_info), 
-					p->fb_info);
+    err = p->fb_info->fbops->fb_set_var(&p->var, p->fb_info); 
     if (err)
         return err;
  
@@ -1858,7 +1837,7 @@ static int fbcon_set_palette(struct vc_data *vc, unsigned char *table)
     else
 	palette_cmap.len = 16;
     palette_cmap.start = 0;
-    return p->fb_info->fbops->fb_set_cmap(&palette_cmap, 1, unit, p->fb_info);
+    return p->fb_info->fbops->fb_set_cmap(&palette_cmap, 1, p->fb_info);
 }
 
 static u16 *fbcon_screen_pos(struct vc_data *vc, int offset)
@@ -2075,8 +2054,7 @@ static int __init fbcon_show_logo(struct vc_data *vc)
 		palette_cmap.green[j] = (green[i+j] << 8) | green[i+j];
 		palette_cmap.blue[j]  = (blue[i+j] << 8) | blue[i+j];
 	    }
-	    p->fb_info->fbops->fb_set_cmap(&palette_cmap, 1, vc->vc_num,  
-					   p->fb_info);
+	    p->fb_info->fbops->fb_set_cmap(&palette_cmap, 1, p->fb_info); 
 	}
     }
 	
