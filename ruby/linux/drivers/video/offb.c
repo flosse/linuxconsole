@@ -24,7 +24,6 @@
 #include <linux/delay.h>
 #include <linux/interrupt.h>
 #include <linux/fb.h>
-#include <linux/selection.h>
 #include <linux/init.h>
 #include <linux/ioport.h>
 #ifdef CONFIG_FB_COMPAT_XPMAC
@@ -34,31 +33,21 @@
 #include <asm/prom.h>
 #include <asm/bootx.h>
 
-#include "fbcon.h"
-#include <video/fbcon-cfb8.h>
-#include <video/fbcon-cfb16.h>
-#include <video/fbcon-cfb32.h>
-#include <video/macmodes.h>
+// #include <video/macmodes.h>
 
-static int currcon = 0;
+/* Supported palette hacks */
+enum {
+	cmap_unknown,
+	cmap_m64,	/* ATI Mach64 */
+	cmap_r128,	/* ATI Rage128 */
+	cmap_M3A,	/* ATI Rage Mobility M3 Head A */
+	cmap_M3B	/* ATI Rage Mobility M3 Head B */
+};
 
-struct fb_info_offb {
-    struct fb_info info;
-    struct fb_fix_screeninfo fix;
-    struct fb_var_screeninfo var;
-    struct display disp;
-    struct { u_char red, green, blue, pad; } palette[256];
-    volatile unsigned char *cmap_adr;
-    volatile unsigned char *cmap_data;
-    int is_rage_128;
-    union {
-#ifdef FBCON_HAS_CFB16
-	u16 cfb16[16];
-#endif
-#ifdef FBCON_HAS_CFB32
-	u32 cfb32[16];
-#endif
-    } fbcon_cmap;
+struct offb_par {
+	volatile unsigned char *cmap_adr;
+	volatile unsigned char *cmap_data;
+	int cmap_type;
 };
 
 #ifdef __powerpc__
@@ -70,18 +59,17 @@ struct fb_info_offb {
     /*
      *  Interface used by the world
      */
-
 int offb_init(void);
 
-static int offb_get_fix(struct fb_fix_screeninfo *fix, int con,
-			struct fb_info *info);
-static int offb_get_var(struct fb_var_screeninfo *var, int con,
-			struct fb_info *info);
-static int offb_set_var(struct fb_var_screeninfo *var, int con,
-			struct fb_info *info);
+static int offb_check_var(struct fb_var_screeninfo *var, struct fb_info *info); 
+static int offb_set_par(struct fb_info *info);
 static int offb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-                         u_int transp, struct fb_info *info);
+                          u_int transp, struct fb_info *info);
 static void offb_blank(int blank, struct fb_info *info);
+
+    /*
+     *  Interface to the low level console driver
+     */
 extern boot_infos_t *boot_infos;
 
 static void offb_init_nodriver(struct device_node *);
@@ -89,93 +77,41 @@ static void offb_init_fb(const char *name, const char *full_name, int width,
 		      int height, int depth, int pitch, unsigned long address,
 		      struct device_node *dp);
 
-    /*
-     *  Interface to the low level console driver
-     */
-
-static int offbcon_switch(int con, struct fb_info *info);
-static int offbcon_updatevar(int con, struct fb_info *info);
-
-    /*
-     *  Internal routines
-     */
-
-static int offb_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
-			 u_int *transp, struct fb_info *info);
-static void do_install_cmap(int con, struct fb_info *info);
-
 static struct fb_ops offb_ops = {
 	owner:		THIS_MODULE,
-	fb_get_fix:	offb_get_fix,
-	fb_get_var:	offb_get_var,
-	fb_set_var:	offb_set_var,
+	fb_check_var:	offb_check_var,
+	fb_set_par:	offb_set_par,
 	fb_setcolreg:	offb_setcolreg,
 	fb_blank:	offb_blank,
 };
 
     /*
-     *  Get the Fixed Part of the Display
-     */
-
-static int offb_get_fix(struct fb_fix_screeninfo *fix, int con,
-			struct fb_info *info)
-{
-    struct fb_info_offb *info2 = (struct fb_info_offb *)info;
-
-    memcpy(fix, &info2->fix, sizeof(struct fb_fix_screeninfo));
-    return 0;
-}
-
-
-    /*
-     *  Get the User Defined Part of the Display
-     */
-
-static int offb_get_var(struct fb_var_screeninfo *var, int con,
-			struct fb_info *info)
-{
-    struct fb_info_offb *info2 = (struct fb_info_offb *)info;
-
-    memcpy(var, &info2->var, sizeof(struct fb_var_screeninfo));
-    return 0;
-}
-
-
-    /*
      *  Set the User Defined Part of the Display
      */
 
-static int offb_set_var(struct fb_var_screeninfo *var, int con,
+static int offb_set_var(struct fb_var_screeninfo *var, 
 			struct fb_info *info)
 {
-    struct display *display;
     unsigned int oldbpp = 0;
     int err;
     int activate = var->activate;
-    struct fb_info_offb *info2 = (struct fb_info_offb *)info;
 
-    if (con >= 0)
-	display = &fb_display[con];
-    else
-	display = &info2->disp;	/* used during initialization */
-
-    if (var->xres > info2->var.xres || var->yres > info2->var.yres ||
-	var->xres_virtual > info2->var.xres_virtual ||
-	var->yres_virtual > info2->var.yres_virtual ||
-	var->bits_per_pixel > info2->var.bits_per_pixel ||
+    if (var->xres > info->var.xres || var->yres > info->var.yres ||
+	var->xres_virtual > info->var.xres_virtual ||
+	var->yres_virtual > info->var.yres_virtual ||
+	var->bits_per_pixel > info->var.bits_per_pixel ||
 	var->nonstd ||
 	(var->vmode & FB_VMODE_MASK) != FB_VMODE_NONINTERLACED)
 	return -EINVAL;
-    memcpy(var, &info2->var, sizeof(struct fb_var_screeninfo));
+    memcpy(var, &info->var, sizeof(struct fb_var_screeninfo));
 
     if ((activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
-	oldbpp = display->var.bits_per_pixel;
-	display->var = *var;
+	oldbpp = var.bits_per_pixel;
+	info->var = *var;
     }
-    if ((oldbpp != var->bits_per_pixel) || (display->cmap.len == 0)) {
+    if ((oldbpp != var->bits_per_pixel) || (info->cmap.len == 0)) {
 	if ((err = fb_alloc_cmap(&info->cmap, 0, 0)))
 	    return err;
-	do_install_cmap(con, info);
     }
     return 0;
 }
@@ -243,20 +179,21 @@ int __init offb_init(void)
 	}
 
 	/* initialize it */
-    	offb_init_fb(macos_display? macos_display->name: "MacOS display",
-                     macos_display? macos_display->full_name: "MacOS display",
-                     boot_infos->dispDeviceRect[2],
-                     boot_infos->dispDeviceRect[3],
-                     boot_infos->dispDeviceDepth,
-                     boot_infos->dispDeviceRowBytes, addr, NULL);
+	offb_init_fb(macos_display? macos_display->name: "MacOS display",
+		     macos_display? macos_display->full_name: "MacOS display",
+		     boot_infos->dispDeviceRect[2],
+		     boot_infos->dispDeviceRect[3],
+		     boot_infos->dispDeviceDepth,
+		     boot_infos->dispDeviceRowBytes, addr, NULL);
     }
 
     for (dpy = 0; dpy < prom_num_displays; dpy++) {
 	if ((dp = find_path_device(prom_display_paths[dpy])))
-		offb_init_nodriver(dp);
+	    offb_init_nodriver(dp);
     }
     return 0;
 }
+
 
 static void __init offb_init_nodriver(struct device_node *dp)
 {
@@ -304,18 +241,18 @@ static void __init offb_init_nodriver(struct device_node *dp)
     
 }
 
-static void offb_init_fb(const char *name, const char *full_name,
+static void __init offb_init_fb(const char *name, const char *full_name,
 				    int width, int height, int depth,
 				    int pitch, unsigned long address,
 				    struct device_node *dp)
 {
-    int i;
-    struct fb_fix_screeninfo *fix;
-    struct fb_var_screeninfo *var;
-    struct display *disp;
-    struct fb_info_offb *info;
     unsigned long res_start = address;
     unsigned long res_size = pitch*height*depth/8;
+    struct fb_fix_screeninfo *fix;
+    struct fb_var_screeninfo *var;
+    struct fb_info *info;
+    struct offb_par *par;	
+    int i;	
 
     if (!request_mem_region(res_start, res_size, "offb"))
 	return;
@@ -327,9 +264,17 @@ static void offb_init_fb(const char *name, const char *full_name,
 	release_mem_region(res_start, res_size);
 	return;
     }
+	
+    par = kmalloc(sizeof(struct offb_par), GFP_ATOMIC);
+    if (par == NULL) {
+	release_mem_region(res_start, res_size);
+	return;	
+    }  	
+    memset(par, 0, sizeof(*par));
 
-    info = kmalloc(sizeof(struct fb_info_offb), GFP_ATOMIC);
+    info = kmalloc(sizeof(struct fb_info), GFP_ATOMIC);
     if (info == 0) {
+	kfree(par);
 	release_mem_region(res_start, res_size);
 	return;
     }
@@ -337,7 +282,6 @@ static void offb_init_fb(const char *name, const char *full_name,
 
     fix = &info->fix;
     var = &info->var;
-    disp = &info->disp;
 
     strcpy(fix->id, "OFfb ");
     strncat(fix->id, name, sizeof(fix->id));
@@ -352,21 +296,27 @@ static void offb_init_fb(const char *name, const char *full_name,
     fix->type = FB_TYPE_PACKED_PIXELS;
     fix->type_aux = 0;
 
-    info->is_rage_128 = 0;
+    par->cmap_type = cmap_unknown;
     if (depth == 8)
     {
     	/* XXX kludge for ati */
-	if (strncmp(name, "ATY,Rage128", 11) == 0) {
-	    if (dp) {
+	if (dp && !strncmp(name, "ATY,Rage128", 11)) {
 		unsigned long regbase = dp->addrs[2].address;
-		info->cmap_adr = ioremap(regbase, 0x1FFF) + 0x00b0;
-		info->cmap_data = info->cmap_adr + 4;
-		info->is_rage_128 = 1;
-	    }
-	} else if (strncmp(name, "ATY,", 4) == 0) {
+		par->cmap_adr = ioremap(regbase, 0x1FFF);
+		par->cmap_type = cmap_r128;
+	} else if (dp && !strncmp(name, "ATY,RageM3pA", 12)) {
+		unsigned long regbase = dp->parent->addrs[2].address;
+		par->cmap_adr = ioremap(regbase, 0x1FFF);
+		par->cmap_type = cmap_M3A;
+	} else if (dp && !strncmp(name, "ATY,RageM3pB", 12)) {
+		unsigned long regbase = dp->parent->addrs[2].address;
+		par->cmap_adr = ioremap(regbase, 0x1FFF);
+		par->cmap_type = cmap_M3B;
+	} else if (!strncmp(name, "ATY,", 4)) {
 		unsigned long base = address & 0xff000000UL;
-		info->cmap_adr = ioremap(base + 0x7ff000, 0x1000) + 0xcc0;
-		info->cmap_data = info->cmap_adr + 1;
+		par->cmap_adr = ioremap(base + 0x7ff000, 0x1000) + 0xcc0;
+		par->cmap_data = info->cmap_adr + 1;
+		par->cmap_type = cmap_m64;
 	}
         fix->visual = info->cmap_adr ? FB_VISUAL_PSEUDOCOLOR
 				     : FB_VISUAL_STATIC_PSEUDOCOLOR;
@@ -424,22 +374,18 @@ static void offb_init_fb(const char *name, const char *full_name,
     var->sync = 0;
     var->vmode = FB_VMODE_NONINTERLACED;
 
-    disp->var = *var;
-    disp->cmap.start = 0;
-    disp->cmap.len = 0;
-    disp->cmap.red = NULL;
-    disp->cmap.green = NULL;
-    disp->cmap.blue = NULL;
-    disp->cmap.transp = NULL;
-    disp->screen_base = ioremap(address, fix->smem_len);
-    disp->visual = fix->visual;
-    disp->type = fix->type;
-    disp->type_aux = fix->type_aux;
-    disp->ypanstep = 0;
-    disp->ywrapstep = 0;
-    disp->line_length = fix->line_length;
-    disp->can_soft_blank = info->cmap_adr ? 1 : 0;
-    disp->inverse = 0;
+    info->var = *var;
+    info->cmap.start = 0;
+    info->cmap.len = 0;
+    info->cmap.red = NULL;
+    info->cmap.green = NULL;
+    info->cmap.blue = NULL;
+    info->cmap.transp = NULL;
+    info->screen_base = ioremap(address, fix->smem_len);
+    fix->ypanstep = 0;
+    fix->ywrapstep = 0;
+  //  disp->can_soft_blank = info->cmap_adr ? 1 : 0;
+  //  disp->inverse = 0;
     switch (depth) {
 #ifdef FBCON_HAS_CFB8
         case 8:
@@ -480,34 +426,25 @@ static void offb_init_fb(const char *name, const char *full_name,
             disp->dispsw = &fbcon_dummy;
     }
 
-    disp->scrollmode = SCROLL_YREDRAW;
+//    disp->scrollmode = SCROLL_YREDRAW;
 
-    strcpy(info->info.modename, "OFfb ");
-    strncat(info->info.modename, full_name, sizeof(info->info.modename));
-    info->info.node = -1;
-    info->info.fbops = &offb_ops;
-    info->info.disp = disp;
-    info->info.fontname[0] = '\0';
-    info->info.switch_con = &offbcon_switch;
-    info->info.updatevar = &offbcon_updatevar;
-    info->info.flags = FBINFO_FLAG_DEFAULT;
+    strcpy(info->modename, "OFfb ");
+    strncat(info->modename, full_name, sizeof(info->modename));
+    info->node = -1;
+    info->fbops = &offb_ops;
+    info->flags = FBINFO_FLAG_DEFAULT;
 
-    for (i = 0; i < 16; i++) {
-	int j = color_table[i];
-	info->palette[i].red = default_red[j];
-	info->palette[i].green = default_grn[j];
-	info->palette[i].blue = default_blu[j];
-    }
-    offb_set_var(var, -1, &info->info);
+    offb_set_var(var, &info);
 
-    if (register_framebuffer(&info->info) < 0) {
+    if (register_framebuffer(&info) < 0) {
 	kfree(info);
+	kfree(par);
 	release_mem_region(res_start, res_size);
 	return;
     }
 
     printk(KERN_INFO "fb%d: Open Firmware frame buffer device on %s\n",
-	   GET_FB_IDX(info->info.node), full_name);
+	   GET_FB_IDX(info->node), full_name);
 
 #ifdef CONFIG_FB_COMPAT_XPMAC
     if (!console_fb_info) {
@@ -522,37 +459,15 @@ static void offb_init_fb(const char *name, const char *full_name,
 	display_info.cmap_data_address = 0;
 	display_info.disp_reg_address = 0;
 	/* XXX kludge for ati */
-	if (strncmp(name, "ATY,", 4) == 0) {
+	if (par->cmap_type == cmap_m64) {
 	    unsigned long base = address & 0xff000000UL;
 	    display_info.disp_reg_address = base + 0x7ffc00;
 	    display_info.cmap_adr_address = base + 0x7ffcc0;
 	    display_info.cmap_data_address = base + 0x7ffcc1;
 	}
-	console_fb_info = &info->info;
+	console_fb_info = info;
     }
 #endif /* CONFIG_FB_COMPAT_XPMAC) */
-}
-
-static int offbcon_switch(int con, struct fb_info *info)
-{
-    /* Do we have to save the colormap? */
-    if (fb_display[currcon].cmap.len)
-	fb_get_cmap(&fb_display[currcon].cmap, 1, offb_getcolreg, info);
-
-    currcon = con;
-    /* Install new colormap */
-    do_install_cmap(con, info);
-    return 0;
-}
-
-    /*
-     *  Update the `var' structure (called by fbcon.c)
-     */
-
-static int offbcon_updatevar(int con, struct fb_info *info)
-{
-    /* Nothing */
-    return 0;
 }
 
     /*
@@ -561,45 +476,44 @@ static int offbcon_updatevar(int con, struct fb_info *info)
 
 static void offb_blank(int blank, struct fb_info *info)
 {
-    struct fb_info_offb *info2 = (struct fb_info_offb *)info;
     int i, j;
 
-    if (!info2->cmap_adr)
+    if (!par->cmap_adr)
 	return;
 
     if (blank)
 	for (i = 0; i < 256; i++) {
-	    *info2->cmap_adr = i;
-	    mach_eieio();
-	    for (j = 0; j < 3; j++) {
-		*info2->cmap_data = 0;
-		mach_eieio();
+	    switch(par->cmap_type) {
+	    case cmap_m64:
+	        *par->cmap_adr = i;
+	  	mach_eieio();
+	  	for (j = 0; j < 3; j++) {
+		    *par->cmap_data = 0;
+		    mach_eieio();
+	    	}
+	    	break;
+	    case cmap_M3A:
+	        /* Clear PALETTE_ACCESS_CNTL in DAC_CNTL */
+	    	out_le32((unsigned *)(par->cmap_adr + 0x58),
+	    		in_le32((unsigned *)(par->cmap_adr + 0x58)) & ~0x20);
+	    case cmap_r128:
+	    	/* Set palette index & data */
+    	        out_8(par->cmap_adr + 0xb0, i);
+	    	out_le32((unsigned *)(par->cmap_adr + 0xb4), 0);
+	    	break;
+	    case cmap_M3B:
+	        /* Set PALETTE_ACCESS_CNTL in DAC_CNTL */
+	    	out_le32((unsigned *)(par->cmap_adr + 0x58),
+	    		in_le32((unsigned *)(par->cmap_adr + 0x58)) | 0x20);
+	    	/* Set palette index & data */
+	    	out_8(par->cmap_adr + 0xb0, i);
+	    	out_le32((unsigned *)(par->cmap_adr + 0xb4), 0);
+	    	break;
 	    }
 	}
-    else
-	do_install_cmap(currcon, info);
+//    else
+//	do_install_cmap(currcon, info);
 }
-
-    /*
-     *  Read a single color register and split it into
-     *  colors/transparent. Return != 0 for invalid regno.
-     */
-
-static int offb_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
-			  u_int *transp, struct fb_info *info)
-{
-    struct fb_info_offb *info2 = (struct fb_info_offb *)info;
-
-    if (!info2->cmap_adr || regno > 255)
-	return 1;
-    
-    *red = (info2->palette[regno].red<<8) | info2->palette[regno].red;
-    *green = (info2->palette[regno].green<<8) | info2->palette[regno].green;
-    *blue = (info2->palette[regno].blue<<8) | info2->palette[regno].blue;
-    *transp = 0;
-    return 0;
-}
-
 
     /*
      *  Set a single color register. The values supplied are already
@@ -619,54 +533,53 @@ static int offb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
     green >>= 8;
     blue >>= 8;
 
-    info2->palette[regno].red = red;
-    info2->palette[regno].green = green;
-    info2->palette[regno].blue = blue;
-
-    *info2->cmap_adr = regno;/* On some chipsets, add << 3 in 15 bits */
-    mach_eieio();
-    if (info2->is_rage_128) {
-    	out_le32((unsigned int *)info2->cmap_data,
+    switch(par->cmap_type) {
+    case cmap_m64:
+        *par->cmap_adr = regno;
+	mach_eieio();
+	*par->cmap_data = red;
+	mach_eieio();
+	*par->cmap_data = green;
+	mach_eieio();
+	*par->cmap_data = blue;
+	mach_eieio();
+	break;
+    case cmap_M3A:
+	/* Clear PALETTE_ACCESS_CNTL in DAC_CNTL */
+	out_le32((unsigned *)(par->cmap_adr + 0x58),
+		in_le32((unsigned *)(par->cmap_adr + 0x58)) & ~0x20);
+    case cmap_r128:
+	/* Set palette index & data */
+	out_8(par->cmap_adr + 0xb0, regno);
+	out_le32((unsigned *)(par->cmap_adr + 0xb4),
+		(red << 16 | green << 8 | blue));
+	break;
+    case cmap_M3B:
+        /* Set PALETTE_ACCESS_CNTL in DAC_CNTL */
+    	out_le32((unsigned *)(par->cmap_adr + 0x58),
+    		in_le32((unsigned *)(par->cmap_adr + 0x58)) | 0x20);
+    	/* Set palette index & data */
+    	out_8(par->cmap_adr + 0xb0, regno);
+  	out_le32((unsigned *)(par->cmap_adr + 0xb4),
     		(red << 16 | green << 8 | blue));
-    } else {
-	*info2->cmap_data = red;
-    	mach_eieio();
-    	*info2->cmap_data = green;
-    	mach_eieio();
-    	*info2->cmap_data = blue;
-    	mach_eieio();
+    	break;
     }
 
     if (regno < 16)
-	switch (info2->var.bits_per_pixel) {
+	switch (info->var.bits_per_pixel) {
 #ifdef FBCON_HAS_CFB16
 	    case 16:
-		info2->fbcon_cmap.cfb16[regno] = (regno << 10) | (regno << 5) | regno;
+		info->pseudo_palette[regno] = (regno << 10) | (regno << 5) | regno;
 		break;
 #endif
 #ifdef FBCON_HAS_CFB32
 	    case 32:
 	    {
 		int i = (regno << 8) | regno;
-		info2->fbcon_cmap.cfb32[regno] = (i << 16) | i;
+		info->pseudo_palette[regno] = (i << 16) | i;
 		break;
 	    }
 #endif
        }
-
     return 0;
-}
-
-
-static void do_install_cmap(int con, struct fb_info *info)
-{
-    if (con != currcon)
-	return;
-    if (fb_display[con].cmap.len)
-	fb_set_cmap(&fb_display[con].cmap, 1, info);
-    else
-    {
-	int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
-	fb_set_cmap(fb_default_cmap(size), 1, info);
-    }
 }
