@@ -770,22 +770,21 @@ int release_vt(struct vt_struct *vt)
 struct vc_data* find_vc(int currcons)
 {
 	struct vt_struct *vt = vt_cons;
-	struct vc_pool *pool = &vt->vcs;
+	struct vc_pool *pool = NULL;
 
-	for (;;) {
-		if (currcons >= pool->first_vc + MAX_NR_USER_CONSOLES || 
-	    	    currcons < pool->first_vc) 
-			pool = pool->next;
-		else
-			break;	
-		
-		if (!pool) {
-			vt = vt->next;
-			if (vt)
-				pool = &vt->vcs;
-			else return NULL;
-		}
-	} 
+        do {
+                pool = &vt->vcs;
+                do {
+                        if (currcons < pool->first_vc + MAX_NR_USER_CONSOLES &&
+                            currcons >= pool->first_vc) {
+                                goto found_vc;
+                        }
+                        pool = pool->next;
+                } while(pool);
+                vt = vt->next;
+        } while(vt);
+        return NULL;
+found_vc:
 	return pool->vc_cons[currcons - pool->first_vc];	
 }
 
@@ -805,27 +804,25 @@ void vc_init(struct vc_data *vc, int do_clear)
 int vc_allocate(unsigned int currcons)  
 {
 	struct vt_struct *vt = vt_cons;
-	struct vc_pool *pool = &vt->vcs;
+	struct vc_pool *pool = NULL;
 	struct vc_data *vc;
-
+	
 	if (currcons >= MAX_NR_CONSOLES)
 		return -ENXIO;
 
-        for (;;) {
-                if (currcons >= pool->first_vc + MAX_NR_USER_CONSOLES ||
-                    currcons < pool->first_vc)
-                        pool = pool->next;
-                else
-                        break;
-
-                if (!pool) {
-                        vt = vt->next;
-                        if (vt)
-                                pool = &vt->vcs;
-                        else 
-				return -ENXIO;
-                }
-        }
+	do {
+		pool = &vt->vcs; 
+		do {
+			if (currcons < pool->first_vc + MAX_NR_USER_CONSOLES && 
+			    currcons >= pool->first_vc) {
+				goto found_pool;
+			}
+			pool = pool->next;
+		} while(pool);
+		vt = vt->next;
+	} while(vt);
+	return -ENXIO;	
+found_pool:
 	vc = pool->vc_cons[currcons - pool->first_vc];
 
         if (!vc) {
