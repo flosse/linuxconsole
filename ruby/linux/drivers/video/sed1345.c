@@ -53,12 +53,6 @@ static struct fb_fix_screeninfo sed1345fb_fix __initdata = {
 	FB_VISUAL_TRUECOLOR, 1, 1, 1, 0, (unsigned long) NULL, 0, FB_ACCEL_NONE
 };
 
-static int sed1345fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
-{
-	/* We don't support changing the graphics resolution */
-	return -EINVAL;
-}
-
 static int sed1345fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 			       u_int transp, struct fb_info *info)
 {
@@ -95,7 +89,6 @@ static int sed1345fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 
 static struct fb_ops sed1345fb_ops = {
     owner:          THIS_MODULE,
-    fb_check_var:   sed1345fb_check_var,
     fb_setcolreg:   sed1345fb_setcolreg,
     fb_fillrect:    cfb_fillrect,
     fb_copyarea:    cfb_copyarea,

@@ -130,13 +130,11 @@ static struct fb_fix_screeninfo sfb_fix __initdata = {
     /*
      *  Internal routines
      */
-static int sfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info);
 static int sfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                          u_int transp, struct fb_info *info);
 
 static struct fb_ops sfb_ops = {
     owner:          THIS_MODULE,
-    fb_check_var:   sfb_check_var,	
     fb_setcolreg:   sfb_setcolreg,
     fb_fillrect:    cfb_fillrect,
     fb_copyarea:    cfb_copyarea,
@@ -164,14 +162,6 @@ int __init sfb_init(void)
 	return -EINVAL;
 
     return 0;
-}
-
-   /*
-    * We assume you can't change the graphcis resolution. 
-    */		
-static int sfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
-{
-   return -EINVAL;	 
 }
 
 #if FB_IS_TRUECOLOR

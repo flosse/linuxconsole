@@ -245,17 +245,8 @@ static int r3912fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
     return 0;
 }
 
-    /*
-     *  We don't support changing the graphics resolution
-     */
-static int r3912fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
-{
-    return -EINVAL;
-}
-
 static struct fb_ops r3912fb_ops = {
     owner:	   THIS_MODULE,
-    fb_check_var:  r3912fb_check_var,
     fb_setcolreg:  r3912fb_setcolreg,
     fb_fillrect:   cfb_fillrect,
     fb_copyarea:   cfb_copyarea,
