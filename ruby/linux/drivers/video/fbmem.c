@@ -623,7 +623,7 @@ register_framebuffer(struct fb_info *fb_info)
 int
 unregister_framebuffer(struct fb_info *fb_info)
 {
-	int i, j;
+	int i;
 
 	i = GET_FB_IDX(fb_info->node);
 	if (fb_info->count) return -EBUSY;
