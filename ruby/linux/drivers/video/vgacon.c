@@ -40,11 +40,9 @@
 #include <linux/fs.h>
 #include <linux/kernel.h>
 #include <linux/tty.h>
-#include <linux/console.h>
 #include <linux/string.h>
 #include <linux/kd.h>
 #include <linux/malloc.h>
-#include <linux/vt_kern.h>
 #include <linux/selection.h>
 #include <linux/ioport.h>
 #include <linux/init.h>
@@ -69,19 +67,19 @@
  */
 
 static const char *vgacon_startup(struct vt_struct *vt);
-static void vgacon_init(struct vc_data *c, int init);
-static void vgacon_deinit(struct vc_data *c);
-static void vgacon_cursor(struct vc_data *c, int mode);
-static int vgacon_switch(struct vc_data *c);
-static int vgacon_blank(struct vc_data *c, int blank);
-static int vgacon_font_op(struct vc_data *c, struct console_font_op *op);
-static int vgacon_set_palette(struct vc_data *c, unsigned char *table);
-static int vgacon_scrolldelta(struct vc_data *c, int lines);
-static int vgacon_set_origin(struct vc_data *c);
-static void vgacon_save_screen(struct vc_data *c);
-static int vgacon_scroll(struct vc_data *c, int t, int b, int dir, int lines);
-static u8 vgacon_build_attr(struct vc_data *c, u8 color, u8 intensity, u8 blink, u8 underline, u8 reverse);
-static void vgacon_invert_region(struct vc_data *c, u16 *p, int count);
+static void vgacon_init(struct vc_data *vc, int init);
+static void vgacon_deinit(struct vc_data *vc);
+static void vgacon_cursor(struct vc_data *vc, int mode);
+static int vgacon_switch(struct vc_data *vc);
+static int vgacon_blank(struct vc_data *vc, int blank);
+static int vgacon_font_op(struct vc_data *vc, struct console_font_op *op);
+static int vgacon_set_palette(struct vc_data *vc, unsigned char *table);
+static int vgacon_scrolldelta(struct vc_data *vc, int lines);
+static int vgacon_set_origin(struct vc_data *vc);
+static void vgacon_save_screen(struct vc_data *vc);
+static int vgacon_scroll(struct vc_data *vc, int t, int b, int dir, int lines);
+static u8 vgacon_build_attr(struct vc_data *vc, u8 color, u8 intensity, u8 blink, u8 underline, u8 reverse);
+static void vgacon_invert_region(struct vc_data *vc, u16 *p, int count);
 static unsigned long vgacon_uni_pagedir[2];
 
 /* Description of the hardware situation */
@@ -105,6 +103,7 @@ static unsigned char   vga_font_is_default = 1;
 static int	       vga_is_gfx;
 static int	       vga_512_chars;
 static unsigned int    vga_rolled_over = 0;
+static char 	       vga_fonts[8192*4];
 static struct vga_hw_state vgacon_state = {
 	80, 80, 2, 12, 2, 400, 8, 2, 39, 0, 0, 0, 0, 0, 0xFF, 0,
        	0, 0xE3, MODE_TEXT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
@@ -155,6 +154,142 @@ static inline void write_vga(unsigned char reg, unsigned int val)
 	outb_p(val & 0xff, vga_video_port_val);
 #endif
 	spin_unlock_irqrestore(&vga_lock, flags);
+}
+
+/*
+ * PIO_FONT support.
+ *
+ * The font loading code goes back to the codepage package by
+ * Joel Hoffman (joel@wam.umd.edu). (He reports that the original
+ * reference is: "From: p. 307 of _Programmer's Guide to PC & PS/2
+ * Video Systems_ by Richard Wilton. 1987.  Microsoft Press".)
+ *
+ * Change for certain monochrome monitors by Yury Shevchuck
+ * (sizif@botik.yaroslavl.su).
+ */
+
+#ifdef CAN_LOAD_EGA_FONTS
+
+#define colourmap 0xa0000
+/* Pauline Middelink <middelin@polyware.iaf.nl> reports that we
+   should use 0xA0000 for the bwmap as well.. */
+#define blackwmap 0xa0000
+#define cmapsz 8192
+
+int vga_do_font_op(char *arg, int set, int ch512)
+{
+        int beg, i, font_select = 0x00;
+        char *charmap;
+
+        if (vgacon_state.video_type != VIDEO_TYPE_EGAM) {
+                charmap = (char *)VGA_MAP_MEM(colourmap);
+                beg = 0x0e;
+#ifdef VGA_CAN_DO_64KB
+                if (vgacon_state.video_type == VIDEO_TYPE_VGAC)
+                        beg = 0x06;
+#endif
+        } else {
+                charmap = (char *)VGA_MAP_MEM(blackwmap);
+                beg = 0x0a;
+        }
+
+        /*
+         * The default font is kept in slot 0 and is never touched.
+         * A custom font is loaded in slot 2 (256 ch) or 2:3 (512 ch)
+         */
+
+        if (set) {
+                vga_font_is_default = !arg;
+                if (!arg)
+                        ch512 = 0;              /* Default font is always 256 */                font_select = arg ? (ch512 ? 0x0e : 0x0a) : 0x00;
+        }
+
+        if ( !vga_font_is_default )
+                charmap += 4*cmapsz;
+
+        spin_lock_irq(&vga_lock);
+        /* First, the Sequencer */
+        vga_io_wseq(VGA_SEQ_RESET, 0x1);
+        /* CPU writes only to map 2 */
+        vga_io_wseq(VGA_SEQ_PLANE_WRITE, 0x04);
+        /* Sequential addressing */
+        vga_io_wseq(VGA_SEQ_MEMORY_MODE, 0x07);
+        /* Clear synchronous reset */
+        vga_io_wseq(VGA_SEQ_RESET, 0x03);
+        /* Now, the graphics controller */
+        /* select map 2 */
+        vga_io_wgfx(VGA_GFX_PLANE_READ, 0x02);
+        /* disable odd-even addressing */
+        vga_io_wgfx(VGA_GFX_MODE, 0x00);
+        /* map start at A000:0000 */
+        vga_io_wgfx(VGA_GFX_MISC, 0x00);
+        spin_unlock_irq(&vga_lock);
+
+        if (arg) {
+                if (set)
+                        for (i=0; i<cmapsz ; i++)
+                                vga_writeb(arg[i], charmap + i);
+                else
+                        for (i=0; i<cmapsz ; i++)
+                                arg[i] = vga_readb(charmap + i);
+
+                /*
+                 * In 512-character mode, the character map is not contiguous if                 * we want to remain EGA compatible -- which we do
+                 */
+
+                if (ch512) {
+                        charmap += 2*cmapsz;
+                        arg += cmapsz;
+                        if (set)
+                                for (i=0; i<cmapsz ; i++)
+                                        vga_writeb(arg[i], charmap+i);
+                        else
+                                for (i=0; i<cmapsz ; i++)
+                                        arg[i] = vga_readb(charmap+i);
+                }
+        }
+
+        spin_lock_irq(&vga_lock);
+        /* First, the squencer. Synchronous reset */
+        vga_io_wseq(VGA_SEQ_RESET, 0x01);
+        /* CPU writes to maps 0 and 1 */
+        vga_io_wseq(VGA_SEQ_PLANE_WRITE, 0x03);
+        /* odd-even addressing */
+        vga_io_wseq(VGA_SEQ_MEMORY_MODE, 0x03);
+
+        if (set) {
+                /* Character Map Select */
+                vga_io_wseq(VGA_SEQ_CHARACTER_MAP, font_select);
+        }
+        /* clear synchronous reset */
+        vga_io_wseq(VGA_SEQ_RESET, 0x03);
+
+        /* Now, the graphics controller */
+        /* select map 0 for CPU */
+        vga_io_wgfx(VGA_GFX_PLANE_READ, 0x00);
+        /* enable even-odd addressing */
+        vga_io_wgfx(VGA_GFX_MODE, 0x10);
+        /* map starts at b800:0 or b000:0 */
+        vga_io_wgfx(VGA_GFX_MISC, beg);
+
+        /* if 512 char mode is already enabled don't re-enable it. */
+        if ((set)&&(ch512!=vga_512_chars)) {    /* attribute controller */
+                vga_512_chars=ch512;
+                /* 256-char: enable intensity bit
+                   512-char: disable intensity bit */
+
+                /* clear address flip-flop */
+                vga_io_r(vga_can_do_color ? VGA_IS1_RC : VGA_IS1_RM);
+                /* color plane enable register */
+                vga_io_wattr(VGA_ATC_PLANE_ENABLE, ch512 ? 0x07 : 0x0f);
+                /* Wilton (1987) mentions the following; I don't know what
+                   it means, but it works, and it appears necessary */
+                vga_io_r(vga_can_do_color ? VGA_IS1_RC : VGA_IS1_RM);
+                vga_io_wattr(VGA_AR_ENABLE_DISPLAY, 0);
+                vga_io_w(VGA_ATT_W, VGA_AR_ENABLE_DISPLAY);
+        }
+        spin_unlock_irq(&vga_lock);
+        return 0;
 }
 
 static const char __init *vgacon_startup(struct vt_struct *vt)
@@ -306,11 +441,14 @@ static const char __init *vgacon_startup(struct vt_struct *vt)
 		vt->default_font.height = ORIG_VIDEO_POINTS;
 	}
 	vgacon_state.mode = MODE_TEXT;
-       
+	vt->default_font.data = vga_fonts;      
+
+	/* 
 	if (vga_512_chars)
-               vga_do_font_op(vga_fonts, 0, 1);
+               vga_do_font_op(vt->default_font.data, 0, 1);
         else
-               vga_do_font_op(vga_fonts, 0, 0);
+               vga_do_font_op(vt->default_font.data, 0, 0);
+	*/
 	return display_desc;
 }
 
@@ -334,6 +472,7 @@ static void vgacon_init(struct vc_data *vc, int init)
 	vc->vc_font = &vc->display_fg->default_font;
 	/* This may be suboptimal but is a safe bet - go with it */
         vc->vc_scan_lines = vc->vc_font->height * vc->vc_rows;
+	/*
 	if (!init) {
         	int i;
 
@@ -344,11 +483,11 @@ static void vgacon_init(struct vc_data *vc, int init)
                	vga_clock_chip(&vgacon_state, 0, 1, 1);
                	vga_set_mode(&vgacon_state, 0);
                	if (vga_512_chars)
-                	vga_do_font_op(vga_fonts, 1, 1);
+                	vga_do_font_op(vt->default_font.data, 1, 1);
                 else
-                        vga_do_font_op(vga_fonts, 1, 0);
-               	/* now set the DAC registers back to their
-                   default values */
+                        vga_do_font_op(vt->default_font.data, 1, 0);
+               	 now set the DAC registers back to their
+                   default values 
               	for (i=0; i<16; i++) {
                 	outb_p (color_table[i], 0x3c8) ;
                        	outb_p (default_red[i], 0x3c9) ;
@@ -356,6 +495,7 @@ static void vgacon_init(struct vc_data *vc, int init)
                        	outb_p (default_blu[i], 0x3c9) ;
                	}
        	}
+	*/
 }
 
 static inline void vga_set_mem_top(struct vc_data *c)
@@ -495,9 +635,9 @@ static void vga_set_palette(struct vc_data *vc, unsigned char *table)
 
 	for (i=j=0; i<16; i++) {
 	 	vga_io_w(VGA_PEL_IW, table[i]);
-                vga_io_w(VGA_PEL_D, c->vc_palette[j++]>>2);
-                vga_io_w(VGA_PEL_D, c->vc_palette[j++]>>2);
-                vga_io_w(VGA_PEL_D, c->vc_palette[j++]>>2);
+                vga_io_w(VGA_PEL_D, vc->vc_palette[j++]>>2);
+                vga_io_w(VGA_PEL_D, vc->vc_palette[j++]>>2);
+                vga_io_w(VGA_PEL_D, vc->vc_palette[j++]>>2);
 	}
 }
 
@@ -549,147 +689,6 @@ static int vgacon_blank(struct vc_data *vc, int blank)
 		}
 		return 0;
 	}
-}
-
-/*
- * PIO_FONT support.
- *
- * The font loading code goes back to the codepage package by
- * Joel Hoffman (joel@wam.umd.edu). (He reports that the original
- * reference is: "From: p. 307 of _Programmer's Guide to PC & PS/2
- * Video Systems_ by Richard Wilton. 1987.  Microsoft Press".)
- *
- * Change for certain monochrome monitors by Yury Shevchuck
- * (sizif@botik.yaroslavl.su).
- */
-
-#ifdef CAN_LOAD_EGA_FONTS
-
-#define colourmap 0xa0000
-/* Pauline Middelink <middelin@polyware.iaf.nl> reports that we
-   should use 0xA0000 for the bwmap as well.. */
-#define blackwmap 0xa0000
-#define cmapsz 8192
-
-int vgacon_do_font_op(struct vc_data *vc, char *arg, int set, int ch512)
-{
-	int beg, i, font_select = 0x00;
-	char *charmap;
-
-	if (vgacon_state.video_type != VIDEO_TYPE_EGAM) {
-		charmap = (char *)VGA_MAP_MEM(colourmap);
-		beg = 0x0e;
-#ifdef VGA_CAN_DO_64KB
-		if (vgacon_state.video_type == VIDEO_TYPE_VGAC)
-			beg = 0x06;
-#endif
-	} else {
-		charmap = (char *)VGA_MAP_MEM(blackwmap);
-		beg = 0x0a;
-	}
-	
-	/*
-	 * The default font is kept in slot 0 and is never touched.
-	 * A custom font is loaded in slot 2 (256 ch) or 2:3 (512 ch)
-	 */
-
-	if (set) {
-		vga_font_is_default = !arg;
-		if (!arg)
-			ch512 = 0;		/* Default font is always 256 */
-		font_select = arg ? (ch512 ? 0x0e : 0x0a) : 0x00;
-	}
-
-	if ( !vga_font_is_default )
-		charmap += 4*cmapsz;
-#endif
-
-	spin_lock_irq(&vga_lock);
-        /* First, the Sequencer */
-        vga_io_wseq(VGA_SEQ_RESET, 0x1);
-        /* CPU writes only to map 2 */
-        vga_io_wseq(VGA_SEQ_PLANE_WRITE, 0x04);
-        /* Sequential addressing */
-        vga_io_wseq(VGA_SEQ_MEMORY_MODE, 0x07);
-        /* Clear synchronous reset */
-        vga_io_wseq(VGA_SEQ_RESET, 0x03);
-        /* Now, the graphics controller */
-        /* select map 2 */
-        vga_io_wgfx(VGA_GFX_PLANE_READ, 0x02);
-        /* disable odd-even addressing */
-        vga_io_wgfx(VGA_GFX_MODE, 0x00);
-        /* map start at A000:0000 */
-        vga_io_wgfx(VGA_GFX_MISC, 0x00);
-        spin_unlock_irq(&vga_lock);
-
-	if (arg) {
-		if (set)
-			for (i=0; i<cmapsz ; i++)
-				vga_writeb(arg[i], charmap + i);
-		else
-			for (i=0; i<cmapsz ; i++)
-				arg[i] = vga_readb(charmap + i);
-
-		/*
-		 * In 512-character mode, the character map is not contiguous if
-		 * we want to remain EGA compatible -- which we do
-		 */
-
-		if (ch512) {
-			charmap += 2*cmapsz;
-			arg += cmapsz;
-			if (set)
-				for (i=0; i<cmapsz ; i++)
-					vga_writeb(arg[i], charmap+i);
-			else
-				for (i=0; i<cmapsz ; i++)
-					arg[i] = vga_readb(charmap+i);
-		}
-	}
-	
-	spin_lock_irqsave(&vga_lock);
-        /* First, the squencer. Synchronous reset */
-        vga_io_wseq(VGA_SEQ_RESET, 0x01);
-        /* CPU writes to maps 0 and 1 */
-        vga_io_wseq(VGA_SEQ_PLANE_WRITE, 0x03);
-        /* odd-even addressing */
-        vga_io_wseq(VGA_SEQ_MEMORY_MODE, 0x03);
-
-	if (set) {
-		/* Character Map Select */
-	        vga_io_wseq(VGA_SEQ_CHARACTER_MAP, font_select);
-	}
-	/* clear synchronous reset */
-        vga_io_wseq(VGA_SEQ_RESET, 0x03);
-	
-        /* Now, the graphics controller */
-        /* select map 0 for CPU */
-        vga_io_wgfx(VGA_GFX_PLANE_READ, 0x00);
-        /* enable even-odd addressing */
-        vga_io_wgfx(VGA_GFX_MODE, 0x10);
-        /* map starts at b800:0 or b000:0 */
-        vga_io_wgfx(VGA_GFX_MISC, beg);
-
-	/* if 512 char mode is already enabled don't re-enable it. */
-	if ((set)&&(ch512!=vga_512_chars)) {	/* attribute controller */
-		if (vc && vc->display_fg->vt_sw == &vga_con)
-			vc->vc_hi_font_mask = ch512 ? 0x0800 : 0;
-		vga_512_chars=ch512;
-		/* 256-char: enable intensity bit
-		   512-char: disable intensity bit */
-		
-		/* clear address flip-flop */
-                vga_io_r(vga_can_do_color ? VGA_IS1_RC : VGA_IS1_RM);
-                /* color plane enable register */
-                vga_io_wattr(VGA_ATC_PLANE_ENABLE, ch512 ? 0x07 : 0x0f);
-		/* Wilton (1987) mentions the following; I don't know what
-		   it means, but it works, and it appears necessary */
-		vga_io_r(vga_can_do_color ? VGA_IS1_RC : VGA_IS1_RM);
-                vga_io_wattr(VGA_AR_ENABLE_DISPLAY, 0);
-                vga_io_w(VGA_ATT_W, VGA_AR_ENABLE_DISPLAY);
-	}
-	spin_unlock_irq(&vga_lock);
-	return 0;
 }
 
 /*
@@ -748,7 +747,7 @@ static int vgacon_font_op(struct vc_data *vc, struct console_font_op *op)
 	if (op->op == KD_FONT_OP_SET) {
 		if (op->width != 8 || (op->charcount != 256 && op->charcount != 512))
 			return -EINVAL;
-		rc = vga_do_font_op(vc, op->data, 1, op->charcount == 512);
+		rc = vga_do_font_op(op->data, 1, op->charcount == 512);
 		if (!rc && !(op->flags & KD_FONT_FLAG_DONT_RECALC))
 			rc = vgacon_adjust_height(vc, op->height);
 	} else if (op->op == KD_FONT_OP_GET) {
@@ -756,7 +755,7 @@ static int vgacon_font_op(struct vc_data *vc, struct console_font_op *op)
 		op->height = vc->vc_font->height;
 		op->charcount = vga_512_chars ? 512 : 256;
 		if (!op->data) return 0;
-		rc = vga_do_font_op(vc, op->data, 0, 0);
+		rc = vga_do_font_op(op->data, 0, vga_512_chars);
 	} else
 		rc = -ENOSYS;
 	return rc;
@@ -921,5 +920,4 @@ void module_exit(void)
 }
 #endif
 
-EXPORT_SYMBOL(vga_do_font_op);
 EXPORT_SYMBOL(vga_con);
