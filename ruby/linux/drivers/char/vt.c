@@ -739,7 +739,7 @@ static void visual_init(struct vc_data *vc)
         complement_mask = can_do_color ? 0x7700 : 0x0800;
     s_complement_mask = complement_mask;
     if (!scrollback)	
-	scrollback = 2;
+	scrollback = 1;
     video_size_row = video_num_columns<<1;
     screenbuf_size = scrollback*video_num_lines*video_size_row;
 }
@@ -1631,8 +1631,8 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
 
                 if (vc) {
                 	old_was_color = vc->vc_can_do_color;
-               		memcpy(vc, vt->default_mode, sizeof(struct vc_data));
-                	visual_init(vc);
+			cons_num = vt->first_vc + i;
+			visual_init(vc);
 	        	update_attr(vc);
 
                 	/* If the console changed between mono <-> color, then
@@ -1645,6 +1645,7 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
 	}
 	vc = vt->fg_console; 
 	update_screen(vc);
+
        	printk("Console: switching to %s %s %dx%d\n", 
                	vc->vc_can_do_color ? "colour" : "mono",
                	desc, vc->vc_cols, vc->vc_rows);
