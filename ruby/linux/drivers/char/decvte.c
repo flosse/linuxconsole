@@ -213,23 +213,23 @@ void vte_ed(struct vc_data *vc, int vpar)
                         count = (scr_end-pos)>>1;
                         start = (unsigned short *) pos;
                         /* do in two stages */
-                        clear_region(vc, y, x, 1,video_num_columns-x);
-                        clear_region(vc, y+1, 0, video_num_lines-y-1, 
-				     video_num_columns);
+                        clear_region(vc, x, y, video_num_columns-x, 1);
+                        clear_region(vc, 0, y+1, video_num_columns,  
+					video_num_lines-y-1); 
                         break;
                 case 1: /* erase from start to cursor */
                         count = ((pos-origin)>>1)+1;
                         start = (unsigned short *) origin;
                         /* do in two stages */
-                        clear_region(vc, 0, 0, y, video_num_columns); 
-                        clear_region(vc, y, 0, 1, x + 1);
+                        clear_region(vc, 0, 0, video_num_columns, y); 
+                        clear_region(vc, 0, y, x + 1, 1);
                         break;
                 case 2: /* erase whole display */
                         count = screensize;
                         start = (unsigned short *) origin;
-                        clear_region(vc, 0, 0, video_num_lines, 
-				     video_num_columns); 
-                        break;
+                        clear_region(vc, 0, 0, video_num_columns, 
+					video_num_lines); 
+			break;
                 default:
                         return;
         }
@@ -249,17 +249,17 @@ static void vte_el(struct vc_data *vc, int vpar)
                 case 0: /* erase from cursor to end of line */
                         count = video_num_columns-x;
                         start = (unsigned short *) pos;
-                        clear_region(vc, y, x, 1, video_num_columns-x); 
+                        clear_region(vc, x, y, video_num_columns-x, 1); 
 	                break;
                 case 1: /* erase from start of line to cursor */
                         start = (unsigned short *) (pos - (x<<1));
                         count = x+1;
-                        clear_region(vc, y, 0, 1, x + 1); 
+                        clear_region(vc, 0, y, x + 1, 1); 
                         break;
                 case 2: /* erase whole line */
                         start = (unsigned short *) (pos - (x<<1));
                         count = video_num_columns;
-                        clear_region(vc, y, 0, 1, video_num_columns); 
+                        clear_region(vc, 0, y, video_num_columns, 1); 
                         break;
                 default:
                         return;
@@ -282,7 +282,7 @@ static void vte_ech(struct vc_data *vc, int vpar)
         count = (vpar > video_num_columns-x) ? (video_num_columns-x) : vpar;
 
         scr_memsetw((unsigned short *) pos, video_erase_char, 2 * count);
-        clear_region(vc, y, x, 1, count);
+        clear_region(vc, x, y, count, 1);
         need_wrap = 0;
 }
 
