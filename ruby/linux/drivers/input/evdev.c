@@ -133,7 +133,7 @@ static int evdev_open(struct inode * inode, struct file * file)
 		return -ENODEV;
 
 	/* Ask the driver if he wishes to accept the open() */
-	if ((accept_err = input_accept_device(&(evdev_table[i]->handle), file))) {
+	if ((accept_err = input_accept_process(&(evdev_table[i]->handle), file))) {
 		return accept_err;
 	}
 
