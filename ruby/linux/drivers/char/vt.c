@@ -983,20 +983,12 @@ int mouse_reporting(struct tty_struct *tty)
 static int do_con_write(struct tty_struct * tty, int from_user,
                         const unsigned char *buf, int count)
 {
-#ifdef VT_BUF_VRAM_ONLY
-#define FLUSH do { } while(0);
-#else
-#define FLUSH if (draw_x >= 0) { \
-        sw->con_putcs(vc, (u16 *)draw_from, (u16 *)draw_to-(u16 *)draw_from, y, draw_x); \
-        draw_x = -1; \
-        }
-#endif
-
-        int c, tc, ok, n = 0, draw_x = -1;
-        unsigned long draw_from = 0, draw_to = 0;
         struct vc_data *vc = (struct vc_data *)tty->driver_data;
-        u16 himask, charmask;
-        const unsigned char *orig_buf = NULL;
+	unsigned long draw_from = 0, draw_to = 0;	
+	const unsigned char *orig_buf = NULL;
+	int c, tc, ok, n = 0, draw_x = -1;
+        unsigned short *translation;
+	u16 himask, charmask;
         int orig_count;
 
         if (!vc) {
@@ -1008,13 +1000,12 @@ static int do_con_write(struct tty_struct * tty, int from_user,
             }
             return 0;
         }
-
+	translation = get_acm(translate);
         orig_buf = buf;
         orig_count = count;
 
         if (from_user) {
                 down(&vc->display_fg->lock);
-
 again:
                 if (count > CON_BUF_SIZE)
                         count = CON_BUF_SIZE;
@@ -1022,7 +1013,6 @@ again:
                         n = 0; /* ?? are error codes legal here ?? */
                         goto out;
                 }
-
                 buf = vc->display_fg->con_buf;
         }
 
@@ -1083,7 +1073,7 @@ again:
                       utf_count = 0;
                     }
                 } else {        /* no utf */
-                  tc = translate[toggle_meta ? (c|0x80) : c];
+                  tc = translation[toggle_meta ? (c|0x80) : c];
                 }
 
                 /* If the original code was a control character we
@@ -1123,8 +1113,13 @@ again:
                         if (tc & ~charmask)
                                 continue; /* Conversion failed */
 
-                        if (need_wrap || irm)
-                                FLUSH
+                        if ((need_wrap || irm) && IS_VISIBLE && sw->con_putc 
+			     && draw_x >= 0) {
+        			sw->con_putcs(vc, (u16 *)draw_from, 
+					      (u16 *)draw_to-(u16 *)draw_from,
+					      y, draw_x);
+				draw_x = -1;
+			}
                         if (need_wrap) {
                                 vte_cr(vc);
                                 vte_lf(vc);
@@ -1148,12 +1143,20 @@ again:
                         }
                         continue;
                 }
-                FLUSH
+		if (sw->con_putcs && draw_x >= 0) {
+        		sw->con_putcs(vc, (u16 *)draw_from, 
+				      (u16 *)draw_to-(u16 *)draw_from, y,
+				      draw_x);
+        		draw_x = -1;
+        	}
                 terminal_emulation(tty, c);
         }
-        FLUSH
+	if (sw->con_putcs && draw_x >= 0) {
+        	sw->con_putcs(vc, (u16 *)draw_from, 
+			      (u16 *)draw_to-(u16 *)draw_from, y, draw_x);
+        	draw_x = -1;
+        }
         spin_unlock_irq(&console_lock);
-
 out:
         if (from_user) {
                 /* If the user requested something larger than
@@ -1171,7 +1174,6 @@ out:
                 up(&vc->display_fg->lock);
         }
         return n;
-#undef FLUSH
 }
 
 /*
