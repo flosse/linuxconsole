@@ -50,6 +50,7 @@ obj-$(CONFIG_INPUT_CS461X)	+= cs461x.o gameport.o
 obj-$(CONFIG_INPUT_ATKBD)	+= atkbd.o serio.o
 obj-$(CONFIG_INPUT_XTKBD)	+= xtkbd.o serio.o
 obj-$(CONFIG_INPUT_PSMOUSE)	+= psmouse.o serio.o
+obj-$(CONFIG_INPUT_NEWTON)	+= newtonkbd.o serio.o
 
 obj-$(CONFIG_INPUT_SERMOUSE)	+= sermouse.o serio.o
 obj-$(CONFIG_INPUT_SUNKBD)	+= sunkbd.o serio.o

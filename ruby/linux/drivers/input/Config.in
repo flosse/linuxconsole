@@ -37,6 +37,7 @@ if [ "$CONFIG_INPUT" != "n" ]; then
       tristate '  Gravis Stinger gamepad' CONFIG_INPUT_STINGER
       tristate '  I-Force joysticks/wheels' CONFIG_INPUT_IFORCE_232
       tristate '  Gunze AHL-51S touchscreen' CONFIG_INPUT_GUNZE
+      tristate '  Newton keyboard' CONFIG_INPUT_NEWTON
    fi
    
    bool 'Standard Game port support' CONFIG_INPUT_GAMEPORT
