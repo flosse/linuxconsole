@@ -117,13 +117,20 @@ static void write_mda_w(unsigned int val, unsigned char reg)
 static int test_mda_b(unsigned char val, unsigned char reg)
 {
 	unsigned long flags;
+	unsigned char save;
 
 	save_flags(flags); cli();
 
 	outb_p(reg, mda_index_port); 
-	outb  (val, mda_value_port);
+	udelay(20);
+	save = inb_p(mda_value_port);
+	udelay(20);
+	outb(val, mda_value_port);
 
 	udelay(20); val = (inb_p(mda_value_port) == val);
+
+	udelay(20);
+	outb_p(save,mda_value_port);
 
 	restore_flags(flags);
 
@@ -220,14 +227,14 @@ static int __init mda_detect(void)
 	/* Edward: These two mess `tests' mess up my cursor on bootup */
 
 	/* cursor low register */
-	/* if (! test_mda_b(0x66, 0x0f)) {
+	if (! test_mda_b(0x66, 0x0f)) {
 		return 0;
-	} */
+	} 
 
 	/* cursor low register */
-	/* if (! test_mda_b(0x99, 0x0f)) {
+	if (! test_mda_b(0x99, 0x0f)) {
 		return 0;
-	} */
+	} 
 
 	/* See if the card is a Hercules, by checking whether the vsync
 	 * bit of the status register is changing.  This test lasts for
