@@ -1813,7 +1813,7 @@ static struct tty_operations vt_ops = {
 
 int __init vty_init(void)
 {
-	if (!vt_list.prev)
+	if (list_empty(&vt_list))
 		return -ENXIO;
 	
 	console_driver = alloc_tty_driver(MAX_NR_CONSOLES);

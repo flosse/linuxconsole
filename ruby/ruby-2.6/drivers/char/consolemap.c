@@ -667,9 +667,11 @@ conv_uni_to_pc(struct vc_data *vc, long ucs)
 void __init 
 console_map_init(void)
 {
-	struct vt_struct *vt = (struct vt_struct *) vt_list.prev;
+	struct vt_struct *vt;
 	int i;
 	
+        vt = list_entry(vt_list.next, typeof(*vt), node);
+
 	for (i = 0; i < vt->vc_count; i++) {
 		struct vc_data *vc = vt->vc_cons[i];
 
