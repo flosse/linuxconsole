@@ -437,7 +437,7 @@ static void fn_send_intr(struct vc_data *vc)
 
 static void fn_scroll_forw(struct vc_data *vc)
 {
-	unsigned short *p = (unsigned short *) (vc->vc_visible_origin + vc->vc_screensize);
+	unsigned short *p = (unsigned short *) vc->vc_visible_origin + vc->vc_screensize;
 
 	if (vc->vc_visible_origin < vc->vc_origin) {
 		vc->vc_visible_origin = (unsigned long) p;
@@ -448,7 +448,7 @@ static void fn_scroll_forw(struct vc_data *vc)
 
 static void fn_scroll_back(struct vc_data *vc)
 {
-	unsigned short *p = (unsigned short *) (vc->vc_visible_origin - vc->vc_screensize);
+	unsigned short *p = (unsigned short *) vc->vc_visible_origin - vc->vc_screensize;
 	unsigned long q = (unsigned long) p;
 
 	if (q >= ((unsigned long) vc->vc_screenbuf)) {
