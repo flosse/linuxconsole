@@ -1866,7 +1866,9 @@ int uart_register_driver(struct uart_driver *drv)
 	normal->hangup		= uart_hangup;
 	normal->break_ctl	= uart_break_ctl;
 	normal->wait_until_sent	= uart_wait_until_sent;
+#ifdef CONFIG_PROC_FS
 	normal->read_proc	= uart_read_proc;
+#endif
 
 	/*
 	 * The callout device is just like the normal device except for
