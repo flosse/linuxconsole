@@ -241,7 +241,8 @@ struct vt_struct {
 	struct semaphore lock;  		/* Lock for con_buf 	 */
 	void *data_hook;			/* Hook for driver data */
 	const struct consw *vt_sw;		/* Display driver for VT */
-	struct console_font_op default_font;	/* Default font */
+	struct vc_data *default_mode;	 	/* Default mode */
+	struct console_font_op default_font;
 	struct input_handle *keyboard;		/* Keyboard attached */
 	struct vc_pool  vcs;			 
 	struct vt_struct *next;				
