@@ -61,6 +61,7 @@ struct vc_data {
         unsigned int    vc_rows;
         unsigned int    vc_size_row;            /* Bytes per row */
         unsigned int 	vc_scan_lines;		/* # of scan lines */
+	unsigned int 	vc_screensize;		/* Size of screen */
 	unsigned char	vc_mode;		/* KD_TEXT, ... */
 	unsigned long   vc_origin;              /* [!] Start of real screen */
         unsigned long   vc_scr_end;             /* [!] End of real screen */

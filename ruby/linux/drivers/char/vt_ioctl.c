@@ -1370,7 +1370,7 @@ inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
                 if (new_vc->vc_mode != KD_GRAPHICS) { 
                         /* Update the screen contents */
                         do_update_region(new_vc, new_vc->vc_origin, 
-					 new_vc->vc_rows*new_vc->vc_cols);
+					 new_vc->vc_screensize);
 		}
         }                               
         set_cursor(new_vc);

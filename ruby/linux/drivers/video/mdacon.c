@@ -455,7 +455,7 @@ static int mdacon_blank(struct vc_data *vc, int blank)
 		if (blank) 
 			scr_memsetw((void *)mda_vram_base, 
 				mda_convert_attr(vc->vc_video_erase_char),
-				vc->vc_screenbuf_size);
+				vc->vc_screensize);
 		/* Tell console.c that it has to restore the screen itself */
 		return 1;
 	} else {
@@ -514,14 +514,14 @@ static int mdacon_scroll_region(struct vc_data *vc, int t, int b, int dir,
 	case SM_UP:
 		scr_memmovew(MDA_ADDR(0, t), MDA_ADDR(0, t+lines),
 				(b-t-lines)*vc->vc_cols*2);
-		scr_memsetw(MDA_ADDR(0, b-lines), eattr,
+		scr_memsetw(MDA_ADDR(0, b-t-lines), eattr,
 				lines*vc->vc_cols*2);
 		break;
 
 	case SM_DOWN:
 		scr_memmovew(MDA_ADDR(0, t+lines), MDA_ADDR(0, t),
 				(b-t-lines)*vc->vc_cols*2);
-		scr_memsetw(MDA_ADDR(0,t), eattr, lines*vc->vc_cols*2);
+		scr_memsetw(MDA_ADDR(0, t), eattr, lines*vc->vc_cols*2);
 		break;
 	}
 
