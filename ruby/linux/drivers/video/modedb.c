@@ -11,7 +11,6 @@
 #include <linux/module.h>
 #include <linux/tty.h>
 #include <linux/fb.h>
-#include <linux/console_struct.h>
 #include <linux/sched.h>
 
 #include "fbcon.h"
