@@ -271,10 +271,6 @@ struct fb_ops {
     int (*fb_get_var)(struct fb_var_screeninfo *var, struct fb_info *info); 
     /* set settable parameters */
     int (*fb_set_var)(struct fb_var_screeninfo *var, struct fb_info *info); 
-    /* get colormap */
-    int (*fb_get_cmap)(struct fb_cmap *cmap, int kspc, struct fb_info *info); 
-    /* set colormap */
-    int (*fb_set_cmap)(struct fb_cmap *cmap, int kspc, struct fb_info *info); 
     /* set color register */
     int (*fb_setcolreg)(unsigned regno, unsigned red, unsigned green,
                         unsigned blue, unsigned transp, struct fb_info *info);
@@ -370,10 +366,6 @@ extern int fbgen_get_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info);
 extern int fbgen_set_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info);
-extern int fbgen_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info);
-extern int fbgen_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info);
 extern int fbgen_pan_display(struct fb_var_screeninfo *var, int con,
 			     struct fb_info *info);
 extern int fbgen_ioctl(struct inode *inode, struct file *file,
