@@ -443,12 +443,33 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 	vgacon_state.mode = MODE_TEXT;
 	vt->default_font.data = vga_fonts;      
 
-	/* 
-	if (vga_512_chars)
-               vga_do_font_op(vt->default_font.data, 0, 1);
-        else
-               vga_do_font_op(vt->default_font.data, 0, 0);
-	*/
+	if (init) {
+		if (vga_512_chars)
+			vga_do_font_op(vga_fonts, 0, 0);
+		else 
+			vga_do_font_op(vga_fonts, 0, 1);
+	} else {
+        	int i;
+
+               	vgacon_state.misc = 0xE3;
+               	vgacon_state.misc &= ~0x40;
+                vgacon_state.misc &= ~0x80;
+
+               	vga_clock_chip(&vgacon_state, 0, 1, 1);
+               	vga_set_mode(&vgacon_state, 0);
+               	if (vga_512_chars)
+                	vga_do_font_op(vt->default_font.data, 1, 1);
+                else
+                        vga_do_font_op(vt->default_font.data, 1, 0);
+               	/* now set the DAC registers back to their
+                   default values */
+              	for (i=0; i<16; i++) {
+                	outb_p (color_table[i], 0x3c8) ;
+                       	outb_p (default_red[i], 0x3c9) ;
+                        outb_p (default_grn[i], 0x3c9) ;
+                       	outb_p (default_blu[i], 0x3c9) ;
+               	}
+       	}
 	return display_desc;
 }
 
@@ -471,30 +492,6 @@ static void vgacon_init(struct vc_data *vc)
 	vc->vc_font = &vc->display_fg->default_font;
 	/* This may be suboptimal but is a safe bet - go with it */
         vc->vc_scan_lines = vc->vc_font->height * vc->vc_rows;
-	/*
-	if (!init) {
-        	int i;
-
-               	vgacon_state.misc = 0xE3;
-               	vgacon_state.misc &= ~0x40;
-                vgacon_state.misc &= ~0x80;
-
-               	vga_clock_chip(&vgacon_state, 0, 1, 1);
-               	vga_set_mode(&vgacon_state, 0);
-               	if (vga_512_chars)
-                	vga_do_font_op(vt->default_font.data, 1, 1);
-                else
-                        vga_do_font_op(vt->default_font.data, 1, 0);
-               	 now set the DAC registers back to their
-                   default values 
-              	for (i=0; i<16; i++) {
-                	outb_p (color_table[i], 0x3c8) ;
-                       	outb_p (default_red[i], 0x3c9) ;
-                        outb_p (default_grn[i], 0x3c9) ;
-                       	outb_p (default_blu[i], 0x3c9) ;
-               	}
-       	}
-	*/
 }
 
 static inline void vga_set_mem_top(struct vc_data *c)
