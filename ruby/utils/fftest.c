@@ -42,6 +42,7 @@ int main(int argc, char** argv)
 	int fd;
 	char device_file_name[64];
 	unsigned long features;
+	int n_effects;	/* Number of effects the device can play at the same time */
 	int i;
 
 	strncpy(device_file_name, "/dev/input/event0", 64);
@@ -90,7 +91,11 @@ int main(int argc, char** argv)
 		if (features & BIT(FF_RUMBLE)) printf("Rumble ");
 	}
 	printf("\nNumber of simultaneous effects: ");
-	printf("%ld\n", (features>>FF_N_EFFECTS_0) & 0xff);
+	if (ioctl(fd, EVIOCGEFFECTS, &n_effects) == -1) {
+		perror("Ioctl number of effects");
+		exit(1);
+	}
+	printf("%d\n", n_effects);
 
 	/* download a constant effect */
 	effects[1].type = FF_CONSTANT;
