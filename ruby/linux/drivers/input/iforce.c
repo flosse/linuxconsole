@@ -75,11 +75,11 @@ static char *iforce_name = "I-Force joystick/wheel";
 
 /* FF: various macros */
 /* Get hi and low bytes of a 16-bits int */
-#define HI(a)	(((a) & 0xff00)>>8)
+#define HI(a)	((a) >> 8)
 #define LOW(a)	((a) & 0x00ff)
 
 /* Encode a time value */
-#define TIME_SCALE(a)	((a)==0xffff?0xffff:(((a)*0x03e8)/0x0100))
+#define TIME_SCALE(a)	((a) == 0xffff ? 0xffff : (a) * 1000 / 256)
  
 /*
  * Send a packet of bytes to the device
