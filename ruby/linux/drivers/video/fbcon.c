@@ -233,7 +233,7 @@ static const char *fbcon_startup(struct vt_struct *vt, int init)
     }
 
 #ifdef CONFIG_FBCON_FONTWIDTH8_ONLY
-    if (!font->width%8) {
+    if (font->width%8) {
         /* ++Geert: changed from panic() to `correct and continue' */
         printk(KERN_ERR "fbcon_startup: No support for fontwidth %d\n", vc->vc_font.width);
     }
@@ -285,7 +285,7 @@ static void fbcon_clear(struct vc_data *vc, int sy, int sx, int height,
 			int width)
 {
     struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
-    unsigned long color;	
+    unsigned long color = attr_bgcol_ec(info, vc);	
 
     info->fbops->fb_fillrect(info, sx, sy, width, height, color, ROP_COPY);	
 }
@@ -293,8 +293,17 @@ static void fbcon_clear(struct vc_data *vc, int sy, int sx, int height,
 static void fbcon_putc(struct vc_data *vc, int c, int ypos, int xpos)
 {
     struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
+    unsigned short charmask = (vc->vc_font.charcount > 256) ? 0xff: 0x1ff;
+    unsigned long fgx = attr_fgcol(info, scr_readw(s));
+    unsigned long bgx = attr_bgcol(info, scr_readw(s));
     unsigned int dy = ypos * vc->vc_font.height;	 	
     unsigned int dx = xpos * vc->vc_font.width;
+    void *image; 	
+   
+    if (vc->vc_font.width <= 8)
+        image = vc->vc_font.data + (c & charmask) * vc->vc_font.height;
+    else
+        image = vc->vc_font.data + ((c & charmask)*vc->vc_font.height << 1);
 
     info->fbops->fb_imageblit(info, vc->vc_font.width, vc->vc_font.height,
                               image, 1, dx, dy);
@@ -303,6 +312,13 @@ static void fbcon_putc(struct vc_data *vc, int c, int ypos, int xpos)
 static void fbcon_putcs(struct vc_data *vc, const unsigned short *s, 
 			int count, int ypos, int xpos)
 {
+   unsigned int charmask = (vc->vc_font.charcount > 256) ? 0xff: 0x1ff;
+   int c; 	
+
+   while (count--) {
+        c = scr_readw(s++) & charmask;
+	fbcon_putc(vc, c, ypos, xpos); 	
+   }	
 }
 
 static void fbcon_cursor(struct vc_data *vc, int mode)
