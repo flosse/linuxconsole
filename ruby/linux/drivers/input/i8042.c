@@ -36,7 +36,7 @@
 #include <linux/module.h>
 #include <linux/ioport.h>
 #include <linux/config.h>
-#include <linux/kbd_kern.h>
+#include <linux/reboot.h>
 #include <linux/init.h>
 #include <linux/serio.h>
 
@@ -626,6 +626,24 @@ void __init i8042_setup(char *str, int *ints)
 		i8042_direct = 1;
 }
 
+/*
+ * Reset the 8042 back to original mode.
+ */
+static int i8042_notify_sys(struct notifier_block *this, unsigned long code,
+        		    void *unused)
+{
+        if (code==SYS_DOWN || code==SYS_HALT) 
+        	i8042_controller_cleanup();
+        return NOTIFY_DONE;
+}
+
+static struct notifier_block i8042_notifier=
+{
+        i8042_notify_sys,
+        NULL,
+        0
+};
+
 int __init i8042_init(void)
 {
 #ifdef I8042_DEBUG_IO
@@ -641,12 +659,14 @@ int __init i8042_init(void)
 		i8042_port_register(&i8042_aux_values, &i8042_aux_port);
 
 	request_region(I8042_DATA_REG, 16, "i8042");
-
+	register_reboot_notifier(&i8042_notifier);
 	return 0;
 }
 
 void __exit i8042_exit(void)
 {
+	unregister_reboot_notifier(&i8042_notifier);
+	
 	if (i8042_kbd_values.exists)
 		serio_unregister_port(&i8042_kbd_port);
 
@@ -654,7 +674,6 @@ void __exit i8042_exit(void)
 		serio_unregister_port(&i8042_aux_port);
 
 	i8042_controller_cleanup();
-
 	release_region(I8042_DATA_REG, 16);
 }
 
