@@ -103,7 +103,7 @@ void fbcon_accel_putc(struct vc_data *conp, struct display *p, int c, int yy,
     do { } while(gfxops[board]->engine_state(p->fb_info->par));	
     gfxops[board]->imageblit(p->fb_info->par, xx * fontwidth(p), 
                              yy * fontheight(p), fontwidth(p), fontheight(p), 
-			     1, bitmap);
+			     fg_color, bg_color, bitmap);
 }
 
 void fbcon_accel_putcs(struct vc_data *conp, struct display *p,
@@ -139,7 +139,7 @@ void fbcon_accel_putcs(struct vc_data *conp, struct display *p,
         do { } while(gfxops[board]->engine_state(p->fb_info->par));
         gfxops[board]->imageblit(p->fb_info->par, xx * fontwidth(p), 
                                  yy * fontheight(p), fontwidth(p), 
-			         fontheight(p), 1, bitmap);
+			         fontheight(p), fg_color, bg_color, bitmap);
         xx += fontwidth(p);
     }
 }
