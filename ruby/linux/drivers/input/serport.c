@@ -148,11 +148,11 @@ static ssize_t serport_ldisc_read(struct tty_struct * tty, struct file * file, u
 	DECLARE_WAITQUEUE(wait, current);
 	char name[32];
 
-	sprintf(name, tty->driver.name, MINOR(tty->device) - tty->driver.minor_start);
+	sprintf(name, "%s%d", tty->driver.name, MINOR(tty->device) - tty->driver.minor_start);
 
 	serio_register_port(&serport->serio);
 
-	printk(KERN_INFO "serio%d: Serial port %s\n", serport->serio.number, name);
+	printk(KERN_INFO "serio%d: Serial port %s%d\n", serport->serio.number, name);
 
 	add_wait_queue(&serport->wait, &wait);
 	current->state = TASK_INTERRUPTIBLE;
