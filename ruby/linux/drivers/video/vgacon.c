@@ -253,10 +253,9 @@ int vga_do_font_op(char *arg, int set, int ch512)
         /* odd-even addressing */
         vga_io_wseq(VGA_SEQ_MEMORY_MODE, 0x03);
 
-        if (set) {
-                /* Character Map Select */
+	/* Character Map Select */
+        if (set) 
                 vga_io_wseq(VGA_SEQ_CHARACTER_MAP, font_select);
-        }
         /* clear synchronous reset */
         vga_io_wseq(VGA_SEQ_RESET, 0x03);
 
@@ -333,7 +332,7 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 			display_desc = "*MDA";
 			request_resource(&ioport_resource, &mda1_console_resource);
 			request_resource(&ioport_resource, &mda2_console_resource);
-			vt->default_font.height = 14;
+			vt->default_mode->vc_font.height = 14;
 		}
 	} else {
 		/* If not, it is color. */
@@ -342,7 +341,7 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 		vga_video_port_reg = 0x3d4;
 		vga_video_port_val = 0x3d5;
 		if ((ORIG_VIDEO_EGA_BX & 0xff) != 0x10) {
-			int i;
+			int i; 
 
 			vga_vram_end = 0xc0000;
 
@@ -399,7 +398,7 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 			vga_vram_end = 0xba000;
 			display_desc = "*CGA";
 			request_resource(&ioport_resource, &cga_console_resource);
-			vt->default_font.height = 8;
+			vt->default_mode->vc_font.height = 8;
 		}
 	}
 
@@ -434,10 +433,9 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 	    || vgacon_state.video_type == VIDEO_TYPE_VGAC
 	    || vgacon_state.video_type == VIDEO_TYPE_EGAM) {
 		vga_hardscroll_enabled = vga_hardscroll_user_enable;
-		vt->default_font.height = ORIG_VIDEO_POINTS;
+		vt->default_mode->vc_font.height = ORIG_VIDEO_POINTS;
 	}
 	vgacon_state.mode = MODE_TEXT;
-	vt->default_font.data = vga_fonts;      
 
 	if (init) {
 		if (vga_512_chars)
@@ -454,9 +452,9 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
                	vga_clock_chip(&vgacon_state, 0, 1, 1);
                	vga_set_mode(&vgacon_state, 0);
                	if (vga_512_chars)
-                	vga_do_font_op(vt->default_font.data, 1, 1);
+                	vga_do_font_op(vga_fonts, 1, 1);
                 else
-                        vga_do_font_op(vt->default_font.data, 1, 0);
+                        vga_do_font_op(vga_fonts, 1, 0);
                	/* now set the DAC registers back to their
                    default values */
               	for (i=0; i<16; i++) {
@@ -466,16 +464,20 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
                        	outb_p (default_blu[i], 0x3c9) ;
                	}
        	}
+ 	vt->default_mode->vc_font.data = vga_fonts;	
+	/* This maybe be suboptimal but is a safe bet - go with it */
+	vt->default_mode->vc_scan_lines = vt->default_mode->vc_font.height * vt->default_mode->vc_rows; 
 	return display_desc;
 }
 
 static void vgacon_init(struct vc_data *vc)
 {
 	unsigned long p;
-	
-	vc->vc_can_do_color = vga_can_do_color;
-	vc->vc_cols = vc->display_fg->default_mode->vc_cols;
+
+        vc->vc_cols = vc->display_fg->default_mode->vc_cols;
 	vc->vc_rows = vc->display_fg->default_mode->vc_rows;
+	vc->vc_font = vc->display_fg->default_mode->vc_font;		
+	vc->vc_can_do_color = vga_can_do_color;
 	vc->vc_complement_mask = 0x7700;
 	p = *vc->vc_uni_pagedir_loc;
 	if (vc->vc_uni_pagedir_loc == &vc->vc_uni_pagedir ||
@@ -485,9 +487,6 @@ static void vgacon_init(struct vc_data *vc)
 	vgacon_uni_pagedir[1]++;
 	if (!vgacon_uni_pagedir[0] && p)
 		con_set_default_unimap(vc);
-	vc->vc_font = &vc->display_fg->default_font;
-	/* This may be suboptimal but is a safe bet - go with it */
-        vc->vc_scan_lines = vc->vc_font->height * vc->vc_rows;
 }
 
 static inline void vga_set_mem_top(struct vc_data *c)
@@ -586,27 +585,27 @@ static void vgacon_cursor(struct vc_data *vc, int mode)
 	    switch (vc->vc_cursor_type & 0x0f) {
 		case CUR_UNDERLINE:
 			vgacon_set_cursor_size(vc->vc_x, 
-					vc->vc_font->height - (vc->vc_font->height < 10 ? 2 : 3),
-					vc->vc_font->height - (vc->vc_font->height < 10 ? 1 : 2));
+					vc->vc_font.height - (vc->vc_font.height < 10 ? 2 : 3),
+					vc->vc_font.height - (vc->vc_font.height < 10 ? 1 : 2));
 			break;
 		case CUR_TWO_THIRDS:
-			vgacon_set_cursor_size(vc->vc_x, vc->vc_font->height/3,
-					 vc->vc_font->height - (vc->vc_font->height < 10 ? 1 : 2));
+			vgacon_set_cursor_size(vc->vc_x, vc->vc_font.height/3,
+					 vc->vc_font.height - (vc->vc_font.height < 10 ? 1 : 2));
 			break;
 		case CUR_LOWER_THIRD:
 			vgacon_set_cursor_size(vc->vc_x, 
-					 (vc->vc_font->height*2) / 3,
-					 vc->vc_font->height - (vc->vc_font->height < 10 ? 1 : 2));
+					 (vc->vc_font.height*2) / 3,
+					 vc->vc_font.height - (vc->vc_font.height < 10 ? 1 : 2));
 			break;
 		case CUR_LOWER_HALF:
-			vgacon_set_cursor_size(vc->vc_x, vc->vc_font->height/2,
-					 vc->vc_font->height - (vc->vc_font->height < 10 ? 1 : 2));
+			vgacon_set_cursor_size(vc->vc_x, vc->vc_font.height/2,
+					 vc->vc_font.height - (vc->vc_font.height < 10 ? 1 : 2));
 			break;
 		case CUR_NONE:
 			vgacon_set_cursor_size(vc->vc_x, 31, 30);
 			break;
           	default:
-			vgacon_set_cursor_size(vc->vc_x, 1,vc->vc_font->height);
+			vgacon_set_cursor_size(vc->vc_x, 1,vc->vc_font.height);
 			break;
 		}
 	    break;
@@ -692,10 +691,10 @@ vgacon_adjust_height(struct vc_data *vc, unsigned fontheight)
 	unsigned char ovr, vde, fsr;
 	int rows, maxscan;
 
-	if (fontheight == vc->vc_font->height)
+	if (fontheight == vc->vc_font.height)
 		return 0;
 
-	vc->vc_font->height = fontheight;
+	vc->vc_font.height = fontheight;
 
 	rows = vc->vc_scan_lines/fontheight;	/* Number of video rows we end up with */
 	maxscan = rows*fontheight - 1;		/* Scan lines to actually display-1 */
@@ -744,7 +743,7 @@ static int vgacon_font_op(struct vc_data *vc, struct console_font_op *op)
 			rc = vgacon_adjust_height(vc, op->height);
 	} else if (op->op == KD_FONT_OP_GET) {
 		op->width = 8;
-		op->height = vc->vc_font->height;
+		op->height = vc->vc_font.height;
 		op->charcount = vga_512_chars ? 512 : 256;
 		if (!op->data) return 0;
 		rc = vga_do_font_op(op->data, 0, vga_512_chars);

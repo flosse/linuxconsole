@@ -439,7 +439,7 @@ int con_font_op(struct vc_data *vc, struct console_font_op *op)
 		err = vc->display_fg->vt_sw->con_font_op(vc, op);
 		spin_unlock_irq(&console_lock);
 		if (!err)
-			vc->vc_font = op;
+			vc->vc_font = *op;
 		break;
 	case KD_FONT_OP_GET:
 		/* Save passed in console_font_op */
@@ -1126,7 +1126,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		if ( vlin )
 		  vc->vc_scan_lines = vlin;
 		if ( clin )
-		  vc->vc_font->height = clin;
+		  vc->vc_font.height = clin;
 	
 		for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
                         struct vc_data *tmp = vc->display_fg->vcs.vc_cons[i];

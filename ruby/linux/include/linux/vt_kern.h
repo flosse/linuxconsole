@@ -93,7 +93,7 @@ struct vc_data {
         unsigned int    vc_npar,vc_par[NPAR];   /* Parameters of current escape sequence */
 	struct kbd_struct kbd_table;		/* VC keyboard state */       
 	unsigned short  vc_hi_font_mask;        /* [#] Attribute set for upper 256 chars of font or 0 if not supported */
-	struct console_font_op *vc_font;	/* VC current font set */
+	struct console_font_op vc_font;		/* VC current font set */
 	/* data for manual vt switching */
 	struct vt_mode  vt_mode;
         int             vt_pid;
@@ -242,7 +242,6 @@ struct vt_struct {
 	void *data_hook;			/* Hook for driver data */
 	const struct consw *vt_sw;		/* Display driver for VT */
 	struct vc_data *default_mode;	 	/* Default mode */
-	struct console_font_op default_font;
 	struct input_handle *keyboard;		/* Keyboard attached */
 	struct vc_pool  vcs;			 
 	struct vt_struct *next;				
