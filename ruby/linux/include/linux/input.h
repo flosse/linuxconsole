@@ -545,7 +545,7 @@ struct ff_effect {
 	__u16 type;
 	__u16 id;	/* Unique id of created effect */
 	union {
-		struct ff_constant_effect force;
+		struct ff_constant_effect constant;
 		struct ff_periodic_effect periodic;
 		struct ff_position_effect spring;
 	} u;
