@@ -230,8 +230,8 @@ void scroll_up(struct vc_data *vc, int lines)
 	if (!lines)
 		return;
 
-	d = (unsigned short *) origin;
-        s = (unsigned short *) origin + video_num_columns*lines;
+	d = (unsigned short *) (origin + video_size_row*top);
+        s = (unsigned short *) (origin + video_size_row*(top+lines));
         scr_memcpyw(d, s, (bottom-lines) * video_size_row);
         scr_memsetw(d + (bottom-lines) * video_num_columns, video_erase_char, video_size_row*lines);
        	if (IS_VISIBLE)
@@ -241,15 +241,14 @@ void scroll_up(struct vc_data *vc, int lines)
 
 void scroll_down(struct vc_data *vc, int lines)
 {
-	unsigned short *s = (unsigned short *) origin;
-	unsigned int step;
+	unsigned short *d = screenbuf + video_num_columns*lines;
+	unsigned short *s = screenbuf;
 
 	if (!lines)
 		return;        
 
-        step = video_num_columns * lines;
-        scr_memmovew(s + step, s, (bottom-lines)*video_size_row);
-        scr_memsetw(s, video_erase_char, 2*step);
+        scr_memmovew(d, s, screenbuf_size - video_size_row*lines);
+        scr_memsetw(s, video_erase_char, video_size_row*lines);
 
        	if (IS_VISIBLE)
 		do_update_region(vc, origin, screensize);
@@ -261,7 +260,7 @@ void scroll_region_up(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
         unsigned short *d, *s;
 
         if (t+nr >= b)
-                nr = b - t;
+                nr = b - t - 1;
         if (b > video_num_lines || t >= b || nr < 1)
                 return;
         d = (unsigned short *) (origin + video_size_row*t);
@@ -279,10 +278,10 @@ void scroll_region_down(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
         unsigned int step;
 
         if (t+nr >= b)
-                nr = b - t;
+                nr = b - t - 1;
         if (b > video_num_lines || t >= b || nr < 1)
                 return;
-        s = (unsigned short *) (origin + video_num_columns*t);
+        s = (unsigned short *) (origin + video_size_row*t);
         step = video_num_columns * nr;
         scr_memmovew(s + step, s, (b-t-nr)*video_size_row);
         scr_memsetw(s, video_erase_char, 2*step);
