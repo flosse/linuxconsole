@@ -21,6 +21,8 @@
     /*                                  
      *  `switch' for the Low Level Operations
      */
+
+struct display;
  
 struct display_switch {                                                
     void (*setup)(struct display *p);
