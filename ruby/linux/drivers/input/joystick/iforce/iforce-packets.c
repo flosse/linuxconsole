@@ -213,7 +213,6 @@ void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char *data)
 					else input_report_abs(dev, ABS_HAT1Y, 0);
 				}
 			}
-			
 
 			break;
 
@@ -250,56 +249,64 @@ int iforce_get_id_packet(struct iforce *iforce, char *packet)
 
 	switch (iforce->bus) {
 
+	case IFORCE_USB:
+
 #ifdef IFORCE_USB
-		case IFORCE_USB:
+		iforce->cr.bRequest = packet[0];
+		iforce->ctrl->dev = iforce->usbdev;
 
-			iforce->cr.bRequest = packet[0];
-			iforce->ctrl->dev = iforce->usbdev;
+		set_current_state(TASK_INTERRUPTIBLE);
+		add_wait_queue(&iforce->wait, &wait);
 
-			set_current_state(TASK_INTERRUPTIBLE);
-			add_wait_queue(&iforce->wait, &wait);
-
-			if (usb_submit_urb(iforce->ctrl, GFP_KERNEL)) {
-				set_current_state(TASK_RUNNING);
-				remove_wait_queue(&iforce->wait, &wait);
-				return -1;
-			}
-
-			while (timeout && iforce->ctrl->status == -EINPROGRESS)
-				timeout = schedule_timeout(timeout);
-
+		if (usb_submit_urb(iforce->ctrl, GFP_KERNEL)) {
 			set_current_state(TASK_RUNNING);
 			remove_wait_queue(&iforce->wait, &wait);
+			return -1;
+		}
 
-			if (!timeout) {
-				usb_unlink_urb(iforce->ctrl);
-				return -1;
-			}
+		while (timeout && iforce->ctrl->status == -EINPROGRESS)
+			timeout = schedule_timeout(timeout);
 
-			break;
+		set_current_state(TASK_RUNNING);
+		remove_wait_queue(&iforce->wait, &wait);
+
+		if (!timeout) {
+			usb_unlink_urb(iforce->ctrl);
+			return -1;
+		}
+#else
+		printk(KERN_ERR "iforce_get_id_packet: iforce->bus = USB!\n");
 #endif
+		break;
+
+	case IFORCE_232:
+
 #ifdef IFORCE_232
-		case IFORCE_232:
+		iforce->expect_packet = FF_CMD_QUERY;
+		iforce_send_packet(iforce, FF_CMD_QUERY, packet);
 
-			iforce->expect_packet = FF_CMD_QUERY;
-			iforce_send_packet(iforce, FF_CMD_QUERY, packet);
+		set_current_state(TASK_INTERRUPTIBLE);
+		add_wait_queue(&iforce->wait, &wait);
 
-			set_current_state(TASK_INTERRUPTIBLE);
-			add_wait_queue(&iforce->wait, &wait);
+		while (timeout && iforce->expect_packet)
+			timeout = schedule_timeout(timeout);
 
-			while (timeout && iforce->expect_packet)
-				timeout = schedule_timeout(timeout);
+		set_current_state(TASK_RUNNING);
+		remove_wait_queue(&iforce->wait, &wait);
 
-			set_current_state(TASK_RUNNING);
-			remove_wait_queue(&iforce->wait, &wait);
-
-			if (!timeout) {
-				iforce->expect_packet = 0;
-				return -1;
-			}
-
-			break;
+		if (!timeout) {
+			iforce->expect_packet = 0;
+			return -1;
+		}
+#else
+		printk(KERN_ERR "iforce_get_id_packet: iforce->bus = SERIO!\n");
 #endif
+		break;
+
+	default:
+		printk(KERN_ERR "iforce_get_id_packet: iforce->bus = %d\n",
+		       iforce->bus);
+		break;
 	}
 
 	return -(iforce->edata[0] != packet[0]);
