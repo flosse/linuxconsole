@@ -83,6 +83,7 @@ static int analog_options[ANALOG_PORTS];
 #define ANALOG_MAX_TIME		3	/* 3 ms */
 #define ANALOG_LOOP_TIME	2000	/* 2 * loop */
 #define ANALOG_REFRESH_TIME	HZ/100	/* 10 ms */
+#define ANALOG_SAITEK_DELAY	50	/* 50 us */
 #define ANALOG_AXIS_TIME	2	/* 2 * refresh */
 #define ANALOG_INIT_RETRIES	8	/* 8 times */
 #define ANALOG_RESOLUTION	12	/* 12 bits */
@@ -254,7 +255,7 @@ static int analog_cooked_read(struct analog_port *port)
 static int analog_button_read(struct analog_port *port, char saitek, char chf)
 {
 	unsigned char u;
-	int i = 0;
+	int t = 1, i = 0;
 
 	u = (~gameport_read(port->gameport) >> 4) & 0xf;
 
@@ -265,10 +266,11 @@ static int analog_button_read(struct analog_port *port, char saitek, char chf)
 
 	port->buttons = u ? (1 << analog_chf[u]) : 0;
 
-	while (saitek && u && i < 16) {
-		udelay(310);
+	while (saitek && u && t && i < 16) {
+		udelay(ANALOG_SAITEK_DELAY);
+		t = gameport_time(port->gameport, ANALOG_MAX_TIME * 1000);
 		gameport_trigger(port->gameport);
-		udelay(70);
+		while (t && (gameport_read(port->gameport) & port->mask)) t--;
 		u = (~gameport_read(port->gameport) >> 4) & 0xf;
 		port->buttons |= 1 << analog_chf[u];
 		i++;
