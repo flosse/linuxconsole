@@ -192,6 +192,7 @@ static ssize_t evdev_read(struct file * file, char * buffer, size_t count, loff_
 	return retval;	
 }
 
+/* No kernel lock - fine */
 static unsigned int evdev_poll(struct file *file, poll_table *wait)
 {
 	struct evdev_list *list = file->private_data;
@@ -211,11 +212,6 @@ static int evdev_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 
 		case EVIOCGVERSION:
 			return put_user(EV_VERSION, (__u32 *) arg);
-#if 0
-		case EVIOCGID:
-			return copy_to_user(&dev->id, (void *) arg,
-						sizeof(struct input_id)) ? -EFAULT : 0;
-#endif
 		default:
 
 			if (_IOC_TYPE(cmd) != 'E' || _IOC_DIR(cmd) != _IOC_READ)
