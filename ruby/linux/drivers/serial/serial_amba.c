@@ -344,7 +344,7 @@ static u_int ambauart_tx_empty(struct uart_port *port)
 	return UART_GET_FR(port) & AMBA_UARTFR_BUSY ? 0 : TIOCSER_TEMT;
 }
 
-static int ambauart_get_mctrl(struct uart_port *port)
+static u_int ambauart_get_mctrl(struct uart_port *port)
 {
 	unsigned int result = 0;
 	unsigned int status;

@@ -311,7 +311,7 @@ static u_int sa1100_tx_empty(struct uart_port *port)
 	return UART_GET_UTSR1(port) & UTSR1_TBY ? 0 : TIOCSER_TEMT;
 }
 
-static int sa1100_get_mctrl(struct uart_port *port)
+static u_int sa1100_get_mctrl(struct uart_port *port)
 {
 	return TIOCM_CTS | TIOCM_DSR | TIOCM_CAR;
 }

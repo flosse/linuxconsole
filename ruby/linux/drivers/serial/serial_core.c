@@ -1393,6 +1393,7 @@ static inline int uart_alloc_tmpbuf(void)
 /*
  * In 2.4.5, calls to uart_open are serialised by the BKL in
  *   linux/fs/devices.c:chrdev_open()
+ * Note that if this fails, then uart_close() _will_ be called.
  */
 static int uart_open(struct tty_struct *tty, struct file *filp)
 {
@@ -1416,12 +1417,17 @@ static int uart_open(struct tty_struct *tty, struct file *filp)
 	if (!info)
 		goto out;
 
+	/*
+	 * Set the tty driver_data.  If we fail from this point on,
+	 * the generic tty layer will cause uart_close(), which will
+	 * decrement the module use count.
+	 */
 	tty->driver_data = info;
 	info->tty = tty;
 	info->tty->low_latency = (info->flags & ASYNC_LOW_LATENCY) ? 1 : 0;
 
 	if (uart_alloc_tmpbuf())
-		goto out;
+		goto fail;
 
 	/*
 	 * If the port is in the middle of closing, bail out now.
@@ -1432,7 +1438,7 @@ static int uart_open(struct tty_struct *tty, struct file *filp)
 			interruptible_sleep_on(&info->close_wait);
 		retval = (info->flags & ASYNC_HUP_NOTIFY) ?
 			-EAGAIN : -ERESTARTSYS;
-		goto out;
+		goto fail;
 	}
 
 	/*
@@ -1451,11 +1457,11 @@ static int uart_open(struct tty_struct *tty, struct file *filp)
 	 */
 	retval = uart_startup(info);
 	if (retval)
-		goto out;
+		goto fail;
 
 	retval = uart_block_til_ready(tty, filp, info);
 	if (retval)
-		goto out;
+		goto fail;
 
 	if (info->state->count == 1) {
 		int changed_termios = 0;

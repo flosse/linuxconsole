@@ -255,7 +255,7 @@ static u_int clps711xuart_tx_empty(struct uart_port *port)
 	return status & SYSFLG_UBUSY ? 0 : TIOCSER_TEMT;
 }
 
-static int clps711xuart_get_mctrl(struct uart_port *port)
+static u_int clps711xuart_get_mctrl(struct uart_port *port)
 {
 	unsigned int port_addr;
 	unsigned int result = 0;

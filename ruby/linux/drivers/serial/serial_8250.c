@@ -320,11 +320,12 @@ autoconfig_startech_uarts(struct uart_port *port)
 	}
 	
 	/*
-	 * We check for a XR16C850 by setting DLL and DLM to 0, and
-	 * then reading back DLL and DLM.  If DLM reads back 0x10,
-	 * then the UART is a XR16C850 and the DLL contains the chip
-	 * revision.  If DLM reads back 0x14, then the UART is a
-	 * XR16C854.
+	 * We check for a XR16C850 by setting DLL and DLM to 0, and then
+	 * reading back DLL and DLM.  The chip type depends on the DLM
+	 * value read back:
+	 *  0x10 - XR16C850 and the DLL contains the chip revision.
+	 *  0x12 - XR16C2850.
+	 *  0x14 - XR16C854.
 	 */
 
 	/* Save the DLL and DLM */
@@ -339,7 +340,7 @@ autoconfig_startech_uarts(struct uart_port *port)
 	scratch = serial_inp(port, UART_DLM);
 	serial_outp(port, UART_LCR, 0);
 
-	if (scratch == 0x10 || scratch == 0x14) {
+	if (scratch == 0x10 || scratch == 0x12 || scratch == 0x14) {
 		if (scratch == 0x10)
 			port->port_rev = scratch2;
 		port->type = PORT_16850;
@@ -1021,11 +1022,11 @@ static u_int serial8250_tx_empty(struct uart_port *port)
 	return serial_in(port, UART_LSR) & UART_LSR_TEMT ? TIOCSER_TEMT : 0;
 }
 
-static int serial8250_get_mctrl(struct uart_port *port)
+static u_int serial8250_get_mctrl(struct uart_port *port)
 {
 	unsigned long flags;
 	unsigned char status;
-	int ret;
+	unsigned int ret;
 
 	save_flags(flags); cli();
 	status = serial_in(port, UART_MSR);
@@ -1420,10 +1421,16 @@ static void serial8250_pm(struct uart_port *port, u_int state, u_int oldstate)
 			 * For a XR16C850, we need to set the trigger levels
 			 */
 			if (port->type == PORT_16850) {
-				serial_outp(port, UART_FCTR, UART_FCTR_TRGD |
+				unsigned char fctr;
+
+				fctr = serial_inp(port, UART_FCTR) &
+					 ~(UART_FCTR_RX | UART_FCTR_TX);
+				serial_outp(port, UART_FCTR, fctr |
+						UART_FCTR_TRGD |
 						UART_FCTR_RX);
 				serial_outp(port, UART_TRG, UART_TRG_96);
-				serial_outp(port, UART_FCTR, UART_FCTR_TRGD |
+				serial_outp(port, UART_FCTR, fctr |
+						UART_FCTR_TRGD |
 						UART_FCTR_TX);
 				serial_outp(port, UART_TRG, UART_TRG_96);
 			}

@@ -363,7 +363,7 @@ static u_int uart00_tx_empty(struct uart_port *port)
 	return UART_GET_TSR(port) & UART_TSR_TX_LEVEL_MSK? 0 : TIOCSER_TEMT;
 }
 
-static int uart00_get_mctrl(struct uart_port *port)
+static u_int uart00_get_mctrl(struct uart_port *port)
 {
 	unsigned int result = 0;
 	unsigned int status;

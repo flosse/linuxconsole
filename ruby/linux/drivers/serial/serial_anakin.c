@@ -225,7 +225,7 @@ anakin_tx_empty(struct uart_port *port)
 	return anakin_in(port, 0x10) & TXEMPTY ? TIOCSER_TEMT : 0;
 }
 
-static int
+static u_int
 anakin_get_mctrl(struct uart_port *port)
 {
 	unsigned int status = 0;

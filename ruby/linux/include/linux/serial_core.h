@@ -66,7 +66,7 @@ struct uart_info;
 struct uart_ops {
 	u_int	(*tx_empty)(struct uart_port *);
 	void	(*set_mctrl)(struct uart_port *, u_int mctrl);
-	int	(*get_mctrl)(struct uart_port *);
+	u_int	(*get_mctrl)(struct uart_port *);
 	void	(*stop_tx)(struct uart_port *, u_int from_tty);
 	void	(*start_tx)(struct uart_port *, u_int nonempty, u_int from_tty);
 	void	(*stop_rx)(struct uart_port *);
