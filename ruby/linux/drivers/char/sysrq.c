@@ -18,7 +18,7 @@
 #include <linux/major.h>
 #include <linux/reboot.h>
 #include <linux/sysrq.h>
-#include <linux/kbd_kern.h>
+#include <linux/vt_kern.h>
 #include <linux/quotaops.h>
 #include <linux/smp_lock.h>
 #include <linux/module.h>
