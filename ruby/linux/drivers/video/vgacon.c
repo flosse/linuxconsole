@@ -816,9 +816,9 @@ vgacon_do_font_op(struct vc_data *vc, char *arg, int set, int ch512)
 	/* if 512 char mode is already enabled don't re-enable it. */
 	if ((set)&&(ch512!=vga_512_chars)) {	/* attribute controller */
 		int i;
-		for(i=0; i<MAX_NR_CONSOLES; i++) {
+		for(i=0; i<MAX_NR_USER_CONSOLES; i++) {
 			struct vc_data *c = vc->display_fg->vcs.vc_cons[i];
-			if (c && c->display_fg->sw == &vga_con)
+			if (c && c->display_fg->vt_sw == &vga_con)
 				c->vc_hi_font_mask = ch512 ? 0x0800 : 0;
 		}
 		vga_512_chars=ch512;
