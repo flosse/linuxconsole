@@ -1,3 +1,6 @@
+#ifndef _TDFX_H
+#define _TDFX_H
+
 /* membase0 register offsets */
 #define STATUS          0x00
 #define PCIINIT0        0x04
@@ -73,6 +76,7 @@
 #define LAUNCH_2D       (0x00100000 + 0x80)
 
 #define COMMAND_3D      (0x00200000 + 0x120)
+
 /* register bitfields (not all, only as needed) */
 
 #define BIT(x) (1UL << (x))
@@ -87,7 +91,6 @@
 #define COMMAND_2D_FILLRECT             0x05
 #define COMMAND_2D_S2S_BITBLT           0x01      // screen to screen
 #define COMMAND_2D_H2S_BITBLT           0x03       // host to screen
-
 
 #define COMMAND_3D_NOP                  0x00
 #define STATUS_RETRACE                  BIT(6)
@@ -131,12 +134,63 @@
 #define GRA_I   0x3ce
 #define GRA_D   0x3cf
 
-#define TDFXF_HSYNC_ACT_HIGH    0x01
-#define TDFXF_HSYNC_ACT_LOW     0x02
-#define TDFXF_VSYNC_ACT_HIGH    0x04
-#define TDFXF_VSYNC_ACT_LOW     0x08
-#define TDFXF_LINE_DOUBLE       0x10
-#define TDFXF_VIDEO_ENABLE      0x20
+#ifdef __KERNEL__
 
-#define TDFXF_HSYNC_MASK        0x03
-#define TDFXF_VSYNC_MASK        0x0c
+struct banshee_reg {
+  /* VGA rubbish */
+  unsigned char att[21];
+  unsigned char crt[25];
+  unsigned char gra[ 9];
+  unsigned char misc[1];
+  unsigned char seq[ 5];
+
+  /* Banshee extensions */
+  unsigned char ext[2];
+  unsigned long vidcfg;
+  unsigned long vidpll;
+  unsigned long mempll;
+  unsigned long gfxpll;
+  unsigned long dacmode;
+  unsigned long vgainit0;
+  unsigned long vgainit1;
+  unsigned long screensize;
+  unsigned long stride;
+  unsigned long cursloc;
+  unsigned long curspataddr;
+  unsigned long cursc0;
+  unsigned long cursc1;
+  unsigned long startaddr;
+  unsigned long clip0min;
+  unsigned long clip0max;
+  unsigned long clip1min;
+  unsigned long clip1max;
+  unsigned long srcbase;
+  unsigned long dstbase;
+};
+
+struct tdfx_par {
+  u32 max_pixclock;
+
+  void *regbase_virt;
+  unsigned long iobase;
+  u32 baseline;
+
+  struct {
+     int type;
+     int state;
+     int w,u,d;
+     int x,y,redraw;
+     unsigned long enable,disable;
+     unsigned long cursorimage;
+     struct timer_list timer;
+  } cursor; 
+
+  spinlock_t DAClock;
+#ifdef CONFIG_MTRR
+  int mtrr_idx;
+#endif
+};
+#endif /* __KERNEL__ */
+
+#endif /* _TDFX_H */
+
