@@ -33,6 +33,8 @@
  * The serial port set type ioctl.
  */
 
+#include <linux/errno.h>
+
 #include <linux/ioctl.h>
 #define SPIOCSTYPE	_IOW('q', 0x01, unsigned long)
 
@@ -46,6 +48,7 @@ struct serio {
 	unsigned long type;
 	int number;
 
+	int (*async_write)(struct serio *, unsigned char*, int);
 	int (*write)(struct serio *, unsigned char);
 	int (*open)(struct serio *);
 	void (*close)(struct serio *);
@@ -78,6 +81,15 @@ void serio_unregister_device(struct serio_dev *dev);
 static __inline__ int serio_write(struct serio *serio, unsigned char data)
 {
 	return serio->write(serio, data);
+}
+
+static __inline__ int serio_async_write(struct serio *serio, unsigned char *data, int len)
+{
+	if (serio->async_write) {
+		return serio->async_write(serio, data, len);
+	} else {
+		return -ENOSYS;
+	}
 }
 
 #define SERIO_TIMEOUT	1
