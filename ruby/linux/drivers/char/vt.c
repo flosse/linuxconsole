@@ -1580,6 +1580,8 @@ void __init vt_console_init(void)
 	vt->vt_sw = &vga_con;
 #elif defined(CONFIG_MDA_CONSOLE)
 	vt->vt_sw = &mda_con;
+#elif defined(CONFIG_DUMMY_CONSOLE)
+	vt->vt_sw = &dummy_con;
 #endif
 	vt->kmalloced = 0;
 	display_desc = create_vt(vt, 1);
@@ -1604,8 +1606,6 @@ void __init vt_console_init(void)
         printk("\n");
 
 #ifdef CONFIG_VT_CONSOLE
-	if (!admin_vt)
-		vt_console_driver.flags &= ~CON_ENABLED;
         vt_console_driver.lock = vt->vt_lock;
 	register_console(&vt_console_driver);
 #endif
