@@ -274,7 +274,7 @@ struct fb_ops {
     int (*fb_setcolreg)(unsigned regno, unsigned red, unsigned green,
                         unsigned blue, unsigned transp, struct fb_info *info);
     /* blank display */
-    void (*fb_blank)(int blank, struct fb_info *info);
+    int (*fb_blank)(int blank, struct fb_info *info);
     /* pan display */
     int (*fb_pan_display)(struct fb_var_screeninfo *var, struct fb_info *info); 
     /* perform fb specific ioctl */
@@ -337,12 +337,7 @@ extern int fbgen_pan_display(struct fb_var_screeninfo *var,
      *  Helper functions
      */
 
-extern int fbgen_do_set_var(struct fb_var_screeninfo *var, int isactive,
-			    struct fb_info_gen *info);
-extern void fbgen_set_disp(int con, struct fb_info_gen *info);
-extern void fbgen_install_cmap(int con, struct fb_info_gen *info);
-extern int fbgen_update_var(int con, struct fb_info *info);
-extern int fbgen_switch(int con, struct fb_info *info);
+extern int fbgen_update_var(struct fb_info *info);
 
 /* drivers/video/fbmem.c */
 extern int register_framebuffer(struct fb_info *fb_info);
