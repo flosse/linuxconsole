@@ -30,7 +30,7 @@
 #
 
 CC		= gcc
-CFLAGS		= -O2 -Wall -I../linux/include
+CFLAGS		= -g -O2 -Wall -I../linux/include
 
 PROGRAMS	= evtest inputattach jstest jscal fftest ffmvforce ffset
 
@@ -43,7 +43,7 @@ ffmvforce.o: ffmvforce.c
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $^ -o $@ `sdl-config --cflags`
 
 ffmvforce: ffmvforce.o
-	$(CC) $^ -o $@ $(LDFLAGS) -lm `sdl-config --libs`
+	$(CC) $^ -o $@ $(LDFLAGS) -g -lm `sdl-config --libs`
 
 jscal: jscal.o
 	$(CC) $(CFLAGS) $(CPPFLAGS) -lm $^ -o $@
