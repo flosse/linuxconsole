@@ -71,6 +71,7 @@ struct input_event {
 #define EVIOCGABS(abs)		_IOR('E', 0x40 + abs, int[5])		/* get abs value/limits */ 
 
 #define EVIOCSFF		_IOC(_IOC_WRITE, 'E', 0x80, sizeof(struct ff_effect))	/* send a force effect to a force feedback device */
+#define EVIOCRMFF		_IOW('E', 0x81, int)			/* Erase a force effect */
 
 /*
  * Event types
@@ -505,7 +506,12 @@ struct ff_constant_effect {
 
 /* FF_SPRING of FF_FRICTION */
 struct ff_interactive_effect {
-	__u16 axis;		/* Axis along which effect must be created */
+/* Axis along which effect must be created. If null, the field named direction
+ * is used
+ * It is a bit array (ie to enable axes X and Y, use BIT(FF_X) | BIT(FF_Y)
+ */
+	__u16 axis;
+	__u16 direction;
  
 	__s16 right_saturation; /* Max level when joystick is on the right */
 	__s16 left_saturation;  /* Max level when joystick in on the left */
@@ -537,7 +543,10 @@ struct ff_periodic_effect {
  */
 struct ff_effect {
 	__u16 type;
-	__u16 id;	/* Unique id of created effect */
+/* Following field denotes the unique id assigned to an effect.
+ * It is set by the driver.
+ */
+	__s16 id;
 
 	struct ff_trigger trigger;
 	struct ff_replay replay;
@@ -550,7 +559,7 @@ struct ff_effect {
 };
 
 /*
- * Force feedback axes
+ * Force feedback axes. Those are position in a bit array
  */
 #define FF_X		0x00
 #define FF_Y		0x01
@@ -647,7 +656,8 @@ struct input_dev {
 	int (*open)(struct input_dev *dev);
 	void (*close)(struct input_dev *dev);
 	int (*event)(struct input_dev *dev, unsigned int type, unsigned int code, int value);
-	void (*upload_effect)(struct input_dev *dev, struct ff_effect *effect);
+	int (*upload_effect)(struct input_dev *dev, struct ff_effect *effect);
+	int (*erase_effect)(struct input_dev *dev, int effect_id);
 
 	struct input_handle *handle;
 	struct input_dev *next;
