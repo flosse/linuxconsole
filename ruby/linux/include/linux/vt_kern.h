@@ -47,8 +47,8 @@
  *      Low-Level Functions
  */
 
-#define IS_FG (cons_num == fg_console)
-#define CON_IS_VISIBLE(vc) (vc->vc_num == fg_console)
+#define IS_FG (cons_num == vc->display_fg->fg_console->vc_num)
+#define CON_IS_VISIBLE(vc) (vc->vc_num == vc->display_fg->fg_console->vc_num)
 #define IS_VISIBLE CON_IS_VISIBLE(vc)
 
 #ifdef VT_BUF_VRAM_ONLY
@@ -59,7 +59,7 @@
 
 int softcursor_original;
 struct console_font_op; 
-extern int fg_console, kmsg_redirect;
+extern int kmsg_redirect;
 
 extern unsigned char color_table[];
 extern int default_red[];
@@ -245,10 +245,14 @@ struct vc_pool {
 
 extern struct vt_struct {
 	unsigned char	vc_mode;		/* KD_TEXT, ... */
+	struct vc_data  *fg_console;		/* VC being displayed */
         struct vc_data 	*last_console;     	/* VC we last switched from */
 	int scrollback_delta;			
 	char		vt_dont_switch;		/* VC switching flag */
 	char            vt_blanked;             /* Is this display blanked */
+	int blank_mode;	       /* 0:none 1:suspendV 2:suspendH 3:powerdown */
+	int blank_interval;			/* How long before blanking */
+	int off_interval;			
 	struct consw	*sw;			/* Display driver for VT */
 	struct vc_pool  vcs;			 
 } *vt_cons; 
@@ -290,7 +294,7 @@ int tioclinux(struct tty_struct *tty, unsigned long arg);
 struct unimapinit;
 struct unipair;
 
-void console_map_init(void);
+void console_map_init(struct vt_struct *vt);
 int con_set_trans_old(struct vc_data *vc, unsigned char * table);
 int con_get_trans_old(struct vc_data *vc, unsigned char * table);
 int con_set_trans_new(struct vc_data *vc, unsigned short * table);
