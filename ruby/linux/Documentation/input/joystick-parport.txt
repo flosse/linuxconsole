@@ -457,8 +457,8 @@ uses the following kernel/module command line:
 	  2  | NES pad
 	  4  | Multisystem 1-button joystick
 	  5  | Multisystem 2-button joystick
-	  6  | Sony PSX controller
-	  7  | N64 pad
+	  6  | N64 pad
+	  7  | Sony PSX controller
 
   The exact type of the PSX controller type is autoprobed, so you must have
 your controller plugged in before initializing.

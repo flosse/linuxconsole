@@ -227,7 +227,7 @@ void compute_shiftstate(void)
 			if (!test_bit(i + j, key_down))
 				continue;
 
-			sym = U(plain_map[i + j]);
+			sym = U(key_maps[0][i + j]);
 			if (KTYP(sym) != KT_SHIFT && KTYP(sym) != KT_SLOCK)
 				continue;
 			
@@ -800,7 +800,7 @@ DECLARE_TASKLET_DISABLED(keyboard_tasklet, kbd_bh, 0);
 
 #ifdef CONFIG_INPUT
 
-#if defined(CONFIG_X86) || defined(CONFIG_IA64) || defined(CONFIG_ALPHA) || defined(CONFIG_MIPS)
+#if defined(CONFIG_X86) || defined(CONFIG_IA64) || defined(CONFIG_ALPHA) || defined(CONFIG_MIPS) || defined(CONFIG_PPC)
 
 static int x86_sysrq_alt = 0;
 
@@ -821,9 +821,40 @@ static unsigned short x86_keycodes[256] =
 	308,310,313,314,315,317,318,319,320,321,322,323,324,325,326,330,
 	332,340,341,342,343,344,345,346,356,359,365,368,369,370,371,372 };
 
+#ifdef CONFIG_MAC_ADBKEYCODES
+extern int machid_keyboard_sends_linux_keycodes(void);
+static unsigned char mac_keycodes[256] =
+	{ 0, 53, 18, 19, 20, 21, 23, 22, 26, 28, 25, 29, 27, 24, 51, 48,
+	 12, 13, 14, 15, 17, 16, 32, 34, 31, 35, 33, 30, 36, 54,128,  1,
+	  2,  3,  5,  4, 38, 40, 37, 41, 39, 50, 56, 42,  6,  7,  8,  9,
+	 11, 45, 46, 43, 47, 44,123, 67, 58, 49, 57,122,120, 99,118, 96,
+	 97, 98,100,101,109, 71,107, 89, 91, 92, 78, 86, 87, 88, 69, 83,
+	 84, 85, 82, 65, 42,  0, 10,103,111,  0,  0,  0,  0,  0,  0,  0,
+	 76,125, 75,105,124,110,115, 62,116, 59, 60,119, 61,121,114,117,
+	  0,  0,  0,  0,127, 81,  0,113,  0,  0,  0,  0, 94, 55, 55,  0,
+	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+	  0,  0,  0,  0,  0,  0, 93,  0,  0,  0,  0,  0,  0,104,102,  0,
+	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0 };
+#endif
+
 static int emulate_raw(struct tty_struct *tty, unsigned int keycode, 
 		       unsigned char up_flag)
 {
+#ifdef CONFIG_MAC_ADBKEYCODES
+	if (!machid_keyboard_sends_linux_keycodes()) {
+		if (keycode > 127 || !mac_keycodes[keycode])
+			return -1;
+
+		put_queue((mac_keycodes[keycode] & 0x7f) | up_flag);
+
+		return 0;
+	}
+#endif
 	if (keycode > 255 || !x86_keycodes[keycode])
 		return -1; 
 
@@ -852,28 +883,6 @@ static int emulate_raw(struct tty_struct *tty, unsigned int keycode,
 	if (keycode == KEY_LEFTALT || keycode == KEY_RIGHTALT)
 		x86_sysrq_alt = !up_flag;
 
-	return 0;
-}
-
-#elif defined(CONFIG_ADB_KEYBOARD)
-
-static unsigned char mac_keycodes[128] =
-	{ 0, 53, 18, 19, 20, 21, 23, 22, 26, 28, 25, 29, 27, 24, 51, 48,
-	 12, 13, 14, 15, 17, 16, 32, 34, 31, 35, 33, 30, 36, 54,128,  1,
-	  2,  3,  5,  4, 38, 40, 37, 41, 39, 50, 56, 42,  6,  7,  8,  9,
-	 11, 45, 46, 43, 47, 44,123, 67, 58, 49, 57,122,120, 99,118, 96,
-	 97, 98,100,101,109, 71,107, 89, 91, 92, 78, 86, 87, 88, 69, 83,
-	 84, 85, 82, 65, 42,  0, 10,103,111,  0,  0,  0,  0,  0,  0,  0,
-	 76,125, 75,105,124,  0,115, 62,116, 59, 60,119, 61,121,114,117,
-	  0,  0,  0,  0,127, 81,  0,113,  0,  0,  0,  0,  0, 55, 55 };
-
-static int emulate_raw(struct tty_struct *tty,unsigned int code,
-           	       unsigned char up_flag)
-{
-	if (keycode > 127 || !mac_keycodes[keycode])
-		return -1;
-
-	put_queue(tty, (mac_keycodes[keycode] & 0x7f) | up_flag);
 	return 0;
 }
 
