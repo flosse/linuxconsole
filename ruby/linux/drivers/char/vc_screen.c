@@ -77,30 +77,23 @@ void vcs_scr_writew(struct vc_data *vc, u16 val, u16 *org)
         }
 }
 
-static int vcs_size(struct inode *inode)
+static loff_t vcs_lseek(struct file *file, loff_t offset, int orig)
 {
-	int currcons = MINOR(inode->i_rdev) & 127;
-	struct vc_data *vc = NULL;
-	int size;	
+	struct vc_data *vc = (struct vc_data *) file->private_data;
+	struct inode *inode = file->f_dentry->d_inode;
+	int size;
 
-	if (currcons == 0) {
+	if (!vc) {
+		/* Impossible ? */
+		if (!vt_cons->fg_console)
+			return -ENXIO;
 		vc = vt_cons->fg_console;
-	} else {
-		vc = find_vc(currcons--);
 	}
-	if (!vc)
-		return -ENXIO;
-
+	
 	size = vc->vc_rows * vc->vc_cols;
 
 	if (MINOR(inode->i_rdev) & 128)
-		size = 2*size + HEADER_SIZE;
-	return size;
-}
-
-static loff_t vcs_lseek(struct file *file, loff_t offset, int orig)
-{
-	int size = vcs_size(file->f_dentry->d_inode);
+                size = 2*size + HEADER_SIZE;
 
 	switch (orig) {
 		default:
@@ -151,7 +144,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
                 vc = vt_cons->fg_console;
 		viewed = 1;
         } else {
-                vc = find_vc(currcons--);
+                vc = (struct vc_data *) file->private_data;
 		viewed = 0;
         }
 
@@ -174,7 +167,10 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 		 * as copy_to_user at the end of this loop
 		 * could sleep.
 		 */
-		size = vcs_size(inode);
+		size = vc->vc_rows * vc->vc_cols;
+		if (MINOR(inode->i_rdev) & 128)
+	                size = 2*size + HEADER_SIZE;
+
 		if (pos >= size)
 			break;
 		if (count > size - pos)
@@ -321,7 +317,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
                 vc = vt_cons->fg_console;
 		viewed = 1;
         } else {
-                vc = find_vc(currcons--);
+                vc = (struct vc_data *) file->private_data;
 		viewed = 0;
 	} 
 	
@@ -329,7 +325,10 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	if (!vc)
 		goto unlock_out;
 
-	size = vcs_size(inode);
+	size = vc->vc_rows * vc->vc_cols;
+	if (MINOR(inode->i_rdev) & 128)
+                size = 2*size + HEADER_SIZE;
+
 	ret = -EINVAL;
 	if (pos < 0 || pos > size)
 		goto unlock_out;
@@ -364,11 +363,14 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 			}
 		}
 
-		/* The vcs_size might have changed while we slept to grab
+		/* The vcs size might have changed while we slept to grab
 		 * the user buffer, so recheck.
 		 * Return data written up to now on failure.
 		 */
-		size = vcs_size(inode);
+		size = vc->vc_rows * vc->vc_cols;
+		if (MINOR(inode->i_rdev) & 128)
+	                size = 2*size + HEADER_SIZE;
+
 		if (pos >= size)
 			break;
 		if (this_round > size - pos)
@@ -482,9 +484,15 @@ static int
 vcs_open(struct inode *inode, struct file *filp)
 {
 	unsigned int currcons = (MINOR(inode->i_rdev) & 127);
+	struct vc_data *vc;
 
-	if(currcons && !find_vc(currcons-1))
-		return -ENXIO;
+	if (currcons) {
+		vc = find_vc(currcons-1);
+		if (vc)
+			filp->private_data = vc;
+		else
+			return -ENXIO;
+	}	
 	return 0;
 }
 
@@ -503,15 +511,12 @@ void vcs_make_devfs (unsigned int index, int unregister)
     char name[8];
 
     sprintf (name, "a%u", index + 1);
-    if (unregister)
-    {
+    if (unregister) {
 	devfs_unregister ( devfs_find_handle (devfs_handle, name + 1, 0, 0, 0,
 					      DEVFS_SPECIAL_CHR, 0) );
 	devfs_unregister ( devfs_find_handle (devfs_handle, name, 0, 0, 0,
 					      DEVFS_SPECIAL_CHR, 0) );
-    }
-    else
-    {
+    } else {
 	devfs_register (devfs_handle, name + 1, DEVFS_FL_DEFAULT,
 			VCS_MAJOR, index + 1,
 			S_IFCHR | S_IRUSR | S_IWUSR, &vcs_fops, NULL);
