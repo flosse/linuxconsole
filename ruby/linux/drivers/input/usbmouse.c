@@ -1,7 +1,7 @@
 /*
- *  usbmouse.c  Version 0.1
+ * $Id$
  *
- *  Copyright (c) 1999 Vojtech Pavlik
+ *  Copyright (c) 1999-2000 Vojtech Pavlik
  *
  *  USB HIDBP Mouse support
  *

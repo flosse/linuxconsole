@@ -1,5 +1,5 @@
 /*
- *  wmforce.c  Version 0.1
+ * $Id$
  *
  *  Copyright (c) 2000 Vojtech Pavlik
  *

@@ -1,5 +1,5 @@
 /*
- *  wacom.c  Version 0.6
+ * $Id$
  *
  *  Copyright (c) 2000 Vojtech Pavlik		<vojtech@suse.cz>
  *  Copyright (c) 2000 Andreas Bach Aaen	<abach@stofanet.dk>
@@ -18,7 +18,7 @@
  *			relative mode, proximity.
  *	v0.5 (vp)  - Big cleanup, nifty features removed,
  * 			they belong in userspace
- *	v0.6 (vp)  - Submit URB only when operating
+ *	v1.1 (vp)  - Submit URB only when operating, moved to CVS
  */
 
 /*

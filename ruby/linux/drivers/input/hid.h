@@ -2,7 +2,7 @@
 #define __HID_H
 
 /*
- *  drivers/usb/hid.h  Version 0.8
+ * $Id$
  *
  *  Copyright (c) 1999 Andreas Gal
  *  Copyright (c) 2000 Vojtech Pavlik
