@@ -71,7 +71,7 @@ struct tsdev_list {
 	struct tsdev_list *next;
 	struct tsdev *tsdev;
 	int head, tail;
-	int oldx, oldy;
+	int oldx, oldy, pendown;
 	TS_EVENT event[TSDEV_BUFFER_SIZE];
 };
 
@@ -237,49 +237,65 @@ static void tsdev_event(struct input_handle *handle, unsigned int type, unsigned
 				switch (code) {
 					case ABS_X:	
 						size = handle->dev->absmax[ABS_X] - handle->dev->absmin[ABS_X];
-						list->event[list->head].x += (value * xres - list->oldx) / size;
-						list->oldx += list->event[list->head].x * size;
+						if(size > 0)
+							list->oldx = ((value - handle->dev->absmin[ABS_X]) * xres / size);
+						else
+							list->oldx = ((value - handle->dev->absmin[ABS_X]));
 						break;
 					case ABS_Y:
 						size = handle->dev->absmax[ABS_Y] - handle->dev->absmin[ABS_Y];
-						list->event[list->head].y -= (value * yres - list->oldy) / size;
-						list->oldy -= list->event[list->head].y * size;
+						if(size > 0)
+							list->oldy = ((value - handle->dev->absmin[ABS_Y]) * yres / size);
+						else
+							list->oldy = ((value - handle->dev->absmin[ABS_Y]));
 						break;
 					case ABS_PRESSURE:
-						size = handle->dev->absmax[ABS_PRESSURE] - handle->dev->absmin[ABS_PRESSURE];
-						list->event[list->head].pressure = (value / size);
+						list->pendown = ((value > handle->dev->absmin[ABS_PRESSURE])) ?
+							value - handle->dev->absmin[ABS_PRESSURE] : 0;
 						break;
 				}
 				break;
 
 			case EV_REL:
 				switch (code) {
-					case REL_X:	
-						list->event[list->head].x += value; 
+					case REL_X:
+						list->oldx += value;
+						if(list->oldx < 0)
+							list->oldx = 0;
+						else if(list->oldx > xres)
+							list->oldx = xres;
 						break;
-					case REL_Y:	
-						list->event[list->head].y -= value; 
+					case REL_Y:
+						list->oldy += value;
+						if(list->oldy < 0)
+							list->oldy = 0;
+						else if(list->oldy > xres)
+							list->oldy = xres;
 						break;
 				}
 				break;
 
 			case EV_KEY:
-				if (code == BTN_TOUCH) {
+				if (code == BTN_TOUCH || code == BTN_MOUSE) {
 					switch (value) {
-                                               	case 0: 
-							list->event[list->head].pressure = 0;
+						case 0:
+							list->pendown = 0;
 							break;
-                                               	case 1: 
+						case 1:
+							if(!list->pendown) list->pendown = 1;
 							break;
-		                                case 2: 
+						case 2: 
 							return;
-                                       	}
+					}
 				} else 
 					return;
 				break;
 		}
 		get_fast_time(&time);
 		list->event[list->head].millisecs = time.tv_usec/100;		
+		list->event[list->head].pressure = list->pendown;
+		list->event[list->head].x = list->oldx;
+		list->event[list->head].y = list->oldy;
 		list->head = (list->head + 1) & (TSDEV_BUFFER_SIZE - 1);
 		kill_fasync(&list->fasync, SIGIO, POLL_IN);
 		list = list->next;
@@ -294,11 +310,11 @@ static struct input_handle *tsdev_connect(struct input_handler *handler, struct 
 
 	for (minor = 0; minor < TSDEV_MINORS && tsdev_table[minor]; minor++);
         if (minor == TSDEV_MINORS) {
-                printk(KERN_ERR "tsdev: You have way to many touchscreens\n");
+                printk(KERN_ERR "tsdev: You have way too many touchscreens\n");
                 return NULL;
         }
 
-	if (!test_bit(EV_KEY, dev->evbit) || (!test_bit(BTN_TOUCH,dev->keybit)))
+	if (!test_bit(EV_KEY, dev->evbit) || ((!test_bit(BTN_TOUCH,dev->keybit)) && (!test_bit(BTN_MOUSE, dev->keybit))))
 		return NULL;
 
 	if ((!test_bit(EV_REL, dev->evbit) || !test_bit(REL_X, dev->relbit)) &&
@@ -351,7 +367,7 @@ static struct input_handler tsdev_handler = {
 static int __init tsdev_init(void)
 {
 	input_register_handler(&tsdev_handler);
-	printk(KERN_INFO "ts: Backwards compatiable touchscreen device\n");
+	printk(KERN_INFO "ts: Compaq touchscreen protocol output\n");
 	return 0;
 }
 
@@ -364,7 +380,7 @@ module_init(tsdev_init);
 module_exit(tsdev_exit);
 
 MODULE_AUTHOR("James Simmons <jsimmons@transvirtual.com>");
-MODULE_DESCRIPTION("Input driver to Touchscreen device driver");
+MODULE_DESCRIPTION("Input driver to touchscreen converter");
 MODULE_PARM(xres, "i");
 MODULE_PARM_DESC(xres, "Horizontal screen resolution");
 MODULE_PARM(yres, "i");
