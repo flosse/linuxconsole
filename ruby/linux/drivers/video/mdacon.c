@@ -607,7 +607,7 @@ int init_module(void)
 
 void cleanup_module(void)
 {
-	/* give_up_console(&mda_con); */
+	/* release_vt(&mda_vt); */
 }
 
 #endif
