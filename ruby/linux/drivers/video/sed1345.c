@@ -35,7 +35,7 @@
 #endif
 
 #ifndef VIDEORAM_SIZE
-  #define VIDEORAM_SIZE (FB_X_RES * FB_Y_RES * FB_BPP)
+  #define VIDEORAM_SIZE (FB_X_RES * FB_Y_RES * FB_BPP / 8)
 #endif
 
 static struct fb_info fb_info;
