@@ -686,47 +686,30 @@ static void vgacon_cursor(struct vc_data *vc, int mode)
     }
 }
 
-static int vgacon_scroll(struct vc_data *c, int t, int b, int dir, int lines)
+static int vgacon_scroll(struct vc_data *vc, int t, int b, int dir, int lines)
 {
-	unsigned long oldo;
-	unsigned int delta;
-	
-	if (t || b != c->vc_rows || vga_is_gfx)
-		return 0;
+        if (!lines)
+                return 0;
 
-	if (c->vc_origin != vga_origin)
-		vgacon_scrolldelta(c, 0);
+        if (lines > vc->vc_rows)   /* maximum realistic size */
+                lines = vc->vc_rows;
 
-	if (!vga_hardscroll_enabled || lines >= c->vc_rows/2)
-		return 0;
+        switch (dir) {
 
-	oldo = c->vc_origin;
-	delta = lines * c->vc_size_row;
-	if (dir == SM_UP) {
-		if (c->vc_scr_end + delta >= vga_vram_end) {
-			scr_memcpyw((u16 *)vga_vram_base,
-				    (u16 *)(oldo + delta),
-				    c->vc_screenbuf_size - delta);
-			c->vc_origin = vga_vram_base;
-			vga_rolled_over = oldo - vga_vram_base;
-		} else
-			c->vc_origin += delta;
-		scr_memsetw((u16 *)(c->vc_origin + c->vc_screenbuf_size - delta), c->vc_video_erase_char, delta);
-	} else {
-		if (oldo - delta < vga_vram_base) {
-			scr_memmovew((u16 *)(vga_vram_end - c->vc_screenbuf_size + delta),
-				     (u16 *)oldo,
-				     c->vc_screenbuf_size - delta);
-			c->vc_origin = vga_vram_end - c->vc_screenbuf_size;
-			vga_rolled_over = 0;
-		} else
-			c->vc_origin -= delta;
-		scr_memsetw((u16 *)(c->vc_origin), c->vc_video_erase_char, delta);
-	}
-	c->vc_scr_end = c->vc_origin + c->vc_screenbuf_size;
-	vga_origin = c->vc_origin;
-	vga_set_mem_top(c);
-	c->vc_pos = (c->vc_pos - oldo) + c->vc_origin;
+        case SM_UP:
+                scr_memmovew(VGA_ADDR(vc, 0,t), VGA_ADDR(vc, 0,t+lines),
+                                (b-t-lines)*vc->vc_cols*2);
+                scr_memsetw(VGA_ADDR(vc, 0,b-lines), vc->vc_video_erase_char,
+                                lines*vc->vc_cols*2);
+                break;
+
+        case SM_DOWN:
+                scr_memmovew(VGA_ADDR(vc, 0,t+lines), VGA_ADDR(vc, 0,t),
+                                (b-t-lines)*vc->vc_cols*2);
+                scr_memsetw(VGA_ADDR(vc, 0,t), vc->vc_video_erase_char, 
+			    lines*vc->vc_cols*2);
+                break;
+	}	
 	return 1;
 }
 
@@ -952,18 +935,18 @@ const struct consw vga_con = {
 	con_startup:		vgacon_startup,
 	con_init:		vgacon_init,
 	con_deinit:		vgacon_deinit,
-	con_clear:		DUMMY,
-	con_putc:		DUMMY,
-	con_putcs:		DUMMY,
+	con_clear:		vgacon_clear,
+	con_putc:		vgacon_putc,
+	con_putcs:		vgacon_putcs,
 	con_cursor:		vgacon_cursor,
 	con_scroll:		vgacon_scroll,
-	con_bmove:		DUMMY,
+	con_bmove:		vgacon_bmove,
 	con_switch:		vgacon_switch,
 	con_blank:		vgacon_blank,
 	con_font_op:		vgacon_font_op,
 	con_set_palette:	vgacon_set_palette,
 	con_resize:		vgacon_resize,
-	con_scrolldelta:	vgacon_scrolldelta,
+	con_scrolldelta:	DUMMY,
 	con_set_origin:		vgacon_set_origin,
 	con_save_screen:	vgacon_save_screen,
 	con_build_attr:		vgacon_build_attr,
