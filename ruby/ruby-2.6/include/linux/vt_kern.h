@@ -10,7 +10,7 @@
 #include <linux/vt.h>
 #include <linux/kbd_kern.h>
 
-#define MIN_NR_CONSOLES 1	/* must be at least 1 */
+#define MIN_NR_CONSOLES 2 	/* must be at least 2 */
 #define MAX_NR_CONSOLES 63	/* serial lines start at 64 */
 #define MAX_NR_USER_CONSOLES 16 /* number of VCs per VT */
 
@@ -210,6 +210,7 @@ struct consw {
 };
 
 struct vt_struct {
+        unsigned short vt_num;          /* VT id */
 	struct vc_data *fg_console;	/* VC being displayed */
 	struct vc_data *last_console;	/* VC we last switched from */
 	struct vc_data *want_vc;	/* VC we want to switch to */
@@ -242,6 +243,7 @@ struct vt_struct {
 	unsigned int vc_count;
 	struct vc_data *vc_cons[MAX_NR_USER_CONSOLES];	/* VT's VC pool */
 	struct vt_struct *next;
+        struct proc_dir_entry *procdir;
 };
 
 extern struct vt_struct *vt_cons;

@@ -111,7 +111,7 @@ int dumbcon_add(void)
         memset(vt, 0, sizeof(struct vt_struct));
         vt->vt_kmalloced = 1;
         vt->vt_sw = &dummy_con;
-        display_desc = vt_map_display(vt, 1, MAX_NR_USER_CONSOLES);
+        display_desc = vt_map_display(vt, 1, MIN_NR_CONSOLES);
         if (!display_desc) {
 		kfree(vt);
 	        return -ENODEV;

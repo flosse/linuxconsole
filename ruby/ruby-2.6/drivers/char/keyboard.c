@@ -1145,7 +1145,6 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 	 * beeper is independent we can share it with all VTs that don't 
 	 * have one.
 	 */
-        //if(strncmp(dev->phys,"isa0061",7))
 	if (i != BTN_MISC) {
                 while (vt) {
                         if (vt->next && !vt->next->keyboard) {
@@ -1159,15 +1158,19 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
                                        dev->name,
                                        vt->first_vc,
                                        vt->first_vc + vt->vc_count - 1);
+				if(test_bit(EV_SND, dev->evbit)) {
+					vt->beeper = handle;
+					vt_map_input(vt);
+				}
 				break;
                         }
                         vt = vt->next;
                 }
 		kbd_refresh_leds(handle);
 	}	
-	if (test_bit(EV_SND, dev->evbit)) { 
-		vt->beeper = handle;
-		vt_map_input(vt);
+	else if (test_bit(EV_SND, dev->evbit) && admin_vt && !admin_vt->beeper) {
+		admin_vt->beeper = handle;
+		vt_map_input(admin_vt);
 	}	
 	return handle;
 }

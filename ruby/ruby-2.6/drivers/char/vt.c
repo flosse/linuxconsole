@@ -128,9 +128,13 @@ extern int dumb_console_init(void);
 #if defined (CONFIG_PROM_CONSOLE)
 extern void prom_con_init(void);
 #endif
+#ifdef CONFIG_PROC_FS
+extern int vt_proc_init(void);
+#endif
 
 struct tty_driver *console_driver;	/* TTY driver for all VT consoles */
 static unsigned int current_vc;		/* Which /dev/vc/X to allocate next */
+static unsigned int current_vt;         /* Which VT to allocate next */
 struct vt_struct *admin_vt;		/* Administrative VT */
 struct vt_struct *vt_cons;		/* Head to link list of VTs */
 
@@ -835,7 +839,7 @@ void poke_blanked_console(struct vt_struct *vt)
  */
 static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
 {
-        struct vt_struct *vt = vt_cons; /*FIXME*/
+        struct vt_struct *vt = admin_vt; /*FIXME*/
 
         if (vt) {
                 switch (rqst)
@@ -998,6 +1002,11 @@ struct vc_data *vc_allocate(unsigned int currcons)
 		kmalloced = 1;
 		if (!*vc->vc_uni_pagedir_loc)
 			con_set_default_unimap(vc);
+		if (!vt->pm_con) {
+                        vt->pm_con = pm_register(PM_SYS_DEV,
+						 PM_SYS_VGA,
+						 pm_con_request);
+		}
 	} else {
 		screenbuf = (unsigned short *) alloc_bootmem(screenbuf_size);
 		if (!screenbuf) {
@@ -1010,11 +1019,6 @@ struct vc_data *vc_allocate(unsigned int currcons)
 	if ((vt->first_vc + 1) == currcons)
 		vt->want_vc = vt->fg_console = vt->last_console = vc;
 	vc_init(vc, 1);
-/*         if (!vt->pm_con) { */
-/*                 vt->pm_con = pm_register(PM_SYS_DEV, */
-/* 					 PM_SYS_VGA, */
-/* 					 pm_con_request); */
-/*         } */
 	return vc;
 }
 
@@ -1737,6 +1741,7 @@ const char *vt_map_display(struct vt_struct *vt, int init, int vc_count)
 
 	/* Now to setup VT */
 	init_MUTEX(&vt->lock);
+	vt->vt_num = current_vt;
 	vt->first_vc = current_vc;
 	vt->vc_count = vc_count;
 	vt->next = vt_cons;
@@ -1767,6 +1772,7 @@ const char *vt_map_display(struct vt_struct *vt, int init, int vc_count)
 	vte_ed(vt->fg_console, 0);
 	update_screen(vt->fg_console);
 	current_vc += vc_count;
+	current_vt += 1;
 	return display_desc;
 }
 
@@ -1846,6 +1852,9 @@ int __init vty_init(void)
 	kbd_init();
 	console_map_init();
 	vcs_init();
+#ifdef CONFIG_PROC_FS
+        vt_proc_init();
+#endif
 	return 0;
 }
 
