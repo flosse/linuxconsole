@@ -324,7 +324,7 @@ struct hid_device {							/* device report descriptor */
 	char buffer[HID_BUFFER_SIZE];					/* Rx buffer */
 
 	struct urb urbctrl;						/* Control URB */
-	devrequest dr;							/* Control devrquest struct */
+	struct usb_ctrlrequest dr;							/* Control devrquest struct */
 	struct hid_control_fifo ctrl[HID_CONTROL_FIFO_SIZE];		/* Control fifo */
 	unsigned char ctrlhead, ctrltail;				/* Control fifo head & tail */
 	char ctrlbuf[HID_BUFFER_SIZE];					/* Control buffer */
