@@ -60,10 +60,6 @@ MODULE_DESCRIPTION("USB/RS232 I-Force joysticks and wheels driver");
 #if defined(CONFIG_INPUT_IFORCE_USB) || defined(CONFIG_INPUT_IFORCE_USB_MODULE)
 #define IFORCE_USB
 #endif
-#ifdef CONFIG_INPUT_IFORCE_FF
-#define IFORCE_FF
-#endif
-
 
 #define FF_EFFECTS_MAX	32
 
@@ -119,13 +115,12 @@ struct iforce {
         struct urb irq, out;
 	wait_queue_head_t wait;
 #endif
-#ifdef IFORCE_FF			/* I-Force Feedback */
+					/* Force Feedback */
 	struct semaphore wait_init_done;
 	unsigned long init_done;
 	struct resource device_memory;  
 	int n_effects_max;
 	struct iforce_core_effect core_effects[FF_EFFECTS_MAX];
-#endif
 };
 
 static struct {
@@ -143,7 +138,13 @@ static char *iforce_name = "I-Force joystick/wheel";
 /* Encode a time value */
 #define TIME_SCALE(a)	((a) == 0xffff ? 0xffff : (a) * 1000 / 256)
  
-#ifdef IFORCE_FF
+static void dump_packet(char *msg, u16 cmd, unsigned char *data)
+{
+	printk(KERN_DEBUG "iforce.c: %s ( cmd = %04x, data = ", msg, cmd);
+			for (i = 0; i < LO(cmd); i++)
+				printk("%02x ", data[i]);
+			printk(")\n");
+}
 
 /*
  * Send a packet of bytes to the device
@@ -152,16 +153,14 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 {
 	int i;
 
-	printk(KERN_DEBUG "iforce.c: send_packet( cmd = %04x, data = ", cmd);
-	for (i = 0; i < LO(cmd); i++) printk("%02x ", data[i]);
-	printk(")\n");
+	dump_packet("send", cmd, data);
 
 	switch (iforce->dev.idbus) {
 
 #ifdef IFORCE_232
 		case BUS_RS232: {
 
-			unsigned char i;
+			int i;
 			unsigned char csum = 0x2b ^ HI(cmd) ^ LO(cmd);
 		 
 			serio_write(iforce->serio, 0x2b);
@@ -285,7 +284,7 @@ static int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned
 	if (type != EV_FF)
 		return -1;
 
-	printk(KERN_DEBUG "iforce ff: input_event(type = %d, code = %d, value = %d)\n", type, code, value);
+	printk(KERN_DEBUG "iforce.c: input_event(type = %d, code = %d, value = %d)\n", type, code, value);
 
         data[0] = LO(code);
         data[1] = (value > 0) ? ((value > 1) ? 0x41 : 0x01) : 0;
@@ -526,7 +525,7 @@ static int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effec
 	struct resource* mod2_chunk = &(iforce->core_effects[core_id].mod2_chunk);
 	int err = 0;
 
-	printk(KERN_DEBUG "iforce ff: make constant effect\n");
+	printk(KERN_DEBUG "iforce.c: make constant effect\n");
  
 	err = make_magnitude_modifier(iforce, mod1_chunk, effect->u.constant.level);
 	if (err) return err;
@@ -566,7 +565,7 @@ static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* ef
 	u16 mod1, mod2, direction;
 	int err = 0;
 
-	printk(KERN_DEBUG "iforce ff: make interactive effect\n");
+	printk(KERN_DEBUG "iforce.c: make interactive effect\n");
 
 	switch (effect->type) {
 		case FF_SPRING:      type = 0x40; break;
@@ -637,7 +636,7 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 	struct iforce* iforce = (struct iforce*)(dev->private);
 	int err = 0;
 
-	printk(KERN_DEBUG "iforce ff: upload effect\n");
+	printk(KERN_DEBUG "iforce.c: upload effect\n");
 
 	/* 
 	 * Get a free id
@@ -680,7 +679,7 @@ static int iforce_erase_effect(struct input_dev *dev, int effect_id)
 	int err = 0;
 	struct iforce_core_effect* core_effect;
 
-	printk(KERN_DEBUG "iforce ff: erase effect %d\n", effect_id);
+	printk(KERN_DEBUG "iforce.c: erase effect %d\n", effect_id);
 
 	if (effect_id < 0 || effect_id >= FF_EFFECTS_MAX) {
 		return -EINVAL;
@@ -699,7 +698,6 @@ static int iforce_erase_effect(struct input_dev *dev, int effect_id)
 
 	return err;
 }
-#endif /* IFORCE_FF */
 
 static void iforce_process_packet(struct input_dev *dev, u16 cmd, unsigned char *data, struct iforce *iforce)
 {
@@ -707,8 +705,8 @@ static void iforce_process_packet(struct input_dev *dev, u16 cmd, unsigned char 
 
 	switch (HI(cmd)) {
 
-		case 1:	/* joystick position data */
-		case 3: /* wheel position data */
+		case 0x01:	/* joystick position data */
+		case 0x03:	/* wheel position data */
 
 			/* Check if we are in the init phase */
 			if (!(iforce->init_done & FF_INIT_DEV_TYPE)) {
@@ -755,7 +753,7 @@ static void iforce_process_packet(struct input_dev *dev, u16 cmd, unsigned char 
 			break;
 
 
-		case 2: /* status report */
+		case 0x02:	/* status report */
 		/*
 		Offset Size Meaning
 		  0      1  Device Status Flags:
@@ -787,44 +785,43 @@ static void iforce_process_packet(struct input_dev *dev, u16 cmd, unsigned char 
 			}
 			break;
 
-#ifdef IFORCE_FF
 		case 0xff:
-			/* Size of ram dedicated to effect parameters */
-			if ((iforce->init_done & FF_INIT_RAMSIZE) == 0 && data[0] == 0x42) {
-				int ramsize = (data[2] << 8) | data[1];
 
-				printk(KERN_INFO "iforce.c: device has %d bytes of RAM\n", ramsize);
+			switch (data[0]) {
 
-				iforce->device_memory.end = ramsize;
+				case 0x42: 	/* Effect memory size */
 
-				iforce->init_done |= FF_INIT_RAMSIZE;
+					if ((iforce->init_done & FF_INIT_RAMSIZE))
+						break;
+					iforce->device_memory.end = (data[2] << 8) | data[1];
+					printk(KERN_INFO "iforce.c: device has %d bytes of RAM\n", iforce->device_memory.end);
+					iforce->init_done |= FF_INIT_RAMSIZE;
+					if (iforce->init_done == FF_INIT_ALL_MASK)
+						up(&iforce->wait_init_done);
+					break;
 
-				if (iforce->init_done == FF_INIT_ALL_MASK)
-					up(&iforce->wait_init_done);
-			}
-			break;
-#endif
+				default:
 
 		default:
-			printk(KERN_DEBUG "iforce.c: process_packet( cmd = %04x, data = ", cmd);
-			for (i = 0; i < LO(cmd); i++)
-				printk("%02x ", data[i]);
-			printk(")\n");
-	}
+			}
 }
 
-#ifdef IFORCE_USB
 
 static int iforce_open(struct input_dev *dev)
 {
 	struct iforce *iforce = dev->private;
 
-	if (dev->idbus == BUS_USB && !iforce->open++) {
-		iforce->irq.dev = iforce->usbdev;
-		if (usb_submit_urb(&iforce->irq))
-			return -EIO;
+	switch (dev->idbus) {
+#ifdef IFORCE_USB
+		case BUS_USB:
+			if (iforce->open++)
+				break;
+			iforce->irq.dev = iforce->usbdev;
+			if (usb_submit_urb(&iforce->irq))
+					return -EIO;
+			break;
+#endif
 	}
-
 	return 0;
 }
 
@@ -832,11 +829,15 @@ static void iforce_close(struct input_dev *dev)
 {
 	struct iforce *iforce = dev->private;
 
-	if (dev->idbus == BUS_USB && !--iforce->open)
-		usb_unlink_urb(&iforce->irq);
-}
-
+	switch (dev->idbus) {
+#ifdef IFORCE_USB
+		case BUS_USB:
+			if (!--iforce->open)
+				usb_unlink_urb(&iforce->irq);
+			break;
 #endif
+	}
+}
 
 static void iforce_input_setup(struct iforce *iforce)
 {
@@ -849,9 +850,7 @@ static void iforce_input_setup(struct iforce *iforce)
 	iforce->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y) | BIT(ABS_THROTTLE) | BIT(ABS_HAT0X) | BIT(ABS_HAT0Y)
 				| BIT(ABS_WHEEL) | BIT(ABS_GAS) | BIT(ABS_BRAKE);
 
-#ifdef IFORCE_FF
 	iforce->dev.evbit[0] |= BIT(EV_FF);
-#endif
 
 	for (i = ABS_X; i <= ABS_Y; i++) {
 		iforce->dev.absmax[i] =  1920;
@@ -871,30 +870,21 @@ static void iforce_input_setup(struct iforce *iforce)
 	}
 
 	iforce->dev.private = iforce;
-
-#ifdef IFORCE_USB
 	iforce->dev.open = iforce_open;
 	iforce->dev.close = iforce_close;
-#endif
-
-#ifdef IFORCE_FF
-	printk(KERN_DEBUG "iforce ff: iforce_input_setup start of ff init\n");
 	iforce->dev.event = iforce_input_event;
-
 	iforce->dev.upload_effect = iforce_upload_effect;
 	iforce->dev.erase_effect = iforce_erase_effect;
-	printk(KERN_DEBUG "iforce ff: iforce functions registered \n");
 
-	/* memory avalaible on the device */
 	iforce->device_memory.name = "I-Force device effect memory";
 	iforce->device_memory.start = 0;
-	/* iforce->device_memory.end = set by process_packet */
+	iforce->device_memory.end = 0;
 	iforce->device_memory.flags = IORESOURCE_MEM;
 	iforce->device_memory.parent = NULL;
 	iforce->device_memory.child = NULL;
 	iforce->device_memory.sibling = NULL;
-	printk(KERN_DEBUG "iforce ff: memory detected \n");
-#endif
+
+	printk(KERN_DEBUG "iforce.c: device detection finished \n");
 
 	input_register_device(&iforce->dev);
 }
