@@ -708,9 +708,9 @@ const char *create_vt(struct vt_struct *vt, int init)
         vt->blank_interval = 10*60*HZ;
         vt->off_interval = 0;
 	init_MUTEX(&vt->lock);
-	vt->default_mode->display_fg = vt;
-	visual_init(vt->default_mode);
-	vt->vcs.vc_cons[0] = vt->default_mode;
+	vt->vcs.vc_cons[0]->display_fg = vt;
+	visual_init(vt->vcs.vc_cons[0]);
+	vt->default_mode = vt->vcs.vc_cons[0];
 	vt->vcs.first_vc = vt->vcs.vc_cons[0]->vc_num = current_vc;
 	vt->fg_console = vt->last_console = vt->vcs.vc_cons[0];
 	vt->vcs.next = NULL;
@@ -822,7 +822,6 @@ int vc_allocate(unsigned int currcons)
             vc_init(vc, 1);
 	
 	    pool->vc_cons[currcons - pool->first_vc] = vc;		
-	 	
             if (!vt->pm_con) { 
             	vt->pm_con = pm_register(PM_SYS_DEV,PM_SYS_VGA,pm_con_request);	
 		if (vt->pm_con)
@@ -1572,7 +1571,7 @@ void __init vt_console_init(void)
 	vt->vt_sw = &dummy_con;
 #endif
 	vc = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
-	vt->default_mode = vc;
+	vt->vcs.vc_cons[0] = vc;
 	display_desc = create_vt(vt, 1);
 	if (!display_desc) { 
 		free_bootmem((unsigned long) vt, sizeof(struct vt_struct));
