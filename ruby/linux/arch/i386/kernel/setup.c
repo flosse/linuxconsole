@@ -835,14 +835,6 @@ void __init setup_arch(char **cmdline_p)
 	/* request I/O space for devices used on all i[345]86 PCs */
 	for (i = 0; i < STANDARD_IO_RESOURCES; i++)
 		request_resource(&ioport_resource, standard_io_resources+i);
-
-#ifdef CONFIG_VT
-#if defined(CONFIG_VGA_CONSOLE)
-	conswitchp = &vga_con;
-#elif defined(CONFIG_DUMMY_CONSOLE)
-	conswitchp = &dummy_con;
-#endif
-#endif
 }
 
 static int __init get_model_name(struct cpuinfo_x86 *c)
