@@ -323,7 +323,7 @@ static int joydev_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 	struct joydev_list *list = file->private_data;
 	struct joydev *joydev = list->joydev;
 	struct input_dev *dev = joydev->handle.dev;
-
+	int i;
 
 	switch (cmd) {
 
@@ -360,7 +360,7 @@ static int joydev_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 		case JSIOCGCORR:
 			return copy_to_user((struct js_corr *) arg, joydev->corr,
 						sizeof(struct js_corr) * joydev->nabs) ? -EFAULT : 0;
-		case JSIOCSGAXMAP:
+		case JSIOCSAXMAP:
 			if (copy_from_user((__u8 *) arg, joydev->abspam, sizeof(__u8) * ABS_MAX))
 				return -EFAULT;
 			for (i = 0; i < ABS_MAX; i++) {
@@ -371,7 +371,7 @@ static int joydev_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 		case JSIOCGAXMAP:
 			return copy_to_user((__u8 *) arg, joydev->abspam,
 						sizeof(__u8) * ABS_MAX) ? -EFAULT : 0;
-		case JSIOCGBTNMAP:
+		case JSIOCSBTNMAP:
 			if (copy_from_user((__u16 *) arg, joydev->absmap, sizeof(__u16) * (KEY_MAX - BTN_MISC)))
 				return -EFAULT;
 			for (i = 0; i < KEY_MAX - BTN_MISC; i++); {
