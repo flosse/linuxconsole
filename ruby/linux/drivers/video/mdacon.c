@@ -600,6 +600,7 @@ int __init mda_console_init(void)
 }
 
 #ifdef MODULE
+
 void __exit mda_module_exit(void)
 {
 	/* release_vt(&mda_vt); */
