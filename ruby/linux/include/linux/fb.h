@@ -450,7 +450,7 @@ extern int num_registered_fb;
 extern struct fb_info *registered_fb[FB_MAX];
 
 #ifdef CONFIG_MTRR
-extern void fb_disable_mtrrs(void);
+extern void fb_disable_mtrrs(struct fb_info *fb_info);
 #endif
 
 /* drivers/video/fbmon.c */
