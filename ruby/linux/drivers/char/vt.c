@@ -121,7 +121,7 @@ void add_softcursor(struct vc_data *vc)
 		i ^= 0x7000;
         if ((type & 0x40) && ((i & 0x700) == ((i & 0x7000) >> 4))) i ^= 0x0700;
         scr_writew(i, (u16 *) pos);
-        if (IS_VISIBLE && sw->con_putc)
+        if (IS_VISIBLE)
                 sw->con_putc(vc, i, y, x);
 }
 
@@ -144,7 +144,8 @@ void hide_cursor(struct vc_data *vc)
 			sw->con_putc(vc, softcursor_original, y, x);
                 softcursor_original = -1;
         }
-	sw->con_cursor(vc, CM_ERASE);
+	if (sw->con_cursor)
+		sw->con_cursor(vc, CM_ERASE);
 	spin_unlock_irqrestore(&vc->display_fg->vt_lock, flags);
 }
 
@@ -302,8 +303,7 @@ void scroll_region_up(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
         scr_memcpyw(d, s, (b-t-nr) * video_size_row);
         scr_memsetw(d + (b-t-nr) * video_num_columns, video_erase_char, video_size_row*nr);
 	if (IS_VISIBLE)
-		do_update_region(vc, origin, screensize);
-//		sw->con_scroll_region(vc, t, b, SM_UP, nr);
+		sw->con_scroll_region(vc, t, b, SM_UP, nr);
 }
 
 void scroll_region_down(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
@@ -320,8 +320,7 @@ void scroll_region_down(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
         scr_memmovew(s + step, s, (b-t-nr)*video_size_row);
         scr_memsetw(s, video_erase_char, 2*step);
 	if (IS_VISIBLE)
-		do_update_region(vc, origin, screensize);
-//		sw->con_scroll_region(vc, t, b, SM_DOWN, nr);
+		sw->con_scroll_region(vc, t, b, SM_DOWN, nr);
 }
 
 /*
@@ -1566,7 +1565,7 @@ void __init vt_console_init(void)
         vt->vc_cons[0] = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
 #if defined(CONFIG_VGA_CONSOLE)
 	vt->vt_sw = &vga_con;
-#elif defined(CONFIG_DUMMY_CONSOLE)
+#else
 	vt->vt_sw = &dummy_con;
 #endif
 	vt->kmalloced = 0;
