@@ -2,7 +2,7 @@
  *  linux/drivers/char/vt_ioctl.c
  *
  *  Copyright (C) 1992 obz under the linux copyright
- *  		  2002 James Simmons <jsimmons@users.sf.net>
+ *  		  2004 James Simmons <jsimmons@users.sf.net>
  *
  *  Dynamic diacritical handling - aeb@cwi.nl - Dec 1993
  *  Dynamic keymap and string allocation - aeb@cwi.nl - May 1994
@@ -33,7 +33,7 @@
 #include <linux/font.h>
 
 #define VT_IS_IN_USE(vc)(vc->vc_tty && vc->vc_tty->count)
-#define VT_BUSY(vc)	(VT_IS_IN_USE(vc) || IS_VISIBLE || vc->vc_num == sel_cons)
+#define VT_BUSY(vc)	(VT_IS_IN_USE(vc) || IS_VISIBLE || vc == sel_cons)
 
 /*
  * Console (vt and kd) routines, as defined by USL SVR4 manual, and by
@@ -47,11 +47,6 @@
  * /dev/tty0 (fg_console) as a target is legal, since an implicit aliasing
  * to the current console is done by the main ioctl code.
  */
-
-/* Keyboard type: Default is KB_101, but can be set by machine
- * specific code.
- */
-unsigned char keyboard_type = KB_101;
 
 #ifdef CONFIG_X86
 #include <linux/syscalls.h>
@@ -105,7 +100,6 @@ int vt_waitactive(struct vc_data *vc)
 static inline int
 do_kdsk_ioctl(struct vc_data *vc, int cmd, struct kbentry __user *user_kbe, int perm)
 {
-	struct kbd_struct *kbd = &vc->kbd_table;
 	ushort *key_map, val, ov;
 	struct kbentry tmp;
 
@@ -117,7 +111,7 @@ do_kdsk_ioctl(struct vc_data *vc, int cmd, struct kbentry __user *user_kbe, int 
 		key_map = key_maps[s];
 		if (key_map) {
 			val = U(key_map[i]);
-			if (kbd->kbdmode != VC_UNICODE && KTYP(val) >= NR_TYPES)
+			if (vc->kbd_table.kbdmode != VC_UNICODE && KTYP(val) >= NR_TYPES)
 				val = K_HOLE;
 		} else
 			val = (i ? K_HOLE : K_NOSUCHMAP);
@@ -141,7 +135,7 @@ do_kdsk_ioctl(struct vc_data *vc, int cmd, struct kbentry __user *user_kbe, int 
 		if (KTYP(v) < NR_TYPES) {
 			if (KVAL(v) > max_vals[KTYP(v)])
 				return -EINVAL;
-		} else if (kbd->kbdmode != VC_UNICODE)
+		} else if (vc->kbd_table.kbdmode != VC_UNICODE)
 			return -EINVAL;
 
 		/* ++Geert: non-PC keyboards may generate keycode zero */
@@ -215,8 +209,8 @@ do_kdgkb_ioctl(int cmd, struct kbsentry __user *user_kdgkb, int perm)
 	char *first_free, *fj, *fnw, *p;
 	int i, j, k, delta, sz, ret;
 	struct kbsentry *kbs;
-	u_char *q;
 	u_char __user *up;
+	u_char *q;
 
 	kbs = kmalloc(sizeof(*kbs), GFP_KERNEL);
 	if (!kbs) {
@@ -332,8 +326,7 @@ reterr:
 int con_font_get(struct vc_data *vc, struct console_font_op *op)
 {
 	struct console_font font;
-	int rc = -EINVAL;
-	int c;
+	int c, rc = -EINVAL;
 
 	if (vc->vc_mode != KD_TEXT)
 		return -EINVAL;
@@ -371,6 +364,10 @@ int con_font_get(struct vc_data *vc, struct console_font_op *op)
 	}
 	if (rc)
 		goto out;
+
+	op->height = font.height;
+	op->width = font.width;
+	op->charcount = font.charcount;
 
 	if (op->data && copy_to_user(op->data, font.data, c))
 		rc = -EFAULT;
@@ -546,21 +543,21 @@ static inline int
 do_unimap_ioctl(struct vc_data *vc, int cmd, struct unimapdesc __user *user_ud, int perm)
 {
 	struct unimapdesc tmp;
-	int i = 0; 
 
 	if (copy_from_user(&tmp, user_ud, sizeof tmp))
 		return -EFAULT;
-	if (tmp.entries) {
-		i = verify_area(VERIFY_WRITE, tmp.entries, 
-				tmp.entry_ct*sizeof(struct unipair));
-		if (i) return i;
-	}
+	if (tmp.entries)
+		if (!access_ok(VERIFY_WRITE, tmp.entries, 
+				tmp.entry_ct*sizeof(struct unipair)))
+			return -EFAULT;
 	switch (cmd) {
 	case PIO_UNIMAP:
 		if (!perm)
 			return -EPERM;
 		return con_set_unimap(vc, tmp.entry_ct, tmp.entries);
 	case GIO_UNIMAP:
+		if (!perm && !IS_VISIBLE)
+			return -EPERM;
 		return con_get_unimap(vc, tmp.entry_ct, &(user_ud->entry_ct), tmp.entries);
 	}
 	return 0;
@@ -575,6 +572,8 @@ int con_set_cmap(struct vc_data *vc, unsigned char __user *arg)
 	int red[16], green[16], blue[16];
 	int i, j, k;
 
+	WARN_CONSOLE_UNLOCKED();
+	
 	for (i = 0; i < 16; i++) {
 		get_user(red[i], arg++);
 		get_user(green[i], arg++);
@@ -615,8 +614,7 @@ inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
         hide_cursor(old_vc);
         if (old_vc != new_vc) {
 		int update;
-		int old_was_color = old_vc->vc_can_do_color;
-		
+
                 new_vc->display_fg->fg_console = new_vc;
                 save_screen(old_vc);
                 set_origin(old_vc);
@@ -624,16 +622,6 @@ inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
                 set_origin(new_vc);
                 update = new_vc->display_fg->vt_sw->con_switch(new_vc);
                 set_palette(new_vc);
-		/*
-		 * If console changed from mono<->color, the best we can do
-		 * is to clear the buffer attributes. As it currently stands,
-		 * rebuilding new attributes from the old buffer is not doable
-		 * without overly complex code.
-		 */
-		if (old_was_color != new_vc->vc_can_do_color) {
-			update_attr(new_vc);
-			clear_buffer_attributes(new_vc);
-		}
 		if (update && new_vc->vc_mode != KD_GRAPHICS)
                         do_update_region(new_vc, new_vc->vc_origin, 
 					 new_vc->vc_screenbuf_size/2);
@@ -735,10 +723,12 @@ void complete_change_console(struct vc_data *new_vc, struct vc_data *old_vc)
 	 * controlling process is gone and we've called reset_vc.
 	 */
 	if (old_vc_mode != new_vc->vc_mode) {
+		acquire_console_sem();
 		if (new_vc->vc_mode == KD_TEXT)
 			unblank_vt(new_vc->display_fg);
 		else
 			do_blank_screen(new_vc->display_fg, 1);
+		release_console_sem();
 	}
 
 	/*
@@ -789,9 +779,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	     unsigned int cmd, unsigned long arg)
 {
 	struct vc_data *vc = (struct vc_data *)tty->driver_data;
+	void __user *up = (void __user *)arg;
 	struct console_font_op op;	/* used in multiple places */
 	unsigned char ucval;
-	void __user *up = (void __user *)arg;
 	int i, perm;
 
 	if (!vc)	/* impossible? */
@@ -836,16 +826,16 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		/*
 		 * this is naive.
 		 */
-		ucval = keyboard_type;
+		ucval = KB_101;
 		goto setchar;
 
-#if !defined(__alpha__) && !defined(__ia64__) && !defined(__mips__) && !defined(__arm__) && !defined(__sh__)
 		/*
 		 * These cannot be implemented on any machine that implements
 		 * ioperm() in user level (such as Alpha PCs) or not at all.
 		 *
-		 * XXX: you should never use them, just call ioperm directly..
+		 * XXX: you should never use these, just call ioperm directly..
 		 */
+#ifdef CONFIG_X86
 	case KDADDIO:
 	case KDDELIO:
 		/*
@@ -999,7 +989,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 
 	case KDGKBDIACR:
 	{
-		struct kbdiacrs *a = up;
+		struct kbdiacrs __user *a = up;
 
 		if (put_user(accent_table_size, &a->kb_cnt))
 			return -EFAULT;
@@ -1097,14 +1087,11 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	case VT_GETMODE:
 	{
 		struct vt_mode tmp;
-		int rc;
 
 		acquire_console_sem();
-		memcpy(&tmp, &(vc->vt_mode), sizeof(struct vt_mode));
+		memcpy(&tmp, &vc->vt_mode, sizeof(struct vt_mode));
 		release_console_sem();
-
-		rc = copy_to_user(up, &tmp, sizeof(struct vt_mode));
-		return rc ? -EFAULT : 0;
+		return copy_to_user(up, &tmp, sizeof(struct vt_mode)) ? -EFAULT : 0;
 	}
 
 	/*
@@ -1114,7 +1101,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	 */
 	case VT_GETSTATE:
 	{
-		struct vt_stat *vtstat = up;
+		struct vt_stat __user *vtstat = up;
 		unsigned short mask, state = 0;
 		struct vc_data *tmp;
 
@@ -1301,12 +1288,12 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 
 	case VT_RESIZEX:
 	{
-		struct vt_consize *vtconsize = up;
+		struct vt_consize __user *vtconsize = up;
 		ushort ll,cc,vlin,clin,vcol,ccol;
 
 		if (!perm)
 			return -EPERM;
-		if (verify_area(VERIFY_READ, vtconsize,
+		if (!access_ok(VERIFY_READ, vtconsize,
 				sizeof(struct vt_consize)))
 			return -EFAULT;
 		__get_user(ll, &vtconsize->v_rows);
