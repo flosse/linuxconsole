@@ -639,8 +639,7 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 			if (!test_bit(FF_CORE_IS_USED, iforce->core_effects[id].flags)) break;
 		}
 		if ( id == FF_EFFECTS_MAX || id >= iforce->n_effects_max ) {
-			err = -ENOMEM;
-			goto leave;
+			return -ENOMEM;
 		}
 		effect->id = id;
 		set_bit(FF_CORE_IS_USED, iforce->core_effects[id].flags);
@@ -648,20 +647,19 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 	
 	switch (effect->type) {
 	case FF_PERIODIC:
-		iforce_upload_periodic(iforce, effect);
+		err = iforce_upload_periodic(iforce, effect);
 		break;
 
 	case FF_CONSTANT:
-		iforce_upload_constant(iforce, effect);
+		err = iforce_upload_constant(iforce, effect);
 		break;
 
 	case FF_SPRING:
 	case FF_FRICTION:
-		iforce_upload_interactive(iforce, effect);
+		err = iforce_upload_interactive(iforce, effect);
 		break;
 	};
 
-leave:
 	return err;
 }
 
@@ -761,11 +759,11 @@ static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char 
 
 				case 0x42: 	/* Effect memory size */
 
-					if ((iforce->init_done & FF_INIT_RAMSIZE))
-						break;
-					iforce->device_memory.end = (data[2] << 8) | data[1];
-					iforce->init_done |= FF_INIT_RAMSIZE;
-					iforce_wake(iforce);
+					if (~iforce->init_done & FF_INIT_RAMSIZE) {
+						iforce->device_memory.end = (data[2] << 8) | data[1];
+						iforce->init_done |= FF_INIT_RAMSIZE;
+						iforce_wake(iforce);
+					}
 					break;
 
 				default:
@@ -826,7 +824,6 @@ static void iforce_init_device(struct iforce *iforce)
 
 	iforce->device_memory.name = "I-Force device effect memory";
 	iforce->device_memory.start = 0;
-	iforce->device_memory.end = 0;
 	iforce->device_memory.flags = IORESOURCE_MEM;
 	iforce->device_memory.parent = NULL;
 	iforce->device_memory.child = NULL;
