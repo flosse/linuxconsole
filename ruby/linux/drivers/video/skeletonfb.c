@@ -230,9 +230,7 @@ void xxxfb_copyarea(struct fb_info *p, int sx, int sy, unsigned int width,
 {
 }
 
-void xxxfb_imageblit(struct fb_info *p, unsigned int width,
-                     unsigned int height, unsigned long *image,
-                     int image_depth, int dx, int dy)
+void xxxfb_imageblit(struct fb_info *p, struct fb_image *image) 
 {
 }
 
