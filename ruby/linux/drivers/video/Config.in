@@ -14,6 +14,7 @@ if [ "$CONFIG_FB" = "y" ]; then
    mainmenu_option next_comment
    comment 'Frame-buffer support'
 
+   define_bool CONFIG_DUMMY_CONSOLE y
    if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
       if [ "$CONFIG_PCI" = "y" ]; then
          tristate '  nVidia Riva support (EXPERIMENTAL)' CONFIG_FB_RIVA
@@ -220,7 +221,6 @@ comment 'Console drivers'
    if [ "$CONFIG_FB" = "y" ]; then
       bool 'Support for frame buffer console' CONFIG_FRAMEBUFFER_CONSOLE
       if [ "$CONFIG_FRAMEBUFFER_CONSOLE" = "y" ]; then
-         define_bool CONFIG_DUMMY_CONSOLE y
          define_bool CONFIG_PCI_CONSOLE y
          bool '  Select compiled-in fonts' CONFIG_FBCON_FONTS
          if [ "$CONFIG_FBCON_FONTS" = "y" ]; then
