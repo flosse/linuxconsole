@@ -496,7 +496,7 @@ static int con_unify_unimap(struct vc_data *vc, struct uni_pagedir *p)
 	int i, j, k;
 	
 	for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
-		tmp = vc->display_fg->vcs.vc_cons[i];
+		tmp = vc->display_fg->vc_cons[i];
 		if (!tmp)
 			continue;
 		q = (struct uni_pagedir *)*tmp->vc_uni_pagedir_loc;
@@ -779,8 +779,8 @@ void __init console_map_init(void)
 	int i;
 
 	while (vt) {
-		if (!vt->kmalloced && !*vt->vcs.vc_cons[0]->vc_uni_pagedir_loc)
-                	con_set_default_unimap(vt->vcs.vc_cons[0]);
+		if (!vt->kmalloced && !*vt->vc_cons[0]->vc_uni_pagedir_loc)
+                	con_set_default_unimap(vt->vc_cons[0]);
                	vt = vt->next;
        	}
 	for (i = 0; i < 4; i++)

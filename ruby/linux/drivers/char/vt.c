@@ -138,7 +138,9 @@ void hide_cursor(struct vc_data *vc)
 			sw->con_putc(vc, softcursor_original, y, x);
                 softcursor_original = -1;
         }
-        sw->con_cursor(vc, CM_ERASE);
+	if (visible_origin != origin)
+		set_origin(vc);
+	sw->con_cursor(vc, CM_ERASE);
 	spin_unlock_irqrestore(&console_lock, flags);
 }
 
@@ -153,8 +155,11 @@ void set_cursor(struct vc_data *vc)
         	if (cons_num == sel_cons)
                 	clear_selection();
         	add_softcursor(vc);
-        	if ((cursor_type & 0x0f) != 1)
+        	if ((cursor_type & 0x0f) != 1) {
+			if (visible_origin != origin)
+				set_origin(vc);
             		sw->con_cursor(vc, CM_DRAW);
+		}
     	} else
         	hide_cursor(vc);
 	spin_unlock_irqrestore(&console_lock, flags);
@@ -234,9 +239,12 @@ void scroll_up(struct vc_data *vc, int lines)
         scr_memcpyw(d, s, screenbuf_size - video_size_row*lines);
         d = (unsigned short *) (scr_end - video_size_row*lines);
 	scr_memsetw(d, video_erase_char, video_size_row*lines);
-       	if (IS_VISIBLE)
+       	if (IS_VISIBLE) {
+		if (visible_origin != origin)
+			set_origin(vc);
 		do_update_region(vc, origin, screensize);
 //               sw->con_scroll(vc, -lines);
+	}
 }
 
 void scroll_down(struct vc_data *vc, int lines)
@@ -250,9 +258,12 @@ void scroll_down(struct vc_data *vc, int lines)
         scr_memmovew(d, s, screenbuf_size - video_size_row*lines);
         scr_memsetw(s, video_erase_char, video_size_row*lines);
 
-       	if (IS_VISIBLE)
+       	if (IS_VISIBLE) {
+		if (visible_origin != origin)
+			set_origin(vc);
 		do_update_region(vc, origin, screensize);
        // 	sw->con_scroll(vc, lines);
+	}
 }
 
 void scroll_region_up(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
@@ -268,7 +279,8 @@ void scroll_region_up(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
         scr_memcpyw(d, s, (b-t-nr) * video_size_row);
         scr_memsetw(d + (b-t-nr) * video_num_columns, video_erase_char, video_size_row*nr);
 	if (IS_VISIBLE)
-		sw->con_scroll_region(vc, t, b, SM_UP, nr);
+		do_update_region(vc, origin, screensize);
+//		sw->con_scroll_region(vc, t, b, SM_UP, nr);
 }
 
 void scroll_region_down(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
@@ -285,7 +297,8 @@ void scroll_region_down(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
         scr_memmovew(s + step, s, (b-t-nr)*video_size_row);
         scr_memsetw(s, video_erase_char, 2*step);
 	if (IS_VISIBLE)
-		sw->con_scroll_region(vc, t, b, SM_DOWN, nr);
+		do_update_region(vc, origin, screensize);
+//		sw->con_scroll_region(vc, t, b, SM_DOWN, nr);
 }
 
 /*
@@ -422,19 +435,13 @@ inline void clear_region(struct vc_data *vc,int sx,int sy,int height,int width)
 void do_update_region(struct vc_data *vc, unsigned long start, int count)
 {
 	unsigned int xx, yy, offset;
-        u16 *p;
+        u16 *p = (u16 *) start;
 
-        p = (u16 *) start;
-        if (!sw->con_getxy) {
-                offset = (start - visible_origin) / 2;
-                xx = offset % video_num_columns;
-                yy = offset / video_num_columns;
-        } else {
-                int nxx, nyy;
-                start = sw->con_getxy(vc, start, &nxx, &nyy);
-                xx = nxx; yy = nyy;
-        }
-        for(;;) {
+        offset = (start - visible_origin) / 2;
+        xx = offset % video_num_columns;
+        yy = offset / video_num_columns;
+        
+	for(;;) {
                 u16 attrib = scr_readw(p) & 0xff00;
                 int startx = xx;
                 u16 *q = p;
@@ -456,10 +463,6 @@ void do_update_region(struct vc_data *vc, unsigned long start, int count)
                         break;
                 xx = 0;
                 yy++;
-                if (sw->con_getxy) {
-                        p = (u16 *)start;
-                        start = sw->con_getxy(vc, start, NULL, NULL);
-                }
         }
 }
 
@@ -753,11 +756,10 @@ const char *create_vt(struct vt_struct *vt, int init)
         vt->off_interval = 0;
 	init_MUTEX(&vt->lock);
 	vt->default_mode->display_fg = vt;
-	memcpy(vt->vcs.vc_cons[0], vt->default_mode, sizeof(struct vc_data));
-	visual_init(vt->vcs.vc_cons[0]);
-	vt->vcs.first_vc = vt->vcs.vc_cons[0]->vc_num = current_vc;
-	vt->want_vc = vt->fg_console = vt->last_console = vt->vcs.vc_cons[0];
-	vt->vcs.next = NULL;
+	memcpy(vt->vc_cons[0], vt->default_mode, sizeof(struct vc_data));
+	visual_init(vt->vc_cons[0]);
+	vt->first_vc = vt->vc_cons[0]->vc_num = current_vc;
+	vt->want_vc = vt->fg_console = vt->last_console = vt->vc_cons[0];
 	vt->keyboard = NULL;
 	current_vc += MAX_NR_USER_CONSOLES;
 
@@ -776,13 +778,12 @@ int release_vt(struct vt_struct *vt)
 struct vc_data* find_vc(int currcons)
 {
 	struct vt_struct *vt;
-	struct vc_pool *pool;
 
-	for (vt = vt_cons; vt != NULL; vt = vt->next) 
-		for (pool = &vt->vcs; pool != NULL; pool = pool->next)  
-                	if (currcons < pool->first_vc + MAX_NR_USER_CONSOLES &&
-                            currcons >= pool->first_vc) 
-        		return pool->vc_cons[currcons - pool->first_vc];
+	for (vt = vt_cons; vt != NULL; vt = vt->next) {
+               	if (currcons < vt->first_vc + MAX_NR_USER_CONSOLES &&
+                            currcons >= vt->first_vc) 
+        		return vt->vc_cons[currcons - vt->first_vc];
+	}
 	return NULL;
 }
 
@@ -802,20 +803,19 @@ void vc_init(struct vc_data *vc, int do_clear)
 int vc_allocate(unsigned int currcons)  
 {
 	struct vt_struct *vt;
-	struct vc_pool *pool;
 	struct vc_data *vc;
 	
 	if (currcons >= MAX_NR_CONSOLES)
 		return -ENXIO;
 	
-	for (vt = vt_cons; vt != NULL; vt = vt->next)  
-		for (pool = &vt->vcs; pool != NULL; pool = pool->next)  
-                	if (currcons < pool->first_vc + MAX_NR_USER_CONSOLES &&
-                            currcons >= pool->first_vc) 
+	for (vt = vt_cons; vt != NULL; vt = vt->next) { 
+               	if (currcons < vt->first_vc + MAX_NR_USER_CONSOLES &&
+                            currcons >= vt->first_vc) 
                                 goto found_pool;
+	}
 	return -ENXIO;	
 found_pool:
-	vc = pool->vc_cons[currcons - pool->first_vc];
+	vc = vt->vc_cons[currcons - vt->first_vc];
 
         if (!vc) {
             long p, q;
@@ -848,7 +848,7 @@ found_pool:
             screenbuf = (unsigned short *) q;
             vc_init(vc, 1);
 	
-	    pool->vc_cons[currcons - pool->first_vc] = vc;		
+	    vt->vc_cons[currcons - vt->first_vc] = vc;		
             if (!vt->pm_con) { 
             	vt->pm_con = pm_register(PM_SYS_DEV,PM_SYS_VGA,pm_con_request);	
 		if (vt->pm_con)
@@ -861,20 +861,19 @@ found_pool:
 int vc_disallocate(unsigned int currcons)
 {
 	struct vt_struct *vt;
-        struct vc_pool *pool;
         struct vc_data *vc;
 
 	if (currcons >= MAX_NR_CONSOLES)
 		return -ENXIO;
 	
-	for (vt = vt_cons; vt != NULL; vt = vt->next)  
-		for (pool = &vt->vcs; pool != NULL; pool = pool->next)  
-                	if (currcons < pool->first_vc + MAX_NR_USER_CONSOLES &&
-                            currcons >= pool->first_vc) 
+	for (vt = vt_cons; vt != NULL; vt = vt->next) {
+               	if (currcons < vt->first_vc + MAX_NR_USER_CONSOLES &&
+                           currcons >= vt->first_vc) 
                                 goto found_pool;
+	}
 	return -ENXIO;	
 found_pool:
-	vc = pool->vc_cons[currcons - pool->first_vc];
+	vc = vt->vc_cons[currcons - vt->first_vc];
         
 	if (vc) {
             sw->con_deinit(vc);
@@ -882,7 +881,7 @@ found_pool:
                 kfree(screenbuf);
             if (currcons >= MIN_NR_CONSOLES)
                 kfree(vc);
-            pool->vc_cons[currcons - pool->first_vc] = NULL;
+            vt->vc_cons[currcons - vt->first_vc] = NULL;
         }
 	return 0;
 }                     
@@ -1547,7 +1546,7 @@ void __init vt_console_init(void)
          */
 	vt = (struct vt_struct *) alloc_bootmem(sizeof(struct vt_struct));
 	vt->default_mode = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
-        vt->vcs.vc_cons[0] = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
+        vt->vc_cons[0] = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
 #if defined(CONFIG_VGA_CONSOLE)
 	vt->vt_sw = &vga_con;
 #elif defined(CONFIG_DUMMY_CONSOLE)
@@ -1558,11 +1557,11 @@ void __init vt_console_init(void)
 	if (!display_desc) { 
 		free_bootmem((unsigned long) vt, sizeof(struct vt_struct));
 		free_bootmem((unsigned long) vt->default_mode, sizeof(struct vc_data));
-		free_bootmem((unsigned long) vt->vcs.vc_cons[0], sizeof(struct vc_data));
+		free_bootmem((unsigned long) vt->vc_cons[0], sizeof(struct vc_data));
 		return;
 	}
         admin_vt = vt;
-	vc = vt->vcs.vc_cons[0];
+	vc = vt->vc_cons[0];
         screenbuf = (unsigned short *) alloc_bootmem(screenbuf_size);
         vc_init(vc, 0); 
         
@@ -1609,7 +1608,7 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
 
         for (i = 0; i <= MAX_NR_USER_CONSOLES; i++) {
                 int old_was_color;
-		struct vc_data *vc = vt->vcs.vc_cons[i];
+		struct vc_data *vc = vt->vc_cons[i];
 
                 if (!vc || !sw)
                         continue;

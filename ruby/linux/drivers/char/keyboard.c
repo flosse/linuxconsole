@@ -402,8 +402,8 @@ static void fn_dec_console(struct vc_data *vc)
        int i, j = vc->display_fg->fg_console->vc_num;
 
        for (i = j-1; i != j; i--) {
-		if (i < vc->display_fg->vcs.first_vc)
-                	i = vc->display_fg->vcs.first_vc + MAX_NR_USER_CONSOLES;
+		if (i < vc->display_fg->first_vc)
+                	i = vc->display_fg->first_vc + MAX_NR_USER_CONSOLES;
 		vc = find_vc(i);
                 if (vc)
 			break;
@@ -416,8 +416,8 @@ static void fn_inc_console(struct vc_data *vc)
        int i, j = vc->display_fg->fg_console->vc_num;
 
        for (i = j+1; i != j; i++) {
-		if (i == vc->display_fg->vcs.first_vc + MAX_NR_USER_CONSOLES)
-                	i = vc->display_fg->vcs.first_vc;
+		if (i == vc->display_fg->first_vc + MAX_NR_USER_CONSOLES)
+                	i = vc->display_fg->first_vc;
 		vc = find_vc(i);
 		if (vc)
                        	break;
@@ -574,7 +574,7 @@ static void k_dead(struct vc_data *vc, unsigned char value, char up_flag)
 
 static void k_cons(struct vc_data *vc, unsigned char value, char up_flag)
 {
-	struct vc_data *tmp = find_vc(value + vc->display_fg->vcs.first_vc);
+	struct vc_data *tmp = find_vc(value + vc->display_fg->first_vc);
 
 	if (up_flag || !tmp)
 		return;	
