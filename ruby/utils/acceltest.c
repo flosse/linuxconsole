@@ -75,9 +75,10 @@ main(int argc, char **argv)
 			break;
 		case '?':
 			printf("Usage: %s [-f <fb_device>] [-x <initial_X>] [-y <initial_Y>] [-w <width>] [-h <height>] [-c <colour>]", argv[0]);
-			break;
+			return(0);
 		default:
 			fprintf(stderr, "Warning: Unknown option \"%c\", try %s -?\n", opnu, argv[0]);
+			exit(1);
 		}
 	}
 
