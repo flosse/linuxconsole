@@ -77,7 +77,6 @@ static int vgacon_scroll_region(struct vc_data *vc, int t, int b, int dir,
 				int lines);
 static void vgacon_bmove(struct vc_data *vc, int sy, int sx, int dy, int dx,
                          int height, int width);
-static int vgacon_switch(struct vc_data *vc);
 static int vgacon_blank(struct vc_data *vc, int blank);
 static int vgacon_font_op(struct vc_data *vc, struct console_font_op *op);
 static int vgacon_set_palette(struct vc_data *vc, unsigned char *table);
@@ -580,7 +579,7 @@ static void vgacon_clear(struct vc_data *vc, int x, int y, int height,
                 scr_memsetw(dest, eattr, (height+1)*width*2); 
         } else {
                 for (; height > 0; height--, dest += vc->vc_cols)
-                        scr_memsetw(dest, eattr, width);
+                        scr_memsetw(dest, eattr, width*2);
         }
 }
 
@@ -697,9 +696,9 @@ static int vgacon_scroll_region(struct vc_data *vc, int t, int b, int dir,
         switch (dir) {
 
         case SM_UP:
-                scr_memmovew(VGA_ADDR(vc, 0, t), VGA_ADDR(vc, 0, t+lines),
+                scr_memcpyw(VGA_ADDR(vc, 0, t), VGA_ADDR(vc, 0, t+lines),
                                 (b-t-lines)*vc->vc_cols*2);
-                scr_memsetw(VGA_ADDR(vc, 0, b-lines), vc->vc_video_erase_char,
+                scr_memsetw(VGA_ADDR(vc, 0, b-t-lines), vc->vc_video_erase_char,
                                 lines*vc->vc_cols*2);
                 break;
 
@@ -707,7 +706,7 @@ static int vgacon_scroll_region(struct vc_data *vc, int t, int b, int dir,
                 scr_memmovew(VGA_ADDR(vc, 0, t+lines), VGA_ADDR(vc, 0, t),
                                 (b-t-lines)*vc->vc_cols*2);
                 scr_memsetw(VGA_ADDR(vc, 0, t), vc->vc_video_erase_char, 
-			    lines*vc->vc_cols*2);
+			    	lines*vc->vc_cols*2);
                 break;
 	}	
 	return 1;
@@ -745,11 +744,6 @@ static void vgacon_bmove(struct vc_data *vc, int sy, int sx, int dy, int dx,
          }
 }
 
-static int vgacon_switch(struct vc_data *vc)
-{
-	return 1;	/* Redrawing not needed */
-}
-
 static void vga_set_palette(struct vc_data *vc, unsigned char *table)
 {
 	int i, j ;
@@ -785,10 +779,10 @@ static int vgacon_blank(struct vc_data *vc, int blank)
 			return 0;
 		}
 		vgacon_set_origin(vc);
-		scr_memsetw((void *)vga_vram_base, BLANK,vc->vc_screenbuf_size);
+		scr_memsetw((void *)vga_vram_base, BLANK, vc->vc_screensize);
 		return 1;
 	case -1:			/* Entering graphic mode */
-		scr_memsetw((void *)vga_vram_base, BLANK,vc->vc_screenbuf_size);
+		scr_memsetw((void *)vga_vram_base, BLANK, vc->vc_screensize);
 		vga_is_gfx = 1;
 		return 1;
 	default:			/* VESA blanking */
@@ -917,13 +911,6 @@ static void vgacon_invert_region(struct vc_data *vc, u16 *p, int count)
  *  The console `switch' structure for the VGA based console
  */
 
-static int vgacon_dummy(struct vc_data *c)
-{
-	return 0;
-}
-
-#define DUMMY (void *) vgacon_dummy
-
 const struct consw vga_con = {
 	con_startup:		vgacon_startup,
 	con_init:		vgacon_init,
@@ -934,12 +921,11 @@ const struct consw vga_con = {
 	con_cursor:		vgacon_cursor,
 	con_scroll_region:	vgacon_scroll_region,
 	con_bmove:		vgacon_bmove,
-	con_switch:		vgacon_switch,
 	con_blank:		vgacon_blank,
 	con_font_op:		vgacon_font_op,
 	con_set_palette:	vgacon_set_palette,
 	con_resize:		vgacon_resize,
-	con_scroll:		DUMMY,
+	con_scroll:		vgacon_scroll,
 	con_set_origin:		vgacon_set_origin,
 	con_build_attr:		vgacon_build_attr,
 	con_invert_region:	vgacon_invert_region,
