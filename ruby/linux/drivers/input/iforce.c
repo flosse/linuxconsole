@@ -228,7 +228,6 @@ static int wait_packet(struct iforce *iforce, int timeout)
 	remove_wait_queue(&iforce->wait, &wait);
 
 	if (!timeout) {
-		printk(KERN_WARNING "iforce.c: Timeout waiting for packet type %04x.\n", iforce->expect_packet);
 		iforce->expect_packet = 0;
 		return -1;
 	}
@@ -666,7 +665,7 @@ static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char 
 	struct input_dev *dev = &iforce->dev;
 
 
-	if (HI(iforce->expect_packet) == HI(cmd)) {
+	if (HI(iforce->expect_packet) == HI(cmd) || LO(iforce->expect_packet) == 0xff) {
 		iforce->expect_packet = 0;
 		iforce->ecmd = cmd;
 		memcpy(iforce->edata, data, IFORCE_MAX_LENGTH);
@@ -678,6 +677,9 @@ static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char 
 
 		case 0x01:	/* joystick position data */
 		case 0x03:	/* wheel position data */
+
+			if (!iforce->type)
+				iforce->type = HI(cmd);
 
 			if (HI(cmd) == 1) {
 				input_report_abs(dev, ABS_X, (__s16) (((__s16)data[1] << 8) | data[0]));
@@ -760,8 +762,6 @@ static void iforce_init_device(struct iforce *iforce)
 	int i;
 
 	init_waitqueue_head(&iforce->wait);
-
-	iforce->type = 1;
 	iforce->n_effects_max = 10;
 
 /*
@@ -794,11 +794,11 @@ static void iforce_init_device(struct iforce *iforce)
 	iforce_open(&iforce->dev);
 
 /*
- * Wait until device ready - till it sends first packet.
+ * Wait until device ready - half a second or until it sends its first packet.
  */
 
-	expect_packet(iforce, 0x0200);
-	wait_packet(iforce, HZ*10);
+	expect_packet(iforce, 0x00ff);
+	wait_packet(iforce, HZ/2);
 
 /*
  * Get device info.
@@ -829,22 +829,13 @@ static void iforce_init_device(struct iforce *iforce)
 	send_packet(iforce, FF_CMD_ENABLE, "\004");
 
 /*
- * Detect if the device is a wheel or a joystick
+ * Detect if the device is a wheel or a joystick. Spend at most four
+ * seconds doing it.
  */
 
-	expect_packet(iforce, 0x0100);
-	if (wait_packet(iforce, HZ/5)) {
-		
-		expect_packet(iforce, 0x0200);
-		if (wait_packet(iforce, HZ/5)) {
-			printk(KERN_WARNING "iforce.c: failed to determine device type\n");
-		}
-		else {
-			iforce->type = 3;
-		}
-	}
-	else {
-		iforce->type = 1;
+	for (i = 0; i < 40 && !iforce->type; i++) { 
+		expect_packet(iforce, 0x00ff);
+		wait_packet(iforce, HZ/10);
 	}
 
 /*
