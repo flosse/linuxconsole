@@ -197,7 +197,7 @@ static unsigned hid_lookup_collection(struct hid_parser *parser, unsigned type)
 
 static int hid_add_usage(struct hid_parser *parser, unsigned usage)
 {
-	if (parser->local.usage_index >= MAX_USAGES) {
+	if (parser->local.usage_index >= HID_MAX_USAGES) {
 		dbg("usage index exceeded");
 		return -1;
 	}
@@ -346,7 +346,7 @@ static int hid_parser_global(struct hid_parser *parser, struct hid_item *item)
 			return 0;
 
 		case HID_GLOBAL_ITEM_TAG_REPORT_COUNT:
-			if ((parser->global.report_count = item_udata(item)) > MAX_USAGES) {
+			if ((parser->global.report_count = item_udata(item)) > HID_MAX_USAGES) {
 				dbg("invalid report_count %d", parser->global.report_count);
 				return -1;
 			}
@@ -1381,7 +1381,7 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum, c
 		if (hdesc->desc[n].bDescriptorType == USB_DT_REPORT)
 			rsize = le16_to_cpu(hdesc->desc[n].wDescriptorLength);
 
-	if (!rsize || rsize > 1024) {
+	if (!rsize || rsize > HID_MAX_DESCRIPTOR_SIZE) {
 		dbg("weird size of report descriptor (%u)", rsize);
 		return NULL;
 	}

@@ -57,6 +57,7 @@ obj-$(CONFIG_INPUT_MAGELLAN)	+= magellan.o serio.o
 obj-$(CONFIG_INPUT_SPACEORB)	+= spaceorb.o serio.o
 obj-$(CONFIG_INPUT_SPACEBALL)	+= spaceball.o serio.o
 obj-$(CONFIG_INPUT_GUNZE)	+= gunze.o serio.o
+obj-$(CONFIG_INPUT_IFORCE)	+= iforce.o serio.o
 
 obj-$(CONFIG_INPUT_ANALOG)	+= analog.o gameport.o
 obj-$(CONFIG_INPUT_A3D)		+= a3d.o gameport.o
