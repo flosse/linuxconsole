@@ -152,7 +152,7 @@ static ssize_t serport_ldisc_read(struct tty_struct * tty, struct file * file, u
 
 	serio_register_port(&serport->serio);
 
-	printk(KERN_INFO "serio%d: Serial port %s%d\n", serport->serio.number, name);
+	printk(KERN_INFO "serio%d: Serial port %s\n", serport->serio.number, name);
 
 	add_wait_queue(&serport->wait, &wait);
 	current->state = TASK_INTERRUPTIBLE;
