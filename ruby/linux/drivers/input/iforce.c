@@ -3,7 +3,7 @@
  *
  *  Copyright (c) 2000 Vojtech Pavlik
  *
- *  USB Logitech WingMan Force joystick support
+ *  USB/RS232 I-Force joysticks and wheels.
  *
  *  Sponsored by SuSE
  */
@@ -39,7 +39,7 @@
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 
 #define USB_VENDOR_ID_LOGITECH		0x046d
-#define USB_DEVICE_ID_LOGITECH_IFORCE	0xc281
+#define USB_DEVICE_ID_LOGITECH_WMFORCE	0xc281
 
 #define IFORCE_MAX_LENGTH	16
 
@@ -48,7 +48,7 @@ struct iforce {
 	struct input_dev dev;
 	struct urb irq;
 	int open;
-	int idx, pkt, len, id;
+	int idx, pkt, len, id, csum;
 };
 
 static struct {
@@ -60,15 +60,20 @@ static char *iforce_name = "I-Force device";
 
 static void iforce_process_packet(struct input_dev *dev, unsigned char id, int idx, unsigned char *data)
 {
-	int i;
-
-	
 	switch (id) {
 
 		case 1:	/* joystick position data */
+		case 3: /* wheel position data */
 			input_report_abs(dev, ABS_X, (__s16) (((__s16)data[1] << 8) | data[0]));
-			input_report_abs(dev, ABS_Y, (__s16) (((__s16)data[3] << 8) | data[2]));
-			input_report_abs(dev, ABS_THROTTLE, data[4]);
+
+			if (id == 1) {
+				input_report_abs(dev, ABS_Y, (__s16) (((__s16)data[3] << 8) | data[2]));
+				input_report_abs(dev, ABS_THROTTLE, 255 - data[4]);
+			} else {
+				input_report_abs(dev, ABS_THROTTLE, 255 - data[2]);
+				input_report_abs(dev, ABS_RUDDER,   255 - data[3]);
+			}
+
 			input_report_abs(dev, ABS_HAT0X, iforce_hat_to_axis[data[6] >> 4].x);
 			input_report_abs(dev, ABS_HAT0Y, iforce_hat_to_axis[data[6] >> 4].y);
 
@@ -81,20 +86,13 @@ static void iforce_process_packet(struct input_dev *dev, unsigned char id, int i
 			input_report_key(dev, BTN_BASE3,   data[5] & 0x40);
 			input_report_key(dev, BTN_BASE4,   data[5] & 0x80);
 			input_report_key(dev, BTN_BASE5,   data[6] & 0x01);
+			input_report_key(dev, BTN_A,       data[6] & 0x02);
+			input_report_key(dev, BTN_B,       data[6] & 0x04);
+			input_report_key(dev, BTN_C,       data[6] & 0x08);
 			break;
 
 		case 2: /* force feedback effect status */
-
-printk("Data packet %d len %d: ", id, idx);
-	for (i = 0; i < idx; i++)
-		printk(" %02x", data[i]);
-	printk("\n");
 			break;
-
-
-		case 3: /* wheel position data */
-
-				break;
 	}
 }
 
@@ -136,8 +134,10 @@ static void iforce_serio_irq(struct serio *serio, unsigned char data, unsigned i
 		return;
 	}
 
-        if (iforce->idx < iforce->len)
-                iforce->data[iforce->idx++] = data;
+        if (iforce->idx < iforce->len) {
+                iforce->csum += iforce->data[iforce->idx++] = data;
+		return;
+	}
 
         if (iforce->idx == iforce->len) {
 		iforce_process_packet(&iforce->dev, iforce->id, iforce->idx, iforce->data);
@@ -145,6 +145,7 @@ static void iforce_serio_irq(struct serio *serio, unsigned char data, unsigned i
 		iforce->id  = 0;
                 iforce->len = 0;
                 iforce->idx = 0;
+		iforce->csum = 0;
         }
 }
 
@@ -172,9 +173,10 @@ static void iforce_input_setup(struct iforce *iforce)
 	int i;
 
 	iforce->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
-	iforce->dev.keybit[LONG(BTN_JOYSTICK)] = BIT(BTN_TRIGGER) | BIT(BTN_TOP) | BIT(BTN_THUMB) | BIT(BTN_TOP2) |
+	iforce->dev.keybit[LONG(BTN_JOYSTICK)] |= BIT(BTN_TRIGGER) | BIT(BTN_TOP) | BIT(BTN_THUMB) | BIT(BTN_TOP2) |
 					BIT(BTN_BASE) | BIT(BTN_BASE2) | BIT(BTN_BASE3) | BIT(BTN_BASE4) | BIT(BTN_BASE5);
-	iforce->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y) | BIT(ABS_THROTTLE) | BIT(ABS_HAT0X) | BIT(ABS_HAT0Y);
+	iforce->dev.keybit[LONG(BTN_GAMEPAD)] |= BIT(BTN_A) | BIT(BTN_B) | BIT(BTN_C);
+	iforce->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y) | BIT(ABS_THROTTLE) | BIT(ABS_RUDDER) | BIT(ABS_HAT0X) | BIT(ABS_HAT0Y);
 
 	for (i = ABS_X; i <= ABS_Y; i++) {
 		iforce->dev.absmax[i] =  1920;
@@ -183,8 +185,10 @@ static void iforce_input_setup(struct iforce *iforce)
 		iforce->dev.absfuzz[i] = 16;
 	}
 
-	iforce->dev.absmax[ABS_THROTTLE] = 255;
-	iforce->dev.absmin[ABS_THROTTLE] = 0;
+	for (i = ABS_THROTTLE; i <= ABS_RUDDER; i++) {
+		iforce->dev.absmax[i] = 255;
+		iforce->dev.absmin[i] = 0;
+	}
 
 	for (i = ABS_HAT0X; i <= ABS_HAT0Y; i++) {
 		iforce->dev.absmax[i] =  1;
@@ -204,7 +208,7 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum)
 	struct iforce *iforce;
 
 	if (dev->descriptor.idVendor != USB_VENDOR_ID_LOGITECH ||
-	    dev->descriptor.idProduct != USB_DEVICE_ID_LOGITECH_IFORCE)
+	    dev->descriptor.idProduct != USB_DEVICE_ID_LOGITECH_WMFORCE)
 		return NULL;
 
 	endpoint = dev->config[0].interface[ifnum].altsetting[0].endpoint + 0;

@@ -279,13 +279,12 @@ static ssize_t joydev_read(struct file *file, char *buf, size_t count, loff_t *p
 
 		if (list->startup < joydev->nkey) {
 			event.type = JS_EVENT_BUTTON | JS_EVENT_INIT;
-			event.value = !!test_bit(joydev->keypam[list->startup], input->key);
 			event.number = list->startup;
+			event.value = !!test_bit(joydev->keypam[event.number], input->key);
 		} else {
 			event.type = JS_EVENT_AXIS | JS_EVENT_INIT;
-			event.value = joydev_correct(input->abs[joydev->abspam[list->startup - joydev->nkey]],
-							&joydev->corr[list->startup - joydev->nkey]);
 			event.number = list->startup - joydev->nkey;
+			event.value = joydev_correct(input->abs[joydev->abspam[event.number]], &joydev->corr[event.number]);
 		}
 
 		if (copy_to_user(buf + retval, &event, sizeof(struct js_event)))
