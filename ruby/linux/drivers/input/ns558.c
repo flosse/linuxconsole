@@ -157,26 +157,13 @@ static struct ns558* ns558_isa_probe(int io, struct ns558 *next)
 #endif
 
 #ifdef NSS558_ISAPNP
-/*
- * PnP IDs:
- *
- * @P@0001 - ALS 100 (no comp. ID)
- * CTL00c1 - SB AWE32 PnP
- * CTL00c3 - SB AWE64 PnP
- * CTL00f0 - SB16 PnP / Vibra 16x
- * CTL7001 - SB Vibra16C PnP (no comp. ID)
- * CTL7002 - SB AWE32 (no comp. ID)
- * CSC0b35 - Crystal (no comp. ID)
- * TER1141 - Terratec AD1818
- * YMM0800 - Yamaha OPL3-SA3
- *
- * PNPb02f - Generic gameport
- */
 
 static struct isapnp_device_id pnp_devids[] = {
 	{ ISAPNP_ANY_ID, ISAPNP_ANY_ID, ISAPNP_VENDOR('@','P','@'), ISAPNP_DEVICE(0x0001), 0 },
 	{ ISAPNP_ANY_ID, ISAPNP_ANY_ID, ISAPNP_VENDOR('C','T','L'), ISAPNP_DEVICE(0x7001), 0 },
 	{ ISAPNP_ANY_ID, ISAPNP_ANY_ID, ISAPNP_VENDOR('C','T','L'), ISAPNP_DEVICE(0x7002), 0 },
+	{ ISAPNP_ANY_ID, ISAPNP_ANY_ID, ISAPNP_VENDOR('C','S','C'), ISAPNP_DEVICE(0x0010), 0 },
+	{ ISAPNP_ANY_ID, ISAPNP_ANY_ID, ISAPNP_VENDOR('C','S','C'), ISAPNP_DEVICE(0x0110), 0 },
 	{ ISAPNP_ANY_ID, ISAPNP_ANY_ID, ISAPNP_VENDOR('C','S','C'), ISAPNP_DEVICE(0x0b35), 0 },
 	{ ISAPNP_ANY_ID, ISAPNP_ANY_ID, ISAPNP_VENDOR('P','N','P'), ISAPNP_DEVICE(0xb02f), 0 },
 	{ 0, },
@@ -217,6 +204,7 @@ static struct ns558* ns558_pnp_probe(struct pci_dev *dev, struct ns558 *next)
 	port->next = next;
 	port->type = NS558_PNP;
 	port->gameport.io = ioport;
+	port->size = iolen;
 	port->dev = dev;
 
 	gameport_register_port(&port->gameport);
