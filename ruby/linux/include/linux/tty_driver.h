@@ -129,6 +129,7 @@ struct tty_driver {
 	short	subtype;	/* subtype of tty driver */
 	struct termios init_termios; /* Initial termios */
 	int	flags;		/* tty driver flags */
+	int 	may_schedule;	/* when we can schedule */
 	int	*refcount;	/* for loadable tty drivers */
 	struct semaphore tty_lock;/* access control for printk and tty layer */
 	struct proc_dir_entry *proc_entry; /* /proc fs entry */
