@@ -31,7 +31,6 @@
 #include <linux/tty_flip.h>
 #include <linux/mm.h>
 #include <linux/string.h>
-#include <linux/random.h>
 #include <linux/init.h>
 #include <linux/slab.h>
 
@@ -87,6 +86,7 @@ int spawnpid, spawnsig;
 /*
  * Variables exported for vt.c
  */
+
 int shift_state = 0;
 
 /*
@@ -110,7 +110,7 @@ static struct ledptr {
 /* Simple translation table for the SysRq keys */
 
 #ifdef CONFIG_MAGIC_SYSRQ
-unsigned char kbd_sysrq_xlate[KEY_MAX] =
+unsigned char kbd_sysrq_xlate[KEY_MAX + 1] =
         "\000\0331234567890-=\177\t"                    /* 0x00 - 0x0f */
         "qwertyuiop[]\r\000as"                          /* 0x10 - 0x1f */
         "dfghjkl;'`\000\\zxcv"                          /* 0x20 - 0x2f */
@@ -133,7 +133,7 @@ int getkeycode(struct input_handle *handle, unsigned int scancode)
 	if (!dev)
 		return -ENODEV;
 
-	if (!dev->keycodesize || (scancode < 0 || scancode >= dev->keycodemax))
+	if (!dev->keycodesize || scancode >= dev->keycodemax)
 		return -EINVAL;
 
 	return INPUT_KEYCODE(dev, scancode);
@@ -147,25 +147,24 @@ int setkeycode(struct input_handle *handle, unsigned int scancode, unsigned int 
 	if (!dev)
 		return -ENODEV;
 
-	if (!dev->keycodesize || (scancode < 0 || scancode >= dev->keycodemax))
+	if (!dev->keycodesize || scancode >= dev->keycodemax || keycode > KEY_MAX)
 		return -EINVAL;
 
-        oldkey = SET_INPUT_KEYCODE(dev, scancode, keycode);
+	oldkey = SET_INPUT_KEYCODE(dev, scancode, keycode);
 
-        clear_bit(oldkey, dev->keybit);
-        set_bit(keycode, dev->keybit);
+	clear_bit(oldkey, dev->keybit);
+	set_bit(keycode, dev->keybit);
 
-        for (i = 0; i < dev->keycodemax; i++)
-                if (INPUT_KEYCODE(dev,i) == oldkey)
-                        set_bit(oldkey, dev->keybit);
-
+	for (i = 0; i < dev->keycodemax; i++)
+		if (INPUT_KEYCODE(dev,i) == oldkey)
+			set_bit(oldkey, dev->keybit);
 	return 0;
 }
 
 /*
  * Making beeps and bells. 
  */
-void kd_nosound(unsigned long private)
+static void kd_nosound(unsigned long private)
 {
 	struct input_handle *handle = (struct input_handle *) private;
 
@@ -205,6 +204,7 @@ void kd_mksound(struct input_handle *handle, unsigned int hz, unsigned int ticks
 /*
  * Setting the keyboard rate.
  */
+
 int kbd_rate(struct input_handle *handle, struct kbd_repeat *rep)
 {
 	struct input_dev *dev = handle->dev;
@@ -236,7 +236,7 @@ static void put_queue(struct vc_data *vc, int ch)
 	}
 }
 
-void puts_queue(struct vc_data *vc, char *cp)
+static void puts_queue(struct vc_data *vc, char *cp)
 {
 	struct tty_struct *tty = vc->vc_tty;
 
@@ -266,7 +266,7 @@ static void applkey(struct vc_data *vc, int key, char mode)
  * in utf-8 already. UTF-8 is defined for words of up to 31 bits,
  * but we need only 16 bits here
  */
-void to_utf8(struct vc_data *vc, ushort c) 
+static void to_utf8(struct vc_data *vc, ushort c)
 {
 	if (c < 0x80)
 		/* 0******* */
@@ -290,7 +290,7 @@ void to_utf8(struct vc_data *vc, ushort c)
  */
 void compute_shiftstate(void)
 {
-	int i, j, k, sym, val;
+	unsigned int i, j, k, sym, val;
 
 	shift_state = 0;
 	memset(shift_down, 0, sizeof(shift_down));
@@ -328,10 +328,10 @@ void compute_shiftstate(void)
  * Otherwise, conclude that DIACR was not combining after all,
  * queue it and return CH.
  */
-unsigned char handle_diacr(struct vc_data *vc, unsigned char ch)
+static unsigned char handle_diacr(struct vc_data *vc, unsigned char ch)
 {
+	unsigned int i;
 	int d = diacr;
-	int i;
 
 	diacr = 0;
 
@@ -599,7 +599,7 @@ static void k_cons(struct vc_data *vc, unsigned char value, char up_flag)
 
 static void k_fn(struct vc_data *vc, unsigned char value, char up_flag)
 {
-        unsigned v;
+	unsigned v;
 
 	if (up_flag)
 		return;
@@ -835,9 +835,9 @@ static inline unsigned char getleds(struct vc_data *vc)
  * Aside from timing (which isn't really that important for
  * keyboard interrupts as they happen often), using the software
  * interrupt routines for this thing allows us to easily mask
- * this when we don't want any of the above to happen. Not yet
- * used, but this allows for easy and efficient race-condition
- * prevention later on.
+ * this when we don't want any of the above to happen.
+ * This allows for easy and efficient race-condition prevention
+ * for kbd_refresh_leds => input_event(dev, EV_LED, ...) => ...
  */
 
 static void kbd_bh(unsigned long dummy)
@@ -868,7 +868,7 @@ DECLARE_TASKLET_DISABLED(keyboard_tasklet, kbd_bh, 0);
 /*
  * This allows a newly plugged keyboard to pick the LED state.
  */
-void kbd_refresh_leds(struct input_handle *handle)
+static void kbd_refresh_leds(struct input_handle *handle)
 {
 	struct vt_struct *vt = handle->private;
 	unsigned char leds;
@@ -887,8 +887,11 @@ void kbd_refresh_leds(struct input_handle *handle)
 		tasklet_enable(&keyboard_tasklet);
 	}
 }
-	
-#if defined(CONFIG_X86) || defined(CONFIG_IA64) || defined(CONFIG_ALPHA) || defined(CONFIG_MIPS) || defined(CONFIG_PPC) || defined(CONFIG_SPARC32) || defined(CONFIG_SPARC64) || defined(CONFIG_PARISC) || defined(CONFIG_SUPERH)
+
+#if defined(CONFIG_X86) || defined(CONFIG_IA64) || defined(CONFIG_ALPHA) ||\
+    defined(CONFIG_MIPS) || defined(CONFIG_PPC) || defined(CONFIG_SPARC32) ||\
+    defined(CONFIG_SPARC64) || defined(CONFIG_PARISC) || defined(CONFIG_SUPERH) ||\
+    (defined(CONFIG_ARM) && defined(CONFIG_KEYBOARD_ATKBD) && !defined(CONFIG_ARCH_RPC))
 
 #define HW_RAW(dev) (test_bit(EV_MSC, dev->evbit) && test_bit(MSC_RAW, dev->mscbit) &&\
 			((dev)->id.bustype == BUS_I8042) && ((dev)->id.vendor == 0x0001) && ((dev)->id.product == 0x0001))
@@ -925,18 +928,18 @@ static int emulate_raw(struct vc_data *vc, unsigned int keycode,
 	if (keycode > 255 || !x86_keycodes[keycode])
 		return -1; 
 
-        switch (keycode) {
-                case KEY_PAUSE:
-                        put_queue(vc, 0xe1);
-                        put_queue(vc, 0x1d | up_flag);
-                        put_queue(vc, 0x45 | up_flag);
-                        return 0;
+	switch (keycode) {
+		case KEY_PAUSE:
+			put_queue(vc, 0xe1);
+			put_queue(vc, 0x1d | up_flag);
+			put_queue(vc, 0x45 | up_flag);
+			return 0;
 		case KEY_HANGUEL:
-                        if (!up_flag) put_queue(vc, 0xf1);
-                        return 0;
+			if (!up_flag) put_queue(vc, 0xf1);
+			return 0;
 		case KEY_HANJA:
-                        if (!up_flag) put_queue(vc, 0xf2);
-                        return 0;
+			if (!up_flag) put_queue(vc, 0xf2);
+			return 0;
 	} 
 
 	if (keycode == KEY_SYSRQ && sysrq_alt) {
@@ -973,7 +976,7 @@ static int emulate_raw(struct vc_data *vc, unsigned int keycode, unsigned char u
 }
 #endif
 
-void kbd_rawcode(struct vt_struct *vt, unsigned char data)
+static void kbd_rawcode(struct vt_struct *vt, unsigned char data)
 {
 	struct vc_data *vc = vt->fg_console;
 	if (vc->kbd_table.kbdmode == VC_RAW)
@@ -987,9 +990,6 @@ void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down, int hw_ra
 	unsigned char type, raw_mode;
 	struct tty_struct *tty;
 	int shift_final;
-
-	if (down != 2)
-		add_keyboard_randomness((keycode << 1) ^ down);
 
 	tty = vc->vc_tty;
 
@@ -1008,8 +1008,8 @@ void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down, int hw_ra
 	rep = (down == 2);
 
 #ifdef CONFIG_MAC_EMUMOUSEBTN
-        if (mac_hid_mouse_emulate_buttons(1, keycode, down))
-                return;
+	if (mac_hid_mouse_emulate_buttons(1, keycode, down))
+		return;
 #endif /* CONFIG_MAC_EMUMOUSEBTN */
 
 	if ((raw_mode = (vc->kbd_table.kbdmode == VC_RAW)) && !hw_raw)
@@ -1137,7 +1137,7 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 					struct input_dev *dev,
 					struct input_device_id *id)
 {
-	struct vt_struct *vt;
+	struct vt_struct *vt = NULL;
 	struct input_handle *handle;
 	int i;
 
@@ -1150,42 +1150,43 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 	if (!(handle = kmalloc(sizeof(struct input_handle), GFP_KERNEL))) 
 		return NULL;
 	memset(handle, 0, sizeof(struct input_handle));
+
 	handle->dev = dev;
 	handle->handler = handler;
 	handle->name = kbd_name;
 	input_open_device(handle);
+
 	/*
-	 *      If we have more keyboards than VTs we still register the handler
-	 * . It is possible someone might add a graphics card thus needing the
+	 *   If we have more keyboards than VTs we still register the handler.
+	 * It is possible someone might add a graphics card thus needing the
 	 * keyboard later. 
-	 *	Now in some cases the speaker is built into the
-	 * keyboard. In this case the handler in struct vt_struct is the
-	 * same for both the keyboard and beeper. Now in the case where the
+	 *	Now in some cases the speaker is built into the keyboard.
+	 * In this case the handler in struct vt_struct is the same for
+	 * both the keyboard and beeper. Now in the case where the
 	 * beeper is independent we can share it with all VTs that don't 
 	 * have one.
 	 */
 	if (i != BTN_MISC) {
-                list_for_each_entry (vt, &vt_list, node) {
-                        if (!vt->keyboard) {
-                                vt->keyboard = handle;
-                                handle->private = vt;
-                                printk(KERN_INFO "keyboard.c: [%s] vc:%d-%d\n",
-                                       dev->name, vt->first_vc + 1,
-				       vt->first_vc + vt->vc_count);
-				if(test_bit(EV_SND, dev->evbit)) {
+		list_for_each_entry (vt, &vt_list, node) {
+			if (!vt->keyboard) {
+				vt->keyboard = handle;
+				handle->private = vt;
+				printk(KERN_INFO "keyboard.c: [%s] vc:%d-%d\n",
+					dev->name, vt->first_vc + 1,
+					vt->first_vc + vt->vc_count);
+				if (test_bit(EV_SND, dev->evbit)) {
 					vt->beeper = handle;
 					vt_map_input(vt);
 				}
 				break;
-                        }
-                }
+			}
+		}
 		kbd_refresh_leds(handle);
-	}	
-	else if (test_bit(EV_SND, dev->evbit) && admin_vt && !admin_vt->beeper) {
+	} else if (test_bit(EV_SND, dev->evbit) && admin_vt && !admin_vt->beeper) {
 		admin_vt->beeper = handle;
 		handle->private = admin_vt;
 		vt_map_input(admin_vt);
-	}	
+	}
 	return handle;
 }
 
