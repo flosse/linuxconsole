@@ -83,7 +83,6 @@ static int __devinit emu_probe(struct pci_dev *pdev, const struct pci_device_id 
 	memset(port, 0, sizeof(struct emu));
 
 	port->gameport.io = ioport;
-	port->gameport.size = iolen;
 	port->dev = pdev;
 
 	pdev->driver_data = port;
@@ -91,7 +90,7 @@ static int __devinit emu_probe(struct pci_dev *pdev, const struct pci_device_id 
 	gameport_register_port(&port->gameport);
 
 	printk(KERN_INFO "gameport%d: Emu10k1 Gameport at %#x", port->gameport.number, port->gameport.io);
-	if (port->gameport.size > 1) printk(" size %d", port->gameport.size);
+	if (iolen > 1) printk(" size %d", iolen);
 	printk(" speed %d kHz\n", port->gameport.speed);
 
 	return 0;

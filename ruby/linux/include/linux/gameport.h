@@ -40,7 +40,6 @@ struct gameport {
 	int number;
 
 	int io;
-	int size;
 	int speed;
 	int fuzz;
 

@@ -253,10 +253,8 @@ int __init l4_init(void)
 			gameport->calibrate = l4_calibrate;
 			gameport->type = GAMEPORT_EXT;
 
-			if (!i && !j) {
+			if (!i && !j)
 				gameport->io = L4_PORT;
-				gameport->size = 1;
-			}
 
 			if (rev > 0x28)		/* on 2.9+ the setcal command works correctly */
 				l4_setcal(l4->port, cal);

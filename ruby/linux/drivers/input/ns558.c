@@ -51,6 +51,7 @@ static int ns558_isa_portlist[] = { 0x200, 0x201, 0x202, 0x203, 0x204, 0x205, 0x
 
 struct ns558 {
 	int type;
+	int size;
 	struct pci_dev *dev;
 	struct ns558 *next;
 	struct gameport gameport;
@@ -137,15 +138,15 @@ static struct ns558* ns558_isa_probe(int io, struct ns558 *next)
 	
 	port->next = next;
 	port->type = NS558_ISA;
+	port->size = (1 << i);
 	port->gameport.io = io & (-1 << i);
-	port->gameport.size = (1 << i);
 
-	request_region(port->gameport.io, port->gameport.size, "ns558-isa");
+	request_region(port->gameport.io, (1 << i), "ns558-isa");
 
 	gameport_register_port(&port->gameport);
 
 	printk(KERN_INFO "gameport%d: NS558 ISA at %#x", port->gameport.number, port->gameport.io);
-	if (port->gameport.size > 1) printk(" size %d", port->gameport.size);
+	if (port->size > 1) printk(" size %d", port->size);
 	printk(" speed %d kHz\n", port->gameport.speed);
 
 	return port;
@@ -216,13 +217,12 @@ static struct ns558* ns558_pnp_probe(struct pci_dev *dev, struct ns558 *next)
 	port->next = next;
 	port->type = NS558_PNP;
 	port->gameport.io = ioport;
-	port->gameport.size = iolen;
 	port->dev = dev;
 
 	gameport_register_port(&port->gameport);
 
 	printk(KERN_INFO "gameport%d: NS558 PnP at %#x", port->gameport.number, port->gameport.io);
-	if (port->gameport.size > 1) printk(" size %d", port->gameport.size);
+	if (iolen > 1) printk(" size %d", iolen);
 	printk(" speed %d kHz\n", port->gameport.speed);
 
 	return port;
@@ -279,7 +279,7 @@ void __exit ns558_exit(void)
 #endif
 
 			case NS558_ISA:
-				release_region(port->gameport.io, port->gameport.size);
+				release_region(port->gameport.io, port->size);
 				break;
 		
 			default:

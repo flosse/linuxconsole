@@ -282,8 +282,6 @@ static int __devinit cs461x_pci_probe(struct pci_dev *pdev, const struct pci_dev
 	}
 	memset(port, 0, sizeof(struct gameport));
 
-	port->io = -1;
-	port->size = -1;
 	pdev->driver_data = port;
 	
 	port->open = cs461x_gameport_open;
@@ -298,9 +296,8 @@ static int __devinit cs461x_pci_probe(struct pci_dev *pdev, const struct pci_dev
 
 	gameport_register_port(port);
 
-	printk(KERN_INFO "gameport%d: CS461x PCI", port->number);
-	if (port->size > 1) printk(" size %d", port->size);
-	printk(" speed %d kHz\n", port->speed);
+	printk(KERN_INFO "gameport%d: CS461x Gameport speed %d kHz\n",
+		port->number, port->speed);
 
 	return 0;
 }
