@@ -417,10 +417,8 @@ static struct input_handle *joydev_connect(struct input_handler *handler, struct
 	struct joydev *joydev;
 	int i, j, minor;
 
-	if (!((test_bit(ABS_X, dev->absbit) || test_bit(ABS_Y, dev->absbit)
-		|| test_bit(ABS_WHEEL, dev->absbit)) &&
-	     (test_bit(BTN_TRIGGER, dev->keybit) || test_bit(BTN_A, dev->keybit)
-		|| test_bit(BTN_1, dev->keybit)))) return NULL; 
+        if (test_bit(BTN_TOUCH, dev->keybit))
+		return NULL;
 
 	for (minor = 0; minor < JOYDEV_MINORS && joydev_table[minor]; minor++);
 	if (minor == JOYDEV_MINORS) {
@@ -507,7 +505,18 @@ static struct input_device_id joydev_ids[] = {
 	{
 		flags: INPUT_DEVICE_ID_MATCH_EVBIT,
 		evbit: { BIT(EV_KEY) | BIT(EV_ABS) },
-	},	
+		absbit: { BIT(ABS_X) },
+	},
+	{
+		flags: INPUT_DEVICE_ID_MATCH_EVBIT,
+		evbit: { BIT(EV_KEY) | BIT(EV_ABS) },
+		absbit: { BIT(ABS_WHEEL) },
+	},
+	{
+		flags: INPUT_DEVICE_ID_MATCH_EVBIT,
+		evbit: { BIT(EV_KEY) | BIT(EV_ABS) },
+		absbit: { BIT(ABS_THROTTLE) },
+	},
 	{ }, 	/* Terminating entry */
 };
 
