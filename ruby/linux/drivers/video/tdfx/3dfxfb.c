@@ -1239,7 +1239,11 @@ static void __exit tdfxfb_exit(void)
 MODULE_AUTHOR("Hannu Mallat <hmallat@cc.hut.fi>");
 MODULE_DESCRIPTION("3Dfx framebuffer device driver");
 MODULE_LICENSE("GPL");
-
+MODULE_PARM(noaccel, "i");
+MODULE_PARM_DESC(noaccel, "Disable hardware acceleration (1 = disabled), enabled by default.");
+MODULE_PARM(nohwcursor, "i");
+MODULE_PARM_DESC(nohwcursor, "Disable hardware cursor (1 = disabled), enabled by default.");
+ 
 #ifdef MODULE
 module_init(tdfxfb_init);
 #endif
