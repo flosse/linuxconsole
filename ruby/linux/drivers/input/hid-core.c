@@ -535,60 +535,64 @@ static void hid_free_device(struct hid_device *device)
  * items, though they are not used yet.
  */
 
-static __u8 *fetch_item(__u8 *start, __u8 *end, struct hid_item *item)
+static u8 *fetch_item(__u8 *start, __u8 *end, struct hid_item *item)
 {
-	if ((end - start) > 0) {
+	u8 b;
 
-		__u8 b = *start++;
-		item->type = (b >> 2) & 3;
-		item->tag  = (b >> 4) & 15;
+	if ((end - start) <= 0)
+		return NULL;
 
-		if (item->tag == HID_ITEM_TAG_LONG) {
+	b = *start++;
 
-			item->format = HID_ITEM_FORMAT_LONG;
+	item->type = (b >> 2) & 3;
+	item->tag  = (b >> 4) & 15;
 
-			if ((end - start) >= 2) {
+	if (item->tag == HID_ITEM_TAG_LONG) {
 
-				item->size = *start++;
-				item->tag  = *start++;
+		item->format = HID_ITEM_FORMAT_LONG;
 
-				if ((end - start) >= item->size) {
-					item->data.longdata = start;
-					start += item->size;
-					return start;
-				}
-			}
-		} else {
+		if ((end - start) < 2)
+			return NULL;
 
-			item->format = HID_ITEM_FORMAT_SHORT;
-			item->size = b & 3;
-			switch (item->size) {
+		item->size = *start++;
+		item->tag  = *start++;
 
-				case 0:
-					return start;
+		if ((end - start) < item->size) 
+			return NULL;
 
-				case 1:
-					if ((end - start) >= 1) {
-						item->data.u8 = *start++;
-						return start;
-					}
-					break;
+		item->data.longdata = start;
+		start += item->size;
+		return start;
+	} 
 
-				case 2:
-					if ((end - start) >= 2) {
-						item->data.u16 = le16_to_cpu( get_unaligned(((__u16*)start)++));
-						return start;
-					}
+	item->format = HID_ITEM_FORMAT_SHORT;
+	item->size = b & 3;
 
-				case 3:
-					item->size++;
-					if ((end - start) >= 4) {
-						item->data.u32 = le32_to_cpu( get_unaligned(((__u32*)start)++));
-						return start;
-					}
-			}
-		}
+	switch (item->size) {
+
+		case 0:
+			return start;
+
+		case 1:
+			if ((end - start) < 1)
+				return NULL;
+			item->data.u8 = *start++;
+			return start;
+
+		case 2:
+			if ((end - start) < 2) 
+				return NULL;
+			item->data.u16 = le16_to_cpu(get_unaligned(((__u16*)start)++));
+			return start;
+
+		case 3:
+			item->size++;
+			if ((end - start) < 4)
+				return NULL;
+			item->data.u32 = le32_to_cpu(get_unaligned(((__u32*)start)++));
+			return start;
 	}
+
 	return NULL;
 }
 
@@ -635,12 +639,14 @@ static struct hid_device *hid_parse_report(__u8 *start, unsigned size)
 
 	end = start + size;
 	while ((start = fetch_item(start, end, &item)) != 0) {
+
 		if (item.format != HID_ITEM_FORMAT_SHORT) {
 			dbg("unexpected long global item");
 			hid_free_device(device);
 			kfree(parser);
 			return NULL;
 		}
+
 		if (dispatch_type[item.type](parser, &item)) {
 			dbg("item %u %u %u %u parsing failed\n",
 				item.format, (unsigned)item.size, (unsigned)item.type, (unsigned)item.tag);
@@ -794,9 +800,12 @@ static void hid_input_field(struct hid_device *hid, struct hid_field *field, __u
 	memcpy(field->value, value, count * sizeof(__s32));
 }
 
-static int hid_input_report(int type, u8 *data, int len, struct hid_device *hid)
+static int hid_input_report(int type, struct urb *urb)
 {
+	struct hid_device *hid = urb->context;
 	struct hid_report_enum *report_enum = hid->report_enum + type;
+	u8 *data = urb->transfer_buffer;
+	int len = urb->actual_length;
 	struct hid_report *report;
 	int n, size;
 
@@ -851,25 +860,7 @@ static void hid_irq(struct urb *urb)
 		return;
 	}
 
-	hid_input_report(HID_INPUT_REPORT, urb->transfer_buffer, urb->actual_length, urb->context);
-}
-
-/*
- * hid_read_report() reads in report values without waiting for an irq urb.
- */
-
-void hid_read_report(struct hid_device *hid, struct hid_report *report)
-{
-	int len = ((report->size - 1) >> 3) + 1 + hid->report_enum[report->type].numbered;
-	u8 data[len];
-	int read;
-
-	if ((read = usb_get_report(hid->dev, hid->ifnum, report->type + 1, report->id, data, len)) != len) {
-		dbg("reading report type %d id %d failed len %d read %d", report->type + 1, report->id, len, read);
-		return;
-	}
-
-	hid_input_report(report->type, data, len, hid);
+	hid_input_report(HID_INPUT_REPORT, urb);
 }
 
 /*
@@ -952,15 +943,29 @@ int hid_find_field(struct hid_device *hid, unsigned int type, unsigned int code,
 	return -1;
 }
 
-static int hid_submit_out(struct hid_device *hid)
+static int hid_submit_ctrl(struct hid_device *hid)
 {
-	hid->urbout.transfer_buffer_length = le16_to_cpup(&hid->out[hid->outtail].dr.length);
-	hid->urbout.transfer_buffer = hid->out[hid->outtail].buffer;
-	hid->urbout.setup_packet = (void *) &(hid->out[hid->outtail].dr);
-	hid->urbout.dev = hid->dev;
+	struct hid_report *report;
+	unsigned char dir;
 
-	if (usb_submit_urb(&hid->urbout)) {
-		err("usb_submit_urb(out) failed");
+	report = hid->ctrl[hid->ctrltail].report;
+	dir = hid->ctrl[hid->ctrltail].dir;
+
+	if (!dir)
+		hid_output_report(report, hid->ctrlbuf);
+
+	hid->urb.transfer_buffer_length = ((report->size - 1) >> 3) + 1 + ((report->id > 0) && dir);
+	hid->urb.pipe = dir ? usb_rcvctrlpipe(hid->dev, 0) : usb_sndctrlpipe(hid->dev, 0);
+	hid->urb.dev = hid->dev;
+	
+	hid->dr.length = cpu_to_le16(hid->urb.transfer_buffer_length);
+	hid->dr.requesttype = USB_TYPE_CLASS | USB_RECIP_INTERFACE | dir;
+	hid->dr.request = dir ? USB_REQ_GET_REPORT : USB_REQ_SET_REPORT;
+	hid->dr.index = cpu_to_le16(hid->ifnum);
+	hid->dr.value = 0x200 | report->id;
+
+	if (usb_submit_urb(&hid->urbctrl)) {
+		err("usb_submit_urb(ctrl) failed");
 		return -1;
 	}
 
@@ -974,26 +979,30 @@ static void hid_ctrl(struct urb *urb)
 	if (urb->status)
 		warn("ctrl urb status %d received", urb->status);
 
-	hid->outtail = (hid->outtail + 1) & (HID_CONTROL_FIFO_SIZE - 1);
+	if (hid->ctrl[hid->ctrltail].dir)
+		hid_input_report(hid->ctrl[hid->ctrltail].report->type, urb);
 
-	if (hid->outhead != hid->outtail)
-		hid_submit_out(hid);
+	hid->ctrltail = (hid->ctrltail + 1) & (HID_CONTROL_FIFO_SIZE - 1);
+
+	if (hid->ctrlhead != hid->ctrltail)
+		hid_submit_ctrl(hid);
 }
 
-void hid_write_report(struct hid_device *hid, struct hid_report *report)
+void hid_submit_report(struct hid_device *hid, struct hid_report *report, unsigned char dir)
 {
-	hid_output_report(report, hid->out[hid->outhead].buffer);
+	int head;
 
-	hid->out[hid->outhead].dr.value = cpu_to_le16(0x200 | report->id);
-	hid->out[hid->outhead].dr.length = cpu_to_le16((report->size + 7) >> 3);
+	if ((head = (hid->ctrlhead + 1) & (HID_CONTROL_FIFO_SIZE - 1)) == hid->ctrltail) {
+		warn("control queue full");
+		return;
+	}
 
-	hid->outhead = (hid->outhead + 1) & (HID_CONTROL_FIFO_SIZE - 1);
+	hid->ctrl[hid->ctrlhead].report = report;
+	hid->ctrl[hid->ctrlhead].dir = dir;
+	hid->ctrlhead = head;
 
-	if (hid->outhead == hid->outtail)
-		hid->outtail = (hid->outtail + 1) & (HID_CONTROL_FIFO_SIZE - 1);
-
-	if (hid->urbout.status != -EINPROGRESS)
-		hid_submit_out(hid);
+	if (hid->urbctrl.status != -EINPROGRESS)
+		hid_submit_ctrl(hid);
 }
 
 int hid_open(struct hid_device *hid)
@@ -1035,7 +1044,7 @@ void hid_init_reports(struct hid_device *hid)
 			hid->urb.transfer_buffer_length = len < 32 ? len : 32;
 		}
 		usb_set_idle(hid->dev, hid->ifnum, 0, report->id);
-		hid_read_report(hid, report);
+		hid_submit_report(hid, report, USB_DIR_IN);
 		list = list->next;
 	}
 
@@ -1043,7 +1052,7 @@ void hid_init_reports(struct hid_device *hid)
 	list = report_enum->report_list.next;
 	while (list != &report_enum->report_list) {
 		report = (struct hid_report *) list;
-		hid_read_report(hid, report);
+		hid_submit_report(hid, report, USB_DIR_IN);
 		list = list->next;
 	}
 }
@@ -1143,12 +1152,6 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 	hid->dev = dev;
 	hid->ifnum = interface->bInterfaceNumber;
 
-	for (n = 0; n < HID_CONTROL_FIFO_SIZE; n++) {
-		hid->out[n].dr.requesttype = USB_TYPE_CLASS | USB_RECIP_INTERFACE;
-		hid->out[n].dr.request = USB_REQ_SET_REPORT;
-		hid->out[n].dr.index = cpu_to_le16(hid->ifnum);
-	}
-
 	hid->name[0] = 0;
 
 	if (!(buf = kmalloc(63, GFP_KERNEL)))
@@ -1163,8 +1166,7 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 
 	kfree(buf);
 
-	FILL_CONTROL_URB(&hid->urbout, dev, usb_sndctrlpipe(dev, 0),
-		(void*) &hid->out[0].dr, hid->out[0].buffer, 1, hid_ctrl, hid);
+	FILL_CONTROL_URB(&hid->urbctrl, dev, 0, (void*) &hid->dr, hid->ctrlbuf, 1, hid_ctrl, hid);
 
 /*
  * Some devices don't like this and crash. I don't know of any devices

@@ -352,7 +352,7 @@ static int hidinput_input_event(struct input_dev *dev, unsigned int type, unsign
 	}
 
 	hid_set_field(field, offset, value);
-	hid_write_report(hid, field->report);
+	hid_submit_report(hid, field->report, USB_DIR_OUT);
 
 	return 0;
 }

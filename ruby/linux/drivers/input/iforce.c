@@ -92,6 +92,8 @@ static signed short btn_joystick[] = { BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_TOP2
 	BTN_BASE2, BTN_BASE3, BTN_BASE4, BTN_BASE5, BTN_A, BTN_B, BTN_C, BTN_DEAD, -1 };
 static signed short btn_wheel[] =    { BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_TOP2, BTN_BASE,
 	BTN_BASE2, BTN_BASE3, BTN_BASE4, BTN_BASE5, BTN_A, BTN_B, BTN_C, -1 };
+static signed short btn_avb_tw[] =    { BTN_TRIGGER, BTN_THUMB, BTN_TOP, BTN_TOP2, BTN_BASE,
+	BTN_BASE2, BTN_BASE3, BTN_BASE4, -1 };
 static signed short abs_joystick[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, -1 };
 static signed short abs_wheel[] =    { ABS_WHEEL, ABS_GAS, ABS_BRAKE, ABS_HAT0X, ABS_HAT0Y, -1 };
 static signed short ff_iforce[] =    { FF_PERIODIC, FF_CONSTANT, FF_SPRING, FF_FRICTION,
@@ -112,6 +114,7 @@ static struct iforce_device {
 	{ 0x046d, 0xc291, "Logitech WingMan Formula Force",		btn_wheel, abs_wheel, ff_iforce },
 	{ 0x05ef, 0x020a, "AVB Top Shot Pegasus",			btn_joystick, abs_joystick, ff_iforce },
 	{ 0x05ef, 0x8884, "AVB Mag Turbo Force",			btn_wheel, abs_wheel, ff_iforce },
+	{ 0x05ef, 0x8888, "AVB Top Shot FFB Racing Wheel",		btn_avb_tw, abs_wheel, ff_iforce },
 	{ 0x06f8, 0x0001, "Guillemot Race Leader Force Feedback",	btn_wheel, abs_wheel, ff_iforce },
 	{ 0x0000, 0x0000, "Unknown I-Force Device [%04x:%04x]",		btn_joystick, abs_joystick, ff_iforce }
 };
@@ -1119,6 +1122,7 @@ static struct usb_device_id iforce_usb_ids [] = {
 	{ USB_DEVICE(0x046d, 0xc291) },		/* Logitech WingMan Formula Force */
 	{ USB_DEVICE(0x05ef, 0x020a) },		/* AVB Top Shot Pegasus */
 	{ USB_DEVICE(0x05ef, 0x8884) },		/* AVB Mag Turbo Force */
+	{ USB_DEVICE(0x05ef, 0x8888) },		/* AVB Top Shot FFB Racing Wheel */
 	{ USB_DEVICE(0x06f8, 0x0001) },		/* Guillemot Race Leader Force Feedback */
 	{ }					/* Terminating entry */
 };

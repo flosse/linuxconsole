@@ -402,7 +402,7 @@ static int hiddev_ioctl(struct inode *inode, struct file *file,
 		if ((report = hiddev_lookup_report(hid, &rinfo)) == NULL)
 			return -EINVAL;
 
-		hid_read_report(hid, report);
+		hid_submit_report(hid, report, USB_DIR_IN);
 
 		return 0;
 
@@ -416,7 +416,7 @@ static int hiddev_ioctl(struct inode *inode, struct file *file,
 		if ((report = hiddev_lookup_report(hid, &rinfo)) == NULL)
 			return -EINVAL;
 
-		hid_write_report(hid, report);
+		hid_submit_report(hid, report, USB_DIR_OUT);
 
 		return 0;
 

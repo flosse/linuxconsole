@@ -282,8 +282,8 @@ struct hid_report_enum {
 #define HID_CONTROL_FIFO_SIZE	8
 
 struct hid_control_fifo {
-	devrequest dr;
-	char buffer[HID_BUFFER_SIZE];
+	unsigned char dir;
+	struct hid_report *report;
 };
 
 #define HID_CLAIMED_INPUT	1
@@ -304,9 +304,11 @@ struct hid_device {							/* device report descriptor */
 	struct urb urb;							/* USB URB structure */
 	char buffer[HID_BUFFER_SIZE];					/* Rx buffer */
 
-	struct urb urbout;						/* Output URB */
-	struct hid_control_fifo out[HID_CONTROL_FIFO_SIZE];		/* Transmit buffer */
-	unsigned char outhead, outtail;					/* Tx buffer head & tail */
+	struct urb urbctrl;						/* Control URB */
+	devrequest dr;							/* Control devrquest struct */
+	struct hid_control_fifo ctrl[HID_CONTROL_FIFO_SIZE];		/* Control fifo */
+	unsigned char ctrlhead, ctrltail;				/* Control fifo head & tail */
+	char ctrlbuf[HID_BUFFER_SIZE];					/* Control buffer */
 
 	unsigned claimed;						/* Claimed by hidinput, hiddev? */	
 	unsigned quirks;						/* Various quirks the device can pull on us */
@@ -366,6 +368,5 @@ int hid_open(struct hid_device *);
 void hid_close(struct hid_device *);
 int hid_find_field(struct hid_device *, unsigned int, unsigned int, struct hid_field **);
 int hid_set_field(struct hid_field *, unsigned, __s32);
-void hid_write_report(struct hid_device *, struct hid_report *);
-void hid_read_report(struct hid_device *, struct hid_report *);
+void hid_submit_report(struct hid_device *, struct hid_report *, unsigned char dir);
 void hid_init_reports(struct hid_device *hid);
