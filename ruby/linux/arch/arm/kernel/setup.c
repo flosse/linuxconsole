@@ -210,7 +210,7 @@ parse_cmdline(struct meminfo *mi, char **cmdline_p, char *from)
 
 			mi->bank[mi->nr_banks].start = start;
 			mi->bank[mi->nr_banks].size  = size;
-			mi->bank[mi->nr_banks].node  = 0;
+			mi->bank[mi->nr_banks].node  = PHYS_TO_NID(start);
 			mi->nr_banks += 1;
 		}
 		c = *from++;
@@ -338,7 +338,7 @@ static int __init parse_tag_mem32(const struct tag *tag)
 	}
 	meminfo.bank[meminfo.nr_banks].start = tag->u.mem.start;
 	meminfo.bank[meminfo.nr_banks].size  = tag->u.mem.size;
-	meminfo.bank[meminfo.nr_banks].node  = 0;
+	meminfo.bank[meminfo.nr_banks].node  = PHYS_TO_NID(tag->u.mem.start); 
 	meminfo.nr_banks += 1;
 
 	return 0;

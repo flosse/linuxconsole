@@ -130,6 +130,8 @@ DRIVERS-  :=
 
 DRIVERS-$(CONFIG_ACPI) += drivers/acpi/acpi.o
 DRIVERS-$(CONFIG_PARPORT) += drivers/parport/driver.o
+DRIVERS-$(CONFIG_I2C) += drivers/i2c/i2c.o
+DRIVERS-$(CONFIG_L3) += drivers/l3/l3.o
 DRIVERS-y += drivers/char/char.o \
 	drivers/block/block.o \
 	drivers/misc/misc.o \
@@ -179,7 +181,6 @@ DRIVERS-$(CONFIG_USB) += drivers/usb/usbdrv.o
 DRIVERS-$(CONFIG_INPUT) += drivers/input/inputdrv.o
 DRIVERS-$(CONFIG_I2O) += drivers/i2o/i2o.o
 DRIVERS-$(CONFIG_IRDA) += drivers/net/irda/irda.o
-DRIVERS-$(CONFIG_I2C) += drivers/i2c/i2c.o
 DRIVERS-$(CONFIG_PHONE) += drivers/telephony/telephony.o
 DRIVERS-$(CONFIG_MD) += drivers/md/mddev.o
 DRIVERS-$(CONFIG_BLUEZ) += drivers/bluetooth/bluetooth.o
