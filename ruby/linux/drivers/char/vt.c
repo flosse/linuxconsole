@@ -395,7 +395,7 @@ void set_origin(struct vc_data *vc)
 {
         if (!IS_VISIBLE || !sw->con_set_origin || !sw->con_set_origin(vc))
                 origin = (unsigned long) screenbuf;
-        visible_origin = origin;
+        // visible_origin = origin;
         scr_end = origin + screenbuf_size;
         pos = origin + video_size_row*y + 2*x;
 }
@@ -487,10 +487,12 @@ inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed)
 {
         unsigned short *p;
 
-        if (!viewed)
+        if (!viewed || !sw->con_screen_pos)
                 p = (unsigned short *)(origin + offset);
+	/*
         else if (!sw->con_screen_pos)
                 p = (unsigned short *)(visible_origin + offset);
+	*/ 
         else
                 p = sw->con_screen_pos(vc, offset);
         return p;
