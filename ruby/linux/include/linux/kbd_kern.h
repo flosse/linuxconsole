@@ -139,7 +139,6 @@ extern unsigned int keymap_count;
 struct console;
 
 void compute_shiftstate(void);
-int keyboard_wait_for_keypress(struct console *);
 int getkeycode(struct input_handle *handle, unsigned int scancode);
 int setkeycode(struct input_handle *handle, unsigned int scancode, unsigned int
 keycode);
