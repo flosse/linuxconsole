@@ -1,8 +1,8 @@
 /*
  * $Id$
  *
- *  Copyright (c) 2000-2001 Vojtech Pavlik <vojtech@ucw.cz>
- *  Copyright (c) 2001 Johann Deneux <deneux@ifrance.com>
+ *  Copyright (c) 2000-2002 Vojtech Pavlik <vojtech@ucw.cz>
+ *  Copyright (c) 2001-2002 Johann Deneux <deneux@ifrance.com>
  *
  *  USB/RS232 I-Force joysticks and wheels.
  */
@@ -110,9 +110,9 @@ int iforce_send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 #ifdef IFORCE_USB
 		case IFORCE_USB: 
 
-		/* FIXME: iforce->out.status should not be checked outside
-		 * the completion handler */
-		if (iforce->usbdev && empty && !iforce->out.status) {
+		if (iforce->usbdev && empty &&
+			!test_and_set_bit(IFORCE_XMIT_RUNNING, iforce->xmit_flag s)) {
+
 			iforce_usb_xmit(iforce);
 		}
 		break;
