@@ -124,7 +124,7 @@ static struct fb_var_screeninfo sfb_default = {
 
 static struct fb_fix_screeninfo sfb_fix __initdata = {
 	"Simple FB", (unsigned long) NULL, 0, FB_TYPE_PACKED_PIXELS, 0,
-	FB_VISUAL_TRUECOLOR, 1, 0, 0, 0 , (unsigned long) NULL, 0, FB_ACCEL_NONE
+	FB_VISUAL_TRUECOLOR, 1, 1, 1, 0 , (unsigned long) NULL, 0, FB_ACCEL_NONE
 };
 
     /*
