@@ -159,6 +159,14 @@ void input_event(struct input_dev *dev, unsigned int type, unsigned int code, in
 			if (dev->event) dev->event(dev, type, code, value);
 
 			break;
+
+		case EV_FF:
+			/* TODO: use handle->handler->event instead ??? */
+			if (dev->event) dev->event(dev, type, code, value);
+			else {
+				printk(KERN_WARNING "input ff: no dev->event\n");
+			}
+			break;
 	}
 
 /*
