@@ -40,50 +40,50 @@ LEN= 0e
 
 05 Direction of effect, if applicable. Else, see 02 for value to assign.
 
-06-07 Related to the use of a trigger. If a trigger is declared or canceled, value is ffff, 0000 else. I guess it can be the interval of time between two consecutive replaying.
+06-07 Minimum time between triggering.
 
-08-09 Periodicity or magnitude modifier id.
-0a-0b Attack and fade modifier id, or ffff if none.
+08-09 Address of periodicity or magnitude parameters
+0a-0b Address of attack and fade parameters, or ffff if none.
 *or*
-08-09 Modifier id of position based modifier for X-axis, or ffff if not
+08-09 Address of interactive parameters for X-axis, or ffff if not
 applicable
-0a-0b Modifier id of position based modifier for Y-axis, or ffff if not
+0a-0b Address of interactive parameters for Y-axis, or ffff if not
 applicable
 
 0c-0d Delay before execution of effect (little endian encoding). 1s = 03e8
 
 
-** Time based modifiers **
+** Time based parameters **
 
-*** Attack and fade modifier ***
+*** Attack and fade ***
 OP=  02
 LEN= 08
-00-01 Modifier id.
+00-01 Address where to store the parameteres
 02-03 Duration of attack (little endian encoding). 1s = 03e8
 04 Level at end of attack. Signed byte.
 05-06 Duration of fade.
 07 Level at end of fade.
 
-*** Magnitude modifier ***
+*** Magnitude ***
 OP=  03
 LEN= 03
-00-01 Modifier id.
+00-01 Address
 02 Level. Signed byte.
 
-*** Periodicity modifier ***
+*** Periodicity ***
 OP=  04
 LEN= 07
-00-01 Modifier id
+00-01 Address
 02 Magnitude. Signed byte.
 03 Offset. Signed byte.
 04 Phase. Val 00 = 0 deg, Val 40 = 90 degs.
 05-06 Period (little endian encoding). 1s = 03e8
 
-** Position based modifier **
+** Interactive parameters **
 
 OP=  05
 LEN= 0a
-00-01 Modifier id.
+00-01 Address
 02 Positive Coeff
 03 Negative Coeff (Val 14 = 2000 (decimal))
 04 Offset (Val 64 = 2000 (decimal))
@@ -103,48 +103,65 @@ LEN= 03
 02 Number of iterations n.
 
 ** Init **
-This is the trickiest part. I haven't been able to understand how all these commands work. But who cares ? I know a few working sequences, and that suffices.
 
+*** Querying features ***
 OP=  ff
-???
+Query command. Length varies according to the query type.
+The general format of this packet is:
+ff 01 QUERY CHECKSUM
+reponses are of the same form:
+FF LEN QUERY VALUE_QUERIED CHECKSUM2
+where LEN = 1 + length(VALUE_QUERIED)
 
+**** Query ram size ****
+QUERY = 42
+The driver should reply with the same packet plus two additionnal bytes
+containing the size of the memory:
+ff 03 42 03 e8 CS would mean that the device has 1000 bytes of ram available.
+
+**** Query number of effects ****
+QUERY = 4e
+The driver should respond by sending the number of effects that can be played
+at the same time (one byte)
+ff 02 4e 14 CS would stand for 20 effects.
+
+**** Vendor's id ****
+QUERY = 4d
+Query the vendors'id (2 bytes)
+
+**** Product id *****
+QUERY = 50
+Query the product id (2 bytes)
+
+*** Initialisation of the device ***
+
+**** Setting a default spring ****
 OP=  40
-???
+LEN= 02
+00 Command type:
+   Val 03 Set the strength of the spring
+   Val 04 Enable or disable the spring 
+01 Strength of the spring if 00 = Val 03
+   Enable (Val 01) or disable (00) the default spring if 00 = Val 04
 
 OP=  42
 ???
+42 01 05 and 42 01 04 enable force feedback
+42 01 01 disables it.
 
 OP=  43
 ???
 
-** Modifier ids **
-Modifiers seems to be produced by the following algorithm:
+** Parameters' memory **
 
-int next_id = 0;
+Each device has a certain amount of memory to store parameters of effects.
+The amount of RAM may vary, I encountered values from 200 to 1000 bytes. Below
+is the amount of memory apparently needed for every set of parameters:
+ - period : 0c
+ - magnitude : 02
+ - attack and fade : 0e
+ - interactive : 08
 
-procedure make_modifier(modifier_type)
-{
-	/* next_id is used for the modifier being created */
-	modifier mod;
-	mod.id = next_id;
-	...
-	sendModifierToDevice(mod);
-
-	/* Update next_id, depending on the current modifier type */
-	switch (modifier_type) {
-		PERIODIC: next_type += 0x0c; break;
-		MAGNITUDE: next_type += 0x02; break;
-		SHAPE: next_type += 0x0e; break;
-		FRICTION:
-		SPRING: next_type += 0x08; break;
-	}
-}
-
-This can seem quite complex, but what I called modifier ids might actually be
-adresses. That would explain why these 'ids' are incremented depending on the
-modifier. This makes sense, as all those increments are always greater or
-equal than the amount of information needed to specify the matching modifier.
-		
 ** Appendix: How to study the protocole ? **
 
 1. Generate effects using the force editor provided with the DirectX SDK, or use Immersion Studio (freely available at their web site in the developer section: www.immersion.com)
