@@ -1,4 +1,3 @@
-
 /*
  *  ATI Frame Buffer Device Driver Core
  *
@@ -65,12 +64,6 @@
 #include <asm/io.h>
 #include <asm/uaccess.h>
 
-#include <video/fbcon.h>
-#include <video/fbcon-cfb8.h>
-#include <video/fbcon-cfb16.h>
-#include <video/fbcon-cfb24.h>
-#include <video/fbcon-cfb32.h>
-
 #include "mach64.h"
 #include "atyfb.h"
 
@@ -97,7 +90,6 @@
 #include <asm/backlight.h>
 #endif
 
-
 /*
  * Debug flags.
  */
@@ -108,10 +100,8 @@
 /*  - must be aligned to a PAGE boundary           */
 #define GUI_RESERVE	(1 * PAGE_SIZE)
 
-
 /* FIXME: remove the FAIL definition */
 #define FAIL(x) do { printk(x "\n"); return -EINVAL; } while (0)
-
 
     /*
      *  The Hardware parameters for each card
@@ -133,42 +123,26 @@ struct pci_mmap_map {
     unsigned long prot_mask;
 };
 
-
     /*
      *  Frame buffer device API
      */
 
 static int atyfb_open(struct fb_info *info, int user);
 static int atyfb_release(struct fb_info *info, int user);
-static int atyfb_get_fix(struct fb_fix_screeninfo *fix, int con,
-			 struct fb_info *fb);
-static int atyfb_get_var(struct fb_var_screeninfo *var, int con,
-			 struct fb_info *fb);
-static int atyfb_set_var(struct fb_var_screeninfo *var, int con,
-			 struct fb_info *fb);
-static int atyfb_pan_display(struct fb_var_screeninfo *var, int con,
+static int atyfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info);
+static void atyfb_set_par(struct fb_info *info);
+static int atyfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+			   u_int transp, struct fb_info *fb);
+static int atyfb_pan_display(struct fb_var_screeninfo *var,
 			     struct fb_info *fb);
-static int atyfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info);
-static int atyfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info);
+static void atyfb_blank(int blank, struct fb_info *fb);
 static int atyfb_ioctl(struct inode *inode, struct file *file, u_int cmd,
-		       u_long arg, int con, struct fb_info *info);
+		       u_long arg, struct fb_info *info);
 #ifdef __sparc__
 static int atyfb_mmap(struct fb_info *info, struct file *file,
 		      struct vm_area_struct *vma);
 #endif
 static int atyfb_rasterimg(struct fb_info *info, int start);
-
-
-    /*
-     *  Interface to the low level console driver
-     */
-
-static int atyfbcon_switch(int con, struct fb_info *fb);
-static int atyfbcon_updatevar(int con, struct fb_info *fb);
-static void atyfbcon_blank(int blank, struct fb_info *fb);
-
 
     /*
      *  Internal routines
@@ -187,9 +161,6 @@ static int aty_var_to_crtc(const struct fb_info_aty *info,
 			   struct crtc *crtc);
 static int aty_crtc_to_var(const struct crtc *crtc,
 			   struct fb_var_screeninfo *var);
-
-static void atyfb_set_par(const struct atyfb_par *par,
-			  struct fb_info_aty *info);
 static int atyfb_decode_var(const struct fb_var_screeninfo *var,
 			    struct atyfb_par *par,
 			    const struct fb_info_aty *info);
@@ -201,13 +172,6 @@ static void set_off_pitch(struct atyfb_par *par,
 static int encode_fix(struct fb_fix_screeninfo *fix,
 		      const struct atyfb_par *par,
 		      const struct fb_info_aty *info);
-static void atyfb_set_dispsw(struct display *disp, struct fb_info_aty *info,
-			     int bpp, int accel);
-static int atyfb_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
-			 u_int *transp, struct fb_info *fb);
-static int atyfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-			 u_int transp, struct fb_info *fb);
-static void do_install_cmap(int con, struct fb_info *info);
 #ifdef CONFIG_PPC
 static int read_aty_sense(const struct fb_info_aty *info);
 #endif
@@ -222,18 +186,15 @@ int atyfb_init(void);
 int atyfb_setup(char*);
 #endif
 
-static int currcon = 0;
-
 static struct fb_ops atyfb_ops = {
 	owner:		THIS_MODULE,
 	fb_open:	atyfb_open,
 	fb_release:	atyfb_release,
-	fb_get_fix:	atyfb_get_fix,
-	fb_get_var:	atyfb_get_var,
-	fb_set_var:	atyfb_set_var,
-	fb_get_cmap:	atyfb_get_cmap,
-	fb_set_cmap:	atyfb_set_cmap,
+	fb_check_var:	atyfb_check_var,
+	fb_set_par:	atyfb_set_par,
+	fb_setcolreg:	atyfb_setcolreg,
 	fb_pan_display:	atyfb_pan_display,
+	fb_blank:	atyfb_blank,
 	fb_ioctl:	atyfb_ioctl,
 #ifdef __sparc__
 	fb_mmap:	atyfb_mmap,
@@ -242,7 +203,6 @@ static struct fb_ops atyfb_ops = {
 };
 
 static char atyfb_name[16] = "ATY Mach64";
-static char fontname[40] __initdata = { 0 };
 static char curblink __initdata = 1;
 static char noaccel __initdata = 0;
 static u32 default_vram __initdata = 0;
@@ -293,7 +253,6 @@ static const char m64n_ltp_a[] __initdata = "3D RAGE LT PRO (AGP)";
 static const char m64n_ltp_p[] __initdata = "3D RAGE LT PRO (PCI)";
 static const char m64n_mob_p[] __initdata = "3D RAGE Mobility (PCI)";
 static const char m64n_mob_a[] __initdata = "3D RAGE Mobility (AGP)";
-
 
 static const struct {
     u16 pci_id, chip_type;
@@ -718,12 +677,12 @@ static int aty_crtc_to_var(const struct crtc *crtc,
 
 /* ------------------------------------------------------------------------- */
 
-static void atyfb_set_par(const struct atyfb_par *par,
-			  struct fb_info_aty *info)
+static void atyfb_set_par(struct fb_info *info)
 {
-    u32 i;
+    struct atyfb_par *par = (struct atyfb_par *) info->par;	
     int accelmode;
     u8 tmp;
+    u32 i;
 
     accelmode = par->accel_flags;  /* hack */
 
@@ -734,7 +693,7 @@ static void atyfb_set_par(const struct atyfb_par *par,
     tmp = aty_ld_8(CRTC_GEN_CNTL + 3, info);
     aty_set_crtc(info, &par->crtc);
     aty_st_8(CLOCK_CNTL + info->clk_wr_offset, 0, info);
-					/* better call aty_StrobeClock ?? */
+    /* better call aty_StrobeClock ?? */
     aty_st_8(CLOCK_CNTL + info->clk_wr_offset, CLOCK_STROBE, info);
 
     info->dac_ops->set_dac(info, &par->pll, par->crtc.bpp, accelmode);
@@ -951,7 +910,6 @@ static int atyfb_release(struct fb_info *info, int user)
     return(0);
 }
 
-
 static int encode_fix(struct fb_fix_screeninfo *fix,
 		      const struct atyfb_par *par,
 		      const struct fb_info_aty *info)
@@ -995,103 +953,17 @@ static int encode_fix(struct fb_fix_screeninfo *fix,
     return 0;
 }
 
-
-    /*
-     *  Get the Fixed Part of the Display
-     */
-
-static int atyfb_get_fix(struct fb_fix_screeninfo *fix, int con,
-			 struct fb_info *fb)
-{
-    const struct fb_info_aty *info = (struct fb_info_aty *)fb;
-    struct atyfb_par par;
-
-    if (con == -1)
-	par = info->default_par;
-    else
-	atyfb_decode_var(&fb_display[con].var, &par, info);
-    encode_fix(fix, &par, info);
-    return 0;
-}
-
-
-    /*
-     *  Get the User Defined Part of the Display
-     */
-
-static int atyfb_get_var(struct fb_var_screeninfo *var, int con,
-			 struct fb_info *fb)
-{
-    const struct fb_info_aty *info = (struct fb_info_aty *)fb;
-
-    if (con == -1)
-	atyfb_encode_var(var, &info->default_par, info);
-    else
-	*var = fb_display[con].var;
-    return 0;
-}
-
-
-static void atyfb_set_dispsw(struct display *disp, struct fb_info_aty *info,
-			     int bpp, int accel)
-{
-	    switch (bpp) {
-#ifdef FBCON_HAS_CFB8
-		case 8:
-		    info->dispsw = accel ? fbcon_aty8 : fbcon_cfb8;
-		    disp->dispsw = &info->dispsw;
-		    break;
-#endif
-#ifdef FBCON_HAS_CFB16
-		case 16:
-		    info->dispsw = accel ? fbcon_aty16 : fbcon_cfb16;
-		    disp->dispsw = &info->dispsw;
-		    disp->dispsw_data = info->fbcon_cmap.cfb16;
-		    break;
-#endif
-#ifdef FBCON_HAS_CFB24
-		case 24:
-		    info->dispsw = accel ? fbcon_aty24 : fbcon_cfb24;
-		    disp->dispsw = &info->dispsw;
-		    disp->dispsw_data = info->fbcon_cmap.cfb24;
-		    break;
-#endif
-#ifdef FBCON_HAS_CFB32
-		case 32:
-		    info->dispsw = accel ? fbcon_aty32 : fbcon_cfb32;
-		    disp->dispsw = &info->dispsw;
-		    disp->dispsw_data = info->fbcon_cmap.cfb32;
-		    break;
-#endif
-		default:
-		    disp->dispsw = &fbcon_dummy;
-	    }
-#ifdef CONFIG_FB_ATY_CT
-	    if (info->cursor) {
-		info->dispsw.cursor = atyfb_cursor;
-		info->dispsw.set_font = atyfb_set_font;
-	    }
-#endif /* CONFIG_FB_ATY_CT */
-}
-
-
     /*
      *  Set the User Defined Part of the Display
      */
 
-static int atyfb_set_var(struct fb_var_screeninfo *var, int con,
+static int atyfb_set_var(struct fb_var_screeninfo *var, 
 			 struct fb_info *fb)
 {
-    struct fb_info_aty *info = (struct fb_info_aty *)fb;
+    struct fb_info_aty *info = (struct fb_info_aty *) fb;
     struct atyfb_par par;
-    struct display *display;
     int oldxres, oldyres, oldvxres, oldvyres, oldbpp, oldaccel, accel, err;
     int activate = var->activate;
-
-    if (con >= 0)
-	display = &fb_display[con];
-    else
-	display = fb->disp;	/* used during initialization */
 
     if ((err = atyfb_decode_var(var, &par, info)))
 	return err;
@@ -1105,7 +977,7 @@ static int atyfb_set_var(struct fb_var_screeninfo *var, int con,
 	oldvyres = display->var.yres_virtual;
 	oldbpp = display->var.bits_per_pixel;
 	oldaccel = display->var.accel_flags;
-	display->var = *var;
+	info->var = *var;
 	accel = var->accel_flags & FB_ACCELF_TEXT;
 	if (oldxres != var->xres || oldyres != var->yres ||
 	    oldvxres != var->xres_virtual || oldvyres != var->yres_virtual ||
@@ -1113,37 +985,22 @@ static int atyfb_set_var(struct fb_var_screeninfo *var, int con,
 	    struct fb_fix_screeninfo fix;
 
 	    encode_fix(&fix, &par, info);
-	    display->screen_base = (char *)info->frame_buffer;
-	    display->visual = fix.visual;
-	    display->type = fix.type;
-	    display->type_aux = fix.type_aux;
-	    display->ypanstep = fix.ypanstep;
-	    display->ywrapstep = fix.ywrapstep;
-	    display->line_length = fix.line_length;
-	    display->can_soft_blank = 1;
-	    display->inverse = 0;
+	    info->screen_base = (char *)info->frame_buffer;
+/*
 	    if (accel)
 	    	display->scrollmode = (info->bus_type == PCI) ? SCROLL_YNOMOVE : 0;
 	    else
 	    	display->scrollmode = SCROLL_YREDRAW;
-	    if (info->fb_info.changevar)
-		(*info->fb_info.changevar)(con);
+*/
 	}
-	if (!info->fb_info.display_fg ||
-	    info->fb_info.display_fg->vc_num == con) {
-	    atyfb_set_par(&par, info);
-	    atyfb_set_dispsw(display, info, par.crtc.bpp, accel);
-	}
+	atyfb_set_par(info);
 	if (oldbpp != var->bits_per_pixel) {
 	    if ((err = fb_alloc_cmap(&display->cmap, 0, 0)))
 		return err;
-	    do_install_cmap(con, &info->fb_info);
 	}
     }
-
     return 0;
 }
-
 
     /*
      *  Pan or Wrap the Display
@@ -1151,7 +1008,7 @@ static int atyfb_set_var(struct fb_var_screeninfo *var, int con,
      *  This call looks only at xoffset, yoffset and the FB_VMODE_YWRAP flag
      */
 
-static int atyfb_pan_display(struct fb_var_screeninfo *var, int con,
+static int atyfb_pan_display(struct fb_var_screeninfo *var, 
 			     struct fb_info *fb)
 {
     struct fb_info_aty *info = (struct fb_info_aty *)fb;
@@ -1169,51 +1026,6 @@ static int atyfb_pan_display(struct fb_var_screeninfo *var, int con,
     set_off_pitch(par, info);
     return 0;
 }
-
-    /*
-     *  Get the Colormap
-     */
-
-static int atyfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info)
-{
-    if (!info->display_fg || con == info->display_fg->vc_num) /* current console? */
-	return fb_get_cmap(cmap, kspc, atyfb_getcolreg, info);
-    else if (fb_display[con].cmap.len) /* non default colormap? */
-	fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-    else {
-	int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
-	fb_copy_cmap(fb_default_cmap(size), cmap, kspc ? 0 : 2);
-    }
-    return 0;
-}
-
-    /*
-     *  Set the Colormap
-     */
-
-static int atyfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info)
-{
-    int err;
-    struct display *disp;
-
-    if (con >= 0)
-    	disp = &fb_display[con];
-    else
-        disp = info->disp;
-    if (!disp->cmap.len) {	/* no colormap allocated? */
-	int size = disp->var.bits_per_pixel == 16 ? 32 : 256;
-	if ((err = fb_alloc_cmap(&disp->cmap, size, 0)))
-	    return err;
-    }
-    if (!info->display_fg || con == info->display_fg->vc_num)			/* current console? */
-	return fb_set_cmap(cmap, kspc, atyfb_setcolreg, info);
-    else
-	fb_copy_cmap(cmap, &disp->cmap, kspc ? 0 : 1);
-    return 0;
-}
-
 
 #ifdef DEBUG
 #define ATYIO_CLKR		0x41545900	/* ATY\00 */
@@ -1238,19 +1050,13 @@ struct atyclk {
 #endif
 
 static int atyfb_ioctl(struct inode *inode, struct file *file, u_int cmd,
-		       u_long arg, int con, struct fb_info *info2)
+		       u_long arg, struct fb_info *info2)
 {
 #if defined(__sparc__) || (defined(DEBUG) && defined(CONFIG_FB_ATY_CT))
     struct fb_info_aty *info = (struct fb_info_aty *)info2;
 #endif /* __sparc__ || DEBUG */
 #ifdef __sparc__
     struct fbtype fbtyp;
-    struct display *disp;
-
-    if (con >= 0)
-    	disp = &fb_display[con];
-    else
-        disp = info2->disp;
 #endif
 
     switch (cmd) {
@@ -1260,7 +1066,7 @@ static int atyfb_ioctl(struct inode *inode, struct file *file, u_int cmd,
 	fbtyp.fb_width = info->current_par.crtc.vxres;
 	fbtyp.fb_height = info->current_par.crtc.vyres;
 	fbtyp.fb_depth = info->current_par.crtc.bpp;
-	fbtyp.fb_cmsize = disp->cmap.len;
+	fbtyp.fb_cmsize = info->cmap.len;
 	fbtyp.fb_size = info->total_vram;
 	if (copy_to_user((struct fbtype *)arg, &fbtyp, sizeof(fbtyp)))
 		return -EFAULT;
@@ -1323,15 +1129,6 @@ static int atyfb_ioctl(struct inode *inode, struct file *file, u_int cmd,
     default:
 	return -EINVAL;
     }
-    return 0;
-}
-
-static int atyfb_rasterimg(struct fb_info *info, int start)
-{
-    struct fb_info_aty *fb = (struct fb_info_aty *)info;
-
-    if (fb->blitter_may_be_busy)
-	wait_for_idle(fb);
     return 0;
 }
 
@@ -1498,17 +1295,12 @@ static void atyfb_palette(int enter)
 {
 	struct fb_info_aty *info;
 	struct atyfb_par *par;
-	struct display *d;
 	int i;
 
 	for (i = 0; i < MAX_NR_CONSOLES; i++) {
-		d = &fb_display[i];
-		if (d->fb_info &&
-		    d->fb_info->fbops == &atyfb_ops &&
-		    d->fb_info->display_fg &&
-		    d->fb_info->display_fg->vc_num == i) {
-			atyfb_save_palette(d->fb_info, enter);
-			info = (struct fb_info_aty *)d->fb_info;
+		if (fb_info && fb_info->fbops == &atyfb_ops) { 
+			atyfb_save_palette(fb_info, enter);
+			info = (struct fb_info_aty *)fb_info;
 			par = &info->current_par;
 			if (enter) {
 				atyfb_save.yoffset = par->crtc.yoffset;
@@ -1523,8 +1315,6 @@ static void atyfb_palette(int enter)
 	}
 }
 #endif /* __sparc__ */
-
-
 
 #ifdef CONFIG_PMAC_PBOOK
 
@@ -1711,7 +1501,7 @@ static int aty_sleep_notify(struct pmu_sleep_notifier *self, int when)
 				info->save_framebuffer = 0;
 			}
 			/* Restore display */
-			atyfb_set_par(&info->current_par, info);
+			atyfb_set_par(info);
 			atyfbcon_blank(0, (struct fb_info *)info);
 			break;
 		}
@@ -1750,7 +1540,6 @@ aty_set_backlight_enable(int on, int level, void* data)
 		reg |= (backlight_conv[0] << BIAS_MOD_LEVEL_SHIFT);
 	}
 	aty_st_lcd(LCD_MISC_CNTL, reg, info);
-
 	return 0;
 }
 
@@ -1766,8 +1555,6 @@ static struct backlight_controller aty_backlight_controller = {
 };
 #endif /* CONFIG_PMAC_BACKLIGHT */
 
-
-
     /*
      *  Initialisation
      */
@@ -1780,7 +1567,6 @@ static int __init aty_init(struct fb_info_aty *info, const char *name)
     u32 i;
     int j, k;
     struct fb_var_screeninfo var;
-    struct display *disp;
     u16 type;
     u8 rev;
     const char *chipname = NULL, *ramname = NULL, *xtal;
@@ -2027,17 +1813,9 @@ found:
     /* Clear the video memory */
     fb_memset((void *)info->frame_buffer, 0, info->total_vram);
 
-    disp = &info->disp;
-
     strcpy(info->fb_info.modename, atyfb_name);
     info->fb_info.node = -1;
     info->fb_info.fbops = &atyfb_ops;
-    info->fb_info.disp = disp;
-    strcpy(info->fb_info.fontname, fontname);
-    info->fb_info.changevar = NULL;
-    info->fb_info.switch_con = &atyfbcon_switch;
-    info->fb_info.updatevar = &atyfbcon_updatevar;
-    info->fb_info.blank = &atyfbcon_blank;
     info->fb_info.flags = FBINFO_FLAG_DEFAULT;
 
 #ifdef CONFIG_PMAC_BACKLIGHT
@@ -2150,7 +1928,7 @@ found:
     }
 #endif /* CONFIG_FB_ATY_CT */
 
-    atyfb_set_var(&var, -1, &info->fb_info);
+    atyfb_set_var(&var, &info->fb_info);
 
     if (register_framebuffer(&info->fb_info) < 0)
 	return 0;
@@ -2561,17 +2339,7 @@ int __init atyfb_setup(char *options)
 
     for (this_opt = strtok(options, ","); this_opt;
 	 this_opt = strtok(NULL, ",")) {
-	if (!strncmp(this_opt, "font:", 5)) {
-		char *p;
-		int i;
-
-		p = this_opt + 5;
-		for (i = 0; i < sizeof(fontname) - 1; i++)
-			if (!*p || *p == ' ' || *p == ',')
-				break;
-		memcpy(fontname, this_opt + 5, i);
-		fontname[i] = 0;
-	} else if (!strncmp(this_opt, "noblink", 7)) {
+	if (!strncmp(this_opt, "noblink", 7)) {
 		curblink = 0;
 	} else if (!strncmp(this_opt, "noaccel", 7)) {
 		noaccel = 1;
@@ -2676,47 +2444,11 @@ static char __init *strtoke(char *s, const char *ct)
 }
 #endif /* CONFIG_ATARI */
 
-static int atyfbcon_switch(int con, struct fb_info *fb)
-{
-    struct fb_info_aty *info = (struct fb_info_aty *)fb;
-    struct atyfb_par par;
-
-    /* Do we have to save the colormap? */
-    if (fb_display[currcon].cmap.len)
-	fb_get_cmap(&fb_display[currcon].cmap, 1, atyfb_getcolreg, fb);
-
-#ifdef CONFIG_FB_ATY_CT
-    /* Erase HW Cursor */
-    if (info->cursor)
-	atyfb_cursor(&fb_display[currcon], CM_ERASE,
-		     info->cursor->pos.x, info->cursor->pos.y);
-#endif /* CONFIG_FB_ATY_CT */
-
-    currcon = con;
-
-    atyfb_decode_var(&fb_display[con].var, &par, info);
-    atyfb_set_par(&par, info);
-    atyfb_set_dispsw(&fb_display[con], info, par.crtc.bpp,
-		     par.accel_flags & FB_ACCELF_TEXT);
-
-    /* Install new colormap */
-    do_install_cmap(con, fb);
-
-#ifdef CONFIG_FB_ATY_CT
-    /* Install hw cursor */
-    if (info->cursor) {
-	aty_set_cursor_color(info);
-	aty_set_cursor_shape(info);
-    }
-#endif /* CONFIG_FB_ATY_CT */
-    return 1;
-}
-
     /*
      *  Blank the display.
      */
 
-static void atyfbcon_blank(int blank, struct fb_info *fb)
+static void atyfb_blank(int blank, struct fb_info *fb)
 {
     struct fb_info_aty *info = (struct fb_info_aty *)fb;
     u8 gen_cntl;
@@ -2752,27 +2484,6 @@ static void atyfbcon_blank(int blank, struct fb_info *fb)
 #endif /* CONFIG_PMAC_BACKLIGHT */
 }
 
-
-    /*
-     *  Read a single color register and split it into
-     *  colors/transparent. Return != 0 for invalid regno.
-     */
-
-static int atyfb_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
-			   u_int *transp, struct fb_info *fb)
-{
-    struct fb_info_aty *info = (struct fb_info_aty *)fb;
-
-    if (regno > 255)
-	return 1;
-    *red = (info->palette[regno].red<<8) | info->palette[regno].red;
-    *green = (info->palette[regno].green<<8) | info->palette[regno].green;
-    *blue = (info->palette[regno].blue<<8) | info->palette[regno].blue;
-    *transp = 0;
-    return 0;
-}
-
-
     /*
      *  Set a single color register. The values supplied are already
      *  rounded down to the hardware's capabilities (according to the
@@ -2790,9 +2501,6 @@ static int atyfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
     red >>= 8;
     green >>= 8;
     blue >>= 8;
-    info->palette[regno].red = red;
-    info->palette[regno].green = green;
-    info->palette[regno].blue = blue;
     i = aty_ld_8(DAC_CNTL, info) & 0xfc;
     if (M64_HAS(EXTRA_BRIGHT))
 	i |= 0x2;	/*DAC_CNTL|0x2 turns off the extra brightness for gt*/
@@ -2826,69 +2534,6 @@ static int atyfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 	    }
     return 0;
 }
-
-
-static void do_install_cmap(int con, struct fb_info *info)
-{
-    if (con != currcon)
-	return;
-    if (fb_display[con].cmap.len)
-	fb_set_cmap(&fb_display[con].cmap, 1, atyfb_setcolreg, info);
-    else {
-	int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
-	fb_set_cmap(fb_default_cmap(size), 1, atyfb_setcolreg, info);
-    }
-}
-
-
-    /*
-     *  Update the `var' structure (called by fbcon.c)
-     */
-
-static int atyfbcon_updatevar(int con, struct fb_info *fb)
-{
-    struct fb_info_aty *info = (struct fb_info_aty *)fb;
-    struct atyfb_par *par = &info->current_par;
-    struct display *p = &fb_display[con];
-    struct vc_data *conp = p->conp;
-    u32 yres, yoffset, sy, height;
-
-    yres = ((par->crtc.v_tot_disp >> 16) & 0x7ff) + 1;
-    yoffset = fb_display[con].var.yoffset;
-
-    sy = (conp->vc_rows + p->yscroll) * fontheight(p);
-    height = yres - conp->vc_rows * fontheight(p);
-
-    if (height && (yoffset + yres > sy)) {
-	u32 xres, xoffset;
-	u32 bgx;
-
-	xres = (((par->crtc.h_tot_disp >> 16) & 0xff) + 1) * 8;
-	xoffset = fb_display[con].var.xoffset;
-
-
-	bgx = attr_bgcol_ec(p, conp);
-	bgx |= (bgx << 8);
-	bgx |= (bgx << 16);
-
-	if (sy + height > par->crtc.vyres) {
-	    wait_for_fifo(1, info);
-	    aty_st_le32(SC_BOTTOM, sy + height - 1, info);
-	}
-	aty_rectfill(xoffset, sy, xres, height, bgx, info);
-    }
-
-#ifdef CONFIG_FB_ATY_CT
-    if (info->cursor && (yoffset + yres <= sy))
-	atyfb_cursor(p, CM_ERASE, info->cursor->pos.x, info->cursor->pos.y);
-#endif /* CONFIG_FB_ATY_CT */
-
-    info->current_par.crtc.yoffset = yoffset;
-    set_off_pitch(&info->current_par, info);
-    return 0;
-}
-
-
 
 #ifdef MODULE
 int __init init_module(void)
@@ -2928,5 +2573,4 @@ void cleanup_module(void)
 	kfree(info);
     }
 }
-
 #endif
