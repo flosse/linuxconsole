@@ -326,6 +326,7 @@ static int make_core(struct iforce* iforce, u16 id, u16 mod_id1, u16 mod_id2,
 	data[1]  = effect_type;
 	data[2]  = LO(axes) | find_button(iforce, button);
 
+	if (!duration) duration = 0xFFFF;
 	data[3]  = LO(duration);
 	data[4]  = HI(duration);
 
