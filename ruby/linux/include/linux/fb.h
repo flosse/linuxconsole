@@ -340,6 +340,7 @@ struct fb_info {
    struct fbcursor cursor;		/* Current cursor */
    struct fb_cmap cmap;                 /* Current cmap */
    struct fb_ops *fbops;
+   struct pm_dev *pm_fb;
    char *screen_base;                   /* Virtual address */
    devfs_handle_t devfs_handle;         /* Devfs handle for new name         */
    devfs_handle_t devfs_lhandle;        /* Devfs handle for compat. symlink  */
