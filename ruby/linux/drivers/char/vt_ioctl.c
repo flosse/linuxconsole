@@ -928,8 +928,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		if (i)
 			return i;
 		put_user(vc->display_fg->fg_console->vc_num, &vtstat->v_active);
-		state = 1;	/* /dev/tty is always open */
-		for (i = 0, mask = 2; i < MAX_NR_USER_CONSOLES && mask; ++i, mask <<= 1) {
+		for (i = 0,mask = 0; i < MAX_NR_USER_CONSOLES; ++i,mask <<= 1) {
 			tmp = find_vc(i + vc->display_fg->vcs.first_vc);
 			if (tmp && VT_IS_IN_USE(tmp))
 				state |= mask;
@@ -966,8 +965,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 
 		if (!perm)
 			return -EPERM;
-		if (arg == vc->display_fg->fg_console->vc_num || 
-		    arg > MAX_NR_CONSOLES)
+		if (arg > MAX_NR_CONSOLES) 
 			return -ENXIO;
 
 		i = vc_allocate(arg);
@@ -975,7 +973,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 			return i;
 		tmp = find_vc(arg);
 		if (tmp->display_fg != vc->display_fg)
-			return -ENXIO; 
+			return -ENXIO;
 		set_console(tmp);
 		return 0;
 	}
@@ -1364,8 +1362,10 @@ inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
 		set_origin(new_vc);	
 		update = vt->vt_sw->con_switch(new_vc);
 	
-		if (memcmp(&new_vc->vc_font, &old_vc->vc_font, 
-		    sizeof(struct console_font_op))) {
+		if (new_vc->vc_font.height != old_vc->vc_font.height ||
+		    new_vc->vc_font.width != old_vc->vc_font.width || 
+		    new_vc->vc_font.charcount != old_vc->vc_font.charcount ||
+		    !strcmp(&new_vc->vc_font.data, &old_vc->vc_font.data)) {
 			vt->vt_sw->con_font_op(new_vc, &new_vc->vc_font);
 		}	
 		set_palette(new_vc);
