@@ -10,6 +10,8 @@
 #include <linux/console_struct.h>
 #include <linux/vt.h>
 
+int softcursor_original;
+
 /*
  * Presently, a lot of graphics programs do not restore the contents of
  * the higher font pages.  Defining this flag will avoid use of them, but
@@ -33,7 +35,7 @@ extern struct vt_struct {
 
 void (*kd_mksound)(unsigned int hz, unsigned int ticks);
 
-/* console.c */
+/* vt.c */
 
 struct console_font_op;
 struct consw;
@@ -45,16 +47,19 @@ int vc_resize(unsigned int lines, unsigned int cols,
 #define vc_resize_all(l, c) vc_resize(l, c, 0, MAX_NR_CONSOLES-1)
 #define vc_resize_con(l, c, x) vc_resize(l, c, x, x)
 void vc_disallocate(unsigned int console);
+void set_cursor(struct vc_data *vc);
+void add_softcursor(struct vc_data *vc);
 void reset_palette(struct vc_data *vc);
 void set_palette(struct vc_data *vc);
 void do_blank_screen(int gfx_mode);
 void unblank_screen(void);
 void poke_blanked_console(void);
-int con_font_op(int currcons, struct console_font_op *op);
+inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed);
 int con_set_cmap(unsigned char *cmap);
 int con_get_cmap(unsigned char *cmap);
 void scrollback(int);
 void scrollfront(int);
+void gotoxy(struct vc_data *vc, int new_x, int new_y);
 void update_region(struct vc_data *vc, unsigned long start, int count);
 void redraw_screen(int new_console, int is_switch);
 #define update_screen(x) redraw_screen(x, 0)
@@ -81,12 +86,13 @@ void con_free_unimap(int currcons);
 void con_protect_unimap(int currcons, int rdonly);
 int con_copy_unimap(int dstcons, int srccons);
 
-/* vt.c */
+/* vt_ioctl.c */
 
 extern unsigned int video_font_height;
 extern unsigned int default_font_height;
 extern unsigned int video_scan_lines;
 
+int con_font_op(int currcons, struct console_font_op *op);
 void complete_change_console(unsigned int new_console);
 int vt_waitactive(int vt);
 void change_console(unsigned int);
