@@ -92,6 +92,7 @@ void gameport_unregister_device(struct gameport_dev *dev);
 #define GAMEPORT_ID_VENDOR_MICROSOFT	0x0007
 #define GAMEPORT_ID_VENDOR_THRUSTMASTER	0x0008
 #define GAMEPORT_ID_VENDOR_GRAVIS	0x0009
+#define GAMEPORT_ID_VENDOR_GUILLEMOT	0x000a
 
 static __inline__ void gameport_trigger(struct gameport *gameport)
 {

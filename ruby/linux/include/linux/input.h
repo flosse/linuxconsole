@@ -643,6 +643,7 @@ struct input_dev {
 
 	int number;
 	char *name;
+	char *phys;
 	unsigned short idbus;
 	unsigned short idvendor;
 	unsigned short idproduct;
