@@ -68,7 +68,7 @@ extern void vcs_make_devfs (unsigned int index, int unregister);
 static struct tty_struct *console_table[MAX_NR_CONSOLES];
 static struct termios *console_termios[MAX_NR_CONSOLES];
 static struct termios *console_termios_locked[MAX_NR_CONSOLES];
-struct vc vc_cons [MAX_NR_CONSOLES];
+struct vc_data *vc_cons[MAX_NR_CONSOLES];
 
 #ifndef VT_SINGLE_DRIVER
 static struct consw *con_driver_map[MAX_NR_CONSOLES];
@@ -99,14 +99,6 @@ int want_console = -1;
 int kmsg_redirect = 0;
 
 /*
- * For each existing display, we have a pointer to console currently visible
- * on that display, allowing consoles other than fg_console to be refreshed
- * appropriately. Unless the low-level driver supplies its own display_fg
- * variable, we use this one for the "master display".
- */
-static struct vc_data *master_display_fg = NULL;
-
-/*
  * Unfortunately, we need to delay tty echo when we're currently writing to the
  * console since the code is (and always was) not re-entrant, so we insert
  * all filp requests to con_task_queue instead of tq_timer and run it from
@@ -125,8 +117,8 @@ int (*console_blank_hook)(int) = NULL;
  *      Low-Level Functions
  */
 
-#define IS_FG (currcons == fg_console)
-#define IS_VISIBLE CON_IS_VISIBLE(vc_cons[currcons].d)
+#define IS_FG (cons_num == fg_console)
+#define IS_VISIBLE CON_IS_VISIBLE(vc_cons[currcons])
 
 #ifdef VT_BUF_VRAM_ONLY
 #define DO_UPDATE 0
@@ -234,8 +226,6 @@ static void gotoxay(struct vc_data *vc, int new_x, int new_y)
 
 void set_palette(struct vc_data *vc)
 {
-	int currcons = vc->vc_num;
-
         if (vcmode != KD_GRAPHICS)
                 sw->con_set_palette(vc, color_table);
 }
@@ -260,6 +250,7 @@ void reset_palette(struct vc_data *vc)
 
 static int set_get_cmap(unsigned char *arg, int set)
 {
+    int currcons = fg_console;	
     int i, j, k;
 
     for (i = 0; i < 16; i++)
@@ -276,11 +267,11 @@ static int set_get_cmap(unsigned char *arg, int set)
         for (i = 0; i < MAX_NR_CONSOLES; i++)
             if (vc_cons_allocated(i)) {
                 for (j = k = 0; j < 16; j++) {
-                    vc_cons[i].d->vc_palette[k++] = default_red[j];
-                    vc_cons[i].d->vc_palette[k++] = default_grn[j];
-                    vc_cons[i].d->vc_palette[k++] = default_blu[j];
+                    palette[k++] = default_red[j];
+                    palette[k++] = default_grn[j];
+                    palette[k++] = default_blu[j];
                 }
-                set_palette(vc_cons[i].d);
+                set_palette(vc_cons[i]);
             }
     }
     return 0;
@@ -493,8 +484,6 @@ static void set_origin(struct vc_data *vc)
 
 static inline void save_screen(struct vc_data *vc)
 {
-	int currcons = vc->vc_num;
-
         if (sw->con_save_screen)
                 sw->con_save_screen(vc);
 }
@@ -653,16 +642,14 @@ void redraw_screen(int new_console, int is_switch)
 
         if (is_switch) {
                 currcons = fg_console;
-                hide_cursor(vc_cons[currcons].d);
+                hide_cursor(vc_cons[currcons]);
                 if (fg_console != new_console) {
-                        struct vc_data **display = vc_cons[new_console].d->vc_display_fg;
-                        old_console = (*display) ? (*display)->vc_num : fg_console;
-                        *display = vc_cons[new_console].d;
+                        old_console = fg_console;
                         fg_console = new_console;
                         currcons = old_console;
                         if (!IS_VISIBLE) {
-                                save_screen(vc_cons[currcons].d);
-                                set_origin(vc_cons[currcons].d);
+                                save_screen(vc_cons[currcons]);
+                                set_origin(vc_cons[currcons]);
                         }
                         currcons = new_console;
                         if (old_console == new_console)
@@ -670,18 +657,18 @@ void redraw_screen(int new_console, int is_switch)
                 }
         } else {
                 currcons = new_console;
-                hide_cursor(vc_cons[currcons].d);
+                hide_cursor(vc_cons[currcons]);
         }
 
         if (redraw) {
-                if (sw->con_switch(vc_cons[currcons].d) && vcmode != KD_GRAPHICS)
+                if (sw->con_switch(vc_cons[currcons]) && vcmode != KD_GRAPHICS)
                         /* Change the palette after a VT switch. */
-                        set_origin(vc_cons[currcons].d);
-                        sw->con_set_palette(vc_cons[currcons].d, color_table);
+                        set_origin(vc_cons[currcons]);
+                        sw->con_set_palette(vc_cons[currcons], color_table);
                         /* Update the screen contents */
-                        do_update_region(vc_cons[currcons].d, origin, screenbuf_size/2);
+                        do_update_region(vc_cons[currcons], origin, screenbuf_size/2);
         }
-        set_cursor(vc_cons[currcons].d);
+        set_cursor(vc_cons[currcons]);
         if (is_switch) {
                 set_leds();
                 compute_shiftstate();
@@ -701,7 +688,7 @@ static void set_vesa_blanking(unsigned long arg)
 
 static void vesa_powerdown(void)
 {
-    struct vc_data *vc = vc_cons[fg_console].d;
+    struct vc_data *vc = vc_cons[fg_console];
     /*
      *  Power down if currently suspended (1 or 2),
      *  suspend if currently blanked (0),
@@ -710,11 +697,11 @@ static void vesa_powerdown(void)
      */
     switch (vesa_blank_mode) {
         case VESA_NO_BLANKING:
-            vc->vc_sw->con_blank(vc, VESA_VSYNC_SUSPEND+1);
+            sw->con_blank(vc, VESA_VSYNC_SUSPEND+1);
             break;
         case VESA_VSYNC_SUSPEND:
         case VESA_HSYNC_SUSPEND:
-            vc->vc_sw->con_blank(vc, VESA_POWERDOWN+1);
+            sw->con_blank(vc, VESA_POWERDOWN+1);
             break;
     }
 }
@@ -745,10 +732,10 @@ void unblank_screen(void)
         console_blanked = 0;
         if (console_blank_hook)
                 console_blank_hook(0);
-        if (sw->con_blank(vc_cons[currcons].d, 0))
+        if (sw->con_blank(vc_cons[currcons], 0))
                 /* Low-level driver cannot restore -> do it ourselves */
                 update_screen(fg_console);
-        set_cursor(vc_cons[fg_console].d);
+        set_cursor(vc_cons[fg_console]);
 }
 
 static void vesa_powerdown_screen(void)
@@ -762,7 +749,7 @@ static void vesa_powerdown_screen(void)
 void do_blank_screen(int entering_gfx)
 {
         int currcons = fg_console;
-	struct vc_data *vc = vc_cons[currcons].d;
+	struct vc_data *vc = vc_cons[currcons];
         int i;
 
         if (console_blanked)
@@ -796,7 +783,7 @@ void do_blank_screen(int entering_gfx)
 
         save_screen(vc);
         /* In case we need to reset origin, blanking hook returns 1 */
-        i = sw->con_blank(vc_cons[currcons].d, 1);
+        i = sw->con_blank(vc_cons[currcons], 1);
         console_blanked = fg_console + 1;
         if (i)
                 set_origin(vc);
@@ -810,7 +797,7 @@ void do_blank_screen(int entering_gfx)
 void poke_blanked_console(void)
 {
         timer_active &= ~(1<<BLANK_TIMER);
-        if (vt_cons[fg_console]->vc_mode == KD_GRAPHICS)
+        if (vt_cons->vc_mode == KD_GRAPHICS)
                 return;
         if (console_blanked) {
                 timer_table[BLANK_TIMER].fn = unblank_screen;
@@ -827,11 +814,11 @@ void poke_blanked_console(void)
  */
 static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
 {
-  switch (rqst) {
-  case PM_RESUME:
+	  switch (rqst) {
+ 		case PM_RESUME:
                         unblank_screen();
                         break;
-  case PM_SUSPEND:
+  		case PM_SUSPEND:
                         blank_screen();
                         break;
   }
@@ -844,25 +831,25 @@ static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
 
 int vc_cons_allocated(unsigned int i)
 {
-        return (i < MAX_NR_CONSOLES && vc_cons[i].d);
+        return (i < MAX_NR_CONSOLES && vc_cons[i]);
 }
 
-static void visual_init(int currcons, int init)
+static void visual_init(struct vc_data *vc, int init)
 {
+    int currcons = vc->vc_num;
+
     /* ++Geert: sw->con_init determines console size */
     sw = conswitchp;
 #ifndef VT_SINGLE_DRIVER
     if (con_driver_map[currcons])
         sw = con_driver_map[currcons];
 #endif
-    cons_num = currcons;
-    display_fg = &master_display_fg;
-    vc_cons[currcons].d->vc_uni_pagedir_loc = &vc_cons[currcons].d->vc_uni_pagedir;
-    vc_cons[currcons].d->vc_uni_pagedir = 0;
+    vc->vc_uni_pagedir_loc = &vc->vc_uni_pagedir;
+    vc->vc_uni_pagedir = 0;
     hi_font_mask = 0;
     complement_mask = 0;
     can_do_color = 0;
-    sw->con_init(vc_cons[currcons].d, init);
+    sw->con_init(vc, init);
     if (!complement_mask)
         complement_mask = can_do_color ? 0x7700 : 0x0800;
     s_complement_mask = complement_mask;
@@ -870,35 +857,31 @@ static void visual_init(int currcons, int init)
     screenbuf_size = video_num_lines*video_size_row;
 }
 
-static void vc_init(unsigned int currcons, unsigned int rows, unsigned int cols, int do_clear)
+static void vc_init(struct vc_data *vc, int do_clear)
 {
+	int currcons = vc->vc_num;
         int j, k ;
 
-        video_num_columns = cols;
-        video_num_lines = rows;
-        video_size_row = cols<<1;
-        screenbuf_size = video_num_lines * video_size_row;
-
-        set_origin(vc_cons[currcons].d);
+        set_origin(vc);
         pos = origin;
         reset_vc(currcons);
         for (j=k=0; j<16; j++) {
-                vc_cons[currcons].d->vc_palette[k++] = default_red[j] ;
-                vc_cons[currcons].d->vc_palette[k++] = default_grn[j] ;
-                vc_cons[currcons].d->vc_palette[k++] = default_blu[j] ;
+                palette[k++] = default_red[j] ;
+                palette[k++] = default_grn[j] ;
+                palette[k++] = default_blu[j] ;
         }
         def_color       = 0x07;   /* white */
         ulcolor         = 0x0f;   /* bold white */
         halfcolor       = 0x08;   /* grey */
-        init_waitqueue_head(&vt_cons[currcons]->paste_wait);
-        vte_ris(vc_cons[currcons].d, do_clear);
+        init_waitqueue_head(&vc->paste_wait);
+        vte_ris(vc, do_clear);
 }
 
 int vc_allocate(unsigned int currcons)  /* return 0 on success */
 {
         if (currcons >= MAX_NR_CONSOLES)
                 return -ENXIO;
-        if (!vc_cons[currcons].d) {
+        if (!vc_cons[currcons]) {
             long p, q;
 
             /* prevent users from taking too much memory */
@@ -911,29 +894,27 @@ int vc_allocate(unsigned int currcons)  /* return 0 on success */
             /* although the numbers above are not valid since long ago, the
                point is still up-to-date and the comment still has its value
                even if only as a historical artifact.  --mj, July 1998 */
-            p = (long) kmalloc(structsize, GFP_KERNEL);
+            p = (long) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
             if (!p)
                 return -ENOMEM;
-            vc_cons[currcons].d = (struct vc_data *)p;
-            vt_cons[currcons] = (struct vt_struct *)(p+sizeof(struct vc_data));
-            visual_init(currcons, 1);
-            if (!*vc_cons[currcons].d->vc_uni_pagedir_loc)
+            vc_cons[currcons] = (struct vc_data *)p;
+	    vc_cons[currcons]->vc_num = currcons;	
+            display_fg = vt_cons;
+            visual_init(vc_cons[currcons], 1);
+            if (!*vc_cons[currcons]->vc_uni_pagedir_loc)
                 con_set_default_unimap(currcons);
             q = (long)kmalloc(screenbuf_size, GFP_KERNEL);
             if (!q) {
-                kfree_s((char *) p, structsize);
-                vc_cons[currcons].d = NULL;
-                vt_cons[currcons] = NULL;
+                kfree_s((char *) p, sizeof(struct vc_data));
+                vc_cons[currcons] = NULL;
                 return -ENOMEM;
             }
             screenbuf = (unsigned short *) q;
             kmalloced = 1;
-            vc_init(currcons, video_num_lines, video_num_columns, 1);
+            vc_init(vc_cons[currcons], 1);
 
             if (!pm_con) {
-                    pm_con = pm_register(PM_SYS_DEV,
-                                         PM_SYS_VGA,
-                                         pm_con_request);
+            	pm_con = pm_register(PM_SYS_DEV, PM_SYS_VGA, pm_con_request);
             }
         }
         return 0;
@@ -999,7 +980,7 @@ int vc_resize(unsigned int lines, unsigned int cols,
                 if (ll < oll)
                         ol += (oll - ll) * osr;
 
-                update_attr(vc_cons[currcons].d);
+                update_attr(vc_cons[currcons]);
 
                 while (ol < scr_end) {
                         scr_memcpyw((unsigned short *) nl, (unsigned short *) ol, rlth);
@@ -1015,13 +996,13 @@ int vc_resize(unsigned int lines, unsigned int cols,
                 screenbuf = newscreens[currcons];
                 kmalloced = 1;
                 screenbuf_size = ss;
-                set_origin(vc_cons[currcons].d);
+                set_origin(vc_cons[currcons]);
 
                 /* do part of a vte_ris() */
                 top = 0;
                 bottom = video_num_lines;
-                gotoxy(vc_cons[currcons].d, x, y);
-                vte_decsc(vc_cons[currcons].d);
+                gotoxy(vc_cons[currcons], x, y);
+                vte_decsc(vc_cons[currcons]);
 
                 if (console_table[currcons]) {
                         struct winsize ws, *cws = &console_table[currcons]->winsize;
@@ -1044,12 +1025,12 @@ int vc_resize(unsigned int lines, unsigned int cols,
 void vc_disallocate(unsigned int currcons)
 {
         if (vc_cons_allocated(currcons)) {
-            sw->con_deinit(vc_cons[currcons].d);
+            sw->con_deinit(vc_cons[currcons]);
             if (kmalloced)
                 kfree_s(screenbuf, screenbuf_size);
             if (currcons >= MIN_NR_CONSOLES)
-                kfree_s(vc_cons[currcons].d, structsize);
-            vc_cons[currcons].d = NULL;
+                kfree_s(vc_cons[currcons], sizeof(struct vc_data));
+            vc_cons[currcons] = NULL;
         }
 }
 
@@ -1427,8 +1408,9 @@ static void respond_string(const char * p, struct tty_struct * tty)
 /*
  * Fake a DEC DSR for non-implemented features
  */
-static void vte_fake_dec_dsr(struct vc_data *vc, struct tty_struct *tty, char *reply)
+static void vte_fake_dec_dsr(struct tty_struct *tty, char *reply)
 {
+	struct vc_data *vc = (struct vc_data *)tty->driver_data;
 	int currcons = vc->vc_num;	
         char buf[40];
 
@@ -1441,8 +1423,9 @@ static void vte_fake_dec_dsr(struct vc_data *vc, struct tty_struct *tty, char *r
  * CURSOR POSITION REPORT (CPR)
  * DEC EXTENDED CURSOR POSITION REPORT (DECXCPR)
  */
-static void vte_cpr(struct vc_data *vc, struct tty_struct *tty, int ext)
+static void vte_cpr(struct tty_struct *tty, int ext)
 {
+	struct vc_data *vc = (struct vc_data *)tty->driver_data;	
 	int currcons = vc->vc_num;
         char buf[40];
 
@@ -1468,8 +1451,9 @@ static void vte_cpr(struct vc_data *vc, struct tty_struct *tty, int ext)
 /*
  * DEVICE STATUS REPORT (DSR)
  */
-static inline void vte_dsr(struct vc_data *vc, struct tty_struct * tty)
+static inline void vte_dsr(struct tty_struct * tty)
 {
+	struct vc_data *vc = (struct vc_data *)tty->driver_data;
 	int currcons = vc->vc_num;
 
 #ifdef CONFIG_VT_EXTENDED
@@ -1492,8 +1476,9 @@ static inline void vte_answerback(struct tty_struct *tty)
 /*
  * DA - DEVICE ATTRIBUTE
  */
-static inline void vte_da(struct vc_data *vc, struct tty_struct *tty)
+static inline void vte_da(struct tty_struct *tty)
 {
+	struct vc_data *vc = (struct vc_data *)tty->driver_data;
 	int currcons = vc->vc_num;
 #ifdef CONFIG_VT_EXTENDED
 
@@ -1520,8 +1505,9 @@ static inline void vte_da(struct vc_data *vc, struct tty_struct *tty)
  * 2 = Firmware version (nn = n.n)
  * 3 = Installed options (0 = none)
  */
-static void vte_dec_da2(struct vc_data *vc, struct tty_struct *tty)
+static void vte_dec_da2(struct tty_struct *tty)
 {
+	struct vc_data *vc = (struct vc_data *)tty->driver_data;
 	int currcons = vc->vc_num;
         char buf[40];
 
@@ -1534,8 +1520,9 @@ static void vte_dec_da2(struct vc_data *vc, struct tty_struct *tty)
  *
  * Reply: unit ID (we report "0")
  */
-static void vte_dec_da3(struct vc_data *vc, struct tty_struct *tty)
+static void vte_dec_da3(struct tty_struct *tty)
 {
+	struct vc_data *vc = (struct vc_data *)tty->driver_data;
 	int currcons = vc->vc_num;
         char buf[40];
 
@@ -1546,8 +1533,9 @@ static void vte_dec_da3(struct vc_data *vc, struct tty_struct *tty)
 /*
  * DECREPTPARM - DEC REPORT TERMINAL PARAMETERS [VT1xx/VT2xx/VT320]
  */
-static void vte_decreptparm(struct vc_data *vc, struct tty_struct *tty)
+static void vte_decreptparm(struct tty_struct *tty)
 {
+	struct vc_data *vc = (struct vc_data *)tty->driver_data;
 	int currcons = vc->vc_num;
         char buf[40];
 
@@ -1688,8 +1676,9 @@ static void vte_deccir(struct tty_struct *tty)
 /*
  * DECMSR - Macro space report
  */
-static void vte_decmsr(struct vc_data *vc, struct tty_struct *tty)
+static void vte_decmsr(struct tty_struct *tty)
 {
+	struct vc_data *vc = (struct vc_data *)tty->driver_data;
 	int currcons = vc->vc_num;
         char buf[40];
 
@@ -1700,8 +1689,9 @@ static void vte_decmsr(struct vc_data *vc, struct tty_struct *tty)
 /*
  * DECRPM - Report mode
  */
-static void vte_decrpm(struct vc_data *vc, struct tty_struct *tty, int priv, int mode, int status)
+static void vte_decrpm(struct tty_struct *tty, int priv, int mode, int status)
 {
+	struct vc_data *vc = (struct vc_data *)tty->driver_data;
 	int currcons = vc->vc_num;
         char buf[40];
 
@@ -1730,67 +1720,68 @@ static void vte_decrpm(struct vc_data *vc, struct tty_struct *tty, int priv, int
  * 3 = premanently set
  * 4 = permanently reset
  */
-static void vte_decrqm(struct vc_data *vc, struct tty_struct *tty, int priv)
+static void vte_decrqm(struct tty_struct *tty, int priv)
 {
+	struct vc_data *vc = (struct vc_data *)tty->driver_data;
 	int currcons = vc->vc_num;
 
         if (priv) {
                 switch (par[0]) {
                         case 1: /* DECCKM - Cursor keys mode */
-                                vte_decrpm(vc, tty, priv, par[0], decckm);
+                                vte_decrpm(tty, priv, par[0], decckm);
                                 break;
                         case 2: /* DECANM */
                         case 3: /* DECCOLM */
                         case 4: /* DECSCLM */
-                                vte_decrpm(vc, tty, priv, par[0], 4);
+                                vte_decrpm(tty, priv, par[0], 4);
                                 break;
                         case 5: /* DECSCNM */
-                                vte_decrpm(vc, tty, priv, par[0], decscnm);
+                                vte_decrpm(tty, priv, par[0], decscnm);
                                 break;
                         case 6: /* DECOM */
-                                vte_decrpm(vc, tty, priv, par[0], decom);
+                                vte_decrpm(tty, priv, par[0], decom);
                                 break;
                         case 7: /* DECAWM */
-                                vte_decrpm(vc, tty, priv, par[0], decawm);
+                                vte_decrpm(tty, priv, par[0], decawm);
                                 break;
                         case 8: /* DECARM */
-                                vte_decrpm(vc, tty, priv, par[0], decarm);
+                                vte_decrpm(tty, priv, par[0], decarm);
                                 break;
                         case 25: /* DECTCEM */
-                                vte_decrpm(vc, tty, priv, par[0], dectcem);
+                                vte_decrpm(tty, priv, par[0], dectcem);
                                 break;
                         case 42: /* DECNCRM */
                         case 60: /* DECHCCM */
                         case 61: /* DECVCCM */
                         case 64: /* DECPCCM */
-                                vte_decrpm(vc, tty, priv, par[0], 4);
+                                vte_decrpm(tty, priv, par[0], 4);
                                 break;
                         case 66: /* DECNKM */
-                                vte_decrpm(vc, tty, priv, par[0], decnkm);
+                                vte_decrpm(tty, priv, par[0], decnkm);
                                 break;
                         case 67: /* DECBKM */
                         case 68: /* DECKBUM */
                         case 69: /* DECVSSM */
                         case 73: /* DECXRLM */
                         case 81: /* DECKPM */
-                                vte_decrpm(vc, tty, priv, par[0], 4);
+                                vte_decrpm(tty, priv, par[0], 4);
                                 break;
                         default:
-                                vte_decrpm(vc, tty, priv, par[0], 2);
+                                vte_decrpm(tty, priv, par[0], 2);
                 }
         } else {
                 switch (par[0]) {
                         case 1: /* GATM */
-                                vte_decrpm(vc, tty, priv, par[0], 4);
+                                vte_decrpm(tty, priv, par[0], 4);
                                 break;
                         case 2: /* KAM */
-                                vte_decrpm(vc, tty, priv, par[0], kam);
+                                vte_decrpm(tty, priv, par[0], kam);
                                 break;
                         case 3: /* CRM */
-                                vte_decrpm(vc, tty, priv, par[0], 4);
+                                vte_decrpm(tty, priv, par[0], 4);
                                 break;
                         case 4: /* IRM */
-                                vte_decrpm(vc, tty, priv, par[0], irm);
+                                vte_decrpm(tty, priv, par[0], irm);
                                 break;
                         case 5: /* SRTM */
                         case 6: /* ERM */
@@ -1807,17 +1798,17 @@ static void vte_decrqm(struct vc_data *vc, struct tty_struct *tty, int priv)
                         case 17: /* SATM */
                         case 18: /* TSM */
                         case 19: /* EBM */
-                                vte_decrpm(vc, tty, priv, par[0], 4);
+                                vte_decrpm(tty, priv, par[0], 4);
                                 break;
                         case 20: /* LNM */
-                                vte_decrpm(vc, tty, priv, par[0], lnm);
+                                vte_decrpm(tty, priv, par[0], lnm);
                                 break;
                         case 21: /* GRCM */
                         case 22: /* ZDM */
-                                vte_decrpm(vc, tty, priv, par[0], 4);
+                                vte_decrpm(tty, priv, par[0], 4);
                                 break;
                         default:
-                                vte_decrpm(vc, tty, priv, par[0], 2);
+                                vte_decrpm(tty, priv, par[0], 2);
                 }
         }
 }
@@ -2167,8 +2158,9 @@ static void vte_tbc(struct vc_data *vc, int vpar)
         }
 }
 
-static void do_con_trol(struct tty_struct *tty, struct vc_data *vc, int c)
+static void do_con_trol(struct tty_struct *tty, int c)
 {
+	struct vc_data *vc = (struct vc_data *)tty->driver_data;
 	int currcons = vc->vc_num;
 
         /*
@@ -2323,7 +2315,7 @@ static void do_con_trol(struct tty_struct *tty, struct vc_data *vc, int c)
                         return;
                 case 0x9a:      /* SCI - Single character introducer */
 #ifndef VTE_STRICT_ISO
-                        vte_da(vc, tty);
+                        vte_da(tty);
 #endif /* ndef VTE_STRICT_ISO */
                         return;
                 case 0x9b:      /* CSI - Control sequence introducer */
@@ -2417,7 +2409,7 @@ static void do_con_trol(struct tty_struct *tty, struct vc_data *vc, int c)
                 case 'C': /* NBH - No break here */
                 case 'D': /* IND - Line feed (DEC only) */
 #ifndef VTE_STRICT_ISO
-                        vte_lf(vc_cons[currcons].d);
+                        vte_lf(vc);
 #endif /* ndef VTE_STRICT_ISO */
                         return;
                 case 'E': /* NEL - Next line */
@@ -2462,7 +2454,7 @@ static void do_con_trol(struct tty_struct *tty, struct vc_data *vc, int c)
                         return;
                 case 'Z': /* SCI - Single character introducer */
 #ifndef VTE_STRICT_ISO
-                        vte_da(vc, tty);
+                        vte_da(tty);
 #endif /* ndef VTE_STRICT_ISO */
                         return;
                 case '[':       /* CSI - Control sequence introducer */
@@ -2631,13 +2623,13 @@ static void do_con_trol(struct tty_struct *tty, struct vc_data *vc, int c)
                 case 'c':
                         if (priv2) {
                                 if (!par[0])
-                                        vte_dec_da3(vc, tty);
+                                        vte_dec_da3(tty);
                                 priv2 = 0;
                                 return;
                         }
                         if (priv3) {
                                 if (!par[0])
-                                        vte_dec_da2(vc, tty);
+                                        vte_dec_da2(tty);
                                 priv3 = 0;
                                 return;
                         }
@@ -2666,38 +2658,38 @@ static void do_con_trol(struct tty_struct *tty, struct vc_data *vc, int c)
                         if (priv4) {
                                 switch (par[0]) {
                                 case 6: /* DECXCPR - Extended CPR */
-                                        vte_cpr(vc, tty, 1);
+                                        vte_cpr(tty, 1);
                                         break;
                                 case 15:        /* DEC printer status */
-                                        vte_fake_dec_dsr(vc, tty, "13");
+                                        vte_fake_dec_dsr(tty, "13");
                                         break;
                                 case 25:        /* DEC UDK status */
-                                        vte_fake_dec_dsr(vc, tty, "21");
+                                        vte_fake_dec_dsr(tty, "21");
                                         break;
                                 case 26:        /* DEC keyboard status */
-                                        vte_fake_dec_dsr(vc, tty, "27;1;0;1");
+                                        vte_fake_dec_dsr(tty, "27;1;0;1");
                                         break;
                                 case 53:        /* DEC locator status */
-                                        vte_fake_dec_dsr(vc, tty, "53");
+                                        vte_fake_dec_dsr(tty, "53");
                                         break;
                                 case 62:        /* DEC macro space */
-                                        vte_decmsr(vc, tty);
+                                        vte_decmsr(tty);
                                         break;
                                 case 75:        /* DEC data integrity */
-                                        vte_fake_dec_dsr(vc, tty, "70");
+                                        vte_fake_dec_dsr(tty, "70");
                                         break;
                                 case 85:        /* DEC multiple session status */
-                                        vte_fake_dec_dsr(vc, tty, "83");
+                                        vte_fake_dec_dsr(tty, "83");
                                         break;
                                 }
                         } else
 #endif /* CONFIG_VT_EXTENDED */
                                 switch (par[0]) {
                                 case 5: /* DSR - Device status report */
-                                        vte_dsr(vc, tty);
+                                        vte_dsr(tty);
                                         break;
                                 case 6: /* CPR - Cursor position report */
-                                        vte_cpr(vc,tty,0);
+                                        vte_cpr(tty, 0);
                                         break;
                                 }
                         priv4 = 0;
@@ -2849,7 +2841,7 @@ static void do_con_trol(struct tty_struct *tty, struct vc_data *vc, int c)
                         return;
                 case 'c':       /* DA - Device attribute */
                         if (!par[0])
-                                vte_da(vc, tty);
+                                vte_da(tty);
                         return;
                 case 'd':       /* VPA - Line position absolute */
                         if (par[0]) par[0]--;
@@ -2901,7 +2893,7 @@ static void do_con_trol(struct tty_struct *tty, struct vc_data *vc, int c)
                 case 't':       /* DECSLPP - Set lines per page */
                         return;
                 case 'x':       /* DECREQTPARM - Request terminal parameters */
-                        vte_decreptparm(vc, tty);
+                        vte_decreptparm(tty);
                         return;
                 case 'y':
                         if (par[0] == 4) {
@@ -2957,7 +2949,7 @@ static void do_con_trol(struct tty_struct *tty, struct vc_data *vc, int c)
                 vc_state = ESinit;
                 switch (c) {
                         case 'p':       /* DECRQM - Request mode */
-                                vte_decrqm(vc, tty, priv4);
+                                vte_decrqm(tty, priv4);
                                 return;
                         case 'r':       /* DECCARA - Change attributes in rectangular area */
                                 return;
@@ -3214,13 +3206,12 @@ static int do_con_write(struct tty_struct * tty, int from_user,
         int c, tc, ok, n = 0, draw_x = -1;
         unsigned int currcons;
         unsigned long draw_from = 0, draw_to = 0;
-        struct vt_struct *vt = (struct vt_struct *)tty->driver_data;
-	struct vc_data *vc;
+        struct vc_data *vc = (struct vc_data *)tty->driver_data;
         u16 himask, charmask;
         const unsigned char *orig_buf = NULL;
         int orig_count;
 
-        currcons = vt->vc_num;
+        currcons = vc->vc_num;
         if (!vc_cons_allocated(currcons)) {
             /* could this happen? */
             static int error = 0;
@@ -3231,7 +3222,7 @@ static int do_con_write(struct tty_struct * tty, int from_user,
             return 0;
         }
 
-	vc = vc_cons[currcons].d;
+	vc = vc_cons[currcons];
 	
         orig_buf = buf;
         orig_count = count;
@@ -3372,7 +3363,7 @@ again:
                         continue;
                 }
                 FLUSH
-                do_con_trol(tty, vc, c);
+                do_con_trol(tty, c);
         }
         FLUSH
         spin_unlock_irq(&console_lock);
@@ -3419,7 +3410,7 @@ static void console_softint(unsigned long ignored)
 
         if (want_console >= 0) {
                 if (want_console != fg_console && vc_cons_allocated(want_console)) {
-                        hide_cursor(vc_cons[fg_console].d);
+                        hide_cursor(vc_cons[fg_console]);
                         change_console(want_console);
                         /* we only changed when the console had already
                            been allocated - a new console is not created
@@ -3435,7 +3426,7 @@ static void console_softint(unsigned long ignored)
                 int currcons = fg_console;
                 clear_selection();
                 if (vcmode == KD_TEXT)
-                        sw->con_scrolldelta(vc_cons[currcons].d, scrollback_delta);
+                        sw->con_scrolldelta(vc_cons[currcons], scrollback_delta);
                 scrollback_delta = 0;
         }
 
@@ -3515,9 +3506,9 @@ static int con_open(struct tty_struct *tty, struct file * filp)
         if (i)
                 return i;
 
-        vt_cons[currcons]->vc_num = currcons;
-        tty->driver_data = vt_cons[currcons];
-	vc = vc_cons[currcons].d;
+        vc_cons[currcons]->vc_num = currcons;
+	vc = vc_cons[currcons];
+        tty->driver_data = vc;
 
         if (!tty->winsize.ws_row && !tty->winsize.ws_col) {
                 tty->winsize.ws_row = video_num_lines;
@@ -3564,8 +3555,7 @@ static int con_write_room(struct tty_struct *tty)
 
 static void con_flush_chars(struct tty_struct *tty)
 {
-        struct vt_struct *vt = (struct vt_struct *)tty->driver_data;
-	struct vc_data *vc = vc_cons[vt->vc_num].d;
+        struct vc_data *vc = (struct vc_data *)tty->driver_data;
         unsigned long flags;
 
         pm_access(pm_con);
@@ -3620,9 +3610,9 @@ static void con_throttle(struct tty_struct *tty)
 
 static void con_unthrottle(struct tty_struct *tty)
 {
-        struct vt_struct *vt = (struct vt_struct *) tty->driver_data;
+        struct vc_data *vc = (struct vc_data *) tty->driver_data;
 
-        wake_up_interruptible(&vt->paste_wait);
+        wake_up_interruptible(&vc->paste_wait);
 }
 
 #ifdef CONFIG_VT_CONSOLE
@@ -3652,7 +3642,7 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
         if (kmsg_redirect && vc_cons_allocated(kmsg_redirect - 1))
                 currcons = kmsg_redirect - 1;
 
-	vc = vc_cons[currcons].d;
+	vc = vc_cons[currcons];
 
         /* read `x' only after setting currecons properly (otherwise
            the `x' macro will read the x of the foreground console). */
@@ -3815,22 +3805,23 @@ void __init vt_console_init(void)
          * kmalloc is not running yet - we use the bootmem allocator.
          */
         for (currcons = 0; currcons < MIN_NR_CONSOLES; currcons++) {
-                vc_cons[currcons].d = (struct vc_data *)
-                                alloc_bootmem(sizeof(struct vc_data));
-                vt_cons[currcons] = (struct vt_struct *)
+                vt_cons = (struct vt_struct *)
                                 alloc_bootmem(sizeof(struct vt_struct));
-                visual_init(currcons, 1);
+		vc_cons[currcons] = (struct vc_data *)
+                                alloc_bootmem(sizeof(struct vc_data));
+		vc_cons[currcons]->vc_num = currcons;
+                display_fg = vt_cons;
+		visual_init(vc_cons[currcons], 1);
                 screenbuf = (unsigned short *) alloc_bootmem(screenbuf_size);
                 kmalloced = 0;
-                vc_init(currcons, video_num_lines, video_num_columns,
-                        currcons || !sw->con_save_screen);
+                vc_init(vc_cons[currcons], currcons || !sw->con_save_screen); 
         }
         currcons = fg_console = 0;
-        master_display_fg = vc_cons[currcons].d;
-        set_origin(vc_cons[currcons].d);
-        save_screen(vc_cons[currcons].d);
-        gotoxy(vc_cons[currcons].d, x, y);
-        vte_ed(vc_cons[currcons].d, 0);
+        /* master_display_fg = vc_cons[currcons]; */
+        set_origin(vc_cons[currcons]);
+        save_screen(vc_cons[currcons]);
+        gotoxy(vc_cons[currcons], x, y);
+        vte_ed(vc_cons[currcons], 0);
         update_screen(fg_console);
         printk("Console: %s %s %dx%d",
                 can_do_color ? "colour" : "mono",
@@ -3880,22 +3871,22 @@ void take_over_console(struct consw *csw, int first, int last, int deflt)
 
                 con_driver_map[i] = csw;
 
-                if (!vc_cons[i].d || !vc_cons[i].d->vc_sw)
+                if (!vc_cons[i] || !sw)
                         continue;
 
                 j = i;
                 if (IS_VISIBLE)
-                        save_screen(vc_cons[i].d);
-                old_was_color = vc_cons[i].d->vc_can_do_color;
-                vc_cons[i].d->vc_sw->con_deinit(vc_cons[i].d);
-                visual_init(i, 0);
-                update_attr(vc_cons[i].d);
+                        save_screen(vc_cons[i]);
+                old_was_color = vc_cons[i]->vc_can_do_color;
+                sw->con_deinit(vc_cons[i]);
+                visual_init(vc_cons[i], 0);
+                update_attr(vc_cons[i]);
 
                 /* If the console changed between mono <-> color, then
                  * the attributes in the screenbuf will be wrong.  The
                  * following resets all attributes to something sane.
                  */
-                if (old_was_color != vc_cons[i].d->vc_can_do_color)
+                if (old_was_color != vc_cons[i]->vc_can_do_color)
                         clear_buffer_attributes(i);
 
                 if (IS_VISIBLE)
@@ -3906,8 +3897,8 @@ void take_over_console(struct consw *csw, int first, int last, int deflt)
                 printk("consoles %d-%d ", first+1, last+1);
         if (j >= 0)
                 printk("to %s %s %dx%d\n",
-                       vc_cons[j].d->vc_can_do_color ? "colour" : "mono",
-                       desc, vc_cons[j].d->vc_cols, vc_cons[j].d->vc_rows);
+                       vc_cons[j]->vc_can_do_color ? "colour" : "mono",
+                       desc, vc_cons[j]->vc_cols, vc_cons[j]->vc_rows);
         else
                 printk("to %s\n", desc);
 }

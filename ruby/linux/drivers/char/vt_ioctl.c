@@ -55,7 +55,7 @@ extern struct tty_driver console_driver;
  * to the current console is done by the main ioctl code.
  */
 
-struct vt_struct *vt_cons[MAX_NR_CONSOLES];
+struct vt_struct *vt_cons;
 
 /* Keyboard type: Default is KB_101, but can be set by machine
  * specific code.
@@ -359,7 +359,6 @@ do_kdgkb_ioctl(int cmd, struct kbsentry *user_kdgkb, int perm)
  *  /Jes
  */                     
 
-
 #define max_font_size 65536
 
 int con_font_op(int currcons, struct console_font_op *op)
@@ -369,7 +368,7 @@ int con_font_op(int currcons, struct console_font_op *op)
         u8 *temp = NULL;
         struct console_font_op old_op;
 
-        if (vt_cons[currcons]->vc_mode != KD_TEXT)
+        if (vt_cons->vc_mode != KD_TEXT)
                 goto quit;
         memcpy(&old_op, op, sizeof(old_op));
         if (op->op == KD_FONT_OP_SET) {
@@ -407,7 +406,7 @@ int con_font_op(int currcons, struct console_font_op *op)
         } else if (op->op == KD_FONT_OP_GET)
                 set = 0;
         else
-                return vc_cons[currcons].d->vc_sw->con_font_op(vc_cons[currcons].d, op);
+                return vt_cons->sw->con_font_op(vc_cons[currcons], op);
         if (op->data) {
                 temp = kmalloc(size, GFP_KERNEL);
                 if (!temp)
@@ -420,7 +419,7 @@ int con_font_op(int currcons, struct console_font_op *op)
         }                                                          
 
         spin_lock_irq(&console_lock);
-        rc = vc_cons[currcons].d->vc_sw->con_font_op(vc_cons[currcons].d, op);
+        rc = vt_cons->sw->con_font_op(vc_cons[currcons], op);
         spin_unlock_irq(&console_lock);
 
         op->data = old_op.data;
@@ -524,9 +523,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	unsigned int console;
 	unsigned char ucval;
 	struct kbd_struct * kbd;
-	struct vt_struct *vt = (struct vt_struct *)tty->driver_data;
+	struct vc_data *vc = (struct vc_data *)tty->driver_data;
 
-	console = vt->vc_num;
+	console = vc->vc_num;
 
 	if (!vc_cons_allocated(console)) 	/* impossible? */
 		return -ENOIOCTLCMD;
@@ -614,9 +613,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		default:
 			return -EINVAL;
 		}
-		if (vt_cons[console]->vc_mode == (unsigned char) arg)
+		if (vt_cons->vc_mode == (unsigned char) arg)
 			return 0;
-		vt_cons[console]->vc_mode = (unsigned char) arg;
+		vt_cons->vc_mode = (unsigned char) arg;
 		if (console != fg_console)
 			return 0;
 		/*
@@ -629,7 +628,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		return 0;
 
 	case KDGETMODE:
-		ucval = vt_cons[console]->vc_mode;
+		ucval = vt_cons->vc_mode;
 		goto setint;
 
 	case KDMAPDISP:
@@ -795,17 +794,17 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 			return -EFAULT;
 		if (tmp.mode != VT_AUTO && tmp.mode != VT_PROCESS)
 			return -EINVAL;
-		vt_cons[console]->vt_mode = tmp;
+		vt_cons->vt_mode = tmp;
 		/* the frsig is ignored, so we set it to 0 */
-		vt_cons[console]->vt_mode.frsig = 0;
-		vt_cons[console]->vt_pid = current->pid;
+		vt_cons->vt_mode.frsig = 0;
+		vt_cons->vt_pid = current->pid;
 		/* no switch is required -- saw@shade.msu.ru */
-		vt_cons[console]->vt_newvt = -1; 
+		vt_cons->vt_newvt = -1; 
 		return 0;
 	}
 
 	case VT_GETMODE:
-		return copy_to_user((void*)arg, &(vt_cons[console]->vt_mode), 
+		return copy_to_user((void*)arg, &(vt_cons->vt_mode), 
 							sizeof(struct vt_mode)) ? -EFAULT : 0; 
 
 	/*
@@ -879,20 +878,20 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	case VT_RELDISP:
 		if (!perm)
 			return -EPERM;
-		if (vt_cons[console]->vt_mode.mode != VT_PROCESS)
+		if (vt_cons->vt_mode.mode != VT_PROCESS)
 			return -EINVAL;
 
 		/*
 		 * Switching-from response
 		 */
-		if (vt_cons[console]->vt_newvt >= 0)
+		if (vt_cons->vt_newvt >= 0)
 		{
 			if (arg == 0)
 				/*
 				 * Switch disallowed, so forget we were trying
 				 * to do it.
 				 */
-				vt_cons[console]->vt_newvt = -1;
+				vt_cons->vt_newvt = -1;
 
 			else
 			{
@@ -900,8 +899,8 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 				 * The current vt has been released, so
 				 * complete the switch.
 				 */
-				int newvt = vt_cons[console]->vt_newvt;
-				vt_cons[console]->vt_newvt = -1;
+				int newvt = vt_cons->vt_newvt;
+				vt_cons->vt_newvt = -1;
 				i = vc_allocate(newvt);
 				if (i)
 					return i;
@@ -1237,81 +1236,16 @@ int vt_waitactive(int vt)
 
 void reset_vc(unsigned int new_console)
 {
-	vt_cons[new_console]->vc_mode = KD_TEXT;
+	vt_cons->vc_mode = KD_TEXT;
 	kbd_table[new_console].kbdmode = VC_XLATE;
-	vt_cons[new_console]->vt_mode.mode = VT_AUTO;
-	vt_cons[new_console]->vt_mode.waitv = 0;
-	vt_cons[new_console]->vt_mode.relsig = 0;
-	vt_cons[new_console]->vt_mode.acqsig = 0;
-	vt_cons[new_console]->vt_mode.frsig = 0;
-	vt_cons[new_console]->vt_pid = -1;
-	vt_cons[new_console]->vt_newvt = -1;
-	reset_palette(vc_cons[new_console].d);
-}
-
-/*
- * Performs the back end of a vt switch
- */
-void complete_change_console(unsigned int new_console)
-{
-	unsigned char old_vc_mode;
-
-	last_console = fg_console;
-
-	/*
-	 * If we're switching, we could be going from KD_GRAPHICS to
-	 * KD_TEXT mode or vice versa, which means we need to blank or
-	 * unblank the screen later.
-	 */
-	old_vc_mode = vt_cons[fg_console]->vc_mode;
-	switch_screen(new_console);
-
-	/*
-	 * If this new console is under process control, send it a signal
-	 * telling it that it has acquired. Also check if it has died and
-	 * clean up (similar to logic employed in change_console())
-	 */
-	if (vt_cons[new_console]->vt_mode.mode == VT_PROCESS)
-	{
-		/*
-		 * Send the signal as privileged - kill_proc() will
-		 * tell us if the process has gone or something else
-		 * is awry
-		 */
-		if (kill_proc(vt_cons[new_console]->vt_pid,
-			      vt_cons[new_console]->vt_mode.acqsig,
-			      1) != 0)
-		{
-		/*
-		 * The controlling process has died, so we revert back to
-		 * normal operation. In this case, we'll also change back
-		 * to KD_TEXT mode. I'm not sure if this is strictly correct
-		 * but it saves the agony when the X server dies and the screen
-		 * remains blanked due to KD_GRAPHICS! It would be nice to do
-		 * this outside of VT_PROCESS but there is no single process
-		 * to account for and tracking tty count may be undesirable.
-		 */
-		        reset_vc(new_console);
-		}
-	}
-
-	/*
-	 * We do this here because the controlling process above may have
-	 * gone, and so there is now a new vc_mode
-	 */
-	if (old_vc_mode != vt_cons[new_console]->vc_mode)
-	{
-		if (vt_cons[new_console]->vc_mode == KD_TEXT)
-			unblank_screen();
-		else
-			do_blank_screen(1);
-	}
-
-	/*
-	 * Wake anyone waiting for their VT to activate
-	 */
-	vt_wake_waitactive();
-	return;
+	vt_cons->vt_mode.mode = VT_AUTO;
+	vt_cons->vt_mode.waitv = 0;
+	vt_cons->vt_mode.relsig = 0;
+	vt_cons->vt_mode.acqsig = 0;
+	vt_cons->vt_mode.frsig = 0;
+	vt_cons->vt_pid = -1;
+	vt_cons->vt_newvt = -1;
+	reset_palette(vc_cons[new_console]);
 }
 
 /*
@@ -1337,15 +1271,15 @@ void change_console(unsigned int new_console)
 	 * the user waits just the right amount of time :-) and revert the
 	 * vt to auto control.
 	 */
-	if (vt_cons[fg_console]->vt_mode.mode == VT_PROCESS)
+	if (vt_cons->vt_mode.mode == VT_PROCESS)
 	{
 		/*
 		 * Send the signal as privileged - kill_proc() will
 		 * tell us if the process has gone or something else
 		 * is awry
 		 */
-		if (kill_proc(vt_cons[fg_console]->vt_pid,
-			      vt_cons[fg_console]->vt_mode.relsig,
+		if (kill_proc(vt_cons->vt_pid,
+			      vt_cons->vt_mode.relsig,
 			      1) == 0)
 		{
 			/*
@@ -1353,7 +1287,7 @@ void change_console(unsigned int new_console)
 			 * return. The process needs to send us a
 			 * VT_RELDISP ioctl to complete the switch.
 			 */
-			vt_cons[fg_console]->vt_newvt = new_console;
+			vt_cons->vt_newvt = new_console;
 			return;
 		}
 
@@ -1376,9 +1310,73 @@ void change_console(unsigned int new_console)
 	/*
 	 * Ignore all switches in KD_GRAPHICS+VT_AUTO mode
 	 */
-	if (vt_cons[fg_console]->vc_mode == KD_GRAPHICS)
+	if (vt_cons->vc_mode == KD_GRAPHICS)
 		return;
 
 	complete_change_console(new_console);
 }
 
+/*
+ * Performs the back end of a vt switch
+ */
+void complete_change_console(unsigned int new_console)
+{
+	unsigned char old_vc_mode;
+
+	last_console = fg_console;
+
+	/*
+	 * If we're switching, we could be going from KD_GRAPHICS to
+	 * KD_TEXT mode or vice versa, which means we need to blank or
+	 * unblank the screen later.
+	 */
+	old_vc_mode = vt_cons->vc_mode;
+	switch_screen(new_console);
+
+	/*
+	 * If this new console is under process control, send it a signal
+	 * telling it that it has acquired. Also check if it has died and
+	 * clean up (similar to logic employed in change_console())
+	 */
+	if (vt_cons->vt_mode.mode == VT_PROCESS)
+	{
+		/*
+		 * Send the signal as privileged - kill_proc() will
+		 * tell us if the process has gone or something else
+		 * is awry
+		 */
+		if (kill_proc(vt_cons->vt_pid,
+			      vt_cons->vt_mode.acqsig,
+			      1) != 0)
+		{
+		/*
+		 * The controlling process has died, so we revert back to
+		 * normal operation. In this case, we'll also change back
+		 * to KD_TEXT mode. I'm not sure if this is strictly correct
+		 * but it saves the agony when the X server dies and the screen
+		 * remains blanked due to KD_GRAPHICS! It would be nice to do
+		 * this outside of VT_PROCESS but there is no single process
+		 * to account for and tracking tty count may be undesirable.
+		 */
+		        reset_vc(new_console);
+		}
+	}
+
+	/*
+	 * We do this here because the controlling process above may have
+	 * gone, and so there is now a new vc_mode
+	 */
+	if (old_vc_mode != vt_cons->vc_mode)
+	{
+		if (vt_cons->vc_mode == KD_TEXT)
+			unblank_screen();
+		else
+			do_blank_screen(1);
+	}
+
+	/*
+	 * Wake anyone waiting for their VT to activate
+	 */
+	vt_wake_waitactive();
+	return;
+}
