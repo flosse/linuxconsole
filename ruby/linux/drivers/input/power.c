@@ -45,9 +45,9 @@ static struct input_handler power_handler;
 static int suspend_button_pushed = 0;
 static void suspend_button_task_handler(void *data)
 {
-        //extern void pm_do_suspend(void);
+        extern void pm_do_suspend(void);
         udelay(200); /* debounce */
-        //pm_do_suspend();
+        pm_do_suspend();
         suspend_button_pushed = 0;
 }
 
@@ -59,6 +59,8 @@ static int power_event(struct input_handle *handle, unsigned int type,
 		       unsigned int code, int down)
 {
 	struct input_dev *dev = handle->dev;
+
+	printk("Entering power_event\n");
 
 	if (type != EV_KEY || type != EV_PWR) return -1;
 
@@ -107,14 +109,11 @@ static struct input_handle *power_connect(struct input_handler *handler,
 	struct input_handle *handle;
 	int i;
 
-	if (!test_bit(EV_KEY, dev->evbit))
+	if (!test_bit(EV_KEY, dev->evbit) || !test_bit(EV_PWR, dev->evbit))
+		return NULL;	
+
+	if (!test_bit(KEY_SUSPEND, dev->keybit) || (!test_bit(KEY_POWER, dev->keybit)))
 		return NULL;
-
-	for (i = KEY_RESERVED; i < BTN_MISC; i++)
-		if (test_bit(i, dev->keybit)) break;
-
-	if (i != KEY_SUSPEND || i != KEY_POWER)
- 		return NULL;
 
 	if (!(handle = kmalloc(sizeof(struct input_handle), GFP_KERNEL)))
 		return NULL;
