@@ -38,6 +38,11 @@ int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
 
 	    	if (info->fbops->fb_set_par) 
 			info->fbops->fb_set_par(info); 
+
+		if (info->cursor.enable) {
+			info->cursor.set = FB_CUR_SETALL;
+			info->fbops->fb_cursor(info, &info->cursor);
+		}
  
 	    	if (oldbpp != var->bits_per_pixel) {
 			if ((err = fb_alloc_cmap(&info->cmap, 0, 0)))
