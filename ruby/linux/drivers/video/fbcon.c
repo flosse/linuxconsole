@@ -153,7 +153,7 @@ static void fbcon_bmove(struct vc_data *vc, int sy, int sx, int dy, int dx,
 			int height, int width);
 static int fbcon_blank(struct vc_data *vc, int blank);
 static int fbcon_font_op(struct vc_data *vc, struct console_font_op *op);
-static int fbcon_resize(struct vc_data *vc,unsigned int cols,unsigned int rows);
+static int fbcon_resize(struct vc_data *vc,unsigned int width,unsigned int height);
 static int fbcon_set_palette(struct vc_data *vc, unsigned char *table);
 static int fbcon_scroll(struct vc_data *vc, int lines);
 static int fbcon_set_origin(struct vc_data *vc);
@@ -595,7 +595,7 @@ static int fbcon_font_op(struct vc_data *vc, struct console_font_op *op)
     return 0;	
 }
 
-static int fbcon_resize(struct vc_data *vc,unsigned int cols,unsigned int rows)
+static int fbcon_resize(struct vc_data *vc,unsigned int width,unsigned int height)
 {
     struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;	
     struct fb_var_screeninfo var;
@@ -603,11 +603,11 @@ static int fbcon_resize(struct vc_data *vc,unsigned int cols,unsigned int rows)
 
     /* We grab what works and then modify the resolution only. */
     memcpy(&var, &info->var, sizeof(struct fb_var_screeninfo));		 
-    var.xres = var.xres_virtual = cols * vc->vc_font.width;
-    var.yres = var.yres_virtual = rows * vc->vc_font.height;
+    var.xres = var.xres_virtual = width;
+    var.yres = var.yres_virtual = height;
     var.activate = FB_ACTIVATE_NOW;		
 
-    DPRINTK("attempting to set mode to %d rows x cols%d\n", rows, cols);
+    DPRINTK("attempting to set mode to %d rows x cols%d\n", height/vc->vc_font.height, width/vc->vc_font.width);
     
     err = fb_set_var(&var, info);
     if (err)

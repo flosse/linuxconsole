@@ -577,13 +577,13 @@ void complement_pos(struct vc_data *vc, int offset)
         }
 }
 
-inline int resize_screen(struct vc_data *vc, int cols, int rows)
+inline int resize_screen(struct vc_data *vc, int width, int height)
 {
         /* Resizes the resolution of the display adapater */
 	int err = 0;
 
         if (IS_VISIBLE && vcmode != KD_GRAPHICS && sw->con_resize)
-               	err = sw->con_resize(vc, cols, rows);
+               	err = sw->con_resize(vc, width, height);
 	return err;
 }
 
@@ -898,16 +898,16 @@ int vc_resize(struct vc_data *vc, unsigned int cols, unsigned int lines)
         old_screenbuf_size = screenbuf_size;
 	old_screenbuf = (unsigned long) screenbuf;	
 
-	err = resize_screen(vc, new_cols, new_rows);    
+	err = resize_screen(vc, new_cols*vc->vc_font.width, new_rows*vc->vc_font.height);    
 	if (err) {
-		resize_screen(vc, old_cols, old_rows);
+		resize_screen(vc, old_cols*vc->vc_font.width, old_rows*vc->vc_font.height); 
 		return err;    
 	}
 
 	/* scrollback could have been changed by resize_screen */
 	newscreen = (unsigned short *) kmalloc(new_screenbuf_size, GFP_USER);
         if (!newscreen) {
-		resize_screen(vc, old_cols, old_rows); 
+		resize_screen(vc, old_cols*vc->vc_font.width, old_rows*vc->vc_font.height); 
         	return -ENOMEM;
 	}
 	
