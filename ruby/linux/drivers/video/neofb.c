@@ -67,8 +67,6 @@
 #include <asm/mtrr.h>
 #endif
 
-#include <video/fbcon.h>
-
 #include <video/neofb.h>
 
 #define NEOFB_VERSION "0.3.3"
@@ -1182,39 +1180,10 @@ static int neofb_set_par(struct fb_info *info)
   return 0;
 }
 
-static int neofb_set_var(struct fb_var_screeninfo *var, int con,
-                         struct fb_info *info)
-{
-	int err;
-
-	if (con < 0 || (memcmp(&info->var, var, sizeof(struct fb_var_screeninfo)))) {
-
-		if ((err = info->fbops->fb_check_var(var, info)))
-			return err;
-
-		if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {	
-			info->var = *var;
-
-			if (con == info->currcon) {
-				info->fbops->fb_set_par(info);
-
-				info->fbops->fb_pan_display(&info->var, con, info);
-
-				gen_set_disp(con, info);
-				fb_set_cmap(&info->cmap, 1, info);
-			}
-
-			if (info->changevar)
-				info->changevar(con);
-  		}
-	}
-	return 0;
-}
-
 /*
  *    Pan or Wrap the Display
  */
-static int neofb_pan_display (struct fb_var_screeninfo *var, int con,
+static int neofb_pan_display (struct fb_var_screeninfo *var, 
 			      struct fb_info *info)
 {
   u_int y_bottom;
@@ -1799,19 +1768,16 @@ static struct fb_info * __devinit neo_alloc_fb_info(const struct pci_device_id *
   struct neofb_par *par;
   struct fb_info *info;
 
-  info = kmalloc(sizeof(struct fb_info) +  
-		 sizeof(struct display) + sizeof(u32) * 16, GFP_KERNEL);
+  info = kmalloc(sizeof(struct fb_info) + sizeof(u32) * 16, GFP_KERNEL); 
 
   if (!info)
     return NULL;
 
-  memset(info, 0, sizeof(struct fb_info) + sizeof(struct display));
+  memset(info, 0, sizeof(struct fb_info));
 
   par = &default_par;
   memset(par, 0, sizeof(struct neofb_par));	
  
-  info->currcon = -1;
-
   par->pci_burst   = !nopciburst;
   par->lcd_stretch = !nostretch;
 
@@ -1870,14 +1836,10 @@ static struct fb_info * __devinit neo_alloc_fb_info(const struct pci_device_id *
   strcpy(info->modename, info->fix.id);
 
   info->fbops          	= &neofb_ops;
-  info->changevar      	= NULL;
-  info->switch_con     	= gen_switch;
-  info->updatevar      	= gen_update_var;
   info->flags          	= FBINFO_FLAG_DEFAULT;
   info->par		= par;
-  info->disp           	= (struct display *)(info + 1);
-  info->pseudo_palette 	= (void *)(info->disp + 1);
-
+  info->pseudo_palette	= (void *)(info + 1);
+  
   fb_alloc_cmap (&info->cmap, NR_PALETTE, 0);
 
   return info;
