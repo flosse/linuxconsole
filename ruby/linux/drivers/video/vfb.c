@@ -289,7 +289,7 @@ static int vfb_check_var(struct fb_var_screeninfo *var, void *vfb_par,
     return 0;
 }
 
-static int tdfxfb_set_par(void *vfb_par, struct fb_info *info)
+static int vfb_set_par(void *vfb_par, struct fb_info *info)
 {
 	/* It's in here where alter info->fix. For this driver it
 	 * doesn't do much besides this. 
