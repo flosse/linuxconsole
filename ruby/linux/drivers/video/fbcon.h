@@ -18,7 +18,6 @@
 
 #include <asm/io.h>
 
-
     /*                                  
      *  `switch' for the Low Level Operations
      */
@@ -51,7 +50,6 @@ extern struct display_switch fbcon_dummy;
 
 struct display {
     /* Filled in by the frame buffer device */
-
     struct fb_var_screeninfo var;   /* variable infos. yoffset and vmode */
                                     /* are updated by fbcon.c */
     struct fb_cmap cmap;            /* colormap */
@@ -75,9 +73,6 @@ struct display {
 #endif
 
     /* Filled in by the low-level console driver */
-
-    struct vc_data *conp;           /* pointer to console data */
-    struct fb_info *fb_info;        /* frame buffer for this console */
     int vrows;                      /* number of virtual rows */
     unsigned short cursor_x;        /* current cursor position */
     unsigned short cursor_y;
@@ -97,13 +92,32 @@ struct display {
     unsigned short charmask;        /* 0xff or 0x1ff */
 };
 
-/* drivers/video/fbcon.c */
-extern struct display fb_display[MAX_NR_CONSOLES];
-extern char con2fb_map[MAX_NR_CONSOLES];
-extern void set_con2fb_map(int unit, int newidx);
-extern int set_all_vcs(int fbidx, struct fb_ops *fb,
-		       struct fb_var_screeninfo *var, struct fb_info *info);
+    /*
+     *  `data` per frmaebuffer device.
+     */
 
+struct fbvt_data {
+	/* frame buffer for this VT */
+        struct fb_info *fb_info; 
+	/* Software scrollback */
+        int fbcon_softback_size;
+        unsigned long softback_buf, softback_curr;
+        unsigned long softback_in;
+        unsigned long softback_top, softback_end;
+        int softback_lines;
+        int scrollback_phys_max;
+        int scrollback_max;
+        int scrollback_current;
+	/* Cursor data */
+        int cursor_drawn;
+	int vbl_cursor_cnt;
+	int cursor_on;
+	int cursor_blink_rate;
+	char fontname[40];     /* default font name */
+        struct display *fb_display[MAX_NR_USER_CONSOLES];
+};
+
+/* drivers/video/fbcon.c */
 #define fontheight(p) ((p)->_fontheight)
 #define fontheightlog(p) ((p)->_fontheightlog)
 
