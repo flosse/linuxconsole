@@ -504,6 +504,10 @@ struct input_event {
  * Structures used in ioctls to upload effects to a device
  * The first structures are not passed directly by using ioctls.
  * They are sub-structures of the actually sent structure (called ff_effect)
+ *
+ * Ranges:
+ *  0 <= __u16 <= 65535
+ *  -32767 <= __s16 <= +32767     ! Not -32768 for lower bound !
  */
 
 struct ff_replay {
@@ -525,7 +529,7 @@ struct ff_shape {
 
 /* FF_CONSTANT */
 struct ff_constant_effect {
-	__s16 level;		/* Strength of effect */
+	__s16 level;		/* Strength of effect. Negative values are OK */
 	__u16 direction;	/* Direction of effect (see periodic effects) */
 	struct ff_shape shape;
 };
@@ -558,8 +562,11 @@ struct ff_periodic_effect {
 	__s16 magnitude;	/* Peak value */
 	__s16 offset;		/* Mean value of wave (roughly) */
 	__u16 phase;		/* 'Horizontal' shift */
-	__u16 direction;	/* Direction. 0 deg -> 0x0000
-					     90 deg -> 0x4000 */
+	__u16 direction;	/* Direction. 0 deg -> 0x0000 (down)
+					     90 deg -> 0x4000 (left)
+					    180 deg -> 0x8000 (up)
+					    270 deg -> 0xC000 (right)
+				*/
 
 	struct ff_shape shape;
 };
