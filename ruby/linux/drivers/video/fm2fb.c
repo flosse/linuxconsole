@@ -4,7 +4,6 @@
  *
  *	Copyright (C) 1998 Steffen A. Mork (mork@ls7.cs.uni-dortmund.de)
  *	Copyright (C) 1999 Geert Uytterhoeven
- *      Copyright (C) 2001 James Simmons
  *
  *  Written for 2.0.x by Steffen A. Mork
  *  Ported to 2.1.x by Geert Uytterhoeven
@@ -134,8 +133,12 @@ static struct fb_info fb_info;
 static u32 pseudo_palette[17];
 
 static struct fb_fix_screeninfo fb_fix __initdata = {
-    NULL, (unsigned long) NULL, FRAMEMASTER_REG, FB_TYPE_PACKED_PIXELS, 0,
-    FB_VISUAL_TRUECOLOR, 0, 0, 0, 768<<2, (unsigned long)NULL, 8, FB_ACCEL_NONE
+	smem_len:	FRAMEMASTER_REG,
+	type:		FB_TYPE_PACKED_PIXELS,
+	visual:		FB_VISUAL_TRUECOLOR,
+	line_length:	(768 << 2),
+	mmio_len:	(8),
+	accel:		FB_ACCEL_NONE,
 };
 
 static int fm2fb_mode __initdata = -1;
@@ -262,6 +265,8 @@ int __init fm2fb_init(void)
 		fb_info.pseudo_palette = pseudo_palette;
 		fb_info.fix = fb_fix;
 		fb_info.flags = FBINFO_FLAG_DEFAULT;
+
+		fb_alloc_cmap(&fb_info.cmap, 16, 0);
 
 		if (register_framebuffer(&fb_info) < 0)
 			return -EINVAL;

@@ -34,16 +34,27 @@ static u16 pseudo_palette[17];
 static struct fb_info fb_info;
 
 static struct fb_fix_screeninfo q40fb_fix __initdata = {
-    "Q40", (unsigned long) NULL, 1024*1024, FB_TYPE_PACKED_PIXELS, 0,
-    FB_VISUAL_TRUECOLOR, 0, 0, 0, 1024*2, (unsigned long) NULL, 0, FB_ACCEL_NONE
+	id:		"Q40",
+	smem_len:	1024*1024,
+	type:		FB_TYPE_PACKED_PIXELS,
+	visual:		FB_VISUAL_TRUECOLOR,
+	line_length:	1024*2,
+	accel_flags:	FB_ACCEL_NONE,
 };
 
 static struct fb_var_screeninfo q40fb_var __initdata = {
-    /* 1024x512, 16 bpp */
-    1024, 512, 1024, 512, 0, 0, 16, 0,
-    {6, 5, 0}, {11, 5, 0}, {0, 6, 0}, {0, 0, 0},
-    0, FB_ACTIVATE_NOW, 230, 300, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, FB_VMODE_NONINTERLACED
+	xres:		1024,
+	yres:		512,
+	xres_virtual:	1024,
+	yres_virtual:	512,
+	bits_per_pixel:	16,
+    	red:		{6, 5, 0}, 
+	green:		{11, 5, 0},
+	blue:		{0, 6, 0},
+	activate:	FB_ACTIVATE_NOW,
+	height:		230,
+	width:		300,
+	vmode:		FB_VMODE_NONINTERLACED,
 };
 
 /* frame buffer operations */
@@ -54,11 +65,11 @@ static int q40fb_setcolreg(unsigned regno, unsigned red, unsigned green,
                            struct fb_info *info);
 
 static struct fb_ops q40fb_ops = {
-        owner:		THIS_MODULE,
-        fb_setcolreg:   q40fb_setcolreg,
-        fb_fillrect:    cfb_fillrect,
-        fb_copyarea:    cfb_copyarea,
-        fb_imageblit:   cfb_imageblit,
+	owner:		THIS_MODULE,
+	fb_setcolreg:	q40fb_setcolreg,
+	fb_fillrect:	cfb_fillrect,
+	fb_copyarea:	cfb_copyarea,
+	fb_imageblit:	cfb_imageblit,
 };
 
 static int q40fb_setcolreg(unsigned regno, unsigned red, unsigned green,
@@ -99,6 +110,8 @@ int q40fb_init(void)
 	fb_info.pseudo_palette = pseudo_palette;	
    	fb_info.screen_base = (char *) q40fb_fix.smem_start;
 
+	fb_alloc_cmap(&fb_info.cmap, 16, 0);
+	
 	master_outb(3, DISPLAY_CONTROL_REG);
 
 	if (register_framebuffer(&fb_info) < 0) {

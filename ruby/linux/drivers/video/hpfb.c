@@ -41,26 +41,27 @@ unsigned char fb_bitmask;
 #define WMOVE		0x409c
 
 static struct fb_fix_screeninfo hpfb_fix __initdata = {
-    "HP300 Topcat", (unsigned long) NULL, 1024*768, FB_TYPE_PACKED_PIXELS, 0,
-    FB_VISUAL_PSEUDOCOLOR, 0, 0, 0, 1024, (unsigned long) NULL, 0, FB_ACCEL_NONE};
+	id:		"HP300 Topcat",
+	smem_len:	1024*768,
+	type:		FB_TYPE_PACKED_PIXELS,
+	visual:		FB_VISUAL_PSEUDOCOLOR,
+	line_length:	1024,
+	accel:		FB_ACCEL_NONE,
 
 static struct fb_var_screeninfo hpfb_defined = {
-	1024,768,1024,768, 	/* W,H, W, H (virtual) load xres,xres_virtual*/
-	0,0,			/* virtual -> visible no offset */
-	1,			/* depth -> load bits_per_pixel */
-	0,			/* greyscale ? */
-	{0,2,0},		/* R */
-	{0,2,0},		/* G */
-	{0,2,0},		/* B */
-	{0,0,0},		/* transparency */
-	0,			/* standard pixel format */
-	FB_ACTIVATE_NOW,
-	274,195,		/* 14" monitor */
-	FB_ACCEL_NONE,
-	0L,0L,0L,0L,0L,
-	0L,0L,0,		/* No sync info */
-	FB_VMODE_NONINTERLACED,
-	{0,0,0,0,0,0}
+	xres:		1024,
+	yres:		768,
+	xres_virtual:	1024,
+	yres_virtual:	786,
+	bits_per_pixel:	1,
+	red:		{0,2,0},	/* R */
+	green:		{0,2,0},	/* G */
+	blue:		{0,2,0},	/* B */
+	activate:	FB_ACTIVATE_NOW,
+	height:		274,
+	width:		195,	/* 14" monitor */
+	accel_flags:	FB_ACCEL_NONE,
+	vmode:		FB_VMODE_NONINTERLACED,
 };
 
 /*
@@ -100,7 +101,7 @@ void hpfb_copyarea(struct fb_info *info, struct fb_copyarea *area)
 static struct fb_ops hpfb_ops = {
 	owner:		THIS_MODULE,
 	fb_setcolreg:	hpfb_setcolreg,
-	fb_fillrect:	cfb_fillrect,	
+	fb_fillrect:	cfb_fillrect,
 	fb_copyarea:	hpfb_copyarea,
 	fb_imageblit:	cfb_imageblit,
 };
@@ -154,6 +155,8 @@ int __init hpfb_init_one(unsigned long base)
 	fb_info.var   = hpfb_defined;
 	fb_info.fix   = hpfb_fix;
 	fb_info.screen_base = hpfb_fix.smem_start;
+
+	fb_alloc_cmap(&fb_info.cmap, 256, 0);
 
 	if (register_framebuffer(&fb_info) < 0)
 		return 1;
