@@ -104,12 +104,19 @@ const int NR_TYPES = SIZE(max_vals);
 
 int spawnpid, spawnsig;
 
-int getkeycode(unsigned int scancode)
+int getkeycode(struct input_handle *handle, unsigned int scancode)
 {
-	return 0;
+        unsigned char *keycode = handle->dev->keycode;
+
+	return keycode[scancode & handle->dev->keycodemax];
 }
-int setkeycode(unsigned int scancode, unsigned int keycode)
+
+int setkeycode(struct input_handle *handle, unsigned int scancode, unsigned int keycode)
 {
+        unsigned char *key_code = handle->dev->keycode;
+
+	if (keycode <= handle->dev->keycodemax) 
+		key_code[scancode & handle->dev->keycodemax] = keycode;  
 	return 0;
 }
 

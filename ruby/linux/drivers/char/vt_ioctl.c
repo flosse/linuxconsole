@@ -257,8 +257,9 @@ do_kdsk_ioctl(int cmd, struct kbentry *user_kbe, int perm, struct kbd_struct *kb
 #undef v
 
 static inline int 
-do_kbkeycode_ioctl(int cmd, struct kbkeycode *user_kbkc, int perm)
+do_kbkeycode_ioctl(struct vc_data *vc, int cmd, struct kbkeycode *user_kbkc, int perm)
 {
+	struct input_handle *handle = vc->display_fg->keyboard;
 	struct kbkeycode tmp;
 	int kc = 0;
 
@@ -266,14 +267,14 @@ do_kbkeycode_ioctl(int cmd, struct kbkeycode *user_kbkc, int perm)
 		return -EFAULT;
 	switch (cmd) {
 	case KDGETKEYCODE:
-		kc = getkeycode(tmp.scancode);
+		kc = getkeycode(handle, tmp.scancode);
 		if (kc >= 0)
 			kc = put_user(kc, &user_kbkc->keycode);
 		break;
 	case KDSETKEYCODE:
 		if (!perm)
 			return -EPERM;
-		kc = setkeycode(tmp.scancode, tmp.keycode);
+		kc = setkeycode(handle, tmp.scancode, tmp.keycode);
 		break;
 	}
 	return kc;
@@ -819,7 +820,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	case KDSETKEYCODE:
 		if(!capable(CAP_SYS_ADMIN))
 			perm=0;
-		return do_kbkeycode_ioctl(cmd, (struct kbkeycode *)arg, perm);
+		return do_kbkeycode_ioctl(vc, cmd,(struct kbkeycode *)arg,perm);
 
 	case KDGKBENT:
 	case KDSKBENT:
