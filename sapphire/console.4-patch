@@ -1,0 +1,42 @@
+--- console.4	2000/03/10 04:47:37	1.1
++++ console.4	2000/03/10 04:53:03
+@@ -7,8 +7,9 @@
+ .\"
+ .\" Modified, Sun Feb 26 14:58:45 1995, faith@cs.unc.edu
+ .\" Modified, Oct 28 1997, dirson@debian.org
++.\" Updated for console driver version 2 by ESR.
+ .\"
+-.TH CONSOLE 4 "28 Oct 1997" "Console tools" "Linux User's Manual"
++.TH CONSOLE 4 "9 Mar 2000" "Console tools" "Linux User's Manual"
+ 
+ .SH NAME
+ console \- console terminal and virtual consoles
+@@ -23,12 +24,6 @@
+ The device files /dev/* are usually created using the script MAKEDEV,
+ or using mknod(1), usually with mode 0622 and owner root.tty.
+ 
+-Before kernel version 1.1.54 the number of virtual consoles was
+-compiled into the kernel (in tty.h: #define NR_CONSOLES 8)
+-and could be changed by editing and recompiling.
+-Since version 1.1.54 virtual consoles are created on the fly,
+-as soon as they are needed.
+-
+ Common ways to start a process on a console are: (a) tell init(8)
+ (in inittab(5)) to start a getty(8) on the console; (b) ask open(1)
+ to start a process on the console; (c) start X - it will find the
+@@ -48,12 +43,9 @@
+ will free the memory taken by the screen buffers for consoles
+ that no longer have any associated process.
+ 
+-.SH PROPERTIES
+-Consoles carry a lot of state. I hope to document that some other time.
+-The most important fact is that the consoles simulate vt100 terminals.
+-In particular, a console is reset to the initial state by printing the two
+-characters ESC c.
+-All escape sequences can be found in
++The console has a built-in terminal emulation resembling that of a DEC
++VT100; actually it implements a large subset of ANSI X3.64/ECMA-48.
++The escape sequences can be found in
+ .BR console_codes (4).
+ 
+ .SH FILES
