@@ -447,9 +447,7 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 	case FBIOPAN_DISPLAY:
 		if (copy_from_user(&var, (void *) arg, sizeof(var)))
 			return -EFAULT;
-		if (fb->fb_pan_display == NULL)
-			return (var.xoffset || var.yoffset) ? -EINVAL : 0;
-		if ((i=fb->fb_pan_display(&var, info)))
+		if ((i = fb_pan_display(&var, info)))
 			return i;
 		if (copy_to_user((void *) arg, &var, sizeof(var)))
 			return -EFAULT;

@@ -61,7 +61,7 @@ int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
      *  This call looks only at xoffset, yoffset and the FB_VMODE_YWRAP flag
      */
 
-int fbgen_pan_display(struct fb_var_screeninfo *var, struct fb_info *info) 
+int fb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info) 
 {
     int err;
 
