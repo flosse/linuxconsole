@@ -145,7 +145,8 @@ int main (int argc, char **argv)
 	while (1) {
 		rd = read(fd, ev, sizeof(struct input_event) * 64);
 
-		if (rd < sizeof(struct input_event)) {
+		if (rd < (int) sizeof(struct input_event)) {
+			printf("yyy\n");
 			perror("\nevtest: error reading");
 			exit (1);
 		}
