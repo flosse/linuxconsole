@@ -38,6 +38,7 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/gameport.h>
+#include <linux/malloc.h>
 
 #define L4_PORT			0x201
 #define L4_SELECT_ANALOG	0xa4
@@ -54,15 +55,11 @@
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 
 struct l4 {
-	int port;
-	int mode;
-	char cal;
+	unsigned char port, rev, cal;
 	int calaxes[4];
 	unsigned long caltime;
-	struct gameport *gameport;
-};
-
-struct l4 *l4_ports[8];
+	struct gameport gameport;
+} *l4_port[8];
 
 /*
  * l4_wait_ready() waits for the L4 to become ready.
@@ -104,11 +101,11 @@ static int l4_cooked_read(struct gameport *gameport, int *axes, int *buttons)
 
 	if (status & 0x10) {
 		if (l4_wait_ready()) goto fail;
-		*buttons = inb(L4_PORT) & 0xf;
+		*buttons = inb(L4_PORT) & 0x0f;
 	}
 
 	if (l4->cal) {
-		if (time_before(l4->caltime)) {
+		if (time_before(jiffies, l4->caltime)) {
 			for (i = 0; i < 4; i++)
 				axes[i] = l4->calaxes[i];
 		} else l4->cal = 0;
@@ -122,9 +119,9 @@ fail:	outb(L4_SELECT_ANALOG, L4_PORT);
 
 static int l4_open(struct gameport *gameport, int mode)
 {
-        if (gameport->port != 0 && mode != GAMEPORT_MODE_COOKED)
+	struct l4 *l4 = gameport->driver;
+        if (l4->port != 0 && mode != GAMEPORT_MODE_COOKED)
 		return -1;
-	gameport->mode = mode;
 	outb(L4_SELECT_ANALOG, L4_PORT);
 	return 0;
 }
@@ -196,21 +193,23 @@ fail:	outb(L4_SELECT_ANALOG, L4_PORT);
  * that the device's resistance fits into the L4's 8-bit range.
  */
 
-static void l4_calibrate(struct l4 *l4, int rev)
+static void l4_calibrate(struct l4 *l4)
 {
 	int i;
 	int cal[4] = {255,255,255,255};
 	int axes[4];
 	int t;
 
-	if (rev < 0x29)
+	if (l4->rev < 0x29)
 		l4_getcal(l4->port, cal);
 	else
 		l4_setcal(l4->port, cal);
 
-	l4_read(l4, axes, &t);
+	printk(KERN_INFO "l4: initial calibration: %d %d %d %d\n", cal[0], cal[1], cal[2], cal[3]);
 
-	/* Fix buttons, throttle, hat ? */
+	l4_cooked_read(&l4->gameport, axes, &t);
+
+	/* Fix buttons, hat, throttle & rudder */
 
 	for (i = 0; i < 4; i++) {
 		t = (axes[i] * cal[i]) / 100;
@@ -224,7 +223,9 @@ static void l4_calibrate(struct l4 *l4, int rev)
 
 	l4_setcal(l4->port, cal);
 
-	if (rev < 0x29)  {
+	printk(KERN_INFO "l4: new calibration: %d %d %d %d\n", cal[0], cal[1], cal[2], cal[3]);
+
+	if (l4->rev < 0x29)  {
 		l4->caltime = jiffies + L4_CALTIME;
 		l4->cal = 1;
 	}
@@ -236,7 +237,7 @@ int __init l4_init(void)
 	struct gameport *gameport;
 	struct l4 *l4;
 
-	if (request_region(L4_PORT, 1, "lightning"))
+	if (!request_region(L4_PORT, 1, "lightning"))
 		return -1;
 
 	for (i = 0; i < 2; i++) {
@@ -262,12 +263,16 @@ int __init l4_init(void)
 			printk(KERN_ERR "lightning: Out of memory allocating ports.\n");
 			continue;
 		}
+		memset(l4_port[i * 4], 0, sizeof(struct l4) * 4);
 
 		for (j = 0; j < 4; j++) {
 
 			l4 = l4_port[i * 4 + j] = l4_port[i * 4] + j;
 
-			gameport = l4;
+			l4->port = i * 4 + j;
+			l4->rev = rev;
+
+			gameport = &l4->gameport;
 			gameport->driver = l4;
 			gameport->open = l4_open;
 			gameport->cooked_read = l4_cooked_read;
@@ -279,14 +284,11 @@ int __init l4_init(void)
 			}
 			
 			gameport_register_port(gameport);
-
-
-			l4_calibrate(l4, rev);
 		}
 
-		printk(KERN_INFO "gameport%d,%d,%d,%d: PDPI Lightning 4 %s card firmware v%d.%d at %#x\n",
-			l4_port[i * 4 + 0]->gameport->number, l4_port[i * 4 + 1]->gameport->number, 
-			l4_port[i * 4 + 2]->gameport->number, l4_port[i * 4 + 3]->gameport->number, 
+		printk(KERN_INFO "gameport%d,%d,%d,%d: PDPI Lightning 4 %s card v%d.%d at %#x\n",
+			l4_port[i * 4 + 0]->gameport.number, l4_port[i * 4 + 1]->gameport.number, 
+			l4_port[i * 4 + 2]->gameport.number, l4_port[i * 4 + 3]->gameport.number, 
 			i ? "secondary" : "primary", rev >> 4, rev, L4_PORT);
 
 		cards++;
@@ -306,12 +308,11 @@ void __init l4_exit(void)
 {
 	int i;
 	int cal[4] = {59, 59, 59, 59};
-	struct l4 *l4;
 
 	for (i = 0; i < 8; i++)
 		if (l4_port[i]) {
 			l4_setcal(l4_port[i]->port, cal);
-			gameport_unregister_port(l4_port[i]->gameport);
+			gameport_unregister_port(&l4_port[i]->gameport);
 		}
 	outb(L4_SELECT_ANALOG, L4_PORT);
 	release_region(L4_PORT, 1);

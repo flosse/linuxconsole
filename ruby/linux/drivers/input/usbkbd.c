@@ -140,9 +140,9 @@ static int usb_kbd_open(struct input_dev *dev)
 	return 0;
 }
 
-static void kbd_close(struct input_dev *dev)
+static void usb_kbd_close(struct input_dev *dev)
 {
-	struct usbkbd *kbd = dev->private;
+	struct usb_kbd *kbd = dev->private;
 
 	if (!--kbd->open)
 		usb_unlink_urb(&kbd->irq);

@@ -604,9 +604,6 @@ static void analog_parse_options(void)
 
 	for (; i < ANALOG_PORTS; i++)
 		analog_options[i] = 0xff;
-
-	for (i = 0; i < ANALOG_PORTS; i++)
-		printk("%d -> %#x\n", i, analog_options[i]);
 }
 
 /*
