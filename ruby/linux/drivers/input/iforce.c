@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- *  Copyright (c) 2000 Vojtech Pavlik
+ *  Copyright (c) 2001 Vojtech Pavlik <vojtech@suse.cz>
  *  Copyright (c) 2001 Johann Deneux <deneux@ifrance.com>
  *
  *  USB/RS232 I-Force joysticks and wheels.
@@ -85,18 +85,34 @@ struct iforce_core_effect {
 	unsigned long flags[NBITS(FF_MODCORE_MAX)];
 };
 
+#define FF_CMD_EFFECT		0x010e
+#define FF_CMD_SHAPE		0x0208
+#define FF_CMD_MAGNITUDE	0x0303
+#define FF_CMD_PERIOD		0x0407
+#define FF_CMD_INTERACT		0x050a
+#define FF_CMD_PLAY		0x4103
+
 struct iforce {
-        signed char data[IFORCE_MAX_LENGTH];
-        struct usb_device *usbdev;
-        struct serio *serio;    /* FF: needed by iforce_input_event */
-        struct input_dev dev;
-        struct urb irq;
+	struct input_dev dev;		/* Input device interface */
         int open;
+
+        signed char data[IFORCE_MAX_LENGTH];
+
+#ifdef IFORCE_232
+        struct serio *serio;		/* RS232 transfer */
         int idx, pkt, len, id;
         unsigned char csum;
-	struct semaphore ff_mutex;	/* FF: to avoid that several threads send commands at the same time to the device */
+#endif
+#ifdef IFORCE_USB
+        struct usb_device *usbdev;	/* USB transfer */
+        struct urb irq, out;
+	DECLARE_WAIT_QUEUE_HEAD(wait);
+#endif
+#ifdef IFORCE_FF
+	struct semaphore ff_mutex;	/* Force Feedback */
 	struct resource device_memory;
 	struct iforce_core_effect core_effects[FF_EFFECTS_MAX];
+#endif
 };
 
 static struct {
@@ -108,70 +124,128 @@ static char *iforce_name = "I-Force joystick/wheel";
 
 /* FF: various macros */
 /* Get hi and low bytes of a 16-bits int */
-#define HI(a)	((a) >> 8)
-#define LOW(a)	((a) & 0x00ff)
+#define HI(a)	((unsigned char)((a) >> 8))
+#define LO(a)	((unsigned char)((a) & 0xff))
 
 /* Encode a time value */
 #define TIME_SCALE(a)	((a) == 0xffff ? 0xffff : (a) * 1000 / 256)
  
 #ifdef IFORCE_FF
+
 /*
  * Send a packet of bytes to the device
  */
-static void send_serio(struct serio* pserio, unsigned char* data)
+static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 {
-	unsigned char i;
-	unsigned char cs = 0;
-	unsigned char len = data[2] +3;
- 
-	printk(KERN_DEBUG "ff msg:");
-	for (i=0; i<len; ++i) {
-		serio_write(pserio, data[i]);
-		cs = cs^data[i];
-		printk("%02x ", data[i]);
+
+	switch (iforce->dev.idbus) {
+
+#ifdef IFORCE_232
+		case BUS_RS232: {
+
+				unsigned char i;
+				unsigned char csum = 0;
+			 
+				printk(KERN_DEBUG "iforce.c: ff msg: 0x2b");
+				serio_write(iforce->serio, 0x2b);
+				printk("%02x ", HI(cmd));
+				serio_write(iforce->serio, HI(cmd));
+				printk("%02x ", LO(cmd));
+				serio_write(iforce->serio, LO(cmd));
+				csum = 0x2b ^ HI(cmd) ^ LO(cmd);
+
+				for (i = 0; i < LO(cmd); i++) {
+					printk("%02x ", data[i]);
+					serio_write(iforce->serio, data[i]);
+					csum = csum ^ data[i];
+				}
+
+				serio_write(iforce->serio, csum);
+				printk("%02x\n", csum);
+
+				return;
+			}
+
+#endif
+#ifdef IFORCE_USB
+		case BUS_USB: {
+
+				DECLARE_WAITQUEUE(wait, current);
+				int timeout = 1000;
+
+				memcpy(iforce->writeurb.transfer_buffer + 1, data, LO(CMD));
+				iforce->transfer_buffer[0] = HI(cmd);
+				iforce->out.transfer_buffer_length = LO(CMD) + 1;
+				iforce->out.dev = iforce->usbdev;
+
+				init_waitqueue_head(&iforce->wait); 	
+				current->state = TASK_INTERRUPTIBLE;
+				add_wait_queue(&iforce->wait, &wait);
+
+				if (usb_submit_urb(urb)) {
+					current->state = TASK_RUNNING;
+					remove_wait_queue(&iforce->wait, &wait);
+					printk(KERN_WARNING "iforce.c: Failed to submit output urb. (%d)\n", status);
+					return;
+				}
+
+				while (timeout && urb->status == -EINPROGRESS)
+					timeout = schedule_timeout(timeout);
+
+				current->state = TASK_RUNNING;
+				remove_wait_queue(&iforce->wait, &wait);
+
+				if (!timeout) {
+					printk(KERN_WARNING "iforce.c: Output urb: timeout\n");
+					usb_unlink_urb(urb);
+				}
+
+				return;
+			}
+#endif
 	}
-	serio_write(pserio, cs);
-	printk("%02x\n", cs);
 } 
 
 /*
  * Start or stop playing an effect
  */
+
 static int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {
 	struct iforce* iforce = (struct iforce*)(dev->private);
-	struct serio* serio = iforce->serio;
+	int effect_id = code & FF_CTRL_MASK;
+	unsigned char data[3];
 
-printk(KERN_DEBUG "iforce ff: input event %d %d %d\n", type, code, value);
+	printk(KERN_DEBUG "iforce ff: input event %d %d %d\n", type, code, value);
 
 	if (code & FF_PLAY) {
-		unsigned char data[6] = {0x2b, 0x41, 0x03, 0x00, 0x00, 0x00};
-		int effect_id = code & FF_CTRL_MASK;
-
 	        printk(KERN_DEBUG "iforce ff: play effect %d\n", effect_id);
-	        data[3] = (unsigned char)effect_id;
-	        data[4] = (value == 1)?0x01:0x41;
-	        data[5] = (unsigned char)value;
+
+	        data[0] = (unsigned char)effect_id;
+	        data[1] = (value == 1) ? 0x01 : 0x41;
+	        data[2] = (unsigned char)value;
  
 		down_interruptible(&(iforce->ff_mutex));
-	        send_serio(serio, data);
+	        send_packet(iforce, FF_CMD_PLAY, data);
 		up(&(iforce->ff_mutex));
 
 		return 0; 
 	}
-	else if (code & FF_STOP) {
-		unsigned char data[6] = {0x2b, 0x41, 0x03, 0x00, 0x00, 0x00};
-		int effect_id = code & FF_CTRL_MASK;
- 
+
+	if (code & FF_STOP) {
 		printk(KERN_DEBUG "iforce ff: stop effect %d\n", effect_id); 
-		data[3] = (unsigned char)effect_id;
+
+		data[0] = (unsigned char) effect_id;
+		data[1] = 0;
+		data[2] = 0;
  
 		down_interruptible(&(iforce->ff_mutex));
-		send_serio(serio, data);
+		send_packet(iforce, FF_CMD_PLAY, data);
 		up(&(iforce->ff_mutex));
 
 		return 0; 
 	}
+
 	return -1;
 }
 
@@ -181,11 +255,11 @@ printk(KERN_DEBUG "iforce ff: input event %d %d %d\n", type, code, value);
  *
  * Note: caller must ensure exclusive access to device
  */
+
 static int make_magnitude_modifier(struct iforce* iforce,
 	struct resource* mod_chunk, __s16 level)
 {
-        unsigned char data[6] = {0x2b, 0x03, 0x03, 0x00, 0x00, 0x00};
-        struct serio* serio = iforce->serio;
+        unsigned char data[3];
  
 	if (allocate_resource(&(iforce->device_memory), mod_chunk, 2,
 		iforce->device_memory.start, iforce->device_memory.end, 2L,
@@ -193,23 +267,23 @@ static int make_magnitude_modifier(struct iforce* iforce,
 		return -ENOMEM;
 	}
 
-        data[3] = (unsigned char)LOW(mod_chunk->start);
-        data[4] = (unsigned char)HI(mod_chunk->start);
-        data[5] = (unsigned char)(level >> 8);
+        data[0] = LO(mod_chunk->start);
+        data[1] = HI(mod_chunk->start);
+        data[2] = HI(level);
  
-        send_serio(serio, data);
+        send_packet(iforce, FF_CMD_MAGNITUDE, data);
 
 	return 0;
 }
+
 /*
  * Upload the component of an effect dealing with the period, phase and magnitude
  */
+
 static int make_period_modifier(struct iforce* iforce, struct resource* mod_chunk,
-	__s16 magnitude, __s16 offset, __u16 period, __u16 phase)
+	__s16 magnitude, __s16 offset, u16 period, u16 phase)
 {
-	unsigned char data[10] = {0x2b, 0x04, 0x07,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-	struct serio* serio = iforce->serio;
+	unsigned char data[7];
  
 	period = TIME_SCALE(period);
  
@@ -219,17 +293,17 @@ static int make_period_modifier(struct iforce* iforce, struct resource* mod_chun
 		return -ENOMEM;
 	}
 
-	data[3] = (unsigned char)LOW(mod_chunk->start);
-	data[4] = (unsigned char)HI(mod_chunk->start);
+	data[0] = LO(mod_chunk->start);
+	data[1] = HI(mod_chunk->start);
  
-	data[5] = (unsigned char)(magnitude >> 8);
-	data[6] = (unsigned char)(offset >> 8);
-	data[7] = (unsigned char)(phase >> 8);
+	data[2] = HI(magnitude);
+	data[3] = HI(offset);
+	data[4] = HI(phase);
  
-	data[8] = (unsigned char)LOW(period);
-	data[9] = (unsigned char)HI(period);
+	data[5] = LO(period);
+	data[6] = HI(period);
  
-	send_serio(serio, data); 
+	send_packet(iforce, FF_CMD_PERIOD, data); 
 
 	return 0;
 }
@@ -237,13 +311,12 @@ static int make_period_modifier(struct iforce* iforce, struct resource* mod_chun
 /*
  * Uploads the part of an effect setting the shape of the force
  */
+
 static int make_shape_modifier(struct iforce* iforce, struct resource* mod_chunk,
-        __u16 attack_duration, __s16 initial_level,
-        __u16 fade_duration, __s16 final_level)
+        u16 attack_duration, __s16 initial_level,
+        u16 fade_duration, __s16 final_level)
 {
-	unsigned char data[11] = {0x2b, 0x02, 0x08,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-	struct serio* serio = iforce->serio;
+	unsigned char data[8];
  
 	attack_duration = TIME_SCALE(attack_duration);
 	fade_duration = TIME_SCALE(fade_duration);
@@ -254,18 +327,18 @@ static int make_shape_modifier(struct iforce* iforce, struct resource* mod_chunk
 		return -ENOMEM;
 	}
 
-	data[3] = (unsigned char)LOW(mod_chunk->start);
-	data[4] = (unsigned char)HI(mod_chunk->start);
+	data[0] = LO(mod_chunk->start);
+	data[1] = HI(mod_chunk->start);
  
-	data[5] = (unsigned char)LOW(attack_duration);
-	data[6] = (unsigned char)HI(attack_duration);
-	data[7] = (unsigned char)(initial_level >> 8);
+	data[2] = LO(attack_duration);
+	data[3] = HI(attack_duration);
+	data[4] = HI(initial_level);
  
-	data[8] = (unsigned char)LOW(fade_duration);
-	data[9] = (unsigned char)HI(fade_duration);
-	data[10] = (unsigned char)(final_level >> 8);
+	data[5] = LO(fade_duration);
+	data[6] = HI(fade_duration);
+	data[7] = HI(final_level);
  
-	send_serio(serio, data);
+	send_packet(iforce, FF_CMD_SHAPE, data);
 
 	return 0;
 }
@@ -273,13 +346,12 @@ static int make_shape_modifier(struct iforce* iforce, struct resource* mod_chunk
 /*
  * Component of spring, friction, inertia... effects
  */
+
 static int make_interactive_modifier(struct iforce* iforce, 
 	struct resource* mod_chunk,
-	__s16 rsat, __s16 lsat, __s16 rk, __s16 lk, __u16 db, __s16 center)
+	__s16 rsat, __s16 lsat, __s16 rk, __s16 lk, u16 db, __s16 center)
 {
-        unsigned char data[13] = {0x2b, 0x05, 0x0a,
-                0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00};
+        unsigned char data[10];
 
 	if (allocate_resource(&(iforce->device_memory), mod_chunk, 8,
 		iforce->device_memory.start, iforce->device_memory.end, 2L,
@@ -287,21 +359,21 @@ static int make_interactive_modifier(struct iforce* iforce,
 		return -ENOMEM;
 	}
 
-        data[3] = (unsigned char)LOW(mod_chunk->start);
-        data[4] = (unsigned char)HI(mod_chunk->start);
+        data[0] = LO(mod_chunk->start);
+        data[1] = HI(mod_chunk->start);
 
-        data[5] = (unsigned char)(rk>>8);
-        data[6] = (unsigned char)(lk>>8);
+        data[2] = HI(rk);
+        data[3] = HI(lk);
 
-        data[7] = (unsigned char)(center>>8);
+        data[4] = HI(center);
 
-        data[9] = (unsigned char)LOW(db);
-        data[10] = (unsigned char)HI(db);
+        data[5] = LO(db);
+        data[6] = HI(db);
 
-        data[11] = (unsigned char)(rsat>>8);
-        data[12] = (unsigned char)(lsat>>8);
+        data[7] = HI(rsat);
+        data[8] = HI(lsat);
 
-        send_serio(iforce->serio, data);
+        send_packet(iforce, FF_CMD_INTERACT, data);
 
 	return 0;
 }
@@ -309,42 +381,39 @@ static int make_interactive_modifier(struct iforce* iforce,
 /*
  * Send the part common to all effects to the device
  */
-static int make_core(struct iforce* iforce, __u16 id, __u16 mod_id1, __u16 mod_id2,
-	__u8 effect_type, __u8 axes, __u16 duration, __u16 delay, __u16 button,
-	__u16 interval, __u16 direction)
+
+static int make_core(struct iforce* iforce, u16 id, u16 mod_id1, u16 mod_id2,
+	u8 effect_type, u8 axes, u16 duration, u16 delay, u16 button,
+	u16 interval, u16 direction)
 {
-	unsigned char data[17] = {0x2b, 0x01, 0x0e,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-	struct serio* serio = (struct serio*)iforce->serio;
+	unsigned char data[14];
  
 	duration = TIME_SCALE(duration);
-	delay = TIME_SCALE(delay);
+	delay    = TIME_SCALE(delay);
 	interval = TIME_SCALE(interval);
  
-	data[3] = (unsigned char)id;
-	data[4] = effect_type;
-	data[5] = (unsigned char)((axes) |
-				 ((button+1) & 0x0f));
-	if (button == FF_BUTTON_NONE) data[5] &= 0xf0;
- 
-	data[6] = (unsigned char)LOW(duration);
-	data[7] = (unsigned char)HI(duration);
- 
-	data[8] = (unsigned char)(direction >> 8);
- 
-	data[9] = (unsigned char)LOW(interval);
-	data[10] = (unsigned char)HI(interval);
- 
-	data[11] = (unsigned char)LOW(mod_id1);
-	data[12] = (unsigned char)HI(mod_id1);
-	data[13] = (unsigned char)LOW(mod_id2);
-	data[14] = (unsigned char)HI(mod_id2);
- 
-	data[15] = (unsigned char)LOW(delay);
-	data[16] = (unsigned char)HI(delay);
+	data[0]  = LO(id);
+	data[1]  = effect_type;
+	data[2]  = LO((axes)
+		 | ((button == FF_BUTTON_NONE ? 0 : (button + 1)) & 0x0f));
 
-	send_serio(serio, data);                                               
+	data[3]  = LO(duration);
+	data[4]  = HI(duration);
+ 
+	data[5]  = HI(direction);
+ 
+	data[6]  = LO(interval);
+	data[7]  = HI(interval);
+ 
+	data[8]  = LO(mod_id1);
+	data[9]  = HI(mod_id1);
+	data[10] = LO(mod_id2);
+	data[11] = HI(mod_id2);
+ 
+	data[12] = LO(delay);
+	data[13] = HI(delay);
+
+	send_packet(iforce, FF_CMD_EFFECT, data);                                               
 
 	return 0;
 }
@@ -352,9 +421,10 @@ static int make_core(struct iforce* iforce, __u16 id, __u16 mod_id1, __u16 mod_i
 /*
  * Upload a periodic effect to the device
  */
+
 static int iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effect)
 {
-	__u8 wave_code;
+	u8 wave_code;
 	int core_id = effect->id;
 	struct iforce_core_effect* core_effect = iforce->core_effects + core_id;
 	struct resource* mod1_chunk = &(iforce->core_effects[core_id].mod1_chunk);
@@ -378,12 +448,12 @@ static int iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effec
 	set_bit(FF_MOD2_IS_STORED, core_effect->flags);
  
 	switch (effect->u.periodic.waveform) {
-	case FF_SQUARE:		wave_code = 0x20; break;
-	case FF_TRIANGLE:	wave_code = 0x21; break;
-	case FF_SINE:		wave_code = 0x22; break;
-	case FF_SAW_UP:		wave_code = 0x23; break;
-	case FF_SAW_DOWN:	wave_code = 0x24; break;
-	default: 		wave_code = 0x20; break;
+		case FF_SQUARE:		wave_code = 0x20; break;
+		case FF_TRIANGLE:	wave_code = 0x21; break;
+		case FF_SINE:		wave_code = 0x22; break;
+		case FF_SAW_UP:		wave_code = 0x23; break;
+		case FF_SAW_DOWN:	wave_code = 0x24; break;
+		default: 		wave_code = 0x20; break;
 	}
  
 	err = make_core(iforce, effect->id,
@@ -449,16 +519,16 @@ static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* ef
 	int core_id = effect->id;
 	struct iforce_core_effect* core_effect = iforce->core_effects + core_id;
 	struct resource* mod_chunk = &(core_effect->mod1_chunk);
-	__u8 type, axes;
-	__u16 mod1, mod2, direction;
+	u8 type, axes;
+	u16 mod1, mod2, direction;
 	int err = 0;
 
 	printk(KERN_DEBUG "iforce ff: make interactive effect");
 
 	switch (effect->type) {
-	case FF_SPRING:      type = 0x40; break;
-	case FF_FRICTION:    type = 0x41; break;
-	default: return -1;
+		case FF_SPRING:      type = 0x40; break;
+		case FF_FRICTION:    type = 0x41; break;
+		default: return -1;
 	}
 
 	err = make_interactive_modifier(iforce, mod_chunk,
@@ -571,7 +641,7 @@ static int iforce_erase_effect(struct input_dev *dev, int effect_id)
 	int err = 0;
 	struct iforce_core_effect* core_effect;
 
-printk(KERN_DEBUG "iforce ff: erase effect %d\n", effect_id);
+	printk(KERN_DEBUG "iforce ff: erase effect %d\n", effect_id);
 
 	if (effect_id < 0 || effect_id >= FF_EFFECTS_MAX) {
 		return -EINVAL;
@@ -594,7 +664,7 @@ printk(KERN_DEBUG "iforce ff: erase effect %d\n", effect_id);
 }
 #endif /* IFORCE_FF */
 
-static void iforce_process_packet(struct input_dev *dev, unsigned char id, int idx, unsigned char *data)
+static void iforce_process_packet(struct input_dev *dev, unsigned char id, unsigned char *data)
 {
 	switch (id) {
 
@@ -706,16 +776,16 @@ static void iforce_input_setup(struct iforce *iforce)
 #endif
 
 #ifdef IFORCE_FF
-printk(KERN_DEBUG "iforce ff: iforce_input_setup start of ff init\n");
+	printk(KERN_DEBUG "iforce ff: iforce_input_setup start of ff init\n");
 	iforce->dev.event = iforce_input_event;
 
 	iforce->dev.upload_effect = iforce_upload_effect;
 	iforce->dev.erase_effect = iforce_erase_effect;
-printk(KERN_DEBUG "iforce ff: iforce functions registered \n");
+	printk(KERN_DEBUG "iforce ff: iforce functions registered \n");
 
 	/* initialize semaphore protecting write access to the device */
 	iforce->ff_mutex = ff_mutex_initializer;
-printk(KERN_DEBUG "iforce ff: mutex initialized \n");
+	printk(KERN_DEBUG "iforce ff: mutex initialized \n");
 
 	/* memory avalaible on the device */
 	iforce->device_memory.name = "I-Force device effect memory";
@@ -726,7 +796,7 @@ printk(KERN_DEBUG "iforce ff: mutex initialized \n");
 	iforce->device_memory.parent = NULL;
 	iforce->device_memory.child = NULL;
 	iforce->device_memory.sibling = NULL;
-printk(KERN_DEBUG "iforce ff: memory detected \n");
+	printk(KERN_DEBUG "iforce ff: memory detected \n");
 #endif
 
 	input_register_device(&iforce->dev);
@@ -738,18 +808,29 @@ static void iforce_usb_irq(struct urb *urb)
 {
 	struct iforce *iforce = urb->context;
 	if (urb->status) return;
-	iforce_process_packet(&iforce->dev, iforce->data[0], 8, iforce->data + 1);
+	iforce_process_packet(&iforce->dev, iforce->data[0], iforce->data + 1);
+}
+
+static void iforce_usb_out(struct urb *urb)
+{
+	 struct iforce *iforce = urb->context;
+
+	if (urb->status)
+		printk(KERN_WARNING "iforce.c: nonzero output urb status %d\n", urb->status);
+
+        if (waitqueue_active(iforce->wait))
+                wake_up(iforce->wait);
 }
 
 static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 			      const struct usb_device_id *id)
 {
-	struct usb_endpoint_descriptor *endpoint;
+	struct usb_endpoint_descriptor *epirq, *epout;
 	struct iforce *iforce;
 
 	endpoint = dev->config[0].interface[ifnum].altsetting[0].endpoint + 0;
 
-	if (!(iforce = kmalloc(sizeof(struct iforce), GFP_KERNEL))) return NULL;
+	if (!(iforce = kmalloc(sizeof(struct iforce) + 32, GFP_KERNEL))) return NULL;
 	memset(iforce, 0, sizeof(struct iforce));
 
 	iforce->dev.name = iforce_name;
@@ -758,8 +839,11 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	iforce->dev.idproduct = dev->descriptor.idProduct;
 	iforce->dev.idversion = dev->descriptor.bcdDevice;
 
-	FILL_INT_URB(&iforce->irq, dev, usb_rcvintpipe(dev, endpoint->bEndpointAddress),
-			iforce->data, 8, iforce_usb_irq, iforce, endpoint->bInterval);
+	FILL_INT_URB(&iforce->irq, dev, usb_rcvintpipe(dev, epirq->bEndpointAddress),
+			iforce->data, 16, iforce_usb_irq, iforce, endpoint->bInterval);
+
+	FILL_BULK_URB(&iforce->out, dev, usb_sndbulkpipe(dev, epout->bEndpointAddress),
+                        iforce + 1, 32, iforce_usb_out, iforce);
 
 	iforce_input_setup(iforce);
 
@@ -832,7 +916,7 @@ static void iforce_serio_irq(struct serio *serio, unsigned char data, unsigned i
 	}
 
         if (iforce->idx == iforce->len) {
-		iforce_process_packet(&iforce->dev, iforce->id, iforce->idx, iforce->data);
+		iforce_process_packet(&iforce->dev, iforce->id, iforce->data);
 		iforce->pkt = 0;
 		iforce->id  = 0;
                 iforce->len = 0;
