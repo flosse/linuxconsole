@@ -68,7 +68,7 @@ obj-$(CONFIG_INPUT_TMDC)	+= tmdc.o gameport.o
 obj-$(CONFIG_INPUT_SIDEWINDER)	+= sidewinder.o gameport.o
 
 obj-$(CONFIG_INPUT_DB9)		+= db9.o
-#obj-$(CONFIG_INPUT_GAMECON)	+= gamecon.o
+obj-$(CONFIG_INPUT_GAMECON)	+= gamecon.o
 obj-$(CONFIG_INPUT_TURBOGRAFX)	+= turbografx.o
 
 obj-$(CONFIG_INPUT_HID)		+= hid.o

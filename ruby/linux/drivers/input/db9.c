@@ -273,7 +273,7 @@ static int db9_open(struct input_dev *dev)
 	struct parport *port = db9->pd->port;
 
 	if (!db9->used++) {
-		if (parport_claim(db9->pd)) return -EBUSY;
+		parport_claim(db9->pd);
 		parport_write_data(port, 0xff);
 		parport_data_reverse(port);
 		parport_write_control(port, DB9_NORMAL);

@@ -108,7 +108,7 @@ static int tgfx_open(struct input_dev *dev)
 {
         struct tgfx *tgfx = dev->private;
         if (!tgfx->used++) {
-		if (parport_claim(tgfx->pd)) return -EBUSY; 
+		parport_claim(tgfx->pd);
 		parport_write_control(tgfx->pd->port, 0x04);
                 mod_timer(&tgfx->timer, jiffies + TGFX_REFRESH_TIME); 
 	}
