@@ -44,15 +44,6 @@ extern int default_red[];
 extern int default_grn[];
 extern int default_blu[];      
 
-/* Bad race condition :-( Must fix */
-extern struct vc_data *want_vc;
-                         
-extern inline void set_console(struct vc_data *vc)
-{
-	want_vc = vc;
-        tasklet_schedule(&console_tasklet);
-}
-
 /*
  * Data structure describing single virtual console except for data
  * used by vt.c.
@@ -254,6 +245,12 @@ extern struct vt_struct *vt_cons;
 extern struct vt_struct *admin_vt;
 
 void (*kd_mksound)(unsigned int hz, unsigned int ticks);
+
+extern inline void set_console(struct vc_data *vc)
+{
+        vc->display_fg->want_vc = vc;
+        tasklet_schedule(&vc->display_fg->vt_tasklet);
+}
 
 /* universal VT emulation functions */
 void vte_ris(struct vc_data *vc, int do_clear);
