@@ -77,8 +77,7 @@ void handle_sysrq(int key, struct pt_regs *pt_regs,
 		printk("SAK\n");
 		if (tty)
 			do_SAK(tty);
-		if (kbd)
-                       reset_vc(kbd->keyb->fg_console);    /* FIXME */
+                reset_vc(fg_console);    
 		break;
 #endif
 	case 'b':					    /* B -- boot immediately */
