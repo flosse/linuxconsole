@@ -622,7 +622,7 @@ struct input_dev {
 	unsigned long mscbit[NBITS(MSC_MAX)];
 	unsigned long ledbit[NBITS(LED_MAX)];
 	unsigned long sndbit[NBITS(SND_MAX)];
-	unsigned long ffbit[NBITS(FF_AXES_MAX)];
+	unsigned long ffbit[NBITS(FF_MAX)];
 
 	unsigned int keycodemax;
 	unsigned int keycodesize;
