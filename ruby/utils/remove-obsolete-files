@@ -45,6 +45,8 @@ rm -fv drivers/sbus/char/sunkeymap.map
 rm -fv drivers/sbus/char/sunmouse.c
 rm -fv drivers/sbus/char/sunmouse.h
 rm -fv drivers/video/fbcon-afb.c
+rm -fv drivers/video/fbcon-accel.c
+rm -fv drivers/video/fbcon-accel.h
 rm -fv drivers/video/fbcon-cfb16.c
 rm -fv drivers/video/fbcon-cfb2.c
 rm -fv drivers/video/fbcon-cfb24.c
