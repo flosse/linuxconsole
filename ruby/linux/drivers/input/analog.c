@@ -281,7 +281,8 @@ static int analog_button_read(struct analog_port *port, char saitek, char chf)
 		i++;
 	}
 
-	printk(KERN_DEBUG "analog.c: Saitek read: t:%d i:%d btn:%#x\n", t, i, port->buttons);
+	if (saitek)
+		printk(KERN_DEBUG "analog.c: Saitek read: t:%d i:%d btn:%#x\n", t, i, port->buttons);
 
 	return -(!t || (i == 16));
 }
