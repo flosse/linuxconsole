@@ -342,9 +342,9 @@ static void vesa_setpalette(int regno, unsigned red, unsigned green, unsigned bl
 
 #endif
 
-static int vesa_setcolreg(unsigned regno, unsigned red, unsigned green,
-			  unsigned blue, unsigned transp,
-			  struct fb_info *fb_info)
+static int vesafb_setcolreg(unsigned regno, unsigned red, unsigned green,
+	      		    unsigned blue, unsigned transp,
+			    struct fb_info *fb_info)
 {
 	/*
 	 *  Set a single color register. The values supplied are
@@ -415,10 +415,9 @@ static void do_install_cmap(int con, struct fb_info *info)
 	if (con != currcon)
 		return;
 	if (fb_display[con].cmap.len)
-		fb_set_cmap(&fb_display[con].cmap, 1, vesa_setcolreg, info);
+		fb_set_cmap(&fb_display[con].cmap, 1, info);
 	else
-		fb_set_cmap(fb_default_cmap(video_cmap_len), 1, vesa_setcolreg,
-			    info);
+		fb_set_cmap(fb_default_cmap(video_cmap_len), 1, info);
 }
 
 static int vesafb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
@@ -434,40 +433,21 @@ static int vesafb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 	return 0;
 }
 
-static int vesafb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info)
-{
-	int err;
-
-	if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
-		err = fb_alloc_cmap(&fb_display[con].cmap,video_cmap_len,0);
-		if (err)
-			return err;
-	}
-	if (con == currcon)			/* current console? */
-		return fb_set_cmap(cmap, kspc, vesa_setcolreg, info);
-	else
-		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
-	return 0;
-}
-
 static struct fb_ops vesafb_ops = {
-	vesafb_open,
-	vesafb_release,
-	vesafb_get_fix,
-	vesafb_get_var,
-	vesafb_set_var,
-	vesafb_get_cmap,
-	vesafb_set_cmap,
-	vesafb_pan_display,
-	NULL	
+	fb_open:	vesafb_open,
+	fb_release:	vesafb_release,
+	fb_get_fix:	vesafb_get_fix,
+	fb_get_var:	vesafb_get_var,
+	fb_set_var:	vesafb_set_var,
+	fb_get_cmap:	vesafb_get_cmap,
+	fb_set_cmap:	fbgen_set_cmap,
+	fb_setcolreg:	vesafb_setcolreg,
+	fb_pan_display:	vesafb_pan_display
 };
 
 int vesafb_setup(char *options)
 {
 	char *this_opt;
-	
-	fb_info.fontname[0] = '\0';
 	
 	if (!options || !*options)
 		return 0;
@@ -489,8 +469,6 @@ int vesafb_setup(char *options)
 			pmi_setpal=1;
 		else if (! strcmp(this_opt, "mtrr"))
 			mtrr=1;
-		else if (!strncmp(this_opt, "font:", 5))
-			strcpy(fb_info.fontname, this_opt+5);
 	}
 	return 0;
 }
@@ -507,13 +485,6 @@ static int vesafb_switch(int con, struct fb_info *info)
 	do_install_cmap(con, info);
 	vesafb_update_var(con,info);
 	return 1;
-}
-
-/* 0 unblank, 1 blank, 2 no vsync, 3 no hsync, 4 off */
-
-static void vesafb_blank(int blank, struct fb_info *info)
-{
-	/* Not supported */
 }
 
 int __init vesafb_init(void)
@@ -662,7 +633,6 @@ int __init vesafb_init(void)
 	fb_info.disp=&disp;
 	fb_info.switch_con=&vesafb_switch;
 	fb_info.updatevar=&vesafb_update_var;
-	fb_info.blank=&vesafb_blank;
 	fb_info.flags=FBINFO_FLAG_DEFAULT;
 	vesafb_set_disp(-1);
 

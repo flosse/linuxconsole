@@ -217,25 +217,6 @@ static int macfb_release(struct fb_info *info, int user)
 	return(0);
 }
 
-static int macfb_update_var(int con, struct fb_info *info)
-{
-	return 0;
-}
-
-static int macfb_get_fix(struct fb_fix_screeninfo *fix, int con,
-			 struct fb_info *info)
-{
-	*fix = info->fix;
-	return 0;
-}
-
-static int macfb_get_var(struct fb_var_screeninfo *var, int con,
-			 struct fb_info *info)
-{
-	*var = info->var;
-	return 0;
-}
-
 static int macfb_set_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info)
 {
@@ -685,46 +666,20 @@ static int macfb_setcolreg(unsigned regno, unsigned red, unsigned green,
     return 0;
 }
 
-static int macfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info)
-{
-	fb_copy_cmap(&info->cmap, cmap, kspc ? 0 : 2);
-	return 0;
-}
-
-static int macfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info)
-{
-        int err = 0;
-
-        /* current console? */
-        if (con == currcon) {
-                if ((err = fb_set_cmap(cmap, kspc, macfb_setcolreg, info))) {
-                        return err;
-                } else {
-                        fb_copy_cmap(cmap, &info->cmap, kspc ? 0 : 1);
-                }
-        }
-        /* Always copy colormap to fb_display. */
-        fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
-        return err;
-}
-
 static struct fb_ops macfb_ops = {
 	fb_open:	macfb_open,
 	fb_release:	macfb_release,
-	fb_get_fix:	macfb_get_fix,
-	fb_get_var:	macfb_get_var,
+	fb_get_fix:	fbgen_get_fix,
+	fb_get_var:	fbgen_get_var,
 	fb_set_var:	macfb_set_var,
-	fb_get_cmap:	macfb_get_cmap,
-	fb_set_cmap:	macfb_set_cmap,
+	fb_get_cmap:	fbgen_get_cmap,
+	fb_set_cmap:	fbgen_set_cmap,
+	fb_setcolreg:	macfb_setcolreg
 };
 
 void macfb_setup(char *options, int *ints)
 {
 	char *this_opt;
-	
-	fb_info.fontname[0] = '\0';
 	
 	if (!options || !*options)
 		return;
@@ -734,8 +689,6 @@ void macfb_setup(char *options, int *ints)
 		
 		if (! strcmp(this_opt, "inverse"))
 			inverse=1;
-		else if (!strncmp(this_opt, "font:", 5))
-			strcpy(fb_info.fontname, this_opt+5);
 		/* This means "turn on experimental CLUT code" */
 		else if (!strcmp(this_opt, "vidtest"))
 			vidtest=1;
@@ -754,11 +707,6 @@ static int macfb_switch(int con, struct fb_info *info)
         new->fb_info->fbops->fb_set_cmap(&new->cmap, 0, con, new->fb_info);
 	macfb_update_var(con, info);
 	return 1;
-}
-
-static void macfb_blank(int blank, struct fb_info *info)
-{
-	/* Not supported */
 }
 
 static void macfb_set_disp(int con)
@@ -1176,8 +1124,7 @@ void __init macfb_init(void)
 	fb_info.var	   = macfb_defined;
 	fb_info.fix 	   = macfb_fix;
 	fb_info.switch_con = &macfb_switch;
-	fb_info.updatevar  = &macfb_update_var;
-	fb_info.blank      = &macfb_blank;
+	fb_info.updatevar  = &fbgen_update_var;
 	fb_info.flags      = FBINFO_FLAG_DEFAULT;
 	
 	macfb_set_disp(-1);

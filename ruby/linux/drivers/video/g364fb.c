@@ -112,31 +112,27 @@ static int g364fb_pan_display(struct fb_var_screeninfo *var, int con,
 			      struct fb_info *info);
 static int g364fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 			   struct fb_info *info);
-static int g364fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info);
+static int g364fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+                            u_int transp, struct fb_info *info);
+static int g364fb_blank(int blank, struct fb_info *info);
 
 /*
  *  Interface to the low level console driver
  */
 static int g364fbcon_switch(int con, struct fb_info *info);
 static int g364fbcon_updatevar(int con, struct fb_info *info);
-static void g364fb_blank(int blank, struct fb_info *info);
-
-/*
- *  Internal routines
- */
-static int g364fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-			    u_int transp, struct fb_info *info);
 
 static struct fb_ops g364fb_ops = {
     fb_open:		g364fb_open, 
     fb_release:		g364fb_release, 
-    fb_get_fix:		g364fb_get_fix, 
-    fb_get_var:		g364fb_get_var, 
+    fb_get_fix:		fbgen_get_fix, 
+    fb_get_var:		fbgen_get_var, 
     fb_set_var:		g364fb_set_var,
-    fb_get_cmap:	g364fb_get_cmap, 
-    fb_set_cmap:	g364fb_set_cmap, 
-    fb_pan_display:	g364fb_pan_display, 
+    fb_get_cmap:	fbgen_get_cmap, 
+    fb_set_cmap:	fbgen_set_cmap, 
+    fb_setcolreg:	g364fb_setcolreg,
+    fb_blank:		g364fb_blank,	
+    fb_pan_display:	g364fb_pan_display 
 };
 
 void fbcon_g364fb_cursor(struct display *p, int mode, int x, int y)
@@ -179,26 +175,6 @@ static int g364fb_release(struct fb_info *info, int user)
 }
 
 /*
- *  Get the Fixed Part of the Display
- */
-static int g364fb_get_fix(struct fb_fix_screeninfo *fix, int con,
-			  struct fb_info *info)
-{
-    *fix = info->fix;
-    return 0;
-}
-
-/*
- *  Get the User Defined Part of the Display
- */
-static int g364fb_get_var(struct fb_var_screeninfo *var, int con,
-			  struct fb_info *info)
-{
-    *var = info->var;
-    return 0;
-}
-
-/*
  *  Set the User Defined Part of the Display
  */
 static int g364fb_set_var(struct fb_var_screeninfo *var, int con,
@@ -227,7 +203,7 @@ static int g364fb_set_var(struct fb_var_screeninfo *var, int con,
 	*(unsigned int *)TOP_REG = var->yoffset * var->xres;	
     }
     if (oldbpp != var->bits_per_pixel) {
-	if ((err = fb_set_cmap(&info->cmap, 1, g364fb_setcolreg, info)))
+	if ((err = fb_set_cmap(&info->cmap, 1, info)))
 	    return err;
     }
     return 0;
@@ -246,37 +222,6 @@ static int g364fb_pan_display(struct fb_var_screeninfo *var, int con,
     
     *(unsigned int *)TOP_REG = var->yoffset * var->xres;
     return 0;
-}
-
-/*
- *  Get the Colormap
- */
-static int g364fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info)
-{
-    fb_copy_cmap(&info->cmap, cmap, kspc ? 0 : 1);
-    return 0;
-}
-
-/*
- *  Set the Colormap
- */
-static int g364fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info)
-{
-    int err = 0;
-	
-    /* current console? */
-    if (con == currcon) {
-   	if ((err = fb_set_cmap(cmap, kspc, g364fb_setcolreg, info))) {
-        	return err;
-        } else {
-                fb_copy_cmap(cmap, &info->cmap, kspc ? 0 : 1);
-        }
-    }
-    /* Always copy colormap to fb_display. */
-    fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0: 1);
-    return err;
 }
 
 /*
@@ -326,7 +271,7 @@ int __init g364fb_init(void)
 
     fb_copy_cmap(fb_default_cmap(1<<fb_var.bits_per_pixel),
                  &fb_info.cmap, 0);
-    fb_set_cmap(&fb_info.cmap, 1, g364fb_setcolreg, &fb_info);	
+    fb_set_cmap(&fb_info.cmap, 1, &fb_info);	
 
     disp.var = fb_var;
     disp.cmap.start = 0;
@@ -349,16 +294,14 @@ int __init g364fb_init(void)
     fb_info.disp = &disp;
     fb_info.var = fb_var;
     fb_info.fix = fb_fix;
-    fb_info.fontname[0] = '\0';
     fb_info.changevar = NULL;
     fb_info.switch_con = &g364fbcon_switch;
     fb_info.updatevar = &g364fbcon_updatevar;
-    fb_info.blank = &g364fb_blank;
     fb_info.flags = FBINFO_FLAG_DEFAULT;
 
     fb_copy_cmap(fb_default_cmap(1<<fb_info.var.bits_per_pixel),
                         &fb_info.cmap, 0);
-    fb_set_cmap(&fb_info.cmap, 1, g364fb_setcolreg, &fb_info);
+    fb_set_cmap(&fb_info.cmap, 1, &fb_info);
     g364fb_set_var(&fb_info.var, -1, &fb_info);
 
     if (register_framebuffer(&fb_info) < 0)
@@ -400,7 +343,7 @@ static int g364fbcon_updatevar(int con, struct fb_info *info)
 /*
  *  Blank the display.
  */
-static void g364fb_blank(int blank, struct fb_info *info)
+static int g364fb_blank(int blank, struct fb_info *info)
 {
     if (blank)
 	*(unsigned int *) CTLA_REG |= FORCE_BLANK;	

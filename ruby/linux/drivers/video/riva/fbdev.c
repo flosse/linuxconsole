@@ -36,7 +36,7 @@
 #include <linux/init.h>
 #include <linux/pci.h>
 
-#include <video/fbcon.h>
+#include "fbcon.h"
 
 #include "riva_hw.h"
 #include "nv4ref.h"
@@ -157,9 +157,6 @@ typedef struct {
 	unsigned char red, green, blue, transp;
 } riva_cfb8_cmap_t;
 
-
-
-struct rivafb_info;
 struct rivafb_info {
 	struct fb_info info;	/* kernel framebuffer info */
 
@@ -208,7 +205,6 @@ struct rivafb_info {
 static struct rivafb_info *riva_boards = NULL;
 
 /* command line data, set in rivafb_setup() */
-static char fontname[40] __initdata;
 #ifndef MODULE
 static char noaccel __initdata;	/* unused */
 static const char *mode_option __initdata;
@@ -237,20 +233,20 @@ static int rivafb_get_cmap (struct fb_cmap *cmap, int kspc, int con,
 		     struct fb_info *info);
 static int rivafb_set_cmap (struct fb_cmap *cmap, int kspc, int con,
 		     struct fb_info *info);
+static int rivafb_setcolreg (unsigned regno, unsigned red, unsigned green,
+                             unsigned blue, unsigned transp,
+                             struct fb_info *info);
+static int rivafb_blank (int blank, struct fb_info *info);
 static int rivafb_pan_display (struct fb_var_screeninfo *var, int con,
 			struct fb_info *info);
 
 static int rivafb_switch (int con, struct fb_info *info);
 static int rivafb_updatevar (int con, struct fb_info *info);
-static void rivafb_blank (int blank, struct fb_info *info);
 
 static void riva_load_video_mode (struct rivafb_info *rivainfo,
 				  struct fb_var_screeninfo *video_mode);
 static int riva_getcolreg (unsigned regno, unsigned *red, unsigned *green,
 			   unsigned *blue, unsigned *transp,
-			   struct fb_info *info);
-static int riva_setcolreg (unsigned regno, unsigned red, unsigned green,
-			   unsigned blue, unsigned transp,
 			   struct fb_info *info);
 static int riva_get_cmap_len (const struct fb_var_screeninfo *var);
 
@@ -266,21 +262,19 @@ static void riva_wclut (unsigned char regnum, unsigned char red,
 			unsigned char green, unsigned char blue);
 
 
-
-
 /* kernel interface */
 static struct fb_ops riva_fb_ops = {
-	rivafb_open,
-	rivafb_release,
-	rivafb_get_fix,
-	rivafb_get_var,
-	rivafb_set_var,
-	rivafb_get_cmap,
-	rivafb_set_cmap,
-	rivafb_pan_display
+	fb_open:	rivafb_open,
+	fb_release:	rivafb_release,
+	fb_get_fix:	rivafb_get_fix,
+	fb_get_var:	rivafb_get_var,
+	fb_set_var:	rivafb_set_var,
+	fb_get_cmap:	rivafb_get_cmap,
+	fb_set_cmap:	fbgen_set_cmap,
+	fb_setcolreg:	rivafb_setcolreg,
+	fb_blank:	rivafb_blank,
+	fb_pan_display: rivafb_pan_display
 };
-
-
 
 
 /* from GGI */
@@ -370,9 +364,6 @@ static void riva_set_dispsw (struct rivafb_info *rinfo)
 	DPRINTK ("EXIT\n");
 }
 
-
-
-
 static int riva_init_disp_var (struct rivafb_info *rinfo)
 {
 #ifndef MODULE
@@ -451,13 +442,10 @@ static int __devinit riva_set_fbinfo (struct rivafb_info *rinfo)
 #warning FIXME: set monspecs to what???
 
 	info->display_fg = NULL;	/* FIXME: correct? */
-	strncpy (info->fontname, fontname, sizeof (info->fontname));
-	info->fontname[sizeof (info->fontname) - 1] = 0;
 
 	info->changevar = NULL;	/* FIXME: needed? */
 	info->switch_con = rivafb_switch;
 	info->updatevar = rivafb_updatevar;
-	info->blank = rivafb_blank;
 
 	if (riva_init_disp (rinfo) < 0)	/* must be done last */
 		return -1;
@@ -685,19 +673,7 @@ int __init rivafb_setup (char *options)
 
 	for (this_opt = strtok (options, ","); this_opt;
 	     this_opt = strtok (NULL, ",")) {
-		if (!strncmp (this_opt, "font:", 5)) {
-			char *p;
-			int i;
-
-			p = this_opt + 5;
-			for (i = 0; i < sizeof (fontname) - 1; i++)
-				if (!*p || *p == ' ' || *p == ',')
-					break;
-			memcpy (fontname, this_opt + 5, i);
-			fontname[i] = 0;
-		}
-
-		else if (!strncmp (this_opt, "noaccel", 7)) {
+		if (!strncmp (this_opt, "noaccel", 7)) {
 			noaccel = 1;
 		}
 
@@ -1042,43 +1018,6 @@ static int rivafb_get_cmap (struct fb_cmap *cmap, int kspc, int con,
 	return 0;
 }
 
-
-static int rivafb_set_cmap (struct fb_cmap *cmap, int kspc, int con,
-		     struct fb_info *info)
-{
-	struct rivafb_info *rivainfo = (struct rivafb_info *) info;
-	struct display *dsp;
-	unsigned int cmap_len;
-
-	DPRINTK ("ENTER\n");
-
-	assert (rivainfo != NULL);
-	assert (cmap != NULL);
-
-	dsp = (con < 0) ? rivainfo->info.disp : &fb_display[con];
-
-	cmap_len = riva_get_cmap_len (&dsp->var);
-	if (dsp->cmap.len != cmap_len) {
-		int err = fb_alloc_cmap (&dsp->cmap, cmap_len, 0);
-		if (err) {
-			DPRINTK ("EXIT - returning %d\n", err);
-			return err;
-		}
-	}
-	if (con == rivainfo->currcon) {	/* current console? */
-		int rc = fb_set_cmap (cmap, kspc, riva_setcolreg, info);
-		DPRINTK ("EXIT - returning %d\n", rc);
-		return rc;
-	} else
-		fb_copy_cmap (cmap, &dsp->cmap, kspc ? 0 : 1);
-
-	DPRINTK ("EXIT, returning 0\n");
-
-	return 0;
-}
-
-
-
 /**
  * rivafb_pan_display
  * @var: standard kernel fb changeable data
@@ -1139,24 +1078,6 @@ static int rivafb_pan_display (struct fb_var_screeninfo *var, int con,
 
 	return 0;
 }
-
-
-static int rivafb_ioctl (struct inode *inode, struct file *file, unsigned int cmd,
-		  unsigned long arg, int con, struct fb_info *info)
-{
-	struct rivafb_info *rivainfo = (struct rivafb_info *) info;
-
-	DPRINTK ("ENTER\n");
-
-	assert (rivainfo != NULL);
-
-	/* no rivafb-specific ioctls */
-
-	DPRINTK ("EXIT, returning -EINVAL\n");
-
-	return -EINVAL;
-}
-
 
 static int rivafb_switch (int con, struct fb_info *info)
 {
@@ -1230,7 +1151,7 @@ static int rivafb_updatevar (int con, struct fb_info *info)
 }
 
 
-static void rivafb_blank (int blank, struct fb_info *info)
+static int rivafb_blank (int blank, struct fb_info *info)
 {
 	unsigned char tmp;
 	struct rivafb_info *rivainfo = (struct rivafb_info *) info;
@@ -1341,7 +1262,7 @@ static int riva_getcolreg (unsigned regno, unsigned *red, unsigned *green,
 
 
 /**
- * riva_setcolreg
+ * rivafb_setcolreg
  * @regno:
  * @red:
  * @green:
@@ -1364,9 +1285,9 @@ static int riva_getcolreg (unsigned regno, unsigned *red, unsigned *green,
  *	fbgen.c:fbgen_blank()
  */
 
-static int riva_setcolreg (unsigned regno, unsigned red, unsigned green,
-			   unsigned blue, unsigned transp,
-			   struct fb_info *info)
+static int rivafb_setcolreg (unsigned regno, unsigned red, unsigned green,
+	   		     unsigned blue, unsigned transp,
+			     struct fb_info *info)
 {
 	struct rivafb_info *rivainfo = (struct rivafb_info *) info;
 	struct display *p;

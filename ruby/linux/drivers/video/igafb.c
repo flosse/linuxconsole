@@ -63,7 +63,6 @@
 #include "iga.h"
 
 static char igafb_name[16] = "IGA 1682";
-static char fontname[40] __initdata = { 0 };
 
 struct pci_mmap_map {
     unsigned long voff;
@@ -350,9 +349,9 @@ static int iga_getcolreg(unsigned regno, unsigned *red, unsigned *green,
 	return 0;
 }
 
-static int iga_setcolreg(unsigned regno, unsigned red, unsigned green,
-                          unsigned blue, unsigned transp,
-                          struct fb_info *fb_info)
+static int igafb_setcolreg(unsigned regno, unsigned red, unsigned green,
+                           unsigned blue, unsigned transp,
+                           struct fb_info *fb_info)
 {
         /*
          *  Set a single color register. The values supplied are
@@ -407,10 +406,10 @@ static void do_install_cmap(int con, struct fb_info *fb_info)
                 return;
         if (fb_display[con].cmap.len)
                 fb_set_cmap(&fb_display[con].cmap, 1,
-                            iga_setcolreg, &info->fb_info);
+                            &info->fb_info);
         else
                 fb_set_cmap(fb_default_cmap(info->video_cmap_len), 1, 
-			    iga_setcolreg, &info->fb_info);
+			    &info->fb_info);
 }
 
 static int igafb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
@@ -428,49 +427,21 @@ static int igafb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
         return 0;
 }
 
-static int igafb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-	                  struct fb_info *info)
-{
-        int err;
-	struct fb_info_iga *fb = (struct fb_info_iga*) info;
-
-        if (!fb_display[con].cmap.len) {        /* no colormap allocated? */
-                err = fb_alloc_cmap(&fb_display[con].cmap,
-				    fb->video_cmap_len,0);
-                if (err)
-                        return err;
-        }
-        if (con == fb->currcon)                     /* current console? */
-                return fb_set_cmap(cmap, kspc, iga_setcolreg, info);
-        else
-                fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
-        return 0;
-}
-
-static int igafb_pan_display(struct fb_var_screeninfo *var, int con,
-                             struct fb_info *info)
-{
-        /* no panning */
-        return -EINVAL;
-}
-
 /*
  * Framebuffer option structure
  */
 static struct fb_ops igafb_ops = {
-    igafb_open, 
-    igafb_release, 
-    igafb_get_fix, 
-    igafb_get_var, 
-    igafb_set_var,
-    igafb_get_cmap, 
-    igafb_set_cmap, 
-    igafb_pan_display, 
-    NULL,
+    fb_open:		igafb_open, 
+    fb_release:		igafb_release, 
+    fb_get_fix:		igafb_get_fix, 
+    fb_get_var:		igafb_get_var, 
+    fb_set_var:		igafb_set_var,
+    fb_get_cmap:	igafb_get_cmap, 
+    fb_set_cmap:	fbgen_set_cmap, 
+    fb_setcolreg:	igafb_setcolreg,
+    fb_pan_display:	igafb_pan_display, 
 #ifdef __sparc__
-    igafb_mmap
-#else
-    NULL
+    fb_mmap:		igafb_mmap
 #endif
 };
 
@@ -551,16 +522,6 @@ static int igafb_switch(int con, struct fb_info *fb_info)
         return 1;
 }
 
-
-
-/* 0 unblank, 1 blank, 2 no vsync, 3 no hsync, 4 off */
-
-static void igafb_blank(int blank, struct fb_info *info)
-{
-        /* Not supported */
-}
-
-
 static int __init iga_init(struct fb_info_iga *info)
 {
         char vramsz = iga_inb(info, IGA_EXT_CNTRL, IGA_IDX_EXT_BUS_CNTL) 
@@ -597,11 +558,9 @@ static int __init iga_init(struct fb_info_iga *info)
 	info->fb_info.node = -1;
 	info->fb_info.fbops = &igafb_ops;
 	info->fb_info.disp = &info->disp;
-	strcpy(info->fb_info.fontname, fontname);
 	info->fb_info.changevar = NULL;
 	info->fb_info.switch_con = &igafb_switch;
 	info->fb_info.updatevar = &igafb_update_var;
-	info->fb_info.blank = &igafb_blank;
 	info->fb_info.flags=FBINFO_FLAG_DEFAULT;
 
 	igafb_set_disp(-1, info);
@@ -794,24 +753,5 @@ int __init igafb_init(void)
 
 int __init igafb_setup(char *options)
 {
-    char *this_opt;
-
-    if (!options || !*options)
-        return 0;
-
-    for (this_opt = strtok(options, ","); this_opt;
-         this_opt = strtok(NULL, ",")) {
-        if (!strncmp(this_opt, "font:", 5)) {
-                char *p;
-                int i;
-
-                p = this_opt + 5;
-                for (i = 0; i < sizeof(fontname) - 1; i++)
-                        if (!*p || *p == ' ' || *p == ',')
-                                break;
-                memcpy(fontname, this_opt + 5, i);
-                fontname[i] = 0;
-        }
-    }
     return 0;
 }

@@ -480,16 +480,18 @@ int clgen_of_init (struct device_node *dp);
 /* function table of the above functions */
 static struct fb_ops clgenfb_ops =
 {
-	clgenfb_open,
-	clgenfb_release,
-	fbgen_get_fix,		/* using the generic functions */
-	fbgen_get_var,		/* makes things much easier... */
-	fbgen_set_var,
-	fbgen_get_cmap,
-	fbgen_set_cmap,
-	fbgen_pan_display,
-	NULL,
-	NULL
+	fb_open:		clgenfb_open,
+	fb_release:		clgenfb_release,
+	/* using the generic functions */
+	/* makes things much easier... */
+	fb_get_fix:		fbgen_get_fix,
+	fb_get_var:		fbgen_get_var,
+	fb_set_var:		fbgen_set_var,
+	fb_get_cmap:		fbgen_get_cmap,
+	fb_set_cmap:		fbgen_set_cmap,
+	fb_setcolreg:		clgenfb_setcolreg,
+	fb_blank:		fbgen_blank,
+	fb_pan_display:		fbgen_pan_display
 };
 
 /*--- Hardware Specific Routines -------------------------------------------*/
@@ -525,7 +527,7 @@ static struct fbgen_hwswitch clgen_hwswitch =
 	clgen_get_par,
 	clgen_set_par,
 	clgen_getcolreg,
-	clgen_setcolreg,
+	NULL,
 	clgen_pan_display,
 	clgen_blank,
 	clgen_set_disp
@@ -1675,9 +1677,9 @@ static int clgen_getcolreg (unsigned regno, unsigned *red, unsigned *green,
 }
 
 
-static int clgen_setcolreg (unsigned regno, unsigned red, unsigned green,
-			    unsigned blue, unsigned transp,
-			    struct fb_info *info)
+static int clgenfb_setcolreg(unsigned regno, unsigned red, unsigned green,
+		  	     unsigned blue, unsigned transp,
+			     struct fb_info *info)
 {
 	struct clgenfb_info *fb_info = (struct clgenfb_info *) info;
 
@@ -2849,7 +2851,6 @@ int __init clgenfb_init(void)
 	fb_info->gen.info.changevar = NULL;
 	fb_info->gen.info.switch_con = &fbgen_switch;
 	fb_info->gen.info.updatevar = &fbgen_update_var;
-	fb_info->gen.info.blank = &fbgen_blank;
 	fb_info->gen.info.flags = FBINFO_FLAG_DEFAULT;
 
 	for (j = 0; j < 256; j++) {

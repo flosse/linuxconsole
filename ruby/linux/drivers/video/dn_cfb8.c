@@ -122,8 +122,6 @@ static int dn_fb_set_var(struct fb_var_screeninfo *var, int isactive,
 			 struct fb_info *info);
 static int dn_fb_get_cmap(struct fb_cmap *cmap,int kspc,int con,
 			  struct fb_info *info);
-static int dn_fb_set_cmap(struct fb_cmap *cmap,int kspc,int con,
-			  struct fb_info *info);
 static int dn_fb_pan_display(struct fb_var_screeninfo *var, int con,
 			     struct fb_info *info);
 
@@ -137,7 +135,7 @@ static struct display disp[MAX_NR_CONSOLES];
 static struct fb_info fb_info;
 static struct fb_ops dn_fb_ops = { 
 	dn_fb_open,dn_fb_release, dn_fb_get_fix, dn_fb_get_var, dn_fb_set_var,
-	dn_fb_get_cmap, dn_fb_set_cmap, dn_fb_pan_display, NULL
+	dn_fb_get_cmap, fbgen_set_cmap, dn_fb_pan_display, NULL
 };
 
 static int currcon=0;
@@ -318,7 +316,6 @@ printk("dn_fb_init\n");
 	fb_info.disp=disp;
 	fb_info.switch_con=&dnfbcon_switch;
 	fb_info.updatevar=&dnfbcon_updatevar;
-	fb_info.blank=&dnfbcon_blank;	
 	fb_info.node = -1;
 	fb_info.fbops = &dn_fb_ops;
 	

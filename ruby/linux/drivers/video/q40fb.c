@@ -56,30 +56,22 @@ int q40fb_init(void);
 
 static int q40fb_open(struct fb_info *info, int user);
 static int q40fb_release(struct fb_info *info, int user);
-static int q40fb_get_fix(struct fb_fix_screeninfo *fix, int con,
-			struct fb_info *info);
-static int q40fb_get_var(struct fb_var_screeninfo *var, int con,
-			struct fb_info *info);
 static int q40fb_set_var(struct fb_var_screeninfo *var, int con,
 			struct fb_info *info);
-static int q40fb_get_cmap(struct fb_cmap *cmap,int kspc,int con,
-			 struct fb_info *info);
-static int q40fb_set_cmap(struct fb_cmap *cmap,int kspc,int con,
-			 struct fb_info *info);
+static int q40fb_setcolreg(unsigned regno, unsigned red, unsigned green,
+                           unsigned blue, unsigned transp,
+                           struct fb_info *info);
 
 static struct fb_ops q40fb_ops = {
         fb_open:        q40fb_open,
         fb_release:     q40fb_release,
-        fb_get_fix:     q40fb_get_fix,
-        fb_get_var:     q40fb_get_var,
+        fb_get_fix:     fbgen_get_fix,
+        fb_get_var:     fbgen_get_var,
         fb_set_var:     q40fb_set_var,
-        fb_get_cmap:    q40fb_get_cmap,
-        fb_set_cmap:    q40fb_set_cmap,
+        fb_get_cmap:    fbgen_get_cmap,
+        fb_set_cmap:    fbgen_set_cmap,
+	fb_setcolreg:	q40fb_setcolreg
 };
-
-static int q40con_switch(int con, struct fb_info *info);
-static int q40con_updatevar(int con, struct fb_info *info);
-static void q40fb_blank(int blank, struct fb_info *info);
 
 static void q40fb_set_disp(int con, struct fb_info *info);
 
@@ -97,20 +89,6 @@ static int q40fb_release(struct fb_info *info, int user)
 {
         MOD_DEC_USE_COUNT;
         return(0);
-}
-
-static int q40fb_get_fix(struct fb_fix_screeninfo *fix, int con,
-			struct fb_info *info)
-{
-	*fix = info->fix;
-	return 0;
-}
-        
-static int q40fb_get_var(struct fb_var_screeninfo *var, int con,
-			struct fb_info *info)
-{
-	*var = info->var;
-	return 0;
 }
 
 static int q40fb_set_var(struct fb_var_screeninfo *var, int con,
@@ -139,31 +117,6 @@ static int q40fb_setcolreg(unsigned regno, unsigned red, unsigned green,
 	                         	(blue & 63);
     }
     return 0;
-}
-
-static int q40fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			 struct fb_info *info)
-{
-	fb_copy_cmap(&info->cmap, cmap, kspc ? 0 : 2);
-	return 0;
-}
-
-static int q40fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			 struct fb_info *info)
-{
-	int err = 0;
-
-	/* current console? */
-	if (con == currcon) {	
-		if ((err = fb_set_cmap(cmap, kspc, q40fb_setcolreg, info))) {
-			return err;
-		} else {
-			fb_copy_cmap(cmap, &info->cmap, kspc ? 0 : 1);	
-		}
-	}
-	/* Always copy colormap to fb_display. */
-        fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
-	return err;
 }
 
 static void q40fb_set_disp(int con, struct fb_info *info)
@@ -207,14 +160,12 @@ int q40fb_init(void)
 	q40fb_fix.smem_start = Q40_PHYS_SCREEN_ADDR;
 	
         fb_info.changevar = NULL;
-	fb_info.fontname[0]=0;
 	fb_info.disp = &disp; 
 	fb_info.var = q40fb_var;
 	fb_info.fix = q40fb_fix;
 	strcpy(&fb_info.modename[0],fb_info.fix.id);
-	fb_info.switch_con = &q40con_switch;
-	fb_info.updatevar = &q40con_updatevar;
-	fb_info.blank = &q40fb_blank;	
+	fb_info.switch_con = &fbgen_switch;
+	fb_info.updatevar = &fbgen_updatevar;
 	fb_info.node = -1;
 	fb_info.fbops = &q40fb_ops;
 	fb_info.flags = FBINFO_FLAG_DEFAULT;  /* not as module for now */
@@ -236,25 +187,3 @@ int q40fb_init(void)
 	       GET_FB_IDX(fb_info.node));
 	return 0;
 }	
-	
-static int q40con_switch(int con, struct fb_info *info)
-{ 
-	struct display *prev = &fb_display[currcon];	
-	struct display *new = &fb_display[con];
-
-	currcon = con;
-	/* Save current colormap */
-	fb_copy_cmap(&prev->fb_info->cmap, &prev->cmap, 0);
-	/* Install new colormap */
-	new->fb_info->fbops->fb_set_cmap(&new->cmap, 0, con, new->fb_info);
-	return 0;
-}
-
-static int q40con_updatevar(int con, struct fb_info *info)
-{
-	return 0;
-}
-
-static void q40fb_blank(int blank, struct fb_info *info)
-{
-}

@@ -118,18 +118,17 @@ static int control_get_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info);
 static int control_set_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info);
-static int control_pan_display(struct fb_var_screeninfo *var, int con,
-			     struct fb_info *info);
 static int control_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 			  struct fb_info *info);
-static int control_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info);
+static int control_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+                             u_int transp, struct fb_info *info);
+static int control_blank(int blank_mode, struct fb_info *info);
+static int control_pan_display(struct fb_var_screeninfo *var, int con,
+                             struct fb_info *info);
 
 
 static int controlfb_getcolreg(u_int regno, u_int *red, u_int *green,
 			     u_int *blue, u_int *transp, struct fb_info *info);
-static int controlfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-			     u_int transp, struct fb_info *info);
 
 /******************** Prototypes for internal functions ********************/
 static void control_par_to_fix(struct fb_par_control *par, struct fb_fix_screeninfo *fix,
@@ -167,18 +166,17 @@ static void control_par_to_display(struct fb_par_control *par,
 static int controlfb_updatevar(int con, struct fb_info *info);
 
 static struct fb_ops controlfb_ops = {
-	control_open,
-	control_release,
-	control_get_fix,
-	control_get_var,
-	control_set_var,
-	control_get_cmap,
-	control_set_cmap,
-	control_pan_display,
-	NULL
+	fb_open:		control_open,
+	fb_release:		control_release,
+	fb_get_fix:		control_get_fix,
+	fb_get_var:		control_get_var,
+	fb_set_var:		control_set_var,
+	fb_get_cmap:		control_get_cmap,
+	fb_set_cmap:		fbgen_set_cmap,
+	fb_setcolreg:		control_setcolreg,
+	fb_blank:		control_blank,
+	fb_pan_display:		control_pan_display,
 };
-
-
 
 /********************  The functions for controlfb_ops ********************/
 
@@ -327,24 +325,6 @@ static int control_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 	return 0;
 }
 
-static int control_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			 struct fb_info *info)
-{
-	struct display *disp = &fb_display[con];
-	int err;
-
-	if (disp->cmap.len == 0) {
-		int size = disp->var.bits_per_pixel == 16 ? 32 : 256;
-		err = fb_alloc_cmap(&disp->cmap, size, 0);
-		if (err)
-			return err;
-	}
-	if (con == currcon)
-		return fb_set_cmap(cmap, kspc, controlfb_setcolreg, info);
-	fb_copy_cmap(cmap, &disp->cmap, kspc ? 0 : 1);
-	return 0;
-}
-
 /********************  End of controlfb_ops implementation  ********************/
 /* (new one that is) */
 
@@ -384,7 +364,7 @@ static int controlfb_updatevar(int con, struct fb_info *info)
 	return 0;
 }
 
-static void controlfb_blank(int blank_mode, struct fb_info *info)
+static int control_blank(int blank_mode, struct fb_info *info)
 {
 /*
  *  Blank the screen if blank_mode != 0, else unblank. If blank == NULL
@@ -430,7 +410,7 @@ static int controlfb_getcolreg(u_int regno, u_int *red, u_int *green,
 	return 0;
 }
 
-static int controlfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+static int control_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 			     u_int transp, struct fb_info *info)
 {
 	struct fb_info_control *p = (struct fb_info_control *) info;
@@ -1165,7 +1145,6 @@ static void control_init_info(struct fb_info *info, struct fb_info_control *p)
 	info->changevar = NULL;
 	info->switch_con = &controlfb_switch;
 	info->updatevar = &controlfb_updatevar;
-	info->blank = &controlfb_blank;
 }
 
 /* Parse user speficied options (`video=controlfb:') */

@@ -87,28 +87,13 @@ int s3triofb_setup(char*);
 
 static int s3trio_open(struct fb_info *info, int user);
 static int s3trio_release(struct fb_info *info, int user);
-static int s3trio_get_fix(struct fb_fix_screeninfo *fix, int con,
-			  struct fb_info *info);
-static int s3trio_get_var(struct fb_var_screeninfo *var, int con,
-			  struct fb_info *info);
 static int s3trio_set_var(struct fb_var_screeninfo *var, int con,
 			  struct fb_info *info);
-static int s3trio_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info);
-static int s3trio_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info);
-static int s3trio_pan_display(struct fb_var_screeninfo *var, int con,
-			      struct fb_info *info);
-
-    /*
-     *  Interface to the low level console driver
-     */
-
-static int s3triofbcon_switch(int con, struct fb_info *info);
-static int s3triofbcon_updatevar(int con, struct fb_info *info);
-static void s3trio_blank(int blank, struct fb_info *info);
 static int s3trio_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                             u_int transp, struct fb_info *info);
+static int s3trio_blank(int blank, struct fb_info *info);
+static int s3trio_pan_display(struct fb_var_screeninfo *var, int con,
+			      struct fb_info *info);
 
     /*
      *  Text console acceleration
@@ -134,11 +119,13 @@ static void Trio_MoveCursor(u_short x, u_short y);
 static struct fb_ops s3trio_ops = {
     fb_open:		s3trio_open, 
     fb_release:		s3trio_release, 
-    fb_get_fix:		s3trio_get_fix, 
-    fb_get_var:		s3trio_get_var, 
+    fb_get_fix:		fbgen_get_fix, 
+    fb_get_var:		fbgen_get_var, 
     fb_set_var:		s3trio_set_var,
-    fb_get_cmap:	s3trio_get_cmap,
-    fb_set_cmap:	s3trio_set_cmap, 
+    fb_get_cmap:	fbgen_get_cmap,
+    fb_set_cmap:	fbgen_set_cmap, 
+    fb_setcolreg:	s3trio_setcolreg,
+    fb_blank:		s3trio_blank,			
     fb_pan_display:	s3trio_pan_display
 };
 
@@ -160,28 +147,6 @@ static int s3trio_release(struct fb_info *info, int user)
 {
     MOD_DEC_USE_COUNT;
     return(0);
-}
-
-    /*
-     *  Get the Fixed Part of the Display
-     */
-
-static int s3trio_get_fix(struct fb_fix_screeninfo *fix, int con,
-			  struct fb_info *info)
-{
-    *fix = info->fix;
-    return 0;
-}
-
-    /*
-     *  Get the User Defined Part of the Display
-     */
-
-static int s3trio_get_var(struct fb_var_screeninfo *var, int con,
-			  struct fb_info *info)
-{
-    *var = info->var;
-    return 0;
 }
 
     /*
@@ -236,52 +201,6 @@ static int s3trio_pan_display(struct fb_var_screeninfo *var, int con,
 }
 
     /*
-     *  Get the Colormap
-     */
-
-static int s3trio_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info)
-{
-    fb_copy_cmap(&info->cmap, cmap, kspc ? 0 : 2);
-    return 0;
-}
-
-    /*
-     *  Set the Colormap
-     */
-
-static int s3trio_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info)
-{
-    int err = 0;
-
-    /* current console? */
-    if (con == currcon) {
-	if ((err = fb_set_cmap(cmap, kspc, s3trio_setcolreg, info))) {
-        	return err;
-        } else {
-                fb_copy_cmap(cmap, &info->cmap, kspc ? 0 : 1);
-        }
-    }
-    /* Always copy colormap to fb_display. */
-    fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
-    return err;
-}
-
-    /*
-     *  Blank the display.
-     */
-
-static void s3trio_blank(int blank, struct fb_info *info)
-{
-    unsigned char x;
-
-    mem_out8(0x1, info->screen_base + 0x1008000 + 0x03c4);
-    x = mem_in8(info->screen_base + 0x1008000 + 0x03c5);
-    mem_out8((x&(~0x20)) | (blank << 5), info->screen_base+0x1008000 + 0x03c5);
-}
-
-    /*
      *  Set a single color register. Return != 0 for invalid regno.
      */
 
@@ -301,6 +220,20 @@ static int s3trio_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
     mem_out8((blue & 0xff) >> 2, info->screen_base+0x1008000 + 0x3c9);
 
     return 0;
+}
+
+    /*
+     *  Blank the display.
+     */
+
+static int s3trio_blank(int blank, struct fb_info *info)
+{
+    unsigned char x;
+
+    mem_out8(0x1, info->screen_base + 0x1008000 + 0x03c4);
+    x = mem_in8(info->screen_base + 0x1008000 + 0x03c5);
+    mem_out8((x&(~0x20)) | (blank << 5), info->screen_base+0x1008000 + 0x03c5);
+    return 0;	
 }
 
 int __init s3triofb_init(void)
@@ -513,9 +446,8 @@ void __init s3triofb_init_of(struct device_node *dp)
     fb_info.fix = fb_fix;
     fb_info.disp = &disp;
     fb_info.changevar = NULL;
-    fb_info.switch_con = &s3triofbcon_switch;
-    fb_info.updatevar = &s3triofbcon_updatevar;
-    fb_info.blank = &s3trio_blank;
+    fb_info.switch_con = &fbgen_switch;
+    fb_info.updatevar = &fbgen_updatevar;
 
 #ifdef CONFIG_FB_COMPAT_XPMAC
     if (!console_fb_info) {

@@ -199,7 +199,7 @@ static int fbcon_scrolldelta(struct vc_data *conp, int lines);
  *  Internal routines
  */
 
-static int __init fbcon_setup(int con, int init, int logo);
+static int __init fbcon_setup(char *options);
 static void fbcon_set_disp(int con, int init, int logo);
 static __inline__ int real_y(struct display *p, int ypos);
 static void fbcon_vbl_handler(int irq, void *dummy, struct pt_regs *fp);
@@ -448,7 +448,7 @@ static const char *fbcon_startup(void)
 
 static void fbcon_init(struct vc_data *conp, int init)
 {
-    int unit = conp->vc_num;
+    int j, unit = conp->vc_num;
     struct fb_info *info;
 
     /* on which frame buffer will we open this console? */
@@ -605,7 +605,7 @@ static void fbcon_set_disp(int con, int init, int logo)
     }
 
     if (!p->fontdata) {
-        if (!fontname[0] || !(font = fbcon_find_font(p->fb_info->fontname)))
+        if (!fontname[0] || !(font = fbcon_find_font(fontname)))
 	        font = fbcon_get_default_font(p->var.xres, p->var.yres);
         p->_fontwidth = font->width;
         p->_fontheight = font->height;
@@ -1497,7 +1497,6 @@ static int fbcon_switch(struct vc_data *conp)
     return 1;
 }
 
-
 static int fbcon_blank(struct vc_data *conp, int blank)
 {
     struct display *p = &fb_display[conp->vc_num];
@@ -1537,7 +1536,7 @@ static int fbcon_blank(struct vc_data *conp, int blank)
 	    return 1;
 	}
     }
-    (*info->blank)(blank, info);
+    (*info->fbops->fb_blank)(blank, info);
     return 0;
 }
 

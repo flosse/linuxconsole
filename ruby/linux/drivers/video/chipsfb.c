@@ -123,29 +123,29 @@ static int chips_get_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info);
 static int chips_set_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info);
-static int chips_pan_display(struct fb_var_screeninfo *var, int con,
-			     struct fb_info *info);
 static int chips_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 			  struct fb_info *info);
-static int chips_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info);
+static int chips_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+                           u_int transp, struct fb_info *info);
+static int chips_blank(int blank, struct fb_info *info);
+static int chips_pan_display(struct fb_var_screeninfo *var, int con,
+                             struct fb_info *info);
 
 static struct fb_ops chipsfb_ops = {
-	chips_open,
-	chips_release,
-	chips_get_fix,
-	chips_get_var,
-	chips_set_var,
-	chips_get_cmap,
-	chips_set_cmap,
-	chips_pan_display,
-        NULL	
+	fb_open:	chips_open,
+	fb_release:	chips_release,
+	fb_get_fix:	chips_get_fix,
+	fb_get_var:	chips_get_var,
+	fb_set_var:	chips_set_var,
+	fb_get_cmap:	chips_get_cmap,
+	fb_set_cmap:	fbgen_set_cmap,
+	fb_setcolreg:	chips_setcolreg,
+	fb_blank:	chips_blank,
+	fb_pan_display:	chips_pan_display
 };
 
 static int chipsfb_getcolreg(u_int regno, u_int *red, u_int *green,
 			     u_int *blue, u_int *transp, struct fb_info *info);
-static int chipsfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-			     u_int transp, struct fb_info *info);
 static void do_install_cmap(int con, struct fb_info *info);
 static void chips_set_bitdepth(struct fb_info_chips *p, struct display* disp, int con, int bpp);
 
@@ -223,23 +223,6 @@ static int chips_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 	return 0;
 }
 
-static int chips_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			 struct fb_info *info)
-{
-	int err;
-
-	if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
-		int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
-		if ((err = fb_alloc_cmap(&fb_display[con].cmap, size, 0)))
-			return err;
-	}
-	if (con == currcon)			/* current console? */
-		return fb_set_cmap(cmap, kspc, chipsfb_setcolreg, info);
-	else
-		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
-	return 0;
-}
-
 static int chipsfbcon_switch(int con, struct fb_info *info)
 {
 	struct fb_info_chips *p = (struct fb_info_chips *) info;
@@ -265,7 +248,7 @@ static int chipsfb_updatevar(int con, struct fb_info *info)
 	return 0;
 }
 
-static void chipsfb_blank(int blank, struct fb_info *info)
+static int chips_blank(int blank, struct fb_info *info)
 {
 	struct fb_info_chips *p = (struct fb_info_chips *) info;
 	int i;
@@ -299,6 +282,7 @@ static void chipsfb_blank(int blank, struct fb_info *info)
 			out_8(p->io_base + 0x3c9, p->palette[i].blue);
 		}
 	}
+	return 0;
 }
 
 static int chipsfb_getcolreg(u_int regno, u_int *red, u_int *green,
@@ -315,8 +299,8 @@ static int chipsfb_getcolreg(u_int regno, u_int *red, u_int *green,
 	return 0;
 }
 
-static int chipsfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-			     u_int transp, struct fb_info *info)
+static int chips_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+		           u_int transp, struct fb_info *info)
 {
 	struct fb_info_chips *p = (struct fb_info_chips *) info;
 
@@ -602,11 +586,9 @@ static void __init init_chips(struct fb_info_chips *p)
 	p->info.node = -1;
 	p->info.fbops = &chipsfb_ops;
 	p->info.disp = &p->disp;
-	p->info.fontname[0] = 0;
 	p->info.changevar = NULL;
 	p->info.switch_con = &chipsfbcon_switch;
 	p->info.updatevar = &chipsfb_updatevar;
-	p->info.blank = &chipsfb_blank;
 	p->info.flags = FBINFO_FLAG_DEFAULT;
 
 	for (i = 0; i < 16; ++i) {

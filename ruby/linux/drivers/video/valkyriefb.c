@@ -72,7 +72,6 @@ static int can_soft_blank = 1;
 
 static int default_vmode = VMODE_NVRAM;
 static int default_cmode = CMODE_NVRAM;
-static char fontname[40] __initdata = { 0 };
 
 static int currcon = 0;
 static int switching = 0;
@@ -827,7 +826,6 @@ static void __init valkyrie_init_info(struct fb_info *info, struct fb_info_valky
 	info->node = -1;	/* ??? danj */
 	info->fbops = &valkyriefb_ops;
 	info->disp = &p->disp;
-	strcpy(info->fontname, fontname);
 	info->changevar = NULL;
 	info->switch_con = &valkyriefb_switch;
 	info->updatevar = &valkyriefb_updatevar;
@@ -848,18 +846,7 @@ int __init valkyriefb_setup(char *options)
 
 	for (this_opt = strtok(options, ","); this_opt;
 	     this_opt = strtok(NULL, ",")) {
-		if (!strncmp(this_opt, "font:", 5)) {
-			char *p;
-			int i;
-
-			p = this_opt + 5;
-			for (i = 0; i < sizeof(fontname) - 1; i++)
-				if (!*p || *p == ' ' || *p == ',')
-					break;
-			memcpy(fontname, this_opt + 5, i);
-			fontname[i] = 0;
-		}
-		else if (!strncmp(this_opt, "vmode:", 6)) {
+		if (!strncmp(this_opt, "vmode:", 6)) 
 	    		int vmode = simple_strtoul(this_opt+6, NULL, 0);
 	    	if (vmode > 0 && vmode <= VMODE_MAX)
 				default_vmode = vmode;

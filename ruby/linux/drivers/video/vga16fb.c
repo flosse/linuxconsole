@@ -601,9 +601,9 @@ static void vga16_setpalette(int regno, unsigned red, unsigned green, unsigned b
 	outb(blue  >> 10, dac_val);
 }
 
-static int vga16_setcolreg(unsigned regno, unsigned red, unsigned green,
-			  unsigned blue, unsigned transp,
-			  struct fb_info *fb_info)
+static int vga16fb_setcolreg(unsigned regno, unsigned red, unsigned green,
+	   		     unsigned blue, unsigned transp,
+			     struct fb_info *fb_info)
 {
 	int gray;
 
@@ -642,10 +642,9 @@ static void do_install_cmap(int con, struct fb_info *info)
 	if (con != currcon)
 		return;
 	if (fb_display[con].cmap.len)
-		fb_set_cmap(&fb_display[con].cmap, 1, vga16_setcolreg, info);
+		fb_set_cmap(&fb_display[con].cmap, 1, info);
 	else
-		fb_set_cmap(fb_default_cmap(16), 1, vga16_setcolreg,
-			    info);
+		fb_set_cmap(fb_default_cmap(16), 1, info); 
 }
 
 static int vga16fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
@@ -672,7 +671,7 @@ static int vga16fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
 			return err;
 	}
 	if (con == currcon)			/* current console? */
-		return fb_set_cmap(cmap, kspc, vga16_setcolreg, info);
+		return fb_set_cmap(cmap, kspc, info);
 	else
 		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
 	return 0;
@@ -692,33 +691,8 @@ static int vga16fb_pan_display(struct fb_var_screeninfo *var, int con,
 	return 0;
 }
 
-static struct fb_ops vga16fb_ops = {
-	vga16fb_open,
-	vga16fb_release,
-	vga16fb_get_fix,
-	vga16fb_get_var,
-	vga16fb_set_var,
-	vga16fb_get_cmap,
-	vga16fb_set_cmap,
-	vga16fb_pan_display,
- 	NULL	
-};
-
 int vga16fb_setup(char *options)
 {
-	char *this_opt;
-	
-	vga16fb.fb_info.fontname[0] = '\0';
-	
-	if (!options || !*options)
-		return 0;
-	
-	for(this_opt=strtok(options,","); this_opt; this_opt=strtok(NULL,",")) {
-		if (!*this_opt) continue;
-		
-		if (!strncmp(this_opt, "font:", 5))
-			strcpy(vga16fb.fb_info.fontname, this_opt+5);
-	}
 	return 0;
 }
 
@@ -883,7 +857,7 @@ static void vga_pal_blank(void)
 }
 
 /* 0 unblank, 1 blank, 2 no vsync, 3 no hsync, 4 off */
-static void vga16fb_blank(int blank, struct fb_info *fb_info)
+static int vga16fb_blank(int blank, struct fb_info *fb_info)
 {
 	struct vga16fb_info *info = (struct vga16fb_info*)fb_info;
 
@@ -907,7 +881,21 @@ static void vga16fb_blank(int blank, struct fb_info *fb_info)
 		info->vesa_blanked = 1;
 		break;
 	}
+	return 0;
 }
+
+static struct fb_ops vga16fb_ops = {
+        fb_open:        vga16fb_open,
+        fb_release:     vga16fb_release,
+        fb_get_fix:     vga16fb_get_fix,
+        fb_get_var:     vga16fb_get_var,
+        fb_set_var:     vga16fb_set_var,
+        fb_get_cmap:    vga16fb_get_cmap,
+        fb_set_cmap:    vga16fb_set_cmap,
+        fb_setcolreg:   vga16fb_setcolreg,
+        fb_blank:       vga16fb_blank,
+        fb_pan_display: vga16fb_pan_display
+};
 
 int __init vga16fb_init(void)
 {
@@ -948,7 +936,6 @@ int __init vga16fb_init(void)
 	vga16fb.fb_info.disp=&disp;
 	vga16fb.fb_info.switch_con=&vga16fb_switch;
 	vga16fb.fb_info.updatevar=&vga16fb_update_var;
-	vga16fb.fb_info.blank=&vga16fb_blank;
 	vga16fb.fb_info.flags=FBINFO_FLAG_DEFAULT;
 	vga16fb_set_disp(-1, &vga16fb);
 

@@ -252,8 +252,8 @@ static struct display_switch fbcon_cyber_accel = {
  *    Set a single color register. Return != 0 for invalid regno.
  */
 static int
-cyber2000_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-		    u_int transp, struct fb_info *info)
+cyber2000fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+    		      u_int transp, struct fb_info *info)
 {
 	struct cfb_info *cfb = (struct cfb_info *)info;
 
@@ -480,44 +480,6 @@ static int cyber2000fb_release(struct fb_info *info, int user)
 {
 	MOD_DEC_USE_COUNT;
 	return 0;
-}
-
-/*
- * Set the Colormap
- */
-static int
-cyber2000fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-		     struct fb_info *info)
-{
-	struct cfb_info *cfb = (struct cfb_info *)info;
-	struct fb_cmap *dcmap = &fb_display[con].cmap;
-	int err = 0;
-
-	/* no colormap allocated? */
-	if (!dcmap->len) {
-		int size;
-
-		if (cfb->fb.var.bits_per_pixel == 16)
-			size = 32;
-		else
-			size = 256;
-
-		err = fb_alloc_cmap(dcmap, size, 0);
-	}
-
-	/*
-	 * we should be able to remove this test once fbcon has been
-	 * "improved" --rmk
-	 */
-	if (!err && con == cfb->currcon) {
-		err = fb_set_cmap(cmap, kspc, cyber2000_setcolreg, &cfb->fb);
-		dcmap = &cfb->fb.cmap;
-	}
-
-	if (!err)
-		fb_copy_cmap(cmap, dcmap, kspc ? 0 : 1);
-
-	return err;
 }
 
 static int
@@ -1019,7 +981,7 @@ cyber2000fb_set_var(struct fb_var_screeninfo *var, int con,
 
 	cyber2000fb_update_start(cfb, var);
 	cyber2000fb_set_timing(&hw);
-	fb_set_cmap(&cfb->fb.cmap, 1, cyber2000_setcolreg, &cfb->fb);
+	fb_set_cmap(&cfb->fb.cmap, 1, &cfb->fb);
 
 	return 0;
 }
@@ -1141,46 +1103,18 @@ static void cyber2000fb_blank(int blank, struct fb_info *info)
 	}
 }
 
-/*
- * Get the currently displayed virtual consoles colormap.
- */
-static int
-gen_get_cmap(struct fb_cmap *cmap, int kspc, int con, struct fb_info *info)
-{
-	fb_copy_cmap(&info->cmap, cmap, kspc ? 0 : 2);
-	return 0;
-}
-
-/*
- * Get the currently displayed virtual consoles fixed part of the display.
- */
-static int
-gen_get_fix(struct fb_fix_screeninfo *fix, int con, struct fb_info *info)
-{
-	*fix = info->fix;
-	return 0;
-}
-
-/*
- * Get the current user defined part of the display.
- */
-static int
-gen_get_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
-{
-	*var = info->var;
-	return 0;
-}
-
 static struct fb_ops cyber2000fb_ops =
 {
 	fb_open:	cyber2000fb_open,
 	fb_release:	cyber2000fb_release,
+	fb_get_fix:	fbgen_get_fix,
+	fb_get_var:	fbgen_get_var,
 	fb_set_var:	cyber2000fb_set_var,
-	fb_set_cmap:	cyber2000fb_set_cmap,
+	fb_get_cmap:	fbgen_get_cmap,	
+	fb_set_cmap:	fbgen_set_cmap,
+	fb_setcolreg:	cyber2000fb_setcolreg,
+	fb_blank:	cyber2000fb_blank,
 	fb_pan_display:	cyber2000fb_pan_display,
-	fb_get_fix:	gen_get_fix,
-	fb_get_var:	gen_get_var,
-	fb_get_cmap:	gen_get_cmap,
 };
 
 /*
@@ -1343,7 +1277,6 @@ cyberpro_alloc_fb_info(struct pci_dev *dev, const struct pci_device_id *id)
 	cfb->fb.changevar	= NULL;
 	cfb->fb.switch_con	= cyber2000fb_switch;
 	cfb->fb.updatevar	= cyber2000fb_updatevar;
-	cfb->fb.blank		= cyber2000fb_blank;
 	cfb->fb.flags		= FBINFO_FLAG_DEFAULT;
 	cfb->fb.disp		= (struct display *)(cfb + 1);
 	cfb->fb.pseudo_palette	= (void *)(cfb->fb.disp + 1);

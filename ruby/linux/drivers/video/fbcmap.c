@@ -72,7 +72,6 @@ static struct fb_cmap default_16_colors = {
     0, 16, red16, green16, blue16, NULL
 };
 
-
     /*
      *  Allocate a colormap
      */
@@ -209,10 +208,7 @@ int fb_get_cmap(struct fb_cmap *cmap, int kspc,
      *  Set the colormap for a screen
      */
 
-int fb_set_cmap(struct fb_cmap *cmap, int kspc,
-    	    	int (*setcolreg)(u_int, u_int, u_int, u_int, u_int,
-				 struct fb_info *),
-		struct fb_info *info)
+int fb_set_cmap(struct fb_cmap *cmap, int kspc, struct fb_info *info)
 {
     int i, start;
     u16 *red, *green, *blue, *transp;
@@ -246,7 +242,8 @@ int fb_set_cmap(struct fb_cmap *cmap, int kspc,
 	blue++;
 	if (transp)
 	    transp++;
-	if (setcolreg(start++, hred, hgreen, hblue, htransp, info))
+	if (info->fbops->fb_setcolreg(start++, hred, hgreen, hblue, htransp, 
+					info))
 	    return 0;
     }
     return 0;

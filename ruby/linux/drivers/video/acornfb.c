@@ -783,26 +783,6 @@ acornfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 }
 
 static int
-acornfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-		 struct fb_info *info)
-{
-	int err = 0;
-
-	if (!fb_display[con].cmap.len)
-		err = fb_alloc_cmap(&fb_display[con].cmap,
-				    current_par.palette_size, 0);
-	if (!err) {
-		if (con == current_par.currcon)
-			err = fb_set_cmap(cmap, kspc, acornfb_setcolreg,
-					  info);
-		else
-			fb_copy_cmap(cmap, &fb_display[con].cmap,
-				     kspc ? 0 : 1);
-	}
-	return err;
-}
-
-static int
 acornfb_decode_var(struct fb_var_screeninfo *var, int con, int *visual)
 {
 	int err;
@@ -1126,15 +1106,16 @@ acornfb_pan_display(struct fb_var_screeninfo *var, int con,
 }
 
 static struct fb_ops acornfb_ops = {
-	acornfb_open,
-	acornfb_release,
-	acornfb_get_fix,
-	acornfb_get_var,
-	acornfb_set_var,
-	acornfb_get_cmap,
-	acornfb_set_cmap,
-	acornfb_pan_display,
-	NULL	
+	fb_open:	acornfb_open,
+	fb_release:	acornfb_release,
+	fb_get_fix:	acornfb_get_fix,
+	fb_get_var:	acornfb_get_var,
+	fb_set_var:	acornfb_set_var,
+	fb_get_cmap:	acornfb_get_cmap,
+	fb_set_cmap:	fbgen_set_cmap,
+	fb_setcolreg:	acornfb_setcolreg,
+	fb_blank:	acornfb_blank,
+	fb_pan_display:	acornfb_pan_display,
 };
 
 static int
@@ -1167,7 +1148,7 @@ acornfb_switch(int con, struct fb_info *info)
 	return 0;
 }
 
-static void
+static int 
 acornfb_blank(int blank, struct fb_info *info)
 {
 	union palette p;
@@ -1290,7 +1271,6 @@ acornfb_init_fbinfo(void)
 	fb_info.changevar	   = NULL;
 	fb_info.switch_con	   = acornfb_switch;
 	fb_info.updatevar	   = acornfb_updatevar;
-	fb_info.blank		   = acornfb_blank;
 	fb_info.flags		   = FBINFO_FLAG_DEFAULT;
 
 	global_disp.dispsw	   = &fbcon_dummy;

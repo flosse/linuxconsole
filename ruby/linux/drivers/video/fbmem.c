@@ -409,10 +409,9 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 			set_con2fb_map(i, con2fb.framebuffer);
 		return 0;
 	case FBIOBLANK:
-		if (info->blank == 0)
-			return -EINVAL;
-		(*info->blank)(arg, info);
-		return 0;
+		if (fb->fb_blank)
+			return fb->fb_blank(arg, info);
+		return -EINVAL;
 	default:
 		if (fb->fb_ioctl)
 			return fb->fb_ioctl(inode, file, cmd, arg, 
@@ -588,10 +587,9 @@ static devfs_handle_t devfs_handle = NULL;
 
 int register_framebuffer(struct fb_info *fb_info)
 {
-	int i, j;
-	char name_buf[8];
-	static int fb_ever_opened[FB_MAX];
 	static int first = 1;
+	char name_buf[8];
+	int i;
 
 	if (num_registered_fb == FB_MAX)
 		return -ENXIO;

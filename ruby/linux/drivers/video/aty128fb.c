@@ -283,7 +283,7 @@ static struct fb_info_aty128 *board_list = NULL;
     /*
      *  Interface used by the world
      */
-
+int aty128fb_init(void);
 int aty128fb_setup(char *options);
 
 static int aty128fb_open(struct fb_info *info, int user);
@@ -296,8 +296,9 @@ static int aty128fb_set_var(struct fb_var_screeninfo *var, int con,
 		       struct fb_info *info);
 static int aty128fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 			struct fb_info *info);
-static int aty128fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			struct fb_info *info);
+static int aty128fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+                              u_int transp, struct fb_info *info);
+static int aty128fb_blank(int blank, struct fb_info *fb);
 static int aty128fb_pan_display(struct fb_var_screeninfo *var, int con,
 			   struct fb_info *fb);
 static int aty128fb_rasterimg(struct fb_info *info, int start);
@@ -305,10 +306,7 @@ static int aty128fb_rasterimg(struct fb_info *info, int start);
     /*
      *  Interface to the low level console driver
      */
-
-int aty128fb_init(void);
 static int aty128fbcon_switch(int con, struct fb_info *fb);
-static void aty128fbcon_blank(int blank, struct fb_info *fb);
 
     /*
      *  Internal routines
@@ -321,8 +319,6 @@ static void aty128_set_disp(struct display *disp,
 			struct fb_info_aty128 *info, int bpp, int accel);
 static int aty128_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
 				u_int *transp, struct fb_info *info);
-static int aty128_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-				u_int transp, struct fb_info *info);
 static void do_install_cmap(int con, struct fb_info *info);
 static int aty128_encode_var(struct fb_var_screeninfo *var,
                              const struct aty128fb_par *par,
@@ -382,12 +378,18 @@ static void fbcon_aty32_putcs(struct vc_data *conp, struct display *p,
 #endif
 
 static struct fb_ops aty128fb_ops = {
-    aty128fb_open, aty128fb_release, aty128fb_get_fix,
-    aty128fb_get_var, aty128fb_set_var, aty128fb_get_cmap,
-    aty128fb_set_cmap, aty128fb_pan_display, NULL,
-    NULL, aty128fb_rasterimg
+    fb_open:		aty128fb_open, 
+    fb_release:		aty128fb_release, 
+    fb_get_fix:		aty128fb_get_fix,
+    fb_get_var:		aty128fb_get_var, 
+    fb_set_var:		aty128fb_set_var, 
+    fb_get_cmap:	aty128fb_get_cmap,
+    fb_set_cmap:	fbgen_set_cmap, 
+    fb_setcolreg:	aty128fb_setcolreg,
+    fb_blank:		aty128fb_blank,
+    fb_pan_display:	aty128fb_pan_display, 
+    fb_rasterimg:	aty128fb_rasterimg
 };
-
 
     /*
      * Functions to read from/write to the mmio registers
@@ -1539,36 +1541,6 @@ aty128fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
     return 0;
 }
 
-    /*
-     *  Set the Colormap
-     */
-
-static int
-aty128fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			struct fb_info *info)
-{
-    int err;
-    struct display *disp;  
-
-    if (con >= 0)
-	disp = &fb_display[con];
-    else
-	disp = info->disp;
-
-    if (!disp->cmap.len) {      /* no colormap allocated? */
-        int size = (disp->var.bits_per_pixel <= 8) ? 256 : 32;
-	if ((err = fb_alloc_cmap(&disp->cmap, size, 0)))
-	    return err;
-    }
-
-    if (con == currcon) /* current console? */
-	return fb_set_cmap(cmap, kspc, aty128_setcolreg, info);
-    else
-	fb_copy_cmap(cmap, &disp->cmap, kspc ? 0 : 1);
-
-    return 0;                
-}
-
 static int
 aty128fb_rasterimg(struct fb_info *info, int start)
 {
@@ -1689,7 +1661,6 @@ aty128_init(struct fb_info_aty128 *info, const char *name)
     info->fb_info.changevar  = NULL;
     info->fb_info.switch_con = &aty128fbcon_switch;
     info->fb_info.updatevar  = NULL;
-    info->fb_info.blank = &aty128fbcon_blank;
     info->fb_info.flags = FBINFO_FLAG_DEFAULT;
 
 #ifdef MODULE
@@ -2139,8 +2110,7 @@ aty128fbcon_switch(int con, struct fb_info *fb)
     /*
      *  Blank the display.
      */
-static void
-aty128fbcon_blank(int blank, struct fb_info *fb)
+static int aty128fb_blank(int blank, struct fb_info *fb)
 {
     struct fb_info_aty128 *info = (struct fb_info_aty128 *)fb;
     u8 state = 0;
@@ -2153,6 +2123,7 @@ aty128fbcon_blank(int blank, struct fb_info *fb)
 	state |= 4;
 
     aty_st_8(CRTC_EXT_CNTL+1, state);
+    return 0;	
 }
 
 
@@ -2183,7 +2154,7 @@ aty128_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
      *  entries in the var structure). Return != 0 for invalid regno.
      */
 static int
-aty128_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+aty128fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                          u_int transp, struct fb_info *fb)
 {
     struct fb_info_aty128 *info = (struct fb_info_aty128 *)fb;
@@ -2253,10 +2224,10 @@ do_install_cmap(int con, struct fb_info *info)
 	return;
 
     if (fb_display[con].cmap.len)
-	fb_set_cmap(&fb_display[con].cmap, 1, aty128_setcolreg, info);
+	fb_set_cmap(&fb_display[con].cmap, 1, info);
     else {
 	int size = (fb_display[con].var.bits_per_pixel <= 8) ? 256 : 16;
-	fb_set_cmap(fb_default_cmap(size), 1, aty128_setcolreg, info);
+	fb_set_cmap(fb_default_cmap(size), 1, info);
     }
 }
 

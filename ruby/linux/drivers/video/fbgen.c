@@ -51,21 +51,26 @@ int fbgen_get_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 
 int fbgen_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 {
+    struct fbgen_par *hwpar = (struct fbgen_par *) info->par;
+    struct fbgen_hwswitch *fbhw = (struct fbgen_hwswitch *) hwpar->fbhw;	
     int oldbpp, err;
 
-    if ((err = fbgen_do_set_var(var, con == currcon, info)))
+    if ((err = fbhw->fb_check_var(var, &info->par, info)))
 	return err;
+
     if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
 	oldbpp = info->var.bits_per_pixel;
-	info->var = *var;
+	fb_display[con].var = info->var = *var;
 	if (info->var.xres != var->xres || info->var.yres != var->yres ||
 	    info->var.xres_virtual != var->xres_virtual ||
 	    info->var.yres_virtual != var->yres_virtual ||
 	    info->var.yoffset != var->yoffset || 
 	    oldbpp != var->bits_per_pixel) {
+	    fbhw->set_par(&hwpar->par, info); 	
 	    fbgen_set_disp(con, info);
+	    
 	    if (oldbpp != var->bits_per_pixel) {
-		if ((err = fb_set_cmap(&info->cmap, 1, fb_setcolreg, info)))
+		if ((err = fb_set_cmap(&info->cmap, 1, info)))
             		return err;
       	    }
 	    if (info->changevar)
@@ -94,12 +99,11 @@ int fbgen_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 int fbgen_set_cmap(struct fb_cmap *cmap, int kspc, int con,
 		   struct fb_info *info)
 {
-    struct fbgen_hwswitch *fbhw = info->fbhw;
     int err = 0;
 
     /* current console? */
     if (con == currcon) {
-    	if ((err = fb_set_cmap(cmap, kspc, fbhw->fb_setcolreg, info))) {
+    	if ((err = fb_set_cmap(cmap, kspc, info))) {
                 return err;
         } else {
                 fb_copy_cmap(cmap, &info->cmap, kspc ? 0 : 1);
@@ -122,12 +126,12 @@ int fbgen_pan_display(struct fb_var_screeninfo *var, int con,
     int err;
 
     if (var->xoffset + info->var.xres > info->var.xres_virtual ||
-	var->yoffset + info->var.yres > info->var.yres_virtual
+	var->yoffset + info->var.yres > info->var.yres_virtual || 
 	var->xoffset < 0 || var->yoffset < 0)
 	return -EINVAL;
     if (con == currcon) {
-	if (fbhw->pan_display) {
-	    if ((err = fbhw->pan_display(var, info2)))
+	if (info->fbops->fb_pan_display) {
+	    if ((err = info->fbops->fb_pan_display(var, con, info)))
 		return err;
 	} else
 	    return -EINVAL;
@@ -138,29 +142,6 @@ int fbgen_pan_display(struct fb_var_screeninfo *var, int con,
 	info->var.vmode |= FB_VMODE_YWRAP;
     else
 	info->var.vmode &= ~FB_VMODE_YWRAP;
-    return 0;
-}
-
-/* ---- Helper functions --------------------------------------------------- */
-
-    /*
-     *  Change the video mode
-     */
-
-int fbgen_do_set_var(struct fb_var_screeninfo *var, int isactive,
-		     struct fb_info_gen *info)
-{
-    struct fbgen_hwswitch *fbhw = info->fbhw;
-    int err, activate;
-    char par[info->parsize];
-
-    if ((err = fbhw->decode_var(var, &par, info)))
-	return err;
-    activate = var->activate;
-    if (((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) && isactive)
-	fbhw->set_par(&par, info);
-    fbhw->encode_var(var, &par, info);
-    var->activate = activate;
     return 0;
 }
 
@@ -179,17 +160,11 @@ void fbgen_set_disp(int con, struct fb_info *info)
     display->ypanstep = info->fix.ypanstep;
     display->ywrapstep = info->fix.ywrapstep;
     display->line_length = info->fix.line_length;
-    if (info->fbhw->blank || info->fix.visual == FB_VISUAL_PSEUDOCOLOR ||
+    if (info->fbops->fb_blank || info->fix.visual == FB_VISUAL_PSEUDOCOLOR ||
 	info->fix.visual == FB_VISUAL_DIRECTCOLOR)
 	display->can_soft_blank = 1;
     else
 	display->can_soft_blank = 0;
-    fbhw->set_disp(&par, display, info);
-#if 0 /* FIXME: generic inverse is not supported yet */
-    display->inverse = (fix.visual == FB_VISUAL_MONO01 ? !inverse : inverse);
-#else
-    display->inverse = fix.visual == FB_VISUAL_MONO01;
-#endif
 }
 
     /*
@@ -198,12 +173,10 @@ void fbgen_set_disp(int con, struct fb_info *info)
 
 int fbgen_update_var(int con, struct fb_info *info)
 {
-    struct fb_info_gen *info2 = (struct fb_info_gen *)info;
-    struct fbgen_hwswitch *fbhw = info2->fbhw;
     int err;
 
-    if (fbhw->pan_display) {
-        if ((err = fbhw->pan_display(&fb_display[con].var, info2)))
+    if (info->fbops->fb_pan_display) {
+        if ((err = info->fbops->fb_pan_display(&info->var, con, info)))
             return err;
     }
     return 0;
@@ -215,17 +188,23 @@ int fbgen_update_var(int con, struct fb_info *info)
 
 int fbgen_switch(int con, struct fb_info *info)
 {
-    struct fb_info_gen *info2 = (struct fb_info_gen *)info;
-    struct fbgen_hwswitch *fbhw = info2->fbhw;
+    struct display *prev = &fb_display[currcon];
+    struct display *new = &fb_display[con];
 
-    /* Do we have to save the colormap ? */
-    if (fb_display[currcon].cmap.len)
-	fb_get_cmap(&fb_display[currcon].cmap, 1, fbhw->getcolreg,
-		    &info2->info);
-    fbgen_do_set_var(&fb_display[con].var, 1, info2);
     currcon = con;
-    /* Install new colormap */
-    fbgen_install_cmap(con, info2);
+    /* Save current video mode and colormap */
+    memcpy(&prev->var, &prev->fb_info->var, sizeof(struct fb_var_screeninfo));
+    fb_copy_cmap(&prev->fb_info->cmap, &prev->cmap, 0);
+    /* First lets see if we are VT switching to a console driven by fbdev */
+    if (new->conp && new->fb_info) {
+          /*
+           * Install new video mode and colormap.
+           * Note: We might switch to a VT that's driver by a different video
+           * card.
+           */
+          fb_copy_cmap(&new->cmap, &new->fb_info->cmap, 0);
+          new->fb_info->fbops->fb_set_var(&new->var, con, new->fb_info);
+    }
     return 0;
 }
 
@@ -233,15 +212,13 @@ int fbgen_switch(int con, struct fb_info *info)
      *  Blank the screen
      */
 
-void fbgen_blank(int blank, struct fb_info *info)
+int fbgen_blank(int blank, struct fb_info *info)
 {
-    struct fb_info_gen *info2 = (struct fb_info_gen *)info;
-    struct fbgen_hwswitch *fbhw = info2->fbhw;
-    u16 black[16];
     struct fb_cmap cmap;
+    u16 black[16];	
 
-    if (fbhw->blank && !fbhw->blank(blank, info2))
-	return;
+    if (info->fbops->fb_blank && !info->fbops->fb_blank(blank, info))
+	return 0;
     if (blank) {
 	memset(black, 0, 16*sizeof(u16));
 	cmap.red = black;
@@ -250,7 +227,8 @@ void fbgen_blank(int blank, struct fb_info *info)
 	cmap.transp = NULL;
 	cmap.start = 0;
 	cmap.len = 16;
-	fb_set_cmap(&cmap, 1, fbhw->setcolreg, info);
-    } else
-	fbgen_install_cmap(currcon, info2);
+	fb_set_cmap(&cmap, 1, info);
+	return 0;
+    }
+    return 0;	 
 }

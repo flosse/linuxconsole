@@ -190,26 +190,28 @@ static int  sa1100fb_get_fix(struct fb_fix_screeninfo *fix, int con, struct fb_i
 static int  sa1100fb_get_var(struct fb_var_screeninfo *var, int con, struct fb_info *info);
 static int  sa1100fb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info);
 static int  sa1100fb_get_cmap(struct fb_cmap *cmap, int kspc, int con, struct fb_info *info);
-static int  sa1100fb_set_cmap(struct fb_cmap *cmap, int kspc, int con, struct fb_info *info);
+static int sa1100fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue, 
+			      u_int trans, struct fb_info *info);
+static int sa1100fb_blank(int blank, struct fb_info *info);
 static int  sa1100fb_pan_display(struct fb_var_screeninfo *var, int con, struct fb_info *info);
  
 static int  sa1100fb_switch(int con, struct fb_info *info);
-static void sa1100fb_blank(int blank, struct fb_info *info);
 static int  sa1100fb_map_video_memory(void);
 static int  sa1100fb_activate_var(struct fb_var_screeninfo *var);
 static void sa1100fb_enable_lcd_controller(void);
 static void sa1100fb_disable_lcd_controller(void);
 
 static struct fb_ops sa1100fb_ops = {
-	sa1100fb_open,
-	sa1100fb_release,
-	sa1100fb_get_fix,		      
-	sa1100fb_get_var,		      
-	sa1100fb_set_var,		      
-	sa1100fb_get_cmap,		      
-	sa1100fb_set_cmap,		      
-	sa1100fb_pan_display,		      
-	NULL			      
+	fb_open:	sa1100fb_open,
+	fb_release:	sa1100fb_release,
+	fb_get_fix:	sa1100fb_get_fix,		      
+	fb_get_var:	sa1100fb_get_var,		      
+	fb_set_var:	sa1100fb_set_var,		      
+	fb_get_cmap:	sa1100fb_get_cmap,		      
+	fb_set_cmap:	fbgen_set_cmap,		      
+	fb_setcolreg:	sa1100fb_setcolreg,
+	fb_blank:	sa1100fb_blank,
+	fb_pan_display:	sa1100fb_pan_display		      
 };
 
 
@@ -325,31 +327,11 @@ sa1100fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 	return err;
 }
 
-static int
-sa1100fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-		 struct fb_info *info)
-{
-	int err = 0;
-
-	if (!fb_display[con].cmap.len)
-		err = fb_alloc_cmap(&fb_display[con].cmap,
-
-				    current_par.palette_size, 0);
-	if (!err) {
-		if (con == current_par.currcon)
-			err = fb_set_cmap(cmap, kspc, sa1100fb_setcolreg,
-					  info);
-		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
-	}
-	return err;
-}
-
 static void inline
 sa1100fb_get_par(struct sa1100fb_par *par)
 {
 	*par = current_par;
 }
-
 
 /*
  * sa1100fb_encode_var():
@@ -574,7 +556,7 @@ sa1100fb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 		else
 			cmap = fb_default_cmap(current_par.palette_size);
 
-		fb_set_cmap(cmap, 1, sa1100fb_setcolreg, info);
+		fb_set_cmap(cmap, 1, info);
 
                	sa1100fb_activate_var(var);
 	}
@@ -623,7 +605,6 @@ static void
 __init sa1100fb_init_fbinfo(void)
 {
 	strcpy(fb_info.modename, SA1100_NAME);
-	strcpy(fb_info.fontname, "Acorn8x8");
 
 	fb_info.node		   = -1;
 	fb_info.flags		   = FBINFO_FLAG_DEFAULT;
@@ -633,7 +614,6 @@ __init sa1100fb_init_fbinfo(void)
 	fb_info.changevar	   = NULL;
 	fb_info.switch_con	   = sa1100fb_switch;
 	fb_info.updatevar	   = sa1100fb_updatevar;
-	fb_info.blank		   = sa1100fb_blank;
 
 	/*
 	 * setup initial parameters
@@ -1039,7 +1019,7 @@ sa1100fb_pan_display(struct fb_var_screeninfo *var, int con,
  * 	12 and 16 bpp modes don't really use the palette, so this will not
  *      blank the display in all modes.  
  */
-static void
+static int 
 sa1100fb_blank(int blank, struct fb_info *info)
 {
 	int i;

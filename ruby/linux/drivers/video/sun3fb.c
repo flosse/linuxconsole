@@ -59,16 +59,15 @@
 #define CURSOR_SHAPE			1
 #define CURSOR_BLINK			2
 
+static int currcon;
+static int curblink __initdata = 1;
+
     /*
      *  Interface used by the world
      */
 
 int sun3fb_init(void);
 int sun3fb_setup(char *options);
-
-static int currcon;
-static char fontname[40] __initdata = { 0 };
-static int curblink __initdata = 1;
 
 static int sun3fb_open(struct fb_info *info, int user);
 static int sun3fb_release(struct fb_info *info, int user);
@@ -84,6 +83,9 @@ static int sun3fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 			struct fb_info *info);
 static int sun3fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
 			struct fb_info *info);
+static int sun3fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+                            u_int transp, struct fb_info *info);
+static int sun3fb_blank(int blank, struct fb_info *info);
 
 static void sun3fb_cursor(struct display *p, int mode, int x, int y);
 static void sun3fb_clear_margin(struct display *p, int s);
@@ -94,8 +96,6 @@ static void sun3fb_clear_margin(struct display *p, int s);
 
 static int sun3fbcon_switch(int con, struct fb_info *info);
 static int sun3fbcon_updatevar(int con, struct fb_info *info);
-static void sun3fbcon_blank(int blank, struct fb_info *info);
-
 
     /*
      *  Internal routines
@@ -103,14 +103,19 @@ static void sun3fbcon_blank(int blank, struct fb_info *info);
 
 static int sun3fb_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
 			    u_int *transp, struct fb_info *info);
-static int sun3fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-			    u_int transp, struct fb_info *info);
 static void do_install_cmap(int con, struct fb_info *info);
 
 static struct fb_ops sun3fb_ops = {
-	sun3fb_open, sun3fb_release, sun3fb_get_fix, sun3fb_get_var, 
-	sun3fb_set_var, sun3fb_get_cmap, sun3fb_set_cmap, sun3fb_pan_display,
-	NULL 
+	fb_open:	sun3fb_open, 
+	fb_release:	sun3fb_release, 
+	fb_get_fix:	sun3fb_get_fix, 
+	fb_get_var:	sun3fb_get_var, 
+	fb_set_var:	sun3fb_set_var, 
+	fb_get_cmap:	sun3fb_get_cmap, 
+	fb_set_cmap:	sun3fb_set_cmap, 
+	fb_setcolreg:	sun3fb_setcolreg,
+	fb_blank:	sun3fb_blank,
+	fb_pan_display:	sun3fb_pan_display
 };
 
 
@@ -372,21 +377,12 @@ __initfunc(void sun3fb_setup(char *options))
 	char *p;
 	
 	for (p = options;;) {
-		if (!strncmp(p, "font=", 5)) {
-			int i;
-			
-			for (i = 0; i < sizeof(fontname) - 1; i++)
-				if (p[i+5] == ' ' || !p[i+5])
-					break;
-			memcpy(fontname, p+5, i);
-			fontname[i] = 0;
-		} else if (!strncmp(p, "noblink", 7))
+		if (!strncmp(p, "noblink", 7))
 			curblink = 0;
 		while (*p && *p != ' ' && *p != ',') p++;
 		if (*p != ',') break;
 		p++;
 	}
-
 	return 0;
 }
 
@@ -435,7 +431,7 @@ static int sun3fbcon_updatevar(int con, struct fb_info *info)
      *  Blank the display.
      */
 
-static void sun3fbcon_blank(int blank, struct fb_info *info)
+static int sun3fb_blank(int blank, struct fb_info *info)
 {
     struct fb_info_sbusfb *fb = sbusfbinfo(info);
     
@@ -609,11 +605,9 @@ sizechange:
 	fb->info.node = -1;
 	fb->info.fbops = &sun3fb_ops;
 	fb->info.disp = disp;
-	strcpy(fb->info.fontname, fontname);
 	fb->info.changevar = NULL;
 	fb->info.switch_con = &sun3fbcon_switch;
 	fb->info.updatevar = &sun3fbcon_updatevar;
-	fb->info.blank = &sun3fbcon_blank;
 	fb->info.flags = FBINFO_FLAG_DEFAULT;
 	
 	fb->cursor.hwsize.fbx = 32;

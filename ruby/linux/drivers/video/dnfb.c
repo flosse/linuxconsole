@@ -150,33 +150,25 @@ void dn_fb_setup(char *options, int *ints);
 
 static int dn_fb_open(struct fb_info *info,int user);
 static int dn_fb_release(struct fb_info *info,int user);
-static int dn_fb_get_fix(struct fb_fix_screeninfo *fix, int con, 
-			 struct fb_info *info);
-static int dn_fb_get_var(struct fb_var_screeninfo *var, int con,
-			 struct fb_info *info);
-static int dn_fb_set_var(struct fb_var_screeninfo *var, int isactive,
-			 struct fb_info *info);
-static int dn_fb_get_cmap(struct fb_cmap *cmap,int kspc,int con,
-			  struct fb_info *info);
-static int dn_fb_set_cmap(struct fb_cmap *cmap,int kspc,int con,
-			  struct fb_info *info);
+static int dn_fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+                          u_int transp, struct fb_info *info);
+static int dn_fb_blank(int blank,struct fb_info *info);
 
 static struct fb_ops dn_fb_ops = {
         fb_open:		dn_fb_open,
 	fb_release:		dn_fb_release, 
-	fb_get_fix:		dn_fb_get_fix, 
-	fb_get_var:		dn_fb_get_var, 
+	fb_get_fix:		fbgen_get_fix, 
+	fb_get_var:		fbgen_get_var, 
 	fb_set_var:		dn_fb_set_var,
-        fb_get_cmap:		dn_fb_get_cmap, 
-	fb_set_cmap:		dn_fb_set_cmap, 
+        fb_get_cmap:		fbgen_get_cmap, 
+	fb_set_cmap:		fbgen_set_cmap, 
+	fb_setcolreg:		dn_fb_setcolreg,
+	fb_blank:		dn_fb_blank
 };
 
 static int dnfbcon_switch(int con,struct fb_info *info);
 static int dnfbcon_updatevar(int con,struct fb_info *info);
-static void dnfb_blank(int blank,struct fb_info *info);
 
-static int dnfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-                          u_int transp, struct fb_info *info);
 static void dn_fb_set_disp(int con,struct fb_info *info);
 
 static int dn_fb_open(struct fb_info *info,int user)
@@ -195,49 +187,10 @@ static int dn_fb_release(struct fb_info *info,int user)
         return(0);
 }
 
-static int dn_fb_get_fix(struct fb_fix_screeninfo *fix, int con,
-			 struct fb_info *info) 
-{
-	*fix = info->fix;
-	return 0;
-}
-        
-static int dn_fb_get_var(struct fb_var_screeninfo *var, int con,
-			 struct fb_info *info) 
-{
-	*var = info->var;
-	return 0;
-}
-
 static int dn_fb_set_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info) 
 {
 	return -EINVAL;
-}
-
-static int dn_fb_get_cmap(struct fb_cmap *cmap,int kspc,int con,
-			  struct fb_info *info) 
-{
-	fb_copy_cmap(&info->cmap, cmap, kspc ? 0 : 1);
-	return 0;
-}
-
-static int dn_fb_set_cmap(struct fb_cmap *cmap,int kspc,int con,
-			  struct fb_info *info) 
-{
-	int err = 0;
-
-        /* current console? */
-        if (con == currcon) {
-                if ((err = fb_set_cmap(cmap, kspc, dnfb_setcolreg, info))) {
-                        return err;
-                } else {
-                        fb_copy_cmap(cmap, &info->cmap, kspc ? 0 : 1);
-                }
-        }
-        /* Always copy colormap to fb_display. */
-        fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0: 1);
-        return err;
 }
 
 static int dnfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
@@ -245,6 +198,17 @@ static int dnfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 {
 	/* Do nothing We support only mono at this time */
 	return 0;
+}
+
+static int dnfb_blank(int blank,  struct fb_info *info)
+{
+
+        if (blank)  {
+                outb(0x0,  AP_CONTROL_3A);
+        } else {
+                outb(0x1,  AP_CONTROL_3A);
+        }
+        return 0;
 }
 
 static void dn_fb_set_disp(int con, struct fb_info *info) 
@@ -274,25 +238,27 @@ static void dn_fb_set_disp(int con, struct fb_info *info)
    display->dispsw = &fbcon_dummy;
 #endif
 }
-  
+
+void dn_fb_setup(char *options, int *ints) {
+        return;
+}
+ 
 int dnfb_init(void) 
 {
 	int err;
 
 	fb_info.changevar=NULL;
 	strcpy(&fb_info.modename[0],fb_info.fix.id);
-	fb_info.fontname[0]=0;
 	fb_info.disp = disp;
 	fb_info.var = dnfb_var;
 	fb_info.fix = dnfb_fix;
-	fb_info.switch_con = &dnfbcon_switch;
-	fb_info.updatevar = &dnfbcon_updatevar;
-	fb_info.blank = &dnfb_blank;	
+	fb_info.switch_con = &fbgen_switch;
+	fb_info.updatevar = &fbgen_updatevar;
 	fb_info.node = -1;
 	fb_info.fbops = &dn_fb_ops;
 
 	fb_alloc_cmap(&fb_info.cmap, 2, 0);
-	fb_set_cmap(&fb_info.cmap, 1, dnfb_setcolreg, &fb_info);
+	fb_set_cmap(&fb_info.cmap, 1, dn_fb_setcolreg, &fb_info);
 	
 	dn_fb_set_disp(-1, &fb_info);
 	
@@ -312,40 +278,6 @@ int dnfb_init(void)
         printk("apollo frame buffer alive and kicking !\n");
 	return 0;
 }	
-
-	
-static int dnfbcon_switch(int con, struct fb_info *info) 
-{
-        struct display *prev = &fb_display[currcon];
-        struct display *new = &fb_display[con];
-
-        currcon = con;
-        /* Save current colormap */
-        fb_copy_cmap(&prev->fb_info->cmap, &prev->cmap, 0);
-        /* Install new colormap */
-        new->fb_info->fbops->fb_set_cmap(&new->cmap, 0, con, new->fb_info); 
-	return 0;
-}
-
-static int dnfbcon_updatevar(int con,  struct fb_info *info) 
-{
-	return 0;
-}
-
-static void dnfb_blank(int blank,  struct fb_info *info) 
-{
-
-	if (blank)  {
-        	outb(0x0,  AP_CONTROL_3A);
-	} else {
-	        outb(0x1,  AP_CONTROL_3A);
-	}
-	return ;
-}
-
-void dn_fb_setup(char *options, int *ints) {
-	return;
-}
 
 void dn_bitblt(struct display *p,int x_src,int y_src, int x_dest, int y_dest,
                int x_count, int y_count) 

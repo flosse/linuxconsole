@@ -87,16 +87,10 @@ int hpfb_init(void);
 
 static int hpfb_open(struct fb_info *info, int user);
 static int hpfb_release(struct fb_info *info, int user);
-static int hpfb_get_fix(struct fb_fix_screeninfo *fix, int con,
-                        struct fb_info *info);
-static int hpfb_get_var(struct fb_var_screeninfo *var, int con,
-                        struct fb_info *info);
 static int hpfb_set_var(struct fb_var_screeninfo *var, int con,
                         struct fb_info *info);
-static int hpfb_get_cmap(struct fb_cmap *cmap,int kspc,int con,
-                         struct fb_info *info);
-static int hpfb_set_cmap(struct fb_cmap *cmap,int kspc,int con,
-                         struct fb_info *info);
+static int hpfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+                          u_int transp, struct fb_info *info);
 
     /*
      *  Interface to the low level console driver
@@ -104,23 +98,16 @@ static int hpfb_set_cmap(struct fb_cmap *cmap,int kspc,int con,
 
 static int hpfb_switch(int con, struct fb_info *info);
 static int hpfb_update_var(int con, struct fb_info *info);
-static void hpfb_blank(int blank, struct fb_info *info);
 		
-    /*
-     *  Internal routines
-     */
-
-static int hpfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-                          u_int transp, struct fb_info *info);
-
 static struct fb_ops hpfb_ops = {
         fb_open:        hpfb_open,
         fb_release:     hpfb_release,
-        fb_get_fix:     hpfb_get_fix,
-        fb_get_var:     hpfb_get_var,
+        fb_get_fix:     fbgen_get_fix,
+        fb_get_var:     fbgen_get_var,
         fb_set_var:     hpfb_set_var,
-        fb_get_cmap:    hpfb_get_cmap,
-        fb_set_cmap:    hpfb_set_cmap,
+        fb_get_cmap:    fbgen_get_cmap,
+        fb_set_cmap:    fbgen_set_cmap,
+	fb_setcolreg:	hpfb_setcolreg
 };
 
 static int hpfb_open(struct fb_info *info, int user)
@@ -136,20 +123,6 @@ static int hpfb_release(struct fb_info *info, int user)
 {
         MOD_DEC_USE_COUNT;
         return(0);
-}
-
-static int hpfb_get_fix(struct fb_fix_screeninfo *fix, int con,
-                         struct fb_info *info)
-{
-	*fix = info->fix;
-        return 0;
-}
-
-static int hpfb_get_var(struct fb_var_screeninfo *var, int con,
-                         struct fb_info *info)
-{
-	*var = info->var;
-        return 0;
 }
 
 static int hpfb_set_var(struct fb_var_screeninfo *var, int con,
@@ -177,31 +150,6 @@ static int hpfb_setcolreg(unsigned regno, unsigned red, unsigned green,
         udelay(100);
 	writew(0xffff, fb_regs + 0x60ba);	
 	return 0; 
-}
-
-static int hpfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info)
-{
-	fb_copy_cmap(&info->cmap, cmap, kspc ? 0 : 1);
-	return 0;
-}
-
-static int hpfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info)
-{
-	int err = 0;
-
-	/* current console? */
-    	if (con == currcon) {
-        	if ((err = fb_set_cmap(cmap, kspc, hpfb_setcolreg, info))) {
-                	return err;
-        	} else {
-                	fb_copy_cmap(cmap, &info->cmap, kspc ? 0 : 1);
-        	}
-    	}	
-    	/* Always copy colormap to fb_display. */
-    	fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0: 1);
-	return err;
 }
 
 static void hpfb_set_disp(int con, struct fb_info *info)
@@ -278,14 +226,13 @@ int __init hpfb_init_one(unsigned long base)
 	fb_info.disp = &disp;
 	fb_info.var = hpfb_var;
 	fb_info.fix = hpfb_fix;
-	fb_info.switch_con = &hpfb_switch;
-	fb_info.updatevar = &hpfb_update_var;
-	fb_info.blank = &hpfb_blank;
+	fb_info.switch_con = &fbgen_switch;
+	fb_info.updatevar = &fbgen_update_var;
 	fb_info.flags = FBINFO_FLAG_DEFAULT;
 
 	fb_copy_cmap(fb_default_cmap(1<<fb_info.var.bits_per_pixel),
                         &fb_info.cmap, 0);
-        fb_set_cmap(&fb_info.cmap, 1, hpfb_setcolreg, &fb_info);
+        fb_set_cmap(&fb_info.cmap, 1, &fb_info);
 	hpfb_set_var(&fb_info.var, -1, &fb_info);
 	hpfb_set_disp(-1, &fb_info);
 
@@ -363,29 +310,4 @@ static void topcat_blit(int x0, int y0, int x1, int y1, int w, int h)
         writew(h, fb_regs + WHEIGHT);
         writew(w, fb_regs + WWIDTH);
         writeb(fb_bitmask, fb_regs + WMOVE);
-}
-
-static int hpfb_update_var(int con, struct fb_info *info)
-{
-        return 0;
-}
-
-static int hpfb_switch(int con, struct fb_info *info)
-{
-	struct display *prev = &fb_display[currcon];
-        struct display *new = &fb_display[con];
-
-        currcon = con;
-        /* Save current colormap */
-        fb_copy_cmap(&prev->fb_info->cmap, &prev->cmap, 0);
-        /* Install new colormap */
-        new->fb_info->fbops->fb_set_cmap(&new->cmap, 0, con, new->fb_info);
-        return 0;
-}
-
-/* 0 unblank, 1 blank, 2 no vsync, 3 no hsync, 4 off */
-
-static void hpfb_blank(int blank, struct fb_info *info)
-{
-        /* Not supported */
 }

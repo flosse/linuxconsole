@@ -265,6 +265,8 @@
 #define BANSHEE_MAX_PIXCLOCK 270000.0
 #define VOODOO3_MAX_PIXCLOCK 300000.0
 
+static int currcon = 0;
+
 struct banshee_reg {
   /* VGA rubbish */
   unsigned char att[21];
@@ -373,6 +375,9 @@ struct fb_info_tdfx {
 /*
  *  Frame buffer device API
  */
+int tdfxfb_init(void);
+void tdfxfb_setup(char *options);
+
 static int tdfxfb_open(struct fb_info* info, 
 		       int user);
 static int tdfxfb_release(struct fb_info* info, 
@@ -393,10 +398,13 @@ static int tdfxfb_get_cmap(struct fb_cmap *cmap,
 			   int kspc, 
 			   int con,
 			   struct fb_info* info);
-static int tdfxfb_set_cmap(struct fb_cmap* cmap, 
-			   int kspc, 
-			   int con,
-			   struct fb_info* info);
+static int  tdfxfb_setcolreg(u_int regno,
+                             u_int red,
+                             u_int green,
+                             u_int blue,
+                             u_int transp,
+                             struct fb_info* fb);
+static int tdfxfb_blank(int blank, struct fb_info* fb);
 
 /*
  *  Interface to the low level console driver
@@ -405,8 +413,6 @@ static int  tdfxfb_switch_con(int con,
 			      struct fb_info* fb);
 static int  tdfxfb_updatevar(int con, 
 			     struct fb_info* fb);
-static void tdfxfb_blank(int blank, 
-			 struct fb_info* fb);
 
 /*
  *  Internal routines
@@ -433,12 +439,6 @@ static int  tdfxfb_getcolreg(u_int regno,
 			     u_int* blue,
 			     u_int* transp, 
 			     struct fb_info* fb);
-static int  tdfxfb_setcolreg(u_int regno, 
-			     u_int red, 
-			     u_int green, 
-			     u_int blue,
-			     u_int transp, 
-			     struct fb_info* fb);
 static void  tdfxfb_install_cmap(struct display *d, 
 				 struct fb_info *info);
 
@@ -463,31 +463,18 @@ static u32 do_calc_pll(int freq, int* freq_out);
 static void  do_write_regs(struct banshee_reg* reg);
 static unsigned long do_lfb_size(void);
 
-/*
- *  Interface used by the world
- */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,3,1)
-void tdfxfb_init(void);
-#else
-int tdfxfb_init(void);
-#endif
-void tdfxfb_setup(char *options, 
-		  int *ints);
-
-static int currcon = 0;
 
 static struct fb_ops tdfxfb_ops = {
-  tdfxfb_open, 
-  tdfxfb_release, 
-  tdfxfb_get_fix, 
-  tdfxfb_get_var, 
-  tdfxfb_set_var,
-  tdfxfb_get_cmap, 
-  tdfxfb_set_cmap, 
-  tdfxfb_pan_display, 
-  NULL,		  // fb_ioctl	
-  NULL,           // fb_mmap
-  NULL            // fb_rasterimg
+  fb_open:	  tdfxfb_open, 
+  fb_release:	  tdfxfb_release, 
+  fb_get_fix:	  tdfxfb_get_fix, 
+  fb_get_var:	  tdfxfb_get_var, 
+  fb_set_var:	  tdfxfb_set_var,
+  fb_get_cmap:	  tdfxfb_get_cmap, 
+  fb_set_cmap:	  fbgen_set_cmap,
+  fb_setcolreg:	  tdfxfb_setcolreg,
+  fb_blank:	  tdfxfb_blank, 
+  fb_pan_display: tdfxfb_pan_display 
 };
 
 struct mode {
@@ -581,7 +568,6 @@ static int  inverse = 0;
 static int  nomtrr = 0;
 #endif
 static int  nohwcursor = 0;
-static char __initdata fontname[40] = { 0 };
 static const char *mode_option __initdata = NULL;
 
 /* ------------------------------------------------------------------------- 
@@ -1911,27 +1897,6 @@ static int tdfxfb_get_cmap(struct fb_cmap *cmap,
    return 0;
 }
 
-static int tdfxfb_set_cmap(struct fb_cmap *cmap, 
-			   int kspc, 
-			   int con,
-			   struct fb_info *fb) {
-   struct display *d=(con<0) ? fb->disp : fb_display + con;
-   struct fb_info_tdfx *i = (struct fb_info_tdfx*)fb;
-
-   int cmap_len= (i->current_par.bpp == 8) ? 256 : 16;
-   if (d->cmap.len!=cmap_len) {
-      int err;
-      if((err = fb_alloc_cmap(&d->cmap, cmap_len, 0)))
-	return err;
-   }
-   if(con == currcon) {
-      /* current console? */
-      return fb_set_cmap(cmap, kspc, tdfxfb_setcolreg, fb);
-   } else {
-      fb_copy_cmap(cmap, &d->cmap, kspc ? 0 : 1);
-   }
-   return 0;
-}
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,3,1)
 __initfunc(void tdfxfb_init(void)) {
@@ -2040,10 +2005,8 @@ int __init tdfxfb_init(void) {
       fb_info.fb_info.node       = -1;
       fb_info.fb_info.fbops      = &tdfxfb_ops;
       fb_info.fb_info.disp       = &fb_info.disp;
-      strcpy(fb_info.fb_info.fontname, fontname);
       fb_info.fb_info.switch_con = &tdfxfb_switch_con;
       fb_info.fb_info.updatevar  = &tdfxfb_updatevar;
-      fb_info.fb_info.blank      = &tdfxfb_blank;
       fb_info.fb_info.flags      = FBINFO_FLAG_DEFAULT;
       
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,3,1)
@@ -2125,8 +2088,8 @@ int __init tdfxfb_init(void) {
 #endif
 }
 
-void tdfxfb_setup(char *options, 
-		  int *ints) {
+void tdfxfb_setup(char *options)
+{ 
   char* this_opt;
 
   if(!options || !*options)
@@ -2150,9 +2113,7 @@ void tdfxfb_setup(char *options,
     } else if (!strcmp(this_opt, "nomtrr")) {
       nomtrr = 1;
 #endif
-    } else if (!strncmp(this_opt, "font:", 5)) {
-      strncpy(fontname, this_opt + 5, 40);
-    } else {
+    } else {	
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,3,1)
       int i;
       for(i = 0; i < modes; i++) {
@@ -2205,8 +2166,8 @@ static int tdfxfb_switch_con(int con,
 }
 
 /* 0 unblank, 1 blank, 2 no vsync, 3 no hsync, 4 off */
-static void tdfxfb_blank(int blank, 
-			 struct fb_info *fb) {
+static int tdfxfb_blank(int blank, struct fb_info *fb) 
+{
   u32 dacmode, state = 0, vgablank = 0;
 
   dacmode = tdfx_inl(DACMODE);
@@ -2243,7 +2204,7 @@ static void tdfxfb_blank(int blank,
   else
     vga_enable_video();
 
-  return;
+  return 0;
 }
 
 static int  tdfxfb_updatevar(int con, 
@@ -2332,10 +2293,9 @@ static void tdfxfb_install_cmap(struct display *d,struct fb_info *info)
    struct fb_info_tdfx* i = (struct fb_info_tdfx*)info;
 
    if(d->cmap.len) {
-      fb_set_cmap(&(d->cmap), 1, tdfxfb_setcolreg, info);
+      fb_set_cmap(&(d->cmap), 1, info);
    } else {
-      fb_set_cmap(fb_default_cmap(i->current_par.cmap_len), 1, 
-		  tdfxfb_setcolreg, info);
+      fb_set_cmap(fb_default_cmap(i->current_par.cmap_len), 1, info); 
    }
 }
 

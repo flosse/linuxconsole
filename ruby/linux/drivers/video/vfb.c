@@ -77,7 +77,7 @@ static int vfb_enable = 0;	/* disabled by default */
     /*
      *  Interface used by the world
      */
-
+int vfb_init(void);
 int vfb_setup(char*);
 
 static int vfb_open(struct fb_info *info, int user);
@@ -94,16 +94,15 @@ static int vfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 			struct fb_info *info);
 static int vfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
 			struct fb_info *info);
+static int vfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+                         u_int transp, struct fb_info *info);
 
     /*
      *  Interface to the low level console driver
      */
 
-int vfb_init(void);
 static int vfbcon_switch(int con, struct fb_info *info);
 static int vfbcon_updatevar(int con, struct fb_info *info);
-static void vfbcon_blank(int blank, struct fb_info *info);
-
 
     /*
      *  Internal routines
@@ -115,16 +114,20 @@ static void vfb_encode_fix(struct fb_fix_screeninfo *fix,
 static void set_color_bitfields(struct fb_var_screeninfo *var);
 static int vfb_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
                          u_int *transp, struct fb_info *info);
-static int vfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-                         u_int transp, struct fb_info *info);
 static void do_install_cmap(int con, struct fb_info *info);
 
 
 static struct fb_ops vfb_ops = {
-    vfb_open, vfb_release, vfb_get_fix, vfb_get_var, vfb_set_var, vfb_get_cmap,
-    vfb_set_cmap, vfb_pan_display, NULL 
+    fb_open:		vfb_open, 
+    fb_release:		vfb_release, 
+    fb_get_fix:		vfb_get_fix, 
+    fb_get_var: 	vfb_get_var, 
+    fb_set_var:		vfb_set_var, 
+    fb_get_cmap:	vfb_get_cmap,
+    fb_set_cmap:	vfb_set_cmap, 
+    fb_setcolreg:	vfb_setcolreg,
+    fb_pan_display:	vfb_pan_display 
 };
-
 
     /*
      *  Open/Release the frame buffer device
@@ -385,7 +388,7 @@ static int vfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
 	    return err;
     }
     if (con == currcon)			/* current console? */
-	return fb_set_cmap(cmap, kspc, vfb_setcolreg, info);
+	return fb_set_cmap(cmap, kspc, info);
     else
 	fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
     return 0;
@@ -395,8 +398,6 @@ int __init vfb_setup(char *options)
 {
     char *this_opt;
 
-    fb_info.fontname[0] = '\0';
-
     vfb_enable = 1;
 
     if (!options || !*options)
@@ -404,8 +405,6 @@ int __init vfb_setup(char *options)
 
     for (this_opt = strtok(options, ","); this_opt;
 	 this_opt = strtok(NULL, ",")) {
-	if (!strncmp(this_opt, "font:", 5))
-	    strcpy(fb_info.fontname, this_opt+5);
     }
     return 0;
 }
@@ -430,7 +429,6 @@ int __init vfb_init(void)
     fb_info.disp = &disp;
     fb_info.switch_con = &vfbcon_switch;
     fb_info.updatevar = &vfbcon_updatevar;
-    fb_info.blank = &vfbcon_blank;
     fb_info.flags = FBINFO_FLAG_DEFAULT;
 
     vfb_set_var(&vfb_default, -1, &fb_info);
@@ -466,15 +464,6 @@ static int vfbcon_updatevar(int con, struct fb_info *info)
 {
     /* Nothing */
     return 0;
-}
-
-    /*
-     *  Blank the display.
-     */
-
-static void vfbcon_blank(int blank, struct fb_info *info)
-{
-    /* Nothing */
 }
 
 static u_long get_line_length(int xres_virtual, int bpp)
@@ -613,10 +602,10 @@ static void do_install_cmap(int con, struct fb_info *info)
     if (con != currcon)
 	return;
     if (fb_display[con].cmap.len)
-	fb_set_cmap(&fb_display[con].cmap, 1, vfb_setcolreg, info);
+	fb_set_cmap(&fb_display[con].cmap, 1, info);
     else
 	fb_set_cmap(fb_default_cmap(1<<fb_display[con].var.bits_per_pixel), 1,
-		    vfb_setcolreg, info);
+		    info);
 }
 
 

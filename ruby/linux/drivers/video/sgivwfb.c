@@ -36,7 +36,6 @@
 #include "sgivwfb.h"
 
 struct sgivwfb_par {
-  struct fb_var_screeninfo var;
   u_long timing_num;
   int valid;
 };
@@ -55,120 +54,64 @@ u_long                sgivwfb_mem_size;
 static volatile char  *fbmem;
 static asregs         *regs;
 static struct fb_info fb_info;
-static struct { u_char red, green, blue, pad; } palette[256];
-static char           sgivwfb_name[16] = "SGI Vis WS FB";
 static u32            cmap_fifo;
 static int            ypan       = 0;
 static int            ywrap      = 0;
 
 /* console related variables */
-static int currcon = 0;
 static struct display disp;
 
-static union {
-#ifdef FBCON_HAS_CFB16
-  u16 cfb16[16];
-#endif
-#ifdef FBCON_HAS_CFB32
-  u32 cfb32[16];
-#endif
-} fbcon_cmap;
+static u32 pseudo_palette[17];
 
 static struct sgivwfb_par par_current = {
-  {                             /* var (screeninfo) */
+  0,                            /* timing_num */
+  0				/* par not activated */
+};
+
+static struct fb_fix_screeninfo sgivwfb_fix __initdata = {
+    "SGI Vis WS FB", 0, 0, FB_TYPE_PACKED_PIXELS, 0, FB_VISUAL_PSEUDOCOLOR, 
+    0, 0, 0, 0, DBE_REG_PHYS, DBE_REG_SIZE, FB_ACCEL_NONE
+};
+
+static struct fb_var_screeninfo sgivwfb_var __initdata = {
     /* 640x480, 8 bpp */
     640, 480, 640, 480, 0, 0, 8, 0,
     {0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
     0, 0, -1, -1, 0, 20000, 64, 64, 32, 32, 64, 2,
     0, FB_VMODE_NONINTERLACED
-  },
-  0,                            /* timing_num */
-  0				/* par not activated */
 };
 
 /*
  *  Interface used by the world
  */
+int sgivwfb_init(void);
 int sgivwfb_setup(char*);
 
 static int sgivwfb_open(struct fb_info *info, int user);
 static int sgivwfb_release(struct fb_info *info, int user);
-static int sgivwfb_get_fix(struct fb_fix_screeninfo *fix, int con,
-			   struct fb_info *info);
-static int sgivwfb_get_var(struct fb_var_screeninfo *var, int con,
-			   struct fb_info *info);
 static int sgivwfb_set_var(struct fb_var_screeninfo *var, int con,
 			   struct fb_info *info);
-static int sgivwfb_pan_display(struct fb_var_screeninfo *var, int con,
-			       struct fb_info *info);
-static int sgivwfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			    struct fb_info *info);
-static int sgivwfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			    struct fb_info *info);
+static int sgivwfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+                             u_int transp, struct fb_info *info);
 static int sgivwfb_mmap(struct fb_info *info, struct file *file,
                         struct vm_area_struct *vma);
 
 static struct fb_ops sgivwfb_ops = {
-  sgivwfb_open,
-  sgivwfb_release,
-  sgivwfb_get_fix,
-  sgivwfb_get_var,
-  sgivwfb_set_var,
-  sgivwfb_get_cmap,
-  sgivwfb_set_cmap,
-  sgivwfb_pan_display,
-  NULL,
-  sgivwfb_mmap
+  fb_open:		sgivwfb_open,
+  fb_release:		sgivwfb_release,
+  fb_get_fix:		fbgen_get_fix,
+  fb_get_var:		fbgen_get_var,
+  fb_set_var:		sgivwfb_set_var,
+  fb_get_cmap:		fbgen_get_cmap,
+  fb_set_cmap:		fbgen_set_cmap,
+  fb_setcolreg:	 	sgivwfb_setcolreg,	
+  fb_mmap:		sgivwfb_mmap
 };
-
-/*
- *  Interface to the low level console driver
- */
-int sgivwfb_init(void);
-static int sgivwfbcon_switch(int con, struct fb_info *info);
-static int sgivwfbcon_updatevar(int con, struct fb_info *info);
-static void sgivwfbcon_blank(int blank, struct fb_info *info);
 
 /*
  *  Internal routines
  */
-static u_long get_line_length(int xres_virtual, int bpp);
-static unsigned long bytes_per_pixel(int bpp);
-static void activate_par(struct sgivwfb_par *par);
-static void sgivwfb_encode_fix(struct fb_fix_screeninfo *fix,
-			       struct fb_var_screeninfo *var);
-static int sgivwfb_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
-			     u_int *transp, struct fb_info *info);
-static int sgivwfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-			     u_int transp, struct fb_info *info);
-static void do_install_cmap(int con, struct fb_info *info);
-
-static unsigned long get_line_length(int xres_virtual, int bpp)
-{
-  return(xres_virtual * bytes_per_pixel(bpp));
-}
-
-static unsigned long bytes_per_pixel(int bpp)
-{
-  unsigned long length;
-
-  switch (bpp) {
-  case 8:
-    length = 1;
-    break;
-  case 16:
-    length = 2;
-    break;
-  case 32:
-    length = 4;
-    break;
-  default:
-    printk(KERN_INFO "sgivwfb: unsupported bpp=%d\n", bpp);
-    length = 0;
-    break;
-  }
-  return(length);
-}
+static void activate_par(struct sgivwfb_par *par, struct fb_info *info);
 
 /*
  * Function:	dbe_TurnOffDma
@@ -242,7 +185,7 @@ static void dbe_TurnOffDma(void)
 /*
  *  Set the hardware according to 'par'.
  */
-static void activate_par(struct sgivwfb_par *par)
+static void activate_par(struct sgivwfb_par *par, struct fb_info *info)
 {
   int i,j, htmp, temp;
   u32 readVal, outputVal;
@@ -253,7 +196,7 @@ static void activate_par(struct sgivwfb_par *par)
   int bytesPerPixel;                      // Bytes per pixel
 
   currentTiming = &dbeVTimings[par->timing_num];
-  bytesPerPixel = bytes_per_pixel(par->var.bits_per_pixel);
+  bytesPerPixel = info->var.bits_per_pixel << 3;
   xpmax = currentTiming->width;
   ypmax = currentTiming->height;
 
@@ -494,48 +437,6 @@ static void activate_par(struct sgivwfb_par *par)
     }
 }
 
-static void sgivwfb_encode_fix(struct fb_fix_screeninfo *fix,
-			       struct fb_var_screeninfo *var)
-{
-  memset(fix, 0, sizeof(struct fb_fix_screeninfo));
-  strcpy(fix->id, sgivwfb_name);
-  fix->smem_start = sgivwfb_mem_phys;
-  fix->smem_len = sgivwfb_mem_size;
-  fix->type = FB_TYPE_PACKED_PIXELS;
-  fix->type_aux = 0;
-  switch (var->bits_per_pixel) {
-  case 8:
-    fix->visual = FB_VISUAL_PSEUDOCOLOR;
-    break;
-  default:
-    fix->visual = FB_VISUAL_TRUECOLOR;
-    break;
-  }
-  fix->ywrapstep = ywrap;
-  fix->xpanstep = 0;
-  fix->ypanstep = ypan;
-  fix->line_length = get_line_length(var->xres_virtual, var->bits_per_pixel);
-  fix->mmio_start = DBE_REG_PHYS;
-  fix->mmio_len = DBE_REG_SIZE;
-}
-
-/*
- *  Read a single color register and split it into
- *  colors/transparent. Return != 0 for invalid regno.
- */
-static int sgivwfb_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
-                             u_int *transp, struct fb_info *info)
-{
-  if (regno > 255)
-    return 1;
-
-  *red =   palette[regno].red << 8;
-  *green = palette[regno].green << 8;
-  *blue =  palette[regno].blue << 8;
-  *transp = 0;
-  return 0;
-}
-
 /*
  *  Set a single color register. The values supplied are already
  *  rounded down to the hardware's capabilities (according to the
@@ -550,9 +451,6 @@ static int sgivwfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
   red >>= 8;
   green >>= 8;
   blue >>= 8;
-  palette[regno].red = red;
-  palette[regno].green = green;
-  palette[regno].blue = blue;
 
   /* wait for the color map FIFO to have a free entry */
   while (cmap_fifo == 0)
@@ -561,17 +459,6 @@ static int sgivwfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
   regs->cmap[regno] = (red << 24) | (green << 16) | (blue << 8);
   cmap_fifo--;			/* assume FIFO is filling up */
   return 0;
-}
-
-static void do_install_cmap(int con, struct fb_info *info)
-{
-    if (con != currcon)
-	return;
-    if (fb_display[con].cmap.len)
-	fb_set_cmap(&fb_display[con].cmap, 1, sgivwfb_setcolreg, info);
-    else
-	fb_set_cmap(fb_default_cmap(1<<fb_display[con].var.bits_per_pixel), 1,
-		    sgivwfb_setcolreg, info);
 }
 
 /* ---------------------------------------------------- */
@@ -585,41 +472,12 @@ static int sgivwfb_open(struct fb_info *info, int user)
    *  Nothing, only a usage count for the moment
    */
   MOD_INC_USE_COUNT;
-  return(0);
+  return 0;
 }
 
 static int sgivwfb_release(struct fb_info *info, int user)
 {
   MOD_DEC_USE_COUNT;
-  return(0);
-}
-
-/*
- *  Get the Fixed Part of the Display
- */
-static int sgivwfb_get_fix(struct fb_fix_screeninfo *fix, int con,
-			   struct fb_info *info)
-{
-  struct fb_var_screeninfo *var;
-
-  if (con == -1)
-    var = &par_current.var;
-  else
-    var = &fb_display[con].var;
-  sgivwfb_encode_fix(fix, var);
-  return 0;
-}
-
-/*
- *  Get the User Defined Part of the Display. If a real par get it form there
- */
-static int sgivwfb_get_var(struct fb_var_screeninfo *var, int con,
-			   struct fb_info *info)
-{
-  if (con == -1)
-    *var = par_current.var;
-  else
-    *var = fb_display[con].var;
   return 0;
 }
 
@@ -630,8 +488,7 @@ static int sgivwfb_get_var(struct fb_var_screeninfo *var, int con,
 static int sgivwfb_set_var(struct fb_var_screeninfo *var, int con,
 			   struct fb_info *info)
 {
-  int err, activate = var->activate;
-  int oldxres, oldyres, oldvxres, oldvyres, oldbpp;
+  int err, oldbpp, activate = var->activate;
   u_long line_length;
   u_long min_mode;
   int req_dot;
@@ -653,8 +510,8 @@ static int sgivwfb_set_var(struct fb_var_screeninfo *var, int con,
 
   if (var->vmode & FB_VMODE_CONUPDATE) {
     var->vmode |= FB_VMODE_YWRAP;
-    var->xoffset = display->var.xoffset;
-    var->yoffset = display->var.yoffset;
+    var->xoffset = info->var.xoffset;
+    var->yoffset = info->var.yoffset;
   }
 
   /* XXX FIXME - forcing var's */
@@ -686,8 +543,8 @@ static int sgivwfb_set_var(struct fb_var_screeninfo *var, int con,
   /* XXX FIXME - should try to pick best refresh rate */
   /* for now, pick closest dot-clock within 3MHz*/
   req_dot = (int)((1.0e3/1.0e6) / (1.0e-12 * (float)var->pixclock));
-  printk(KERN_INFO "sgivwfb: requested pixclock=%d ps (%d KHz)\n", var->pixclock,
-	 req_dot);
+  printk(KERN_INFO "sgivwfb: requested pixclock=%d ps (%d KHz)\n", 
+	 var->pixclock, req_dot);
   test_mode=min_mode;
   while (dbeVTimings[min_mode].width == dbeVTimings[test_mode].width) {
     if (dbeVTimings[test_mode].cfreq+3000 > req_dot)
@@ -709,7 +566,7 @@ static int sgivwfb_set_var(struct fb_var_screeninfo *var, int con,
   /*
    *  Memory limit
    */
-  line_length = get_line_length(var->xres_virtual, var->bits_per_pixel);
+  line_length = var->xres_virtual * (var->bits_per_pixel>>3);
   if (line_length*var->yres_virtual > sgivwfb_mem_size)
     return -ENOMEM;             /* Virtual resolution to high */
 
@@ -761,54 +618,42 @@ static int sgivwfb_set_var(struct fb_var_screeninfo *var, int con,
   var->vsync_len = timing->vsync_end -  timing->vsync_start;
 
   if ((activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
-    oldxres = display->var.xres;
-    oldyres = display->var.yres;
-    oldvxres = display->var.xres_virtual;
-    oldvyres = display->var.yres_virtual;
-    oldbpp = display->var.bits_per_pixel;
-    display->var = *var;
-    par_current.var = *var;
+    oldbpp = info->var.bits_per_pixel;
     par_current.timing_num = min_mode;
-    if (oldxres != var->xres || oldyres != var->yres ||
-	oldvxres != var->xres_virtual || oldvyres != var->yres_virtual ||
+    if (info->var.xres != var->xres || info->var.yres != var->yres ||
+	info->var.xres_virtual != var->xres_virtual || 
+	info->var.yres_virtual != var->yres_virtual ||
 	oldbpp != var->bits_per_pixel || !par_current.valid) {
-      struct fb_fix_screeninfo fix;
       printk(KERN_INFO "sgivwfb: new video mode xres=%d yres=%d bpp=%d\n",
 	     var->xres, var->yres, var->bits_per_pixel);
       printk(KERN_INFO "         vxres=%d vyres=%d\n",
 	     var->xres_virtual, var->yres_virtual);
-      activate_par(&par_current);
-      sgivwfb_encode_fix(&fix, var);
-      display->screen_base = (char *)fbmem;
-      display->visual = fix.visual;
-      display->type = fix.type;
-      display->type_aux = fix.type_aux;
-      display->ypanstep = fix.ypanstep;
-      display->ywrapstep = fix.ywrapstep;
-      display->line_length = fix.line_length;
-      display->can_soft_blank = 1;
-      display->inverse = 0;
-      if (oldbpp != var->bits_per_pixel || !par_current.valid) {
-	if ((err = fb_alloc_cmap(&display->cmap, 0, 0)))
-	  return err;
-	do_install_cmap(con, info);
-      }
+      activate_par(&par_current, info);
+      display->var = info->var = *var;
+
+      info->fix.ywrapstep = ywrap;
+      info->fix.ypanstep = ypan;
+      info->fix.line_length = var->xres_virtual * var->bits_per_pixel>>3;
+
       switch (var->bits_per_pixel) {
 #ifdef FBCON_HAS_CFB8
       case 8:
 	display->dispsw = &fbcon_cfb8;
+	info->fix.visual = FB_VISUAL_PSEUDOCOLOR;
 	break;
 #endif
 #ifdef FBCON_HAS_CFB16
       case 16:
 	display->dispsw = &fbcon_cfb16;
-	display->dispsw_data = fbcon_cmap.cfb16;
+	display->dispsw_data = pseudo_palette;
+	info->fix.visual = FB_VISUAL_TRUECOLOR;
 	break;
 #endif
 #ifdef FBCON_HAS_CFB32
       case 32:
 	display->dispsw = &fbcon_cfb32;
-	display->dispsw_data = fbcon_cmap.cfb32;
+	display->dispsw_data = pseudo_palette;
+	info->fix.visual = FB_VISUAL_TRUECOLOR;
 	break;
 #endif
       default:
@@ -816,82 +661,26 @@ static int sgivwfb_set_var(struct fb_var_screeninfo *var, int con,
 	break;
       }
       par_current.valid = 1;
+
+      display->screen_base = (char *)fbmem;
+      display->visual = info->fix.visual;
+      display->type = info->fix.type;
+      display->type_aux = info->fix.type_aux;
+      display->ypanstep = info->fix.ypanstep;
+      display->ywrapstep = info->fix.ywrapstep;
+      display->line_length = info->fix.line_length;
+      display->can_soft_blank = 1;
+      display->inverse = 0;
+      if (oldbpp != var->bits_per_pixel || !par_current.valid) {
+	if ((err = fb_set_cmap(&info->cmap, 1, info)))
+            return err;
+      }
       if (fb_info.changevar)
 	(*fb_info.changevar)(con);
     }
   }
   return 0;
 }
-
-/*
- *  Pan or Wrap the Display
- *
- *  This call looks only at xoffset, yoffset and the FB_VMODE_YWRAP flag
- */
-
-static int sgivwfb_pan_display(struct fb_var_screeninfo *var, int con,
-			       struct fb_info *info)
-{
-#if 0
-  if (var->vmode & FB_VMODE_YWRAP) {
-    if (var->yoffset < 0 ||
-	var->yoffset >= fb_display[con].var.yres_virtual ||
-	var->xoffset)
-      return -EINVAL;
-  } else {
-    if (var->xoffset+fb_display[con].var.xres >
-	fb_display[con].var.xres_virtual ||
-	var->yoffset+fb_display[con].var.yres >
-	fb_display[con].var.yres_virtual)
-      return -EINVAL;
-  }
-  fb_display[con].var.xoffset = var->xoffset;
-  fb_display[con].var.yoffset = var->yoffset;
-  if (var->vmode & FB_VMODE_YWRAP)
-    fb_display[con].var.vmode |= FB_VMODE_YWRAP;
-  else
-    fb_display[con].var.vmode &= ~FB_VMODE_YWRAP;
-  return 0;
-#endif
-  return -EINVAL;
-}
-
-/*
- *  Get the Colormap
- */
-static int sgivwfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			    struct fb_info *info)
-{
-  if (con == currcon) /* current console? */
-    return fb_get_cmap(cmap, kspc, sgivwfb_getcolreg, info);
-  else if (fb_display[con].cmap.len) /* non default colormap? */
-    fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-  else
-    fb_copy_cmap(fb_default_cmap(1<<fb_display[con].var.bits_per_pixel),
-		 cmap, kspc ? 0 : 2);
-  return 0;
-}
-
-/*
- *  Set the Colormap
- */
-static int sgivwfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			    struct fb_info *info)
-{
-  int err;
-
-  if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
-    if ((err = fb_alloc_cmap(&fb_display[con].cmap,
-			     1<<fb_display[con].var.bits_per_pixel, 0)))
-      return err;
-  }
-  if (con == currcon)			/* current console? */
-    return fb_set_cmap(cmap, kspc, sgivwfb_setcolreg, info);
-  else
-    fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
-  return 0;
-}
-
 static int sgivwfb_mmap(struct fb_info *info, struct file *file,
                         struct vm_area_struct *vma)
 {
@@ -913,18 +702,6 @@ static int sgivwfb_mmap(struct fb_info *info, struct file *file,
 
 int __init sgivwfb_setup(char *options)
 {
-  char *this_opt;
-
-  fb_info.fontname[0] = '\0';
-
-  if (!options || !*options)
-    return 0;
-
-  for (this_opt = strtok(options, ","); this_opt;
-       this_opt = strtok(NULL, ",")) {
-    if (!strncmp(this_opt, "font:", 5))
-      strcpy(fb_info.fontname, this_opt+5);
-  }
   return 0;
 }
 
@@ -946,14 +723,20 @@ int __init sgivwfb_init(void)
   mtrr_add((unsigned long)sgivwfb_mem_phys, sgivwfb_mem_size, MTRR_TYPE_WRCOMB, 1);
 #endif
 
-  strcpy(fb_info.modename, sgivwfb_name);
+  sgivwfb_fix.smem_start = sgivwfb_mem_phys;
+  sgivwfb_fix.smem_len = sgivwfb_mem_size;	
+  sgivwfb_fix.ypanstep = ypan;	
+  sgivwfb_fix.ywrapstep = ywrap;
+
+  strcpy(fb_info.modename, sgivwfb_fix.id);
   fb_info.changevar = NULL;
   fb_info.node = -1;
   fb_info.fbops = &sgivwfb_ops;
   fb_info.disp = &disp;
-  fb_info.switch_con = &sgivwfbcon_switch;
-  fb_info.updatevar = &sgivwfbcon_updatevar;
-  fb_info.blank = &sgivwfbcon_blank;
+  fb_info.var = sgivwfb_var;
+  fb_info.fix = sgivwfb_fix;	
+  fb_info.switch_con = &fbgen_switch;
+  fb_info.updatevar = &fbgen_update_var;
   fb_info.flags = FBINFO_FLAG_DEFAULT;
 
   fbmem = ioremap_nocache((unsigned long)sgivwfb_mem_phys, sgivwfb_mem_size);
@@ -963,7 +746,9 @@ int __init sgivwfb_init(void)
   }
 
   /* turn on default video mode */
-  sgivwfb_set_var(&par_current.var, -1, &fb_info);
+  fb_alloc_cmap(&fb_info.cmap, 1<<fb_info.var.bits_per_pixel, 0);
+  fb_set_cmap(&fb_info.cmap, 1, &fb_info);
+  sgivwfb_set_var(&fb_info.var, -1, &fb_info);
 
   if (register_framebuffer(&fb_info) < 0) {
     printk(KERN_ERR "sgivwfb: couldn't register framebuffer\n");
@@ -981,35 +766,6 @@ int __init sgivwfb_init(void)
   iounmap(regs);
  fail_ioremap_regs:
   return -ENXIO;
-}
-
-static int sgivwfbcon_switch(int con, struct fb_info *info)
-{
-  /* Do we have to save the colormap? */
-  if (fb_display[currcon].cmap.len)
-    fb_get_cmap(&fb_display[currcon].cmap, 1, sgivwfb_getcolreg, info);
-
-  currcon = con;
-  /* Install new colormap */
-  do_install_cmap(con, info);
-  return 0;
-}
-
-/*
- *  Update the `var' structure (called by fbcon.c)
- */
-static int sgivwfbcon_updatevar(int con, struct fb_info *info)
-{
-    /* Nothing */
-    return 0;
-}
-
-/*
- *  Blank the display.
- */
-static void sgivwfbcon_blank(int blank, struct fb_info *info)
-{
-    /* Nothing */
 }
 
 #ifdef MODULE
