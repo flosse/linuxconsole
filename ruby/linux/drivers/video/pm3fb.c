@@ -40,11 +40,11 @@
 /* Driver name */
 static const char permedia3_name[16] = "Permedia3";
 
-/* the fb_info struct, mandatory */
+/* complement to the fb_info struct, no longer integrated with FBCON fb_info */
 struct pm3fb_info {
+	struct pm3fb_par *current_par; /* current HW parameter */
 	unsigned long board_num; /* internal board number */
 	unsigned long use_current;
-	struct pm3fb_par *current_par;
 	struct pci_dev *dev;    /* PCI device */
 	unsigned long board_type; /* index in the cardbase */
 	unsigned char *fb_base;	/* framebuffer memory base */
@@ -84,8 +84,8 @@ struct pm3fb_par {
 	/* NOTE : unlike other pm3 stuff above, stored *after* shiftbpp. don't ask */
 	u32 depth;		/* screen depth (8, 12, 15, 16 or 32) */
 	u32 video;		/* video control (hsync,vsync) */
-	struct pm3fb_info *l_fb_info;
-	struct fb_info *f_fb_info;
+	struct pm3fb_info *l_fb_info; /* HW-specific description */
+	struct fb_info *f_fb_info; /* FBCON fb_info, non-HW specific */
 };
 
 
