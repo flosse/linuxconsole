@@ -45,9 +45,9 @@ static struct input_handler power_handler;
 static int suspend_button_pushed = 0;
 static void suspend_button_task_handler(void *data)
 {
-        extern void pm_do_suspend(void);
+        //extern void pm_do_suspend(void);
         udelay(200); /* debounce */
-        pm_do_suspend();
+        //pm_do_suspend();
         suspend_button_pushed = 0;
 }
 

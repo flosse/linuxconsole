@@ -32,6 +32,7 @@ comment 'USB Controllers'
    if [ "$CONFIG_USB_STORAGE" != "n" ]; then
       bool '    USB Mass Storage verbose debug' CONFIG_USB_STORAGE_DEBUG
       bool '    Freecom USB/ATAPI Bridge support' CONFIG_USB_STORAGE_FREECOM
+      bool '    Microtech CompactFlash/SmartMedia reader' CONFIG_USB_STORAGE_DPCM
    fi
    dep_tristate '  USB Modem (CDC ACM) support' CONFIG_USB_ACM $CONFIG_USB
    dep_tristate '  USB Printer support' CONFIG_USB_PRINTER $CONFIG_USB
@@ -40,17 +41,20 @@ comment 'USB Controllers'
    dep_tristate '  USB Kodak DC-2xx Camera support' CONFIG_USB_DC2XX $CONFIG_USB
    dep_tristate '  USB Mustek MDC800 Digital Camera support (EXPERIMENTAL)' CONFIG_USB_MDC800 $CONFIG_USB $CONFIG_EXPERIMENTAL
    dep_tristate '  USB Scanner support' CONFIG_USB_SCANNER $CONFIG_USB
-   dep_tristate '  Microtek X6USB scanner support (EXPERIMENTAL)' CONFIG_USB_MICROTEK $CONFIG_USB $CONFIG_SCSI $CONFIG_EXPERIMENTAL
+   dep_tristate '  Microtek X6USB scanner support' CONFIG_USB_MICROTEK $CONFIG_USB $CONFIG_SCSI
 
    comment 'USB Multimedia devices'
    dep_tristate '  USB IBM (Xirlink) C-it Camera support' CONFIG_USB_IBMCAM $CONFIG_USB $CONFIG_VIDEO_DEV
    dep_tristate '  USB OV511 Camera support' CONFIG_USB_OV511 $CONFIG_USB $CONFIG_VIDEO_DEV
+   dep_tristate '  USB Philips Cameras' CONFIG_USB_PWC $CONFIG_USB $CONFIG_VIDEO_DEV
+   dep_tristate '  USB SE401 Camera support' CONFIG_USB_SE401 $CONFIG_USB $CONFIG_VIDEO_DEV
    dep_tristate '  D-Link USB FM radio support (EXPERIMENTAL)' CONFIG_USB_DSBR $CONFIG_USB $CONFIG_VIDEO_DEV $CONFIG_EXPERIMENTAL
    dep_tristate '  DABUSB driver' CONFIG_USB_DABUSB $CONFIG_USB
 
    comment 'USB Network adaptors'
    dep_tristate '  PLUSB Prolific USB-Network driver (EXPERIMENTAL)' CONFIG_USB_PLUSB $CONFIG_USB $CONFIG_NET $CONFIG_EXPERIMENTAL
    dep_tristate '  USB ADMtek Pegasus-based ethernet device support (EXPERIMENTAL)' CONFIG_USB_PEGASUS $CONFIG_USB $CONFIG_NET $CONFIG_EXPERIMENTAL
+   dep_tristate '  USB CATC NetMate-based Ethernet driver (EXPERIMENTAL)' CONFIG_USB_CATC $CONFIG_USB $CONFIG_NET $CONFIG_EXPERIMENTAL
    dep_tristate '  NetChip 1080-based USB Host-to-Host Link (EXPERIMENTAL)' CONFIG_USB_NET1080 $CONFIG_USB $CONFIG_NET $CONFIG_EXPERIMENTAL
 
    comment 'USB port drivers'

@@ -42,7 +42,9 @@ if [ "$CONFIG_INPUT" != "n" ]; then
       fi
       tristate '  Gunze AHL-51S touchscreen' CONFIG_INPUT_GUNZE
       tristate '  Newton keyboard' CONFIG_INPUT_NEWTON
-      tristate '  Compaq iPAQ H3600 (Bitsy) touchscreen input driver' CONFIG_TOUCHSCREEN_INPUT_BITSY	
+      if [ "$CONFIG_SA1100_BITSY" = "y" ]; then
+      	 tristate '  Compaq iPAQ H3600 (Bitsy) touchscreen input driver' CONFIG_TOUCHSCREEN_INPUT_BITSY	
+      fi	
    fi
    
    bool 'Standard Game port support' CONFIG_JOYSTICK
@@ -99,6 +101,12 @@ if [ "$CONFIG_INPUT" != "n" ]; then
 
    if [ "$CONFIG_PPC" = "y" ]; then
       bool '     Support for mouse button 2+3 emulation' CONFIG_MAC_EMUMOUSEBTN
+   fi
+
+   if [ "$CONFIG_SH_DREAMCAST" = "y" -a "$CONFIG_MAPLE" != "n" ]; then
+      comment 'Maple Bus input peripherals'
+      tristate '  Maple Bus keyboard support' CONFIG_MAPLE_KEYBOARD
+      tristate '  Maple Bus mouse support' CONFIG_MAPLE_MOUSE
    fi
 
    comment 'Bus devices'
