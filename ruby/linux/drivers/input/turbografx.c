@@ -82,7 +82,7 @@ static void tgfx_timer(unsigned long private)
 	int data1, data2, i;
 
 	for (i = 0; i < 7; i++)
-		if ((tgfx->sticks >> i) & 1) {
+		if (tgfx->sticks & (1 << i)) {
 
  			dev = tgfx->dev + i;
 
@@ -168,6 +168,7 @@ static struct tgfx __init *tgfx_probe(int *config)
 
 			tgfx->sticks |= (1 << i);
 
+			tgfx->dev[i].private = tgfx;
 			tgfx->dev[i].open = tgfx_open;
 			tgfx->dev[i].close = tgfx_close;
 
