@@ -37,6 +37,11 @@
 #include <linux/blk.h>
 #endif
 
+#ifdef CONFIG_MAGIC_SYSRQ
+#include <linux/sysrq.h>
+#include <linux/reboot.h>
+#endif
+
 #include <linux/notifier.h>
 extern struct notifier_block *panic_notifier_list;
 static int alpha_panic_event(struct notifier_block *, unsigned long, void *);
@@ -89,6 +94,8 @@ struct alpha_machine_vector alpha_mv;
 int alpha_using_srm;
 #endif
 
+unsigned char aux_device_present = 0xaa;
+
 #define N(a) (sizeof(a)/sizeof(a[0]))
 
 static struct alpha_machine_vector *get_sysvec(long, long, long);
@@ -105,12 +112,12 @@ char saved_command_line[COMMAND_LINE_SIZE];
  */
 
 struct screen_info screen_info = {
-	orig_x: 0,
-	orig_y: 25,
-	orig_video_cols: 80,
-	orig_video_lines: 25,
-	orig_video_isVGA: 1,
-	orig_video_points: 16
+	.orig_x = 0,
+	.orig_y = 25,
+	.orig_video_cols = 80,
+	.orig_video_lines = 25,
+	.orig_video_isVGA = 1,
+	.orig_video_points = 16
 };
 
 /*
@@ -445,12 +452,12 @@ static int __init srm_console_setup(struct console *co, char *options)
 }
 
 static struct console srmcons = {
-	name:		"srm0",
-	write:		srm_console_write,
-	device:		srm_console_device,
-	setup:		srm_console_setup,
-	flags:		CON_PRINTBUFFER | CON_ENABLED, /* fake it out */
-	index:		-1,
+	.name		= "srm0",
+	.write		= srm_console_write,
+	.device		= srm_console_device,
+	.setup		= srm_console_setup,
+	.flags		= CON_PRINTBUFFER | CON_ENABLED, /* fake it out */
+	.index		= -1,
 };
 
 #else
@@ -536,6 +543,15 @@ setup_arch(char **cmdline_p)
 	if (alpha_using_srm && srmcons_output) {
 		register_srm_console();
 	}
+
+#ifdef CONFIG_MAGIC_SYSRQ
+	/* If we're using SRM, make sysrq-b halt back to the prom,
+	   not auto-reboot.  */
+	if (alpha_using_srm) {
+		struct sysrq_key_op *op = __sysrq_get_key_op('b');
+		op->handler = (void *) machine_halt;
+	}
+#endif
 
 	/*
 	 * Indentify and reconfigure for the current system.
@@ -1094,7 +1110,7 @@ show_cpuinfo(struct seq_file *f, void *slot)
 #ifdef CONFIG_SMP
 	seq_printf(f, "cpus active\t\t: %d\n"
 		      "cpu active mask\t\t: %016lx\n",
-		       smp_num_cpus, cpu_present_mask);
+		       num_online_cpus(), cpu_present_mask);
 #endif
 
 	return 0;
@@ -1121,10 +1137,10 @@ c_stop(struct seq_file *f, void *v)
 }
 
 struct seq_operations cpuinfo_op = {
-	start:	c_start,
-	next:	c_next,
-	stop:	c_stop,
-	show:	show_cpuinfo,
+	.start	= c_start,
+	.next	= c_next,
+	.stop	= c_stop,
+	.show	= show_cpuinfo,
 };
 
 
