@@ -72,6 +72,7 @@ static struct fb_cmap default_16_colors = {
     0, 16, red16, green16, blue16, NULL
 };
 
+
     /*
      *  Allocate a colormap
      */
@@ -220,7 +221,7 @@ int fb_set_cmap(struct fb_cmap *cmap, int kspc, struct fb_info *info)
     transp = cmap->transp;
     start = cmap->start;
 
-    if (start < 0)
+    if (start < 0 || !info->fbops->fb_setcolreg)
 	return -EINVAL;
     for (i = 0; i < cmap->len; i++) {
 	if (kspc) {
@@ -242,8 +243,7 @@ int fb_set_cmap(struct fb_cmap *cmap, int kspc, struct fb_info *info)
 	blue++;
 	if (transp)
 	    transp++;
-	if (info->fbops->fb_setcolreg(start++, hred, hgreen, hblue, htransp, 
-					info))
+	if (info->fbops->fb_setcolreg(start++,hred,hgreen,hblue,htransp,info))
 	    return 0;
     }
     return 0;
