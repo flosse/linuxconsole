@@ -84,7 +84,7 @@ static void vgacon_bmove(struct vc_data *vc, int sy, int sx, int dy, int dx,
 static int vgacon_blank(struct vc_data *vc, int blank);
 static int vgacon_font_op(struct vc_data *vc, struct console_font_op *op);
 static int vgacon_set_palette(struct vc_data *vc, unsigned char *table);
-static int vgacon_resize(struct vc_data *vc, unsigned int rows, unsigned int cols);
+static int vgacon_resize(struct vc_data *vc, unsigned int width, unsigned int height);
 static int vgacon_scroll(struct vc_data *vc, int lines);
 static int vgacon_set_origin(struct vc_data *vc);
 static u8 vgacon_build_attr(struct vc_data *vc, u8 color, u8 intensity, u8 blink, u8 underline, u8 reverse);
@@ -837,20 +837,18 @@ static int vgacon_set_palette(struct vc_data *vc, unsigned char *table)
 #endif
 }
 
-static int vgacon_resize(struct vc_data *vc, unsigned int rows, 
-			 unsigned int cols)
+static int vgacon_resize(struct vc_data *vc, unsigned int width, 
+			 unsigned int height)
 {
     	struct vga_hw_state *par = (struct vga_hw_state *) vc->display_fg->data_hook;
 	int err = 0;
 	
-	err = vga_check_mode(cols * vc->vc_font.width, par->right, par->hslen,
- 			     par->left, cols * vc->vc_font.width, 
-			     rows * vc->vc_font.height, par->lower, 
-			     par->vslen, par->upper, 0);
+	err = vga_check_mode(width, par->right, par->hslen, par->left, width,
+			     height, par->lower, par->vslen, par->upper, 0); 
 	if (err) return err; 		
 	
-	par->xres = par->vxres = cols;
-	par->yres = rows * vc->vc_font.height;
+	par->xres = par->vxres = width/vc->vc_font.width;
+	par->yres = height;
 	
 	vga_set_mode(par, 0);	
 	vc->display_fg->data_hook = par;

@@ -88,14 +88,14 @@ ifeq ($(CONFIG_FB_SIS),y)
 obj-y				  += sis/sisfb.o
 endif
 
-subdir-$(CONFIG_FB_TDFX)          += tdfx 
-ifeq ($(CONFIG_FB_TDFX),y)
-obj-y                             += tdfx/tdfxfb.o
-endif
-
 subdir-$(CONFIG_FB_ATY)           += aty
 ifeq ($(CONFIG_FB_ATY),y)
 obj-y                             += aty/atyfb.o
+endif
+
+subdir-$(CONFIG_FB_TDFX)          += tdfx 
+ifeq ($(CONFIG_FB_TDFX),y)
+obj-y                             += tdfx/tdfxfb.o
 endif
 
 obj-$(CONFIG_FB_SUN3)             += sun3fb.o

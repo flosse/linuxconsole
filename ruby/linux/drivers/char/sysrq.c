@@ -27,7 +27,6 @@
 #endif
 #include <asm/ptrace.h>
 
-extern void wakeup_bdflush(int);
 extern struct list_head super_blocks;
 
 /* Whether we react on sysrq keys or just ignore them */
@@ -98,12 +97,12 @@ void handle_sysrq(int key, struct pt_regs *pt_regs,
 	case 's':					    /* S -- emergency sync */
 		printk("Emergency Sync\n");
 		emergency_sync_scheduled = EMERG_SYNC;
-		wakeup_bdflush(0);
+		wakeup_bdflush();
 		break;
 	case 'u':					    /* U -- emergency remount R/O */
 		printk("Emergency Remount R/O\n");
 		emergency_sync_scheduled = EMERG_REMOUNT;
-		wakeup_bdflush(0);
+		wakeup_bdflush();
 		break;
 	case 'p':					    /* P -- show PC */
 		printk("Show Regs\n");

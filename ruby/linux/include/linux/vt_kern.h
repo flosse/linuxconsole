@@ -233,7 +233,7 @@ struct vt_struct {
 extern struct vt_struct *vt_cons;
 extern struct vt_struct *admin_vt;
 
-extern inline void set_console(struct vc_data *vc)
+static inline void set_console(struct vc_data *vc)
 {
         vc->display_fg->want_vc = vc;
         schedule_task(&vc->display_fg->vt_tq);

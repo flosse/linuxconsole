@@ -3,12 +3,15 @@
  *  ATI Mach64 CT/VT/GT/LT Cursor Support
  */
 
-#include <linux/slab.h>
+#include <linux/malloc.h>
+#include <linux/console.h>
 #include <linux/fb.h>
 #include <linux/init.h>
 
 #include <asm/io.h>
 #include <asm/uaccess.h>
+
+#include <video/fbcon.h>
 
 #ifdef __sparc__
 #include <asm/pbm.h>

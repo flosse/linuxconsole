@@ -6,6 +6,12 @@
 #include <linux/delay.h>
 #include <linux/fb.h>
 
+#include <video/fbcon.h>
+#include <video/fbcon-cfb8.h>
+#include <video/fbcon-cfb16.h>
+#include <video/fbcon-cfb24.h>
+#include <video/fbcon-cfb32.h>
+
 #include "mach64.h"
 #include "atyfb.h"
 
@@ -161,6 +167,7 @@ void aty_init_engine(const struct atyfb_par *par, struct fb_info_aty *info)
     wait_for_idle(info);
 }
 
+
     /*
      *  Accelerated functions
      */
@@ -236,3 +243,110 @@ void aty_rectfill(int dstx, int dsty, u_int width, u_int height, u_int color,
 			  DST_X_LEFT_TO_RIGHT, info);
     draw_rect(dstx, dsty, width, height, info);
 }
+
+
+    /*
+     *  Text console acceleration
+     */
+
+static void fbcon_aty_bmove(struct display *p, int sy, int sx, int dy, int dx,
+			    int height, int width)
+{
+#ifdef __sparc__
+    struct fb_info_aty *fb = (struct fb_info_aty *)(p->fb_info);
+
+    if (fb->mmaped && (!fb->fb_info.display_fg
+	|| fb->fb_info.display_fg->vc_num == fb->vtconsole))
+	return;
+#endif
+
+    sx *= fontwidth(p);
+    sy *= fontheight(p);
+    dx *= fontwidth(p);
+    dy *= fontheight(p);
+    width *= fontwidth(p);
+    height *= fontheight(p);
+
+    aty_rectcopy(sx, sy, dx, dy, width, height,
+		 (struct fb_info_aty *)p->fb_info);
+}
+
+static void fbcon_aty_clear(struct vc_data *conp, struct display *p, int sy,
+			    int sx, int height, int width)
+{
+    u32 bgx;
+#ifdef __sparc__
+    struct fb_info_aty *fb = (struct fb_info_aty *)(p->fb_info);
+
+    if (fb->mmaped && (!fb->fb_info.display_fg
+	|| fb->fb_info.display_fg->vc_num == fb->vtconsole))
+	return;
+#endif
+
+    bgx = attr_bgcol_ec(p, conp);
+    bgx |= (bgx << 8);
+    bgx |= (bgx << 16);
+
+    sx *= fontwidth(p);
+    sy *= fontheight(p);
+    width *= fontwidth(p);
+    height *= fontheight(p);
+
+    aty_rectfill(sx, sy, width, height, bgx,
+		 (struct fb_info_aty *)p->fb_info);
+}
+
+#ifdef __sparc__
+#define check_access \
+    if (fb->mmaped && (!fb->fb_info.display_fg \
+	|| fb->fb_info.display_fg->vc_num == fb->vtconsole)) \
+	return;
+#else
+#define check_access do { } while (0)
+#endif
+
+#define DEF_FBCON_ATY_OP(name, call, args...) \
+static void name(struct vc_data *conp, struct display *p, args) \
+{ \
+    struct fb_info_aty *fb = (struct fb_info_aty *)(p->fb_info); \
+    check_access; \
+    if (fb->blitter_may_be_busy) \
+	wait_for_idle((struct fb_info_aty *)p->fb_info); \
+    call; \
+}
+
+#define DEF_FBCON_ATY(width) \
+    DEF_FBCON_ATY_OP(fbcon_aty##width##_putc, \
+		     fbcon_cfb##width##_putc(conp, p, c, yy, xx), \
+		     int c, int yy, int xx) \
+    DEF_FBCON_ATY_OP(fbcon_aty##width##_putcs, \
+		     fbcon_cfb##width##_putcs(conp, p, s, count, yy, xx), \
+		     const unsigned short *s, int count, int yy, int xx) \
+    DEF_FBCON_ATY_OP(fbcon_aty##width##_clear_margins, \
+		     fbcon_cfb##width##_clear_margins(conp, p, bottom_only), \
+		     int bottom_only) \
+ \
+const struct display_switch fbcon_aty##width## = { \
+    setup:		fbcon_cfb##width##_setup, \
+    bmove:		fbcon_aty_bmove, \
+    clear:		fbcon_aty_clear, \
+    putc:		fbcon_aty##width##_putc, \
+    putcs:		fbcon_aty##width##_putcs, \
+    revc:		fbcon_cfb##width##_revc, \
+    clear_margins:	fbcon_aty##width##_clear_margins, \
+    fontwidthmask:	FONTWIDTH(4)|FONTWIDTH(8)|FONTWIDTH(12)|FONTWIDTH(16) \
+};
+
+#ifdef FBCON_HAS_CFB8
+DEF_FBCON_ATY(8)
+#endif
+#ifdef FBCON_HAS_CFB16
+DEF_FBCON_ATY(16)
+#endif
+#ifdef FBCON_HAS_CFB24
+DEF_FBCON_ATY(24)
+#endif
+#ifdef FBCON_HAS_CFB32
+DEF_FBCON_ATY(32)
+#endif
+

@@ -243,7 +243,9 @@ void aty_set_pll_ct(const struct fb_info_aty *info, const union aty_pll *pll)
     aty_st_pll(PLL_EXT_CNTL, pll->ct.pll_ext_cntl, info);
 
     if (M64_HAS(GTB_DSP)) {
-	if (info->ram_type >= SDRAM)
+	if (M64_HAS(XL_DLL))
+	    aty_st_pll(DLL_CNTL, 0x80, info);
+	else if (info->ram_type >= SDRAM)
 	    aty_st_pll(DLL_CNTL, 0xa6, info);
 	else
 	    aty_st_pll(DLL_CNTL, 0xa0, info);

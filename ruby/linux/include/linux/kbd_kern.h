@@ -73,57 +73,57 @@ extern void setledstate(struct kbd_struct *kbd, unsigned int led);
 
 extern void (*kbd_ledfunc)(unsigned int led);
 
-extern inline void set_leds(void)
+static inline void set_leds(void)
 {
 	tasklet_schedule(&keyboard_tasklet);
 }
 
-extern inline int vc_kbd_mode(struct kbd_struct * kbd, int flag)
+static inline int vc_kbd_mode(struct kbd_struct * kbd, int flag)
 {
 	return ((kbd->modeflags >> flag) & 1);
 }
 
-extern inline int vc_kbd_led(struct kbd_struct * kbd, int flag)
+static inline int vc_kbd_led(struct kbd_struct * kbd, int flag)
 {
 	return ((kbd->ledflagstate >> flag) & 1);
 }
 
-extern inline void set_vc_kbd_mode(struct kbd_struct * kbd, int flag)
+static inline void set_vc_kbd_mode(struct kbd_struct * kbd, int flag)
 {
 	kbd->modeflags |= 1 << flag;
 }
 
-extern inline void set_vc_kbd_led(struct kbd_struct * kbd, int flag)
+static inline void set_vc_kbd_led(struct kbd_struct * kbd, int flag)
 {
 	kbd->ledflagstate |= 1 << flag;
 }
 
-extern inline void clr_vc_kbd_mode(struct kbd_struct * kbd, int flag)
+static inline void clr_vc_kbd_mode(struct kbd_struct * kbd, int flag)
 {
 	kbd->modeflags &= ~(1 << flag);
 }
 
-extern inline void clr_vc_kbd_led(struct kbd_struct * kbd, int flag)
+static inline void clr_vc_kbd_led(struct kbd_struct * kbd, int flag)
 {
 	kbd->ledflagstate &= ~(1 << flag);
 }
 
-extern inline void chg_vc_kbd_lock(struct kbd_struct * kbd, int flag)
+static inline void chg_vc_kbd_lock(struct kbd_struct * kbd, int flag)
 {
 	kbd->lockstate ^= 1 << flag;
 }
 
-extern inline void chg_vc_kbd_slock(struct kbd_struct * kbd, int flag)
+static inline void chg_vc_kbd_slock(struct kbd_struct * kbd, int flag)
 {
 	kbd->slockstate ^= 1 << flag;
 }
 
-extern inline void chg_vc_kbd_mode(struct kbd_struct * kbd, int flag)
+static inline void chg_vc_kbd_mode(struct kbd_struct * kbd, int flag)
 {
 	kbd->modeflags ^= 1 << flag;
 }
 
-extern inline void chg_vc_kbd_led(struct kbd_struct * kbd, int flag)
+static inline void chg_vc_kbd_led(struct kbd_struct * kbd, int flag)
 {
 	kbd->ledflagstate ^= 1 << flag;
 }
