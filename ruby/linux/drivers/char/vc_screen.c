@@ -86,7 +86,7 @@ static int vcs_size(struct inode *inode)
 	if (currcons == 0) {
 		vc = vt_cons->fg_console;
 	} else {
-		vc = vt_cons->vcs.vc_cons[currcons--];
+		vc = find_vc(currcons--);
 	}
 	if (!vc)
 		return -ENXIO;
@@ -151,7 +151,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
                 vc = vt_cons->fg_console;
 		viewed = 1;
         } else {
-                vc = vt_cons->vcs.vc_cons[currcons--];
+                vc = find_vc(currcons--);
 		viewed = 0;
         }
 
@@ -321,7 +321,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
                 vc = vt_cons->fg_console;
 		viewed = 1;
         } else {
-                vc = vt_cons->vcs.vc_cons[currcons--];
+                vc = find_vc(currcons--);
 		viewed = 0;
 	} 
 	
@@ -483,7 +483,7 @@ vcs_open(struct inode *inode, struct file *filp)
 {
 	unsigned int currcons = (MINOR(inode->i_rdev) & 127);
 
-	if(currcons && !vc_cons_allocated(currcons-1))
+	if(currcons && !find_vc(currcons-1))
 		return -ENXIO;
 	return 0;
 }
