@@ -101,11 +101,8 @@ static int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned
 			else {
 				clear_bit(FF_CORE_SHOULD_PLAY, iforce->core_effects[code].flags);
 			}
-			data[0] = LO(code);
-			data[1] = (value > 0) ? ((value > 1) ? 0x41 : 0x01) : 0;
-			data[2] = LO(value);
-			iforce_send_packet(iforce, FF_CMD_PLAY, data);
 
+			iforce_control_playback(iforce, code, value);
 			return 0;
 	}
 

@@ -336,7 +336,16 @@ static int make_core(struct iforce* iforce, u16 id, u16 mod_id1, u16 mod_id2,
 	data[12] = LO(delay);
 	data[13] = HI(delay);
 
+	/* Stop effect */
+/*	iforce_control_playback(iforce, id, 0);*/
+
 	iforce_send_packet(iforce, FF_CMD_EFFECT, data);
+
+	/* If needed, restart effect */
+	if (test_bit(FF_CORE_SHOULD_PLAY, iforce->core_effects[id].flags)) {
+		/* BUG: perhaps we should replay n times, instead of 1. But we do not know n */
+		iforce_control_playback(iforce, id, 1);
+	}
 
 	return 0;
 }

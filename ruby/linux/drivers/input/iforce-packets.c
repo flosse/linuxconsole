@@ -119,6 +119,19 @@ int iforce_send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 	return 0;
 }
 
+/* Start or stop an effect */
+int iforce_control_playback(struct iforce* iforce, u16 id, unsigned int value)
+{
+	unsigned char data[3];
+
+printk(KERN_DEBUG "iforce-packets.c: control_playback %d %d\n", id, value);
+
+	data[0] = LO(id);
+	data[1] = (value > 0) ? ((value > 1) ? 0x41 : 0x01) : 0;
+	data[2] = LO(value);
+	return iforce_send_packet(iforce, FF_CMD_PLAY, data);
+}
+
 /* Mark an effect that was being updated as ready. That means it can be updated
  * again */
 static int mark_core_as_ready(struct iforce *iforce, unsigned short addr)
@@ -195,22 +208,12 @@ void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char *data)
 			if (data[1] & 0x80) {
 				if (!test_and_set_bit(FF_CORE_IS_PLAYED, iforce->core_effects[i].flags)) {
 				/* Report play event */
-				input_report_ff_status(dev, i, FF_STATUS_PLAYING);	
-printk(KERN_DEBUG "iforce.c: effect %d started to play\n", i);
+				input_report_ff_status(dev, i, FF_STATUS_PLAYING);
 				}
 			}
-			else {
-				if (!test_bit(FF_CORE_SHOULD_PLAY, iforce->core_effects[i].flags)) {
-					if (test_and_clear_bit(FF_CORE_IS_PLAYED, iforce->core_effects[i].flags)) {
-					/* Report stop event */
-					input_report_ff_status(dev, i, FF_STATUS_STOPPED);	
-printk(KERN_DEBUG "iforce.c: effect %d stopped to play\n", i);
-					}
-				}
-				else {
-printk(KERN_WARNING "iforce.c: effect %d stopped, while it should not\nStarting again\n", i);
-					input_report_ff(dev, i, 1);
-				}
+			else if (test_and_clear_bit(FF_CORE_IS_PLAYED, iforce->core_effects[i].flags)) {
+				/* Report stop event */
+				input_report_ff_status(dev, i, FF_STATUS_STOPPED);
 			}
 			if (LO(cmd) > 3) {
 				int j;
