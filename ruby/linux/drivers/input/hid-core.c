@@ -2,7 +2,7 @@
  * $Id$
  *
  *  Copyright (c) 1999 Andreas Gal
- *  Copyright (c) 2000 Vojtech Pavlik
+ *  Copyright (c) 2000-2001 Vojtech Pavlik
  *
  *  USB HID support for Linux
  *
@@ -12,18 +12,18 @@
 /*
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or 
+ * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- * 
+ *
  * Should you need to contact me, the author, you can do so either by
  * e-mail - mail your message to <vojtech@suse.cz>, or by paper mail:
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
@@ -51,6 +51,14 @@
 #include <linux/hiddev.h>
 #endif
 
+/*
+ * Version Information
+ */
+
+#define DRIVER_VERSION "v1.8"
+#define DRIVER_AUTHOR "Andreas Gal, Vojtech Pavlik <vojtech@suse.cz>"
+#define DRIVER_DESC "USB HID support drivers"
+
 static char *hid_types[] = {"Device", "Pointer", "Mouse", "Device", "Joystick",
 				"Gamepad", "Keyboard", "Keypad", "Multi-Axis Controller"};
 
@@ -62,7 +70,7 @@ static struct hid_report *hid_register_report(struct hid_device *device, unsigne
 {
 	struct hid_report_enum *report_enum = device->report_enum + type;
 	struct hid_report *report;
-	 
+
 	if (report_enum->report_id_hash[id])
 		return report_enum->report_id_hash[id];
 
@@ -125,11 +133,11 @@ static int open_collection(struct hid_parser *parser, unsigned type)
 		&& parser->device->maxapplication < HID_MAX_APPLICATIONS)
 			parser->device->application[parser->device->maxapplication++] = usage;
 
-	if (parser->collection_stack_ptr == HID_COLLECTION_STACK_SIZE) { 
+	if (parser->collection_stack_ptr == HID_COLLECTION_STACK_SIZE) {
 		dbg("collection stack overflow");
 		return -1;
 	}
-		
+
 	collection = parser->collection_stack + parser->collection_stack_ptr++;
 	collection->type = type;
 	collection->usage = usage;
@@ -192,7 +200,7 @@ static int hid_add_field(struct hid_parser *parser, unsigned report_type, unsign
 	int i;
 
 	if (!(report = hid_register_report(parser->device, report_type, parser->global.report_id))) {
-    		dbg("hid_register_report failed");
+		dbg("hid_register_report failed");
 		return -1;
 	}
 
@@ -292,7 +300,7 @@ static int hid_parser_global(struct hid_parser *parser, struct hid_item *item)
 			memcpy(&parser->global, parser->global_stack + --parser->global_stack_ptr,
 				sizeof(struct hid_global));
 			return 0;
-			
+
 		case HID_GLOBAL_ITEM_TAG_USAGE_PAGE:
 			parser->global.usage_page = item_udata(item);
 			return 0;
@@ -431,7 +439,7 @@ static int hid_parser_local(struct hid_parser *parser, struct hid_item *item)
 					return -1;
 				}
 			return 0;
-		
+
 		default:
 
 			dbg("unknown local item tag 0x%x", item->tag);
@@ -450,7 +458,7 @@ static int hid_parser_main(struct hid_parser *parser, struct hid_item *item)
 	int ret;
 
 	data = item_udata(item);
-	
+
 	switch (item->tag) {
 		case HID_MAIN_ITEM_TAG_BEGIN_COLLECTION:
 			ret = open_collection(parser, data & 3);
@@ -561,20 +569,20 @@ static __u8 *fetch_item(__u8 *start, __u8 *end, struct hid_item *item)
 				case 0:
 					return start;
 
-				case 1: 
+				case 1:
 					if ((end - start) >= 1) {
 						item->data.u8 = *start++;
 						return start;
 					}
 					break;
 
-				case 2: 
+				case 2:
 					if ((end - start) >= 2) {
 						item->data.u16 = le16_to_cpu( get_unaligned(((__u16*)start)++));
 						return start;
 					}
 
-				case 3: 
+				case 3:
 					item->size++;
 					if ((end - start) >= 4) {
 						item->data.u32 = le32_to_cpu( get_unaligned(((__u32*)start)++));
@@ -595,7 +603,7 @@ static struct hid_device *hid_parse_report(__u8 *start, unsigned size)
 {
 	struct hid_device *device;
 	struct hid_parser *parser;
-	struct hid_item    item;
+	struct hid_item item;
 	__u8 *end;
 	unsigned i;
 	static int (*dispatch_type[])(struct hid_parser *parser,
@@ -626,7 +634,7 @@ static struct hid_device *hid_parse_report(__u8 *start, unsigned size)
 	}
 	memset(parser, 0, sizeof(struct hid_parser));
 	parser->device = device;
-	
+
 	end = start + size;
 	while ((start = fetch_item(start, end, &item)) != 0) {
 		if (item.format != HID_ITEM_FORMAT_SHORT) {
@@ -684,7 +692,7 @@ static __inline__ __s32 snto32(__u32 value, unsigned n)
 }
 
 /*
- * Convert a signed 32-bit integer to a signed n-bit integer. 
+ * Convert a signed 32-bit integer to a signed n-bit integer.
  */
 
 static __inline__ __u32 s32ton(__s32 value, unsigned n)
@@ -749,10 +757,10 @@ static void hid_input_field(struct hid_device *hid, struct hid_field *field, __u
 	__s32 min = field->logical_minimum;
 	__s32 max = field->logical_maximum;
 	__s32 value[count]; /* WARNING: gcc specific */
-   
+
 	for (n = 0; n < count; n++) {
 
-			value[n] = min < 0 ? snto32(extract(data, offset + n * size, size), size) : 
+			value[n] = min < 0 ? snto32(extract(data, offset + n * size, size), size) :
 						    extract(data, offset + n * size, size);
 
 			if (!(field->flags & HID_MAIN_ITEM_VARIABLE) /* Ignore report if ErrorRollOver */
@@ -778,7 +786,7 @@ static void hid_input_field(struct hid_device *hid, struct hid_field *field, __u
 			&& search(value, field->value[n], count))
 				hid_process_event(hid, field, &field->usage[field->value[n] - min], 0);
 
-		if (value[n] >= min && value[n] <= max		
+		if (value[n] >= min && value[n] <= max
 			&& field->usage[value[n] - min].hid
 			&& search(field->value, value[n], count))
 				hid_process_event(hid, field, &field->usage[value[n] - min], 1);
@@ -806,7 +814,7 @@ static int hid_input_report(u8 *data, int len, struct hid_device *hid)
 	if (report_enum->numbered) {	/* Device uses numbered reports, data[0] is report number */
 		n = *data++;
 		len--;
-	} 
+	}
 
 	if (!(report = report_enum->report_id_hash[n])) {
 		dbg("undefined report_id %d received", n);
@@ -816,7 +824,7 @@ static int hid_input_report(u8 *data, int len, struct hid_device *hid)
 				printk(" %02x", data[n]);
 			printk("\n");
 #endif
-	
+
 		return -1;
 	}
 
@@ -836,7 +844,7 @@ static int hid_input_report(u8 *data, int len, struct hid_device *hid)
 		 * reports anyway - then they don't need to be large.
 		 */
 
-		if (!report->data) 
+		if (!report->data)
 			if (!(report->data = kmalloc(size, GFP_ATOMIC))) {
 				dbg("couldn't allocate report buffer");
 				return -1;
@@ -906,13 +914,13 @@ static void hid_output_field(struct hid_field *field, __u8 *data)
 	unsigned offset = field->report_offset;
 	unsigned size = field->report_size;
 	unsigned n;
-   
+
 	for (n = 0; n < count; n++) {
 		if (field->logical_minimum < 0)	/* signed values */
 			implement(data, offset + n * size, size, s32ton(field->value[n], size));
 		 else				/* unsigned values */
 			implement(data, offset + n * size, size, field->value[n]);
-       	}
+	}
 }
 
 /*
@@ -937,7 +945,7 @@ int hid_set_field(struct hid_field *field, unsigned offset, __s32 value)
 	unsigned size = field->report_size;
 
 	hid_dump_input(field->usage + offset, value);
-	
+
 	if (offset >= field->report_count) {
 		dbg("offset exceeds report_count");
 		return -1;
@@ -995,14 +1003,14 @@ static void hid_ctrl(struct urb *urb)
 {
 	struct hid_device *hid = urb->context;
 
-        if (urb->status)
+	if (urb->status)
 		warn("ctrl urb status %d received", urb->status);
-	
+
 	hid->outtail = (hid->outtail + 1) & (HID_CONTROL_FIFO_SIZE - 1);
 
 	if (hid->outhead != hid->outtail)
 		hid_submit_out(hid);
-}       
+}
 
 void hid_write_report(struct hid_device *hid, struct hid_report *report)
 {
@@ -1048,7 +1056,7 @@ static void hid_init_reports(struct hid_device *hid)
 	struct hid_report *report;
 	struct hid_report_enum *report_enum;
 	struct list_head *list;
-	
+
 	for (i = 0; i < HID_REPORT_TYPES; i++) {
 		if (i == HID_FEATURE_REPORT || i == HID_INPUT_REPORT) {
 			report_enum = hid->report_enum + i;
@@ -1062,7 +1070,7 @@ static void hid_init_reports(struct hid_device *hid)
 		}
 	}
 }
- 
+
 #define USB_VENDOR_ID_WACOM		0x056a
 #define USB_DEVICE_ID_WACOM_GRAPHIRE	0x0010
 #define USB_DEVICE_ID_WACOM_INTUOS	0x0020
@@ -1137,14 +1145,14 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 		if ((endpoint->bmAttributes & 3) != 3)		/* Not an interrupt endpoint */
 			continue;
 
-		if (!(endpoint->bEndpointAddress & 0x80)) 	/* Not an input endpoint */
+		if (!(endpoint->bEndpointAddress & 0x80))	/* Not an input endpoint */
 			continue;
 
 		pipe = usb_rcvintpipe(dev, endpoint->bEndpointAddress);
 		maxp = usb_maxpacket(dev, pipe, usb_pipeout(pipe));
 
 		FILL_INT_URB(&hid->urb, dev, pipe, hid->buffer, maxp > 32 ? 32 : maxp, hid_irq, hid, endpoint->bInterval);
-	
+
 		break;
 	}
 
@@ -1189,7 +1197,7 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 
 #if 0
 	if (interface->bInterfaceSubClass == 1)
-        	usb_set_protocol(dev, hid->ifnum, 1);
+		usb_set_protocol(dev, hid->ifnum, 1);
 #endif
 
 	return hid;
@@ -1227,14 +1235,14 @@ static void* hid_probe(struct usb_device *dev, unsigned int ifnum,
 
 	c = "Device";
 	for (i = 0; i < hid->maxapplication; i++)
-		if (((hid->application[i] >= 0x00010000) && (hid->application[i] <= 0x00010008))) {
+		if (IS_INPUT_APPLICATION(hid->application[i])) {
 			c = hid_types[hid->application[i] & 0xffff];
 			break;
 		}
 
 	printk(": USB HID v%x.%02x %s [%s] on usb%d:%d.%d\n",
-                hid->version >> 8, hid->version & 0xff, c, hid->name,
-                dev->bus->busnum, dev->devnum, ifnum);
+		hid->version >> 8, hid->version & 0xff, c, hid->name,
+		dev->bus->busnum, dev->devnum, ifnum);
 
 	return hid;
 }
@@ -1245,19 +1253,19 @@ static void hid_disconnect(struct usb_device *dev, void *ptr)
 
 	dbg("cleanup called");
 	usb_unlink_urb(&hid->urb);
-	
+
 	if (hid->claimed & HID_CLAIMED_INPUT)
 		hidinput_disconnect(hid);
 #ifdef CONFIG_USB_HIDDEV
 	if (hid->claimed & HID_CLAIMED_HIDDEV)
-		hiddev_disconnect(hid);	
+		hiddev_disconnect(hid);
 #endif
 	hid_free_device(hid);
 }
 
 static struct usb_device_id hid_usb_ids [] = {
-    { bInterfaceClass: USB_INTERFACE_CLASS_HID},
-    { }						/* Terminating entry */
+	{ bInterfaceClass: USB_INTERFACE_CLASS_HID},
+	{ }						/* Terminating entry */
 };
 
 MODULE_DEVICE_TABLE (usb, hid_usb_ids);
@@ -1275,6 +1283,9 @@ static int __init hid_init(void)
 #ifdef CONFIG_USB_HIDDEV
 	hiddev_init();
 #endif
+	info(DRIVER_VERSION " " DRIVER_AUTHOR);
+	info(DRIVER_DESC);
+
 	return 0;
 }
 
@@ -1289,5 +1300,5 @@ static void __exit hid_exit(void)
 module_init(hid_init);
 module_exit(hid_exit);
 
-MODULE_AUTHOR("Andreas Gal, Vojtech Pavlik <vojtech@suse.cz>");
-MODULE_DESCRIPTION("USB HID support drivers");
+MODULE_AUTHOR( DRIVER_AUTHOR );
+MODULE_DESCRIPTION( DRIVER_DESC );

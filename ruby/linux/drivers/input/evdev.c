@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- *  Copyright (c) 1999-2000 Vojtech Pavlik
+ *  Copyright (c) 1999-2001 Vojtech Pavlik
  *
  *  Event char devices, giving access to raw input device events.
  *
@@ -11,18 +11,18 @@
 /*
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or 
+ * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- * 
+ *
  * Should you need to contact me, the author, you can do so either by
  * e-mail - mail your message to <vojtech@suse.cz>, or by paper mail:
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
@@ -72,7 +72,7 @@ static void evdev_event(struct input_handle *handle, unsigned int type, unsigned
 		list->buffer[list->head].code = code;
 		list->buffer[list->head].value = value;
 		list->head = (list->head + 1) & (EVDEV_BUFFER_SIZE - 1);
-		
+
 		kill_fasync(&list->fasync, SIGIO, POLL_IN);
 
 		list = list->next;
@@ -104,7 +104,7 @@ static int evdev_release(struct inode * inode, struct file * file)
 
 	if (!--list->evdev->open) {
 		if (list->evdev->exist) {
-			input_close_device(&list->evdev->handle);	
+			input_close_device(&list->evdev->handle);
 		} else {
 			input_unregister_minor(list->evdev->devfs);
 			evdev_table[list->evdev->minor] = NULL;
@@ -138,7 +138,7 @@ static int evdev_open(struct inode * inode, struct file * file)
 
 	if (!list->evdev->open++)
 		if (list->evdev->exist)
-			input_open_device(&list->evdev->handle);	
+			input_open_device(&list->evdev->handle);
 
 	return 0;
 }
@@ -203,7 +203,7 @@ static ssize_t evdev_read(struct file * file, char * buffer, size_t count, loff_
 		retval += sizeof(struct input_event);
 	}
 
-	return retval;	
+	return retval;
 }
 
 /* No kernel lock - fine */
@@ -250,7 +250,7 @@ static int evdev_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 				return err;
 			}
 			else return -ENOSYS;
-			
+
 		case EVIOCRMFF:
 			if (dev->erase_effect) {
 				return dev->erase_effect(dev, (int)arg);
@@ -353,7 +353,7 @@ static struct input_handle *evdev_connect(struct input_handler *handler, struct 
 
 	evdev->devfs = input_register_minor("event%d", minor, EVDEV_MINOR_BASE);
 
-	printk(KERN_INFO "event%d: Event device for input%d\n", minor, dev->number);
+//	printk(KERN_INFO "event%d: Event device for input%d\n", minor, dev->number);
 
 	return &evdev->handle;
 }
@@ -373,7 +373,7 @@ static void evdev_disconnect(struct input_handle *handle)
 		kfree(evdev);
 	}
 }
-	
+
 static struct input_handler evdev_handler = {
 	event:		evdev_event,
 	connect:	evdev_connect,

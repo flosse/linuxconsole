@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- *  Copyright (c) 2000 Vojtech Pavlik
+ *  Copyright (c) 2000-2001 Vojtech Pavlik
  *
  *  USB HID to Linux Input mapping module
  *
@@ -11,18 +11,18 @@
 /*
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or 
+ * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- * 
+ *
  * Should you need to contact me, the author, you can do so either by
  * e-mail - mail your message to <vojtech@suse.cz>, or by paper mail:
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
@@ -83,13 +83,13 @@ static void hidinput_configure_usage(struct hid_device *device, struct hid_field
 			} else
 				usage->code = KEY_UNKNOWN;
 
-			break; 
+			break;
 
 		case HID_UP_BUTTON:
 
 			usage->code = ((usage->hid - 1) & 0xf) + 0x100;
 			usage->type = EV_KEY; bit = input->keybit; max = KEY_MAX;
-			
+
 			switch (field->application) {
 				case HID_GD_GAMEPAD:  usage->code += 0x10;
 				case HID_GD_JOYSTICK: usage->code += 0x10;
@@ -125,7 +125,7 @@ static void hidinput_configure_usage(struct hid_device *device, struct hid_field
 			if (field->flags & HID_MAIN_ITEM_RELATIVE) {
 				usage->type = EV_REL; bit = input->relbit; max = REL_MAX;
 				break;
-			} 
+			}
 
 			usage->type = EV_ABS; bit = input->absbit; max = ABS_MAX;
 
@@ -138,7 +138,7 @@ static void hidinput_configure_usage(struct hid_device *device, struct hid_field
 		case HID_UP_LED:
 
 			usage->code = (usage->hid - 1) & 0xf;
-			usage->type = EV_LED; bit = input->ledbit; max = LED_MAX; 
+			usage->type = EV_LED; bit = input->ledbit; max = LED_MAX;
 			break;
 
 		case HID_UP_DIGITIZER:
@@ -152,7 +152,7 @@ static void hidinput_configure_usage(struct hid_device *device, struct hid_field
 						set_bit(EV_KEY, input->evbit);
 						set_bit(BTN_TOUCH, input->keybit);
 					}
-					usage->type = EV_ABS; bit = input->absbit; max = ABS_MAX; 
+					usage->type = EV_ABS; bit = input->absbit; max = ABS_MAX;
 					usage->code = ABS_PRESSURE;
 					clear_bit(usage->code, bit);
 					break;
@@ -160,7 +160,7 @@ static void hidinput_configure_usage(struct hid_device *device, struct hid_field
 				case 0x32: /* InRange */
 
 					usage->type = EV_KEY; bit = input->keybit; max = KEY_MAX;
-					switch (field->physical & 0xff) {	
+					switch (field->physical & 0xff) {
 						case 0x21: usage->code = BTN_TOOL_MOUSE; break;
 						case 0x22: usage->code = BTN_TOOL_FINGER; break;
 						default: usage->code = BTN_TOOL_PEN; break;
@@ -196,9 +196,9 @@ static void hidinput_configure_usage(struct hid_device *device, struct hid_field
 			break;
 
 		case HID_UP_CONSUMER:	/* USB HUT v1.1, pages 56-62 */
-			
+
 			switch (usage->hid & HID_USAGE) {
-				case 0x000: usage->code = 0; break; 
+				case 0x000: usage->code = 0; break;
 				case 0x034: usage->code = KEY_SLEEP;		break;
 				case 0x036: usage->code = BTN_MISC;		break;
 				case 0x08a: usage->code = KEY_WWW;		break;
@@ -236,7 +236,7 @@ static void hidinput_configure_usage(struct hid_device *device, struct hid_field
 				default:    usage->code = KEY_UNKNOWN;		break;
 
 			}
-		
+
 			usage->type = EV_KEY; bit = input->keybit; max = KEY_MAX;
 			break;
 
@@ -247,7 +247,7 @@ static void hidinput_configure_usage(struct hid_device *device, struct hid_field
 
 				if (field->report->type == HID_OUTPUT_REPORT) {
 					usage->code = LED_MISC;
-					usage->type = EV_LED; bit = input->ledbit; max = LED_MAX; 
+					usage->type = EV_LED; bit = input->ledbit; max = LED_MAX;
 					break;
 				}
 
@@ -279,7 +279,7 @@ static void hidinput_configure_usage(struct hid_device *device, struct hid_field
 		int a = field->logical_minimum;
 		int b = field->logical_maximum;
 
-		input->absmin[usage->code] = a; 
+		input->absmin[usage->code] = a;
 		input->absmax[usage->code] = b;
 		input->absfuzz[usage->code] = (b - a) >> 8;
 		input->absflat[usage->code] = (b - a) >> 4;
@@ -370,17 +370,25 @@ static void hidinput_close(struct input_dev *dev)
 }
 
 /*
+ * Register the input device; print a message.
  * Configure the input layer interface
  * Read all reports and initalize the absoulte field values.
  */
 
-static void hidinput_init_input(struct hid_device *hid)
+int hidinput_connect(struct hid_device *hid)
 {
 	struct usb_device *dev = hid->dev;
 	struct hid_report_enum *report_enum;
 	struct hid_report *report;
 	struct list_head *list;
 	int i, j, k;
+
+	for (i = 0; i < hid->maxapplication; i++)
+		if (IS_INPUT_APPLICATION(hid->application[i]))
+			break;
+
+	if (i == hid->maxapplication)
+		return -1;
 
 	hid->input.private = hid;
 	hid->input.event = hidinput_input_event;
@@ -404,15 +412,7 @@ static void hidinput_init_input(struct hid_device *hid)
 			list = list->next;
 		}
 	}
-}
 
-/*
- * Register the input device; print a message.
- */
-
-int hidinput_connect(struct hid_device *hid)
-{
-	hidinput_init_input(hid);
 	input_register_device(&hid->input);
 
 	return 0;

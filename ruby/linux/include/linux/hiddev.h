@@ -182,14 +182,12 @@ void hiddev_disconnect(void *);
 void hiddev_hid_event(void *private, unsigned int usage, int value);
 int __init hiddev_init(void);
 void __exit hiddev_exit(void);
-#define IS_INPUT_APPLICATION(a) ((a >= 0x00010000) && (a <= 0x00010008))
 #else
 static inline void *hiddev_connect(struct hid_device *hid) { return NULL; }
 static inline void hiddev_disconnect(void *private) { }
 static inline void hiddev_event(void *private, unsigned int usage, int value) { }
 static inline int hiddev_init(void) { return 0; }
 static inline void hiddev_exit(void) { }
-#define IS_INPUT_APPLICATION(a) 1
 #endif
 
 #endif

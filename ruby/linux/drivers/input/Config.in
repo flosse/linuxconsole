@@ -44,8 +44,8 @@ if [ "$CONFIG_INPUT" != "n" ]; then
       tristate '  Newton keyboard' CONFIG_INPUT_NEWTON
    fi
    
-   bool 'Standard Game port support' CONFIG_INPUT_GAMEPORT
-   if [ "$CONFIG_INPUT_GAMEPORT" != "n" ]; then	
+   bool 'Standard Game port support' CONFIG_JOYSTICK
+   if [ "$CONFIG_JOYSTICK" != "n" ]; then	
       bool 'Expansion Gameport Cards' CONFIG_INPUT_GAMECARDS
       if [ "$CONFIG_INPUT_GAMECARDS" != "n" ]; then 
          tristate '  Classic gameports (ISA and PnP)' CONFIG_INPUT_NS558

@@ -35,8 +35,15 @@
 #include <linux/init.h>
 #include <linux/usb.h>
 
-MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
-MODULE_DESCRIPTION("USB HID Boot Protocol mouse driver");
+/*
+ * Version Information
+ */
+#define DRIVER_VERSION "v1.6"
+#define DRIVER_AUTHOR "Vojtech Pavlik <vojtech@suse.cz>"
+#define DRIVER_DESC "USB HID Boot Protocol mouse driver"
+
+MODULE_AUTHOR( DRIVER_AUTHOR );
+MODULE_DESCRIPTION( DRIVER_DESC );
 
 struct usb_mouse {
 	signed char data[8];
@@ -171,7 +178,7 @@ static void usb_mouse_disconnect(struct usb_device *dev, void *ptr)
 }
 
 static struct usb_device_id usb_mouse_id_table [] = {
-    { bInterfaceClass: 3, bInterfaceSubClass: 1, bInterfaceProtocol: 2},
+	{ USB_INTERFACE_INFO(3, 1, 2) },
     { }						/* Terminating entry */
 };
 
@@ -187,6 +194,8 @@ static struct usb_driver usb_mouse_driver = {
 static int __init usb_mouse_init(void)
 {
 	usb_register(&usb_mouse_driver);
+	info(DRIVER_VERSION " " DRIVER_AUTHOR);
+	info(DRIVER_DESC);
 	return 0;
 }
 

@@ -1,13 +1,13 @@
 /*
  * $Id$
  *
- *  Copyright (c) 2000 Vojtech Pavlik		<vojtech@suse.cz>
+ *  Copyright (c) 2000-2001 Vojtech Pavlik	<vojtech@suse.cz>
  *  Copyright (c) 2000 Andreas Bach Aaen	<abach@stofanet.dk>
  *  Copyright (c) 2000 Clifford Wolf		<clifford@clifford.at>
  *  Copyright (c) 2000 Sam Mosel		<sam.mosel@computer.org>
  *  Copyright (c) 2000 James E. Blair		<corvus@gnu.org>
  *  Copyright (c) 2000 Daniel Egger		<egger@suse.de>
- *  Copyright (c) 2001 Frederic Lepied          <flepied@mandrakesoft.com>
+ *  Copyright (c) 2001 Frederic Lepied		<flepied@mandrakesoft.com>
  *
  *  USB Wacom Graphire and Wacom Intuos tablet support
  *
@@ -38,6 +38,7 @@
  *		   - Fix Wacom Graphire mouse wheel again
  *	v1.21 (vp) - Removed protocol descriptions
  *		   - Added MISC_SERIAL for tool serial numbers
+ *	      (gb) - Identify version on module load.
  */
 
 /*
@@ -67,8 +68,15 @@
 #include <linux/init.h>
 #include <linux/usb.h>
 
-MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
-MODULE_DESCRIPTION("USB Wacom Graphire and Wacom Intuos tablet driver");
+/*
+ * Version Information
+ */
+#define DRIVER_VERSION "v1.21"
+#define DRIVER_AUTHOR "Vojtech Pavlik <vojtech@suse.cz>"
+#define DRIVER_DESC "USB Wacom Graphire and Wacom Intuos tablet driver"
+
+MODULE_AUTHOR( DRIVER_AUTHOR );
+MODULE_DESCRIPTION( DRIVER_DESC );
 
 #define USB_VENDOR_ID_WACOM	0x056a
 
@@ -307,20 +315,13 @@ struct wacom_features wacom_features[] = {
 };
 
 struct usb_device_id wacom_ids[] = {
-	{ idVendor: USB_VENDOR_ID_WACOM, idProduct: 0x10, driver_info: 0,
-	  match_flags: USB_DEVICE_ID_MATCH_VENDOR|USB_DEVICE_ID_MATCH_PRODUCT },
-	{ idVendor: USB_VENDOR_ID_WACOM, idProduct: 0x20, driver_info: 1,
-	  match_flags: USB_DEVICE_ID_MATCH_VENDOR|USB_DEVICE_ID_MATCH_PRODUCT },
-	{ idVendor: USB_VENDOR_ID_WACOM, idProduct: 0x21, driver_info: 2,
-	  match_flags: USB_DEVICE_ID_MATCH_VENDOR|USB_DEVICE_ID_MATCH_PRODUCT },
-	{ idVendor: USB_VENDOR_ID_WACOM, idProduct: 0x22, driver_info: 3,
-	  match_flags: USB_DEVICE_ID_MATCH_VENDOR|USB_DEVICE_ID_MATCH_PRODUCT },
-	{ idVendor: USB_VENDOR_ID_WACOM, idProduct: 0x23, driver_info: 4,
-	  match_flags: USB_DEVICE_ID_MATCH_VENDOR|USB_DEVICE_ID_MATCH_PRODUCT },
-	{ idVendor: USB_VENDOR_ID_WACOM, idProduct: 0x24, driver_info: 5,
-	  match_flags: USB_DEVICE_ID_MATCH_VENDOR|USB_DEVICE_ID_MATCH_PRODUCT },
-	{ idVendor: USB_VENDOR_ID_WACOM, idProduct: 0x31, driver_info: 6,
-	  match_flags: USB_DEVICE_ID_MATCH_VENDOR|USB_DEVICE_ID_MATCH_PRODUCT },
+	{ USB_DEVICE(USB_VENDOR_ID_WACOM, 0x10), driver_info: 0 },
+	{ USB_DEVICE(USB_VENDOR_ID_WACOM, 0x20), driver_info: 1 },
+	{ USB_DEVICE(USB_VENDOR_ID_WACOM, 0x21), driver_info: 2 },
+	{ USB_DEVICE(USB_VENDOR_ID_WACOM, 0x22), driver_info: 3 },
+	{ USB_DEVICE(USB_VENDOR_ID_WACOM, 0x23), driver_info: 4 },
+	{ USB_DEVICE(USB_VENDOR_ID_WACOM, 0x24), driver_info: 5 },
+	{ USB_DEVICE(USB_VENDOR_ID_WACOM, 0x31), driver_info: 6 },
 	{ }
 };
 
@@ -424,6 +425,8 @@ static struct usb_driver wacom_driver = {
 static int __init wacom_init(void)
 {
 	usb_register(&wacom_driver);
+	info(DRIVER_VERSION " " DRIVER_AUTHOR);
+	info(DRIVER_DESC);
 	return 0;
 }
 

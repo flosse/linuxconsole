@@ -12,18 +12,18 @@
 /*
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or 
+ * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- * 
+ *
  * Should you need to contact me, the author, you can do so either by
  * e-mail - mail your message to <vojtech@suse.cz>, or by paper mail:
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
@@ -58,7 +58,7 @@ struct input_event {
  * IOCTLs (0x00 - 0x7f)
  */
 
-#define EVIOCGVERSION		_IOR('E', 0x01, int)                    /* get driver version */
+#define EVIOCGVERSION		_IOR('E', 0x01, int)			/* get driver version */
 #define EVIOCGID		_IOR('E', 0x02, short[4])		/* get device ID */
 #define EVIOCGREP		_IOR('E', 0x03, int[2])			/* get repeat settings */
 #define EVIOCSREP		_IOW('E', 0x03, int[2])			/* get repeat settings */
@@ -69,7 +69,7 @@ struct input_event {
 #define EVIOCGBUS		_IOR('E', 0x07, short[4])		/* get bus address */
 
 #define EVIOCGBIT(ev,len)	_IOC(_IOC_READ, 'E', 0x20 + ev, len)	/* get event bits */
-#define EVIOCGABS(abs)		_IOR('E', 0x40 + abs, int[5])		/* get abs value/limits */ 
+#define EVIOCGABS(abs)		_IOR('E', 0x40 + abs, int[5])		/* get abs value/limits */
 
 #define EVIOCSFF		_IOC(_IOC_WRITE, 'E', 0x80, sizeof(struct ff_effect))	/* send a force effect to a force feedback device */
 #define EVIOCRMFF		_IOW('E', 0x81, int)			/* Erase a force effect */
@@ -85,7 +85,7 @@ struct input_event {
 #define EV_KEY			0x01
 #define EV_REL			0x02
 #define EV_ABS			0x03
-#define EV_MSC			0x04	
+#define EV_MSC			0x04
 #define EV_LED			0x11
 #define EV_SND			0x12
 #define EV_REP			0x14
@@ -96,176 +96,176 @@ struct input_event {
  * Keys and buttons
  */
 
-#define KEY_RESERVED		0		
-#define KEY_ESC			1		
-#define KEY_1			2		
-#define KEY_2			3		
-#define KEY_3			4		
-#define KEY_4			5		
-#define KEY_5			6		
-#define KEY_6			7		
-#define KEY_7			8		
-#define KEY_8			9		
-#define KEY_9			10		
-#define KEY_0			11		
-#define KEY_MINUS		12		
-#define KEY_EQUAL		13		
-#define KEY_BACKSPACE		14		
-#define KEY_TAB			15		
-#define KEY_Q			16		
-#define KEY_W			17		
-#define KEY_E			18		
-#define KEY_R			19		
-#define KEY_T			20		
-#define KEY_Y			21		
-#define KEY_U			22		
-#define KEY_I			23		
-#define KEY_O			24		
-#define KEY_P			25		
-#define KEY_LEFTBRACE		26		
-#define KEY_RIGHTBRACE		27		
-#define KEY_ENTER		28		
-#define KEY_LEFTCTRL		29		
-#define KEY_A			30		
-#define KEY_S			31		
-#define KEY_D			32		
-#define KEY_F			33		
-#define KEY_G			34		
-#define KEY_H			35		
-#define KEY_J			36		
-#define KEY_K			37		
-#define KEY_L			38		
-#define KEY_SEMICOLON		39		
-#define KEY_APOSTROPHE		40		
-#define KEY_GRAVE		41		
-#define KEY_LEFTSHIFT		42		
-#define KEY_BACKSLASH		43		
-#define KEY_Z			44		
-#define KEY_X			45		
-#define KEY_C			46		
-#define KEY_V			47		
-#define KEY_B			48		
-#define KEY_N			49		
-#define KEY_M			50		
-#define KEY_COMMA		51		
-#define KEY_DOT			52		
-#define KEY_SLASH		53		
-#define KEY_RIGHTSHIFT		54		
-#define KEY_KPASTERISK		55		
-#define KEY_LEFTALT		56		
-#define KEY_SPACE		57		
-#define KEY_CAPSLOCK		58		
-#define KEY_F1			59		
-#define KEY_F2			60		
-#define KEY_F3			61		
-#define KEY_F4			62		
-#define KEY_F5			63		
-#define KEY_F6			64		
-#define KEY_F7			65		
-#define KEY_F8			66		
-#define KEY_F9			67		
-#define KEY_F10			68		
-#define KEY_NUMLOCK		69		
-#define KEY_SCROLLLOCK		70		
-#define KEY_KP7			71		
-#define KEY_KP8			72		
-#define KEY_KP9			73		
-#define KEY_KPMINUS		74		
-#define KEY_KP4			75		
-#define KEY_KP5			76		
-#define KEY_KP6			77		
-#define KEY_KPPLUS		78		
-#define KEY_KP1			79		
-#define KEY_KP2			80		
-#define KEY_KP3			81		
-#define KEY_KP0			82		
-#define KEY_KPDOT		83		
+#define KEY_RESERVED		0
+#define KEY_ESC			1
+#define KEY_1			2
+#define KEY_2			3
+#define KEY_3			4
+#define KEY_4			5
+#define KEY_5			6
+#define KEY_6			7
+#define KEY_7			8
+#define KEY_8			9
+#define KEY_9			10
+#define KEY_0			11
+#define KEY_MINUS		12
+#define KEY_EQUAL		13
+#define KEY_BACKSPACE		14
+#define KEY_TAB			15
+#define KEY_Q			16
+#define KEY_W			17
+#define KEY_E			18
+#define KEY_R			19
+#define KEY_T			20
+#define KEY_Y			21
+#define KEY_U			22
+#define KEY_I			23
+#define KEY_O			24
+#define KEY_P			25
+#define KEY_LEFTBRACE		26
+#define KEY_RIGHTBRACE		27
+#define KEY_ENTER		28
+#define KEY_LEFTCTRL		29
+#define KEY_A			30
+#define KEY_S			31
+#define KEY_D			32
+#define KEY_F			33
+#define KEY_G			34
+#define KEY_H			35
+#define KEY_J			36
+#define KEY_K			37
+#define KEY_L			38
+#define KEY_SEMICOLON		39
+#define KEY_APOSTROPHE		40
+#define KEY_GRAVE		41
+#define KEY_LEFTSHIFT		42
+#define KEY_BACKSLASH		43
+#define KEY_Z			44
+#define KEY_X			45
+#define KEY_C			46
+#define KEY_V			47
+#define KEY_B			48
+#define KEY_N			49
+#define KEY_M			50
+#define KEY_COMMA		51
+#define KEY_DOT			52
+#define KEY_SLASH		53
+#define KEY_RIGHTSHIFT		54
+#define KEY_KPASTERISK		55
+#define KEY_LEFTALT		56
+#define KEY_SPACE		57
+#define KEY_CAPSLOCK		58
+#define KEY_F1			59
+#define KEY_F2			60
+#define KEY_F3			61
+#define KEY_F4			62
+#define KEY_F5			63
+#define KEY_F6			64
+#define KEY_F7			65
+#define KEY_F8			66
+#define KEY_F9			67
+#define KEY_F10			68
+#define KEY_NUMLOCK		69
+#define KEY_SCROLLLOCK		70
+#define KEY_KP7			71
+#define KEY_KP8			72
+#define KEY_KP9			73
+#define KEY_KPMINUS		74
+#define KEY_KP4			75
+#define KEY_KP5			76
+#define KEY_KP6			77
+#define KEY_KPPLUS		78
+#define KEY_KP1			79
+#define KEY_KP2			80
+#define KEY_KP3			81
+#define KEY_KP0			82
+#define KEY_KPDOT		83
 #define KEY_103RD		84
-#define KEY_F13			85		
-#define KEY_102ND		86		
-#define KEY_F11			87		
-#define KEY_F12			88		
-#define KEY_F14			89		
-#define KEY_F15			90		
-#define KEY_F16			91		
-#define KEY_F17			92		
-#define KEY_F18			93		
-#define KEY_F19			94		
-#define KEY_F20			95		
-#define KEY_KPENTER		96		
-#define KEY_RIGHTCTRL		97		
-#define KEY_KPSLASH		98		
-#define KEY_SYSRQ		99		
-#define KEY_RIGHTALT		100		
-#define KEY_LINEFEED		101		
-#define KEY_HOME		102		
-#define KEY_UP			103		
-#define KEY_PAGEUP		104		
-#define KEY_LEFT		105		
-#define KEY_RIGHT		106		
-#define KEY_END			107		
-#define KEY_DOWN		108		
-#define KEY_PAGEDOWN		109		
-#define KEY_INSERT		110		
-#define KEY_DELETE		111		
-#define KEY_MACRO		112		
-#define KEY_MUTE		113		
-#define KEY_VOLUMEDOWN		114		
-#define KEY_VOLUMEUP		115		
-#define KEY_POWER		116		
-#define KEY_KPEQUAL		117		
-#define KEY_KPPLUSMINUS		118		
-#define KEY_PAUSE		119		
-#define KEY_F21			120		
-#define KEY_F22			121		
-#define KEY_F23			122		
-#define KEY_F24			123		
+#define KEY_F13			85
+#define KEY_102ND		86
+#define KEY_F11			87
+#define KEY_F12			88
+#define KEY_F14			89
+#define KEY_F15			90
+#define KEY_F16			91
+#define KEY_F17			92
+#define KEY_F18			93
+#define KEY_F19			94
+#define KEY_F20			95
+#define KEY_KPENTER		96
+#define KEY_RIGHTCTRL		97
+#define KEY_KPSLASH		98
+#define KEY_SYSRQ		99
+#define KEY_RIGHTALT		100
+#define KEY_LINEFEED		101
+#define KEY_HOME		102
+#define KEY_UP			103
+#define KEY_PAGEUP		104
+#define KEY_LEFT		105
+#define KEY_RIGHT		106
+#define KEY_END			107
+#define KEY_DOWN		108
+#define KEY_PAGEDOWN		109
+#define KEY_INSERT		110
+#define KEY_DELETE		111
+#define KEY_MACRO		112
+#define KEY_MUTE		113
+#define KEY_VOLUMEDOWN		114
+#define KEY_VOLUMEUP		115
+#define KEY_POWER		116
+#define KEY_KPEQUAL		117
+#define KEY_KPPLUSMINUS		118
+#define KEY_PAUSE		119
+#define KEY_F21			120
+#define KEY_F22			121
+#define KEY_F23			122
+#define KEY_F24			123
 #define KEY_KPCOMMA		124
-#define KEY_LEFTMETA		125		
-#define KEY_RIGHTMETA		126		
-#define KEY_COMPOSE		127		
+#define KEY_LEFTMETA		125
+#define KEY_RIGHTMETA		126
+#define KEY_COMPOSE		127
 
-#define KEY_STOP		128		
-#define KEY_AGAIN		129		
-#define KEY_PROPS		130		
-#define KEY_UNDO		131		
-#define KEY_FRONT		132		
-#define KEY_COPY		133		
-#define KEY_OPEN		134		
-#define KEY_PASTE		135		
-#define KEY_FIND		136		
-#define KEY_CUT			137		
-#define KEY_HELP		138		
-#define KEY_MENU		139		
-#define KEY_CALC		140		
-#define KEY_SETUP		141		
-#define KEY_SLEEP		142		
-#define KEY_WAKEUP		143		
-#define KEY_FILE		144		
-#define KEY_SENDFILE		145		
-#define KEY_DELETEFILE		146		
-#define KEY_XFER		147		
-#define KEY_PROG1		148		
-#define KEY_PROG2		149		
-#define KEY_WWW			150		
-#define KEY_MSDOS		151		
-#define KEY_COFFEE		152		
-#define KEY_DIRECTION		153		
-#define KEY_CYCLEWINDOWS	154		
+#define KEY_STOP		128
+#define KEY_AGAIN		129
+#define KEY_PROPS		130
+#define KEY_UNDO		131
+#define KEY_FRONT		132
+#define KEY_COPY		133
+#define KEY_OPEN		134
+#define KEY_PASTE		135
+#define KEY_FIND		136
+#define KEY_CUT			137
+#define KEY_HELP		138
+#define KEY_MENU		139
+#define KEY_CALC		140
+#define KEY_SETUP		141
+#define KEY_SLEEP		142
+#define KEY_WAKEUP		143
+#define KEY_FILE		144
+#define KEY_SENDFILE		145
+#define KEY_DELETEFILE		146
+#define KEY_XFER		147
+#define KEY_PROG1		148
+#define KEY_PROG2		149
+#define KEY_WWW			150
+#define KEY_MSDOS		151
+#define KEY_COFFEE		152
+#define KEY_DIRECTION		153
+#define KEY_CYCLEWINDOWS	154
 #define KEY_MAIL		155
 #define KEY_BOOKMARKS		156
 #define KEY_COMPUTER		157
 #define KEY_BACK		158
 #define KEY_FORWARD		159
-#define KEY_CLOSECD		160		
-#define KEY_EJECTCD		161		
-#define KEY_EJECTCLOSECD	162		
-#define KEY_NEXTSONG		163		
-#define KEY_PLAYPAUSE		164		
-#define KEY_PREVIOUSSONG	165		
-#define KEY_STOPCD		166		
-#define KEY_RECORD		167		
-#define KEY_REWIND		168		
+#define KEY_CLOSECD		160
+#define KEY_EJECTCD		161
+#define KEY_EJECTCLOSECD	162
+#define KEY_NEXTSONG		163
+#define KEY_PLAYPAUSE		164
+#define KEY_PREVIOUSSONG	165
+#define KEY_STOPCD		166
+#define KEY_RECORD		167
+#define KEY_REWIND		168
 #define KEY_PHONE		169
 #define KEY_ISO			170
 #define KEY_CONFIG		171
@@ -486,26 +486,26 @@ struct input_event {
  */
 
 struct ff_replay {
-	__u16 length;   /* Duration of an effect */
-	__u16 delay;    /* Time to wait before to start playing an effect */
+	__u16 length;		/* Duration of an effect */
+	__u16 delay;		/* Time to wait before to start playing an effect */
 };
 
 struct ff_trigger {
-	__u16 button;   /* Number of button triggering an effect */
-	__u16 interval; /* Time to wait before an effect can be re-triggered */
+	__u16 button;		/* Number of button triggering an effect */
+	__u16 interval;		/* Time to wait before an effect can be re-triggered */
 };
 
 struct ff_shape {
-	__u16 attack_length;    /* Duration of attack */
-	__s16 attack_level;     /* Level at beginning of attack */
-	__u16 fade_length;      /* Duration of fade */
-	__s16 fade_level;       /* Level at end of fade */
+	__u16 attack_length;	/* Duration of attack */
+	__s16 attack_level;	/* Level at beginning of attack */
+	__u16 fade_length;	/* Duration of fade */
+	__s16 fade_level;	/* Level at end of fade */
 };
 
 /* FF_CONSTANT */
 struct ff_constant_effect {
-        __s16 level;            /* Strength of effect */
-	__u16 direction;        /* Direction of effect (see periodic effects) */ 
+	__s16 level;		/* Strength of effect */
+	__u16 direction;	/* Direction of effect (see periodic effects) */
 	struct ff_shape shape;
 };
 
@@ -517,29 +517,29 @@ struct ff_interactive_effect {
  */
 	__u16 axis;
 	__u16 direction;
- 
+
 	__s16 right_saturation; /* Max level when joystick is on the right */
 	__s16 left_saturation;  /* Max level when joystick in on the left */
- 
-	__s16 right_coeff;      /* Indicates how fast the force grows when the
-                                   joystick moves to the right */
-	__s16 left_coeff;       /* Same for left side */
- 
-	__u16 deadband;         /* Size of area where no force is produced */
-	__s16 center;           /* Position of dead dead zone */
- 
+
+	__s16 right_coeff;	/* Indicates how fast the force grows when the
+				   joystick moves to the right */
+	__s16 left_coeff;	/* Same for left side */
+
+	__u16 deadband;		/* Size of area where no force is produced */
+	__s16 center;		/* Position of dead dead zone */
+
 };
 
 /* FF_PERIODIC */
 struct ff_periodic_effect {
-	__u16 waveform;         /* Kind of wave (sine, square...) */
+	__u16 waveform;		/* Kind of wave (sine, square...) */
 	__u16 period;
-	__s16 magnitude;        /* Peak value */
-	__s16 offset;           /* Mean value of wave (roughly) */
-	__u16 phase;            /* 'Horizontal' shift */
-	__u16 direction;        /* Direction. 0 deg -> 0x0000
-                                              90 deg -> 0x4000 */
- 
+	__s16 magnitude;	/* Peak value */
+	__s16 offset;		/* Mean value of wave (roughly) */
+	__u16 phase;		/* 'Horizontal' shift */
+	__u16 direction;	/* Direction. 0 deg -> 0x0000
+					     90 deg -> 0x4000 */
+
 	struct ff_shape shape;
 };
 
@@ -565,7 +565,7 @@ struct ff_effect {
 
 /*
  * Buttons that can trigger effects.  Use for example FF_BTN(BTN_TRIGGER) to
- * access the bitmap. 
+ * access the bitmap.
  */
 
 #define FF_BTN(x)	((x) - BTN_MISC + FF_BTN_OFFSET)
@@ -655,7 +655,7 @@ struct input_dev {
 	unsigned long key[NBITS(KEY_MAX)];
 	unsigned long led[NBITS(LED_MAX)];
 	unsigned long snd[NBITS(SND_MAX)];
-	
+
 	int absmax[ABS_MAX + 1];
 	int absmin[ABS_MAX + 1];
 	int absfuzz[ABS_MAX + 1];
@@ -691,7 +691,7 @@ struct input_handle {
 	void *private;
 
 	int open;
-	
+
 	struct input_dev *dev;
 	struct input_handler *handler;
 

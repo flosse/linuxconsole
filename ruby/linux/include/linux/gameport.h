@@ -12,18 +12,18 @@
 /*
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or 
+ * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- * 
+ *
  * Should you need to contact me, the author, you can do so either by
  * e-mail - mail your message to <vojtech@ucw.cz>, or by paper mail:
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
@@ -45,8 +45,8 @@ struct gameport {
 
 	void (*trigger)(struct gameport *);
 	unsigned char (*read)(struct gameport *);
-	int (*cooked_read)(struct gameport *, int *, int *);	
-	int (*calibrate)(struct gameport *, int *, int *); 
+	int (*cooked_read)(struct gameport *, int *, int *);
+	int (*calibrate)(struct gameport *, int *, int *);
 	int (*open)(struct gameport *, int);
 	void (*close)(struct gameport *);
 
@@ -68,7 +68,7 @@ int gameport_open(struct gameport *gameport, struct gameport_dev *dev, int mode)
 void gameport_close(struct gameport *gameport);
 void gameport_rescan(struct gameport *gameport);
 
-#ifdef CONFIG_INPUT_GAMEPORT
+#ifdef CONFIG_JOYSTICK
 void gameport_register_port(struct gameport *gameport);
 void gameport_unregister_port(struct gameport *gameport);
 #else

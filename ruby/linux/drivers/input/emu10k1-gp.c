@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- *  Copyright (c) 1999-2000 Vojtech Pavlik
+ *  Copyright (c) 2001 Vojtech Pavlik
  *
  *  Sponsored by SuSE
  */
@@ -38,6 +38,7 @@
 #include <linux/init.h>
 #include <linux/gameport.h>
 #include <linux/slab.h>
+#include <linux/pci.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
 
@@ -45,10 +46,9 @@ struct emu {
 	struct pci_dev *dev;
 	struct emu *next;
 	struct gameport gameport;
+	int size;
 };
 	
-static struct emu *emu;
-
 static struct pci_device_id emu_tbl[] __devinitdata = {
 	{ 0x1102, 0x7002, PCI_ANY_ID, PCI_ANY_ID }, /* SB Live! gameport */
 	{ 0, }
@@ -83,15 +83,14 @@ static int __devinit emu_probe(struct pci_dev *pdev, const struct pci_device_id 
 	memset(port, 0, sizeof(struct emu));
 
 	port->gameport.io = ioport;
+	port->size = iolen;
 	port->dev = pdev;
-
 	pdev->driver_data = port;
 
 	gameport_register_port(&port->gameport);
 
-	printk(KERN_INFO "gameport%d: Emu10k1 Gameport at %#x", port->gameport.number, port->gameport.io);
-	if (iolen > 1) printk(" size %d", iolen);
-	printk(" speed %d kHz\n", port->gameport.speed);
+	printk(KERN_INFO "gameport%d: Emu10k1 Gameport at %#x size %d speed %d kHz\n",
+		port->gameport.number, port->gameport.io, iolen, port->gameport.speed);
 
 	return 0;
 }
@@ -99,7 +98,8 @@ static int __devinit emu_probe(struct pci_dev *pdev, const struct pci_device_id 
 static void __devexit emu_remove(struct pci_dev *pdev)
 {
 	struct emu *port = (struct emu *)pdev->driver_data;
-	release_region(port->gameport.io, port->gameport.size);
+	gameport_unregister_port(&port->gameport);
+	release_region(port->gameport.io, port->size);
 	kfree(port);
 }
 

@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- *  Copyright (c) 1999-2000 Vojtech Pavlik
+ *  Copyright (c) 1999-2001 Vojtech Pavlik
  *
  *  USB HIDBP Keyboard support
  *
@@ -35,8 +35,15 @@
 #include <linux/init.h>
 #include <linux/usb.h>
 
-MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
-MODULE_DESCRIPTION("USB HID Boot Protocol keyboard driver");
+/*
+ * Version Information
+ */
+#define DRIVER_VERSION ""
+#define DRIVER_AUTHOR "Vojtech Pavlik <vojtech@suse.cz>"
+#define DRIVER_DESC "USB HID Boot Protocol keyboard driver"
+
+MODULE_AUTHOR( DRIVER_AUTHOR );
+MODULE_DESCRIPTION( DRIVER_DESC );
 
 static unsigned char usb_kbd_keycode[256] = {
 	  0,  0,  0,  0, 30, 48, 46, 32, 18, 33, 34, 35, 23, 36, 37, 38,
@@ -257,8 +264,8 @@ static void usb_kbd_disconnect(struct usb_device *dev, void *ptr)
 }
 
 static struct usb_device_id usb_kbd_id_table [] = {
-    { bInterfaceClass: 3, bInterfaceSubClass: 1, bInterfaceProtocol: 1},
-    { }						/* Terminating entry */
+	{ USB_INTERFACE_INFO(3, 1, 1) },
+	{ }						/* Terminating entry */
 };
 
 MODULE_DEVICE_TABLE (usb, usb_kbd_id_table);
@@ -273,6 +280,8 @@ static struct usb_driver usb_kbd_driver = {
 static int __init usb_kbd_init(void)
 {
 	usb_register(&usb_kbd_driver);
+	info(DRIVER_VERSION " " DRIVER_AUTHOR);
+	info(DRIVER_DESC);
 	return 0;
 }
 

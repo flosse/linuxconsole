@@ -440,7 +440,7 @@ static struct input_handle *mousedev_connect(struct input_handler *handler, stru
 	if (mousedev_mix.open)
 		input_open_device(&mousedev->handle);
 
-	printk(KERN_INFO "mouse%d: PS/2 mouse device for input%d\n", minor, dev->number);
+//	printk(KERN_INFO "mouse%d: PS/2 mouse device for input%d\n", minor, dev->number);
 
 	return &mousedev->handle;
 }

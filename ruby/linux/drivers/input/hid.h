@@ -5,7 +5,7 @@
  * $Id$
  *
  *  Copyright (c) 1999 Andreas Gal
- *  Copyright (c) 2000 Vojtech Pavlik
+ *  Copyright (c) 2000-2001 Vojtech Pavlik
  *
  *  Sponsored by SuSE
  */
@@ -368,6 +368,8 @@ void hidinput_disconnect(struct hid_device *);
 #endif
 
 #endif
+
+#define IS_INPUT_APPLICATION(a) ((a >= 0x00010000) && (a <= 0x00010008))
 
 int hid_open(struct hid_device *);
 void hid_close(struct hid_device *);
