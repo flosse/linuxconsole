@@ -37,7 +37,6 @@
 #include <linux/ioport.h>
 #include <linux/config.h>
 #include <linux/init.h>
-#include <linux/sched.h>
 #include <linux/gameport.h>
 #include <linux/slab.h>
 #include <linux/isapnp.h>
@@ -243,15 +242,15 @@ static struct pci_driver ns558_pci_driver;
  * PNPb02f - Generic gameport
  */
 
-static struct pnp_devid {
-	unsigned int vendor, device;
-} pnp_devids[] = {
-	{ ISAPNP_VENDOR('C','T','L'), ISAPNP_DEVICE(0x7001) },
-	{ ISAPNP_VENDOR('C','T','L'), ISAPNP_DEVICE(0x7002) },
-	{ ISAPNP_VENDOR('C','S','C'), ISAPNP_DEVICE(0x0b35) },
-	{ ISAPNP_VENDOR('P','N','P'), ISAPNP_DEVICE(0xb02f) },
+static struct isapnp_device_id pnp_devids[] = {
+	{ ISAPNP_ANY_ID, ISAPNP_ANY_ID, ISAPNP_VENDOR('C','T','L'), ISAPNP_DEVICE(0x7001), 0 },
+	{ ISAPNP_ANY_ID, ISAPNP_ANY_ID, ISAPNP_VENDOR('C','T','L'), ISAPNP_DEVICE(0x7002), 0 },
+	{ ISAPNP_ANY_ID, ISAPNP_ANY_ID, ISAPNP_VENDOR('C','S','C'), ISAPNP_DEVICE(0x0b35), 0 },
+	{ ISAPNP_ANY_ID, ISAPNP_ANY_ID, ISAPNP_VENDOR('P','N','P'), ISAPNP_DEVICE(0xb02f), 0 },
 	{ 0, },
 };
+
+MODULE_DEVICE_TABLE(isapnp, pnp_devids);
 
 static struct ns558* ns558_pnp_probe(struct pci_dev *dev, struct ns558 *next)
 {
@@ -309,11 +308,12 @@ int __init ns558_init(void)
 	int i = 0;
 #ifdef NSS558_ISAPNP
 	struct pci_dev *dev = NULL;
-	struct pnp_devid *devid;
+	struct isapnp_device_id *devid;
 #endif
 
 /*
- * Probe for PCI ports.
+ * Probe for PCI ports.  Always probe for PCI first,
+ * it is the least-invasive probe.
  */
 
 	ns558_pci = !pci_module_init(&ns558_pci_driver);
@@ -331,7 +331,7 @@ int __init ns558_init(void)
 
 #ifdef NSS558_ISAPNP
 	for (devid = pnp_devids; devid->vendor; devid++) {
-		while ((dev = isapnp_find_dev(NULL, devid->vendor, devid->device, dev))) {
+		while ((dev = isapnp_find_dev(NULL, devid->vendor, devid->function, dev))) {
 			ns558 = ns558_pnp_probe(dev, ns558);
 		}
 	}
