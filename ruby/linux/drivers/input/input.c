@@ -235,19 +235,34 @@ static void input_link_handle(struct input_handle *handle)
 	handle->handler->handle = handle;
 }
 
+/**
+ *     input_find_and_remove - Find and remove node
+ *
+ *     @type:          data type
+ *     @initval:       initial value
+ *     @targ:          node to find
+ *     @next:          next node in the list
+ *
+ *     Searches the linked list for the target node @targ. If the node
+ *     is found, it is removed from the list.
+ *
+ *     If the node is not found, the end of the list will be hit,
+ *     indicating that it wasn't in the list to begin with.
+ *
+ *     Returns nothing.
+ */
+#define input_find_and_remove(type, initval, targ, next) { \
+       type **ptr;                                        \
+       for (ptr = &initval; *ptr; ptr = &((*ptr)->next))  \
+               if (*ptr == targ) break;                   \
+       if (*ptr && (*ptr)->next) *ptr = (*ptr)->next;   }
+
 static void input_unlink_handle(struct input_handle *handle)
 {
-	struct input_handle **handleptr;
-
-	handleptr = &handle->dev->handle;
-	while (*handleptr && (*handleptr != handle))
-		handleptr = &((*handleptr)->dnext);
-	*handleptr = (*handleptr)->dnext;
-
-	handleptr = &handle->handler->handle;
-	while (*handleptr && (*handleptr != handle))
-		handleptr = &((*handleptr)->hnext);
-	*handleptr = (*handleptr)->hnext;
+	input_find_and_remove(struct input_handle, handle->dev->handle, handle,
+                              	dnext);
+        input_find_and_remove(struct input_handle, handle->handler->handle,
+				handle, hnext);
 }
 
 void input_register_device(struct input_dev *dev)
@@ -295,11 +310,12 @@ void input_register_device(struct input_dev *dev)
 void input_unregister_device(struct input_dev *dev)
 {
 	struct input_handle *handle = dev->handle;
-	struct input_dev **devptr = &input_dev;
 	struct input_handle *dnext;
 
+	if (!dev) return;
+
 /*
- * Turn off power management.
+ * Turn off power management for the device.
  */
 	if (dev->pm_dev)
 		pm_unregister(dev->pm_dev);
@@ -324,11 +340,7 @@ void input_unregister_device(struct input_dev *dev)
 /*
  * Remove the device.
  */
-
-	while (*devptr && (*devptr != dev))
-		devptr = &((*devptr)->next);
-	*devptr = (*devptr)->next;
-
+	input_find_and_remove(struct input_dev, input_dev, dev, next);
 	input_number--;
 
 	if (dev->number < INPUT_DEVICES)
@@ -339,6 +351,8 @@ void input_register_handler(struct input_handler *handler)
 {
 	struct input_dev *dev = input_dev;
 	struct input_handle *handle;
+
+	if (!handler) return;
 
 /*
  * Add minors if needed.
@@ -367,7 +381,6 @@ void input_register_handler(struct input_handler *handler)
 
 void input_unregister_handler(struct input_handler *handler)
 {
-	struct input_handler **handlerptr = &input_handler;
 	struct input_handle *handle = handler->handle;
 	struct input_handle *hnext;
 
@@ -385,11 +398,8 @@ void input_unregister_handler(struct input_handler *handler)
 /*
  * Remove it.
  */
-
-	while (*handlerptr && (*handlerptr != handler))
-		handlerptr = &((*handlerptr)->next);
-
-	*handlerptr = (*handlerptr)->next;
+	input_find_and_remove(struct input_handler, input_handler, handler,
+				next);
 
 /*
  * Remove minors.
