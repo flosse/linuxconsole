@@ -46,6 +46,8 @@ EXPORT_SYMBOL(input_register_minor);
 EXPORT_SYMBOL(input_unregister_minor);
 EXPORT_SYMBOL(input_open_device);
 EXPORT_SYMBOL(input_close_device);
+EXPORT_SYMBOL(input_accept_device);
+EXPORT_SYMBOL(input_flush_device);
 EXPORT_SYMBOL(input_event);
 
 #define INPUT_MAJOR	13
@@ -183,11 +185,27 @@ static void input_repeat_key(unsigned long data)
 	mod_timer(&dev->timer, jiffies + dev->rep[REP_PERIOD]);
 }
 
+int input_accept_device(struct input_handle *handle, struct file *file)
+{
+	if (handle->dev->accept)
+		return handle->dev->accept(handle->dev, file);
+
+	return 0;
+}
+
 int input_open_device(struct input_handle *handle)
 {
 	handle->open++;
 	if (handle->dev->open)
 		return handle->dev->open(handle->dev);
+	return 0;
+}
+
+int input_flush_device(struct input_handle* handle, struct file* file)
+{
+	if (handle->dev->flush)
+		return handle->dev->flush(handle->dev, file);
+
 	return 0;
 }
 

@@ -90,10 +90,19 @@ static int evdev_fasync(int fd, struct file *file, int on)
 	return retval < 0 ? retval : 0;
 }
 
+static int evdev_flush(struct file * file)
+{
+	printk(KERN_DEBUG "evdev flush\n");
+
+	return input_flush_device(&((struct evdev_list*)file->private_data)->evdev->handle, file);
+}
+
 static int evdev_release(struct inode * inode, struct file * file)
 {
 	struct evdev_list *list = file->private_data;
 	struct evdev_list **listptr;
+
+	printk(KERN_DEBUG "evdev release\n");
 
 	lock_kernel();
 	listptr = &list->evdev->list;
@@ -102,10 +111,6 @@ static int evdev_release(struct inode * inode, struct file * file)
 	while (*listptr && (*listptr != list))
 		listptr = &((*listptr)->next);
 	*listptr = (*listptr)->next;
-
-	if (file->f_mode & FMODE_WRITE) {
-		list->evdev->open_for_write--;
-	}
 
 	if (!--list->evdev->open) {
 		if (list->evdev->exist) {
@@ -127,13 +132,15 @@ static int evdev_open(struct inode * inode, struct file * file)
 {
 	struct evdev_list *list;
 	int i = MINOR(inode->i_rdev) - EVDEV_MINOR_BASE;
+	int accept_err;
 
 	if (i >= EVDEV_MINORS || !evdev_table[i])
 		return -ENODEV;
 
-	/* For some devices, only one process can open a device with write access */
-	if ( (evdev_table[i]->handle.dev->only_one_writer) && (file->f_mode & FMODE_WRITE) && (evdev_table[i]->open_for_write) )
-		return -EBUSY;
+	/* Ask the driver if he wishes to accept the open() */
+	if ((accept_err = input_accept_device(&(evdev_table[i]->handle), file))) {
+		return accept_err;
+	}
 
 	if (!(list = kmalloc(sizeof(struct evdev_list), GFP_KERNEL)))
 		return -ENOMEM;
@@ -148,10 +155,6 @@ static int evdev_open(struct inode * inode, struct file * file)
 	if (!list->evdev->open++)
 		if (list->evdev->exist)
 			input_open_device(&list->evdev->handle);
-
-	if (file->f_mode & FMODE_WRITE) {
-		list->evdev->open_for_write++;
-	}
 
 	return 0;
 }
@@ -336,6 +339,7 @@ static struct file_operations evdev_fops = {
 	release:	evdev_release,
 	ioctl:		evdev_ioctl,
 	fasync:		evdev_fasync,
+	flush:		evdev_flush
 };
 
 static struct input_handle *evdev_connect(struct input_handler *handler, struct input_dev *dev)
