@@ -138,8 +138,10 @@ void hide_cursor(struct vc_data *vc)
 			sw->con_putc(vc, softcursor_original, y, x);
                 softcursor_original = -1;
         }
+/*
 	if (visible_origin != origin)
 		set_origin(vc);
+*/
 	sw->con_cursor(vc, CM_ERASE);
 	spin_unlock_irqrestore(&console_lock, flags);
 }
@@ -156,8 +158,10 @@ void set_cursor(struct vc_data *vc)
                 	clear_selection();
         	add_softcursor(vc);
         	if ((cursor_type & 0x0f) != 1) {
+		/*
 			if (visible_origin != origin)
 				set_origin(vc);
+		*/
             		sw->con_cursor(vc, CM_DRAW);
 		}
     	} else
@@ -493,12 +497,10 @@ inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed)
 {
         unsigned short *p;
 
-        if (!viewed || !sw->con_screen_pos)
+        if (!viewed)
                 p = (unsigned short *)(origin + offset);
-        else if (!sw->con_screen_pos)
+        else 
                 p = (unsigned short *)(visible_origin + offset);
-        else
-                p = sw->con_screen_pos(vc, offset);
         return p;
 }
 
