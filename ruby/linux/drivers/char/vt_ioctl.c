@@ -1,5 +1,5 @@
 /*
- *  linux/drivers/char/vt.c
+ *  linux/drivers/char/vt_ioctl.c
  *
  *  Copyright (C) 1992 obz under the linux copyright
  *
@@ -7,6 +7,8 @@
  *  Dynamic keymap and string allocation - aeb@cwi.nl - May 1994
  *  Restrict VT switching via ioctl() - grif@cs.ucr.edu - Dec 1995
  *  Some code moved for less code duplication - Andi Kleen - Mar 1997
+ *  Made VC ioctls truly SYSV complient. Rewritten to support 
+ *  multihead systems - James Simmons - Sept 2000
  */
 
 #include <linux/config.h>
@@ -1007,10 +1009,13 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 				struct vc_data *tmp;
 
 				i = vc_allocate(vc->vt_newvt);
-				vc->vt_newvt = -1;
-				if (i)
+				if (i) {
+					vt->vt_newvt = -1;
 					return i;
+				}
 				tmp = find_vc(vc->vt_newvt);
+				if (!tmp)
+                                	return -ENXIO;
 
 				/*
 				 * When we actually do the console switch,
@@ -1318,7 +1323,7 @@ void reset_vc(struct vc_data *vc)
 	reset_palette(vc);
 }
 
-void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
+inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
 {
         if (!new_vc) {
                 /* strange ... */
@@ -1458,7 +1463,6 @@ void complete_change_console(struct vc_data *new_vc, struct vc_data *old_vc)
 	 */
 	if (old_vc_mode != new_vc->display_fg->vc_mode) {
 		if (new_vc->display_fg->vc_mode == KD_TEXT) {
-			set_palette(new_vc);
 			unblank_screen(new_vc->display_fg);
 		} else
 			do_blank_screen(new_vc);
