@@ -1222,7 +1222,7 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 	usb_make_path(dev, buf, 63);
 	sprintf(hid->phys, "%s.%d", buf, ifnum);
 
-	if (usb_string(dev, dev->descriptor.iSerial, hid->uniq, 64) <= 0)
+	if (usb_string(dev, dev->descriptor.iSerialNumber, hid->uniq, 64) <= 0)
 		hid->uniq[0] = 0;
 
 	kfree(buf);
