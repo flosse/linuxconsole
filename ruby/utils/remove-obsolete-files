@@ -34,6 +34,7 @@ rm -fv drivers/char/pc_keyb.c
 rm -fv drivers/char/ec3104_keyb.c
 rm -fv drivers/char/q40_keyb.c
 rm -fv drivers/char/qpmouse.c
+rm -fv drivers/input/joytstick/iforce.c
 rm -fv drivers/macintosh/mac_keyb.c
 rm -fv drivers/tc/lk201.c
 rm -fv drivers/tc/lk201-remap.c
