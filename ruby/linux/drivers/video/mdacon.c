@@ -577,14 +577,23 @@ void mda_console_init(void)
 void __init mda_console_init(void)
 #endif
 {
+	const char *display_desc = NULL;
 	struct vt_struct *vt;
 	int i;
 
 	vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
-	if (!vt) return;	
-	create_vt(vt, &mda_con);
+	if (!vt) return;
+	display_desc = create_vt(vt, &mda_con);	
+	if (!display_desc) {
+		kfree(vt);
+		return;
+	}
 	i = vc_allocate(vt->vcs.first_vc);
-        if (i)  return;
+        if (i)  {
+		kfree(vt);
+		return;
+	}
+	printk("Console: mono %s %dx%d",display_desc,vc->vc_cols,vc->vc_rows);
 	return;
 }
 
