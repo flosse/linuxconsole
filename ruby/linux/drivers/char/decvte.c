@@ -541,7 +541,8 @@ static void set_mode(struct vc_data *vc, int on_off)
                         case 5: /* DECSCNM - Screen mode */
                                 if (decscnm != on_off) {
                                         decscnm = on_off;
-                                        invert_screen(vc, 0, screenbuf_size, 0);                                        update_attr(vc);
+                                        invert_screen(vc, 0, screenbuf_size, 0);
+                                        update_attr(vc);
                                 }
                                 break;
                         case 6: /* DECOM - Origin mode */
