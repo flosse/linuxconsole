@@ -201,11 +201,6 @@ struct fb_cmap {
 	__u16 *transp;			/* transparency, can be NULL */
 };
 
-struct fb_con2fbmap {
-	__u32 console;
-	__u32 framebuffer;
-};
-
 /* VESA Blanking Levels */
 #define VESA_NO_BLANKING        0
 #define VESA_VSYNC_SUSPEND      1
@@ -271,6 +266,10 @@ struct fb_ops {
     int (*fb_get_var)(struct fb_var_screeninfo *var, struct fb_info *info); 
     /* set settable parameters */
     int (*fb_set_var)(struct fb_var_screeninfo *var, struct fb_info *info); 
+    /* checks var and creates a par based on it */
+    int (*fb_check_var)(struct fb_var_screeninfo *var, struct fb_info *info);
+    /* set the video mode according to par */
+    int (*fb_set_par)(struct fb_info *info);
     /* set color register */
     int (*fb_setcolreg)(unsigned regno, unsigned red, unsigned green,
                         unsigned blue, unsigned transp, struct fb_info *info);
@@ -321,56 +320,18 @@ struct fb_info {
 #endif
 
     /*
-     *  This structure abstracts from the underlying hardware. It is not
-     *  mandatory but used by the `generic' frame buffer operations.
-     *  Read drivers/video/skeletonfb.c for more information.
-     */
-
-struct fbgen_hwswitch {
-    void (*detect)(void);
-    int (*encode_fix)(struct fb_fix_screeninfo *fix, const void *par,
-		      struct fb_info_gen *info);
-    int (*decode_var)(const struct fb_var_screeninfo *var, void *par,
-		      struct fb_info_gen *info);
-    int (*encode_var)(struct fb_var_screeninfo *var, const void *par,
-		      struct fb_info_gen *info);
-    void (*get_par)(void *par, struct fb_info_gen *info);
-    void (*set_par)(const void *par, struct fb_info_gen *info);
-    int (*getcolreg)(unsigned regno, unsigned *red, unsigned *green,
-		     unsigned *blue, unsigned *transp, struct fb_info *info);
-    int (*pan_display)(const struct fb_var_screeninfo *var,
-		       struct fb_info_gen *info);
-    int (*blank)(int blank_mode, struct fb_info_gen *info);
-    void (*set_disp)(const void *par, struct display *disp,
-		     struct fb_info_gen *info);
-};
-
-struct fb_info_gen {
-    struct fb_info info;
-
-    /* Entries for a generic frame buffer device */
-    /* Yes, this starts looking like C++ */
-    u_int parsize;
-    struct fbgen_hwswitch *fbhw;
-
-   /* From here on everything is device dependent */
-};
-
-    /*
      *  `Generic' versions of the frame buffer device operations
      */
 
-extern int fbgen_get_fix(struct fb_fix_screeninfo *fix, int con,
+extern int fbgen_get_fix(struct fb_fix_screeninfo *fix, 
 			 struct fb_info *info);
-extern int fbgen_get_var(struct fb_var_screeninfo *var, int con,
+extern int fbgen_get_var(struct fb_var_screeninfo *var,
 			 struct fb_info *info);
-extern int fbgen_set_var(struct fb_var_screeninfo *var, int con,
+extern int fbgen_set_var(struct fb_var_screeninfo *var,
 			 struct fb_info *info);
-extern int fbgen_pan_display(struct fb_var_screeninfo *var, int con,
+extern void fbgen_blank(int blank, struct fb_info *info);
+extern int fbgen_pan_display(struct fb_var_screeninfo *var, 
 			     struct fb_info *info);
-extern int fbgen_ioctl(struct inode *inode, struct file *file,
-		       unsigned int cmd, unsigned long arg, int con,
-		       struct fb_info *info);
 
     /*
      *  Helper functions
@@ -382,8 +343,6 @@ extern void fbgen_set_disp(int con, struct fb_info_gen *info);
 extern void fbgen_install_cmap(int con, struct fb_info_gen *info);
 extern int fbgen_update_var(int con, struct fb_info *info);
 extern int fbgen_switch(int con, struct fb_info *info);
-extern void fbgen_blank(int blank, struct fb_info *info);
-
 
 /* drivers/video/fbmem.c */
 extern int register_framebuffer(struct fb_info *fb_info);
@@ -401,10 +360,7 @@ extern int fbmon_dpms(const struct fb_info *fb_info);
 extern int fb_alloc_cmap(struct fb_cmap *cmap, int len, int transp);
 extern void fb_copy_cmap(struct fb_cmap *from, struct fb_cmap *to,
 			 int fsfromto);
-extern int fb_get_cmap(struct fb_cmap *cmap, int kspc,
-		       int (*getcolreg)(u_int, u_int *, u_int *, u_int *,
-					u_int *, struct fb_info *),
-		       struct fb_info *fb_info);
+extern int fb_get_cmap(struct fb_cmap *cmap, int kspc,struct fb_info *fb_info);
 extern int fb_set_cmap(struct fb_cmap *cmap, int kspc,struct fb_info *fb_info);
 extern struct fb_cmap *fb_default_cmap(int len);
 extern void fb_invert_cmaps(void);
