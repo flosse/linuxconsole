@@ -262,17 +262,18 @@ static inline void scrolldelta(int lines)
         tasklet_schedule(&console_tasklet);
 }
 
-void scrollback(int lines)
-{                                                                                       int currcons = fg_console;
+void scrollback(struct vc_data *vc, int lines)
+{
+	int currcons = vc->vc_num;
 
         if (!lines)
                 lines = video_num_lines/2;
         scrolldelta(-lines);
 }
 
-void scrollfront(int lines)
+void scrollfront(struct vc_data *vc, int lines)
 {
-        int currcons = fg_console;
+        int currcons = vc->vc_num;
 
         if (!lines)
                 lines = video_num_lines/2;
@@ -808,7 +809,7 @@ static void vc_init(struct vc_data *vc, int do_clear)
 
         set_origin(vc);
         pos = origin;
-        reset_vc(cons_num);
+        reset_vc(vc);
         for (j=k=0; j<16; j++) {
                 palette[k++] = default_red[j] ;
                 palette[k++] = default_grn[j] ;
