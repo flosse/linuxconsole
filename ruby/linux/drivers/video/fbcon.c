@@ -169,8 +169,9 @@ static int __init fbcon_setup(char *options)
     if (!options || !*options)
             return 0;
 
-    if (!strncmp(options, "font:", 5))
-        strcpy(fontname, options+5);
+    while (this_opt = strsep(&options, ",")) {	
+    	if (!strncmp(options, "font:", 5))
+        	strcpy(fontname, options+5);
     return 0;
 }
 
@@ -374,17 +375,18 @@ static void fbcon_putcs(struct vc_data *vc, const unsigned short *s,
    unsigned short charmask = (vc->vc_font.charcount > 256) ? 0x1ff: 0xff;
    unsigned int width = ((vc->vc_font.width+7)>>3);	
    struct fb_image image; 	
+   u16 c = scr_readw(s);	
   
    if (info->fix.visual == FB_VISUAL_PSEUDOCOLOR) {
 	image.fg_color = attr_fgcol(vc, *s);
 	image.bg_color = attr_bgcol(vc, *s);
    } else {
 	if (info->var.bits_per_pixel > 16) {
-		image.fg_color = ((u32*)info->pseudo_palette)[attr_fgcol(vc,*s)];
-		image.bg_color = ((u32*)info->pseudo_palette)[attr_bgcol(vc,*s)];
+		image.fg_color = ((u32*)info->pseudo_palette)[attr_fgcol(vc,c)];
+		image.bg_color = ((u32*)info->pseudo_palette)[attr_bgcol(vc,c)];
 	} else {
-		image.fg_color = ((u16*)info->pseudo_palette)[attr_fgcol(vc,*s)];
-		image.bg_color = ((u16*)info->pseudo_palette)[attr_bgcol(vc,*s)];
+		image.fg_color = ((u16*)info->pseudo_palette)[attr_fgcol(vc,c)];
+		image.bg_color = ((u16*)info->pseudo_palette)[attr_bgcol(vc,c)];
     	}
    }
    image.x = xpos * vc->vc_font.width;
@@ -395,7 +397,8 @@ static void fbcon_putcs(struct vc_data *vc, const unsigned short *s,
  
    while (count--) {
     	image.data = vc->vc_font.data + 
-			(scr_readw(s++) & charmask)*vc->vc_font.height*width;
+			(scr_readw(s) & charmask)*vc->vc_font.height*width;
+	s++;
     	info->fbops->fb_imageblit(info, &image);
 	image.x += vc->vc_font.width;
    }	

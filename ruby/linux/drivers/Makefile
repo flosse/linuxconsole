@@ -7,7 +7,7 @@
 
 
 mod-subdirs :=	dio mtd sbus macintosh usb input telephony sgi ide \
-		i2o message/fusion scsi md ieee1394 pnp isdn atm \
+		message/i2o message/fusion scsi md ieee1394 pnp isdn atm \
 		fc4 net/hamradio i2c acpi bluetooth serial
 
 subdir-y :=	parport char block net sound misc media cdrom video
@@ -18,7 +18,7 @@ subdir-$(CONFIG_DIO)		+= dio
 subdir-$(CONFIG_PCI)		+= pci
 subdir-$(CONFIG_PCMCIA)		+= pcmcia
 subdir-$(CONFIG_MTD)		+= mtd
-subdir-$(CONFIG_UART)          	+= serial
+subdir-$(CONFIG_UART)		+= serial
 subdir-$(CONFIG_SBUS)		+= sbus
 subdir-$(CONFIG_ZORRO)		+= zorro
 subdir-$(CONFIG_NUBUS)		+= nubus
@@ -31,7 +31,7 @@ subdir-$(CONFIG_PHONE)		+= telephony
 subdir-$(CONFIG_SGI)		+= sgi
 subdir-$(CONFIG_IDE)		+= ide
 subdir-$(CONFIG_SCSI)		+= scsi
-subdir-$(CONFIG_I2O)		+= i2o
+subdir-$(CONFIG_I2O)		+= message/i2o
 subdir-$(CONFIG_FUSION)		+= message/fusion
 subdir-$(CONFIG_MD)		+= md
 subdir-$(CONFIG_IEEE1394)	+= ieee1394
@@ -46,7 +46,7 @@ subdir-$(CONFIG_I2C)		+= i2c
 subdir-$(CONFIG_ACPI)		+= acpi
 
 subdir-$(CONFIG_BLUEZ)		+= bluetooth
-subdif-$(CONFIG_SSI)            += ssi
+subdif-$(CONFIG_SSI)		+= ssi
 
 include $(TOPDIR)/Rules.make
 

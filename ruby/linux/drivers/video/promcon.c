@@ -14,7 +14,11 @@
 #include <linux/tty.h>
 #include <linux/slab.h>
 #include <linux/delay.h>
+#include <linux/console.h>
+#include <linux/console_struct.h>
 #include <linux/vt_kern.h>
+#include <linux/selection.h>
+#include <linux/fb.h>
 #include <linux/init.h>
 #include <linux/kd.h>
 
@@ -43,71 +47,74 @@ promcon_puts(char *buf, int cnt)
 }
 
 static int
-promcon_start(struct vc_data *vc, char *b)
+promcon_start(struct vc_data *conp, char *b)
 {
 	unsigned short *s = (unsigned short *)
-			(vc->vc_origin + py * vc->vc_size_row + (px << 1));
+			(conp->vc_origin + py * conp->vc_size_row + (px << 1));
+	u16 cs;
 
+	cs = scr_readw(s);
 	if (px == pw) {
 		unsigned short *t = s - 1;
+		u16 ct = scr_readw(t);
 
-		if (inverted(*s) && inverted(*t))
-			return sprintf(b, "\b\033[7m%c\b\033[@%c\033[m",
-				       *s, *t);
-		else if (inverted(*s))
-			return sprintf(b, "\b\033[7m%c\033[m\b\033[@%c",
-				       *s, *t);
-		else if (inverted(*t))
-			return sprintf(b, "\b%c\b\033[@\033[7m%c\033[m",
-				       *s, *t);
+		if (inverted(cs) && inverted(ct))
+			return sprintf(b, "\b\033[7m%c\b\033[@%c\033[m", cs,
+				       ct);
+		else if (inverted(cs))
+			return sprintf(b, "\b\033[7m%c\033[m\b\033[@%c", cs,
+				       ct);
+		else if (inverted(ct))
+			return sprintf(b, "\b%c\b\033[@\033[7m%c\033[m", cs,
+				       ct);
 		else
-			return sprintf(b, "\b%c\b\033[@%c", *s, *t);
+			return sprintf(b, "\b%c\b\033[@%c", cs, ct);
 	}
 
-	if (inverted(*s))
-		return sprintf(b, "\033[7m%c\033[m\b", *s);
+	if (inverted(cs))
+		return sprintf(b, "\033[7m%c\033[m\b", cs);
 	else
-		return sprintf(b, "%c\b", *s);
+		return sprintf(b, "%c\b", cs);
 }
 
 static int
-promcon_end(struct vc_data *vc, char *b)
+promcon_end(struct vc_data *conp, char *b)
 {
 	unsigned short *s = (unsigned short *)
-			(vc->vc_origin + py * vc->vc_size_row + (px << 1));
+			(conp->vc_origin + py * conp->vc_size_row + (px << 1));
 	char *p = b;
+	u16 cs;
 
 	b += sprintf(b, "\033[%d;%dH", py + 1, px + 1);
 
+	cs = scr_readw(s);
 	if (px == pw) {
 		unsigned short *t = s - 1;
+		u16 ct = scr_readw(t);
 
-		if (inverted(*s) && inverted(*t))
-			b += sprintf(b, "\b%c\b\033[@\033[7m%c\033[m", *s, *t);
-		else if (inverted(*s))
-			b += sprintf(b, "\b%c\b\033[@%c", *s, *t);
-		else if (inverted(*t))
-			b += sprintf(b, "\b\033[7m%c\b\033[@%c\033[m", *s, *t);
+		if (inverted(cs) && inverted(ct))
+			b += sprintf(b, "\b%c\b\033[@\033[7m%c\033[m", cs, ct);
+		else if (inverted(cs))
+			b += sprintf(b, "\b%c\b\033[@%c", cs, ct);
+		else if (inverted(ct))
+			b += sprintf(b, "\b\033[7m%c\b\033[@%c\033[m", cs, ct);
 		else
-			b += sprintf(b, "\b\033[7m%c\033[m\b\033[@%c", *s, *t);
+			b += sprintf(b, "\b\033[7m%c\033[m\b\033[@%c", cs, ct);
 		return b - p;
 	}
 
-	if (inverted(*s))
-		b += sprintf(b, "%c\b", *s);
+	if (inverted(cs))
+		b += sprintf(b, "%c\b", cs);
 	else
-		b += sprintf(b, "\033[7m%c\033[m\b", *s);
+		b += sprintf(b, "\033[7m%c\033[m\b", cs);
 	return b - p;
 }
 
-const char __init *promcon_startup(struct vt_struct *vt, int init)
+const char __init *promcon_startup(void)
 {
 	const char *display_desc = "PROM";
-	struct vc_data *vc;
-	char buf[40];
 	int node;
-
-	vt->default_mode = vc = &prom_default;
+	char buf[40];
 	
 	node = prom_getchild(prom_root_node);
 	node = prom_searchsiblings(node, "options");
@@ -124,16 +131,11 @@ const char __init *promcon_startup(struct vt_struct *vt, int init)
 		ph--;
 	}
 	promcon_puts("\033[H\033[J", 6);
-	vc->vc_can_do_color = PROMCON_COLOR;
-	if (init) {
-		vc->vc_cols = pw + 1;
-		vc->vc_rows = ph + 1;
-	}
 	return display_desc;
 }
 
 static void __init 
-promcon_init_unimap(struct vc_data *vc)
+promcon_init_unimap(struct vc_data *conp)
 {
 	mm_segment_t old_fs = get_fs();
 	struct unipair *p, *p1;
@@ -154,43 +156,50 @@ promcon_init_unimap(struct vc_data *vc)
 			k++;
 		}
 	set_fs(KERNEL_DS);
-	con_clear_unimap(vc, NULL);
-	con_set_unimap(vc, k, p);
-	con_protect_unimap(vc, 1);
+	con_clear_unimap(conp->vc_num, NULL);
+	con_set_unimap(conp->vc_num, k, p);
+	con_protect_unimap(conp->vc_num, 1);
 	set_fs(old_fs);
 	kfree(p);
 }
 
 static void
-promcon_init(struct vc_data *vc)
+promcon_init(struct vc_data *conp, int init)
 {
 	unsigned long p;
 	
-	vc->vc_can_do_color = PROMCON_COLOR;
-	vc->vc_cols = vc->display_fg->default_mode->vc_cols;
-	vc->vc_rows = vc->display_fg->default_mode->vc_rows;
-	p = *vc->vc_uni_pagedir_loc;
-	if (vc->vc_uni_pagedir_loc == &vc->vc_uni_pagedir ||
-	    !--vc->vc_uni_pagedir_loc[1])
-		con_free_unimap(vc);
-	vc->vc_uni_pagedir_loc = promcon_uni_pagedir;
+	conp->vc_can_do_color = PROMCON_COLOR;
+	if (init) {
+		conp->vc_cols = pw + 1;
+		conp->vc_rows = ph + 1;
+	}
+	p = *conp->vc_uni_pagedir_loc;
+	if (conp->vc_uni_pagedir_loc == &conp->vc_uni_pagedir ||
+	    !--conp->vc_uni_pagedir_loc[1])
+		con_free_unimap(conp->vc_num);
+	conp->vc_uni_pagedir_loc = promcon_uni_pagedir;
 	promcon_uni_pagedir[1]++;
-	if (!promcon_uni_pagedir[0] && p) 
-		promcon_init_unimap(vc);
+	if (!promcon_uni_pagedir[0] && p) {
+		promcon_init_unimap(conp);
+	}
+	if (!init) {
+		if (conp->vc_cols != pw + 1 || conp->vc_rows != ph + 1)
+			vc_resize_con(ph + 1, pw + 1, conp->vc_num);
+	}
 }
 
 static void
-promcon_deinit(struct vc_data *vc)
+promcon_deinit(struct vc_data *conp)
 {
 	/* When closing the last console, reset video origin */
 	if (!--promcon_uni_pagedir[1])
-		con_free_unimap(vc);
-	vc->vc_uni_pagedir_loc = &vc->vc_uni_pagedir;
-	con_set_default_unimap(vc);
+		con_free_unimap(conp->vc_num);
+	conp->vc_uni_pagedir_loc = &conp->vc_uni_pagedir;
+	con_set_default_unimap(conp->vc_num);
 }
 
 static int
-promcon_switch(struct vc_data *vc)
+promcon_switch(struct vc_data *conp)
 {
 	return 1;
 }
@@ -203,8 +212,9 @@ promcon_repaint_line(unsigned short *s, unsigned char *buf, unsigned char **bp)
 	unsigned char *b = *bp;
 
 	while (cnt--) {
-		if (attr != inverted(*s)) {
-			attr = inverted(*s);
+		u16 c = scr_readw(s);
+		if (attr != inverted(c)) {
+			attr = inverted(c);
 			if (attr) {
 				strcpy (b, "\033[7m");
 				b += 4;
@@ -213,7 +223,8 @@ promcon_repaint_line(unsigned short *s, unsigned char *buf, unsigned char **bp)
 				b += 3;
 			}
 		}
-		*b++ = *s++;
+		*b++ = c;
+		s++;
 		if (b - buf >= 224) {
 			promcon_puts(buf, b - buf);
 			b = buf;
@@ -224,7 +235,7 @@ promcon_repaint_line(unsigned short *s, unsigned char *buf, unsigned char **bp)
 }
 
 static void
-promcon_putcs(struct vc_data *vc, const unsigned short *s,
+promcon_putcs(struct vc_data *conp, const unsigned short *s,
 	      int count, int y, int x)
 {
 	unsigned char buf[256], *b = buf;
@@ -232,20 +243,20 @@ promcon_putcs(struct vc_data *vc, const unsigned short *s,
 	unsigned char save;
 	int i, last = 0;
 
-	if (vc->display_fg->vt_blanked)
+	if (console_blanked)
 		return;
 	
 	if (count <= 0)
 		return;
 
-	b += promcon_start(vc, b);
+	b += promcon_start(conp, b);
 
 	if (x + count >= pw + 1) {
 		if (count == 1) {
 			x -= 1;
-			save = *(unsigned short *)(vc->vc_origin
-						   + y * vc->vc_size_row
-						   + (x << 1));
+			save = scr_readw((unsigned short *)(conp->vc_origin
+						   + y * conp->vc_size_row
+						   + (x << 1)));
 
 			if (px != x || py != y) {
 				b += sprintf(b, "\033[%d;%dH", y + 1, x + 1);
@@ -268,7 +279,7 @@ promcon_putcs(struct vc_data *vc, const unsigned short *s,
 
 			px++;
 
-			b += promcon_end(vc, b);
+			b += promcon_end(conp, b);
 			promcon_puts(buf, b - buf);
 			return;
 		} else {
@@ -309,44 +320,44 @@ promcon_putcs(struct vc_data *vc, const unsigned short *s,
 		b += 3;
 	}
 
-	b += promcon_end(vc, b);
+	b += promcon_end(conp, b);
 	promcon_puts(buf, b - buf);
 }
 
 static void
-promcon_putc(struct vc_data *vc, int c, int y, int x)
+promcon_putc(struct vc_data *conp, int c, int y, int x)
 {
 	unsigned short s;
 
-	if (vc->display_fg->vt_blanked)
+	if (console_blanked)
 		return;
 	
 	scr_writew(c, &s);
-	promcon_putcs(vc, &s, 1, y, x);
+	promcon_putcs(conp, &s, 1, y, x);
 }
 
 static void
-promcon_clear(struct vc_data *vc, int sy, int sx, int height, int width)
+promcon_clear(struct vc_data *conp, int sy, int sx, int height, int width)
 {
 	unsigned char buf[256], *b = buf;
 	int i, j;
 
-	if (vc->display_fg->vt_blanked)
+	if (console_blanked)
 		return;
 	
-	b += promcon_start(vc, b);
+	b += promcon_start(conp, b);
 
 	if (!sx && width == pw + 1) {
 
 		if (!sy && height == ph + 1) {
 			strcpy(b, "\033[H\033[J");
 			b += 6;
-			b += promcon_end(vc, b);
+			b += promcon_end(conp, b);
 			promcon_puts(buf, b - buf);
 			return;
 		} else if (sy + height == ph + 1) {
 			b += sprintf(b, "\033[%dH\033[J", sy + 1);
-			b += promcon_end(vc, b);
+			b += promcon_end(conp, b);
 			promcon_puts(buf, b - buf);
 			return;
 		}
@@ -360,7 +371,7 @@ promcon_clear(struct vc_data *vc, int sy, int sx, int height, int width)
 		strcpy(b, "\033[K");
 		b += 3;
 
-		b += promcon_end(vc, b);
+		b += promcon_end(conp, b);
 		promcon_puts(buf, b - buf);
 		return;
 
@@ -375,7 +386,7 @@ promcon_clear(struct vc_data *vc, int sy, int sx, int height, int width)
 		strcpy(b, "\033[K");
 		b += 3;
 
-		b += promcon_end(vc, b);
+		b += promcon_end(conp, b);
 		promcon_puts(buf, b - buf);
 		return;
 	}
@@ -390,29 +401,29 @@ promcon_clear(struct vc_data *vc, int sy, int sx, int height, int width)
 		}
 	}
 
-	b += promcon_end(vc, b);
+	b += promcon_end(conp, b);
 	promcon_puts(buf, b - buf);
 }
                         
 static void
-promcon_bmove(struct vc_data *vc, int sy, int sx, int dy, int dx,
+promcon_bmove(struct vc_data *conp, int sy, int sx, int dy, int dx,
 	      int height, int width)
 {
 	char buf[256], *b = buf;
 
-	if (vc->display_fg->vt_blanked)
+	if (console_blanked)
 		return;
 	
-	b += promcon_start(vc, b);
+	b += promcon_start(conp, b);
 	if (sy == dy && height == 1) {
-		if (dx > sx && dx + width == vc->vc_cols)
+		if (dx > sx && dx + width == conp->vc_cols)
 			b += sprintf(b, "\033[%d;%dH\033[%d@\033[%d;%dH",
 				     sy + 1, sx + 1, dx - sx, py + 1, px + 1);
-		else if (dx < sx && sx + width == vc->vc_cols)
+		else if (dx < sx && sx + width == conp->vc_cols)
 			b += sprintf(b, "\033[%d;%dH\033[%dP\033[%d;%dH",
 				     dy + 1, dx + 1, sx - dx, py + 1, px + 1);
 
-		b += promcon_end(vc, b);
+		b += promcon_end(conp, b);
 		promcon_puts(buf, b - buf);
 		return;
 	}
@@ -425,7 +436,7 @@ promcon_bmove(struct vc_data *vc, int sy, int sx, int dy, int dx,
 }
 
 static void
-promcon_cursor(struct vc_data *vc, int mode)
+promcon_cursor(struct vc_data *conp, int mode)
 {
 	char buf[32], *b = buf;
 
@@ -435,10 +446,10 @@ promcon_cursor(struct vc_data *vc, int mode)
 
 	case CM_MOVE:
 	case CM_DRAW:
-		b += promcon_start(vc, b);
-		if (px != vc->vc_x || py != vc->vc_y) {
-			px = vc->vc_x;
-			py = vc->vc_y;
+		b += promcon_start(conp, b);
+		if (px != conp->vc_x || py != conp->vc_y) {
+			px = conp->vc_x;
+			py = conp->vc_y;
 			b += sprintf(b, "\033[%d;%dH", py + 1, px + 1);
 		}
 		promcon_puts(buf, b - buf);
@@ -447,13 +458,13 @@ promcon_cursor(struct vc_data *vc, int mode)
 }
 
 static int
-promcon_font_op(struct vc_data *vc, struct console_font_op *op)
+promcon_font_op(struct vc_data *conp, struct console_font_op *op)
 {
 	return -ENOSYS;
 }
         
 static int
-promcon_blank(struct vc_data *vc, int blank)
+promcon_blank(struct vc_data *conp, int blank)
 {
 	if (blank) {
 		promcon_puts("\033[H\033[J\033[7m \033[m\b", 15);
@@ -465,16 +476,16 @@ promcon_blank(struct vc_data *vc, int blank)
 }
 
 static int
-promcon_scroll(struct vc_data *vc, int t, int b, int dir, int count)
+promcon_scroll(struct vc_data *conp, int t, int b, int dir, int count)
 {
 	unsigned char buf[256], *p = buf;
 	unsigned short *s;
 	int i;
 
-	if (vc->display_fg->vt_blanked)
+	if (console_blanked)
 		return 0;
 	
-	p += promcon_start(vc, p);
+	p += promcon_start(conp, p);
 
 	switch (dir) {
 	case SM_UP:
@@ -482,13 +493,13 @@ promcon_scroll(struct vc_data *vc, int t, int b, int dir, int count)
 			p += sprintf(p, "\033[%dH\033[%dM", t + 1, count);
 			px = 0;
 			py = t;
-			p += promcon_end(vc, p);
+			p += promcon_end(conp, p);
 			promcon_puts(buf, p - buf);
 			break;
 		}
 
-		s = (unsigned short *)((t + count) * vc->vc_size_row +
-					vc->vc_origin);
+		s = (unsigned short *)(conp->vc_origin
+				       + (t + count) * conp->vc_size_row);
 
 		p += sprintf(p, "\033[%dH", t + 1);
 
@@ -507,7 +518,7 @@ promcon_scroll(struct vc_data *vc, int t, int b, int dir, int count)
 		strcpy(p, "\033[K");
 		p += 3;
 
-		p += promcon_end(vc, p);
+		p += promcon_end(conp, p);
 		promcon_puts(buf, p - buf);
 		break;
 
@@ -516,12 +527,12 @@ promcon_scroll(struct vc_data *vc, int t, int b, int dir, int count)
 			p += sprintf(p, "\033[%dH\033[%dL", t + 1, count);
 			px = 0;
 			py = t;
-			p += promcon_end(vc, p);
+			p += promcon_end(conp, p);
 			promcon_puts(buf, p - buf);
 			break;
 		}
 
-		s = (unsigned short *)(vc->vc_origin + t * vc->vc_size_row);
+		s = (unsigned short *)(conp->vc_origin + t * conp->vc_size_row);
 
 		p += sprintf(p, "\033[%dH", t + 1);
 
@@ -537,7 +548,7 @@ promcon_scroll(struct vc_data *vc, int t, int b, int dir, int count)
 		for (; i < b; i++)
 			s = promcon_repaint_line(s, buf, &p);
 
-		p += promcon_end(vc, p);
+		p += promcon_end(conp, p);
 		promcon_puts(buf, p - buf);
 		break;
 	}
@@ -546,7 +557,7 @@ promcon_scroll(struct vc_data *vc, int t, int b, int dir, int count)
 }
 
 #if !(PROMCON_COLOR)
-static u8 promcon_build_attr(struct vc_data *vc, u8 _color, u8 _intensity, u8 _blink, u8 _underline, u8 _reverse)
+static u8 promcon_build_attr(struct vc_data *conp, u8 _color, u8 _intensity, u8 _blink, u8 _underline, u8 _reverse)
 {
 	return (_reverse) ? 0xf : 0x7;
 }
@@ -576,7 +587,6 @@ const struct consw prom_con = {
 	con_switch:		promcon_switch,
 	con_blank:		promcon_blank,
 	con_font_op:		promcon_font_op,
-	con_resize:		DUMMY,
 	con_set_palette:	DUMMY,
 	con_scrolldelta:	DUMMY,
 #if !(PROMCON_COLOR)
@@ -586,28 +596,11 @@ const struct consw prom_con = {
 
 void __init prom_con_init(void)
 {
-	const char *display_desc = NULL;
-        struct vt_struct *vt;
-	struct vc_data *vc;
-	long q;
-
-        /* Alloc the mem we need */
-	vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
-        if (!vt) return;
-	vc = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
-	vt->kmalloced = 1;
-	vt->vt_sw = &prom_con;
-	vt->vcs.vc_cons[0] = vc;
-        display_desc = create_vt(vt, 0);
-	q = (long) kmalloc(vc->vc_screenbuf_size, GFP_KERNEL);       
-	if (!display_desc || !q) {
-		kfree(vt->vcs.vc_cons[0]);
-                kfree(vt);
-		if (q)
-			kfree((char *) q);		
-                return;
-        }
-	vc->vc_screenbuf = (unsigned short *) q;
-	vc_init(vc, 1);
-	promcon_init_unimap(vt->fg_console);
+#ifdef CONFIG_DUMMY_CONSOLE
+	if (conswitchp == &dummy_con)
+		take_over_console(&prom_con, 0, MAX_NR_CONSOLES-1, 1);
+	else
+#endif
+	if (conswitchp == &prom_con)
+		promcon_init_unimap(vc_cons[fg_console].d);
 }

@@ -522,22 +522,30 @@ void invert_screen(struct vc_data *vc, int offset, int count, int viewed)
         if (sw->con_invert_region)
                 sw->con_invert_region(vc, p, count);
         else {
-                u16 *q = p;
                 int cnt = count;
+                u16 *q = p;
+		u16 a;
 
                 if (!can_do_color) {
-                        while (cnt--) *q++ ^= 0x0800;
+                        while (cnt--) {
+				a = scr_readw(q);
+				a ^= 0x0800;
+				scr_writew(a, q);
+				q++;
+			}
                 } else if (hi_font_mask == 0x100) {
                         while (cnt--) {
 				u16 a = scr_readw(q);
                                 a = ((a) & 0x11ff) | (((a) & 0xe000) >> 4) | (((a) & 0x0e00) << 4);
-                                scr_writew(a, q++);
+                                scr_writew(a, q);
+				q++;
                         }
                 } else {
                         while (cnt--) {
 				u16 a = scr_readw(q);
                                 a = ((a) & 0x88ff) | (((a) & 0x7000) >> 4) | (((a) & 0x0700) << 4);
-                                scr_writew(a, q++);
+                                scr_writew(a, q);
+				q++;
                         }
                 }
         }

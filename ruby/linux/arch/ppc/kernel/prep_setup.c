@@ -827,8 +827,8 @@ unsigned long __init prep_find_end_of_memory(void)
  */
 void __init prep_map_io(void)
 {
-	io_block_mapping(0x80000000, 0x80000000, 0x10000000, _PAGE_IO);
-	io_block_mapping(0xf0000000, 0xc0000000, 0x08000000, _PAGE_IO);
+	io_block_mapping(0x80000000, PREP_ISA_IO_BASE, 0x10000000, _PAGE_IO);
+	io_block_mapping(0xf0000000, PREP_ISA_MEM_BASE, 0x08000000, _PAGE_IO);
 }
 
 void __init

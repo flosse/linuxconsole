@@ -1,5 +1,5 @@
 /*
- * BK Id: SCCS/s.config.c 1.7 05/21/01 00:48:24 cort
+ * BK Id: SCCS/s.config.c 1.12 09/18/01 11:19:06 paulus
  */
 #define m68k_debug_device debug_device
 
@@ -51,22 +51,22 @@ unsigned char amiga_vblank;
 unsigned char amiga_psfreq;
 struct amiga_hw_present amiga_hw_present;
 
-static const char s_a500[] __initdata = "A500";
-static const char s_a500p[] __initdata = "A500+";
-static const char s_a600[] __initdata = "A600";
-static const char s_a1000[] __initdata = "A1000";
-static const char s_a1200[] __initdata = "A1200";
-static const char s_a2000[] __initdata = "A2000";
-static const char s_a2500[] __initdata = "A2500";
-static const char s_a3000[] __initdata = "A3000";
-static const char s_a3000t[] __initdata = "A3000T";
-static const char s_a3000p[] __initdata = "A3000+";
-static const char s_a4000[] __initdata = "A4000";
-static const char s_a4000t[] __initdata = "A4000T";
-static const char s_cdtv[] __initdata = "CDTV";
-static const char s_cd32[] __initdata = "CD32";
-static const char s_draco[] __initdata = "Draco";
-static const char *amiga_models[] __initdata = {
+static char s_a500[] __initdata = "A500";
+static char s_a500p[] __initdata = "A500+";
+static char s_a600[] __initdata = "A600";
+static char s_a1000[] __initdata = "A1000";
+static char s_a1200[] __initdata = "A1200";
+static char s_a2000[] __initdata = "A2000";
+static char s_a2500[] __initdata = "A2500";
+static char s_a3000[] __initdata = "A3000";
+static char s_a3000t[] __initdata = "A3000T";
+static char s_a3000p[] __initdata = "A3000+";
+static char s_a4000[] __initdata = "A4000";
+static char s_a4000t[] __initdata = "A4000T";
+static char s_cdtv[] __initdata = "CDTV";
+static char s_cd32[] __initdata = "CD32";
+static char s_draco[] __initdata = "Draco";
+static char *amiga_models[] __initdata = {
     s_a500, s_a500p, s_a600, s_a1000, s_a1200, s_a2000, s_a2500, s_a3000,
     s_a3000t, s_a3000p, s_a4000, s_a4000t, s_cdtv, s_cd32, s_draco,
 };
@@ -76,9 +76,6 @@ static char amiga_model_name[13] = "Amiga ";
 extern char m68k_debug_device[];
 
 static void amiga_sched_init(void (*handler)(int, void *, struct pt_regs *));
-/* amiga specific keyboard functions */
-extern int amiga_keyb_init(void);
-extern int amiga_kbdrate (struct kbd_repeat *);
 /* amiga specific irq functions */
 extern void amiga_init_IRQ (void);
 extern void (*amiga_default_handler[]) (int, void *, struct pt_regs *);
@@ -121,21 +118,6 @@ static struct console amiga_console_driver = {
 	flags:		CON_PRINTBUFFER,
 	index:		-1,
 };
-
-#ifdef CONFIG_MAGIC_SYSRQ
-char amiga_sysrq_xlate[128] =
-	"\0001234567890-=\\\000\000"					/* 0x00 - 0x0f */
-	"qwertyuiop[]\000123"							/* 0x10 - 0x1f */
-	"asdfghjkl;'\000\000456"						/* 0x20 - 0x2f */
-	"\000zxcvbnm,./\000+789"						/* 0x30 - 0x3f */
-	" \177\t\r\r\000\177\000\000\000-\000\000\000\000\000"	/* 0x40 - 0x4f */
-	"\000\201\202\203\204\205\206\207\210\211()/*+\000"	/* 0x50 - 0x5f */
-	"\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"	/* 0x60 - 0x6f */
-	"\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000";	/* 0x70 - 0x7f */
-#endif
-
-extern void (*kd_mksound)(unsigned int, unsigned int);
-
 
     /*
      *  Motherboard Resources present in all Amiga models
@@ -410,8 +392,6 @@ void __init config_amiga(void)
     request_resource(&iomem_resource, &((struct resource *)&mb_resources)[i]);
 
   mach_sched_init      = amiga_sched_init;
-  mach_keyb_init       = amiga_keyb_init;
-  mach_kbdrate         = amiga_kbdrate;
   mach_init_IRQ        = amiga_init_IRQ;
   mach_default_handler = &amiga_default_handler;
 #ifndef CONFIG_APUS
@@ -451,10 +431,6 @@ void __init config_amiga(void)
   mach_floppy_setup    = amiga_floppy_setup;
 #endif
   mach_reset           = amiga_reset;
-#ifdef CONFIG_DUMMY_CONSOLE
-  conswitchp           = &dummy_con;
-#endif
-  kd_mksound           = amiga_mksound;
 #ifdef CONFIG_HEARTBEAT
   mach_heartbeat = amiga_heartbeat;
 #endif
