@@ -213,11 +213,11 @@ if [ "$CONFIG_CD_NO_IDESCSI" != "n" ]; then
 fi
 endmenu
 
+source drivers/usb/Config.in
+source drivers/input/Config.in
 source drivers/char/Config.in
 
 #source drivers/misc/Config.in
-
-source drivers/media/Config.in
 
 source fs/Config.in
 
@@ -238,8 +238,7 @@ if [ "$CONFIG_SGI_IP22" = "y" ]; then
    source drivers/sgi/Config.in
 fi
 
-source drivers/usb/Config.in
-source drivers/input/Config.in
+source drivers/media/Config.in
 source drivers/video/Config.in
 
 mainmenu_option next_comment

@@ -297,6 +297,9 @@ if [ "$CONFIG_ISA" = "y" -o "$CONFIG_PCI" = "y" ]; then
    endmenu
 fi
 
+source drivers/usb/Config.in
+source drivers/input/Config.in
+
 if [ "$CONFIG_DECSTATION" != "y" -a \
      "$CONFIG_SGI_IP22" != "y" ]; then
    source drivers/char/Config.in
@@ -308,9 +311,11 @@ if [ "$CONFIG_DECSTATION" = "y" ]; then
    mainmenu_option next_comment
    comment 'DECStation Character devices'
 
-   bool 'Virtual terminal' CONFIG_VT
-   if [ "$CONFIG_VT" = "y" ]; then
-      bool 'Support for console on virtual terminal' CONFIG_VT_CONSOLE
+   if [ "$CONFIG_INPUT" = "y" ]; then	
+      bool 'Virtual terminal' CONFIG_VT
+      if [ "$CONFIG_VT" = "y" ]; then
+         bool 'Support for console on virtual terminal' CONFIG_VT_CONSOLE
+      fi
    fi
    tristate 'Standard/generic (dumb) serial support' CONFIG_SERIAL
    if [ "$CONFIG_SERIAL" = "y" ]; then
@@ -337,11 +342,13 @@ fi
 if [ "$CONFIG_SGI_IP22" = "y" ]; then
    mainmenu_option next_comment
    comment 'SGI Character devices'
-   bool 'Virtual terminal' CONFIG_VT
-   if [ "$CONFIG_VT" = "y" ]; then
-      bool 'Support for console on virtual terminal' CONFIG_VT_CONSOLE
-      bool 'SGI PROM Console Support' CONFIG_SGI_PROM_CONSOLE
-   fi
+   if [ "$CONFIG_INPUT" = "y" ]; then	
+      bool 'Virtual terminal' CONFIG_VT
+      if [ "$CONFIG_VT" = "y" ]; then
+         bool 'Support for console on virtual terminal' CONFIG_VT_CONSOLE
+         bool 'SGI PROM Console Support' CONFIG_SGI_PROM_CONSOLE
+      fi
+   fi	
    bool 'Unix98 PTY support' CONFIG_UNIX98_PTYS
    if [ "$CONFIG_UNIX98_PTYS" = "y" ]; then
       int 'Maximum number of Unix98 PTYs in use (0-2048)' CONFIG_UNIX98_PTY_COUNT 256
@@ -366,8 +373,6 @@ if [ "$CONFIG_SGI_IP22" = "y" ]; then
    source drivers/sgi/Config.in
 fi
 
-source drivers/usb/Config.in
-source drivers/input/Config.in
 source drivers/video/Config.in
 
 mainmenu_option next_comment

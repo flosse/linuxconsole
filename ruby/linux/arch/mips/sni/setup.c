@@ -17,7 +17,6 @@
 #include <linux/timex.h>
 #include <linux/pci.h>
 #include <linux/mc146818rtc.h>
-#include <linux/console.h>
 #include <linux/fb.h>
 #include <linux/ide.h>
 
@@ -48,7 +47,6 @@ extern void sni_machine_power_off(void);
 
 extern struct ide_ops std_ide_ops;
 extern struct rtc_ops std_rtc_ops;
-extern struct kbd_ops std_kbd_ops;
 
 static void __init sni_irq_setup(void)
 {
@@ -186,5 +184,4 @@ void __init sni_rm200_pci_setup(void)
 	};
 
 	rtc_ops = &std_rtc_ops;
-	kbd_ops = &std_kbd_ops;
 }
