@@ -46,7 +46,7 @@ main(int argc, char **argv)
 	struct fb_fillrect fbfr;
 	struct fb_copyarea fbca;
 	
-	while ((opnu = getopt(argc, argv, "f:x:y:w:h:c:"h)) != EOF)
+	while ((opnu = getopt(argc, argv, "f:x:y:w:h:c:h")) != EOF)
 	{
 		switch(opnu)
 		{
