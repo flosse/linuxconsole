@@ -49,7 +49,6 @@
 
 struct sh_cpuinfo boot_cpu_data = { CPU_SH_NONE, 0, 0, 0, };
 struct screen_info screen_info;
-unsigned char aux_device_present = 0xaa;
 
 #if defined(CONFIG_SH_GENERIC) || defined(CONFIG_SH_UNKNOWN)
 struct sh_machine_vector sh_mv;
