@@ -178,9 +178,9 @@ int set_selection(const unsigned long arg, struct tty_struct *tty, int user)
 		pe = tmp;
 	}
 
-	if (sel_cons != fg_console) {
+	if (sel_cons != vc->display_fg->fg_console->vc_num) {
 		clear_selection();
-		sel_cons = fg_console;
+		sel_cons = vc->display_fg->fg_console->vc_num;
 	}
 
 	switch (sel_mode)

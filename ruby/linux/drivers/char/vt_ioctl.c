@@ -38,7 +38,7 @@
 extern struct tty_driver console_driver;
 
 #define VT_IS_IN_USE(i)	(console_driver.table[i] && console_driver.table[i]->count)
-#define VT_BUSY(i)	(VT_IS_IN_USE(i) || i == fg_console || i == sel_cons)
+#define VT_BUSY(i)	(VT_IS_IN_USE(i) || i == sel_cons)
 
 /*
  * Console (vt and kd) routines, as defined by USL SVR4 manual, and by
@@ -465,7 +465,7 @@ do_fontx_ioctl(struct vc_data *vc, int cmd, struct consolefontdesc *user_cfd,
 		op.height = cfdarg.charheight;
 		op.charcount = cfdarg.charcount;
 		op.data = cfdarg.chardata;
-		return con_font_op(vc, &op);
+		return con_font_op(vc->display_fg->fg_console, &op);
 	case GIO_FONTX: {
 		op.op = KD_FONT_OP_GET;
 		op.flags = KD_FONT_FLAG_OLD;
@@ -473,7 +473,7 @@ do_fontx_ioctl(struct vc_data *vc, int cmd, struct consolefontdesc *user_cfd,
 		op.height = cfdarg.charheight;
 		op.charcount = cfdarg.charcount;
 		op.data = cfdarg.chardata;
-		i = con_font_op(vc, &op);
+		i = con_font_op(vc->display_fg->fg_console, &op);
 		if (i)
 			return i;
 		cfdarg.charheight = op.height;
@@ -503,9 +503,11 @@ do_unimap_ioctl(struct vc_data *vc,int cmd, struct unimapdesc *user_ud,int perm)
 	case PIO_UNIMAP:
 		if (!perm)
 			return -EPERM;
-		return con_set_unimap(vc, tmp.entry_ct, tmp.entries);
+		return con_set_unimap(vc->display_fg->fg_console, tmp.entry_ct,
+				      tmp.entries);
 	case GIO_UNIMAP:
-		return con_get_unimap(vc, tmp.entry_ct, &(user_ud->entry_ct), tmp.entries);
+		return con_get_unimap(vc->display_fg->fg_console, tmp.entry_ct,
+				      &(user_ud->entry_ct), tmp.entries);
 	}
 	return 0;
 }
@@ -551,7 +553,7 @@ int con_get_cmap(unsigned char *arg)
               
 void do_blank_screen(void)
 {
-        struct vc_data *vc = vt_cons->vcs.vc_cons[fg_console];
+        struct vc_data *vc = vt_cons->fg_console;
 
         if (vc->display_fg->vt_blanked)
                 return;
@@ -666,7 +668,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		if (vc->display_fg->vc_mode == (unsigned char) arg)
 			return 0;
 		vc->display_fg->vc_mode = (unsigned char) arg;
-		if (vc->vc_num != fg_console)
+		if (vc->vc_num != vc->display_fg->fg_console->vc_num)
 			return 0;
 		/*
 		 * explicitly blank/unblank the screen if switching modes
@@ -870,7 +872,8 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		i = verify_area(VERIFY_WRITE,(void *)vtstat, sizeof(struct vt_stat));
 		if (i)
 			return i;
-		put_user(fg_console + 1, &vtstat->v_active);
+		put_user(vc->display_fg->fg_console->vc_num + 1,
+			 &vtstat->v_active);
 		state = 1;	/* /dev/tty0 is always open */
 		for (i = 0, mask = 2; i < MAX_NR_CONSOLES && mask; ++i, mask <<= 1)
 			if (VT_IS_IN_USE(i))
@@ -961,7 +964,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 				 * other console switches..
 				 */
 				spin_lock_irq(&console_lock);
-				complete_change_console(vc->display_fg->vcs.vc_cons[newvt], vc->display_fg->vcs.vc_cons[fg_console]);
+				complete_change_console(vc->display_fg->vcs.vc_cons[newvt], vc->display_fg->fg_console);
 				spin_unlock_irq(&console_lock);
 			}
 		}
@@ -989,7 +992,8 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		if (arg == 0) {
 		    /* disallocate all unused consoles, but leave 0 */
 		    for (i=1; i<MAX_NR_CONSOLES; i++)
-		      if (! VT_BUSY(i))
+		      if (i == vc->display_fg->fg_console->vc_num ||
+				!VT_BUSY(i)) 
 			vc_disallocate(i);
 		} else {
 		    /* disallocate a single console, if possible */
@@ -1073,7 +1077,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		op.height = 0;
 		op.charcount = 256;
 		op.data = (char *) arg;
-		return con_font_op(vc, &op);
+		return con_font_op(vc->display_fg->fg_console, &op);
 	}
 
 	case GIO_FONT: {
@@ -1084,7 +1088,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		op.height = 32;
 		op.charcount = 256;
 		op.data = (char *) arg;
-		return con_font_op(vc, &op);
+		return con_font_op(vc->display_fg->fg_console, &op);
 	}
 
 	case PIO_CMAP:
@@ -1114,9 +1118,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		struct console_font_op op;
 		op.op = KD_FONT_OP_SET_DEFAULT;
 		op.data = NULL;
-		i = con_font_op(vc, &op);
+		i = con_font_op(vc->display_fg->fg_console, &op);
 		if (i) return i;
-		con_set_default_unimap(vc);
+		con_set_default_unimap(vc->display_fg->fg_console);
 		return 0;
 		}
 #endif
@@ -1157,7 +1161,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 			return -EPERM;
 		i = copy_from_user(&ui, (void *)arg, sizeof(struct unimapinit));
 		if (i) return -EFAULT;
-		con_clear_unimap(vc, &ui);
+		con_clear_unimap(vc->display_fg->fg_console, &ui);
 		return 0;
 	      }
 
@@ -1272,7 +1276,7 @@ int vt_waitactive(int vt)
 	for (;;) {
 		set_current_state(TASK_INTERRUPTIBLE);
 		retval = 0;
-		if (vt == fg_console)
+		if (vt == vt_cons->fg_console->vc_num)
 			break;
 		retval = -EINTR;
 		if (signal_pending(current))
@@ -1310,7 +1314,7 @@ void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
 
         hide_cursor(old_vc);
         if (old_vc->vc_num != new_vc->vc_num) {
-		fg_console = new_vc->vc_num;
+		old_vc->display_fg->fg_console = new_vc;
                	save_screen(old_vc);
                 set_origin(old_vc);               
 		

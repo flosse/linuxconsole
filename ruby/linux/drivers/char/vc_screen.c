@@ -84,16 +84,13 @@ static int vcs_size(struct inode *inode)
 	int size;	
 
 	if (currcons == 0) {
-		currcons = fg_console;
-		vc = vc->display_fg->vcs.vc_cons[currcons];
+		vc = vt_cons->fg_console;
 	} else {
-		currcons--;
+		vc = vt_cons->vcs.vc_cons[currcons--];
 	}
-	if (!vc_cons_allocated(currcons))
+	if (!vc)
 		return -ENXIO;
 
-	vc = vt_cons->vcs.vc_cons[currcons];
-	
 	size = video_num_lines * video_num_columns;
 
 	if (MINOR(inode->i_rdev) & 128)
@@ -151,16 +148,15 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 	attr = (currcons & 128);
 	currcons = (currcons & 127);
 	if (currcons == 0) {
-		currcons = fg_console;
-		vc = vt_cons->vcs.vc_cons[currcons];
+                vc = vt_cons->fg_console;
 		viewed = 1;
-	} else {
-		currcons--;
-		vc = vt_cons->vcs.vc_cons[currcons];
+        } else {
+                vc = vt_cons->vcs.vc_cons[currcons--];
 		viewed = 0;
-	}
+        }
+
 	ret = -ENXIO;
-	if (!vc_cons_allocated(currcons))
+	if (!vc)
 		goto unlock_out;
 
 	ret = -EINVAL;
@@ -322,17 +318,16 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	currcons = (currcons & 127);
 
 	if (currcons == 0) {
-		currcons = fg_console;
+                vc = vt_cons->fg_console;
 		viewed = 1;
-	} else {
-		currcons--;
+        } else {
+                vc = vt_cons->vcs.vc_cons[currcons--];
 		viewed = 0;
-	}
+	} 
+	
 	ret = -ENXIO;
-	if (!vc_cons_allocated(currcons))
+	if (!vc)
 		goto unlock_out;
-
-	vc = vt_cons->vcs.vc_cons[currcons];
 
 	size = vcs_size(inode);
 	ret = -EINVAL;

@@ -74,12 +74,6 @@ static void con_flush_chars(struct tty_struct *tty);
 
 static int printable = 0;               /* Is console ready for printing? */
 
-int do_poke_blanked_console = 0;
-
-static int vesa_blank_mode = 0; /* 0:none 1:suspendV 2:suspendH 3:powerdown */
-static int blankinterval = 10*60*HZ;
-static int vesa_off_interval = 0;
-
 /*
  * fg_console is the current virtual console,
  * want_vc is the virtual console we want to switch to,
@@ -87,7 +81,6 @@ static int vesa_off_interval = 0;
  */
 struct vc_data *want_vc = NULL;
 int kmsg_redirect = 0;
-int fg_console = 0;
 
 /* 
  * the default colour table, for VGA+ colour systems 
@@ -568,19 +561,19 @@ static void set_vesa_blanking(unsigned long arg)
     char *argp = (char *)arg + 1;
     unsigned int mode;
     get_user(mode, argp);
-    vesa_blank_mode = (mode < 4) ? mode : 0;
+    vt_cons->blank_mode = (mode < 4) ? mode : 0;
 }
 
 static void vesa_powerdown(void)
 {
-    struct vc_data *vc = vt_cons->vcs.vc_cons[fg_console];
+    struct vc_data *vc = vt_cons->fg_console;
     /*
      *  Power down if currently suspended (1 or 2),
      *  suspend if currently blanked (0),
      *  else do nothing (i.e. already powered down (3)).
      *  Called only if powerdown features are allowed.
      */
-    switch (vesa_blank_mode) {
+    switch (vt_cons->blank_mode) {
         case VESA_NO_BLANKING:
             sw->con_blank(vc, VESA_VSYNC_SUSPEND+1);
             break;
@@ -601,7 +594,7 @@ static void vesa_powerdown_screen(void)
 
 static void blank_screen(void)
 {
-        struct vc_data *vc = vt_cons->vcs.vc_cons[fg_console];
+        struct vc_data *vc = vt_cons->fg_console;
         int i;
 
         if (vc->display_fg->vt_blanked)
@@ -614,9 +607,9 @@ static void blank_screen(void)
         }
 
         hide_cursor(vc);
-        if (vesa_off_interval) {
+        if (vc->display_fg->off_interval) {
                 timer_table[BLANK_TIMER].fn = vesa_powerdown_screen;
-                timer_table[BLANK_TIMER].expires = jiffies + vesa_off_interval;
+                timer_table[BLANK_TIMER].expires = jiffies + vc->display_fg->off_interval;
                 timer_active |= (1<<BLANK_TIMER);
         } else {
                 timer_active &= ~(1<<BLANK_TIMER);
@@ -632,28 +625,27 @@ static void blank_screen(void)
 
         if (console_blank_hook && console_blank_hook(1))
                 return;
-        if (vesa_blank_mode)
-                sw->con_blank(vc, vesa_blank_mode + 1);          
+        if (vc->display_fg->blank_mode)
+                sw->con_blank(vc, vc->display_fg->blank_mode + 1);          
 }
 
 void unblank_screen(void)
 {
-	struct vc_data *vc;
+	struct vc_data *vc = vt_cons->fg_console;
 
         if (!vt_cons->vt_blanked)
                 return;
-        if (!vc_cons_allocated(fg_console)) {
+        if (!vc_cons_allocated(vt_cons->fg_console->vc_num)) {
                 /* impossible */
-                printk("unblank_screen: tty %d not allocated ??\n", fg_console+1);
+                printk("unblank_screen: tty %d not allocated ??\n", vt_cons->fg_console->vc_num+1);
                 return;
         }
         timer_table[BLANK_TIMER].fn = blank_screen;
-        if (blankinterval) {
-                timer_table[BLANK_TIMER].expires = jiffies + blankinterval;
+        if (vc->display_fg->blank_interval) {
+                timer_table[BLANK_TIMER].expires = jiffies + vc->display_fg->blank_interval;
                 timer_active |= 1<<BLANK_TIMER;
         }
 
-	vc = vt_cons->vcs.vc_cons[fg_console];
         vc->display_fg->vt_blanked = 0;
         if (console_blank_hook)
                 console_blank_hook(0);
@@ -672,8 +664,8 @@ void poke_blanked_console(struct vt_struct *vt)
                 timer_table[BLANK_TIMER].fn = unblank_screen;
                 timer_table[BLANK_TIMER].expires = jiffies;     /* Now */
                 timer_active |= 1<<BLANK_TIMER;
-        } else if (blankinterval) {
-                timer_table[BLANK_TIMER].expires = jiffies + blankinterval;
+        } else if (vt->blank_interval) {
+                timer_table[BLANK_TIMER].expires = jiffies + vt->blank_interval;
                 timer_active |= 1<<BLANK_TIMER;
         }
 }
@@ -807,9 +799,9 @@ int vc_resize(unsigned int lines, unsigned int cols,
               unsigned int first, unsigned int last)
 {
         unsigned int cc, ll, ss, sr, todo = 0;
-        unsigned int currcons = fg_console, i;
         unsigned short *newscreens[MAX_NR_CONSOLES];
-	struct vc_data *vc = vt_cons->vcs.vc_cons[fg_console];
+	struct vc_data *vc = vc->display_fg->fg_console;
+	int currcons, i;
 
         cc = (cols ? cols : video_num_columns);
         ll = (lines ? lines : video_num_lines);
@@ -1712,7 +1704,8 @@ static void setterm_command(struct vc_data *vc)
                         update_attr(vc);
                         break;
                 case 9: /* set blanking interval */
-                        blankinterval = ((par[1] < 60) ? par[1] : 60) * 60 * HZ;
+                        vc->display_fg->blank_interval = 
+					((par[1] < 60) ? par[1] : 60) * 60 * HZ;
                         poke_blanked_console(vc->display_fg);
                         break;
                 case 10: /* set bell frequency in Hz */
@@ -1736,7 +1729,8 @@ static void setterm_command(struct vc_data *vc)
                         poke_blanked_console(vc->display_fg);
                         break;
                 case 14: /* set vesa powerdown interval */
-                        vesa_off_interval = ((par[1] < 60) ? par[1] : 60) * 60 * HZ;
+                        vc->display_fg->off_interval = 
+				((par[1] < 60) ? par[1] : 60) * 60 * HZ;
                         break;
         }
 }
@@ -3215,25 +3209,24 @@ static void console_softint(unsigned long ignored)
 
         spin_lock_irq(&console_lock);
 
-        if (want_vc->vc_num != fg_console && vc_cons_allocated(want_vc->vc_num) 
-	    && !want_vc->display_fg->vt_dont_switch) { 
-		hide_cursor(vt_cons->vcs.vc_cons[fg_console]);
+        if (want_vc->vc_num != want_vc->display_fg->fg_console->vc_num && 
+	    vc_cons_allocated(want_vc->vc_num) &&
+	    !want_vc->display_fg->vt_dont_switch) { 
+		hide_cursor(want_vc->display_fg->fg_console);
 		/* New console, old console */
-                change_console(want_vc, vt_cons->vcs.vc_cons[fg_console]);
+                change_console(want_vc, want_vc->display_fg->fg_console);
                 /* we only changed when the console had already
                    been allocated - a new console is not created
                    in an interrupt routine */
         }
 	/* do not unblank for a LED change */
-	if (do_poke_blanked_console) { 
-                do_poke_blanked_console = 0;
-                poke_blanked_console(want_vc->display_fg);
-        }
+        poke_blanked_console(want_vc->display_fg);
+	
 	if (want_vc->display_fg->scrollback_delta) {
-		struct vc_data *vc = vt_cons->vcs.vc_cons[fg_console];
+		struct vc_data *vc = want_vc->display_fg->fg_console;
                 clear_selection();
                 if (vcmode == KD_TEXT)
-                	sw->con_scrolldelta(vc, vc->display_fg->scrollback_delta); 
+                      sw->con_scrolldelta(vc,vc->display_fg->scrollback_delta); 
                 vc->display_fg->scrollback_delta = 0;
         }
         spin_unlock_irq(&console_lock);
@@ -3245,6 +3238,7 @@ static void console_softint(unsigned long ignored)
 
 int tioclinux(struct tty_struct *tty, unsigned long arg)
 {
+	struct vc_data *vc = (struct vc_data *) tty->driver_data;
         char type, data;
 
         if (tty->driver.type != TTY_DRIVER_TYPE_CONSOLE)
@@ -3288,7 +3282,7 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
                         kmsg_redirect = data;
                         return 0;
                 case 12:        /* get fg_console */
-                        return fg_console;
+                        return vc->display_fg->fg_console->vc_num; 
         }
         return -EINVAL;
 }
@@ -3434,7 +3428,7 @@ static void con_unthrottle(struct tty_struct *tty)
 
 void vt_console_print(struct console *co, const char * b, unsigned count)
 {
-        int currcons = fg_console;
+        int currcons = vt_cons->fg_console->vc_num;
         unsigned char c;
         static unsigned long printing = 0;
 	struct vc_data *vc;
@@ -3526,7 +3520,7 @@ quit:
 
 static kdev_t vt_console_device(struct console *c)
 {
-        return MKDEV(TTY_MAJOR, c->index ? c->index : fg_console + 1);
+        return MKDEV(TTY_MAJOR, c->index ? c->index : vt_cons->fg_console->vc_num + 1);
 }
 
 struct console vt_console_driver = {
@@ -3564,7 +3558,6 @@ void __init vt_console_init(void)
         if (conswitchp)
                 display_desc = conswitchp->con_startup();
         if (!display_desc) {
-                fg_console = 0;
                 return;
         }
 
@@ -3604,13 +3597,6 @@ void __init vt_console_init(void)
         if (tty_register_driver(&console_driver))
                 panic("Couldn't register console driver\n");
 
-        timer_table[BLANK_TIMER].fn = blank_screen;
-        timer_table[BLANK_TIMER].expires = 0;
-        if (blankinterval) {
-                timer_table[BLANK_TIMER].expires = jiffies + blankinterval;
-                timer_active |= 1<<BLANK_TIMER;
-        }
-
         /*
          * kmalloc is not running yet - we use the bootmem allocator.
          */
@@ -3618,10 +3604,21 @@ void __init vt_console_init(void)
 	vt_cons->vt_dont_switch = 0;
 	vt_cons->scrollback_delta = 0;
 	vt_cons->vt_blanked = 0;
+	vt_cons->blank_interval = 10*60*HZ;
+	vt_cons->off_interval = 0;
 	vt_cons->vcs.first_vc = 0;
 	vt_cons->vcs.last_vc = MAX_NR_USER_CONSOLES;
+
+	timer_table[BLANK_TIMER].fn = blank_screen;
+        timer_table[BLANK_TIMER].expires = 0;
+        if (vt_cons->blank_interval) {
+                timer_table[BLANK_TIMER].expires = jiffies + vt_cons->blank_interval;
+                timer_active |= 1<<BLANK_TIMER;
+        }
+
         for (currcons = 0; currcons < MIN_NR_CONSOLES; currcons++) {
-		vt_cons->vcs.vc_cons[currcons] = vc = (struct vc_data *)
+		vt_cons->vcs.vc_cons[currcons] = vc = 
+		      vt_cons->fg_console = (struct vc_data *)
                                 	alloc_bootmem(sizeof(struct vc_data));
 		vc->vc_num = currcons;
                 vc->display_fg = vt_cons;
@@ -3630,7 +3627,7 @@ void __init vt_console_init(void)
                 kmalloced = 0;
                 vc_init(vc, currcons || !sw->con_save_screen); 
         }
-        vc = vt_cons->vcs.vc_cons[fg_console];
+        vc = vt_cons->fg_console;
         /* master_display_fg = vc; */
         set_origin(vc);
         save_screen(vc);
@@ -3745,7 +3742,6 @@ EXPORT_SYMBOL(default_blu);
 EXPORT_SYMBOL(video_font_height);
 EXPORT_SYMBOL(video_scan_lines);
 EXPORT_SYMBOL(vc_resize);
-EXPORT_SYMBOL(fg_console);
 EXPORT_SYMBOL(console_blank_hook);
 EXPORT_SYMBOL(take_over_console);
 EXPORT_SYMBOL(give_up_console);

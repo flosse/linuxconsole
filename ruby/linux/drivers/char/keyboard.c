@@ -357,9 +357,9 @@ static void fn_lastcons(struct tty_struct *tty)
 static void fn_dec_console(struct tty_struct *tty)
 {
        struct vc_data *vc = (struct vc_data *) tty->driver_data;  	
-       int i;
+       int i, j = vc->display_fg->fg_console->vc_num;
 
-       for (i = fg_console-1; i != fg_console; i--) {
+       for (i = j-1; i != j; i--) {
                if (i == -1)
                        i = MAX_NR_CONSOLES-1;
                if (vc_cons_allocated(i))
@@ -371,9 +371,9 @@ static void fn_dec_console(struct tty_struct *tty)
 static void fn_inc_console(struct tty_struct *tty)
 {
        struct vc_data *vc = (struct vc_data *) tty->driver_data; 	
-       int i;
+       int i, j = vc->display_fg->fg_console->vc_num;
 
-       for (i = fg_console+1; i != fg_console; i++) {
+       for (i = j+1; i != j; i++) {
                if (i == MAX_NR_CONSOLES)
                        i = 0;
                if (vc_cons_allocated(i))
@@ -736,7 +736,7 @@ void register_leds(struct kbd_struct *kbd, unsigned int led,unsigned int *addr,
 
 static inline unsigned char getleds(struct vt_struct *vt)
 {
-	struct kbd_struct *kbd = &vt->vcs.vc_cons[fg_console]->kbd_table;
+	struct kbd_struct *kbd = &vt->fg_console->kbd_table;
 	unsigned char leds;
 	int i;
 
@@ -898,7 +898,7 @@ void kbd_keycode(unsigned int keycode, int down)
 
 	add_keyboard_randomness(keycode ^ (down << 7));
 
-	tty = ttytab ? ttytab[fg_console] : NULL;
+	tty = ttytab ? ttytab[vt_cons->fg_console->vc_num] : NULL;
 
 	if (tty && (!tty->driver_data)) {
 		/*
@@ -910,7 +910,7 @@ void kbd_keycode(unsigned int keycode, int down)
 		 */
 		tty = NULL;
 	}
-	vc = (struct vc_data *) tty->driver_data;
+	vc = vt_cons->fg_console;
 
 	/* If the console is blanked unblank it */
 	want_vc = vc;
