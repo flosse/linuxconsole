@@ -138,7 +138,7 @@ static __inline__ int gameport_time(struct gameport *gameport, int time)
 
 static __inline__ void wait_ms(unsigned int ms)
 {
-	current->state = TASK_UNINTERRUPTIBLE;
+	set_current_state(TASK_UNINTERRUPTIBLE);
 	schedule_timeout(1 + ms * HZ / 1000);
 }
 

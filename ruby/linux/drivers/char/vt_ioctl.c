@@ -134,7 +134,7 @@ int vt_waitactive(struct vc_data *vc)
 		schedule();
 	}
 	remove_wait_queue(&vt_activate_queue, &wait);
-	current->state = TASK_RUNNING;
+	set_current_state(TASK_RUNNING);
 	return retval;
 }
 

@@ -328,7 +328,7 @@ static int poll_aux_status(void)
  		if ((pcimouse_inb(pcimouse_iobase + KBD_STATUS_REG) & AUX_STAT_OBF)
 		    == AUX_STAT_OBF)
 			pcimouse_inb(pcimouse_iobase + KBD_DATA_REG);
-		current->state = TASK_INTERRUPTIBLE;
+		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout((5*HZ + 99) / 100);
 		retries++;
 	}

@@ -176,11 +176,11 @@ static ssize_t serport_ldisc_read(struct tty_struct * tty, struct file * file, u
 	printk(KERN_INFO "serio: Serial port %s\n", name);
 
 	add_wait_queue(&serport->wait, &wait);
-	current->state = TASK_INTERRUPTIBLE;
+	set_current_state(TASK_INTERRUPTIBLE);
 
 	while(serport->serio.type && !signal_pending(current)) schedule();
 
-	current->state = TASK_RUNNING;
+	set_current_state(TASK_RUNNING);
 	remove_wait_queue(&serport->wait, &wait);
 
 	serio_unregister_port(&serport->serio);

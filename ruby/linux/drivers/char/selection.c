@@ -365,7 +365,7 @@ int paste_selection(struct tty_struct *tty)
 		p += count;
 	}
 	remove_wait_queue(&vc->paste_wait, &wait);
-	current->state = TASK_RUNNING;
+	set_current_state(TASK_RUNNING);
 	kfree(paste_buffer);
 	return 0;
 }

@@ -266,14 +266,14 @@ static void rs285_wait_until_sent(struct tty_struct *tty, int timeout)
 {
 	int orig_jiffies = jiffies;
 	while (*CSR_UARTFLG & 8) {
-		current->state = TASK_INTERRUPTIBLE;
+		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(1);
 		if (signal_pending(current))
 			break;
 		if (timeout && time_after(jiffies, orig_jiffies + timeout))
 			break;
 	}
-	current->state = TASK_RUNNING;
+	set_current_state(TASK_RUNNING);
 }
 
 static int rs285_open(struct tty_struct *tty, struct file *filp)
