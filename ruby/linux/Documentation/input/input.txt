@@ -1,6 +1,7 @@
-			  Linux Input drivers v0.9
-		 (c) 1999 Vojtech Pavlik <vojtech@suse.cz>
+			  Linux Input drivers v1.0
+	       (c) 1999-2000 Vojtech Pavlik <vojtech@suse.cz>
 			     Sponsored by SuSE
+	    $Id$
 ----------------------------------------------------------------------------
 
 0. Disclaimer
@@ -64,25 +65,25 @@ kernel):
   After this, the USB keyboard will work straight away, and the USB mouse
 will be available as a character device on major 13, minor 32:
 
-	crw-r--r--   1 root     root      13,  32 Mar 28 22:45 mouse0
+	crw-r--r--   1 root     root      13,  32 Mar 28 22:45 mice
 
   This device, has to be created, unless you use devfs, in which case it's
 created automatically. The commands to do that are:
 
 	cd /dev
 	mkdir input
-	mknod input/mouse0 c 13 32
+	mknod input/mice c 13 63
 
   After that you have to point GPM (the textmode mouse cut&paste tool) and
 XFree to this device to use it - GPM should be called like:
 
-	gpm -t ps2 -m /dev/input/mouse0
+	gpm -t ps2 -m /dev/input/mice
 
   And in X:
 
 	Section "Pointer"
 	    Protocol    "ImPS/2"
-	    Device      "/dev/input/mouse0"
+	    Device      "/dev/input/mice"
 	    ZAxisMapping 4 5
 	EndSection
 
@@ -185,24 +186,29 @@ programs could use a more reasonable interface, for example evdev.c
 	crw-r--r--   1 root     root      13,  33 Mar 29 00:41 mouse1
 	crw-r--r--   1 root     root      13,  34 Mar 29 00:41 mouse2
 	crw-r--r--   1 root     root      13,  35 Apr  1 10:50 mouse3
+	...
+	...
+	crw-r--r--   1 root     root      13,  62 Apr  1 10:50 mouse30
+	crw-r--r--   1 root     root      13,  63 Apr  1 10:50 mice
 
-and so on, up to mouse31. Each is assigned to a single mouse or digitizer,
-unless CONFIG_INPUT_MOUSEDEV_MIX is set. In that case all mice and
-digitizers share a single character device, mouse0, and even when none are
-connected, mouse0 is present. This is useful for hotplugging USB mice, so
-that programs can open the device even when no mice are present.
+Each 'mouse' device is assigned to a single mouse or digitizer, except the last
+one - 'mice'. This single character device is shared by all mice and
+digitizers, and even if none are connected, the device is present.  This is
+useful for hotplugging USB mice, so that programs can open the device even when
+no mice are present.
 
   CONFIG_INPUT_MOUSEDEV_SCREEN_[XY] in the kernel configuration are the size
 of your screen (in pixels) in XFree86. This is needed if you want to use
 your digitizer in X, because it's movement is sent to X via a virtual PS/2
-mouse.
+mouse and thus needs to be scaled accordingly. These values won't be used if
+you use a mouse only.
 
-  Mousedev.c will generate either PS/2, ImPS/2 (microsoft intellimouse) or
-GenPS/2 (genius netmouse/netscroll) protocols, depending on what the program
-wishes. You can set GPM and X to any of these. You'll need ImPS/2 if you
-want to make use of a wheel on a USB mouse and GenPS/2 if you want to use
-extra (up to 5) buttons. I'm not sure how much is GenPS/2 supported in X,
-though.
+  Mousedev will generate either PS/2, ImPS/2 (Microsoft IntelliMouse) or
+GenPS/2 (Genius NetMouse/NetScroll) protocols, depending on what the program
+reading the data wishes. You can set GPM and X to any of these. You'll need
+ImPS/2 if you want to make use of a wheel on a USB mouse and GenPS/2 if you
+want to use extra (up to 5) buttons. I'm not sure how much is GenPS/2 supported
+in X, though.
 
 3.2.3 joydev.c
 ~~~~~~~~~~~~~~
@@ -216,6 +222,7 @@ though. As soon as any USB joystick is connected, it can be accessed in
 	crw-r--r--   1 root     root      13,   1 Apr  1 10:50 js1
 	crw-r--r--   1 root     root      13,   2 Apr  1 10:50 js2
 	crw-r--r--   1 root     root      13,   3 Apr  1 10:50 js3
+	...
 
 And so on up to js31.
 
@@ -236,6 +243,7 @@ independent.
 	crw-r--r--   1 root     root      13,  65 Apr  1 10:50 event1
 	crw-r--r--   1 root     root      13,  66 Apr  1 10:50 event2
 	crw-r--r--   1 root     root      13,  67 Apr  1 10:50 event3
+	...
 
 3. Contacts
 ~~~~~~~~~~~
@@ -272,8 +280,8 @@ can. Here goes a description of the current state of things, which is going
 to be extended, but not changed incompatibly as time goes:
 
   You can use blocking and nonblocking reads, also select() on the
-/dev/inputX devices, and you'll always get a whole number of input events on
-a read. Their layout is:
+/dev/input/eventX devices, and you'll always get a whole number of input
+events on a read. Their layout is:
 
 struct input_event {
 	struct timeval time;
