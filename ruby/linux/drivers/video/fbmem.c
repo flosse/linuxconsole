@@ -128,6 +128,7 @@ extern int sisfb_init(void);
 extern int sisfb_setup(char*);
 extern int stifb_init(void);
 extern int stifb_setup(char*);
+extern int tx3912fb_init(void);
 extern int radeonfb_init(void);
 extern int radeonfb_setup(char*);
 extern int sstfb_init(void);
@@ -318,6 +319,9 @@ static struct {
 #endif
 #ifdef CONFIG_FB_VR4181
 	{ "vr4181fb", vr4181fb_init, NULL },
+#endif
+#ifdef CONFIG_FB_TX3912
+        { "tx3912", tx3912fb_init, NULL },
 #endif
 
 	/*
