@@ -55,12 +55,12 @@
 #define I8042_AUX_IRQ CONFIG_I8042_AUX_IRQ
 
 /*
- * The speed of the i8042's varies. This timeout equals 100 ms on a system
- * with 8.3 MHz i8042 clock, which should be most common. It should not need
- * to be raised / lowered.
+ * This is in 50us units, the time we wait for the i8042 to react. This
+ * has to be long enough for the i8042 itself to timeout on sending a byte
+ * to a non-existent mouse.
  */
 
-#define I8042_CTL_TIMEOUT	83000
+#define I8042_CTL_TIMEOUT	10000
 
 /*
  * Register numbers.

@@ -96,14 +96,20 @@ static void i8042_interrupt(int irq, void *dev_id, struct pt_regs *regs);
 static int i8042_wait_read(void)
 {
 	int i = 0;
-	while ((~inb(I8042_STATUS_REG) & I8042_STR_OBF) && (i < I8042_CTL_TIMEOUT)) i++;
+	while ((~inb(I8042_STATUS_REG) & I8042_STR_OBF) && (i < I8042_CTL_TIMEOUT)) {
+		udelay(50);
+		i++;
+	}
 	return -(i == I8042_CTL_TIMEOUT);
 }
 
 static int i8042_wait_write(void)
 {
 	int i = 0;
-	while ((inb(I8042_STATUS_REG) & I8042_STR_IBF) && (i < I8042_CTL_TIMEOUT)) i++;
+	while ((inb(I8042_STATUS_REG) & I8042_STR_IBF) && (i < I8042_CTL_TIMEOUT)) {
+		udelay(50);
+		i++;
+	}
 	return -(i == I8042_CTL_TIMEOUT);
 }
 
@@ -181,14 +187,17 @@ static int i8042_command(unsigned char *param, int command)
 
 	spin_unlock_irqrestore(&i8042_lock, flags);
 
+#ifdef I8042_DEBUG_IO
+	if (retval)
+		printk(KERN_DEBUG "i8042.c:      -- i8042 (timeout) [%d]\n",
+			(int) (jiffies - i8042_start));
+#endif
+
 	return retval;
 }
 
 /*
  * i8042_kbd_write() sends a byte out through the keyboard interface.
- * It also automatically refreshes the CTR value, since some i8042's
- * trash their CTR after attempting to send data to an nonexistent
- * device.
  */
 
 static int i8042_kbd_write(struct serio *port, unsigned char c)

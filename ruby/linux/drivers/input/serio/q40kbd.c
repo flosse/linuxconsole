@@ -47,15 +47,10 @@ MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
 MODULE_DESCRIPTION("Q40 PS/2 keyboard controller driver");
 MODULE_LICENSE("GPL");
 
-static inline void q40kbd_write(unsigned char val)
-{
-	/* No way to write to the keyboard! */
-}
-
 static struct serio q40kbd_port =
 {
 	type:   SERIO_8042,
-	write:  q40kbd_write,
+	write:  NULL,
 	name:	"Q40 PS/2 kbd port",
 	phys:	"isa0060/serio0",
 };
