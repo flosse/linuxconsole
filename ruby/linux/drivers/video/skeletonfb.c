@@ -1,6 +1,8 @@
 /*
  * linux/drivers/video/skeletonfb.c -- Skeleton for a frame buffer device
  *
+ *  Modified to new api Jan 2001 by James Simmons (jsimmons@linux-fbdev.org)
+ *
  *  Created 28 Dec 1997 by Geert Uytterhoeven
  *
  * This file is subject to the terms and conditions of the GNU General Public
@@ -19,7 +21,8 @@
 #include <linux/fb.h>
 #include <linux/init.h>
 
-#include "fbcon.h"
+/* This header contains struct xxx_par for your graphics card */
+#include <video/skeletion.h>
 
     /*
      *  This is just simple sample code.
@@ -28,47 +31,41 @@
      *  Even less warranty that it actually works :-)
      */
 
-struct xxxfb_info {
-    /*
-     *  Choose _one_ of the two alternatives:
-     *
-     *    1. Use the generic frame buffer operations (fbgen_*).
-     */
-    struct fb_info_gen gen;
-    /*
-     *    2. Provide your own frame buffer operations.
-     */
-    struct fb_info info;
-
-    /* Here starts the frame buffer device dependent part */
-    /* You can use this to store e.g. the board number if you support */
-    /* multiple boards */
+static struct fb_fix_screeninfo xxxfb_fix __initdata = {
+    "FB's name", (unsigned long) NULL, 0, FB_TYPE_PACKED_PIXELS, 0,
+    FB_VISUAL_PSEUDOCOLOR, 1, 1, 1, 0, (unsigned long) NULL, 0, FB_ACCEL_NONE
 };
 
-
-struct xxxfb_par {
     /*
-     *  The hardware specific data in this structure uniquely defines a video
-     *  mode.
+     * 	Modern graphical hardware not only supports pipelines but some 
+     *  also support multiple monitors where each display can have its  
+     *  its own unique data. In this case each display could be  
+     *  represented by a seperate framebuffer device thus a seperate 
+     *  struct fb_info. In this case all of the par structures for the
+     *  graphics card would be shared between each struct fb_info. This
+     *  allows when one display changes it video resolution (info->var) 
+     *  the other displays know instantly. Each display can always be
+     *  aware of the entire hardware state that affects it. I hope this 
+     *  covers every possible hardware design. If not feel free to send 
+     *  me more design types. 
+     */
+
+    /*
+     *  If your driver supports multiple boards, you should make these  
+     *  arrays, or allocate them dynamically (using kmalloc()). 
+     */ 
+static struct fb_info info;
+    /* 
+     * This struct represents the state of a rendering pipe. A modern 
+     * graphics card can have more than one pipe per card depending 
+     * on the hardware design. So the same holds true if you have
+     * multiple pipes. Use arrays or allocate them dynamically.
      *
-     *  If your hardware supports only one video mode, you can leave it empty.
+     * Read video/skeleton.h for more information about graphics pipes. 
      */
-};
+static struct xxx_par __initdata current_par;
 
-
-    /*
-     *  If your driver supports multiple boards, you should make these arrays,
-     *  or allocate them dynamically (using kmalloc()).
-     */
-
-static struct xxxfb_info fb_info;
-static struct xxxfb_par current_par;
-static int current_par_valid = 0;
-static struct display disp;
-
-static struct fb_var_screeninfo default_var;
-
-static int currcon = 0;
+static u32 xxxfb_pseudo_palette[17];
 static int inverse = 0;
 
 int xxxfb_init(void);
@@ -76,142 +73,118 @@ int xxxfb_setup(char*);
 
 /* ------------------- chipset specific functions -------------------------- */
 
-
-static void xxx_detect(void)
+static int xxxfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 {
-    /*
-     *  This function should detect the current video mode settings and store
-     *  it as the default video mode
-     */
-
-    struct xxxfb_par par;
-
-    /* ... */
-    xxx_get_par(&par);
-    xxx_encode_var(&default_var, &par);
-}
-
-static int xxx_encode_fix(struct fb_fix_screeninfo *fix, struct xxxfb_par *par,
-			  const struct fb_info *info)
-{
-    /*
-     *  This function should fill in the 'fix' structure based on the values
-     *  in the `par' structure.
+    const struct xxx_par *par = (const struct xxx_par *) info->par;
+    /* 
+     * We test to see if the hardware can support var. Struct xxx_par will
+     * have the information needed to see if it does. Note we don't change
+     * par nor info->var. This function can be called on its own if we
+     * intent to only test a mode and not set it. Return 0 if it is a
+     * acceptable mode.
      */
 
     /* ... */
-    return 0;
+    return 0;	   	
 }
 
-static int xxx_decode_var(struct fb_var_screeninfo *var, struct xxxfb_par *par,
-			  const struct fb_info *info)
+static void xxxfb_set_par(struct fb_info *info)
 {
     /*
-     *  Get the video params out of 'var'. If a value doesn't fit, round it up,
-     *  if it's too big, return -EINVAL.
-     *
-     *  Suggestion: Round up in the following order: bits_per_pixel, xres,
-     *  yres, xres_virtual, yres_virtual, xoffset, yoffset, grayscale,
-     *  bitfields, horizontal timing, vertical timing.
+     *  xxx_fb_check_var tested the mode we want to set the hardware to.
+     *  If it passes it then is set to info->var. Now we set the hardware
+     *  (and struct par) according to info->var.
      */
 
     /* ... */
-
-    /* pixclock in picos, htotal in pixels, vtotal in scanlines */
-    if (!fbmon_valid_timings(pixclock, htotal, vtotal, info))
-	    return -EINVAL;
-
-    return 0;
 }
 
-static int xxx_encode_var(struct fb_var_screeninfo *var, struct xxxfb_par *par,
-			  const struct fb_info *info)
-{
     /*
-     *  Fill the 'var' structure based on the values in 'par' and maybe other
-     *  values read out of the hardware.
-     */
-
-    /* ... */
-    return 0;
-}
-
-static void xxx_get_par(struct xxxfb_par *par, const struct fb_info *info)
-{
-    /*
-     *  Fill the hardware's 'par' structure.
-     */
-
-    if (current_par_valid)
-	*par = current_par;
-    else {
-	/* ... */
-    }
-}
-
-static void xxx_set_par(struct xxxfb_par *par, const struct fb_info *info)
-{
-    /*
-     *  Set the hardware according to 'par'.
-     */
-
-    current_par = *par;
-    current_par_valid = 1;
-    /* ... */
-}
-
-static int xxx_getcolreg(unsigned regno, unsigned *red, unsigned *green,
-			 unsigned *blue, unsigned *transp,
-			 const struct fb_info *info)
-{
-    /*
-     *  Read a single color register and split it into colors/transparent.
-     *  The return values must have a 16 bit magnitude.
+     *  Set a single color register. The values supplied have a 16 bit
+     *  magnitude. Return != 0 for invalid regno. This routine assumes
+     *  your graphics hardware is packed pixel based (most are :-). 
      *  Return != 0 for invalid regno.
      */
-
-    /* ... */
-    return 0;
-}
-
 static int xxxfb_setcolreg(unsigned regno, unsigned red, unsigned green,
 			   unsigned blue, unsigned transp,
 			   const struct fb_info *info)
 {
+    if (regno >= 256)  /* no. of hw registers */
+       return 1;
     /*
-     *  Set a single color register. The values supplied have a 16 bit
-     *  magnitude.
-     *  Return != 0 for invalid regno.
+     * Program hardware... do anything you want with transp
      */
 
-    if (regno < 16) {
-	/*
-	 *  Make the first 16 colors of the palette available to fbcon
-	 */
-	if (is_cfb15)		/* RGB 555 */
-	    ...fbcon_cmap.cfb16[regno] = ((red & 0xf800) >> 1) |
-					 ((green & 0xf800) >> 6) |
-					 ((blue & 0xf800) >> 11);
-	if (is_cfb16)		/* RGB 565 */
-	    ...fbcon_cmap.cfb16[regno] = (red & 0xf800) |
-					 ((green & 0xfc00) >> 5) |
-					 ((blue & 0xf800) >> 11);
-	if (is_cfb24)		/* RGB 888 */
-	    ...fbcon_cmap.cfb24[regno] = ((red & 0xff00) << 8) |
-					 (green & 0xff00) |
-					 ((blue & 0xff00) >> 8);
-	if (is_cfb32)		/* RGBA 8888 */
-	    ...fbcon_cmap.cfb32[regno] = ((red & 0xff00) << 16) |
-					 ((green & 0xff00) << 8) |
-					 (blue & 0xff00) |
-					 ((transp & 0xff00) >> 8);
+    /* grayscale works only partially under directcolor */
+    if (info->var.grayscale) {
+       /* grayscale = 0.30*R + 0.59*G + 0.11*B */
+       red = green = blue = (red * 77 + green * 151 + blue * 28) >> 8;
+    }
+
+    /* Directcolor:
+     *   var->{color}.offset contains start of bitfield
+     *   var->{color}.length contains length of bitfield
+     *   {hardwarespecific} contains width of DAC
+     *   cmap[X] is programmed to (X << red.offset) | (X << green.offset) | (X << blue.offset)
+     *   DAC[X] is programmed to (red, green, blue)
+     *
+     * Pseudocolor:
+     *    uses offset = 0 && length = DAC register width.
+     *    var->{color}.offset is 0
+     *    var->{color}.length contains widht of DAC
+     *    cmap is not used
+     *    DAC[X] is programmed to (red, green, blue)
+     * Truecolor:
+     *    does not use DAC.
+     *    var->{color}.offset contains start of bitfield
+     *    var->{color}.length contains length of bitfield
+     *    cmap is programmed to (red << red.offset) | (green << green.offset) |
+     *                      (blue << blue.offset) | (transp << transp.offset)
+     *    DAC does not exist
+     */
+#define CNVT_TOHW(val,width) ((((val)<<(width))+0x7FFF-(val))>>16)
+    switch (info->fix.visual) {
+       case FB_VISUAL_TRUECOLOR:
+       case FB_VISUAL_PSEUDOCOLOR:
+               red = CNVT_TOHW(red, info->var.red.length);
+               green = CNVT_TOHW(green, info->var.green.length);
+               blue = CNVT_TOHW(blue, info->var.blue.length);
+               transp = CNVT_TOHW(transp, info->var.transp.length);
+               break;
+       case FB_VISUAL_DIRECTCOLOR:
+	       /* example here assumes 8 bit DAC. Might be different 
+		* for your hardware */	
+               red = CNVT_TOHW(red, 8);       
+               green = CNVT_TOHW(green, 8);
+               blue = CNVT_TOHW(blue, 8);
+               /* hey, there is bug in transp handling... */
+               transp = CNVT_TOHW(transp, 8);
+               break;
+    }
+#undef CNVT_TOHW
+    /* Truecolor has hardware independent palette */
+    if (info->fix.visual == FB_VISUAL_TRUECOLOR) {
+       u32 v;
+
+       if (regno >= 16)
+           return 1;
+
+       v = (red << info->var.red.offset) |
+           (green << info->var.green.offset) |
+           (blue << info->var.blue.offset) |
+           (transp << info->var.transp.offset);
+       if (info->var.bits_per_pixel == 16)
+           ((u16*)(info->pseudo_palette))[regno] = v;
+       else
+           ((u32*)(info->pseudo_palette))[regno] = v;
+       return 0;
     }
     /* ... */
     return 0;
 }
 
-static int xxx_pan_display(struct fb_var_screeninfo *var,
-			   struct xxxfb_par *par, const struct fb_info *info)
+static int xxxfb_pan_display(struct fb_var_screeninfo *var,
+			     const struct fb_info *info)
 {
     /*
      *  Pan (or wrap, depending on the `vmode' field) the display using the
@@ -223,7 +196,7 @@ static int xxx_pan_display(struct fb_var_screeninfo *var,
     return 0;
 }
 
-static int xxx_blank(int blank_mode, const struct fb_info *info)
+static int xxxfb_blank(int blank_mode, const struct fb_info *info)
 {
     /*
      *  Blank the screen if blank_mode != 0, else unblank. If blank == NULL
@@ -240,56 +213,30 @@ static int xxx_blank(int blank_mode, const struct fb_info *info)
     return 0;
 }
 
-static void xxx_set_disp(const void *par, struct display *disp,
-			 struct fb_info_gen *info)
+/* ------------ Accelerated Functions --------------------- */
+
+/*
+ * We provide our own functions if we have hardware acceleration
+ * or non packed pixel format layouts.  
+ */
+
+void xxxfb_rectfill(struct fb_info *p, int x1, int y1, unsigned int width,
+                    unsigned int height, unsigned long color, int rop)
 {
-    /*
-     *  Fill in a pointer with the virtual address of the mapped frame buffer.
-     *  Fill in a pointer to appropriate low level text console operations (and
-     *  optionally a pointer to help data) for the video mode `par' of your
-     *  video hardware. These can be generic software routines, or hardware
-     *  accelerated routines specifically tailored for your hardware.
-     *  If you don't have any appropriate operations, you must fill in a
-     *  pointer to dummy operations, and there will be no text output.
-     */
-    disp->screen_base = virtual_frame_buffer_address;
-#ifdef FBCON_HAS_CFB8
-    if (is_cfb8) {
-	disp->dispsw = fbcon_cfb8;
-    } else
-#endif
-#ifdef FBCON_HAS_CFB16
-    if (is_cfb16) {
-	disp->dispsw = fbcon_cfb16;
-	disp->dispsw_data = ...fbcon_cmap.cfb16;	/* console palette */
-    } else
-#endif
-#ifdef FBCON_HAS_CFB24
-    if (is_cfb24) {
-	disp->dispsw = fbcon_cfb24;
-	disp->dispsw_data = ...fbcon_cmap.cfb24;	/* console palette */
-    } else
-#endif
-#ifdef FBCON_HAS_CFB32
-    if (is_cfb32) {
-	disp->dispsw = fbcon_cfb32;
-	disp->dispsw_data = ...fbcon_cmap.cfb32;	/* console palette */
-    } else
-#endif
-	disp->dispsw = &fbcon_dummy;
 }
 
+void xxxfb_copyarea(struct fb_info *p, int sx, int sy, unsigned int width,
+                         unsigned int height, int dx, int dy)
+{
+}
 
-/* ------------ Interfaces to hardware functions ------------ */
-
-
-struct fbgen_hwswitch xxx_switch = {
-    xxx_detect, xxx_encode_fix, xxx_decode_var, xxx_encode_var, xxx_get_par,
-    xxx_set_par, xxx_getcolreg, xxx_pan_display, xxx_blank, xxx_set_disp
-};
+void xxxfb_imageblit(struct fb_info *p, unsigned int width,
+                     unsigned int height, unsigned long *image,
+                     int image_depth, int dx, int dy)
+{
+}
 
 /* ------------ Hardware Independent Functions ------------ */
-
 
     /*
      *  Initialization
@@ -297,30 +244,41 @@ struct fbgen_hwswitch xxx_switch = {
 
 int __init xxxfb_init(void)
 {
-    fb_info.gen.fbhw = &xxx_switch;
-    fb_info.gen.fbhw->detect();
-    strcpy(fb_info.gen.info.modename, "XXX");
-    fb_info.gen.info.node = -1;
-    fb_info.gen.info.fbops = &xxxfb_ops;
-    fb_info.gen.info.disp = &disp;
-    fb_info.gen.info.switch_con = &xxxfb_switch;
-    fb_info.gen.info.updatevar = &xxxfb_update_var;
-    fb_info.gen.info.flags = FBINFO_FLAG_DEFAULT;
+    int retval;	
+   
+    /* 
+     * Here we set the screen_base to the vitrual memory address
+     * for the framebuffer. Usually we obtain the resource address
+     * from the bus layer and then translate it to virtual memory
+     * space via ioremap. Consult ioport.h. 
+     */
+    info.screen_base = framebuffer_virtual_memory;	
+    info.node = -1;
+    info.fbops = &xxxfb_ops;
+    info.fix = xxxfb_fix;
+    info.par = xxx_par;
+    info.pseudo_palette = xxxfb_pseudo_palette;
+    info.flags = FBINFO_FLAG_DEFAULT;
     /* This should give a reasonable default video mode */
-    fbgen_get_var(&disp.var, -1, &fb_info.gen.info);
-    fbgen_do_set_var(&disp.var, 1, &fb_info.gen);
-    fbgen_set_disp(-1, &fb_info.gen);
-    fbgen_install_cmap(0, &fb_info.gen);
-    if (register_framebuffer(&fb_info.gen.info) < 0)
+    if (!mode_option)
+	mode_option = "640x480@60";	 	
+
+    retval = fb_find_mode(&info.var, &info, mode_option, NULL, 0, NULL, 8);
+  
+    if (!retval || retval == 4)
+	return -EINVAL;			
+
+    info.cmap = fb_default_cmap(1<<info.var.bits_per_pixel);	
+	
+    if (register_framebuffer(&info) < 0)
 	return -EINVAL;
-    printk(KERN_INFO "fb%d: %s frame buffer device\n", GET_FB_IDX(fb_info.gen.info.node),
-	   fb_info.gen.info.modename);
+    printk(KERN_INFO "fb%d: %s frame buffer device\n", GET_FB_IDX(info.node),
+	   info.fix.id);
 
     /* uncomment this if your driver cannot be unloaded */
     /* MOD_INC_USE_COUNT; */
     return 0;
 }
-
 
     /*
      *  Cleanup
@@ -350,7 +308,6 @@ int __init xxxfb_setup(char *options)
 
 /* ------------------------------------------------------------------------- */
 
-
     /*
      *  Frame buffer operations
      */
@@ -367,25 +324,21 @@ static int xxxfb_release(const struct fb_info *info, int user)
     return 0;
 }
 
-
-    /*
-     *  In most cases the `generic' routines (fbgen_*) should be satisfactory.
-     *  However, you're free to fill in your own replacements.
-     */
-
 static struct fb_ops xxxfb_ops = {
 	owner:		THIS_MODULE,
 	fb_open:	xxxfb_open,    /* only if you need it to do something */
 	fb_release:	xxxfb_release, /* only if you need it to do something */
-	fb_get_fix:	fbgen_get_fix,
-	fb_get_var:	fbgen_get_var,
-	fb_set_var:	fbgen_set_var,
+	fb_check_var:	xxxfb_check_var,
+	fb_set_par:	xxxfb_set_par,
 	fb_setcolreg:	xxxfb_setcolreg,
-	fb_blank:	fbgen_blank,
-	fb_pan_display:	fbgen_pan_display,
-	fb_ioctl:       xxxfb_ioctl,   /* optional */
+	fb_blank:	xxxfb_blank,
+	fb_pan_display:	xxxfb_pan_display,
+	fb_rectfill:	xxxfb_rectfill,  /* optional */
+	fb_copyarea:	xxxfb_copyarea,  /* optional */
+	fb_imageblit:	xxxfb_imageblit, /* optional */
+	fb_ioctl:       xxxfb_ioctl,     /* optional */
+	fb_mmap:	xxxfb_mmap,      /* optional */	
 };
-
 
 /* ------------------------------------------------------------------------- */
 
