@@ -706,9 +706,10 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		/*
 		 * explicitly blank/unblank the screen if switching modes
 		 */
-		if (arg == KD_TEXT)
+		if (arg == KD_TEXT) {
+			set_palette(vc->display_fg->fg_console);
 			unblank_screen(vc->display_fg);
-		else
+		} else
 			do_blank_screen(vc);
 		return 0;
 
@@ -1449,9 +1450,10 @@ void complete_change_console(struct vc_data *new_vc, struct vc_data *old_vc)
 	 * gone, and so there is now a new vc_mode
 	 */
 	if (old_vc_mode != new_vc->display_fg->vc_mode) {
-		if (new_vc->display_fg->vc_mode == KD_TEXT)
+		if (new_vc->display_fg->vc_mode == KD_TEXT) {
+			set_palette(new_vc);
 			unblank_screen(new_vc->display_fg);
-		else
+		} else
 			do_blank_screen(new_vc);
 	}
 
