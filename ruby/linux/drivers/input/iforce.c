@@ -214,6 +214,8 @@ static struct ff_init_data {
 	u16 cmd;
 	u8 data[4];
 } ff_init_data[] =  {
+
+#if 0
 	{ FF_CMD_INIT_F,   { 0x4F, 0x9A } },
 	{ FF_CMD_INIT_F,   { 0x56, 0x83 } },
 	{ FF_CMD_INIT_F,   { 0x4E, 0x9B } },
@@ -234,8 +236,8 @@ static struct ff_init_data {
 	{ FF_CMD_INIT_0_A, { 0x04, 0x00, 0x6D } },
 	{ FF_CMD_INIT_2,   { 0x01, 0x69 } },
 	{ FF_CMD_INIT_2,   { 0x00, 0x68 } },
+#endif
 
-#if 1
 	{ FF_CMD_INIT_F,   { 0x4F, 0x9A } },
 	{ FF_CMD_INIT_F,   { 0x56, 0x83 } },
 	{ FF_CMD_INIT_F,   { 0x4E, 0x9B } },
@@ -253,7 +255,6 @@ static struct ff_init_data {
 	{ FF_CMD_INIT_2,   { 0x05, 0x6D } },
 	{ FF_CMD_INIT_0_A, { 0x04, 0x00, 0x6D } },
 	{ FF_CMD_INIT_3,   { 0x80, 0xE9 } },
-#endif
 	{ 0, }
  };
 
