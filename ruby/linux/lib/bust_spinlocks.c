@@ -23,7 +23,6 @@ void bust_spinlocks(int yes)
                oops_in_progress = 1;
        } else {
                int loglevel_save = console_loglevel;
-               unblank_screen();
                oops_in_progress = 0;
                /*
                 * OK, the message is on the console. Now we call printk()
