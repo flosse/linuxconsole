@@ -19,8 +19,6 @@
 #include <asm/uaccess.h>
 #include <asm/io.h>
 
-#include "fbcon.h"
-
 /* ---- `Generic' versions of the frame buffer device operations ----------- */
 
     /*
@@ -47,7 +45,7 @@ int fbgen_get_var(struct fb_var_screeninfo *var, struct fb_info *info)
      *  Set the User Defined Part of the Display
      */
 
-int fbgen_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
+int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
 {
     int err, oldbpp;
 	
