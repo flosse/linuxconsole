@@ -59,13 +59,13 @@ to be address for todays needs:
      to use framebuffer devices without a VT. 
 <li> The console system input system is based solely on the input api. This
      allows for things like a universal keymap. No more compiling in new
-     keymaps for every type of different keybaords out their. Plus with this
+     keymaps for every type of different keyboards out there. Plus with this
      design it is possible to use a keyboard without the console system.
 <li> New serial API. The serial layer is more like the parport layer now.
      Having to using the TTY layer for something like a serial mouse is
      plain silly. The idea is to create a basic serial API and register
-     device interfaces. For a modem youwould want to register a TTY interface
-     whereas for a serial mouse or joystick we woudl want to register a
+     device interfaces. For a modem you would want to register a TTY interface
+     whereas for a serial mouse or joystick we would want to register a
      interface for the input api.
 <li> Support for hot plug. We can add or remove graphics cards or even 
      keyboards to create new desktop VTs.     

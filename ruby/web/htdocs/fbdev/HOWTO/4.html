@@ -9,396 +9,203 @@
 <hr width="100%" size="2">
 
 <p>
-Now that we understand the basic 
-ideas behind video card technology and mode setting, we can now look at how 
-the framebuffer devices abstract them. Also, we will see that fbdev actually 
-handles most of the mode setting issues for you to make life much easier. In 
-the older API, the console code was heavily linked to the framebuffer devices.
-The newer API has now moved nearly all console handling code into fbcon 
-itself. Now, fbcon is a true wrapper around the video card&#146;s abilities.
-This allows for massive code reduction and easier driver development. A good 
-example of a framebuffer driver is the virtual framebuffer (vfb). The vfb 
-driver is not 
-  a true framebuffer driver. All it does is map a chunk of memory to userspace. 
-  It's used for demonstration purposes and testing. For a more detailed file
-  that explains each function look at skeletonfb.c. It is not a true driver
-  but it explains everything you need for a real one.
+Now that we understand the basic ideas behind graphics card technology and
+mode setting, we can now look at how the framebuffer devices abstract. Also
+we will see that fbdev actually handles most of the mode setting issues for
+you which make life much easier. In the older API, the console code was
+heavily linked to the framebuffer devices. The newer API has now moved all
+the console handling code into fbcon itself. Now, fbcon is a true wrapper
+around the graphics card&#146;s abilities. This allows for massive code
+and easier driver development. It also allows for a framebuffer system to
+run independent of the VT console layer. A good example of a working
+framebuffer driver is the virtual framebuffer (vfb). The vfb driver is not
+a true framebuffer driver. All it does is map a chunk of memory to userspace.
+It's used for demonstration purposes and testing. For a more detailed file
+that explains each function look at skeletonfb.c. It is not a driver at all
+but it explains everything you need for a real one.               
 </p>
 
 <h3>4.1 Data Structures</h3>
 
-<p>The framebuffer drivers depend heavily on four data structures. These 
-   structures are declared in fb.h. They are 
-	
-   <i>struct fb_var_screeninfo</i></br>            
-   <i>struct fb_fix_screeninfo</i></br> 
-   <i>struct fb_monospecs</i></br> 
-   <i>struct fb_info</i></br> 
+<p>
+The framebuffer drivers depend heavily on four data structures. These
+structures are declared in fb.h. They are:
+</p>
+<pre> 
+   <i>struct fb_var_screeninfo</i>
+   <i> struct fb_fix_screeninfo</i>
+   <i> struct fb_monospecs</i>
+   <i> struct fb_info</i>
+</pre>
+<p> 
+The first three can be made available to and from userland. First let me
+describe what each means and how they are used. 
+</p>    
 
-  The first 
-  three can be made available to and from userland. First let me describe what 
-  each means and how they are used.</p>
+<p>
+<i>Struct fb_var_screeninfo</i> is used to describe the features of a graphics
+you normally can set. With <i>struct fb_var_screeninfo</i>, you can define
+such things as depth and the resolution you want.
+</p>
 
-<p><i>fb_var_screeninfo</i> 
-  is used to describe the features of a video card you normally can set. With 
-  <i>fb_var_screeninfo</i>, you 
-  can define such things as depth and the resolution you want.</p>
-<p>The next structure is<i>fb_fix_screeninfo</i>. 
-  This defines the properties of a card that are created when you set a mode and 
-  can't be changed otherwise. A good example is the start of the framebuffer memory. 
-  This can depend on what mode is set. Now while using that mode, you don't want 
-  to have the memory position change on you. In this case, the video hardware 
-  tells you the memory location and you have no say about it.</p>
-<p>The third structure is <i>fb_monospecs</i>. 
-  In the old API, the importance of <i>fb_monospecs</i> 
-  was very little. This allowed for forbidden things such as setting a mode of 
-  800x600 on a fix frequency monitor. With the new API, <i>fb_monospecs</i> 
-  prevents such things, and if used correctly, can prevent a monitor from being 
-  cooked.</p>
-<p>The final data structure is <i>fb_info</i>. 
-  This defines the current state of the video card. <i>fb_info</i> 
-  is only visible from the kernel. Inside of <i>fb_info</i>, 
-  there exist a <i>struct fb_ops</i> which 
-  is a collection of needed functions to make fbdev work.</p>
+<p>
+The next structure is <i>struct fb_fix_screeninfo</i>. This defines the non
+changeable properties of a graphics card that are set when you change the
+resolution. A good example is the start of the framebuffer memory. It is
+possible this address depends on what resolution, endians, or color depth
+the graphics card is running at. Now while using that mode, you don't want
+to have the memory position change on you. In this case, the graphics hardware
+tells you the memory location and you have no say about it.
+</p>
+
+<p>
+The third structure is <i>struct fb_monospecs</i>. In the old API, the
+importance of <i>struct fb_monospecs</i> was very little. This allowed for
+forbidden things such as setting a mode of 800x600 on a fix frequency monitor.
+With the new API, <i>struct fb_monospecs</i> prevents such things. With DDC
+it can even be expanded to support Plug-n-Play of monitors. This would lead
+to preventing blank screens or worst fried montiors.
+</p>
+        
+<p>
+The final data structure is <i>struct fb_info</i>. This defines the current
+hardware independent state of the framebuffer of a graphics card. It is
+possible that a graphics card has mulitple framebuffers. In this case that
+device would have two <i>struct fb_info</i>.<i>Struct fb_info</i> is only
+visible from the kernel. <i>Struct fb_info</i> is defined as:
+</p>     
+
+<blockquote>
+<pre>
+  <i>struct fb_info {</i>
+  <i>   kdev_t node;</i>
+  <i>   int flags;</i>
+  <i>   int open;</i>
+  <i>   struct fb_var_screeninfo var;</i>
+  <i>   struct fb_fix_screeninfo fix;</i>
+  <i>   struct fb_monspecs monspecs;</i>
+  <i>   struct fbcursor cursor;</i>
+  <i>   struct fb_cmap cmap;</i>
+  <i>   struct fb_ops *fbops;</i>
+  <i>   struct pm_dev *pm_fb;</i>
+  <i>   char *screen_base;</i>
+  <i>   wait_queue_head_t wait;</i>
+  <i>   devfs_handle_t devfs_handle;</i>
+  <i>   devfs_handle_t devfs_lhandle;</i>
+  <i>   void *pseudo_palette;</i>
+  <i>#ifdef CONFIG_MTRR</i>
+  <i>   int mtrr_handle;</i>
+  <i>#endif
+  <i>   void *par;</i>
+  <i>}</i>                        
+</pre>
+</blockquote>
+
+there exist a <i>struct fb_ops</i> which is a collection of needed functions
+to make fbdev work.
+</p>    
 
 <h3>4.2 Driver layout</h3>
-<p>Here I describe a clean way to code 
-  your drivers. A good example of the basic layout is vfb.c. In the example driver, 
-  we first present our data structures in the beginning of the file. Note that 
-  there is no<i>fb_monospecs</i> 
-  since this is handled by code in fbmon.c. This can be done since monitors are 
-  independent in behavior from video cards. First, we define our three basic data 
-  structures. For all the data structures I defined them static and declare the 
-  default values. The reason I do this is because it's less memory intensive than 
-  to allocate a piece of memory and filling in the default values. Note that drivers 
-  that support multihead (multiple video cards) of the same card, then the <i>fb_info </i> 
-  should be dynamically allocated for each card present. For <i>fb_var_screeninfo</i> 
-  and <i>fb_fix_screeninfo</i>, 
-  they still are declared static since all the cards can be set to the same mode.</p>
-<h3>4.3 Initialization and boot time 
-  parameter handling</h3>
-<p>There are two functions that handle 
-  the video card at boot time:</p>
-<blockquote> 
-  <pre><i>int xxfb_init(void);
-</i><i>int xxfb_setup(char*);</i></pre>
-</blockquote>
-<p>In the example driver as with most 
-  drivers, these functions are placed at the end of the driver. Both are very 
-  card specific. In order to link your driver directly into the kernel, both of 
-  these functions must add the above definition with extern in front to fbmem.c. 
-  Add these functions to the following in fbmem.c:</p>
-<blockquote> 
-  <pre><i>static struct {
-</i><i>     const char *name;
 
-</i><i>     int (*init)(void);
-</i><i>     int (*setup)(char*);</i></pre>
-  <pre><i>} fb_drivers[] __initdata = {
-</i><i>#ifdef CONFIG_FB_YOURCARD
-</i><i>     { &quot;driver_name&quot;, xxxfb_init, xxxfb_setup },
-</i><i>#endif</i></pre>
-</blockquote>
-<p>Setup is used to pass card specific 
-  options from the boot prompt of your favorite boot loader. A good example is:</p>
-<blockquote> 
+<p>
+Here I describe a clean way to code your drivers. A good example of the basic
+layout is vfb.c. In the example driver, we first present our data structures
+in the beginning of the file. Note that there is no<i>struct fb_monospecs</i>
+since this is handled by code in fbmon.c. This can be done since monitors are
+independent in behavior from video cards. First, we define our three basic data
+structures. For all the data structures I defined them static and declare the
+default values. The reason I do this is because it's less memory intensive than
+to allocate a piece of memory and filling in the default values. Note that
+drivers can support multihead on the same card, then in that case we would
+have multiple <i>struct fb_info </i>. If the device is hot pluggable then we
+should dynamically allocated <i>struct fb_info </i> for each framebuffer
+present on the graphics card present. For <i>struct fb_var_screeninfo</i> and
+<i>struct fb_fix_screeninfo</i>, they still are declared static since all the
+cards can be set to the same mode.
+</p>                  
+
+<h3>4.3 Initialization and boot time parameter handling</h3>
+ 
+<p>
+There are two functions that handle the video card at boot time:
+</p>
+ 
+<blockquote>
+<pre>
+    <i>int xxfb_init(void);</i>
+    <i>int xxfb_setup(char*);</i>
+</pre>
+</blockquote>       
+
+<p>
+In the example driver as with most drivers, these functions are placed at the
+end of the driver. Both are very card specific. In order to link your driver
+directly into the kernel, both of these functions must add the above functions
+to fbmem.c similiar to what follows:
+</p>
+ 
+<blockquote>
+<pre>
+    <i>static struct {</i>
+    <i>         const char *name;</i>
+    <i>         int (*init)(void);</i>
+    <i>         int (*setup)(char*);</i>
+</pre>
+<pre><i>} fb_drivers[] __initdata = {</i>
+     <i>#ifdef CONFIG_FB_YOURCARD</i>
+     <i>        { &quot;driver_name&quot;, xxxfb_init, xxxfb_setup },</i>
+     <i>#endif</i>
+</pre>
+</blockquote>                    
+
+<p>
+Setup is used to pass card specific options from the boot prompt of your
+favorite boot loader. A good example is:
+</p>
+
+<blockquote>
   <p>boot: video=matrox: vesa: 443</p>
 </blockquote>
+ 
 <p>The basic setup function is:</p>
-<blockquote> 
-  <pre><i>int __init xxxfb_setup(char *options)
-</i><i>{
-    </i><i>char *this_opt;
+ 
+<blockquote>
+<pre>
+     <i>int __init xxxfb_setup(char *options)</i>
+     <i>{</i>
+     <i>char *this_opt;</i>
+ 
+     <i>if (!options || !*options)</i>
+          <i>return 0;</i>
+ 
+</pre>                               
+<pre>
 
-    </i><i>if (!options || !*options)
-        </i><i>return 0;</i></pre>
-  <pre><i>    for (this_opt = strtok(options, &quot;,&quot;); this_opt;
+     <i>for (this_opt = strtok(options, &quot;,&quot;); this_opt;
         </i><i>this_opt = strtok(NULL,      &quot;,&quot;))</i></pre>
   <pre><i>        if (!strcmp(this_opt, &quot;my_option&quot;)) {
-        </i><i>/* Do your stuff. Usually set some static flags that the driver later uses */</i></pre>
-  <pre><i>        } else if (!strncmp(this_opt, &quot;Other_option:&quot;, 5))
+        </i><i>/* Do your stuff. Usually set some static flags that the driver l  <pre><i>        } else if (!strncmp(this_opt, &quot;Other_option:&quot;, 5))
             </i><i>strcpy(some_flag_driver_uses, this_opt+5);
         </i><i>} else ....
     }
 </i><i>}</i></pre>
-</blockquote>
-<p>The <i>xxfb_init</i> function sets 
-  the initial state of the video card. This function has to consider bus and platform 
-  handling since today most cards can exist on many platforms. For bus types we 
-  have to deal with, there are PCI, ISA, and zorro. Also, some platforms offer 
-  firmware that returns information about the video card. In this case, we often 
-  don't need to deal with the bus unless we need more control over the card. Let 
-  us look at Open Firmware that&#146;s available on PowerPCs. If you are going 
-  to use Open Firmware to initialize your card, you need to add the following 
-  to offb.c.</p>
-<blockquote> 
-  <pre><i>#ifdef CONFIG_FB_YOUR_CARD
-</i><i>extern void xxxfb_of_init(struct device_node *dp);
-</i><i>#endif /* CONFIG_FB_YOUR_CARD */</i></pre>
-  <pre><i>Then in the function offb_init_driver, you add something similar to the following:</i></pre>
-  <pre><i>#ifdef CONFIG_FB_YOUR_CARD
-</i><i>if (!strncmp(dp-&gt;name,&quot;Open Firmware number of your card &quot;, size_of_name)) {
-    </i><i>xxxfb_of_init(dp);
-    </i><i>return 1;
-</i><i>}
-</i><i>#endif /* CONFIG_FB_YOUR_CARD */</i></pre>
-</blockquote>
-<p>If Open Firmware doesn't detect your 
-  card, Open Firmware sets up a generic video mode for you. Now in your driver 
-  you really need two initialization functions. </p>
-<p>The next major part of the driver 
-  is declaring the functions of <i>fb_ops</i> 
-  that are declared in <i>fb_info</i> 
-  for the driver. </p>
-<p>The first two functions,<i> xxfb_open</i> 
-  and <i>xxfb_release</i>, can 
-  be called from both fbcon and fbdev. In fact, that's the use of the user flag. 
-  If user equals zero then fbcon wants to access this device, else it's an explicit 
-  open of the framebuffer device. This way, you can handle the framebuffer device 
-  for the console in a special way for a particular video card. For most drivers, 
-  this function just does a <i>MOD_INC_USE_COUNT</i> 
-  or <i>MOD_DEC_USE_COUNT</i>.</p>
-<p>These are the functions that are 
-  at the heart of mode setting. There do exist a few cards that don't support 
-  mode changing. For these we have this function return an -EINVAL to let the 
-  user know he/she can't set the mode. Actually, set_var does more than just set 
-  modes. It can check them as well. In <i>fb_var_screeninfo</i>, 
-  there exists a flag called activate. This flag can take on the following values: 
-  <i>FB_ACTIVATE_NOW</i>, <i>FB_ACTIVATE_NXTOPEN</i>, 
-  and <i>FB_ACTIVATE_TEST</i>. 
-  </p>
-<p><i>FB_ACTIVATE_TEST</i> 
-  tells us if the hardware can handle what the user requested. <i>FB_ACTIVATE_NXTOPEN</i> 
-  sets the values wanted on the next explicit open of fbdev. The final one <i>FB_ACTIVATE_NOW</i> 
-  checks the mode to see if it can be done and then sets the mode. You 
-  MUST check the mode before all things. Note that this function is very card 
-  specific, but I will attempt to give you the most general layout. The basic 
-  layout then for xxxfb_set_var 
-  is:</p>
-<blockquote> 
-  <pre><i>static int vfb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
-</i><i>{
-    int line_length;</i></pre>
-  <blockquote> 
-    <pre><i>/* Basic setup test. Here we look at what the user passed in that he/she wants.
-   For example to test the fb_var_screeninfo field vmode like its done in vfb.c.
-   Here we see if the user has FB_VMODE_YWARP. Also we should look to see if
-   the user tried to pass in invalid values like 17 bpp (bits per pixel) */</i></pre>
-    <pre><i>/* Remember the above discussion on how monitors see a mode. They don't care
-   about bit depth.  So you can divide the checking into two parts. One is to
-   see if the user changed a mode from say 640x480 at 8 bpp to 640x480 at 32 bpp.
-   Remember the var in fb_info represents the current video mode. Before we
-   actually change any resolutions we have to make sure the card has enough 
-   memory for the new mode. Discovering how much memory a video card has varies
-   from card to card.  Also finding out how much memory we have is done in
-   xxxfb_init since this never changes unless you add more memory to your card,
-   which requires a reboot of the machine anyway. You might have to do other
-   tests depending on make of your card. Note the par filed in fb_info. This
-   is used to store card specific data. This data can affect set_var. Also it
-   is present to allow other possible drivers that could effect the framebuffer
-   device such as a special driver for an accel engine or memory mapping the
-   Z buffer on a card */</i></pre>
-    <pre><i>/* Summary. First look at any var fields to see if they are valid. Next test
-   hardware with these fields without setting the hardware. An example of one
-   is to find what the line_length would be for the new mode. Then test the
-   following: */</i></pre>
-  </blockquote>
-  <pre><i>     if ((line_length * var-&gt;yres_virtual) &gt; info-&gt;fix.smem_len)
-        return -ENOMEM; </i></pre>
-  <pre><i>    if (info-&gt;var.xres != var-&gt;xres || info-&gt;var.yres != var-&gt;yres ||
-        info-&gt;var.xres_virtual != var-&gt;xres_virtual ||
-        info-&gt;var.yres_vitual != var-&gt;yres_virtual) {
+</blockquote>       
 
-        /* Resolution changed !!! */
+<p>The <i>xxfb_init</i> function sets
+  the initial state of the video card. This function has to consider bus and pla  handling since today most cards can exist on many platforms. For bus types we
+  have to deal with, there are PCI, ISA, and zorro. Also, some platforms offer
+  firmware that returns information about the video card. In this case, we often  don't need to deal with the bus unless we need more control over the card. Let  us look at Open Firmware that&#146;s available on PowerPCs.
+</p>                                                     
 
-        /* Next you must check to see if the monitor can handle this mode. Don't
-           want to fry your monitor or mess up the display really badly */</i></pre>
-  <pre><i>        if (fbmon_valid_timings(u_int pixclock, u_int htotal, u_int vtotal,
-                                              const struct fb_info *fb_info))
-    </i><i>   /* Can't handle these timings. */
-           </i><i>return -EINVAL;</i></pre>
-  <blockquote> 
-    <pre><i>    /* Timings are okay. Next we see if we really want to change this mode */
-    </i><i>if ((activate &amp; FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
+<p>
+The next major part of the driver
+is declaring the functions of <i>fb_ops</i>
+that are declared in <i>fb_info</i>
+for the driver.
+</p>       
 
-        </i><i>/* Now lets program the clocks on this card. Here the code is
-           very card specific. Remember to change any fields for fix in
-           info that might be affected by the changing of the resolution. */
-        </i><i>info-&gt;fix.line_length      = line_length;</i></pre>
-  </blockquote>
-  <blockquote> 
-    <pre><i>        /* Now that we have dealt with the possible changing resolutions lets
-           handle a possible change of bit depth. */
-        </i><i>if (info-&gt;var.bits_per_pixel != var-&gt;bits_per_pixel) {
-            </i><i>if ((err = fb_alloc_cmap(&amp;info-&gt;cmap, 0, 0)))
-                </i><i>return err;
-        </i><i>}
-    </i><i>}</i></pre>
-  </blockquote>
-  <blockquote> 
-    <pre><i>    /* We have shown that the monitor and video card can handle this mode or
-       have actually set the mode.  Next the fb_bitfield structure in
-       fb_var_screeninfo is filled in. Even if you don't set the mode you get
-       a feel of the mode before you really set it. These are typical values
-       but may be different for your card. For truecolor modes all the fields
-       matter. For pseudocolor modes only the length matters.  Thus all the
-       lengths should be the same (=bpp). */
-    </i><i>switch (var-&gt;bits_per_pixel) {
-        </i><i>case 1:
-        </i><i>case 7:
-        </i><i>    /* Pseudocolor mode example */
-        </i><i>    var-&gt;red.offset    = 0;
-        </i><i>    var-&gt;red.length    = 8;
-</i><i>            var-&gt;green.offset  = 0;
-</i><i>            var-&gt;green.length  = 8;
-</i><i>            var-&gt;blue.offset   = 0;
-</i><i>            var-&gt;blue.length   = 8;
-</i><i>            var-&gt;transp.offset = 0;
-</i><i>            var-&gt;transp.length = 0;
-</i><i>            break;
-        </i><i>case 16:        /* RGB 565 */
-            </i><i>var-&gt;red.offset    = 0;
- </i><i>           var-&gt;red.length    = 5;
- </i><i>           var-&gt;green.offset  = 5;
- </i><i>           var-&gt;green.length  = 6;
- </i><i>           var-&gt;blue.offset   = 11;
- </i><i>           var-&gt;blue.length   = 5;
- </i><i>           var-&gt;transp.offset = 0;
- </i><i>           var-&gt;transp.length = 0;
- </i><i>           break;
-        </i><i>case 24:        /* RGB 888 */
- </i><i>           var-&gt;red.offset    = 0;
- </i><i>           var-&gt;red.length    = 8;
- </i><i>           var-&gt;green.offset  = 8;
- </i><i>           var-&gt;green.length  = 8;
- </i><i>           var-&gt;blue.offset   = 16;
- </i><i>           var-&gt;blue.length   = 8;
- </i><i>           var-&gt;transp.offset = 0;
- </i><i>           var-&gt;transp.length = 0;
- </i><i>           break;
-        </i><i>case 32:        /* RGBA 8888 */
- </i><i>           var-&gt;red.offset    = 0;
- </i><i>           var-&gt;red.length    = 8;
- </i><i>           var-&gt;green.offset  = 8;
- </i><i>           var-&gt;green.length  = 8;
- </i><i>           var-&gt;blue.offset   = 16;
- </i><i>           var-&gt;blue.length   = 8;
- </i><i>           var-&gt;transp.offset = 24;
- </i><i>           var-&gt;transp.length = 8;
- </i><i>           break;
-    </i><i>}
-    </i><i>/* Yeah. We are done !!! */
-</i><i>}</i></pre>
-  </blockquote>
-</blockquote>
-<p>The function <i>xxxfb_setcolreg</i> 
-  is used to set a single color register for a video card. To use this properly, 
-  you must understand colors, which is described above. This routine sets a color 
-  map entry. The regno passed into the routine represents the color map index 
-  which is equal to the color that&#146;s composed of the amount of red, green, 
-  blue, and even alpha that are also passed into the function. For pseudocolor 
-  modes, this color map index (regno) represents the pixel value. So if you place 
-  a pixel value of regno in video memory, you get the color that&#146;s made of 
-  the red, green, blue that you passed into <i>xxxfb_setcolreg</i>. 
-  Now for truecolor and directcolor mode, it&#146;s a little different. In this 
-  case, we simulate a pseudo color map. The reason for this is the console system 
-  always has a color map, which has 16 entries. In 
-  <i>fb_info</i>, there exist the pseudo_palette, which gives a mapping 
-  from a non-color map mode to a color map based system. The pseudo_palette always 
-  has 17 entries. The first 16 is for the console colors and the last one for 
-  the cursor. So if we wanted to display the 4 entry in the color map of the console, 
-  we would place the value of info-&gt;psuedo_palette[4] directly into the video 
-  memory. This is, of course, taken care of by fbcon. You just need to code the 
-  &quot;formula&quot; that does this translation. An example follows for 32-bit 
-  mode:</p>
-<blockquote> 
-  <pre><i>red &gt;&gt;= 8;
-</i><i>green &gt;&gt;= 8;
-</i><i>blue &gt;&gt;= 8;</i></pre>
-  <pre><i>info-&gt;pseudo_palette[regno] =
-</i><i>       (red   &lt;&lt; info-&gt;var.red.offset)        |
-</i><i>       (green &lt;&lt; info-&gt;var.green.offset)      |
-</i><i>       (blue  &lt;&lt; info-&gt;var.blue.offset);</i></pre>
-</blockquote>
-<p>Here, we first scale down the color 
-  components. Each color passed to set_colreg is 16 bits in size. For 32-bit mode, 
-  each color is 8 bits in size. Next, we OR the colors together after we have 
-  offseted them. The offset is used because the pixel layout in 32 bits could 
-  be RBGA, ARGBA, etc. In setcol_reg of vfb.c, is the standard way to deal with 
-  packed pixel format of various image depths. Regno is the index to get this 
-  particular color.</p>
-<p>That does it for required functions 
-  besides the set of needed accel functions, which has not been discussed yet. 
-  If the video card doesn't support the function, then we just place a NULL in 
-  <i>fb_ops</i>. The next function 
-  in <i>fb_ops</i> is <i>xxxfb_blank</i>. 
-  This function provides support for hardware blanking. For <i>xxxfb_blank</i>, 
-  the first parameter represents the blanking modes available. They are <i>VESA_NO_BLANKING</i>, 
-  <i>VESA_VSYNC_SUSPEND</i>, <i>VESA_HSYNC_SUSPEND</i>, 
-  and <i>VESA_POWERDOWN</i>. <i>VESA_NO_BLANKING</i> 
-  powers up the display again. <i>VESA_POWERDOWN</i> 
-  turns off the display. This is a great power saving feature on a laptop. </p>
-<p>The next optional function is <i>xxxfb_pan_display</i>. 
-  This function enables panning. Panning is often used for scrolling. </p>
-<p>The ioctl function gives you the 
-  power to take advantage of special features other cards don't have. If your 
-  card is nothing special then just give this<i> fb_ops</i> 
-  function a NULL pointer. The sky is the limit for defining your ioctl calls.</p>
-<p>There exists a default memory map 
-  function for fbdev, but sometimes it just doesn't have the power you truly need. 
-  A good example of this is video cards that work in sparc workstations that need 
-  their own mmap functions because of the way sparcs handle memory is different 
-  from other platforms. This is true even for sparcs with PCI buses. </p>
-<p>Now here is the next class of functions 
-  that are optional -- <i>xxxfb_accel_init 
-  </i>and <i>xxfb_accel_done</i>. 
-  <i>xxxfb_accel_init</i> really 
-  depends on the card. It is intended to initialize the engine or set the accel 
-  engine into a state so that you can use the acceleration engine. It also ensures 
-  that the framebuffer is not accessed at the same time as the accel engine. This 
-  can lock a system. Usually, there exists a bit to test to see if an accel engine 
-  is idle or if the card generates an interrupt. For cards that used the old fb_rasterimg, 
-  this function replaces it. Some cards have separate states for 3D and 2D. This 
-  function insures that the card goes into a 2D state. Just in case a previous 
-  application set the accel engine into a 3D state or made the accel engine very 
-  unhappy. The next function that encompasses this set is <i>xxxfb_accel_done</i>. 
-  This function sets the video card in a state such that you can write to the 
-  framebuffer again. You should provide both functions if your driver uses even 
-  one hardware accelerated function. The reason being is to ensure that the framebuffer 
-  is not accessed at the same time as the accel engine.</p>
-<p>Finally, the third class of fb_op 
-  functions. Like the first, they are required. If your card does not support 
-  any of these accelerated functions, there exist default functions for packed 
-  pixel framebuffer formats. They are <i>cfba_fillrect</i>, 
-  <i>cfba_copyarea</i>, and <i>cfba_imgblit</i>. 
-  If your driver supports some but not all of the accels available, you can still 
-  use some of these software emulated accels. Each software-emulated accel is 
-  stored in a separate file. Now lets describe each accel function. Before we 
-  discuss these functions we need to note not to draw in areas pass the video 
-  boundaries. If it does, you need to adjust the width and height of the areas 
-  to avoid this problem.</p>
-<p>The first function just fills in 
-  a rectangle starting at x1 and y1 of some width and height with a pixel value 
-  of packed pixel format. If the video memory mapping is not a direct mapping 
-  from the pixel value (not <i>FB_TYPE_PACKED_PIXEL</i>), 
-  you will have to do some translating. There are two ways to fill in the rectangle, 
-  <i>FBA_ROP_COPY</i> and <i>FBA_ROP_XOR. 
-  FBA_ROP_XOR</i> exclusive ORs 
-  the pixel value with the current pixel value. This allows things like quickly 
-  erasing a rectangular area. The other function just directly copies the data.</p>
-<p>The next function is <i>xxxfb_copyarea</i>. 
-  It just copies one area of the framebuffer at source x and source y of some 
-  width and height to some destination x and y.</p>
-<p>The final function is <i>xxxfb_imageblt</i>. 
-  This function copies an image from system memory to video memory. You can get 
-  really fancy here but this is fbdev, which has the purpose of mode setting only. 
-  All the image blit function does is draw bitmaps, image made of a foreground 
-  and background color, and a color image of the same color depth as the framebuffer. 
-  The second part is used to draw the little penguins. The drawing of bitmaps 
-  is used to draw our fonts.</p>
-<p>That does it for the functions. Now 
-  you should be set for writing your driver.</p>
+
 <p align="center"><a href="index.html">index</a> 
-  <a href="3.html">back</a></p>
+<a href="3.html">back</a></p>
 </body>
 </html>
