@@ -80,8 +80,7 @@ obj-$(CONFIG_INPUT_USBKBD)	+= usbkbd.o
 obj-$(CONFIG_INPUT_WACOMUSB)	+= wacom.o
 obj-$(CONFIG_INPUT_IFORCE_USB)	+= iforce.o
 
-#obj-$(CONFIG_INPUT_ADBMOUSE)	+= adbmouse.o
-#obj-$(CONFIG_INPUT_ADBKBD)	+= adbkbd.o
+obj-$(CONFIG_INPUT_ADBHID)	+= adbhid.o
 #obj-$(CONFIG_INPUT_ADBSW)	+= adbsw.o
 #obj-$(CONFIG_INPUT_MOUSESTICK) += mousestick.o
 
