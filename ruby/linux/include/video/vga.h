@@ -175,47 +175,6 @@
 #define VGA_OUTW_WRITE
 #endif
 
-#define MODE_SKIP4  1
-#define MODE_8BPP   2
-#define MODE_CFB    4
-#define MODE_TEXT   8
-
-struct vga_hw_state {
-	caddr_t regsbase;
-	u16 xres;
-	u16 vxres;
-	u16 right; 
-	u16 hslen; 
-	u16 left;
-	u16 yres;
-	u16 lower;
-	u16 vslen; 
-	u16 upper;
-	u16 xoffset;
-	u16 yoffset;
-	u8 palette_blanked;
-	u8 vesa_blanked;
-	u8 video_type;
-	u8 pel_mask;	
-	u8 clkdiv;
-	u8 rMode;
-	u8 misc;
-	u8 mode;
-	u8 shift;
-	u8 SeqCtrlIndex;	/* Sequencer Index Reg. */
-	u8 CrtCtrlIndex;	/* CRT-Contr. Index reg. */
-	u8 CrtMiscIO;		/* Miscellaneous register */
-	u8 HorizontalTotal; 	/* CRT-Controller:00h */
-	u8 HorizDisplayEnd;	/* CRT-Controller:01h */
-	u8 StartHorizRetrace;	/* CRT-Controller:04h */
-	u8 EndHorizRetrace;	/* CRT-Controller:05h */
-	u8 Overflow;		/* CRT-Controller:07h */
-	u8 StartVertRetrace;	/* CRT-Controller:10h */
-	u8 EndVertRetrace;	/* CRT-Controller:11h */
-	u8 ModeControl;		/* CRT-Controller:17h */
-	u8 ClockingMode;	/* Seq-Controller:01h */
-};
-
 /*
  * generic VGA port read/write
  */
@@ -479,6 +438,49 @@ static inline void vga_mm_wattr (caddr_t regbase, unsigned char reg, unsigned ch
         vga_mm_w (regbase, VGA_ATT_W, val);
 }
 
+#ifdef __KERNEL__
+
+#define MODE_SKIP4  1
+#define MODE_8BPP   2
+#define MODE_CFB    4
+#define MODE_TEXT   8
+
+struct vga_hw_state {
+        caddr_t regsbase;
+        u16 xres;
+        u16 vxres;
+        u16 right;
+        u16 hslen;
+        u16 left;
+        u16 yres;
+        u16 lower;
+        u16 vslen;
+        u16 upper;
+        u16 xoffset;
+        u16 yoffset;
+        u8 palette_blanked;
+        u8 vesa_blanked;
+        u8 video_type;
+        u8 pel_mask;
+        u8 clkdiv;
+        u8 rMode;
+        u8 misc;
+        u8 mode;
+        u8 shift;
+        u8 SeqCtrlIndex;        /* Sequencer Index Reg. */
+        u8 CrtCtrlIndex;        /* CRT-Contr. Index reg. */
+        u8 CrtMiscIO;           /* Miscellaneous register */
+        u8 HorizontalTotal;     /* CRT-Controller:00h */
+        u8 HorizDisplayEnd;     /* CRT-Controller:01h */
+        u8 StartHorizRetrace;   /* CRT-Controller:04h */
+        u8 EndHorizRetrace;     /* CRT-Controller:05h */
+        u8 Overflow;            /* CRT-Controller:07h */
+        u8 StartVertRetrace;    /* CRT-Controller:10h */
+        u8 EndVertRetrace;      /* CRT-Controller:11h */
+        u8 ModeControl;         /* CRT-Controller:17h */
+        u8 ClockingMode;        /* Seq-Controller:01h */
+};
+
 extern void vga_clock_chip(struct vga_hw_state *state, unsigned int pixclock,
 			   int mul, int div);
 extern int vga_check_mode(int xres, int right, int hslen, int left, int vxres, 
@@ -488,5 +490,6 @@ extern int vga_set_mode(struct vga_hw_state *state, int xoffset);
 extern void vga_vesa_blank(struct vga_hw_state *state, int mode);
 extern void vga_vesa_unblank(struct vga_hw_state *state);
 extern void vga_pal_blank(void);
+#endif /* __KERNEL__ */
 
 #endif /* __linux_video_vga_h__ */
