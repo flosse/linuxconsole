@@ -667,7 +667,7 @@ conv_uni_to_pc(struct vc_data *vc, long ucs)
 void __init 
 console_map_init(void)
 {
-	struct vt_struct *vt = vt_cons;
+	struct vt_struct *vt = (struct vt_struct *) vt_list.prev;
 	int i;
 	
 	for (i = 0; i < vt->vc_count; i++) {
@@ -677,3 +677,6 @@ console_map_init(void)
 			con_set_default_unimap(vc);
 	}
 }
+
+EXPORT_SYMBOL(con_copy_unimap);
+

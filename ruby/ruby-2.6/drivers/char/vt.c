@@ -135,7 +135,7 @@ struct tty_driver *console_driver;	/* TTY driver for all VT consoles */
 static unsigned int current_vc;		/* Which /dev/vc/X to allocate next */
 static unsigned int current_vt;         /* Which VT to allocate next */
 struct vt_struct *admin_vt;		/* Administrative VT */
-struct vt_struct *vt_cons;		/* Head to link list of VTs */
+LIST_HEAD(vt_list);		/* Head to link list of VTs */
 
 static void vt_flush_chars(struct tty_struct *tty);
 static void unblank_screen_t(unsigned long dummy);
@@ -811,11 +811,10 @@ void unblank_vt(struct vt_struct *vt)
  */
 void unblank_screen(void)
 {
-        struct vt_struct *vt = vt_cons;
+        struct vt_struct *vt;
 
-        while(vt) {
+        list_for_each_entry (vt, &vt_list, node) {
                 unblank_vt(vt);
-                vt = vt->next;
         }
 }
 
@@ -940,7 +939,7 @@ struct vc_data *find_vc(int currcons)
 {
         struct vt_struct *vt;
 
-        for (vt = vt_cons; vt != NULL; vt = vt->next) {
+        list_for_each_entry (vt, &vt_list, node) {
                 if ((currcons < vt->first_vc + vt->vc_count) &&
                     currcons >= vt->first_vc)
                         return vt->vc_cons[currcons - vt->first_vc];
@@ -951,7 +950,7 @@ struct vc_data *find_vc(int currcons)
 struct vc_data *vc_allocate(unsigned int currcons)
 {
 	struct vc_data *vc = NULL;
-	struct vt_struct *vt = vt_cons;
+	struct vt_struct *vt;
 
 	if (currcons >= MAX_NR_CONSOLES) {
 		currcons = -ENXIO;
@@ -964,7 +963,7 @@ struct vc_data *vc_allocate(unsigned int currcons)
 		return NULL;
 	}
 
-        for (vt = vt_cons; vt != NULL; vt = vt->next) {
+        list_for_each_entry (vt, &vt_list, node) {
                 if (currcons < vt->first_vc + vt->vc_count &&
                     currcons >= vt->first_vc)
                         goto found_pool;
@@ -1743,8 +1742,7 @@ const char *vt_map_display(struct vt_struct *vt, int init, int vc_count)
 	vt->vt_num = current_vt;
 	vt->first_vc = current_vc;
 	vt->vc_count = vc_count;
-	vt->next = vt_cons;
-	vt_cons = vt;
+	list_add_tail(&vt->node, &vt_list);
 	vt->vt_dont_switch = 0;
 	vt->scrollback_delta = 0;	
 	vt->vt_blanked = 0;
@@ -1820,7 +1818,7 @@ static struct tty_operations vt_ops = {
 
 int __init vty_init(void)
 {
-	if (!vt_cons)
+	if (!vt_list.prev)
 		return -ENXIO;
 	
 	console_driver = alloc_tty_driver(MAX_NR_CONSOLES);
@@ -1924,5 +1922,10 @@ EXPORT_SYMBOL(default_grn);
 EXPORT_SYMBOL(default_blu);
 EXPORT_SYMBOL(vc_resize);
 EXPORT_SYMBOL(console_blank_hook);
-EXPORT_SYMBOL(vt_cons);
+EXPORT_SYMBOL(vt_list);
 EXPORT_SYMBOL(take_over_console);
+EXPORT_SYMBOL(update_region);
+EXPORT_SYMBOL(update_screen);
+EXPORT_SYMBOL(vt_map_display);
+EXPORT_SYMBOL(admin_vt);
+EXPORT_SYMBOL(find_vc);

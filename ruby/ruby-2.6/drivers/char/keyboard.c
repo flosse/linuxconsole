@@ -969,7 +969,6 @@ static int emulate_raw(struct vc_data *vc, unsigned int keycode, unsigned char u
 void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down)
 {
 	struct vc_data *vc = vt->fg_console;
-	struct input_handle *handle = vt->keyboard;
 	unsigned short keysym, *key_map;
 	unsigned char type, raw_mode;
 	struct tty_struct *tty;
@@ -1113,7 +1112,7 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 					struct input_dev *dev,
 					struct input_device_id *id)
 {
-	struct vt_struct *vt = vt_cons;
+	struct vt_struct *vt;
 	struct input_handle *handle;
 	int i;
 
@@ -1141,11 +1140,7 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 	 * have one.
 	 */
 	if (i != BTN_MISC) {
-                while (vt) {
-                        if (vt->next && !vt->next->keyboard) {
-                                vt = vt->next;
-                                continue;
-                        }
+                list_for_each_entry (vt, &vt_list, node) {
                         if (!vt->keyboard) {
                                 vt->keyboard = handle;
                                 handle->private = vt;
@@ -1158,7 +1153,6 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 				}
 				break;
                         }
-                        vt = vt->next;
                 }
 		kbd_refresh_leds(handle);
 	}	

@@ -2280,7 +2280,7 @@ int fbcon_resize_all(struct fb_info *info)
 	
 	if(!vt)
 		return -ENODEV;
-	
+
 	vc = vt->default_mode;
 	vc->vc_cols = info->var.xres/vc->vc_font.width;
 	vc->vc_rows = info->var.yres/vc->vc_font.height;

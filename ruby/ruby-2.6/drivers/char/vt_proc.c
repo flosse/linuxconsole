@@ -176,12 +176,11 @@ EXPORT_SYMBOL(vt_proc_detach);
 
 int __init vt_proc_init(void)
 {
-        struct vt_struct *vt=vt_cons;
-	if (vt) {
+        struct vt_struct *vt;
+	if (vt_list.prev) {
 		proc_bus_console_dir = proc_mkdir(VT_PROC_DIR, proc_bus);
-		while(vt) {
+		list_for_each_entry (vt, &vt_list, node) {
 			vt_proc_attach(vt);
-			vt=vt->next;
 		}
 	}
 	return 0;

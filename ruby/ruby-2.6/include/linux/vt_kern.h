@@ -240,13 +240,13 @@ struct vt_struct {
 	unsigned int first_vc;
 	unsigned int vc_count;
 	struct vc_data *vc_cons[MAX_NR_USER_CONSOLES];	/* VT's VC pool */
-	struct vt_struct *next;
+        struct list_head node;
         struct proc_dir_entry *procdir;
 	unsigned char vt_ledstate;
 	unsigned char vt_ledioctl;
 };
 
-extern struct vt_struct *vt_cons;
+extern struct list_head vt_list;
 extern struct vt_struct *admin_vt;
 
 /* universal VT emulation functions */

@@ -31,7 +31,6 @@
 #define MAX_DUMB_CONSOLES 16
 
 static unsigned long dumb_num = 0;
-static unsigned long dumb_vc_count = 0;
 static struct vt_struct dummy_vt;
 static struct vc_data default_mode;
 
