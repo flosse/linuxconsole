@@ -398,7 +398,7 @@ int con_font_op(struct vc_data *vc, struct console_font_op *op)
 	switch (op->op) {
 	case KD_FONT_OP_SET:
 		/* We need data from userland */
-		if (!op->data || !op->charcount)
+		if (!op->data || !op->charcount || !vc->display_fg->vt_sw->con_font_op)
 			return -EINVAL;
 		/* Need to guess font height [compat]. In the old days you
 		   could pass in console_font_op w/o a heigth and figure
@@ -455,8 +455,8 @@ int con_font_op(struct vc_data *vc, struct console_font_op *op)
 			op->data = temp;
 		}
 		/* Get font data for present console */	
-		err = vc->display_fg->vt_sw->con_font_op(vc, op);
-		
+		op = &vc->vc_font;	
+	
  		/* point userland font data space back to passed in font_op */	
 		op->data = old_op.data;
 		if (!err) {
@@ -489,11 +489,14 @@ int con_font_op(struct vc_data *vc, struct console_font_op *op)
 		}		
 		break;
 	case KD_FONT_OP_COPY:
+		/* !!! FIXME !!! */
 		vc->vc_font = vc->display_fg->fg_console->vc_font;
 		break;
 	case KD_FONT_OP_SET_DEFAULT:
-		vc->vc_font = vc->display_fg->default_mode->vc_font;	
+		acquire_console_sem(&vc->vc_tty->driver);
+		*op = vc->display_fg->default_mode->vc_font;
 		err = vc->display_fg->vt_sw->con_font_op(vc, op);
+		release_console_sem(&vc->vc_tty->driver);	
 		break;
 	default:
 		return -EINVAL;
@@ -1365,8 +1368,8 @@ inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
 		    !strcmp(&new_vc->vc_font.data, &old_vc->vc_font.data)) {
 			vt->vt_sw->con_font_op(new_vc, &new_vc->vc_font);
 		}	
-*/	
 		resize_screen(new_vc, new_vc->vc_cols, new_vc->vc_rows);
+		*/
 		set_origin(new_vc);	
 
 		set_palette(new_vc);
