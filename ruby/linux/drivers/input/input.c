@@ -35,6 +35,7 @@
 #include <linux/module.h>
 #include <linux/random.h>
 #include <linux/pm.h>
+#include <linux/proc_fs.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 MODULE_DESCRIPTION("Input layer module");
@@ -60,6 +61,8 @@ static struct input_handler *input_table[8];
 static devfs_handle_t input_devfs_handle;
 static int input_number;
 static long input_devices[NBITS(INPUT_DEVICES)];
+
+static struct proc_dir_entry *proc_bus_input_dir;
 
 void input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {
@@ -261,10 +264,8 @@ static void input_link_handle(struct input_handle *handle)
 
 static void input_unlink_handle(struct input_handle *handle)
 {
-	input_find_and_remove(struct input_handle, handle->dev->handle, handle,
-                              	dnext);
-        input_find_and_remove(struct input_handle, handle->handler->handle,
-				handle, hnext);
+	input_find_and_remove(struct input_handle, handle->dev->handle, handle, dnext);
+        input_find_and_remove(struct input_handle, handle->handler->handle, handle, hnext);
 }
 
 void input_register_device(struct input_dev *dev)
@@ -462,13 +463,101 @@ void input_unregister_minor(devfs_handle_t handle)
 	devfs_unregister(handle);
 }
 
+/*
+ * ProcFS interface for the input drivers.
+ */
+
+static int input_devices_info(char *buf, char **start, off_t pos, int count)
+{
+	struct input_dev *dev = input_dev;
+
+	off_t at = 0;
+	int len, cnt = 0;
+
+	while (dev) {
+
+		len = sprintf(buf, "I: Bus=%04x Vendor=%04x Product=%04x Version=%04x\n",
+			dev->idbus, dev->idvendor, dev->idproduct, dev->idversion);
+
+		len += sprintf(buf + len, "N: Number=%d Name=\"%s\"\n",
+			dev->number, dev->name);
+
+		at += len;
+
+		if (at >= pos) {
+			if (!*start) {
+				*start = buf + (pos - (at - len));
+				cnt = at - pos;
+			} else {
+				cnt += len;
+			}
+			buf += len;
+			if (cnt >= count)
+				/*
+				 * proc_file_read() gives us 1KB of slack so it's OK if the
+				 * above printfs write a little beyond the buffer end (we
+				 * never write more than 1KB beyond the buffer end).
+				 */
+				break;
+		}
+
+		dev = dev->next;
+	}
+
+	return (count > cnt) ? cnt : count;
+}
+
+static int input_handlers_info(char *buf, char **start, off_t pos, int count)
+{
+	struct input_handler *handler = input_handler;
+
+	off_t at = 0;
+	int len, cnt = 0;
+	int i = 0;
+
+	while (handler) {
+
+		len = sprintf(buf, "N: Number=%d Minor=%d Name=\"%s\"\n",
+			i++, handler->minor, "XXX");
+
+		at += len;
+
+		if (at >= pos) {
+			if (!*start) {
+				*start = buf + (pos - (at - len));
+				cnt = at - pos;
+			} else {
+				cnt += len;
+			}
+			buf += len;
+			if (cnt >= count)
+				/*
+				 * proc_file_read() gives us 1KB of slack so it's OK if the
+				 * above printfs write a little beyond the buffer end (we
+				 * never write more than 1KB beyond the buffer end).
+				 */
+				break;
+		}
+
+		handler = handler->next;
+	}
+
+	return (count > cnt) ? cnt : count;
+}
+
 static int __init input_init(void)
 {
+	proc_bus_input_dir = proc_mkdir("input", proc_bus);
+	create_proc_info_entry("devices", 0, proc_bus_input_dir, input_devices_info);
+	create_proc_info_entry("handlers", 0, proc_bus_input_dir, input_handlers_info);
+
 	if (devfs_register_chrdev(INPUT_MAJOR, "input", &input_fops)) {
 		printk(KERN_ERR "input: unable to register char major %d", INPUT_MAJOR);
 		return -EBUSY;
 	}
+
 	input_devfs_handle = devfs_mk_dir(NULL, "input", NULL);
+
 	return 0;
 }
 
