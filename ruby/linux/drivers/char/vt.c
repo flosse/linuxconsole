@@ -150,6 +150,7 @@ void add_softcursor(struct vc_data *vc)
 
 void hide_cursor(struct vc_data *vc)
 {
+	spin_lock_irq(&console_lock);
         if (cons_num == sel_cons)
                 clear_selection();
         if (softcursor_original != -1) {
@@ -159,12 +160,14 @@ void hide_cursor(struct vc_data *vc)
                 softcursor_original = -1;
         }
         sw->con_cursor(vc, CM_ERASE);
+	spin_unlock_irq(&console_lock);
 }
 
 void set_cursor(struct vc_data *vc)
 {
     if (!IS_FG || vc->display_fg->vt_blanked || vcmode == KD_GRAPHICS)
         return;
+    spin_lock_irq(&console_lock); 		
     if (dectcem) {
         if (cons_num == sel_cons)
                 clear_selection();
@@ -173,6 +176,7 @@ void set_cursor(struct vc_data *vc)
             sw->con_cursor(vc, CM_DRAW);
     } else
         hide_cursor(vc);
+    spin_unlock_irq(&console_lock);	
 }
 
 /*
@@ -710,8 +714,7 @@ const char *create_vt(struct vt_struct *vt, struct consw *vt_sw)
         init_timer(&vt->timer);
         vt->timer.data = (long) vt;
         vt->timer.function = blank_screen;
-        vt->timer.expires = jiffies + vt->blank_interval;
-        add_timer(&vt->timer);
+        mod_timer(&vt->timer, jiffies + vt->blank_interval);
 	return display_desc;
 }
 
