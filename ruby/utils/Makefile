@@ -32,12 +32,18 @@
 CC		= gcc
 CFLAGS		= -O2 -Wall -I../linux/include
 
-PROGRAMS	= evtest inputattach jstest jscal fftest
+PROGRAMS	= evtest inputattach jstest jscal fftest ffmvforce
 
 compile: $(PROGRAMS)
 
 clean:
-	-$(RM) *.o *.swp $(PROGRAMS) *.orig *.rej map *~
+	$(RM) *.o *.swp $(PROGRAMS) *.orig *.rej map *~
+
+ffmvforce.o: ffmvforce.c
+	$(CC) -c $(CFLAGS) $(CPPFLAGS) $^ -o $@ `sdl-config --cflags`
+
+ffmvforce: ffmvforce.o
+	$(CC) $^ -o $@ $(LDFLAGS) -lm `sdl-config --libs`
 
 jscal: jscal.o
 	$(CC) $(CFLAGS) $(CPPFLAGS) -lm $^ -o $@
