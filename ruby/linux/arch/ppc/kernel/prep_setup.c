@@ -912,5 +912,4 @@ prep_init(unsigned long r3, unsigned long r4, unsigned long r5,
         ppc_ide_md.ide_init_hwif = prep_ide_init_hwif_ports;
 #endif		
         ppc_ide_md.io_base = _IO_BASE;
-#endif
 }
