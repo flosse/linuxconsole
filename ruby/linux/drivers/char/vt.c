@@ -1649,19 +1649,6 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
                	desc, vc->vc_cols, vc->vc_rows);
 }
 
-/* We can't register the console with devfs during con_init(), because it
- * is called before kmalloc() works.  This function is called later to
- * do the registration.
- */
-void __init con_init_devfs (void)
-{
-        int i;
-
-        for (i = 0; i < vt_driver.num; i++)
-                tty_register_devfs(&vt_driver, DEVFS_FL_AOPEN_NOTIFY,
-                                    vt_driver.minor_start + i);
-}
-
 /*
  *      Visible symbols for modules
  */

@@ -101,7 +101,6 @@
 #include <linux/kmod.h>
 
 #ifdef CONFIG_VT
-extern void con_init_devfs (void);
 #ifdef CONFIG_PROM_CONSOLE
 extern void prom_con_init(void);
 #endif
@@ -2255,6 +2254,9 @@ static struct tty_driver dev_ptmx_driver;
  */
 void __init tty_init(void)
 {
+	struct tty_driver *p;
+	int i;
+
 	/*
 	 * dev_tty_driver and dev_console_driver are actually magic
 	 * devices which get redirected at open time.  Nevertheless,
@@ -2286,12 +2288,16 @@ void __init tty_init(void)
 	if (tty_register_driver(&dev_syscons_driver))
 		panic("Couldn't register /dev/console driver\n");
 
-	/* console calls tty_register_driver() before kmalloc() works.
+	/* 
+         * Some consoles calls tty_register_driver() before kmalloc() works.
 	 * Thus, we can't devfs_register() then.  Do so now, instead. 
 	 */
-#ifdef CONFIG_VT
-	con_init_devfs();
-#endif
+	for (p = tty_drivers; p; p = p->next) {
+		if (p->flags && TTY_DRIVER_NO_DEVFS) {
+			for (i = 0; i < p->num; i++) 
+               			tty_register_devfs(p, DEVFS_FL_AOPEN_NOTIFY, p->minor_start + i);
+		}
+	}
 
 #ifdef CONFIG_UNIX98_PTYS
 	dev_ptmx_driver = dev_tty_driver;
