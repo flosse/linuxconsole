@@ -70,8 +70,8 @@ static unsigned short translations[][256] = {
     0x0050, 0x0051, 0x0052, 0x0053, 0x0054, 0x0055, 0x0056, 0x0057,
     0x0058, 0x0059, 0x005a, 0x005b, 0x005c, 0x005d, 0x005e, 0x00a0,
     0x25c6, 0x2592, 0x2409, 0x240c, 0x240d, 0x240a, 0x00b0, 0x00b1,
-    0x2591, 0x240b, 0x2518, 0x2510, 0x250c, 0x2514, 0x253c, 0xf800,
-    0xf801, 0x2500, 0xf803, 0xf804, 0x251c, 0x2524, 0x2534, 0x252c,
+    0x2591, 0x240b, 0x2518, 0x2510, 0x250c, 0x2514, 0x253c, 0x23ba,
+    0x23bb, 0x2500, 0x23bc, 0x23bd, 0x251c, 0x2524, 0x2534, 0x252c,
     0x2502, 0x2264, 0x2265, 0x03c0, 0x2260, 0x00a3, 0x00b7, 0x007f,
     0x0080, 0x0081, 0x0082, 0x0083, 0x0084, 0x0085, 0x0086, 0x0087,
     0x0088, 0x0089, 0x008a, 0x008b, 0x008c, 0x008d, 0x008e, 0x008f,
@@ -255,14 +255,13 @@ static void update_user_maps(struct vc_data *vc)
  * 0xf000-0xf0ff "transparent" Unicodes) whereas the "new" variants set
  * Unicodes explicitly.
  */
-int con_set_trans_old(struct vc_data *vc, unsigned char __user * arg)
+int con_set_trans_old(struct vc_data *vc, unsigned char __user *arg)
 {
-	int i;
 	unsigned short *p = translations[USER_MAP];
+	int i;
 
-	i = verify_area(VERIFY_READ, arg, E_TABSZ);
-	if (i)
-		return i;
+	if (!access_ok(VERIFY_READ, arg, E_TABSZ))
+		return -EFAULT;
 
 	for (i=0; i<E_TABSZ ; i++) {
 		unsigned char uc;
@@ -274,14 +273,13 @@ int con_set_trans_old(struct vc_data *vc, unsigned char __user * arg)
 	return 0;
 }
 
-int con_get_trans_old(struct vc_data *vc, unsigned char __user * arg)
+int con_get_trans_old(struct vc_data *vc, unsigned char __user *arg)
 {
-	int i, ch;
 	unsigned short *p = translations[USER_MAP];
+	int i, ch;
 
-	i = verify_area(VERIFY_WRITE, arg, E_TABSZ);
-	if (i)
-		return i;
+	if (!access_ok(VERIFY_WRITE, arg, E_TABSZ))
+		return -EFAULT;
 
 	for (i=0; i<E_TABSZ ; i++)
 	  {
@@ -291,14 +289,13 @@ int con_get_trans_old(struct vc_data *vc, unsigned char __user * arg)
 	return 0;
 }
 
-int con_set_trans_new(struct vc_data *vc, ushort __user * arg)
+int con_set_trans_new(struct vc_data *vc, ushort __user *arg)
 {
-	int i;
 	unsigned short *p = translations[USER_MAP];
+	int i;
 
-	i = verify_area(VERIFY_READ, arg, E_TABSZ*sizeof(unsigned short));
-	if (i)
-		return i;
+	if (!access_ok(VERIFY_READ, arg, E_TABSZ*sizeof(unsigned short)))
+		return -EFAULT;
 
 	for (i=0; i<E_TABSZ ; i++) {
 		unsigned short us;
@@ -310,18 +307,17 @@ int con_set_trans_new(struct vc_data *vc, ushort __user * arg)
 	return 0;
 }
 
-int con_get_trans_new(struct vc_data *vc, ushort __user * arg)
+int con_get_trans_new(struct vc_data *vc, ushort __user *arg)
 {
-	int i;
 	unsigned short *p = translations[USER_MAP];
+	int i;
 
-	i = verify_area(VERIFY_WRITE, arg, E_TABSZ*sizeof(unsigned short));
-	if (i)
-		return i;
+	if (!access_ok(VERIFY_WRITE, arg, E_TABSZ*sizeof(unsigned short)))
+		return -EFAULT;
 
 	for (i=0; i<E_TABSZ ; i++)
 	  __put_user(p[i], arg+i);
-	
+
 	return 0;
 }
 
@@ -465,8 +461,7 @@ int con_clear_unimap(struct vc_data *vc, struct unimapinit *ui)
 	return 0;
 }
 
-int
-con_set_unimap(struct vc_data *vc, ushort ct, struct unipair __user *list)
+int con_set_unimap(struct vc_data *vc, ushort ct, struct unipair __user *list)
 {
 	struct uni_pagedir *p, *q;
 	int err = 0, err1, i;
@@ -525,8 +520,7 @@ con_set_unimap(struct vc_data *vc, ushort ct, struct unipair __user *list)
    with.  This routine is executed at sys_setup time, and when the
    PIO_FONTRESET ioctl is called. */
 
-int
-con_set_default_unimap(struct vc_data *vc)
+int con_set_default_unimap(struct vc_data *vc)
 {
 	int i, j, err = 0, err1;
 	u16 *q;
@@ -571,8 +565,7 @@ con_set_default_unimap(struct vc_data *vc)
 }
 EXPORT_SYMBOL(con_set_default_unimap);
 
-int
-con_copy_unimap(struct vc_data *dst, struct vc_data *src)
+int con_copy_unimap(struct vc_data *dst, struct vc_data *src)
 {
 	struct uni_pagedir *q;
 	
@@ -587,8 +580,7 @@ con_copy_unimap(struct vc_data *dst, struct vc_data *src)
 	return 0;
 }
 
-int
-con_get_unimap(struct vc_data *vc, ushort ct, ushort *uct, struct unipair __user *list)
+int con_get_unimap(struct vc_data *vc, ushort ct, ushort __user *uct, struct unipair __user *list)
 {
 	int i, j, k, ect;
 	u16 **p1, *p2;
@@ -618,9 +610,8 @@ con_get_unimap(struct vc_data *vc, ushort ct, ushort *uct, struct unipair __user
 
 void con_protect_unimap(struct vc_data *vc, int rdonly)
 {
-	struct uni_pagedir *p = (struct uni_pagedir *)
-		*vc->vc_uni_pagedir_loc;
-	
+	struct uni_pagedir *p = (struct uni_pagedir *) *vc->vc_uni_pagedir_loc;
+
 	if (p) p->readonly = rdonly;
 }
 
@@ -668,8 +659,8 @@ console_map_init(void)
 {
 	struct vt_struct *vt;
 	int i;
-	
-        vt = list_entry(vt_list.next, typeof(*vt), node);
+
+	vt = list_entry(vt_list.next, typeof(*vt), node);
 
 	for (i = 0; i < vt->vc_count; i++) {
 		struct vc_data *vc = vt->vc_cons[i];
