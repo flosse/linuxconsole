@@ -20,7 +20,7 @@
 #include <linux/sched.h>
 #include <linux/string.h>
 #include <linux/kernel.h>
-#include <linux/malloc.h>
+#include <linux/slab.h>
 #include <linux/serial.h>
 
 /* 2.4.6 compatibility cruft ;( */

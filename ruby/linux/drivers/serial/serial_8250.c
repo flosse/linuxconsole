@@ -41,6 +41,30 @@
 
 #include "serial_8250.h"
 
+/*
+ * This converts from our new CONFIG_ symbols to the symbols
+ * that asm/serial.h expects.  You _NEED_ to comment out the
+ * linux/config.h include contained inside asm/serial.h for
+ * this to work.
+ */
+#undef CONFIG_SERIAL_MANY_PORTS
+#undef CONFIG_SERIAL_DETECT_IRQ
+#undef CONFIG_SERIAL_MULTIPORT
+#undef CONFIG_HUB6
+
+#ifdef CONFIG_SERIAL_8250_MANY_PORTS
+#define CONFIG_SERIAL_MANY_PORTS 1
+#endif
+#ifdef CONFIG_SERIAL_8250_DETECT_IRQ
+#define CONFIG_SERIAL_DETECT_IRQ 1
+#endif
+#ifdef CONFIG_SERIAL_8250_MULTIPORT
+#define CONFIG_SERIAL_MULTIPORT 1
+#endif
+#ifdef CONFIG_SERIAL_8250_HUB6
+#define CONFIG_HUB6 1
+#endif
+
 #include <asm/serial.h>
 
 static struct old_serial_port old_serial_port[] = {
@@ -99,7 +123,7 @@ static _INLINE_ unsigned int serial_in(struct uart_port *port, int offset)
 	offset <<= port->regshift;
 
 	switch (port->iotype) {
-#ifdef CONFIG_HUB6
+#ifdef CONFIG_SERIAL_8250_HUB6
 	case SERIAL_IO_HUB6:
 		outb(port->hub6 - 1 + offset, port->iobase);
 		return inb(port->iobase + 1);
@@ -119,7 +143,7 @@ serial_out(struct uart_port *port, int offset, int value)
 	offset <<= port->regshift;
 
 	switch (port->iotype) {
-#ifdef CONFIG_HUB6
+#ifdef CONFIG_SERIAL_8250_HUB6
 	case SERIAL_IO_HUB6:
 		outb(port->hub6 - 1 + offset, port->iobase);
 		outb(value, port->iobase + 1);
@@ -681,7 +705,7 @@ receive_chars(struct uart_info *info, int *status, struct pt_regs *regs)
 			 */
 			*status &= port->read_status_mask;
 
-#ifdef CONFIG_SERIAL_CONSOLE
+#ifdef CONFIG_SERIAL_8250_CONSOLE
 			if (port->line == sercons.index) {
 				/* Recover the break flag from console xmit */
 				*status |= lsr_break_flag;
@@ -804,7 +828,7 @@ serial8250_handle_port(struct uart_info *info, struct pt_regs *regs)
 		transmit_chars(info, 0);
 }
 
-#ifdef CONFIG_SERIAL_SHARE_IRQ
+#ifdef CONFIG_SERIAL_8250_SHARE_IRQ
 /*
  * This is the serial driver's generic interrupt routine
  */
@@ -812,7 +836,7 @@ static void rs_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 {
 	struct uart_info *info, *end_mark = NULL;
 	int pass_counter = 0;
-#ifdef CONFIG_SERIAL_MULTIPORT
+#ifdef CONFIG_SERIAL_8250_MULTIPORT
 	int first_multi = 0;
 	unsigned long port_monitor = rs_multiport[irq].port_monitor;
 #endif
@@ -825,7 +849,7 @@ static void rs_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 	if (!info)
 		return;
 
-#ifdef CONFIG_SERIAL_MULTIPORT
+#ifdef CONFIG_SERIAL_8250_MULTIPORT
 	if (port_monitor)
 		first_multi = inb(port_monitor);
 #endif
@@ -856,7 +880,7 @@ static void rs_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 			break; /* Prevent infinite loops */
 		}
 	} while (end_mark != info);
-#ifdef CONFIG_SERIAL_MULTIPORT
+#ifdef CONFIG_SERIAL_8250_MULTIPORT
 	if (port_monitor)
 		printk("rs port monitor (normal) irq %d: 0x%x, 0x%x\n",
 			info->port->irq, first_multi, inb(port_monitor));
@@ -874,7 +898,7 @@ static void rs_interrupt_single(int irq, void *dev_id, struct pt_regs *regs)
 {
 	struct uart_info *info;
 	int pass_counter = 0;
-#ifdef CONFIG_SERIAL_MULTIPORT
+#ifdef CONFIG_SERIAL_8250_MULTIPORT
 	int first_multi = 0;
 	unsigned long port_monitor = rs_multiport[irq].port_monitor;
 #endif
@@ -887,7 +911,7 @@ static void rs_interrupt_single(int irq, void *dev_id, struct pt_regs *regs)
 	if (!info || !info->tty)
 		return;
 
-#ifdef CONFIG_SERIAL_MULTIPORT
+#ifdef CONFIG_SERIAL_8250_MULTIPORT
 	if (port_monitor)
 		first_multi = inb(port_monitor);
 #endif
@@ -904,7 +928,7 @@ static void rs_interrupt_single(int irq, void *dev_id, struct pt_regs *regs)
 		printk("IIR = %x...", serial_in(info->port, UART_IIR));
 #endif
 	} while (!(serial_in(info->port, UART_IIR) & UART_IIR_NO_INT));
-#ifdef CONFIG_SERIAL_MULTIPORT
+#ifdef CONFIG_SERIAL_8250_MULTIPORT
 	if (port_monitor)
 		printk("rs port monitor (single) irq %d: 0x%x, 0x%x\n",
 			info->port->irq, first_multi, inb(port_monitor));
@@ -914,7 +938,7 @@ static void rs_interrupt_single(int irq, void *dev_id, struct pt_regs *regs)
 #endif
 }
 
-#ifdef CONFIG_SERIAL_MULTIPORT
+#ifdef CONFIG_SERIAL_8250_MULTIPORT
 /*
  * This is the serial driver's interrupt routine for multiport boards
  */
@@ -1123,16 +1147,16 @@ static int serial8250_startup(struct uart_port *port, struct uart_info *info)
 			  !IRQ_ports[port->irq]->next_info)) {
 		handler = rs_interrupt_single;
 		if (IRQ_ports[port->irq]) {
-#ifdef CONFIG_SERIAL_SHARE_IRQ
+#ifdef CONFIG_SERIAL_8250_SHARE_IRQ
 			handler = rs_interrupt;
 			free_irq(port->irq, &IRQ_ports[port->irq]);
-#ifdef CONFIG_SERIAL_MULTIPORT
+#ifdef CONFIG_SERIAL_8250_MULTIPORT
 			if (rs_multiport[port->irq].port1)
 				handler = serial8250_interrupt_multi;
 #endif
 #else
 			return -EBUSY;
-#endif /* CONFIG_SERIAL_SHARE_IRQ */
+#endif /* CONFIG_SERIAL_8250_SHARE_IRQ */
 		}
 
 		retval = request_irq(port->irq, handler, SA_SHIRQ,
@@ -1620,7 +1644,7 @@ static void __init serial8250_isa_init_ports(void)
 	}
 }
 
-#ifdef CONFIG_SERIAL_SERIAL8250_CONSOLE
+#ifdef CONFIG_SERIAL_8250_CONSOLE
 #ifdef used_and_not_const_char_pointer
 static int serial8250_console_read(struct uart_port *port, char *s, u_int count)
 {

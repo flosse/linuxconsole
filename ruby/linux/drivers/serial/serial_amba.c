@@ -579,7 +579,7 @@ static struct uart_port amba_ports[UART_NR] = {
 		irq:		IRQ_UARTINT0,
 		uartclk:	14745600,
 		fifosize:	16,
-		unused:		{ 4, 5 }, /*Udriver_priv:	PORT_CTRLS(5, 4), */
+		unused:		{ 4, 5 }, /*driver_priv:	PORT_CTRLS(5, 4), */
 		ops:		&amba_pops,
 		flags:		ASYNC_BOOT_AUTOCONF,
 	},
