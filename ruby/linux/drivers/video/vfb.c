@@ -104,8 +104,6 @@ MODULE_PARM(vfb_enable, "i");
 int vfb_init(void);
 int vfb_setup(char*);
 
-static int vfb_open(struct fb_info *info, int user);
-static int vfb_release(struct fb_info *info, int user);
 static int vfb_check_var(struct fb_var_screeninfo *var, void *par,
                          struct fb_info *info);
 static int vfb_set_par(void *par, struct fb_info *info);
@@ -124,13 +122,6 @@ static struct fb_ops vfb_ops = {
 };
 
     /*
-     *  Interface to the low level console driver
-     */
-
-static int vfbcon_switch(int con, struct fb_info *info);
-static int vfbcon_updatevar(int con, struct fb_info *info);
-
-    /*
      *  Internal routines
      */
 
@@ -145,12 +136,11 @@ static u_long get_line_length(int xres_virtual, int bpp)
 }
 
     /*
-     *  Set the User Defined Part of the Display
-     *
-     *  Note: The set_var function should be split into two parts.
-     *        First part, xxxfb_check_var, must not write anything
-     *        to hardware, it should only verify and adjust var.
-     *        Second part, xxxfb_set_par, should initialize hardware.
+     *  Setting the video mode has been split into two parts.
+     *  First part, xxxfb_check_var, must not write anything
+     *  to hardware, it should only verify and adjust var.
+     *  This means it doesn't alter par but it does use hardware
+     *  data from it to check this var. 
      */
 
 static int vfb_check_var(struct fb_var_screeninfo *var, void *vfb_par,
@@ -272,12 +262,12 @@ static int vfb_check_var(struct fb_var_screeninfo *var, void *vfb_par,
     return 0;
 }
 
+/* This routine actually sets the video mode. It's in here where we
+ * the hardware state info->par and fix which can be affected by the 
+ * change in par. For this driver it doesn't do much. 
+ */
 static int vfb_set_par(void *vfb_par, struct fb_info *info)
 {
-	/* This routines actually sets the video mode. It's in here where 
-	 * alter info->fix according to this new mode. For this driver it
-	 * doesn't do much besides this. 
-	 */ 
 	info->fix.line_length = get_line_length(info->var.xres_virtual,
                                                 info->var.bits_per_pixel);
 	return 0;
@@ -453,13 +443,10 @@ int __init vfb_init(void)
     fb_info.var = vfb_default;
 #endif
     fb_info.fix = vfb_fix;
-    fb_info.switch_con = &fbgen_switch;
-    fb_info.updatevar = &fbgen_updatevar;
     fb_info.pseudo_palette = &vfb_pseudo_palette;	
     fb_info.flags = FBINFO_FLAG_DEFAULT;
   
-    /* Alloc but do not set the default color map.
-       vfb_set_par will do this for us */
+    /* Alloc but do not set the default color map. */
     fb_info.cmap.len = 1<<fb_info.var.bits_per_pixel;
     fb_alloc_cmap(&fb_info.cmap, fb_info.cmap.len, 0);	 
 
