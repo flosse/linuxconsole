@@ -849,7 +849,6 @@ static int vgacon_scroll(struct vc_data *c, int t, int b, int dir, int lines)
 			vga_rolled_over = 0;
 		} else
 			c->vc_origin -= delta;
-		c->vc_scr_end = c->vc_origin + c->vc_screenbuf_size;
 		scr_memsetw((u16 *)(c->vc_origin), c->vc_video_erase_char, delta);
 	}
 	c->vc_scr_end = c->vc_origin + c->vc_screenbuf_size;
