@@ -207,7 +207,7 @@ struct input_types input_types[] = {
 { "--mouseman",		"-mman",	B1200, CS7,			SERIO_MP,	0x01,	1,	NULL },
 { "--intellimouse",	"-ms3",		B1200, CS7,			SERIO_MZ,	0x11,	1,	NULL },
 { "--mmwheel",		"-mmw",		B1200, CS7 | CSTOPB,		SERIO_MZP,	0x13,	1,	mzp_init },
-{ "--iforce",		"-ifor",	B38400, CS8 | CRTSCTS,		SERIO_IFORCE,	0x00,	0,	NULL },
+{ "--iforce",		"-ifor",	B38400, CS8,			SERIO_IFORCE,	0x00,	0,	NULL },
 { "--newtonkbd",        "-newt",        B9600, CS8,                     SERIO_NEWTON,  0x00,    0,      newton_init },
 { "--dump",		"-dump",	B1200, CS7, 			0,		0x00,	0,	dump_init },
 { "", "", 0, 0 }
