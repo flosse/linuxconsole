@@ -1118,14 +1118,12 @@ static int usb_make_path(struct usb_device *dev, char *buf, int maxlen)
 		strcpy(tmp, port);
 		
 		sprintf(port, strlen(port) ? "%d-%s" : "%d", i + 1, tmp);
-		//snprintf(port, maxlen, strlen(port) ? "%d-%s" : "%d", i + 1, tmp);
 
 		dev = pdev;
 		pdev = dev->parent;
 	}
 
 	sprintf(buf, "usb%d:%s", dev->bus->busnum, port);
-	//snprintf(buf, maxlen, "usb%d:%s", dev->bus->busnum, port);
 	return 0;
 }
 
@@ -1211,21 +1209,21 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 
 	hid->name[0] = 0;
 
-	if (!(buf = kmalloc(63, GFP_KERNEL)))
+	if (!(buf = kmalloc(64, GFP_KERNEL)))
 		return NULL;
 
-	if (usb_string(dev, dev->descriptor.iManufacturer, buf, 63) > 0) {
+	if (usb_string(dev, dev->descriptor.iManufacturer, buf, 64) > 0) {
 		strcat(hid->name, buf);
-		if (usb_string(dev, dev->descriptor.iProduct, buf, 63) > 0) {
-			//snprintf(hid->name, 128, "%s %s", hid->name, buf);
+		if (usb_string(dev, dev->descriptor.iProduct, buf, 64) > 0)
 			sprintf(hid->name, "%s %s", hid->name, buf);
-		}
 	} else
 		sprintf(hid->name, "%04x:%04x", dev->descriptor.idVendor, dev->descriptor.idProduct);
 
 	usb_make_path(dev, buf, 63);
-	//snprintf(hid->phys, 128, "%s.%d", buf, ifnum);
 	sprintf(hid->phys, "%s.%d", buf, ifnum);
+
+	if (usb_string(dev, dev->descriptor.iSerial, hid->uniq, 64) <= 0)
+		hid->uniq[0] = 0;
 
 	kfree(buf);
 
