@@ -80,7 +80,8 @@ struct vc_data {
         unsigned int    vc_cols;                /* [#] Console size */
         unsigned int    vc_rows;
         unsigned int    vc_size_row;            /* Bytes per row */
-        unsigned long   vc_origin;              /* [!] Start of real screen */
+        unsigned int 	vc_scan_lines;		/* # of scan lines */
+	unsigned long   vc_origin;              /* [!] Start of real screen */
         unsigned long   vc_scr_end;             /* [!] End of real screen */
         unsigned long   vc_visible_origin;      /* [!] Top of visible window */
         unsigned int    vc_top, vc_bottom;      /* Scrolling region */
@@ -103,7 +104,7 @@ struct vc_data {
         unsigned int    vc_npar,vc_par[NPAR];   /* Parameters of current escape sequence */
 	struct kbd_struct kbd_table;		/* VC keyboard state */       
 	unsigned short  vc_hi_font_mask;        /* [#] Attribute set for upper 256 chars of font or 0 if not supported */
-	struct console_font_op vc_font;		/* VC current font set */
+	struct console_font_op *vc_font;	/* VC current font set */
 	/* data for manual vt switching */
 	struct vt_mode  vt_mode;
         int             vt_pid;
@@ -254,6 +255,7 @@ struct vt_struct {
 	struct semaphore lock;  		/* Lock for con_buf 	 */
 	void *data_hook;			/* Hook for driver data */
 	struct consw	*vt_sw;			/* Display driver for VT */
+	struct console_font_op default_font;	/* Default font */
 	struct input_handle *keyboard;		/* Keyboard attached */
 	struct vc_pool  vcs;			 
 	struct vt_struct *next;				
@@ -332,11 +334,6 @@ void con_protect_unimap(struct vc_data *vc, int rdonly);
 int con_copy_unimap(struct vc_data *dstcons, struct vc_data *srccons);
 
 /* vt_ioctl.c */
-
-extern unsigned int video_font_height;
-extern unsigned int default_font_height;
-extern unsigned int video_scan_lines;
-
 void change_console(struct vc_data *new_vc, struct vc_data *old_vc);
 void complete_change_console(struct vc_data *new_vc, struct vc_data *old_vc);
 void reset_vc(struct vc_data *vc);

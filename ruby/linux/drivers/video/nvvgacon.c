@@ -82,13 +82,11 @@ static char *nvvga_mmio_base2;		/* dac */
 
 static unsigned int    nvvga_video_num_columns;	/* Number of text columns */
 static unsigned int    nvvga_video_num_lines;	/* Number of text lines */
-static unsigned int    nvvga_default_font_height;	/* Height of default screen font */
 static unsigned char   nvvga_font_is_default = 1;
 static int	       nvvga_vesa_blanked;
 static int	       nvvga_palette_blanked;
 static int	       nvvga_is_gfx;
 static int	       nvvga_512_chars;
-static int	       nvvga_video_font_height;
 static char *nvvga_video_port_reg, *seq_port_reg;
 static char *nvvga_video_port_val, *seq_port_val;
 static char *video_misc_wr, *video_misc_rd;
@@ -168,28 +166,24 @@ __initfunc(static const char *nvvgacon_startup(struct vt_struct *vt))
                 writeb (default_grn[i], dac_val) ;
                 writeb (default_blu[i], dac_val) ;
         }
-
-	nvvga_default_font_height = 16;
-	nvvga_video_font_height = 16;
-        video_scan_lines = nvvga_video_font_height * nvvga_video_num_lines;
-	video_font_height = nvvga_video_font_height;
-
+	
+	vt->default_font.height = 16;
 	return "NVVGACON";
 }
 
-static void nvvgacon_init(struct vc_data *c, int init)
+static void nvvgacon_init(struct vc_data *vc, int init)
 {
-	
-	c->vc_can_do_color = 1;
-	c->vc_complement_mask = 0x7700;
+	vc->vc_can_do_color = 1;
+	vc->vc_complement_mask = 0x7700;
 
 	if (init) {
-		c->vc_cols = nvvga_video_num_columns;
-		c->vc_rows = nvvga_video_num_lines;
+		vc->vc_cols = nvvga_video_num_columns;
+		vc->vc_rows = nvvga_video_num_lines;
 	} else {
 		vc_resize(vc, nvvga_video_num_lines, nvvga_video_num_columns);
         }
-	
+	vc->vc_font = &vc->display_fg->default_font;	
+	vc->vc_scan_lines = vc->display_fg->default_font.height * nvvga_video_num_lines;
 	MOD_INC_USE_COUNT;
 }
 
@@ -254,10 +248,10 @@ static void nvvgacon_set_cursor_size(int xpos, int from, int to)
 	restore_flags(flags);
 }
 
-static void nvvgacon_cursor(struct vc_data *c, int mode)
+static void nvvgacon_cursor(struct vc_data *vc, int mode)
 {
-    if (c->vc_origin != c->vc_visible_origin)
-	nvvgacon_scrolldelta(c, 0);
+    if (vc->vc_origin != vc->vc_visible_origin)
+	nvvgacon_scrolldelta(vc, 0);
     switch (mode) {
 	case CM_ERASE:
 	    write_vga(14, (64*1024 - 1));
@@ -265,68 +259,64 @@ static void nvvgacon_cursor(struct vc_data *c, int mode)
 
 	case CM_MOVE:
 	case CM_DRAW:
-	    write_vga(14, c->vc_x+nvvga_video_num_columns*c->vc_y);
-	    switch (c->vc_cursor_type & 0x0f) {
+	    write_vga(14, vc->vc_x + vc->vc_cols * vc->vc_y);
+	    switch (vc->vc_cursor_type & 0x0f) {
 		case CUR_UNDERLINE:
-			nvvgacon_set_cursor_size(c->vc_x, 
-					video_font_height - (video_font_height < 10 ? 2 : 3),
-					video_font_height - (video_font_height < 10 ? 1 : 2));
+			nvvgacon_set_cursor_size(vc->vc_x,  
+					vc->vc_font->height - (vc->vc_font->height < 10 ? 2 : 3),
+					vc->vc_font->height - (vc->vc_font->height < 10 ? 1 : 2));
 			break;
 		case CUR_TWO_THIRDS:
-			nvvgacon_set_cursor_size(c->vc_x, 
-					 video_font_height / 3,
-					 video_font_height - (video_font_height < 10 ? 1 : 2));
+			nvvgacon_set_cursor_size(vc->vc_x, vc->vc_font->height/3, 
+					 vc->vc_font->height - (vc->vc_font->height < 10 ? 1 : 2));
 			break;
 		case CUR_LOWER_THIRD:
-			nvvgacon_set_cursor_size(c->vc_x, 
-					 (video_font_height*2) / 3,
-					 video_font_height - (video_font_height < 10 ? 1 : 2));
+			nvvgacon_set_cursor_size(vc->vc_x, 
+					 (vc->vc_font->height*2) / 3,
+					  vc->vc_font->height - (vc->vc_font->height < 10 ? 1 : 2));
 			break;
 		case CUR_LOWER_HALF:
-			nvvgacon_set_cursor_size(c->vc_x, 
-					 video_font_height / 2,
-					 video_font_height - (video_font_height < 10 ? 1 : 2));
+			nvvgacon_set_cursor_size(vc->vc_x,vc->vc_font->height/2,
+					 vc->vc_font->height - (vc->vc_font->height < 10 ? 1 : 2));
 			break;
 		case CUR_NONE:
-			nvvgacon_set_cursor_size(c->vc_x, 31, 30);
+			nvvgacon_set_cursor_size(vc->vc_x, 31, 30);
 			break;
           	default:
-			nvvgacon_set_cursor_size(c->vc_x, 1, video_font_height);
+			nvvgacon_set_cursor_size(vc->vc_x,1,vc->vc_font->height);
 			break;
 		}
 	    break;
     }
 }
 
-static int nvvgacon_switch(struct vc_data *c)
+static int nvvgacon_switch(struct vc_data *vc)
 {
 	/*
 	 * We need to save screen size here as it's the only way
 	 * we can spot the screen has been resized and we need to
 	 * set size of freshly allocated screens ourselves.
 	 */
-	nvvga_video_num_columns = c->vc_cols;
-	nvvga_video_num_lines = c->vc_rows;
         return 1;
 }
 
-static void nvvga_set_palette(struct vc_data *c, unsigned char *table)
+static void nvvga_set_palette(struct vc_data *vc, unsigned char *table)
 {
 	int i, j ;
 
 	for (i=j=0; i<16; i++) {
 		writeb (table[i], dac_reg) ;
-                writeb (c->vc_palette[j++]>>2, dac_val) ;
-                writeb (c->vc_palette[j++]>>2, dac_val) ;
-                writeb (c->vc_palette[j++]>>2, dac_val) ;
+                writeb (vc->vc_palette[j++]>>2, dac_val) ;
+                writeb (vc->vc_palette[j++]>>2, dac_val) ;
+                writeb (vc->vc_palette[j++]>>2, dac_val) ;
 	}
 }
 
-static int nvvgacon_set_palette(struct vc_data *c, unsigned char *table)
+static int nvvgacon_set_palette(struct vc_data *vc, unsigned char *table)
 {
 	if (nvvga_palette_blanked)
 		return -EINVAL;
-	nvvga_set_palette(c, table);
+	nvvga_set_palette(vc, table);
 	return 0;
 }
 
@@ -461,7 +451,7 @@ static void nvvga_pal_blank(void)
 	}
 }
 
-static int nvvgacon_blank(struct vc_data *c, int blank)
+static int nvvgacon_blank(struct vc_data *vc, int blank)
 {
 	switch (blank) {
 	case 0:				/* Unblank */
@@ -470,7 +460,7 @@ static int nvvgacon_blank(struct vc_data *c, int blank)
 			nvvga_vesa_blanked = 0;
 		}
 		if (nvvga_palette_blanked) {
-			nvvga_set_palette(c, color_table);
+			nvvga_set_palette(vc, color_table);
 			nvvga_palette_blanked = 0;
 			return 0;
 		}
@@ -480,11 +470,11 @@ static int nvvgacon_blank(struct vc_data *c, int blank)
 	case 1:				/* Normal blanking */
             	nvvga_pal_blank();
                 nvvga_palette_blanked = 1;
-		nvvgacon_set_origin(c);
-		scr_memsetw((void *)nvvga_vram_base, BLANK, c->vc_screenbuf_size);
+		nvvgacon_set_origin(vc);
+		scr_memsetw((void *)nvvga_vram_base, BLANK, vc->vc_screenbuf_size);
 		return 1;
 	case -1:			/* Entering graphic mode */
-		scr_memsetw((void *)nvvga_vram_base, BLANK, c->vc_screenbuf_size);
+		scr_memsetw((void *)nvvga_vram_base, BLANK, vc->vc_screenbuf_size);
 		nvvga_is_gfx = 1;
 		return 1;
 	default:			/* VESA blanking */
@@ -596,12 +586,12 @@ nvvgacon_adjust_height(struct vc_data *vc, unsigned fontheight)
 	int rows, maxscan;
 	unsigned char ovr, vde, fsr;
 
-	if (fontheight == nvvga_video_font_height)
+	if (fontheight == vc->vc_font->height)
 		return 0;
 
-	nvvga_video_font_height = video_font_height = fontheight;
+	vc->vc_font->height = fontheight;
 
-	rows = video_scan_lines/fontheight;	/* Number of video rows we end up with */
+	rows = vc->vc_scan_lines/fontheight;	/* Number of video rows we end up with */
 	maxscan = rows*fontheight - 1;		/* Scan lines to actually display-1 */
 
 	/* Reprogram the CRTC for the new font size
@@ -640,7 +630,7 @@ nvvgacon_adjust_height(struct vc_data *vc, unsigned fontheight)
 	return 0;
 }
 
-static int nvvgacon_font_op(struct vc_data *c, struct console_font_op *op)
+static int nvvgacon_font_op(struct vc_data *vc, struct console_font_op *op)
 {
 	int rc;
 
@@ -649,10 +639,10 @@ static int nvvgacon_font_op(struct vc_data *c, struct console_font_op *op)
 			return -EINVAL;
 		rc = nvvgacon_do_font_op(op->data, 1, op->charcount == 512);
 		if (!rc && !(op->flags & KD_FONT_FLAG_DONT_RECALC))
-			rc = nvvgacon_adjust_height(c, op->height);
+			rc = nvvgacon_adjust_height(vc, op->height);
 	} else if (op->op == KD_FONT_OP_GET) {
 		op->width = 8;
-		op->height = nvvga_video_font_height;
+		op->height = vc->vc_font->height;
 		op->charcount = nvvga_512_chars ? 512 : 256;
 		if (!op->data) return 0;
 		rc = nvvgacon_do_font_op(op->data, 0, 0);
@@ -661,7 +651,7 @@ static int nvvgacon_font_op(struct vc_data *c, struct console_font_op *op)
 	return rc;
 }
 
-static int nvvgacon_set_origin(struct vc_data *c)
+static int nvvgacon_set_origin(struct vc_data *vc)
 {
 	if (nvvga_is_gfx 	/* We don't play origin tricks in graphic modes */
 #if 0
@@ -669,50 +659,53 @@ static int nvvgacon_set_origin(struct vc_data *c)
 #endif
             )	/* Nor we write to blanked screens */
 		return 0;
-	nvvga_set_mem_top(c);
+	nvvga_set_mem_top(vc);
 	return 1;
 }
 
-static int nvvgacon_scrolldelta(struct vc_data *c, int lines)
+static int nvvgacon_scrolldelta(struct vc_data *vc, int lines)
 {
     return 0;
 }
 
-static int nvvgacon_scroll(struct vc_data *c, int t, int b, int dir, int lines)
+static int nvvgacon_scroll(struct vc_data *vc, int t, int b, int dir, int lines)
 {
 	if (!lines)
 		return 0;
 
-	if (lines > c->vc_rows)   /* maximum realistic size */
-		lines = c->vc_rows;
+	if (lines > vc->vc_rows)   /* maximum realistic size */
+		lines = vc->vc_rows;
 
 	switch (dir) {
 
 	case SM_UP:
-	        nvvgacon_bmove(c,lines,0,0,0,c->vc_rows-lines,nvvga_video_num_columns);
-                nvvgacon_clear(c,c->vc_rows-lines,0,lines,nvvga_video_num_columns);
+	        nvvgacon_bmove(vc,lines, 0, 0, 0, vc->vc_rows-lines, 
+			       vc->vc_cols);
+                nvvgacon_clear(vc, vc->vc_rows - lines, 0, lines, 
+			       vc->vc_cols);
 		break;
 
 	case SM_DOWN:
-	        nvvgacon_bmove(c,0,0,lines,0,c->vc_rows-lines,nvvga_video_num_columns);
-                nvvgacon_clear(c,0,0,lines,nvvga_video_num_columns);
+	        nvvgacon_bmove(vc, 0, 0, lines, 0, vc->vc_rows - lines, 
+			       vc->vc_cols);
+                nvvgacon_clear(vc, 0, 0, lines, vc->vc_cols);
 		break;
 	}
 
 	return 0;
 }
 
-#define NVVGA_ADDR(x,y)  ((u16 *) nvvga_vram_base + ((y)*nvvga_video_num_columns + (x))*4)
+#define NVVGA_ADDR(vc,x,y) ((u16 *) nvvga_vram_base + ((y)*vc->vc_cols + (x))*4)
 
-static void nvvgacon_putc(struct vc_data *c, int ch, int y, int x)
+static void nvvgacon_putc(struct vc_data *vc, int ch, int y, int x)
 {
-	scr_writew(ch, NVVGA_ADDR(x, y));
+	scr_writew(ch, NVVGA_ADDR(vc, x, y));
 }
 
-static void nvvgacon_putcs(struct vc_data *c, const unsigned short *s,
+static void nvvgacon_putcs(struct vc_data *vc, const unsigned short *s,
 		         int count, int y, int x)
 {
-	u16 *dest = NVVGA_ADDR(x, y);
+	u16 *dest = NVVGA_ADDR(vc, x, y);
 
         for (; count > 0; count--) {
             scr_writew(readw(s), dest);
@@ -721,20 +714,20 @@ static void nvvgacon_putcs(struct vc_data *c, const unsigned short *s,
         }
 }
 
-static void nvvgacon_clear(struct vc_data *c, int y, int x, 
-			  int height, int width)
+static void nvvgacon_clear(struct vc_data *vc, int y, int x, int height, 
+			   int width)
 {
-	u16 *dest = NVVGA_ADDR(x, y);
-	u16 eattr = c->vc_video_erase_char;
+	u16 *dest = NVVGA_ADDR(vc, x, y);
+	u16 eattr = vc->vc_video_erase_char;
 
 	if (width <= 0 || height <= 0)
 		return;
 
-        for (; height > 0; height--, dest+=nvvga_video_num_columns*4)
+        for (; height > 0; height--, dest += vc->vc_cols*4)
             scr_memsetw(dest,eattr,width*2);
 }
 
-static void nvvgacon_bmove(struct vc_data *c, int sy, int sx, 
+static void nvvgacon_bmove(struct vc_data *vc, int sy, int sx, 
 			 int dy, int dx, int height, int width)
 {
 	u16 *src, *dest;
@@ -744,22 +737,22 @@ static void nvvgacon_bmove(struct vc_data *c, int sy, int sx,
 		return;
 		
 	} else if (dy < sy || (dy == sy && dx < sx)) {
-		src  = NVVGA_ADDR(sx, sy);
-		dest = NVVGA_ADDR(dx, dy);
+		src  = NVVGA_ADDR(vc, sx, sy);
+		dest = NVVGA_ADDR(vc, dx, dy);
 
 		for (; height > 0; height--) {
 			for(i=0;i<width;i++)scr_writew(scr_readw(src+4*i),dest+4*i);
-			src  += nvvga_video_num_columns*4;
-			dest += nvvga_video_num_columns*4;
+			src  += vc->vc_cols*4;
+			dest += vc->vc_cols*4;
 		}
 	} else {
-		src  = NVVGA_ADDR(sx, sy+height-1);
-		dest = NVVGA_ADDR(dx, dy+height-1);
+		src  = NVVGA_ADDR(vc, sx, sy+height-1);
+		dest = NVVGA_ADDR(vc, dx, dy+height-1);
 
 		for (; height > 0; height--) {
 			for(i=width-1;i>=0;i--)scr_writew(scr_readw(src+4*i),dest+4*i);
-			src  -= nvvga_video_num_columns*4;
-			dest -= nvvga_video_num_columns*4;
+			src  -= vc->vc_cols*4;
+			dest -= vc->vc_cols*4;
 		}
 	}
 }
