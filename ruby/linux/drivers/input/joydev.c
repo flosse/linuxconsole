@@ -253,7 +253,7 @@ static ssize_t joydev_read(struct file *file, char *buf, size_t count, loff_t *p
 	if (list->head == list->tail && list->startup == joydev->nabs + joydev->nkey) {
 
 		add_wait_queue(&list->joydev->wait, &wait);
-		current->state = TASK_INTERRUPTIBLE;
+		set_current_state(TASK_INTERRUPTIBLE);
 
 		while (list->head == list->tail) {
 
@@ -269,7 +269,7 @@ static ssize_t joydev_read(struct file *file, char *buf, size_t count, loff_t *p
 			schedule();
 		}
 
-		current->state = TASK_RUNNING;
+		set_current_state(TASK_RUNNING);
 		remove_wait_queue(&list->joydev->wait, &wait);
 	}
 

@@ -180,7 +180,7 @@ static ssize_t evdev_read(struct file * file, char * buffer, size_t count, loff_
 	if (list->head == list->tail) {
 
 		add_wait_queue(&list->evdev->wait, &wait);
-		current->state = TASK_INTERRUPTIBLE;
+		set_current_state(TASK_INTERRUPTIBLE);
 
 		while (list->head == list->tail) {
 
@@ -200,7 +200,7 @@ static ssize_t evdev_read(struct file * file, char * buffer, size_t count, loff_
 			schedule();
 		}
 
-		current->state = TASK_RUNNING;
+		set_current_state(TASK_RUNNING);
 		remove_wait_queue(&list->evdev->wait, &wait);
 	}
 
