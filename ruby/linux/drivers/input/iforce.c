@@ -181,6 +181,11 @@ static struct {
 #define HI(a)	((unsigned char)((a) >> 8))
 #define LO(a)	((unsigned char)((a) & 0xff))
 
+/* For many parameters, it seems that 0x80 is a special value that should
+ * be avoided. Instead, we replace this value by 0x7f
+ */
+#define FIX80(a) ((a)==0x80?0x7f:(a))
+
 /* Encode a time value */
 #define TIME_SCALE(a)	((a) == 0xffff ? 0xffff : (a) * 1000 / 256)
 
@@ -674,7 +679,7 @@ static int make_magnitude_modifier(struct iforce* iforce,
 
 	data[0] = LO(mod_chunk->start);
 	data[1] = HI(mod_chunk->start);
-	data[2] = HI(level);
+	data[2] = FIX80(HI(level));
 
 	send_packet(iforce, FF_CMD_MAGNITUDE, data);
 
@@ -707,9 +712,9 @@ static int make_period_modifier(struct iforce* iforce,
 	data[0] = LO(mod_chunk->start);
 	data[1] = HI(mod_chunk->start);
 
-	data[2] = HI(magnitude);
-	data[3] = HI(offset);
-	data[4] = HI(phase);
+	data[2] = FIX80(HI(magnitude));
+	data[3] = FIX80(HI(offset));
+	data[4] = FIX80(HI(phase));
 
 	data[5] = LO(period);
 	data[6] = HI(period);
@@ -749,11 +754,11 @@ static int make_shape_modifier(struct iforce* iforce,
 
 	data[2] = LO(attack_duration);
 	data[3] = HI(attack_duration);
-	data[4] = HI(initial_level);
+	data[4] = FIX80(HI(initial_level));
 
 	data[5] = LO(fade_duration);
 	data[6] = HI(fade_duration);
-	data[7] = HI(final_level);
+	data[7] = FIX80(HI(final_level));
 
 	send_packet(iforce, FF_CMD_SHAPE, data);
 
@@ -784,8 +789,8 @@ static int make_interactive_modifier(struct iforce* iforce,
 	data[0] = LO(mod_chunk->start);
 	data[1] = HI(mod_chunk->start);
 
-	data[2] = HI(rk);
-	data[3] = HI(lk);
+	data[2] = FIX80(HI(rk));
+	data[3] = FIX80(HI(lk));
 
 	data[4] = LO(center);
 	data[5] = HI(center);
@@ -793,8 +798,8 @@ static int make_interactive_modifier(struct iforce* iforce,
 	data[6] = LO(db);
 	data[7] = HI(db);
 
-	data[8] = HI(rsat);
-	data[9] = HI(lsat);
+	data[8] = FIX80(HI(rsat));
+	data[9] = FIX80(HI(lsat));
 
 	send_packet(iforce, FF_CMD_INTERACT, data);
 
@@ -831,7 +836,7 @@ static int make_core(struct iforce* iforce, u16 id, u16 mod_id1, u16 mod_id2,
 	data[3]  = LO(duration);
 	data[4]  = HI(duration);
 
-	data[5]  = HI(direction);
+	data[5]  = FIX80(HI(direction));
 
 	data[6]  = LO(interval);
 	data[7]  = HI(interval);
