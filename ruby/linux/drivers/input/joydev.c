@@ -385,7 +385,7 @@ static struct input_handle *joydev_connect(struct input_handler *handler, struct
 	int i, j, minor;
 
 	if (!(test_bit(EV_KEY, dev->evbit) && test_bit(EV_ABS, dev->evbit) &&
-	      test_bit(ABS_X, dev->absbit) && test_bit(ABS_Y, dev->absbit) &&
+	     (test_bit(ABS_X, dev->absbit) || test_bit(ABS_Y, dev->absbit)) &&
 	     (test_bit(BTN_TRIGGER, dev->keybit) || test_bit(BTN_A, dev->keybit)
 		|| test_bit(BTN_1, dev->keybit)))) return NULL; 
 
