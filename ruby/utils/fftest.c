@@ -49,7 +49,7 @@ int main(int argc, char** argv)
 
 	for (i=1; i<argc; ++i) {
 		if (strncmp(argv[i], "--help", 64) == 0) {
-			printf("Usage: %s /dev/eventXX\n", argv[0]);
+			printf("Usage: %s /dev/input/eventXX\n", argv[0]);
 			printf("Tests the force feedback driver\n");
 			exit(1);
 		}
