@@ -45,7 +45,9 @@
 #include <asm/unaligned.h>
 
 #include "hid.h"
+#ifdef CONFIG_INPUT_HIDDEV
 #include "hiddev.h"
+#endif
 
 static char *hid_types[] = {"Device", "Pointer", "Mouse", "Device", "Joystick",
 				"Gamepad", "Keyboard", "Keypad", "Multi-Axis Controller"};
@@ -720,8 +722,10 @@ static void hid_process_event(struct hid_device *hid, struct hid_field *field, s
 {
 	if (hid->claimed & HID_CLAIMED_INPUT)
 		hidinput_hid_event(hid, field, usage, value);
+#ifdef CONFIG_INPUT_HIDDEV
 	if (hid->claimed & HID_CLAIMED_HIDDEV)
 		hiddev_hid_event(hid->hiddev.private, usage->hid, value);
+#endif
 }
 
 
@@ -1167,9 +1171,10 @@ static void* hid_probe(struct usb_device *dev, unsigned int ifnum,
 
 	if (!hidinput_connect(hid))
 		hid->claimed |= HID_CLAIMED_INPUT;
+#ifdef CONFIG_INPUT_HIDDEV
 	if (!hiddev_connect(hid))
 		hid->claimed |= HID_CLAIMED_HIDDEV;
-
+#endif
 	printk(KERN_INFO);
 
 	if (hid->claimed & HID_CLAIMED_INPUT)
@@ -1202,9 +1207,10 @@ static void hid_disconnect(struct usb_device *dev, void *ptr)
 	
 	if (hid->claimed & HID_CLAIMED_INPUT)
 		hidinput_disconnect(hid);
+#ifdef CONFIG_INPUT_HIDDEV
 	if (hid->claimed & HID_CLAIMED_HIDDEV)
 		hiddev_disconnect(hid);	
-
+#endif
 	hid_free_device(hid);
 }
 
@@ -1225,13 +1231,17 @@ static struct usb_driver hid_driver = {
 static int __init hid_init(void)
 {
 	usb_register(&hid_driver);
+#ifdef CONFIG_INPUT_HIDDEV
 	hiddev_init();
+#endif
 	return 0;
 }
 
 static void __exit hid_exit(void)
 {
+#ifdef CONFIG_INPUT_HIDDEV
 	hiddev_exit();
+#endif
 	usb_deregister(&hid_driver);
 }
 
