@@ -375,6 +375,7 @@ extern void start_tty(struct tty_struct * tty);
 extern int tty_register_ldisc(int disc, struct tty_ldisc *new_ldisc);
 extern int tty_register_driver(struct tty_driver *driver);
 extern int tty_unregister_driver(struct tty_driver *driver);
+extern struct tty_driver *get_tty_driver(kdev_t device);
 extern void tty_register_devfs (struct tty_driver *driver, unsigned int flags,
 				unsigned minor);
 extern void tty_unregister_devfs (struct tty_driver *driver, unsigned minor);

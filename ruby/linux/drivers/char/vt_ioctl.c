@@ -435,9 +435,9 @@ int con_font_op(struct vc_data *vc, struct console_font_op *op)
 			return -EFAULT;
 		}
 		op->data = temp;
-		acquire_console_sem(&vc->vc_tty->driver);
+		acquire_console_sem(vc->vc_tty->device);
 		err = vc->display_fg->vt_sw->con_font_op(vc, op);
-		release_console_sem(&vc->vc_tty->driver);
+		release_console_sem(vc->vc_tty->device);
 		if (!err)
 			vc->vc_font = *op;
 		break;
@@ -490,10 +490,10 @@ int con_font_op(struct vc_data *vc, struct console_font_op *op)
 		vc->vc_font = vc->display_fg->fg_console->vc_font;
 		break;
 	case KD_FONT_OP_SET_DEFAULT:
-		acquire_console_sem(&vc->vc_tty->driver);
+		acquire_console_sem(vc->vc_tty->device);
 		*op = vc->display_fg->default_mode->vc_font;
 		err = vc->display_fg->vt_sw->con_font_op(vc, op);
-		release_console_sem(&vc->vc_tty->driver);	
+		release_console_sem(vc->vc_tty->device);	
 		break;
 	default:
 		return -EINVAL;
@@ -1042,9 +1042,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 				 * make sure we are atomic with respect to
 				 * other console switches..
 				 */
-				acquire_console_sem(&vc->vc_tty->driver);
+				acquire_console_sem(vc->vc_tty->device);
 				complete_change_console(tmp, vc->display_fg->fg_console);
-				release_console_sem(&vc->vc_tty->driver);
+				release_console_sem(vc->vc_tty->device);
 			}
 		} else {
 			/*

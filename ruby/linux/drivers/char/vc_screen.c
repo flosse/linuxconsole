@@ -131,7 +131,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 	/* Select the proper current console and verify
 	 * sanity of the situation under the console lock.
 	 */
-	acquire_console_sem(&vc->vc_tty->driver);
+	acquire_console_sem(vc->vc_tty->device);
 
 	attr = (currcons & 128);
 	currcons = (currcons & 127);
@@ -261,10 +261,9 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 		/* Finally, temporarily drop the console lock and push
 		 * all the data to userspace from our temporary buffer.
 		 */
-
-		release_console_sem(&vc->vc_tty->driver);
+		release_console_sem(vc->vc_tty->device);
 		ret = copy_to_user(buf, con_buf_start, orig_count);
-		acquire_console_sem(&vc->vc_tty->driver);
+		acquire_console_sem(vc->vc_tty->device);
 
 		if (ret) {
 			read += (orig_count - ret);
@@ -280,7 +279,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 	if (read)
 		ret = read;
 unlock_out:
-	release_console_sem(&vc->vc_tty->driver);
+	release_console_sem(vc->vc_tty->device);
 	up(&vc->display_fg->lock);
 	return ret;
 }
@@ -303,7 +302,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	/* Select the proper current console and verify
 	 * sanity of the situation under the console lock.
 	 */
-	acquire_console_sem(&vc->vc_tty->driver);
+	acquire_console_sem(vc->vc_tty->device);
 
 	attr = (currcons & 128);
 	currcons = (currcons & 127);
@@ -341,9 +340,9 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 		/* Temporarily drop the console lock so that we can read
 		 * in the write data from userspace safely.
 		 */
-		release_console_sem(&vc->vc_tty->driver);
+		release_console_sem(vc->vc_tty->device);
 		ret = copy_from_user(&vc->display_fg->con_buf, buf, this_round);
-		acquire_console_sem(&vc->vc_tty->driver);
+		acquire_console_sem(vc->vc_tty->device);
 
 		if (ret) {
 			this_round -= ret;
@@ -468,7 +467,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	ret = written;
 
 unlock_out:
-	release_console_sem(&vc->vc_tty->driver);
+	release_console_sem(vc->vc_tty->device);
 	up(&vc->display_fg->lock);
 	return ret;
 }

@@ -47,15 +47,14 @@ struct console
 	kdev_t	(*device)(struct console *);
 	int	(*wait_key)(struct console *);
 	int	(*setup)(struct console *, char *);
-	struct tty_driver *driver;
 	short	flags;
 	short	index;
 	int	cflag;
 	struct	 console *next;
 };
 
-extern void acquire_console_sem(struct tty_driver *device);
-extern void release_console_sem(struct tty_driver *device);
+extern void acquire_console_sem(kdev_t device);
+extern void release_console_sem(kdev_t device);
 extern void register_console(struct console *);
 extern int unregister_console(struct console *);
 extern struct console *console_drivers;

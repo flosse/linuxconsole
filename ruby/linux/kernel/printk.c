@@ -288,13 +288,15 @@ asmlinkage long sys_syslog(int type, char * buf, int len)
  */
 static void __call_console_drivers(struct console *con, unsigned long start, unsigned long end)
 {
+	struct tty_driver *driver = get_tty_driver(con->device(con));
+
 	/* Make sure that we print immediately */
 	if (oops_in_progress)
-		init_MUTEX(&con->driver->tty_lock);
+		init_MUTEX(&driver->tty_lock);
 
-	down(&con->driver->tty_lock);
+	down(&driver->tty_lock);
 	con->write(con, &LOG_BUF(start), end - start);
-	up(&con->driver->tty_lock);
+	up(&driver->tty_lock);
 }
 
 /*
@@ -387,6 +389,7 @@ asmlinkage int printk(const char *fmt, ...)
                	unsigned long semi_random;
         } printk_buf;
 	static int log_level_unknown = 1;
+	struct tty_driver *driver;
 	unsigned long sr_copy;
 	unsigned long flags;
 	struct console *con;
@@ -432,10 +435,10 @@ asmlinkage int printk(const char *fmt, ...)
 	spin_unlock_irqrestore(&logbuf_lock, flags);
 
         for (con = console_drivers; con; con = con->next) {
-                if ((con->flags & CON_ENABLED) && con->write && 
-		     !down_trylock(&con->driver->tty_lock)) {
-			//console_may_schedule = 0;
-			release_console_sem(con->driver);
+                if ((con->flags & CON_ENABLED) && con->write) {
+			driver = get_tty_driver(con->device(con));
+			if (driver && !down_trylock(&driver->tty_lock)) 
+				release_console_sem(con->device(con));
 		}
 	}
 	return printed_len;
@@ -456,11 +459,13 @@ EXPORT_SYMBOL(console_print);
  *
  * Can sleep, returns nothing.
  */
-void acquire_console_sem(struct tty_driver *device)
+void acquire_console_sem(kdev_t device)
 {
+	struct tty_driver *driver = get_tty_driver(device);
+	
 	if (in_interrupt())
         	BUG();
-       	down(&device->tty_lock);
+       	down(&driver->tty_lock);
        	//console_may_schedule = 1;
 }
 EXPORT_SYMBOL(acquire_console_sem);
@@ -479,17 +484,18 @@ EXPORT_SYMBOL(acquire_console_sem);
  *
  * release_console_sem() may be called from any context.
  */
-void release_console_sem(struct tty_driver *device)
+void release_console_sem(kdev_t device)
 {
+	struct tty_driver *driver = get_tty_driver(device);
 	unsigned long _con_start, _log_end;
         unsigned long must_wake_klogd = 0;
 	unsigned long flags;
 	struct console *con;
 
-	if (device->flags & TTY_DRIVER_CONSOLE) {
+	if (driver->flags & TTY_DRIVER_CONSOLE) {
 		/* Look for new messages */      
 		for (con = console_drivers; con; con = con->next) {
-			if (con->driver == device)
+			if (con->device(con) == device)
 				break;
 		}		 	
 	
@@ -508,8 +514,7 @@ void release_console_sem(struct tty_driver *device)
        		if (must_wake_klogd && !oops_in_progress)
         		wake_up_interruptible(&log_wait);
 	}
-       	//console_may_schedule = 0;
-       	up(&device->tty_lock);
+       	up(&driver->tty_lock);
 }
 
 /*
@@ -520,6 +525,7 @@ void release_console_sem(struct tty_driver *device)
  */
 void register_console(struct console *console)
 {
+	struct tty_driver *driver;
 	unsigned long flags;
 	int i;
 
@@ -575,8 +581,11 @@ void register_console(struct console *console)
 		console->next = console_drivers->next;
 		console_drivers->next = console;
 	}
-	init_MUTEX(&console->driver->tty_lock);
-	console->driver->flags |= TTY_DRIVER_CONSOLE;
+	driver = get_tty_driver(console->device(console));
+	if (driver) {
+		init_MUTEX(&driver->tty_lock);
+		driver->flags |= TTY_DRIVER_CONSOLE;
+	}
 	up(&console_sem);
 	if (console->flags & CON_PRINTBUFFER) { 
 		/*
@@ -587,16 +596,19 @@ void register_console(struct console *console)
 		con_start = log_start;
 		spin_unlock_irqrestore(&logbuf_lock, flags);
 	}
-	release_console_sem(console->driver);
+	release_console_sem(console->device(console));
 }
 EXPORT_SYMBOL(register_console);
 
-int unregister_console(struct console * console)
+int unregister_console(struct console *console)
 {
+	struct tty_driver *driver = get_tty_driver(console->device(console));
         struct console *a,*b;
 	int res = 1;
 
 	down(&console_sem);
+	if (driver)
+		release_console_sem(console->device(console));
 	if (console_drivers == console) {
 		console_drivers=console->next;
 		res = 0;
@@ -617,7 +629,6 @@ int unregister_console(struct console * console)
 	 */
 	if (console_drivers == NULL)
 		preferred_console = -1;
-	release_console_sem(console->driver);
 	up(&console_sem);
 	return res;
 }

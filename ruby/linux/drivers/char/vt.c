@@ -714,7 +714,7 @@ static void vt_callback(void *private)
 
         if (!vt || !vt->want_vc || !vt->want_vc->vc_tty) return;
 
-        acquire_console_sem(&vt->want_vc->vc_tty->driver);
+        acquire_console_sem(vt->want_vc->vc_tty->device);
 
         if (vt->want_vc->vc_num != vt->fg_console->vc_num &&
             !vt->vt_dont_switch) {
@@ -735,7 +735,7 @@ static void vt_callback(void *private)
                       sw->con_scroll(vt->fg_console, vt->scrollback_delta);
                 vt->scrollback_delta = 0;
         }
-        release_console_sem(&vt->want_vc->vc_tty->driver);
+        release_console_sem(vt->want_vc->vc_tty->device);
 }
 
 /*
@@ -992,7 +992,6 @@ const char *create_vt(struct vt_struct *vt, int init)
 
 		admin_vt = vt;
 #ifdef CONFIG_VT_CONSOLE
-		vt_console_driver.driver = &vt_driver;
 		register_console(&vt_console_driver);
         	printable = 1;
 #endif
@@ -1278,9 +1277,9 @@ static int vt_write(struct tty_struct * tty, int from_user,
 
         pm_access(vc->display_fg->pm_con);
         retval = do_con_write(tty, from_user, buf, count);
-	acquire_console_sem(&vc->vc_tty->driver);
+	acquire_console_sem(vc->vc_tty->device);
         set_cursor(vc);
-	release_console_sem(&vc->vc_tty->driver);
+	release_console_sem(vc->vc_tty->device);
         return retval;
 }
 
@@ -1307,9 +1306,9 @@ static void vt_flush_chars(struct tty_struct *tty)
 		return;
 
         pm_access(vc->display_fg->pm_con);
-	acquire_console_sem(&vc->vc_tty->driver);
+	acquire_console_sem(vc->vc_tty->device);
         set_cursor(vc);
-	release_console_sem(&vc->vc_tty->driver);
+	release_console_sem(vc->vc_tty->device);
 }
 
 static int vt_chars_in_buffer(struct tty_struct *tty)
@@ -1539,8 +1538,6 @@ static int console_refcount;
 
 void __init vt_console_init(void)
 {
-	struct vc_data *vc;
-
         memset(&vt_driver, 0, sizeof(struct tty_driver));
         vt_driver.magic = TTY_DRIVER_MAGIC;
         vt_driver.name = "vc/%d";
@@ -1583,12 +1580,6 @@ void __init vt_console_init(void)
 #if defined(CONFIG_MDA_CONSOLE)
 	mda_console_init();
 #endif
-	if (admin_vt) {
-		vc = admin_vt->vc_cons[0];
-        	gotoxy(vc, x, y);
-        	vte_ed(vc, 0);
-        	update_screen(vc);
-	}
 }
 
 static void clear_buffer_attributes(struct vc_data *vc)
