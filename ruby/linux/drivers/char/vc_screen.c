@@ -43,6 +43,7 @@
 #undef org
 #undef addr
 #define HEADER_SIZE	4
+#define CON_BUF_SIZE	PAGE_SIZE
 
 /* note the word offset */
 unsigned short *screen_pos(struct vc_data *vc, int w_offset, int viewed)
