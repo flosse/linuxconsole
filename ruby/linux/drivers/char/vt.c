@@ -1479,17 +1479,11 @@ static kdev_t vt_console_device(struct console *c)
         return MKDEV(TTY_MAJOR, c->index ? c->index : admin_vt->fg_console->vc_num);
 }
 
-void vt_console_unblank(void)
-{
-	unblank_screen(admin_vt);		
-}
-
 struct console vt_console_driver = {
 	name:		"tty",
         write:		vt_console_print,
         device:		vt_console_device,
         wait_key:	keyboard_wait_for_keypress,
-        unblank:	vt_console_unblank, 
         flags:		CON_PRINTBUFFER,
         index:		-1,
 };

@@ -18,7 +18,6 @@
 #include <linux/interrupt.h>
 
 asmlinkage void sys_sync(void);	/* it's really int */
-extern void unblank_console(void);
 
 int panic_timeout;
 
@@ -36,9 +35,9 @@ __setup("panic=", panic_setup);
  *	panic - halt the system
  *	@fmt: The text string to print
  *
- *	Display a message, then unblank the console and perform
- *	cleanups. Functions in the panic notifier list are called
- *	after the filesystem cache is flushed (when possible).
+ *	Display a message, then perform cleanups. Functions in the panic
+ *	notifier list are called after the filesystem cache is flushed
+ *	(when possible).
  *
  *	This function never returns.
  */
@@ -61,9 +60,7 @@ NORET_TYPE void panic(const char * fmt, ...)
 		printk(KERN_EMERG "In idle task - not syncing\n");
 	else
 		sys_sync();
-
 	bust_spinlocks(0);
-	unblank_console();
 
 #ifdef CONFIG_SMP
 	smp_send_stop();

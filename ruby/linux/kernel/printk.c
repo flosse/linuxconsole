@@ -415,35 +415,9 @@ EXPORT_SYMBOL(printk);
 
 void console_print(const char *s)
 {
-	struct console *c;
-	unsigned long flags;
-	int len = strlen(s);
-
-	spin_lock_irqsave(&console_lock, flags);
-	c = console_drivers;
-	while(c) {
-		if ((c->flags & CON_ENABLED) && c->write)
-			c->write(c, s, len);
-		c = c->next;
-	}
-	spin_unlock_irqrestore(&console_lock, flags);
+	printk(KERN_EMERG "%s", s);
 }
 EXPORT_SYMBOL(console_print);
-
-void unblank_console(void)
-{
-	struct console *c;
-	unsigned long flags;
-	
-	spin_lock_irqsave(&console_lock, flags);
-	c = console_drivers;
-	while(c) {
-		if ((c->flags & CON_ENABLED) && c->unblank)
-			c->unblank();
-		c = c->next;
-	}
-	spin_unlock_irqrestore(&console_lock, flags);
-}
 
 /*
  * The console driver calls this routine during kernel initialization
