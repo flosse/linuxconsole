@@ -115,13 +115,13 @@ where LEN = 1 + length(VALUE_QUERIED)
 
 **** Query ram size ****
 QUERY = 42 ('B'uffer size)
-The driver should reply with the same packet plus two additionnal bytes
+The device should reply with the same packet plus two additionnal bytes
 containing the size of the memory:
 ff 03 42 03 e8 CS would mean that the device has 1000 bytes of ram available.
 
 **** Query number of effects ****
 QUERY = 4e ('N'umber of effects)
-The driver should respond by sending the number of effects that can be played
+The device should respond by sending the number of effects that can be played
 at the same time (one byte)
 ff 02 4e 14 CS would stand for 20 effects.
 
@@ -195,5 +195,6 @@ Check www.immerse.com for Immersion Studio, and www.fcoder.com for ComPortSpy.
 Johann Deneux <deneux@ifrance.com>
 Home page at http://www.esil.univ-mrs.fr/~jdeneux/projects/ff/
 
+Additions by Vojtech Pavlik.
 
 I-Force is trademark of Immersion Corp.
