@@ -257,23 +257,23 @@ static int vfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
     /* Directcolor:
      *   var->{color}.offset contains start of bitfield
      *   var->{color}.length contains length of bitfield
-     *   {hardwarespecific} contains width of DAC
+     *   {hardwarespecific} contains width of RAMDAC
      *   cmap[X] is programmed to (X << red.offset) | (X << green.offset) | (X << blue.offset)
-     *   DAC[X] is programmed to (red, green, blue)
+     *   RAMDAC[X] is programmed to (red, green, blue)
      * 
      * Pseudocolor:
-     *    uses offset = 0 && length = DAC register width.
+     *    uses offset = 0 && length = RAMDAC register width.
      *    var->{color}.offset is 0
      *    var->{color}.length contains widht of DAC
      *    cmap is not used
-     *    DAC[X] is programmed to (red, green, blue)
+     *    RAMDAC[X] is programmed to (red, green, blue)
      * Truecolor:
-     *    does not use DAC.
+     *    does not use DAC. Usually 3 are present.
      *    var->{color}.offset contains start of bitfield
      *    var->{color}.length contains length of bitfield
      *    cmap is programmed to (red << red.offset) | (green << green.offset) |
      *                      (blue << blue.offset) | (transp << transp.offset)
-     *    DAC does not exist
+     *    RAMDAC does not exist
      */
 #define CNVT_TOHW(val,width) ((((val)<<(width))+0x7FFF-(val))>>16)
     switch (info->fix.visual) {
@@ -304,10 +304,17 @@ static int vfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
            (green << info->var.green.offset) |
            (blue << info->var.blue.offset) |
            (transp << info->var.transp.offset);
-       if (info->var.bits_per_pixel == 16)
-           ((u16*)(info->pseudo_palette))[regno] = v;
-       else
-           ((u32*)(info->pseudo_palette))[regno] = v;
+       switch (info->var.bits_per_pixel) {
+		case 8:
+			break;
+		case 16:
+           		((u16*)(info->pseudo_palette))[regno] = v;
+			break;
+		case 24:
+		case 32:
+           		((u32*)(info->pseudo_palette))[regno] = v;
+			break;
+       }
        return 0;
     }
     return 0;
