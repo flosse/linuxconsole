@@ -11,22 +11,22 @@
 
 extern int sel_cons;
 
-void clear_selection(void);
-int set_selection(const unsigned long arg, struct tty_struct *tty, int user);
-int paste_selection(struct tty_struct *tty);
-int sel_loadlut(const unsigned long arg);
-int mouse_reporting(struct tty_struct *tty);
-void mouse_report(struct tty_struct *tty, int butt, int mrx, int mry);
+extern void clear_selection(void);
+extern int set_selection(const unsigned long arg, struct tty_struct *tty, int user);
+extern int paste_selection(struct tty_struct *tty);
+extern int sel_loadlut(const unsigned long arg);
+extern int mouse_reporting(struct vc_data *vc);
+extern void mouse_report(struct vc_data *vc, int butt, int mrx, int mry);
 
-unsigned short *screen_pos(struct vc_data *vc, int w_offset, int viewed);
-u16 screen_glyph(struct vc_data *vc, int offset);
-void complement_pos(struct vc_data *vc, int offset);
-void invert_screen(struct vc_data *vc, int offset, int count, int shift);
+extern unsigned short *screen_pos(struct vc_data *vc, int w_offset, int viewed);
+extern u16 screen_glyph(struct vc_data *vc, int offset);
+extern void complement_pos(struct vc_data *vc, int offset);
+extern void invert_screen(struct vc_data *vc, int offset, int count, int shift);
 
-void getconsxy(struct vc_data *vc, char *p);
-void putconsxy(struct vc_data *vc, char *p);
+extern void getconsxy(struct vc_data *vc, char *p);
+extern void putconsxy(struct vc_data *vc, char *p);
 
-u16 vcs_scr_readw(struct vc_data *vc, const u16 *org);
-void vcs_scr_writew(struct vc_data *vc, u16 val, u16 *org);
+extern u16 vcs_scr_readw(struct vc_data *vc, const u16 *org);
+extern void vcs_scr_writew(struct vc_data *vc, u16 val, u16 *org);
 
 #endif
