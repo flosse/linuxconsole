@@ -72,7 +72,7 @@ if [ "$CONFIG_INPUT" != "n" ]; then
    comment 'Bus devices'
       tristate '  InPort/MS/ATIXL busmouse' CONFIG_INPUT_INPORT
       if [ "$CONFIG_INPUT_INPORT" != "n" ]; then
-         bool '  ATI XL variant' CONFIG_INPUT_ATIXL
+         bool '    ATI XL variant' CONFIG_INPUT_ATIXL
       fi
       tristate '  Logitech busmouse' CONFIG_INPUT_LOGIBM
       tristate '  IBM PC110 touchpad' CONFIG_INPUT_PC110PAD

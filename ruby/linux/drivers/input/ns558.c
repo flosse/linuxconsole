@@ -136,7 +136,7 @@ static struct ns558* ns558_isa_probe(int io, struct ns558 *next)
 	port->gameport.io = io & (-1 << i);
 	port->gameport.size = (1 << i);
 
-	request_region(port->gameport.io, port->gameport.size, "gameport");
+	request_region(port->gameport.io, port->gameport.size, "ns558-isa");
 
 	gameport_register_port(&port->gameport);
 
@@ -154,7 +154,7 @@ static struct pci_device_id ns558_pci_tbl[] __devinitdata = {
 };
 MODULE_DEVICE_TABLE(pci, ns558_pci_tbl);
 
-static int __devinit ns558_pci_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
+static int __devinit ns558_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	int ioport, iolen;
 	int rc;
@@ -169,7 +169,7 @@ static int __devinit ns558_pci_init_one(struct pci_dev *pdev, const struct pci_d
 	ioport = pci_resource_start(pdev, 0);
 	iolen = pci_resource_len(pdev, 0);
 
-	if (!request_region(ioport, iolen, "gameport"))
+	if (!request_region(ioport, iolen, "ns558-pci"))
 		return -EBUSY;
 
 	if (!(port = kmalloc(sizeof(struct ns558), GFP_KERNEL))) {
@@ -196,7 +196,7 @@ static int __devinit ns558_pci_init_one(struct pci_dev *pdev, const struct pci_d
 	return 0;
 }
 
-static void __devexit ns558_pci_exit_one(struct pci_dev *pdev)
+static void __devexit ns558_pci_remove(struct pci_dev *pdev)
 {
 	struct ns558 *port = (struct ns558 *)pdev->driver_data;
 	release_region(port->gameport.io, port->gameport.size);
@@ -205,8 +205,8 @@ static void __devexit ns558_pci_exit_one(struct pci_dev *pdev)
 static struct pci_driver ns558_pci_driver = {
         name:           "PCI Gameport",
         id_table:       ns558_pci_tbl,
-        probe:          ns558_pci_init_one,
-        remove:         ns558_pci_exit_one,
+        probe:          ns558_pci_probe,
+        remove:         ns558_pci_remove,
 };
 #endif /* CONFIG_PCI */
 
@@ -256,7 +256,7 @@ static struct ns558* ns558_pnp_probe(struct pci_dev *dev, struct ns558 *next)
 	ioport = pci_resource_start(dev, 0);
 	iolen = pci_resource_len(dev, 0);
 
-	if (!request_region(ioport, iolen, "gameport"))
+	if (!request_region(ioport, iolen, "ns558-pnp"))
 		goto deactivate;
 
 	if (!(port = kmalloc(sizeof(struct ns558), GFP_KERNEL))) {

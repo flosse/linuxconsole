@@ -1,15 +1,16 @@
 /*
- *  joy-turbografx.c  Version 1.2
+ * $Id$
  *
- *  Copyright (c) 1998-1999 Vojtech Pavlik
+ *  Copyright (c) 1998-2000 Vojtech Pavlik
+ *
+ *  Based on the work of:
+ *	Steffen Schwenke
  *
  *  Sponsored by SuSE
  */
 
 /*
- * This is a module for the Linux joystick driver, supporting
- * Steffen Schwenke's <schwenke@burg-halle.de> TurboGraFX parallel port
- * interface.
+ * TurboGraFX parallel port interface driver for Linux.
  */
 
 /*
@@ -43,224 +44,215 @@
 #include <linux/delay.h>
 #include <linux/init.h>
 
-
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
-MODULE_PARM(js_tg, "2-8i");
-MODULE_PARM(js_tg_2, "2-8i");
-MODULE_PARM(js_tg_3, "2-8i");
+MODULE_PARM(tgfx, "2-8i");
+MODULE_PARM(tgfx_2, "2-8i");
+MODULE_PARM(tgfx_3, "2-8i");
 
-#define JS_TG_BUTTON1	0x08
-#define JS_TG_UP	0x10
-#define JS_TG_DOWN	0x20	
-#define JS_TG_LEFT	0x40
-#define JS_TG_RIGHT	0x80
+#define TGFX_REFRESH_TIME	HZ/100	/* 10 ms */
 
-#define JS_TG_BUTTON2	0x02
-#define JS_TG_BUTTON3	0x04
-#define JS_TG_BUTTON4	0x01
-#define JS_TG_BUTTON5	0x08
+#define TGFX_TRIGGER		0x08
+#define TGFX_UP			0x10
+#define TGFX_DOWN		0x20	
+#define TGFX_LEFT		0x40
+#define TGFX_RIGHT		0x80
 
-static struct js_port* js_tg_port __initdata = NULL;
+#define TGFX_THUMB		0x02
+#define TGFX_THUMB2		0x04
+#define TGFX_TOP		0x01
+#define TGFX_TOP2		0x08
 
-static int js_tg[] __initdata = { -1, 0, 0, 0, 0, 0, 0, 0 };
-static int js_tg_2[] __initdata = { -1, 0, 0, 0, 0, 0, 0, 0 };
-static int js_tg_3[] __initdata = { -1, 0, 0, 0, 0, 0, 0, 0 };
+static int tgfx[] __initdata = { -1, 0, 0, 0, 0, 0, 0, 0 };
+static int tgfx_2[] __initdata = { -1, 0, 0, 0, 0, 0, 0, 0 };
+static int tgfx_3[] __initdata = { -1, 0, 0, 0, 0, 0, 0, 0 };
 
-struct js_tg_info {
-	struct pardevice *port;	/* parport device */
-	int sticks;		/* joysticks connected */
-};
+static int tgfx_buttons = { BTN_TRIGGER, BTN_THUMB, BTN_THUMB2, BTN_TOP, BTN_TOP2 };
+
+struct tgfx {
+	struct pardevice *pd;
+	struct timer_list timer;
+	struct input_dev dev[7];
+	int sticks;
+	int used;
+} *tgfx_base[3];
 
 /*
- * js_tg_read() reads and analyzes tg joystick data.
+ * tgfx_timer() reads and analyzes TurboGraFX joystick data.
  */
 
-static int js_tg_read(void *xinfo, int **axes, int **buttons)
+static int tgfx_timer(unsigned long private)
 {
-	struct js_tg_info *info = xinfo;
+	struct tgfx *tgfx = (void *private);
+	struct input_dev *dev;
 	int data1, data2, i;
 
 	for (i = 0; i < 7; i++)
-		if ((info->sticks >> i) & 1) {
+		if ((tgfx->sticks >> i) & 1) {
 
-		JS_PAR_DATA_OUT(~(1 << i), info->port);
-		data1 = JS_PAR_STATUS(info->port) ^ ~JS_PAR_STATUS_INVERT;
-		data2 = JS_PAR_CTRL_IN(info->port) ^ JS_PAR_CTRL_INVERT;
+ 			dev = tgfx->dev + i;
 
-		axes[i][0] = ((data1 & JS_TG_RIGHT) ? 1 : 0) - ((data1 & JS_TG_LEFT) ? 1 : 0);
-		axes[i][1] = ((data1 & JS_TG_DOWN ) ? 1 : 0) - ((data1 & JS_TG_UP  ) ? 1 : 0);
+			parport_write_data(tgfx->pd->port, ~(1 << i));
+			data1 = parport_read_status(gfx->pd->port) ^ 0x7f;
+			data2 = parport_read_control(tgfx->pd->port) ^ 0x04;	/* CAVEAT parport */
 
-		buttons[i][0] = ((data1 & JS_TG_BUTTON1) ? 0x01 : 0) | ((data2 & JS_TG_BUTTON2) ? 0x02 : 0)
-			      | ((data2 & JS_TG_BUTTON3) ? 0x04 : 0) | ((data2 & JS_TG_BUTTON4) ? 0x08 : 0)
-			      | ((data2 & JS_TG_BUTTON5) ? 0x10 : 0);
+			input_report_abs(dev, ABS_X, !!(data1 & TGFX_RIGHT) - !!(data1 & TGFX_LEFT));
+			input_report_abs(dev, ABS_Y, !!(data1 & TGFX_DOWN ) - !!(data1 & TGFX_UP  ));
 
-	}
+			input_report_key(dev, BTN_TRIGGER, (data1 & TGFX_TRIGGER));
+			input_report_key(dev, BTN_THUMB,   (data2 & TGFX_THUMB  ));
+			input_report_key(dev, BTN_THUMB2,  (data2 & TGFX_THUMB2 ));
+			input_report_key(dev, BTN_TOP,     (data2 & TGFX_TOP    ));
+			input_report_key(dev, BTN_TOP2,    (data2 & TGFX_TOP2   ));
+		}
 
-	return 0;
+	mod_timer(&tgfx->timer, jiffies + TGFX_REFRESH_TIME);
 }
 
-/*
- * open callback: claim parport.
- */
-
-int js_tg_open(struct js_dev *dev)
+static int tgfx_open(struct input_dev *dev)
 {
-	struct js_tg_info *info = dev->port->info;
-
-	if (!MOD_IN_USE) {
-		if (parport_claim(info->port)) return -EBUSY; 
-		JS_PAR_CTRL_OUT(0x04, info->port);
-	}
-	MOD_INC_USE_COUNT;
-	return 0;
-}
-
-/*
- * close callback: release parport
- */
-
-int js_tg_close(struct js_dev *dev)
-{
-        struct js_tg_info *info = dev->port->info;
-
-        MOD_DEC_USE_COUNT;
-	if (!MOD_IN_USE) {
-		JS_PAR_CTRL_OUT(0x00, info->port);
-        	parport_release(info->port);
+        struct tgfx *tgfx = dev->private;
+        if (!tgfx->used++) {
+		if (parport_claim(tgfx->pd)) return -EBUSY; 
+		parport_write_control(tgfx->pd->port, 0x04);
+                mod_timer(&tgfx->timer, jiffies + TGFX_REFRESH_TIME); 
 	}
         return 0;
 }
 
-#ifdef MODULE
-void cleanup_module(void)
+static void tgfx_close(struct input_dev *dev)
 {
-	struct js_tg_info *info;
-	int i;
-
-	while (js_tg_port) {
-		for (i = 0; i < js_tg_port->ndevs; i++)
-			if (js_tg_port->devs[i])
-				js_unregister_device(js_tg_port->devs[i]);
-		info = js_tg_port->info;
-		parport_unregister_device(info->port);
-		js_tg_port = js_unregister_port(js_tg_port);
+        struct tgfx *tgfx = dev->private;
+        if (!--tgfx->used) {
+                del_timer(&tgfx->timer);
+		parport_write_control(tgfx->pd->port, 0x00);
+        	parport_release(tgfx->pd);
 	}
 }
-#endif
 
 /*
- * js_tg_init_corr() initializes correction values of
- * tg gamepads.
+ * tgfx_probe() probes for tg gamepads.
  */
 
-static void __init js_tg_init_corr(int sticks, struct js_corr **corr)
+static int __init *tgfx_probe(int *config)
 {
+	struct tgfx *tgfx;
+	struct parport *pp;
 	int i, j;
 
-	for (i = 0; i < 7; i++)
-		if ((sticks >> i) & 1)
-			for (j = 0; j < 2; j++) {
-				corr[i][j].type = JS_CORR_BROKEN;
-				corr[i][j].prec = 0;
-				corr[i][j].coef[0] = 0;
-				corr[i][j].coef[1] = 0;
-				corr[i][j].coef[2] = (1 << 29);
-				corr[i][j].coef[3] = (1 << 29);
-			}
-}
+	if (config[0] < 0)
+		return -1;
 
-/*
- * js_tg_probe() probes for tg gamepads.
- */
-
-static struct js_port __init *js_tg_probe(int *config, struct js_port *port)
-{
-	struct js_tg_info iniinfo;
-	struct js_tg_info *info = &iniinfo;
-	struct parport *pp;
-	int i;
-
-	if (config[0] < 0) return port;
-
-
-	if (config[0] > 0x10)
-		for (pp=parport_enumerate(); pp && (pp->base!=config[0]); pp=pp->next);
-	else
-		for (pp=parport_enumerate(); pp && (config[0]>0); pp=pp->next) config[0]--;
+	for (pp = parport_enumerate(); pp && (config[0] > 0); pp = pp->next)
+		config[0]--;
 
 	if (!pp) {
-		printk(KERN_ERR "joy-tg: no such parport\n");
-		return port;
+		printk(KERN_ERR "turbografx.c: no such parport\n");
+		return -1;
 	}
 
-	info->port = parport_register_device(pp, "joystick (turbografx)", NULL, NULL, NULL, PARPORT_DEV_EXCL, NULL);
-	if (!info->port)
-		return port;
+	if (!(tgfx = kmalloc(sizeof(struct tgfx), GFP_KERNEL)))
+		return -1;
+	memset(tgfx, 0, sizeof(struct tgfx));
 
-	port = js_register_port(port, info, 7, sizeof(struct js_tg_info), js_tg_read);
-	info = port->info;
+	tgfx->pd = parport_register_device(pp, "turbografx", NULL, NULL, NULL, PARPORT_DEV_EXCL, NULL);
 
-	info->sticks = 0;
+	if (!tgfx->pd) {
+		printk(KERN_ERR "turbografx.c: parport busy already - lp.o loaded?\n");
+		kfree(tgfx);
+		return -1;
+	}
+
+	init_timer(&tgfx->timer);
+	tgfx->timer.data = (long) tgfx;
+	tgfx->timer.function = tgfx_timer;
+
+	tgfx->sticks = 0;
 
 	for (i = 0; i < 7; i++)
 		if (config[i+1] > 0 && config[i+1] < 6) {
-			printk(KERN_INFO "js%d: Multisystem joystick on %s\n",
-				js_register_device(port, i, 2, config[i+1], "Multisystem joystick", js_tg_open, js_tg_close),
-				info->port->port->name);
-			info->sticks |= (1 << i);
+
+			tgfx->sticks |= (1 << i);
+
+			tgfx->dev[i].open = tgfx_open;
+			tgfx->dev[i].close = tgfx_close;
+
+			tgfx->dev[i].evbit = BIT(EV_KEY) | BIT(EV_ABS);
+			tgfx->dev[i].absbit = BIT(ABS_X) | BIT(ABS_Y);
+
+			for (j = 0; j < config[i+1]; j++)
+				set_bit(tgfx_buttons[j], tgfx->dev[i].keybit); 
+
+			tgfx->dev[i].absmin[ABS_X] = -1; tgfx->dev[i].absmax[ABS_X] = 1;
+			tgfx->dev[i].absmin[ABS_Y] = -1; tgfx->dev[i].absmax[ABS_Y] = 1;
+
+			input_register_device(tgfx->dev + i);
+			printk(KERN_INFO "input%d: %d-button Multisystem joystick on %s\n",
+				tgfx->dev[i].number, config[i+1], tgfx->pd->port->name);
 		}
 
-        if (!info->sticks) {
-		parport_unregister_device(info->port);
-		return port;
+        if (!tgfx->sticks) {
+		parport_unregister_device(tgfx->pd);
+		kfree(tgfx);
+		return -1;
         }
 		
-	js_tg_init_corr(info->sticks, port->corr);
-
-	return port;
+	return 0;
 }
 
 #ifndef MODULE
-int __init js_tg_setup(SETUP_PARAM)
+int __init tgfx_setup(char *str)
 {
-	int i;
-	SETUP_PARSE(2);
-	for (i = 0; i <= ints[0] && i < 2; i++) js_tg[i] = ints[i+1];
+	int i, ints[9];
+	get_options(str, ARRAY_SIZE(ints), ints);
+	for (i = 0; i <= ints[0] && i < 2; i++) tgfx[i] = ints[i + 1];
 	return 1;
 }
-int __init js_tg_setup_2(SETUP_PARAM)
+int __init tgfx_setup_2(char *str)
 {
-	int i;
-	SETUP_PARSE(2);
-	for (i = 0; i <= ints[0] && i < 2; i++) js_tg_2[i] = ints[i+1];
+	int i, ints[9];
+	get_options(str, ARRAY_SIZE(ints), ints);
+	for (i = 0; i <= ints[0] && i < 2; i++) tgfx_2[i] = ints[i + 1];
 	return 1;
 }
-int __init js_tg_setup_3(SETUP_PARAM)
+int __init tgfx_setup_3(char *str)
 {
-	int i;
-	SETUP_PARSE(2);
-	for (i = 0; i <= ints[0] && i < 2; i++) js_tg_3[i] = ints[i+1];
+	int i, ints[9];
+	get_options(str, ARRAY_SIZE(ints), ints);
+	for (i = 0; i <= ints[0] && i < 2; i++) tgfx_3[i] = ints[i + 1];
 	return 1;
 }
-__setup("js_tg=", js_tg_setup);
-__setup("js_tg_2=", js_tg_setup_2);
-__setup("js_tg_3=", js_tg_setup_3);
+__setup("tgfx=", tgfx_setup);
+__setup("tgfx_2=", tgfx_setup_2);
+__setup("tgfx_3=", tgfx_setup_3);
 #endif
 
-#ifdef MODULE
-int init_module(void)
-#else
-int __init js_tg_init(void)
-#endif
+int __init tgfx_init(void)
 {
-	js_tg_port = js_tg_probe(js_tg, js_tg_port);
-	js_tg_port = js_tg_probe(js_tg_2, js_tg_port);
-	js_tg_port = js_tg_probe(js_tg_3, js_tg_port);
+	int i = 0;
 
-	if (js_tg_port) return 0;
+	tgfx_base[0] = tgfx_probe(tgfx);
+	tgfx_base[1] = tgfx_probe(tgfx_2);
+	tgfx_base[2] = tgfx_probe(tgfx_3);
 
-#ifdef MODULE
-	printk(KERN_WARNING "joy-tg: no joysticks specified\n");
-#endif
+	if (tgfx_base[0] || tgfx_base[1] || tgfx_base[2])
+		return 0;
+
 	return -ENODEV;
 }
+
+void __exit tgfx_exit(void)
+{
+	struct tgfx *tgfx;
+	int i, j;
+
+	for (i = 0; i < 3; i++) 
+		if (tgfx_base[i]) {
+			for (j = 0; j < 7; j++)
+				if (tgfx_base[i].sticks & (1 << j))
+					input_unregister_device(tgfx_base[i].dev + j);
+		parport_unregister_device(tgfx[base].pd);
+	}
+}
+
+module_init(tgfx_init);
+module_exit(tgfx_exit);
