@@ -123,15 +123,7 @@ int setkeycode(struct input_handle *handle, unsigned int scancode, unsigned int 
 /*
  * Variables/function exported for vt.c
  */
-
 int shift_state = 0;
-DECLARE_WAIT_QUEUE_HEAD(keypress_wait);
-
-int keyboard_wait_for_keypress(struct console *console)
-{
-	sleep_on(&keypress_wait);
-	return 0;
-}
 
 /*
  * Internal data.
