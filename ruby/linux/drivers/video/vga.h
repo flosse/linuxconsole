@@ -181,6 +181,7 @@
 #define MODE_TEXT   8
 
 struct vga_hw_state {
+	caddr_t regsbase;
 	u16 xres;
 	u16 vxres;
 	u16 right; 

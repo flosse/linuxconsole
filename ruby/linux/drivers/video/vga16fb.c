@@ -67,8 +67,9 @@ static struct fb_fix_screeninfo vga16fb_fix __initdata = {
 
 static void vga16fb_pan_var(struct fb_info *info,struct fb_var_screeninfo *var) 
 {
-	u32 pos;
-	u32 xoffset;
+	struct vga_hw_state *par = (struct vga_hw_state *)info->par;
+	caddr_t regs = par->regsbase;
+	u32 xoffset, pos;
 
 	xoffset = var->xoffset;
 	if (var->bits_per_pixel == 8) {
@@ -78,19 +79,19 @@ static void vga16fb_pan_var(struct fb_info *info,struct fb_var_screeninfo *var)
 			xoffset--;
 		pos = (var->xres_virtual * var->yoffset + xoffset) >> 3;
 	}
-	vga_wcrt(NULL, VGA_CRTC_START_HI, pos >> 8);
-	vga_wcrt(NULL, VGA_CRTC_START_LO, pos & 0xFF);
+	vga_wcrt(regs, VGA_CRTC_START_HI, pos >> 8);
+	vga_wcrt(regs, VGA_CRTC_START_LO, pos & 0xFF);
 	/* if we support CFB4, then we must! support xoffset with pixel 
 	   granularity */
 	/* if someone supports xoffset in bit resolution */
-	vga_r(NULL, VGA_IS1_RC);		/* reset flip-flop */
-	vga_w(NULL, VGA_ATT_IW, VGA_ATC_PEL);
+	vga_r(regs, VGA_IS1_RC);		/* reset flip-flop */
+	vga_w(regs, VGA_ATT_IW, VGA_ATC_PEL);
 	if (var->bits_per_pixel == 8)
-		vga_w(NULL, VGA_ATT_IW, (xoffset & 3) << 1);
+		vga_w(regs, VGA_ATT_IW, (xoffset & 3) << 1);
 	else
-		vga_w(NULL, VGA_ATT_IW, xoffset & 7);
-	vga_r(NULL, VGA_IS1_RC);
-	vga_w(NULL, VGA_ATT_IW, 0x20);
+		vga_w(regs, VGA_ATT_IW, xoffset & 7);
+	vga_r(regs, VGA_IS1_RC);
+	vga_w(regs, VGA_ATT_IW, 0x20);
 }
 
 #define FAIL(X) return -EINVAL
@@ -270,26 +271,31 @@ static int vga16fb_set_par(struct fb_info *info)
 	return 0;
 }
 
-static void ega16_setpalette(int regno, unsigned red, unsigned green, unsigned blue)
+static void ega16_setpalette(struct vga_hw_state *par, int regno, unsigned red, 
+			     unsigned green, unsigned blue)
 {
 	static unsigned char map[] = { 000, 001, 010, 011 };
+	caddr_t regs = par->regsbase;
 	int val;
 	
 	if (regno >= 16)
 		return;
 	val = map[red>>14] | ((map[green>>14]) << 1) | ((map[blue>>14]) << 2);
-	vga_r(NULL, VGA_IS1_RC);   /* ! 0x3BA */
-	vga_wattr(NULL, regno, val);
-	vga_r(NULL, VGA_IS1_RC);   /* some clones need it */
-	vga_w(NULL, VGA_ATT_IW, 0x20); /* unblank screen */
+	vga_r(regs, VGA_IS1_RC);   /* ! 0x3BA */
+	vga_wattr(regs, regno, val);
+	vga_r(regs, VGA_IS1_RC);   /* some clones need it */
+	vga_w(regs, VGA_ATT_IW, 0x20); /* unblank screen */
 }
 
-static void vga16_setpalette(int regno, unsigned red, unsigned green, unsigned blue)
+static void vga16_setpalette(struct vga_hw_state *par, int regno, unsigned red,
+			     unsigned green, unsigned blue)
 {
-	vga_w(NULL, VGA_PEL_IW, regno);
-	vga_w(NULL, VGA_PEL_D, red   >> 10);
-	vga_w(NULL, VGA_PEL_D, green >> 10);
-	vga_w(NULL, VGA_PEL_D, blue  >> 10);
+	caddr_t regs = par->regsbase;
+
+	vga_w(regs, VGA_PEL_IW, regno);
+	vga_w(regs, VGA_PEL_D, red   >> 10);
+	vga_w(regs, VGA_PEL_D, green >> 10);
+	vga_w(regs, VGA_PEL_D, blue  >> 10);
 }
 
 static int vga16fb_setcolreg(unsigned regno, unsigned red, unsigned green,
@@ -313,9 +319,9 @@ static int vga16fb_setcolreg(unsigned regno, unsigned red, unsigned green,
 		red = green = blue = (red * 77 + green * 151 + blue * 28) >> 8;
 	}
 	if (par->video_type == VIDEO_TYPE_VGAC) 
-		vga16_setpalette(regno,red,green,blue);
+		vga16_setpalette(par, regno, red, green, blue);
 	else
-		ega16_setpalette(regno,red,green,blue);
+		ega16_setpalette(par, regno, red, green, blue);
 	return 0;
 }
 
@@ -364,26 +370,23 @@ static void vga16fb_fillrect(struct fb_info *info, int x1, int y1,
 	 		     unsigned int width, unsigned int height, 
 			     unsigned long color, int rop)
 {
+	struct vga_hw_state *par = (struct vga_hw_state *)info->par;
         int line_ofs = info->fix.line_length - width;
-        char *where;
+	caddr_t regs = par->regsbase;
+	char *where;
         int x;
 
-	outb(VGA_GFX_MODE, VGA_GFX_I);
-        outb(0, VGA_GFX_D);
-	outb(VGA_GFX_DATA_ROTATE, VGA_GFX_I);
-        outb(0, VGA_GFX_D);
-	outb(VGA_GFX_SR_ENABLE, VGA_GFX_I);
-        outb(0xf, VGA_GFX_D);
-	outb(VGA_GFX_SR_VALUE, VGA_GFX_I);
-        outb(color, VGA_GFX_D);
-	outb(VGA_GFX_BIT_MASK, VGA_GFX_I);
-        outb(0xff, VGA_GFX_D);
+	vga_wgfx(regs, VGA_GFX_MODE, 0);	
+	vga_wgfx(regs, VGA_GFX_DATA_ROTATE, 0);
+	vga_wgfx(regs, VGA_GFX_SR_ENABLE, 0xf);
+	vga_wgfx(regs, VGA_GFX_SR_VALUE, color);
+	vga_wgfx(regs, VGA_GFX_BIT_MASK, 0xff);
 
         where = info->screen_base + x1 + y1 * info->fix.line_length;
         
 	while (height--) {
                 for (x = 0; x < width; x++) {
-                        writeb(0, where);
+                        fb_writeb(0, where);
                         where++;
                 }
                 where += line_ofs;
@@ -395,15 +398,14 @@ static void vga16fb_copyarea(struct fb_info *info, int sx, int sy,
 			     unsigned int width, unsigned int height, 
 			     int dx, int dy)
 {
+	struct vga_hw_state *par = (struct vga_hw_state *)info->par;
+	caddr_t regs = par->regsbase;
         char *dest, *src;
         int line_ofs, x;
 
-	outb(VGA_GFX_MODE, VGA_GFX_I);
-        outb(1, VGA_GFX_D);
-	outb(VGA_GFX_DATA_ROTATE, VGA_GFX_I);
-        outb(0, VGA_GFX_D);
-	outb(VGA_GFX_SR_ENABLE, VGA_GFX_I);
-        outb(0xf, VGA_GFX_D);
+	vga_wgfx(regs, VGA_GFX_MODE, 1);
+        vga_wgfx(regs, VGA_GFX_DATA_ROTATE, 0);
+        vga_wgfx(regs, VGA_GFX_SR_ENABLE, 0xf);
         
         if (dy < sy || (dy == sy && dx < sx)) {
                 line_ofs = info->fix.line_length - width;
@@ -411,8 +413,8 @@ static void vga16fb_copyarea(struct fb_info *info, int sx, int sy,
                 src = info->screen_base + sx + sy * info->fix.line_length;
                 while (height--) {
                         for (x = 0; x < width; x++) {
-			        readb(src);
-                                writeb(0, dest);
+			       	fb_readb(src);
+                                fb_writeb(0, dest);
                                 dest++;
                                 src++;
                         }
@@ -429,8 +431,8 @@ static void vga16fb_copyarea(struct fb_info *info, int sx, int sy,
                         for (x = 0; x < width; x++) {
                                 dest--;
                                 src--;
-                                readb(src);
-                                writeb(0, dest);
+                                fb_readb(src);
+                                fb_writeb(0, dest);
                         }
                         src -= line_ofs;
                         dest -= line_ofs;
@@ -444,6 +446,8 @@ static void vga16fb_imageblit(struct fb_info *info, unsigned int width,
                    	      int image_depth, int dx, int dy)
 {
 	char *dest = info->screen_base+dx + dy * info->fix.line_length * height;
+	struct vga_hw_state *par = (struct vga_hw_state *)info->par;
+	caddr_t regs = par->regsbase;
 	char *pic = (char *) image;
 	int x1, y1;
 
@@ -451,23 +455,16 @@ static void vga16fb_imageblit(struct fb_info *info, unsigned int width,
 		int fg = 0; //attr_fgcol(p,c);
 	        int bg = 1; //attr_bgcol(p,c);
 
-		outb(VGA_GFX_MODE, VGA_GFX_I);
-        	outb(2, VGA_GFX_D);
-		outb(VGA_GFX_DATA_ROTATE, VGA_GFX_I);
-        	outb(0, VGA_GFX_D);
-		outb(VGA_GFX_SR_ENABLE, VGA_GFX_I);
-        	outb(0xf, VGA_GFX_D);
+		vga_wgfx(regs, VGA_GFX_MODE, 2);
+	        vga_wgfx(regs, VGA_GFX_DATA_ROTATE, 0);
+        	vga_wgfx(regs, VGA_GFX_SR_ENABLE, 0xf);
+        	vga_wgfx(regs, VGA_GFX_SR_VALUE, fg);
+       	 	vga_wgfx(regs, VGA_GFX_BIT_MASK, 0xff);
 
-        	outb(VGA_GFX_SR_VALUE, VGA_GFX_I);
-        	outb(fg, VGA_GFX_D);
-
-		outb(VGA_GFX_BIT_MASK, VGA_GFX_I);
-		outb(0xff, VGA_GFX_D);	
         	writeb(bg, dest);
         	rmb();
         	fb_readb(dest); /* fill latches */
-        	outb(VGA_GFX_MODE, VGA_GFX_I);
-        	outb(3, VGA_GFX_D);
+		vga_wgfx(regs, VGA_GFX_MODE, 3);
         	wmb();
         	for (y1=dy;y1<(dy + height);y1++,dest += info->fix.line_length)
                 	fb_writeb(*pic, dest);
@@ -475,24 +472,21 @@ static void vga16fb_imageblit(struct fb_info *info, unsigned int width,
 	} else {
         	if (info->var.bits_per_pixel == 4 && 
 		    info->fix.type == FB_TYPE_VGA_PLANES) {
-                	outb_p(1,0x3ce); outb_p(0xf,0x3cf);
-                	outb_p(3,0x3ce); outb_p(0,0x3cf);
-                	outb_p(5,0x3ce); outb_p(0,0x3cf);
-
+			vga_wgfx(regs, VGA_GFX_SR_ENABLE, 0xf);                
+			vga_wgfx(regs, VGA_GFX_DATA_ROTATE, 0);	
+			vga_wgfx(regs, VGA_GFX_MODE, 0);
+                	
                 	for (y1 = dy; y1 < (dy + height); y1++) {
                         	for (x1 = dx; x1 < (dx + width); x1++) {
                                 	dest = info->screen_base + y1*info->fix.line_length + x1/4 + dx/8;
-                                	outb_p(0,0x3ce);
-                                	outb_p(*pic >> 4,0x3cf);
-                                	outb_p(8,0x3ce);
-                                	outb_p(1 << (7 - x1 % 4 * 2),0x3cf);
+                                
+					vga_wgfx(regs,VGA_GFX_SR_VALUE,*pic>>4);
+                                	vga_wgfx(regs,VGA_GFX_BIT_MASK, 1 << (7 - x1%4*2));
                                 	fb_readb(dest);
                                 	fb_writeb(0, dest);
 
-                                	outb_p(0,0x3ce);
-                                	outb_p(*pic & 0xf,0x3cf);
-                                	outb_p(8,0x3ce);
-                                	outb_p(1 << (7-(1 + x1 % 4 * 2)),0x3cf);
+					vga_wgfx(regs,VGA_GFX_SR_VALUE, *pic&0xf);
+                                	vga_wgfx(regs,VGA_GFX_BIT_MASK, 1 << (7 - x1%4*2));
                                 	fb_readb(dest);
                                 	fb_writeb(0, dest);
                                 	pic++;
@@ -527,9 +521,9 @@ int __init vga16fb_init(void)
 	printk(KERN_DEBUG "vga16fb: initializing\n");
 
 	/* XXX share VGA_FB_PHYS region with vgacon */
-
         vga16fb.screen_base = ioremap(VGA_FB_PHYS, VGA_FB_PHYS_LEN);
 	printk(KERN_INFO "vga16fb: mapped to 0x%p\n", vga16fb.screen_base);
+	default_par.regsbase = NULL;
 	default_par.palette_blanked = 0;
 	default_par.vesa_blanked = 0;
 
