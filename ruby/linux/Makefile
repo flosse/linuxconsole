@@ -151,6 +151,7 @@ ifneq ($(CONFIG_CD_NO_IDESCSI)$(CONFIG_BLK_DEV_IDECD)$(CONFIG_BLK_DEV_SR)$(CONFI
 DRIVERS-y += drivers/cdrom/driver.o
 endif
 
+DRIVERS-$(CONFIG_SSI) += drivers/ssi/ssi.o
 DRIVERS-$(CONFIG_SOUND) += drivers/sound/sounddrivers.o
 DRIVERS-$(CONFIG_PCI) += drivers/pci/driver.o
 DRIVERS-$(CONFIG_MTD) += drivers/mtd/mtdlink.o

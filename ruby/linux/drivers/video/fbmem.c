@@ -64,6 +64,7 @@ extern int cyberfb_init(void);
 extern int cyberfb_setup(char*);
 extern int pm2fb_init(void);
 extern int pm2fb_setup(char*);
+extern int clps711xfb_init(void);
 extern int cyber2000fb_init(void);
 extern int retz3fb_init(void);
 extern int retz3fb_setup(char*);
@@ -128,6 +129,7 @@ extern int sstfb_init(void);
 extern int e1355fb_init(void);
 extern int e1355fb_setup(char*);
 extern int dcfb_init(void);
+extern int anakinfb_init(void);
 extern int sfb_init(void);
 extern int sed1345fb_init(void);
 extern int r3912fb_init(void);
@@ -155,6 +157,9 @@ static struct {
 #endif
 #ifdef CONFIG_FB_AMIGA
 	{ "amifb", amifb_init, amifb_setup },
+#endif
+#ifdef CONFIG_FB_CLPS711X
+       { "clps711xfb", clps711xfb_init, NULL },
 #endif
 #ifdef CONFIG_FB_CYBER
 	{ "cyber", cyberfb_init, cyberfb_setup },
@@ -280,6 +285,9 @@ static struct {
 #endif
 #ifdef CONFIG_FB_HIT
 	{ "hitfb", hitfb_init, NULL },
+#endif
+#ifdef CONFIG_FB_ANAKIN
+        { "anakinfb", anakinfb_init, NULL },
 #endif
 #ifdef CONFIG_FB_E1355
         { "e1355fb", e1355fb_init, e1355fb_setup },

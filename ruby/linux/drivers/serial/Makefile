@@ -1,11 +1,9 @@
 #
-# Makefile for the kernel Parallel port device drivers.
+# Makefile for the kernel serial port device drivers.
 #
-# Note! Parport is the Borg.  We have assimilated some other
-# drivers in the `char', `net' and `scsi' directories,
-# but left them there to allay suspicion.
+# We place all the "new" serial drivers to the new serial core.
 #
-# 7 October 2000, Bartlomiej Zolnierkiewicz <bkz@linux-ide.org>
+# 21 June 2001, James Simmons <jsimmons@transvirtual.com>
 # Rewritten to use lists instead of if-statements.
 #
 
@@ -14,5 +12,9 @@ O_TARGET := uart.o
 export-objs	:= serial_core.o
 
 obj-$(CONFIG_UART)		+= serial_core.o
+obj-$(CONFIG_SERIAL_AMBA) 	+= serial_amba.o
+obj-$(CONFIG_SERIAL_CLPS711X) 	+= serial_clps711x.o
+obj-$(CONFIG_SERIAL_ANAKIN) 	+= serial_anakin.o
+obj-$(CONFIG_SERIAL_SA1100) 	+= serial_sa1100.o
 
 include $(TOPDIR)/Rules.make

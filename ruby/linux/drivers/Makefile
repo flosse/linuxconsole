@@ -43,6 +43,7 @@ subdir-$(CONFIG_UART)		+= serial
 subdir-$(CONFIG_HAMRADIO)	+= net/hamradio
 subdir-$(CONFIG_I2C)		+= i2c
 subdir-$(CONFIG_ACPI)		+= acpi
+subdir-$(CONFIG_SSI)		+= ssi
 
 include $(TOPDIR)/Rules.make
 

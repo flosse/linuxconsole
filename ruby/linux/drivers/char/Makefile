@@ -77,6 +77,7 @@ obj-$(CONFIG_R3964) += n_r3964.o
 obj-$(CONFIG_APPLICOM) += applicom.o
 obj-$(CONFIG_RTC) += rtc.o
 obj-$(CONFIG_EFI_RTC) += efirtc.o
+obj-$(CONFIG_SA1100_RTC) += sa1100-rtc.o
 ifeq ($(CONFIG_PPC),)
   obj-$(CONFIG_NVRAM) += nvram.o
 endif
@@ -119,6 +120,11 @@ obj-$(CONFIG_I810_TCO) += i810-tco.o
 obj-$(CONFIG_MACHZ_WDT) += machzwd.o
 obj-$(CONFIG_SOFT_WATCHDOG) += softdog.o
 
+ifeq ($(CONFIG_ARCH_ACORN),y)
+mod-subdirs    += ../acorn/char
+subdir-y       += ../acorn/char
+obj-y          += ../acorn/char/acorn-char.o
+endif
 
 include $(TOPDIR)/Rules.make
 

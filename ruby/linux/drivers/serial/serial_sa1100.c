@@ -1,7 +1,7 @@
 /*
  *  linux/drivers/char/serial_sa1100.c
  *
- *  Driver for SA1100 serial ports
+ *  Driver for SA11x0 serial ports
  *
  *  Based on drivers/char/serial.c, by Linus Torvalds, Theodore Ts'o.
  *
@@ -21,9 +21,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- *
- * 2001-02-14 Initial power management support - Jeff Sutherland, Accelent Systems Inc
- *
  */
 #include <linux/config.h>
 #include <linux/module.h>
@@ -52,37 +49,22 @@
 #include <asm/uaccess.h>
 #include <asm/bitops.h>
 #include <asm/hardware.h>
-#include <asm/hardware/serial_sa1100.h>
-#include <asm/arch/serial_reg.h>
+#include <asm/mach/serial_sa1100.h>
 
-#include "serial_core.h"
-
-#ifdef CONFIG_PM
-#include <linux/pm.h>
-
-static struct pm_dev *ser_sa1100_pm_dev;
-
-/* local storage of critical uart registers */
-static unsigned long uart_saved_regs[3][4];
-
+#if defined(CONFIG_SERIAL_SA1100_CONSOLE) && defined(CONFIG_MAGIC_SYSRQ)
+#define SUPPORT_SYSRQ
 #endif
 
-#undef DEBUG
+#include <asm/arch/serial_reg.h> /* ? */
 
-#ifdef DEBUG
-#define DPRINTK( x... )  printk( ##x )
-#else
-#define DPRINTK( x... )
-#endif
-
+#include <linux/serial_core.h>
 
 /* We've been assigned a range on the "Low-density serial ports" major */
-#define  SERIAL_SA1100_MAJOR	204
+#define SERIAL_SA1100_MAJOR	204
 #define CALLOUT_SA1100_MAJOR	205
 #define MINOR_START		5
 
 #define NR_PORTS		3
-static int nr_available_ports;
 
 #define SA1100_ISR_PASS_LIMIT	256
 
@@ -93,31 +75,29 @@ static int nr_available_ports;
 #define SM_TO_UTSR1(x)	((x) >> 8)
 #define UTSR0_TO_SM(x)	((x))
 #define UTSR1_TO_SM(x)	((x) << 8)
-#define IDX_TO_OFFSET(x) ((x) << 2)
 
-#define UART_GET_UTCR0(port)		__raw_readl((port)->base + IDX_TO_OFFSET(UTCR0))
-#define UART_GET_UTCR1(port)		__raw_readl((port)->base + IDX_TO_OFFSET(UTCR1))
-#define UART_GET_UTCR2(port)		__raw_readl((port)->base + IDX_TO_OFFSET(UTCR2))
-#define UART_GET_UTCR3(port)		__raw_readl((port)->base + IDX_TO_OFFSET(UTCR3))
-#define UART_GET_UTSR0(port)		__raw_readl((port)->base + IDX_TO_OFFSET(UTSR0))
-#define UART_GET_UTSR1(port)		__raw_readl((port)->base + IDX_TO_OFFSET(UTSR1))
-#define UART_GET_CHAR(port)		__raw_readl((port)->base + IDX_TO_OFFSET(UTDR))
+#define UART_GET_UTCR0(port)		__raw_readl((port)->base + UTCR0)
+#define UART_GET_UTCR1(port)		__raw_readl((port)->base + UTCR1)
+#define UART_GET_UTCR2(port)		__raw_readl((port)->base + UTCR2)
+#define UART_GET_UTCR3(port)		__raw_readl((port)->base + UTCR3)
+#define UART_GET_UTSR0(port)		__raw_readl((port)->base + UTSR0)
+#define UART_GET_UTSR1(port)		__raw_readl((port)->base + UTSR1)
+#define UART_GET_CHAR(port)		__raw_readl((port)->base + UTDR)
 
-#define UART_PUT_UTCR0(port,v)		__raw_writel((v),(port)->base + IDX_TO_OFFSET(UTCR0))
-#define UART_PUT_UTCR1(port,v)		__raw_writel((v),(port)->base + IDX_TO_OFFSET(UTCR1))
-#define UART_PUT_UTCR2(port,v)		__raw_writel((v),(port)->base + IDX_TO_OFFSET(UTCR2))
-#define UART_PUT_UTCR3(port,v)		__raw_writel((v),(port)->base + IDX_TO_OFFSET(UTCR3))
-#define UART_PUT_UTSR0(port,v)		__raw_writel((v),(port)->base + IDX_TO_OFFSET(UTSR0))
-#define UART_PUT_UTSR1(port,v)		__raw_writel((v),(port)->base + IDX_TO_OFFSET(UTSR1))
-#define UART_PUT_CHAR(port,v)		__raw_writel((v),(port)->base + IDX_TO_OFFSET(UTDR))
+#define UART_PUT_UTCR0(port,v)		__raw_writel((v),(port)->base + UTCR0)
+#define UART_PUT_UTCR1(port,v)		__raw_writel((v),(port)->base + UTCR1)
+#define UART_PUT_UTCR2(port,v)		__raw_writel((v),(port)->base + UTCR2)
+#define UART_PUT_UTCR3(port,v)		__raw_writel((v),(port)->base + UTCR3)
+#define UART_PUT_UTSR0(port,v)		__raw_writel((v),(port)->base + UTSR0)
+#define UART_PUT_UTSR1(port,v)		__raw_writel((v),(port)->base + UTSR1)
+#define UART_PUT_CHAR(port,v)		__raw_writel((v),(port)->base + UTDR)
 
 static struct tty_driver normal, callout;
 static struct tty_struct *sa1100_table[NR_PORTS];
 static struct termios *sa1100_termios[NR_PORTS], *sa1100_termios_locked[NR_PORTS];
 static struct uart_state sa1100_state[NR_PORTS];
-
-#ifdef CONFIG_PM
-static int ser_sa1100_pm_callback(struct pm_dev *pm_dev, pm_request_t req, void *data);
+#ifdef SUPPORT_SYSRQ
+static struct console sa1100_console;
 #endif
 
 /*
@@ -135,15 +115,11 @@ static void sa1100_stop_tx(struct uart_port *port, u_int from_tty)
  */
 static void sa1100_start_tx(struct uart_port *port, u_int nonempty, u_int from_tty)
 {
-	DPRINTK("%s:%s: nonempty = %d.\n",__FILE__,__FUNCTION__,nonempty);
 	if (nonempty) {
 		u32 utcr3 = UART_GET_UTCR3(port);
-		DPRINTK("UTCR3 = %0#10x for port %0#10x\n",utcr3,port->base);
 		port->read_status_mask |= UTSR0_TO_SM(UTSR0_TFS);
 		UART_PUT_UTCR3(port, utcr3 | UTCR3_TIE);
-		DPRINTK("wrote %0#10x to port.\n",utcr3 | UTCR3_TIE);
 	}
-	DPRINTK("%s:%s:finished.\n",__FILE__,__FUNCTION__);
 }
 
 /*
@@ -160,26 +136,24 @@ static void sa1100_stop_rx(struct uart_port *port)
  */
 static void sa1100_enable_ms(struct uart_port *port)
 {
-	sa1100_mach_uart.enable_ms(port->base);
 }
 
-static void sa1100_rx_chars(struct uart_info *info)
+static void
+#ifdef SUPPORT_SYSRQ
+sa1100_rx_chars(struct uart_info *info, struct pt_regs *regs)
+#else
+sa1100_rx_chars(struct uart_info *info)
+#endif
 {
 	struct tty_struct *tty = info->tty;
 	unsigned int status, ch, flg, ignored = 0;
 	struct uart_icount *icount = &info->state->icount;
 	struct uart_port *port = info->port;
 
-	DPRINTK("%s\n",__FUNCTION__);
-	
 	status = UTSR1_TO_SM(UART_GET_UTSR1(port)) | UTSR0_TO_SM(UART_GET_UTSR0(port));
 	while (status & UTSR1_TO_SM(UTSR1_RNE)) {
 		ch = UART_GET_CHAR(port);
 
-#ifdef CONFIG_REMOTE_DEBUG
-		if (uart_rx_for_console(info, ch))
-			goto ignore_char;
-#endif
 		if (tty->flip.count >= TTY_FLIPBUF_SIZE)
 			goto ignore_char;
 		icount->rx++;
@@ -192,6 +166,16 @@ static void sa1100_rx_chars(struct uart_info *info)
 		 */
 		if (status & UTSR1_TO_SM(UTSR1_PRE | UTSR1_FRE | UTSR1_ROR))
 			goto handle_error;
+#ifdef SUPPORT_SYSRQ
+		if (info->sysrq) {
+			if (ch && time_before(jiffies, info->sysrq)) {
+				handle_sysrq(ch, regs, NULL, NULL);
+				info->sysrq = 0;
+				goto ignore_char;
+			}
+			info->sysrq = 0;
+		}
+#endif
 	error_return:
 		*tty->flip.flag_buf_ptr++ = flg;
 		*tty->flip.char_buf_ptr++ = ch;
@@ -237,6 +221,9 @@ handle_error:
 		ch = 0;
 		flg = TTY_OVERRUN;
 	}
+#ifdef SUPPORT_SYSRQ
+	info->sysrq = 0;
+#endif
 	goto error_return;
 }
 
@@ -244,8 +231,6 @@ static void sa1100_tx_chars(struct uart_info *info)
 {
 	struct uart_port *port = info->port;
 
-	DPRINTK("%s\n",__FUNCTION__);
-	
 	if (info->x_char) {
 		UART_PUT_CHAR(port, info->x_char);
 		info->state->icount.tx++;
@@ -285,32 +270,40 @@ static void sa1100_int(int irq, void *dev_id, struct pt_regs *regs)
 	struct uart_port *port = info->port;
 	unsigned int status, pass_counter = 0;
 
-//	DPRINTK("in sa1100 serial interrupt handler...\n");
-	
 	status = UART_GET_UTSR0(port);
-	DPRINTK("irq: status = %08x,", status);
-//	status &= SM_TO_UTSR0(port->read_status_mask);
-	DPRINTK(" following mask op: %08x, mask: %08x\n",status,SM_TO_UTSR0(port->read_status_mask));
 	do {
 		if (status & (UTSR0_RFS | UTSR0_RID)) {
 			/* Clear the receiver idle bit, if set */
 			if (status & UTSR0_RID)
 				UART_PUT_UTSR0(port, UTSR0_RID);
+#ifdef SUPPORT_SYSRQ
+			sa1100_rx_chars(info, regs);
+#else
 			sa1100_rx_chars(info);
+#endif
 		}
-		if (status & (UTSR0_RBB | UTSR0_REB)) {
-			/* Clear the relevent bits */
+
+		/* Clear the relevent break bits */
+		if (status & (UTSR0_RBB | UTSR0_REB))
 			UART_PUT_UTSR0(port, status & (UTSR0_RBB | UTSR0_REB));
-			if (status & UTSR0_RBB) {
-				info->state->icount.brk++;
+
+		if (status & UTSR0_RBB)
+			info->state->icount.brk++;
+
+		if (status & UTSR0_REB) {
+#ifdef SUPPORT_SYSRQ
+			if (info->state->line == sa1100_console.index &&
+			    !info->sysrq) {
+				info->sysrq = jiffies + HZ*5;
 			}
+#endif
 		}
+		status &= SM_TO_UTSR0(port->read_status_mask);
 		if (status & UTSR0_TFS)
 			sa1100_tx_chars(info);
 		if (pass_counter++ > SA1100_ISR_PASS_LIMIT)
 			break;
-
-		status = UART_GET_UTSR0(port); // & SM_TO_UTSR0(port->read_status_mask);
+		status = UART_GET_UTSR0(port);
 	} while (status & (UTSR0_TFS | UTSR0_RFS | UTSR0_RID));
 }
 
@@ -324,12 +317,11 @@ static u_int sa1100_tx_empty(struct uart_port *port)
 
 static int sa1100_get_mctrl(struct uart_port *port)
 {
-	sa1100_mach_uart.get_mctrl(port->base);
+	return TIOCM_CTS | TIOCM_DSR | TIOCM_CAR;
 }
 
 static void sa1100_set_mctrl(struct uart_port *port, u_int mctrl)
 {
-	sa1100_mach_uart.set_mctrl(port->base, mctrl);
 }
 
 static void sa1100_break_ctl(struct uart_port *port, int break_state)
@@ -351,24 +343,15 @@ static int sa1100_startup(struct uart_port *port, struct uart_info *info)
 	/*
 	 * Allocate the IRQ
 	 */
-	DPRINTK("%s:",__FUNCTION__);
-	
 	retval = request_irq(port->irq, sa1100_int, 0, "serial_sa1100", info);
-	if (retval) {
-		DPRINTK("Error requesting interrupt %d, aborting...\n",port->irq);
+	if (retval)
 		return retval;
-	}
-	/* turn on the power before twiddling any modem control lines */
-	sa1100_mach_uart.on(port->base);  
-	port->ops->set_mctrl(port, info->mctrl);
 
 	/*
 	 * Finally, clear and enable interrupts
 	 */
 	UART_PUT_UTSR0(port, -1);
-	UART_PUT_UTCR3(port, UTCR3_RXE | UTCR3_RIE | UTCR3_TXE);
-
-	DPRINTK("Successfully allocated irq%d.\n",port->irq);
+	UART_PUT_UTCR3(port, UTCR3_RXE | UTCR3_TXE | UTCR3_RIE);
 
 	return 0;
 }
@@ -381,11 +364,9 @@ static void sa1100_shutdown(struct uart_port *port, struct uart_info *info)
 	free_irq(port->irq, info);
 
 	/*
-	 * Disable all interrupts, port and break condition
+	 * Disable all interrupts, port and break condition.
 	 */
 	UART_PUT_UTCR3(port, 0);
-	sa1100_mach_uart.off(port->base);
-	DPRINTK("%s:disabling irq%d\n",__FUNCTION__,port->irq);
 }
 
 static void sa1100_change_speed(struct uart_port *port, u_int cflag, u_int iflag, u_int quot)
@@ -393,8 +374,6 @@ static void sa1100_change_speed(struct uart_port *port, u_int cflag, u_int iflag
 	unsigned long flags;
 	u_int utcr0, old_utcr3;
 
-	DPRINTK("%s: setting baud to %d\n",__FUNCTION__,230400/(quot+1));
-	
 	/* byte size and parity */
 	switch (cflag & CSIZE) {
 	case CS7:	utcr0 = 0;		break;
@@ -450,8 +429,6 @@ static void sa1100_change_speed(struct uart_port *port, u_int cflag, u_int iflag
 	UART_PUT_UTSR0(port, -1);
 
 	UART_PUT_UTCR3(port, old_utcr3);
-
-	DPRINTK("%s: baud set to %d\n",__FUNCTION__,230400/(quot+1));
 }
 
 static struct uart_ops sa1100_pops = {
@@ -468,78 +445,98 @@ static struct uart_ops sa1100_pops = {
 	change_speed:	sa1100_change_speed,
 };
 
-static struct uart_port sa1100_ports[NR_PORTS] = {
-	{
-		uartclk:	3686400,
-		fifosize:	0,
-		ops:		&sa1100_pops,
-	},
-	{
-		uartclk:	3686400,
-		fifosize:	0,
-		ops:		&sa1100_pops,
-	},
-	{
-		uartclk:	3686400,
-		fifosize:	0,
-		ops:		&sa1100_pops,
-	}
-};
+static struct uart_port sa1100_ports[NR_PORTS];
 
-static void __init sa1100_init_ports(void)
+/*
+ * Setup the SA1100 serial ports.  Note that we don't include the IrDA
+ * port here since we have our own SIR/FIR driver (see drivers/net/irda)
+ *
+ * Note also that we support "console=ttySAx" where "x" is either 0 or 1.
+ * Which serial port this ends up being depends on the machine you're
+ * running this kernel on.  I'm not convinced that this is a good idea,
+ * but that's the way it traditionally works.
+ *
+ * Note that NanoEngine UART3 becomes UART2, and UART2 is no longer
+ * used here.
+ */
+static void sa1100_init_ports(void)
 {
-	int ports = 0;
-	int i;
 	static int first = 1;
+	int i;
 
 	if (!first)
 		return;
 	first = 0;
 
-	i = sa1100_mach_uart.uart1_idx;
-	if (i >= 0) {
-		sa1100_ports[i].base = (unsigned long)&Ser1UTCR0;
-		sa1100_ports[i].irq  = IRQ_Ser1UART;
-		ports++;
+	for (i = 0; i < NR_PORTS; i++) {
+		sa1100_ports[i].uartclk  = 3686400;
+		sa1100_ports[i].ops      = &sa1100_pops;
+		sa1100_ports[i].fifosize = 8;
 	}
-	i = sa1100_mach_uart.uart2_idx;
-	if (i >= 0) {
-		sa1100_ports[i].base = (unsigned long)&Ser2UTCR0;
-		sa1100_ports[i].irq  = IRQ_Ser2ICP;
-		ports++;
-	}
-	i = sa1100_mach_uart.uart3_idx;
-	if (i >= 0) {
-		sa1100_ports[i].base = (unsigned long)&Ser3UTCR0;
-		sa1100_ports[i].irq  = IRQ_Ser3UART;
-		ports++;
-	}
-	nr_available_ports = ports;
 
-	printk("SA1100 serial driver configured:\n");
-	for (i = 0; i < ports; i++) {
-		int uart = ((sa1100_ports[i].base & 0x70000) + 0x10000) >> 17;
-		printk ("\tttySA%d attached to UART%d\n", i, uart);
+	/*
+	 * make transmit lines outputs, so that when the port
+	 * is closed, the output is in the MARK state.
+	 */
+	PPDR |= PPC_TXD1 | PPC_TXD3;
+	PPSR |= PPC_TXD1 | PPC_TXD3;
+}
+
+void __init sa1100_register_port_fns(struct sa1100_port_fns *fns)
+{
+	if (fns->enable_ms)
+		sa1100_pops.enable_ms = fns->enable_ms;
+	if (fns->get_mctrl)
+		sa1100_pops.get_mctrl = fns->get_mctrl;
+	if (fns->set_mctrl)
+		sa1100_pops.set_mctrl = fns->set_mctrl;
+	sa1100_pops.pm	      = fns->pm;
+}
+
+void __init sa1100_register_port(int idx, int port)
+{
+	if (idx >= NR_PORTS) {
+		printk(KERN_ERR __FUNCTION__ ": bad index number %d\n", idx);
+		return;
+	}
+
+	switch (port) {
+	case 1:
+		sa1100_ports[idx].base = (unsigned long)&Ser1UTCR0;
+		sa1100_ports[idx].irq  = IRQ_Ser1UART;
+		break;
+
+	case 2:
+		sa1100_ports[idx].base = (unsigned long)&Ser2UTCR0;
+		sa1100_ports[idx].irq  = IRQ_Ser2ICP;
+		break;
+
+	case 3:
+		sa1100_ports[idx].base = (unsigned long)&Ser3UTCR0;
+		sa1100_ports[idx].irq  = IRQ_Ser3UART;
+		break;
+
+	default:
+		printk(KERN_ERR __FUNCTION__ ": bad port number %d\n", port);
 	}
 }
 
+
 #ifdef CONFIG_SERIAL_SA1100_CONSOLE
 
+/*
+ * Interrupts are disabled on entering
+ */
 static void sa1100_console_write(struct console *co, const char *s, u_int count)
 {
 	struct uart_port *port = sa1100_ports + co->index;
-	unsigned long flags;
 	u_int old_utcr3, status, i;
 
 	/*
 	 *	First, save UTCR3 and then disable interrupts
 	 */
-
-	DPRINTK("%s:writing chars to console device...\n",__FUNCTION__);
-	
-	save_flags_cli(flags);
 	old_utcr3 = UART_GET_UTCR3(port);
-	UART_PUT_UTCR3(port, old_utcr3 & ~(UTCR3_RIE | UTCR3_TIE));
+	UART_PUT_UTCR3(port, (old_utcr3 & ~(UTCR3_RIE | UTCR3_TIE)) | UTCR3_TXE);
 
 	/*
 	 *	Now, do each character
@@ -564,7 +561,6 @@ static void sa1100_console_write(struct console *co, const char *s, u_int count)
 	do {
 		status = UART_GET_UTSR1(port);
 	} while (status & UTSR1_TBY);
-	restore_flags(flags);
 	UART_PUT_UTCR3(port, old_utcr3);
 }
 
@@ -582,10 +578,8 @@ static int sa1100_console_wait_key(struct console *co)
 	/*
 	 * Save UTCR3 and disable interrupts
 	 */
-
-	DPRINTK("%s:Waiting for console input...\n",__FUNCTION__);
-	
-	save_flags_cli(flags);
+	save_flags(flags);
+	cli();
 	old_utcr3 = UART_GET_UTCR3(port);
 	UART_PUT_UTCR3(port, old_utcr3 & ~(UTCR3_RIE | UTCR3_TIE));
 	restore_flags(flags);
@@ -635,7 +629,8 @@ sa1100_console_get_options(struct uart_port *port, int *baud, int *parity, int *
 		else
 			*bits = 7;
 
-		quot = ((UART_GET_UTCR1(port) & 0x0f) << 8) | UART_GET_UTCR2(port);
+		quot = UART_GET_UTCR2(port) | UART_GET_UTCR1(port) << 8;
+		quot &= 0xfff;
 		*baud = port->uartclk / (16 * (quot + 1));
 	}
 }
@@ -653,7 +648,7 @@ sa1100_console_setup(struct console *co, char *options)
 	 * if so, search for the first available port that does have
 	 * console support.
 	 */
-	port = uart_get_console(sa1100_ports, nr_available_ports, co);
+	port = uart_get_console(sa1100_ports, NR_PORTS, co);
 
 	if (options)
 		uart_parse_options(options, &baud, &parity, &bits);
@@ -665,9 +660,6 @@ sa1100_console_setup(struct console *co, char *options)
 
 static struct console sa1100_console = {
 	name:		"ttySA",
-#ifdef CONFIG_REMOTE_DEBUG
-	read:		uart_console_read,
-#endif
 	write:		sa1100_console_write,
 	device:		sa1100_console_device,
 	wait_key:	sa1100_console_wait_key,
@@ -688,6 +680,7 @@ void __init sa1100_rs_console_init(void)
 #endif
 
 static struct uart_register sa1100_reg = {
+	owner:			THIS_MODULE,
 	normal_major:		SERIAL_SA1100_MAJOR,
 	normal_name:		"ttySA",
 	normal_driver:		&normal,
@@ -698,72 +691,23 @@ static struct uart_register sa1100_reg = {
 	termios:		sa1100_termios,
 	termios_locked:		sa1100_termios_locked,
 	minor:			MINOR_START,
+	nr:			NR_PORTS,
 	state:			sa1100_state,
 	port:			sa1100_ports,
 	cons:			SA1100_CONSOLE,
 };
 
-static int __init sa1100_uart_init(void)
+static int __init sa1100_serial_init(void)
 {
 	sa1100_init_ports();
-	sa1100_reg.nr = nr_available_ports;
-
-#ifdef CONFIG_PM
-	ser_sa1100_pm_dev = pm_register(PM_SYS_DEV, 0, ser_sa1100_pm_callback);
-	DPRINTK("%s:registering ser_sa1100_pm_callback = %0#10x\n",__FUNCTION__,ser_1110_pm_dev);
-#endif
-	
 	return uart_register_port(&sa1100_reg);
 }
 
-__initcall(sa1100_uart_init);
-
-#ifdef CONFIG_PM
-static int ser_sa1100_pm_callback(struct pm_dev *pm_dev, pm_request_t req, void *data)
+static void __exit sa1100_serial_exit(void)
 {
-	int i, j;
-	
-	switch (req) {
-	case PM_SUSPEND: /* enter D1-D3 */
-		// save all uart registers
-		// This scheme wastes a little storage but is super fast on the way down because
-		// of optimisations the compiler can do. This isn't optimal: characters coming in
-		// or going out when this event appears will get trashed.  Hmmm.... Do we care?
-
-#ifdef CONFIG_SERIAL_SA1100_CONSOLE
-		unregister_console(SA1100_CONSOLE);
-#endif	
-		for (i=0;i<3;i++){
-			for (j=0;j<4;j++) {  //don't need to save status or data ports. 
-				uart_saved_regs[i][j]= *(unsigned long *)(sa1100_ports[i].base + (j<<2));
-				DPRINTK("%s: saving register UTCR%d of uart %d...\n",__FUNCTION__,j,i);
-			}
-			UART_PUT_UTCR3(&sa1100_ports[i],0);  //disable interrupts BUT DON'T DEREGISTER
-			sa1100_mach_uart.off(sa1100_ports[i].base);
-		}	
-		break;
-
-	case PM_RESUME:  /* enter D0 */
-		// restore all uart registers (we can afford to take our time now...)
-		for (i=0;i<3;i++) {
-			UART_PUT_UTCR0(&sa1100_ports[i],uart_saved_regs[i][UTCR0]);
-			UART_PUT_UTCR1(&sa1100_ports[i],uart_saved_regs[i][UTCR1]);
-			UART_PUT_UTCR2(&sa1100_ports[i],uart_saved_regs[i][UTCR2]);
-			if (uart_saved_regs[i][UTCR3] && UTCR3_RIE | UTCR3_TXE | UTCR3_RXE) {
-			       	//port had some or all enabled on entry, must have been open...
-				UART_PUT_UTSR0(&sa1100_ports[i],-1);
-				UART_PUT_UTCR3(&sa1100_ports[i],uart_saved_regs[i][UTCR3]);
-				sa1100_mach_uart.on(sa1100_ports[i].base);
-			}
-		}				
-	
-#ifdef CONFIG_SERIAL_SA1100_CONSOLE
-		register_console(SA1100_CONSOLE);
-#endif
-                break;
-	}
-
-	return 0;
+	uart_unregister_port(&sa1100_reg);
 }
-#endif
+
+module_init(sa1100_serial_init);
+module_exit(sa1100_serial_exit);
 

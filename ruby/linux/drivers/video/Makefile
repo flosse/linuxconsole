@@ -9,7 +9,7 @@ obj-y	+= dummycon.o
 # All of the (potential) objects that export symbols.
 # This list comes from 'grep -l EXPORT_SYMBOL *.[hc]'.
 
-export-objs    := fbmem.o fbcmap.o fbmon.o modedb.o vga.o cyber2000fb.o
+export-objs    := fbmem.o fbcmap.o fbmon.o modedb.o vga.o cyber2000fb.o sa1100fb.o
 
 mod-subdirs	:= aty fonts matrox riva sis tdfx
 
@@ -46,6 +46,7 @@ obj-$(CONFIG_FB_CONTROL)          += controlfb.o
 obj-$(CONFIG_FB_PLATINUM)         += platinumfb.o
 obj-$(CONFIG_FB_VALKYRIE)         += valkyriefb.o
 obj-$(CONFIG_FB_CT65550)          += chipsfb.o
+obj-$(CONFIG_FB_CLPS711X)         += clps711xfb.o
 obj-$(CONFIG_FB_CYBER)            += cyberfb.o
 obj-$(CONFIG_FB_CYBER2000)        += cyber2000fb.o
 obj-$(CONFIG_FB_SGIVW)            += sgivwfb.o
@@ -104,6 +105,7 @@ obj-$(CONFIG_FB_VIRTUAL)          += vfb.o cfbfillrect.o cfbcopyarea.o cfbimgblt
 obj-$(CONFIG_FB_HIT)              += hitfb.o fbgen.o
 obj-$(CONFIG_FB_E1355)            += epson1355fb.o fbgen.o
 obj-$(CONFIG_FB_DC)               += dcfb.o fbgen.o          
+obj-$(CONFIG_FB_ANAKIN)           += anakinfb.o
 obj-$(CONFIG_FB_SIMPLE)		  += sfb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 obj-$(CONFIG_FB_SED1345)	  += sed1345fb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 obj-$(CONFIG_FB_R3912)		  += r3912fb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o

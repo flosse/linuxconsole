@@ -66,15 +66,7 @@ if [ "$CONFIG_SERIAL_NONSTANDARD" = "y" ]; then
      tristate '    Stallion EC8/64, ONboard, Brumby support' CONFIG_ISTALLION
    fi
 fi
-if [ "$CONFIG_FOOTBRIDGE" = "y" ]; then
-   bool 'DC21285 serial port support' CONFIG_SERIAL_21285
-   if [ "$CONFIG_SERIAL_21285" = "y" ]; then
-      if [ "$CONFIG_OBSOLETE" = "y" ]; then
-         bool '  Use /dev/ttyS0 device (OBSOLETE)' CONFIG_SERIAL_21285_OLD
-      fi
-      bool '  Console on DC21285 serial port' CONFIG_SERIAL_21285_CONSOLE
-   fi
-fi
+
 bool 'Unix98 PTY support' CONFIG_UNIX98_PTYS
 if [ "$CONFIG_UNIX98_PTYS" = "y" ]; then
    int 'Maximum number of Unix98 PTYs in use (0-2048)' CONFIG_UNIX98_PTY_COUNT 256
@@ -148,6 +140,9 @@ if [ "$CONFIG_IA64" = "y" ]; then
 fi
 if [ "$CONFIG_OBSOLETE" = "y" -a "$CONFIG_ALPHA_BOOK1" = "y" ]; then
    bool 'Tadpole ANA H8 Support'  CONFIG_H8
+fi
+if [ "$CONFIG_ARCH_SA1100" = "y" ]; then
+   tristate 'SA1100 Real Time Clock' CONFIG_SA1100_RTC
 fi
 
 tristate 'Double Talk PC internal speech card support' CONFIG_DTLK
