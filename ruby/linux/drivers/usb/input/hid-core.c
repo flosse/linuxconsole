@@ -1415,7 +1415,16 @@ static void* hid_probe(struct usb_device *dev, unsigned int ifnum,
 	hid_dump_device(hid);
 
 #ifdef CONFIG_HID_FF
-	if (hid_ff_init(hid)) {
+	switch (hid_ff_init(hid)) {
+	case 0:
+		break;
+
+	case -ENOSYS:
+		info("No force feedback support for this hid device");
+		break;
+
+	default:
+		err("hid_ff_init failed");
 		hid_free_device(hid);
 		return NULL;
 	}

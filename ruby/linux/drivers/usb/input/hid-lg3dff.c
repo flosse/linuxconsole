@@ -98,8 +98,7 @@ int hid_lg3d_init(struct hid_device* hid)
 	struct lg3d_device *private;
 
 	/* Private data */
-	hid->ff_private = kmalloc(sizeof(struct lg3d_device), GFP_KERNEL);
-	private = hid->ff_private;
+	private = kmalloc(sizeof(struct lg3d_device), GFP_KERNEL);
 	if (!private) return -1;
 
 	memset(private, 0, sizeof(struct lg3d_device));

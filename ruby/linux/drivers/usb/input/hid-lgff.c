@@ -121,8 +121,7 @@ int hid_lgff_init(struct hid_device* hid)
 	int i;
 
 	/* Private data */
-	hid->ff_private = kmalloc(sizeof(struct hid_ff_logitech), GFP_KERNEL);
-	private = hid->ff_private;
+	private = kmalloc(sizeof(struct hid_ff_logitech), GFP_KERNEL);
 	if (!private) return -1;
 
 	memset(private, 0, sizeof(struct hid_ff_logitech));
