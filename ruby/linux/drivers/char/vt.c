@@ -700,6 +700,7 @@ const char *create_vt(struct vt_struct *vt, struct consw *vt_sw)
         vt->vt_blanked = 0;
         vt->blank_interval = 10*60*HZ;
         vt->off_interval = 0;
+	vt->keyboard = NULL;
 	vt->vcs.first_vc = current_vc;  
 	vt->vcs.next = NULL;
         vt->next = vt_cons;
@@ -1707,7 +1708,9 @@ EXPORT_SYMBOL(default_grn);
 EXPORT_SYMBOL(default_blu);
 EXPORT_SYMBOL(video_font_height);
 EXPORT_SYMBOL(video_scan_lines);
+EXPORT_SYMBOL(create_vt);
 EXPORT_SYMBOL(vc_resize);
+EXPORT_SYMBOL(vc_allocate);
 EXPORT_SYMBOL(console_blank_hook);
 EXPORT_SYMBOL(take_over_console);
 EXPORT_SYMBOL(give_up_console);

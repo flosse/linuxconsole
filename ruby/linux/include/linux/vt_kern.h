@@ -9,6 +9,7 @@
 #include <linux/config.h>
 #include <linux/vt.h>
 #include <linux/kbd_kern.h>
+#include <linux/input.h>
 
 /*
  * Presently, a lot of graphics programs do not restore the contents of
@@ -252,6 +253,7 @@ struct vt_struct {
 	int off_interval;			
 	struct timer_list timer;		/* Timer for VT blanking */
 	struct consw	*vt_sw;			/* Display driver for VT */
+	struct input_handle *keyboard;		/* Keyboard attached */
 	struct vc_pool  vcs;			 
 	struct vt_struct *next;				
 }; 

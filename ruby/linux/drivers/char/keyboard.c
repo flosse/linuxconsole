@@ -783,7 +783,7 @@ static void kbd_bh(unsigned long dummy)
 
 #ifdef CONFIG_INPUT
 	for (handle = kbd_handler.handle; handle; handle = handle->hnext) {
-		leds = getleds(vt_cons);
+		leds = getleds(handle->private);
 		if (leds != ledstate) {
                 	ledstate = leds;
 			input_event(handle->dev, EV_LED, LED_SCROLLL, !!(leds & 0x01));
@@ -889,19 +889,19 @@ void emulate_raw(struct tty_struct *tty,unsigned int code,unsigned char up_flag)
 }
 #endif
 
-void kbd_keycode(unsigned int keycode, int down)
+void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down)
 {
 	unsigned short keysym, *key_map;
 	unsigned char type, raw_mode;
 	struct tty_struct *tty;
-	struct vc_data *vc;
+	struct vc_data *vc = vt->fg_console;
 	int shift_final;
 
 	pm_access(pm_kbd);
 
 	add_keyboard_randomness(keycode ^ (down << 7));
 
-	tty = ttytab ? ttytab[vt_cons->fg_console->vc_num] : NULL;
+	tty = ttytab ? ttytab[vc->vc_num] : NULL;
 
 	if (tty && (!tty->driver_data)) {
 		/*
@@ -913,7 +913,6 @@ void kbd_keycode(unsigned int keycode, int down)
 		 */
 		tty = NULL;
 	}
-	vc = vt_cons->fg_console;
 
 	/* If the console is blanked unblank it */
 	want_vc = vc;
@@ -994,7 +993,8 @@ void kbd_keycode(unsigned int keycode, int down)
 void kbd_event(struct input_handle *handle, unsigned int event_type, unsigned int keycode, int down)
 {
 	if (event_type != EV_KEY) return;
-	kbd_keycode(keycode, down);
+	if (handle->private)
+		kbd_keycode(handle->private, keycode, down);
 	tasklet_schedule(&keyboard_tasklet);
 }
 
@@ -1002,11 +1002,12 @@ void kbd_event(struct input_handle *handle, unsigned int event_type, unsigned in
  * When a keyboard (or other input device) is found, the kbd_connect
  * function is called. The function then looks at the device, and if it
  * likes it, it can open it and get events from it. In this (kbd_connect)
- * function, we should decide which VTs to bind that keyboard to initially.
+ * function, we should decide which VT to bind that keyboard to initially.
  */
 static struct input_handle *kbd_connect(struct input_handler *handler, struct input_dev *dev)
 {
 	struct input_handle *handle;
+	struct vt_struct *vt = vt_cons;
 	int i;
 
 	if (!test_bit(EV_KEY, dev->evbit)) return NULL;
@@ -1016,6 +1017,14 @@ static struct input_handle *kbd_connect(struct input_handler *handler, struct in
 	if (!(handle = kmalloc(sizeof(struct input_handle), GFP_KERNEL))) return NULL;
 	memset(handle, 0, sizeof(struct input_handle));
 
+	while (vt) {
+                if (!vt->keyboard) {
+                        vt->keyboard = handle;
+			handle->private = vt;
+			break;
+		} else 
+			vt = vt->next;
+	}	
 	handle->dev = dev;
 	handle->handler = handler;
 	input_open_device(handle);
@@ -1025,7 +1034,16 @@ static struct input_handle *kbd_connect(struct input_handler *handler, struct in
 
 static void kbd_disconnect(struct input_handle *handle)
 {
+	struct vt_struct *vt = vt_cons;
+
 	printk(KERN_INFO "keyboard.c: Removing keyboard: input%d\n", handle->dev->number);
+	while (vt) {
+		if (vt->keyboard == handle) {
+			vt->keyboard = NULL;
+			break;
+		}
+		vt = vt->next;	
+	}	
 	input_close_device(handle);
 	kfree(handle);
 }
