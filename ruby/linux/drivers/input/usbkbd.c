@@ -194,9 +194,6 @@ static void *usb_kbd_probe(struct usb_device *dev, unsigned int ifnum,
 	pipe = usb_rcvintpipe(dev, endpoint->bEndpointAddress);
 	maxp = usb_maxpacket(dev, pipe, usb_pipeout(pipe));
 
-	usb_set_protocol(dev, interface->bInterfaceNumber, 0);
-	usb_set_idle(dev, interface->bInterfaceNumber, 0, 0);
-
 	if (!(kbd = kmalloc(sizeof(struct usb_kbd), GFP_KERNEL))) return NULL;
 	memset(kbd, 0, sizeof(struct usb_kbd));
 
@@ -218,7 +215,7 @@ static void *usb_kbd_probe(struct usb_device *dev, unsigned int ifnum,
 		usb_kbd_irq, kbd, endpoint->bInterval);
 
 	kbd->dr.requesttype = USB_TYPE_CLASS | USB_RECIP_INTERFACE;
-	kbd->dr.request = USB_REQ_SET_REPORT;
+	kbd->dr.request = 0x09;
 	kbd->dr.value = 0x200;
 	kbd->dr.index = interface->bInterfaceNumber;
 	kbd->dr.length = 1;

@@ -979,7 +979,7 @@ static int hid_submit_ctrl(struct hid_device *hid)
 	
 	hid->dr.length = cpu_to_le16(hid->urbctrl.transfer_buffer_length);
 	hid->dr.requesttype = USB_TYPE_CLASS | USB_RECIP_INTERFACE | dir;
-	hid->dr.request = dir ? USB_REQ_GET_REPORT : USB_REQ_SET_REPORT;
+	hid->dr.request = dir ? HID_REQ_GET_REPORT : HID_REQ_SET_REPORT;
 	hid->dr.index = cpu_to_le16(hid->ifnum);
 	hid->dr.value = ((report->type + 1) << 8) | report->id;
 
@@ -1028,6 +1028,14 @@ void hid_submit_report(struct hid_device *hid, struct hid_report *report, unsign
 
 	if (hid->urbctrl.status != -EINPROGRESS)
 		hid_submit_ctrl(hid);
+}
+
+static int hid_get_class_descriptor(struct usb_device *dev, int ifnum,
+		unsigned char type, void *buf, int size)
+{
+	return usb_control_msg(dev, usb_rcvctrlpipe(dev, 0),
+		USB_REQ_GET_DESCRIPTOR, USB_RECIP_INTERFACE | USB_DIR_IN,
+		(type << 8), ifnum, buf, size, HZ * USB_CTRL_GET_TIMEOUT);
 }
 
 int hid_open(struct hid_device *hid)
@@ -1127,14 +1135,14 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 		if ((hid_blacklist[n].idVendor == dev->descriptor.idVendor) &&
 			(hid_blacklist[n].idProduct == dev->descriptor.idProduct)) return NULL;
 
-	if (usb_get_extra_descriptor(interface, USB_DT_HID, &hdesc) && ((!interface->bNumEndpoints) ||
-		usb_get_extra_descriptor(&interface->endpoint[0], USB_DT_HID, &hdesc))) {
+	if (usb_get_extra_descriptor(interface, HID_DT_HID, &hdesc) && ((!interface->bNumEndpoints) ||
+		usb_get_extra_descriptor(&interface->endpoint[0], HID_DT_HID, &hdesc))) {
 			dbg("class descriptor not present\n");
 			return NULL;
 	}
 
 	for (n = 0; n < hdesc->bNumDescriptors; n++)
-		if (hdesc->desc[n].bDescriptorType == USB_DT_REPORT)
+		if (hdesc->desc[n].bDescriptorType == HID_DT_REPORT)
 			rsize = le16_to_cpu(hdesc->desc[n].wDescriptorLength);
 
 	if (!rsize || rsize > HID_MAX_DESCRIPTOR_SIZE) {
@@ -1145,7 +1153,7 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 	{
 		__u8 rdesc[rsize];
 
-		if ((n = usb_get_class_descriptor(dev, interface->bInterfaceNumber, USB_DT_REPORT, 0, rdesc, rsize)) < 0) {
+		if ((n = hid_get_class_descriptor(dev, interface->bInterfaceNumber, HID_DT_REPORT, rdesc, rsize)) < 0) {
 			dbg("reading report descriptor failed");
 			return NULL;
 		}

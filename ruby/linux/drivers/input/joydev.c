@@ -468,7 +468,7 @@ static struct input_handle *joydev_connect(struct input_handler *handler, struct
 		joydev->corr[i].prec = dev->absfuzz[j];
 		joydev->corr[i].coef[0] = (dev->absmax[j] + dev->absmin[j]) / 2 - dev->absflat[j];
 		joydev->corr[i].coef[1] = (dev->absmax[j] + dev->absmin[j]) / 2 + dev->absflat[j];
-		if (!(t = ((dev->absmax[j] - dev->absmin[j]) / 2 - 2 * dev->absflat[j]))
+		if (!(t = ((dev->absmax[j] - dev->absmin[j]) / 2 - 2 * dev->absflat[j])))
 			continue;
 		joydev->corr[i].coef[2] = (1 << 29) / t;
 		joydev->corr[i].coef[3] = (1 << 29) / t;
