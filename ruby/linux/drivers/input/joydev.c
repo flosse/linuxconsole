@@ -449,7 +449,7 @@ static struct input_handle *joydev_connect(struct input_handler *handler, struct
 
 	joydev->devfs = input_register_minor("js%d", minor, JOYDEV_MINOR_BASE);
 
-	printk("js%d: Joystick device for input%d\n", minor, dev->number);
+	printk(KERN_INFO "js%d: Joystick device for input%d\n", minor, dev->number);
 
 	return &joydev->handle;
 }
