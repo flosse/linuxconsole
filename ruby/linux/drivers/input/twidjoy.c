@@ -63,10 +63,6 @@
  * Constants.
  */
 
-#ifndef SERIO_TWIDJOY
-#define SERIO_TWIDJOY 4711	/* Please assign a number in linux/serio.h! */
-#endif
-
 #define TWIDJOY_MAX_LENGTH 5
 
 static char *twidjoy_name = "Handykey Twiddler";

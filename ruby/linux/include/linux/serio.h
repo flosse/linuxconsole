@@ -117,6 +117,7 @@ static __inline__ void serio_dev_write_wakeup(struct serio *serio)
 #define SERIO_H3600	0x21
 #define SERIO_PS2SER	0x22
 #define SERIO_TWIDKBD	0x23
+#define SERIO_TWIDJOY   0x24
 
 #define SERIO_ID	0xff00UL
 #define SERIO_EXTRA	0xff0000UL

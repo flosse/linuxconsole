@@ -35,14 +35,6 @@
 
 #include <linux/serio.h>
 
-#ifndef SERIO_TWIDKBD
-#define SERIO_TWIDKBD 4710	/* Please assign a number in linux/serio.h! */
-#endif
-
-#ifndef SERIO_TWIDJOY
-#define SERIO_TWIDJOY 4711	/* Please assign a number in linux/serio.h! */
-#endif
-
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
