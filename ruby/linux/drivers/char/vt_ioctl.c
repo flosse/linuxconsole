@@ -100,8 +100,7 @@ kd_nosound(unsigned long ignored)
 	return;
 }
 
-void
-_kd_mksound(unsigned int hz, unsigned int ticks)
+void kd_mksound(unsigned int hz, unsigned int ticks)
 {
 	static struct timer_list sound_timer = { function: kd_nosound };
 	unsigned int count = 0;
@@ -134,13 +133,11 @@ _kd_mksound(unsigned int hz, unsigned int ticks)
 #else
 
 void
-_kd_mksound(unsigned int hz, unsigned int ticks)
+kd_mksound(unsigned int hz, unsigned int ticks)
 {
 }
 
 #endif
-
-void (*kd_mksound)(unsigned int hz, unsigned int ticks) = _kd_mksound;
 
 /*
  * Sometimes we want to wait until a particular VT has been activated. We
