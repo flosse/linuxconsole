@@ -84,6 +84,7 @@ static int analog_options[ANALOG_PORTS];
 #define ANALOG_LOOP_TIME	2000	/* 2 * loop */
 #define ANALOG_REFRESH_TIME	HZ/100	/* 10 ms */
 #define ANALOG_SAITEK_DELAY	200	/* 200 us */
+#define ANALOG_SAITEK_TIME	200	/* 200 us */
 #define ANALOG_AXIS_TIME	2	/* 2 * refresh */
 #define ANALOG_INIT_RETRIES	8	/* 8 times */
 #define ANALOG_FUZZ_BITS	2	/* 2 bit more */
@@ -113,12 +114,13 @@ struct analog_port {
 	struct timer_list timer;
 	struct analog analog[2];
 	char mask;
+	char saitek;
+	char cooked;
 	int bads;
 	int reads;
 	int speed;
 	int loop;
 	int fuzz;
-	int cooked;
 	int axes[4];
 	int buttons;
 	int initial[4];
@@ -258,7 +260,7 @@ static int analog_button_read(struct analog_port *port, char saitek, char chf)
 {
 	unsigned char u;
 	int t = 1, i = 0;
-	int strobe = gameport_time(port->gameport, ANALOG_MAX_TIME * 1000);
+	int strobe = gameport_time(port->gameport, ANALOG_SAITEK_TIME);
 
 	u = gameport_read(port->gameport);
 
@@ -279,7 +281,7 @@ static int analog_button_read(struct analog_port *port, char saitek, char chf)
 		i++;
 	}
 
-	return -((!t) || (i == 16));
+	return -(!t || (i == 16));
 }
 
 /*
@@ -301,8 +303,10 @@ static void analog_timer(unsigned long data)
 		port->reads++;
 	} else {
 		if (!port->axtime--) {
-			port->bads -= analog_cooked_read(port);
-			analog_button_read(port, saitek, chf);
+			if (!analog_cooked_read(port))
+				port->bads -= analog_button_read(port, saitek, chf);
+			else
+				port->bads++;
 			port->reads++;
 			port->axtime = ANALOG_AXIS_TIME - 1;
 		} else {
@@ -559,7 +563,7 @@ static int analog_init_masks(struct analog_port *port)
 static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
 {
 	struct analog_port *port;
-	int i;
+	int i, t;
 
 	if (!(port = kmalloc(sizeof(struct analog_port), GFP_KERNEL)))
 		return;
@@ -572,14 +576,45 @@ static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
 	port->timer.data = (long) port;
 	port->timer.function = analog_timer;
 
-	if (((port->gameport->number < ANALOG_PORTS) &&
-	     (analog_options[port->gameport->number] & ANALOG_SAITEK)) ||
-	      gameport_open(gameport, dev, GAMEPORT_MODE_COOKED)) {
-		if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW)) {
+	if (!gameport_open(gameport, dev, GAMEPORT_MODE_RAW)) {
+
+		analog_calibrate_timer(port);
+
+		gameport_trigger(gameport);
+		port->mask = gameport_read(gameport);
+		wait_ms(ANALOG_MAX_TIME);
+		port->mask = (gameport_read(gameport) ^ port->mask) & port->mask & 0xf;
+		port->fuzz = 1 << ANALOG_FUZZ_FILTER;
+	
+		for (i = 0; i < ANALOG_INIT_RETRIES; i++) {
+			if (!analog_cooked_read(port)) break;
+			else wait_ms(ANALOG_MAX_TIME);
+		}
+
+		wait_ms(ANALOG_MAX_TIME);
+		t = gameport_time(gameport, ANALOG_MAX_TIME * 1000);
+		gameport_trigger(gameport);
+		while ((gameport_read(port->gameport) & port->mask) && t) t--;
+		udelay(ANALOG_SAITEK_DELAY);
+		t = gameport_time(gameport, ANALOG_SAITEK_TIME);
+		gameport_trigger(gameport);
+		while ((gameport_read(port->gameport) & port->mask) && t) t--;
+
+		if (t && port->gameport->number < ANALOG_PORTS) {
+			analog_options[port->gameport->number] |= ANALOG_SAITEK;
+		} else {
+			gameport_close(gameport);
+			if (!gameport_open(gameport, dev, GAMEPORT_MODE_COOKED))
+				port->cooked = 1;
+			else
+				gameport_open(gameport, dev, GAMEPORT_MODE_RAW);
+		}
+	} else {
+		if (gameport_open(gameport, dev, GAMEPORT_MODE_COOKED)) {
 			kfree(port);
 			return;
-		}
-	} else port->cooked = 1;
+		} else port->cooked = 1;
+	}
 
 	if (port->cooked) {
 		for (i = 0; i < ANALOG_INIT_RETRIES; i++)
@@ -588,16 +623,6 @@ static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
 		for (i = 0; i < 4; i++)
 			if (port->axes[i] != -1) port->mask |= 1 << i;
 		port->fuzz = gameport->fuzz;
-	} else {
-		analog_calibrate_timer(port);
-		gameport_trigger(gameport);
-		port->mask = gameport_read(gameport);
-		wait_ms(ANALOG_MAX_TIME);
-		port->mask = (gameport_read(gameport) ^ port->mask) & port->mask & 0xf;
-		for (i = 0; i < ANALOG_INIT_RETRIES; i++)
-			if (!analog_cooked_read(port))
-				break;
-		port->fuzz = 1 << ANALOG_FUZZ_FILTER;
 	}
 
 	if (analog_init_masks(port)) {
