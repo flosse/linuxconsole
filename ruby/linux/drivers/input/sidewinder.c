@@ -1,5 +1,5 @@
 /*
- *  sidewinder.c.c  Version 1.2
+ * $Id$
  *
  *  Copyright (c) 1998-2000 Vojtech Pavlik
  *
@@ -7,8 +7,7 @@
  */
 
 /*
- * This is a module for the Linux input driver, supporting
- * Microsoft SideWinder digital joystick family.
+ * Microsoft SideWinder joystick family driver for Linux
  */
 
 /*
@@ -31,24 +30,20 @@
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
  */
 
-#include <asm/io.h>
-#include <asm/system.h>
 #include <linux/delay.h>
-#include <linux/errno.h>
-#include <linux/ioport.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/string.h>
+#include <linux/malloc.h>
 #include <linux/init.h>
 #include <linux/input.h>
-#include "gameport.h"
+#include <linux/gameport.h>
 
 /*
  * These are really magic values. Changing them can make a problem go away,
  * as well as break everything.
  */
 
-#undef SW_DEBUG
+#define SW_DEBUG
 
 #define SW_START	400	/* The time we wait for the first bit [400 us] */
 #define SW_STROBE	45	/* Max time per bit [45 us] */
@@ -59,6 +54,7 @@
 #define SW_BAD		2	/* Number of packet read errors to switch off 3d Pro optimization */
 #define SW_OK		64	/* Number of packet read successes to switch optimization back on */
 #define SW_LENGTH	512	/* Max number of bits in a packet */
+#define SW_REFRESH	HZ/50	/* Time to wait between updates of joystick data [20 ms] */
 
 /*
  * SideWinder joystick types ...
@@ -79,18 +75,29 @@ static char *sw_names[] = {	"SideWinder 3D Pro", "SideWinder GamePad", "SideWind
 				"SideWinder Force Feedback Pro", "SideWinder FreeStyle Pro",
 				"SideWinder Force Feedback Wheel" };
 
-static char sw_3dp_abs[] =	{ ABS_X, ABS_Y, ABS_RZ, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y };
-static char sw_gp_abs[] = 	{ ABS_X, ABS_Y };
-static char sw_pp_abs[] =	{ ABS_X, ABS_Y, ABS_RZ, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y };
-static char sw_ffp_abs[] = 	{ ABS_X, ABS_Y, ABS_RZ, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y };
-static char sw_fsp_abs[] = 	{ ABS_X, ABS_Y,         ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y };
+static char sw_abs[][] = {
+	{ ABS_X, ABS_Y, ABS_RZ, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, 0 },
+	{ ABS_X, ABS_Y, 0 },
+	{ ABS_X, ABS_Y, ABS_RZ, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, 0 },
+	{ ABS_X, ABS_Y, ABS_RZ, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, 0 },
+	{ ABS_X, ABS_Y,         ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, 0 },
+	{ ABX_RX, ABS_RUDDER,   ABS_THROTTLE, 0 }},
 
-3dp_btn = { BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_THUMB2, BTN_BASE, BTN_BASE2, BTN_BASE3, BTN_BASE4 };
-gp_btn =  { BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_TL, BTN_TR, BTN_START, BTN_MODE };
-pp_btn = { BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_THUMB2, BTN_BASE, BTN_BASE2, BTN_BASE3, BTN_BASE4 };
+static char sw_bits[][] = {
+	{ 10, 10,  9, 10,  1,  1, 0 },
+	{  1,  1,  0                },
+	{ 10, 10,  6,  7,  1,  1, 0 },
+	{ 10, 10,  6,  7,  1,  1, 0 },
+	{ 10, 10,  6,  1,  1,  0    },
+	{ 10,  7,  7,  1,  1,  0    }};
 
-char axes[] = { 0, 6, 6, 2, 6, 6, 5, 3 };
-char buttons[] = { 0, 9, 9, 10, 9, 9, 10, 8 };
+static short sw_btns[][] = {
+	{ BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_THUMB2, BTN_BASE, BTN_BASE2, BTN_BASE3, BTN_BASE4, BTN_BASE5, 0 },
+	{ BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_TL, BTN_TR, BTN_START, BTN_MODE, 0 },
+	{ BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_THUMB2, BTN_BASE, BTN_BASE2, BTN_BASE3, BTN_BASE4, 0 },
+	{ BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_THUMB2, BTN_BASE, BTN_BASE2, BTN_BASE3, BTN_BASE4, 0 },
+	{ BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_TL, BTN_TR, BTN_START, BTN_MODE, BTN_SELECT, 0 },
+	{ BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_THUMB2, BTN_BASE, BTN_BASE2, BTN_BASE3, 0 }};
 
 static struct {
 	int x;
@@ -98,86 +105,35 @@ static struct {
 } sw_hat_to_axis[] = {{ 0, 0}, { 0,-1}, { 1,-1}, { 1, 0}, { 1, 1}, { 0, 1}, {-1, 1}, {-1, 0}, {-1,-1}};
 
 struct sw {
-	int io;
+	struct gameport *gameport;
+	struct input_dev dev[4];
 	int length;
-	int speed;
 	unsigned char type;
 	unsigned char bits;
 	unsigned char number;
-	unsigned char fail;
-	unsigned char ok;
+	int fail;
+	int ok;
+	int reads;
+	int bads;
 };
 
 /*
- * Gameport speed.
- */
-
-unsigned int sw_io_speed = 0;
-
-/*
- * sw_measure_speed() measures the gameport i/o speed.
- */
-
-static int __init sw_measure_speed(int io)
-{
-#ifdef __i386__
-
-#define GET_TIME(x)     do { outb(0, 0x43); x = inb(0x40); x |= inb(0x40) << 8; } while (0)
-#define DELTA(x,y)      ((y)-(x)+((y)<(x)?1193180L/HZ:0))
-
-	unsigned int i, t, t1, t2, t3, tx;
-	unsigned long flags;
-
-	tx = 1 << 30;
-
-	for(i = 0; i < 50; i++) {
-		save_flags(flags);	/* Yes, all CPUs */
-		cli();
-		GET_TIME(t1);
-		for(t = 0; t < 50; t++) inb(io);
-		GET_TIME(t2);
-		GET_TIME(t3);
-		restore_flags(flags);
-		udelay(i * 10);
-		if ((t = DELTA(t2,t1) - DELTA(t3,t2)) < tx) tx = t;
-	}
-
-	return 59659 / t;
-
-#else
-
-	unsigned int j, t = 0;
-
-	j = jiffies; while (j == jiffies);
-	j = jiffies; while (j == jiffies) { t++; inb(0x201); }
-
-	return t * HZ / 1000;
-
-#endif
-}
-
-/*
  * sw_read_packet() is a function which reads either a data packet, or an
- * identification packet from a SideWinder joystick. Better don't try to
- * understand this, since all the ugliness of the Microsoft Digital
- * Overdrive protocol is concentrated in this function. If you really want
- * to know how this works, first go watch a couple horror movies, so that
- * you are well prepared, read US patent #5628686 and then e-mail me,
- * and I'll send you an explanation.
- *					Vojtech <vojtech@suse.cz>
+ * identification packet from a SideWinder joystick. The protocol is very,
+ * very, very braindamaged. Microsoft patented it in US patent #5628686.
  */
 
-static int sw_read_packet(int io, int speed, unsigned char *buf, int length, int id)
+static int sw_read_packet(struct gameport *gameport, unsigned char *buf, int length, int id)
 {
 	unsigned long flags;
 	int timeout, bitout, sched, i, kick, start, strobe;
 	unsigned char pending, u, v;
 
 	i = -id;						/* Don't care about data, only want ID */
-	timeout = id ? (SW_TIMEOUT * speed) >> 10 : 0;	/* Set up global timeout for ID packet */
-	kick = id ? (SW_KICK * speed) >> 10 : 0;		/* Set up kick timeout for ID packet */
-	start = (SW_START * speed) >> 10;
-	strobe = (SW_STROBE * speed) >> 10;
+	timeout = id ? gameport_time(gameport, SW_TIMEOUT) : 0;	/* Set up global timeout for ID packet */
+	kick = id ? gameport_time(gameport, SW_KICK) : 0;	/* Set up kick timeout for ID packet */
+	start = gameport_time(gameport, SW_START);
+	strobe = gameport_time(gameport, SW_STROBE);
 	bitout = start;
 	pending = 0;
 	sched = 0;
@@ -185,13 +141,13 @@ static int sw_read_packet(int io, int speed, unsigned char *buf, int length, int
         __save_flags(flags);					/* Quiet, please */
         __cli();
 
-	outb(0xff, io);						/* Trigger */
+	gameport_trigger(gameport)				/* Trigger */
 	v = inb(io);
 
 	do {
 		bitout--;
 		u = v;
-		v = inb(io);
+		v = gameport_read(gameport);
 	} while (!(~v & u & 0x10) && (bitout > 0));		/* Wait for first falling edge on clock */
 
 	if (bitout > 0) bitout = strobe;			/* Extend time if not timed out */
@@ -203,7 +159,7 @@ static int sw_read_packet(int io, int speed, unsigned char *buf, int length, int
 		sched--;
 
 		u = v;
-		v = inb(io);
+		v = gameport_read(gameport);
 
 		if ((~u & v & 0x10) && (bitout > 0)) {		/* Rising edge on clock - data bit */
 			if (i >= 0)				/* Want this data */
@@ -219,7 +175,7 @@ static int sw_read_packet(int io, int speed, unsigned char *buf, int length, int
 		} 
 
 		if (pending && sched < 0 && (i > -SW_END)) {	/* Second trigger time */
-			outb(0xff, io);				/* Trigger */
+			gameport_trigger(gameport);		/* Trigger */
 			bitout = start;				/* Long bit timeout */
 			pending = 0;				/* Unmark schedule */
 			timeout = 0;				/* Switch from global to bit timeouts */ 
@@ -247,14 +203,14 @@ static int sw_read_packet(int io, int speed, unsigned char *buf, int length, int
  * is number of bits per triplet.
  */
 
-#define GB(pos,num,shift) sw_get_bits(buf, pos, num, shift, sw->bits)
+#define GB(pos,num) sw_get_bits(buf, pos, num, sw->bits)
 
-static __u64 sw_get_bits(unsigned char *buf, int pos, int num, char shift, char bits)
+static __u64 sw_get_bits(unsigned char *buf, int pos, int num, char bits)
 {
 	__u64 data = 0;
 	int tri = pos % bits;						/* Start position */
 	int i   = pos / bits;
-	int bit = shift;
+	int bit = 0;
 
 	while (num--) {
 		data |= (__u64)((buf[i] >> tri++) & 1) << bit++;	/* Transfer bit */
@@ -272,7 +228,7 @@ static __u64 sw_get_bits(unsigned char *buf, int pos, int num, char shift, char 
  * into digital mode.
  */
 
-static void sw_init_digital(int io, int speed)
+static void sw_init_digital(struct gameport *gameport)
 {
 	int seq[] = { 140, 140+725, 140+300, 0 };
 	unsigned long flags;
@@ -283,13 +239,13 @@ static void sw_init_digital(int io, int speed)
 
 	i = 0;
         do {
-                outb(0xff, io);					/* Trigger */
-		t = (SW_TIMEOUT * speed) >> 10;
-		while ((inb(io) & 1) && t) t--;			/* Wait for axis to fall back to 0 */
+                gameport_trigger(gameport);			/* Trigger */
+		t = gameport_time(gameport, SW_TIMEOUT);
+		while ((gameport_read(gameport) & 1) && t) t--;	/* Wait for axis to fall back to 0 */
                 udelay(seq[i]);					/* Delay magic time */
         } while (seq[++i]);
 
-	outb(0xff, io);						/* Last trigger */
+	gameport_trigger(gameport);				/* Last trigger */
 
 	__restore_flags(flags);
 }
@@ -333,23 +289,30 @@ static int sw_check(__u64 t)
  * the axes and buttons arrays.
  */
 
-static int sw_parse(unsigned char *buf, struct sw *sw, int **axes, int **buttons)
+static int sw_parse(unsigned char *buf, struct  *sw)
 {
-	int hat, i;
+	int hat, i, j;
+	struct input_dev *dev = sw->dev;
 
 	switch (sw->type) {
 
 		case SW_ID_3DP:
 
-			if (sw_check(GB(0,64,0)) || (hat = GB(6,1,3) | GB(60,3,0))  > 8) return -1;
+			if (sw_check(GB(0,64)) || (hat = (GB(6,1) << 3) | GB(60,3)) > 8) return -1;
 
-			axes[0][0] = GB( 3,3,7) | GB(16,7,0);
-			axes[0][1] = GB( 0,3,7) | GB(24,7,0);
-			axes[0][2] = GB(35,2,7) | GB(40,7,0);
-			axes[0][3] = GB(32,3,7) | GB(48,7,0);
-			axes[0][4] = sw_hat_to_axis[hat].x;
-			axes[0][5] = sw_hat_to_axis[hat].y;
-			buttons[0][0] = ~(GB(37,1,8) | GB(38,1,7) | GB(8,7,0));
+			input_report_abs(dev, ABS_X,        (GB( 3,3) << 7) | GB(16,7));
+			input_report_abs(dev, ABS_Y,        (GB( 0,3) << 7) | GB(24,7));
+			input_report_abs(dev, ABS_RZ,       (GB(35,2) << 7) | GB(40,7));
+			input_report_abs(dev, ABS_THROTTLE, (GB(32,3) << 7) | GB(48,7));
+
+			input_report_abs(dev, ABS_HAT0X, sw_hat_to_axis[hat].x);
+			input_report_abs(dev, ABS_HAT0Y, sw_hat_to_axis[hat].y);
+
+			for (j = 0; j < 7; j++)
+				input_report_key(dev, sw_btn[SW_ID_3DP][j], GB(j+8,1));
+
+			input_report_key(dev, BTN_BASE4, GB(38,1));
+			input_report_key(dev, BTN_BASE5, GB(37,1));
 
 			return 0;
 
@@ -357,12 +320,13 @@ static int sw_parse(unsigned char *buf, struct sw *sw, int **axes, int **buttons
 
 			for (i = 0; i < sw->number * 15; i += 15) {
 
-				if (sw_parity(GB(i,15,0))) return -1;
+				if (sw_parity(GB(i,15))) return -1;
 
-				axes[i][0] = GB(i+3,1,0) - GB(i+2,1,0);
-				axes[i][1] = GB(i+0,1,0) - GB(i+1,1,0);
-				buttons[i][0] = ~GB(i+4,10,0);
+				input_report_key(dev + i, ABS_X, GB(i+3,1) - GB(i+2,1));
+				input_report_key(dev + i, ABS_Y, GB(i+0,1) - GB(i+1,1));
 
+				for (j = 0; j < 10; j++)
+					input_report_key(dev, sw_btn[SW_ID_GP][j], !GB(i+j+4,1));
 			}
 
 			return 0;
@@ -370,39 +334,52 @@ static int sw_parse(unsigned char *buf, struct sw *sw, int **axes, int **buttons
 		case SW_ID_PP:
 		case SW_ID_FFP:
 
-			if (!sw_parity(GB(0,48,0)) || (hat = GB(42,4,0)) > 8) return -1;
+			if (!sw_parity(GB(0,48)) || (hat = GB(42,4)) > 8) return -1;
 
-			axes[0][0] = GB( 9,10,0);
-			axes[0][1] = GB(19,10,0);
-			axes[0][2] = GB(36, 6,0);
-			axes[0][3] = GB(29, 7,0);
-			axes[0][4] = sw_hat_to_axis[hat].x;
-			axes[0][5] = sw_hat_to_axis[hat].y;
-			buttons[0][0] = ~GB(0,9,0);
+			input_report_abs(dev, ABS_X,        GB( 9,10));
+			input_report_abs(dev, ABS_Y,        GB(19,10));
+			input_report_abs(dev, ABS_RZ,       GB(36, 6));
+			input_report_abs(dev, ABS_THROTTLE, GB(29, 7));
+
+			input_report_abs(dev, ABS_HAT0X, sw_hat_to_axis[hat].x));
+			input_report_abs(dev, ABS_HAT0Y, sw_hat_to_axis[hat].y));
+
+			for (j = 0; j < 9; j++)
+				input_report_key(dev, sw_btn[SW_ID_PP][j], !GB(j,1));
 
 			return 0;
 
 		case SW_ID_FSP:
 
-			if (!sw_parity(GB(0,43,0)) || (hat = GB(28,4,0)) > 8) return -1;
+			if (!sw_parity(GB(0,43)) || (hat = GB(28,4)) > 8) return -1;
 
-			axes[0][0] = GB( 0,10,0);
-			axes[0][1] = GB(16,10,0);
-			axes[0][2] = GB(32, 6,0);
-			axes[0][3] = sw_hat_to_axis[hat].x;
-			axes[0][4] = sw_hat_to_axis[hat].y;
-			buttons[0][0] = ~(GB(10,6,0) | GB(26,2,6) | GB(38,2,8));
+			input_report_abs(dev, ABS_X,        GB( 0,10));
+			input_report_abs(dev, ABS_Y,        GB(16,10));
+			input_report_abs(dev, ABS_THROTTLE, GB(32, 6));
+
+			input_report_abs(dev, ABS_HAT0X, sw_hat_to_axis[hat].x);
+			input_report_abs(dev, ABS_HAT0Y, sw_hat_to_axis[hat].y);
+
+			for (j = 0; j < 6; j++)
+				input_report_key(dev, sw_btn[SW_ID_FSP][j], !GB(j+10,1,0));
+
+			input_report_key(dev, BTN_TR,     GB(26,1));
+			input_report_key(dev, BTN_START,  GB(27,1));
+			input_report_key(dev, BTN_MODE,   GB(38,1));
+			input_report_key(dev, BTN_SELECT, GB(39,1));
 
 			return 0;
 
 		case SW_ID_FFW:
 
-			if (!sw_parity(GB(0,33,0))) return -1;
+			if (!sw_parity(GB(0,33))) return -1;
 
-			axes[0][0] = GB( 0,10,0);
-			axes[0][1] = GB(10, 6,0);
-			axes[0][2] = GB(16, 6,0);
-			buttons[0][0] = ~GB(22,8,0);
+			input_report_abs(dev, ABS_RX,       GB( 0,10));
+			input_report_abs(dev, ABS_RUDDER,   GB(10, 6));
+			input_report_abs(dev, ABS_THROTTLE, GB(16, 6));
+
+			for (j = 0; j < 8; j++)
+				input_report_key(dev, sw_btn[SW_ID_FFW][j], !GB(j+22,1));
 
 			return 0;
 	}
@@ -416,36 +393,35 @@ static int sw_parse(unsigned char *buf, struct sw *sw, int **axes, int **buttons
  * called from the generic code to poll the joystick.
  */
 
-static int sw_read(void *xsw, int **axes, int **buttons)
+static void sw_read(struct sw *sw)
 {
-	struct sw *sw = xsw;
 	unsigned char buf[SW_LENGTH];
 	int i;
 
-	i = sw_read_packet(sw->io, sw->speed, buf, sw->length, 0);
+	i = sw_read_packet(sw->gameport, buf, sw->length, 0);
 
 	if (sw->type == SW_ID_3DP && sw->length == 66 && i != 66) {		/* Broken packet, try to fix */
 
-		if (i == 64 && !sw_check(sw_get_bits(buf,0,64,0,1))) {		/* Last init failed, 1 bit mode */
-			printk(KERN_WARNING "sidewinder.c: Joystick in wrong mode on %#x"
-				" - going to reinitialize.\n", sw->io);
+		if (i == 64 && !sw_check(sw_get_bits(buf,0,64,1))) {		/* Last init failed, 1 bit mode */
+			printk(KERN_WARNING "sidewinder.c: Joystick in wrong mode on gameport%d"
+				" - going to reinitialize.\n", sw->gameport->number);
 			sw->fail = SW_FAIL;					/* Reinitialize */
 			i = 128;						/* Bogus value */
 		}
 
-		if (i < 66 && GB(0,64,0) == GB(i*3-66,64,0))			/* 1 == 3 */
+		if (i < 66 && GB(0,64) == GB(i*3-66,64))			/* 1 == 3 */
 			i = 66;							/* Everything is fine */
 
-		if (i < 66 && GB(0,64,0) == GB(66,64,0))			/* 1 == 2 */
+		if (i < 66 && GB(0,64) == GB(66,64))				/* 1 == 2 */
 			i = 66;							/* Everything is fine */
 
-		if (i < 66 && GB(i*3-132,64,0) == GB(i*3-66,64,0)) {		/* 2 == 3 */
+		if (i < 66 && GB(i*3-132,64) == GB(i*3-66,64)) {		/* 2 == 3 */
 			memmove(buf, buf + i - 22, 22);				/* Move data */
 			i = 66;							/* Carry on */
 		}
 	}
 
-	if (i == sw->length && !sw_parse(buf, sw, axes, buttons)) {		/* Parse data */
+	if (i == sw->length && !sw_parse(buf, sw)) {				/* Parse data */
 
 		sw->fail = 0;
 		sw->ok++;
@@ -453,8 +429,8 @@ static int sw_read(void *xsw, int **axes, int **buttons)
 		if (sw->type == SW_ID_3DP && sw->length == 66			/* Many packets OK */
 			&& sw->ok > SW_OK) {
 
-			printk(KERN_INFO "sidewinder.c: No more trouble on %#x"
-				" - enabling optimization again.\n", sw->io);
+			printk(KERN_INFO "sidewinder.c: No more trouble on gameport%d"
+				" - enabling optimization again.\n", sw->gameport->number);
 			sw->length = 22;
 		}
 
@@ -466,161 +442,53 @@ static int sw_read(void *xsw, int **axes, int **buttons)
 
 	if (sw->type == SW_ID_3DP && sw->length == 22 && sw->fail > SW_BAD) {	/* Consecutive bad packets */
 
-		printk(KERN_INFO "sidewinder.c: Many bit errors on %#x"
-			" - disabling optimization.\n", sw->io);
+		printk(KERN_INFO "sidewinder.c: Many bit errors on gameport%d"
+			" - disabling optimization.\n", sw->gameport->number);
 		sw->length = 66;
 	}
 
 	if (sw->fail < SW_FAIL) return -1;					/* Not enough, don't reinitialize yet */
 
-	printk(KERN_WARNING "sidewinder.c: Too many bit errors on %#x"
-		" - reinitializing joystick.\n", sw->io);
+	printk(KERN_WARNING "sidewinder.c: Too many bit errors on gameport%d"
+		" - reinitializing joystick.\n", sw->gameport->number);
 
 	if (!i && sw->type == SW_ID_3DP) {					/* 3D Pro can be in analog mode */
 		udelay(3 * SW_TIMEOUT);
-		sw_init_digital(sw->io, sw->speed);
+		sw_init_digital(sw->gameport);
 	}
 
 	udelay(SW_TIMEOUT);
-	i = sw_read_packet(sw->io, sw->speed, buf, SW_LENGTH, 0);		/* Read normal data packet */
+	i = sw_read_packet(sw->gameport, buf, SW_LENGTH, 0);			/* Read normal data packet */
 	udelay(SW_TIMEOUT);
-	sw_read_packet(sw->io, sw->speed, buf, SW_LENGTH, i);			/* Read ID packet, this initializes the stick */
+	sw_read_packet(sw->gameport, buf, SW_LENGTH, i);			/* Read ID packet, this initializes the stick */
 
 	sw->fail = SW_FAIL;
 	
 	return -1;
 }
 
-/*
- * sw_open() is a callback from the file open routine.
- */
-
-static int sw_open(struct js_dev *jd)
+static void sw_timer(unsigned long private)
 {
-	MOD_INC_USE_COUNT;
+	struct sw *sw = (void *) private;
+	
+	sw->reads++;
+	if (sw_read(sw)) sw->bads++;
+	mod_timer(&sw->timer, jiffies + SW_REFRESH);
+}
+
+static int sw_open(struct input_dev *dev)
+{
+	struct sw *sw = dev->private;
+	if (!sw->used++)
+		mod_timer(&sw->timer, jiffies + SW_REFRESH);
 	return 0;
 }
 
-/*
- * sw_close() is a callback from the file release routine.
- */
-
-static int sw_close(struct js_dev *jd)
+static void sw_close(struct input_dev *dev)
 {
-	MOD_DEC_USE_COUNT;
-	return 0;
-}
-
-/*
- * sw_init_corr() initializes the correction values for
- * SideWinders.
- */
-
-static void __init sw_init_corr(int num_axes, int type, int number, struct js_corr **corr)
-{
-	int i, j;
-
-	for (i = 0; i < number; i++) {
-
-		for (j = 0; j < num_axes; j++) {
-			corr[i][j].type = JS_CORR_BROKEN;
-			corr[i][j].prec = 8;
-			corr[i][j].coef[0] = 511 - 32;
-			corr[i][j].coef[1] = 512 + 32;
-			corr[i][j].coef[2] = (1 << 29) / (511 - 32);
-			corr[i][j].coef[3] = (1 << 29) / (511 - 32);
-		}
-
-		switch (type) {
-
-			case SW_ID_3DP:
-
-				corr[i][2].type = JS_CORR_BROKEN;
-				corr[i][2].prec = 4;
-				corr[i][2].coef[0] = 255 - 16;
-				corr[i][2].coef[1] = 256 + 16;
-				corr[i][2].coef[2] = (1 << 29) / (255 - 16);
-				corr[i][2].coef[3] = (1 << 29) / (255 - 16);
-
-				j = 4;
-
-			break;
-
-			case SW_ID_PP:
-			case SW_ID_FFP:
-
-				corr[i][2].type = JS_CORR_BROKEN;
-				corr[i][2].prec = 0;
-				corr[i][2].coef[0] = 31 - 2;
-				corr[i][2].coef[1] = 32 + 2;
-				corr[i][2].coef[2] = (1 << 29) / (31 - 2);
-				corr[i][2].coef[3] = (1 << 29) / (31 - 2);
-
-				corr[i][3].type = JS_CORR_BROKEN;
-				corr[i][3].prec = 1;
-				corr[i][3].coef[0] = 63 - 4;
-				corr[i][3].coef[1] = 64 + 4;
-				corr[i][3].coef[2] = (1 << 29) / (63 - 4);
-				corr[i][3].coef[3] = (1 << 29) / (63 - 4);
-
-				j = 4;
-
-			break;
-
-			case SW_ID_FFW:
-
-				corr[i][0].type = JS_CORR_BROKEN;
-				corr[i][0].prec = 2;
-				corr[i][0].coef[0] = 511 - 8;
-				corr[i][0].coef[1] = 512 + 8;
-				corr[i][0].coef[2] = (1 << 29) / (511 - 8);
-				corr[i][0].coef[3] = (1 << 29) / (511 - 8);
-
-				corr[i][1].type = JS_CORR_BROKEN;
-				corr[i][1].prec = 1;
-				corr[i][1].coef[0] = 63;
-				corr[i][1].coef[1] = 63;
-				corr[i][1].coef[2] = (1 << 29) / -63;
-				corr[i][1].coef[3] = (1 << 29) / -63;
-
-				corr[i][2].type = JS_CORR_BROKEN;
-				corr[i][2].prec = 1;
-				corr[i][2].coef[0] = 63;
-				corr[i][2].coef[1] = 63;
-				corr[i][2].coef[2] = (1 << 29) / -63;
-				corr[i][2].coef[3] = (1 << 29) / -63;
-
-				j = 3;
-
-			break;
-
-			case SW_ID_FSP:
-				
-				corr[i][2].type = JS_CORR_BROKEN;
-				corr[i][2].prec = 0;
-				corr[i][2].coef[0] = 31 - 2;
-				corr[i][2].coef[1] = 32 + 2;
-				corr[i][2].coef[2] = (1 << 29) / (31 - 2);
-				corr[i][2].coef[3] = (1 << 29) / (31 - 2);
-
-				j = 3;
-
-			break;
-
-			default:
-
-				j = 0;
-		}
-
-		for (; j < num_axes; j++) {				/* Hats & other binary axes */
-			corr[i][j].type = JS_CORR_BROKEN;
-			corr[i][j].prec = 0;
-			corr[i][j].coef[0] = 0;
-			corr[i][j].coef[1] = 0;
-			corr[i][j].coef[2] = (1 << 29);
-			corr[i][j].coef[3] = (1 << 29);
-		}
-	}
+	struct sw *sw = dev->private;
+	if (!--sw->used)
+		del_timer(&sw->timer);
 }
 
 /*
@@ -648,18 +516,18 @@ static void sw_3dp_id(unsigned char *buf, char *comment)
 	char pnp[8], rev[9];
 
 	for (i = 0; i < 7; i++)						/* ASCII PnP ID */
-		pnp[i] = sw_get_bits(buf, 24+8*i, 8, 0, 1);
+		pnp[i] = sw_get_bits(buf, 24+8*i, 8, 1);
 
 	for (i = 0; i < 8; i++)						/* ASCII firmware revision */
-		rev[i] = sw_get_bits(buf, 88+8*i, 8, 0, 1);
+		rev[i] = sw_get_bits(buf, 88+8*i, 8, 1);
 
 	pnp[7] = rev[8] = 0;
 
 	sprintf(comment, " [PnP %d.%02d id %s rev %s]",
-		(int) (sw_get_bits(buf, 8, 6, 6, 1) |			/* Two 6-bit values */
-			sw_get_bits(buf, 16, 6, 0, 1)) / 100,
-		(int) (sw_get_bits(buf, 8, 6, 6, 1) |
-			sw_get_bits(buf, 16, 6, 0, 1)) % 100,
+		(int) ((sw_get_bits(buf, 8, 6, 1) << 6) |		/* Two 6-bit values */
+			sw_get_bits(buf, 16, 6, 1)) / 100,
+		(int) ((sw_get_bits(buf, 8, 6, 1) << 6) |
+			sw_get_bits(buf, 16, 6, 1)) % 100,
 		 pnp, rev);
 }
 
@@ -679,12 +547,12 @@ static int sw_guess_mode(unsigned char *buf, int len)
 }
 
 /*
- * sw_probe() probes for SideWinder type joysticks.
+ * sw_connect() probes for SideWinder type joysticks.
  */
 
-static struct js_port __init *sw_probe(int io, struct js_port *port)
+static void sidewinder_connect(struct gameport *gameport, struct gameport_dev *dev)
 {
-	struct sw sw;
+	struct sw *sw;
 	int i, j, k, l;
 	unsigned char buf[SW_LENGTH];
 	unsigned char idbuf[SW_LENGTH];

@@ -7,7 +7,7 @@
  */
 
 /*
- * Logitech ADI joystick family driver for Linux.
+ * Logitech ADI joystick family driver for Linux
  */
 
 /*
@@ -504,8 +504,8 @@ static void adi_connect(struct gameport *gameport, struct gameport_dev *dev)
 		if (port->adi[i].length > 0) {
 			adi_init_center(port->adi + i);
 			input_register_device(&port->adi[i].dev);
-			printk(KERN_INFO "input%d: %s [%s] on gameport%d\n",
-				port->adi[i].dev.number, port->adi[i].name, port->adi[i].cname, gameport->number);
+			printk(KERN_INFO "input%d: %s [%s] on gameport%d.%d\n",
+				port->adi[i].dev.number, port->adi[i].name, port->adi[i].cname, gameport->number, i);
 		}
 }
 

@@ -1,5 +1,5 @@
 /*
- *  cobra.c  Version 1.3
+ *  * $Id$
  *
  *  Copyright (c) 1999-2000 Vojtech Pavlik
  *
@@ -42,6 +42,8 @@
 #define COBRA_LENGTH		36
 
 static char* cobra_name = "Blaster GamePad Cobra";
+
+static int cobra_btn[] = { BTN_START, BTN_SELECT, BTN_TL, BTN_TR, BTN_X, BTN_Y, BTN_Z, BTN_A, BTN_B, BTN_C, BTN_TL2, BTN_TR2, 0 };
 
 struct cobra {
 	struct gameport *gameport;
@@ -113,7 +115,7 @@ static void cobra_timer(unsigned long private)
 	struct cobra *cobra = (void *) private;
 	struct input_dev *dev;
 	unsigned int data[2];
-	int i, r;
+	int i, j, r;
 
 	cobra->reads++;
 
@@ -129,18 +131,8 @@ static void cobra_timer(unsigned long private)
 			input_report_abs(dev, ABS_X, ((data[i] >> 4) & 1) - ((data[i] >> 3) & 1));
 			input_report_abs(dev, ABS_Y, ((data[i] >> 2) & 1) - ((data[i] >> 1) & 1));
 
-			input_report_key(dev, BTN_START,  data[i] & 0x20);
-			input_report_key(dev, BTN_SELECT, data[i] & 0x40);
-			input_report_key(dev, BTN_TL,     data[i] & 0x80);
-			input_report_key(dev, BTN_TR,     data[i] & 0x100);
-			input_report_key(dev, BTN_X,      data[i] & 0x200);
-			input_report_key(dev, BTN_Y,      data[i] & 0x400);
-			input_report_key(dev, BTN_Z,      data[i] & 0x800);
-			input_report_key(dev, BTN_A,      data[i] & 0x1000);
-			input_report_key(dev, BTN_B,      data[i] & 0x2000);
-			input_report_key(dev, BTN_C,      data[i] & 0x4000);
-			input_report_key(dev, BTN_TL2,    data[i] & 0x8000);
-			input_report_key(dev, BTN_TR2,    data[i] & 0x10000);
+			for (j = 0; cobra_btn[j]; j++)
+				input_report_key(dev, cobra_btn[j], data[i] & (0x20 << i));
 
 		}
 
@@ -166,7 +158,7 @@ static void cobra_connect(struct gameport *gameport, struct gameport_dev *dev)
 {
 	struct cobra *cobra;
 	unsigned int data[2];
-	int i;
+	int i, j;
 
 	if (!(cobra = kmalloc(sizeof(struct cobra), GFP_KERNEL)))
 		return;
@@ -186,8 +178,8 @@ static void cobra_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 	for (i = 0; i < 2; i++) 
 		if ((cobra->exists >> i) & data[i] & 1) {
-			printk(KERN_WARNING "cobra.c: Device #%d on gameport%d has the Ext bit set. ID is: %d"
-				" Contact vojtech@suse.cz", i, (data[i] >> 2) & 7, gameport->number);
+			printk(KERN_WARNING "cobra.c: Device on gameport%d.%d has the Ext bit set. ID is: %d"
+				" Contact vojtech@suse.cz\n", gameport->number, i, (data[i] >> 2) & 7);
 			cobra->exists &= ~(1 << i);
 		}
 
@@ -205,17 +197,16 @@ static void cobra_connect(struct gameport *gameport, struct gameport_dev *dev)
 		
 			cobra->dev[i].evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 			cobra->dev[i].absbit[0] = BIT(ABS_X) | BIT(ABS_Y);
-			cobra->dev[i].keybit[LONG(BTN_A)] = BIT(BTN_A) | BIT(BTN_B) | BIT(BTN_C)
-							  | BIT(BTN_X) | BIT(BTN_Y) | BIT(BTN_Z)
-							  | BIT(BTN_TL) | BIT(BTN_TR) | BIT(BTN_TL2) | BIT(BTN_TR2)
-							  | BIT(BTN_START) | BIT(BTN_SELECT);
+
+			for (j = 0; cobra_btn[j]; j++)
+				set_bit(cobra_btn[j], cobra->dev[i].keybit);
 
 			cobra->dev[i].absmin[ABS_X] = -1; cobra->dev[i].absmax[ABS_X] = 1;
 			cobra->dev[i].absmin[ABS_Y] = -1; cobra->dev[i].absmax[ABS_Y] = 1;
 
 			input_register_device(cobra->dev + i);
-			printk(KERN_INFO "input%d: Blaster GamePad Cobra on gameport%d\n",
-				cobra->dev[i].number, gameport->number);
+			printk(KERN_INFO "input%d: Blaster GamePad Cobra on gameport%d.%d\n",
+				cobra->dev[i].number, gameport->number, i);
 		}
 
 

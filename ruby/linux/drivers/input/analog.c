@@ -7,7 +7,7 @@
  */
 
 /*
- * Analog joystick and gamepad driver for Linux.
+ * Analog joystick and gamepad driver for Linux
  */
 
 /*
@@ -385,7 +385,7 @@ static void analog_name(struct analog *analog)
  * analog_init_device()
  */
 
-static void analog_init_device(struct analog_port *port, struct analog *analog)
+static void analog_init_device(struct analog_port *port, struct analog *analog, int index)
 {
 	int i, j, t, x;
 
@@ -441,8 +441,8 @@ static void analog_init_device(struct analog_port *port, struct analog *analog)
 
 	input_register_device(&analog->dev);
 
-	printk(KERN_INFO "input%d: %s at gameport%d",
-		analog->dev.number, analog->name, port->gameport->number);
+	printk(KERN_INFO "input%d: %s at gameport%d.%d",
+		analog->dev.number, analog->name, port->gameport->number, index);
 
 	if (port->cooked)
 		printk(" [ADC port]\n");
@@ -566,7 +566,7 @@ static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 	for (i = 0; i < 2; i++)
 		if (port->analog[i].mask)
-			analog_init_device(port, port->analog + i);
+			analog_init_device(port, port->analog + i, i);
 }
 
 static void analog_disconnect(struct gameport *gameport)

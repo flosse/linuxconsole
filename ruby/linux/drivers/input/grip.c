@@ -1,5 +1,5 @@
 /*
- *  grip.c  Version 1.3
+ * $Id$
  *
  *  Copyright (c) 1998-2000 Vojtech Pavlik
  *
@@ -32,21 +32,23 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/string.h>
 #include <linux/init.h>
+#include <linux/malloc.h>
 #include <linux/gameport.h>
 #include <linux/input.h>
 
 #define GRIP_MODE_GPP		1
-#define GRIP_MODE_XT		2
-#define GRIP_MODE_BD		3
+#define GRIP_MODE_BD		2
+#define GRIP_MODE_XT		9
 
-#define GRIP_LENGTH_GPP	24
-#define GRIP_STROBE_GPP	400
+#define GRIP_LENGTH_GPP		24
+#define GRIP_STROBE_GPP		200	/* 200 us */
 #define GRIP_LENGTH_XT		4
-#define GRIP_STROBE_XT		200
+#define GRIP_STROBE_XT		64	/* 64 us */
 #define GRIP_MAX_CHUNKS_XT	10	
 #define GRIP_MAX_BITS_XT	30	
+
+#define GRIP_REFRESH_TIME	HZ/50	/* 20 ms */
 
 struct grip {
 	struct gameport *gameport;
@@ -57,6 +59,19 @@ struct grip {
 	int reads;
 	int bads;
 };
+
+static int grip_btn_gpp[] = { BTN_START, BTN_SELECT, BTN_TR2, BTN_Y, -1, BTN_TL2, BTN_A, BTN_B, BTN_X, -1, BTN_TL, BTN_TR, 0 };
+static int grip_btn_xt[] = { BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_TRIGGER, BTN_TOP, BTN_SELECT, BTN_MODE, BTN_START, 0 };
+static int grip_btn_bd[] = { BTN_THUMB, BTN_THUMB2, BTN_TRIGGER, BTN_TOP, BTN_BASE, 0 };
+
+static int grip_abs_gpp[] = { ABS_X, ABS_Y, 0 };
+static int grip_abs_xt[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_TL, ABS_TR, ABS_HAT0X, ABS_HAT0Y, ABS_HAT1X, ABS_HAT0Y, 0 };
+static int grip_abs_bd[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, 0 };
+
+static char *grip_name[] = { [1] = "Gravis GamePad Pro", [2] = "Gravis Blackhawk Digital", [9] = "Gravis Xterminator" };
+static int *grip_abs[] = { [1] = grip_abs_gpp, [2] = grip_abs_bd, [9] = grip_abs_xt };
+static int *grip_btn[] = { [1] = grip_btn_gpp, [2] = grip_btn_bd, [9] = grip_btn_xt };
+static char grip_anx[] = { [1] = 0, [2] = 3, [9] = 5 };
 
 /*
  * grip_gpp_read_packet() reads a Gravis GamePad Pro packet.
@@ -69,7 +84,7 @@ static int grip_gpp_read_packet(struct gameport *gameport, int shift, unsigned i
 	unsigned int t;
 	int i;
 
-	int strobe = gameport_time(GRIP_STROBE_GPP);
+	int strobe = gameport_time(gameport, GRIP_STROBE_GPP);
 
 	data[0] = 0;
 	t = strobe;
@@ -111,7 +126,7 @@ static int grip_xt_read_packet(struct gameport *gameport, int shift, unsigned in
 	unsigned int t;
 	char status;
 
-	int strobe = gameport_time(GRIP_STROBE_XT);
+	int strobe = gameport_time(gameport, GRIP_STROBE_XT);
 
 	data[0] = data[1] = data[2] = data[3] = 0;
 	status = buf = i = j = 0;
@@ -120,11 +135,11 @@ static int grip_xt_read_packet(struct gameport *gameport, int shift, unsigned in
 	__save_flags(flags);
 	__cli();
 
-	v = w = (inb(io) >> shift) & 3;
+	v = w = (gameport_read(gameport) >> shift) & 3;
 
 	do {
 		t--;
-		u = (gameport_read(io) >> shift) & 3;
+		u = (gameport_read(gameport) >> shift) & 3;
 
 		if (u ^ v) {
 
@@ -164,250 +179,202 @@ static int grip_xt_read_packet(struct gameport *gameport, int shift, unsigned in
 
 static void grip_timer(unsigned long private)
 {
-	struct grip *grip = (void*) private;;
+	struct grip *grip = (void*) private;
 	unsigned int data[GRIP_LENGTH_XT];
-	int i;
+	struct input_dev *dev;
+	int i, j;
 
 	for (i = 0; i < 2; i++) {
 
 		dev = grip->dev + i;
+		grip->reads++;
 
 		switch (grip->mode[i]) {
 
 			case GRIP_MODE_GPP:
 
-				if (grip_gpp_read_packet(grip->gameport, (i << 1) + 4, data)) return -1;
+				if (grip_gpp_read_packet(grip->gameport, (i << 1) + 4, data)) {
+					grip->bads++;
+					break;
+				}
 
 				input_report_abs(dev, ABS_X, ((*data >> 15) & 1) - ((*data >> 16) & 1));
 				input_report_abs(dev, ABS_Y, ((*data >> 13) & 1) - ((*data >> 12) & 1));
 
-				input_report_key(dev, BTN_A,      *data & 0x040);
-				input_report_key(dev, BTN_B,      *data & 0x080)
-				input_report_key(dev, BTN_C,      *data & 0x100);
-				input_report_key(dev, BTN_D,      *data & 0x008);
-
-				input_report_key(dev, BTN_LT,     *data & 0x400);
-				input_report_key(dev, BTN_RT,     *data & 0x800);
-				input_report_key(dev, BTN_LT2,    *data & 0x020);
-				input_report_key(dev, BTN_RT2,    *data & 0x004);
-
-				input_report_key(dev, BTN_START,  *data & 0x001);
-				input_report_key(dev, BTN_SELECT, *data & 0x002);
-
+				for (j = 0; j < 12; j++)
+					if (grip_btn_gpp[i] > 0)
+						input_report_key(dev, grip_btn_gpp[i], (*data >> i) & 1);
 				break;
 
 			case GRIP_MODE_XT:
 
-				if (grip_xt_read_packet(grip->gameport, (i << 1) + 4, data)) return -1;
+				if (grip_xt_read_packet(grip->gameport, (i << 1) + 4, data)) {
+					grip->bads++;
+					break;
+				}
 
-				input_report_abs(dev, ABS_X,       (data[0] >> 2) & 0x3f);
-				input_report_abs(dev, ABS_Y, 63 - ((data[0] >> 8) & 0x3f);
+				input_report_abs(dev, ABS_X,        (data[0] >> 2) & 0x3f);
+				input_report_abs(dev, ABS_Y,  63 - ((data[0] >> 8) & 0x3f));
 				input_report_abs(dev, ABS_THROTTLE, (data[1] >> 2) & 0x3f);
-				input_report_abs(dev, ABS_TL, (data[1] >> 8) & 0x3f);
-				input_report_abs(dev, ABS_TR, (data[2] >> 8) & 0x3f);
+				input_report_abs(dev, ABS_TL,	    (data[1] >> 8) & 0x3f);
+				input_report_abs(dev, ABS_TR,	    (data[2] >> 8) & 0x3f);
 
 				input_report_abs(dev, ABS_HAT0X, ((data[2] >> 1) & 1) - ( data[2]       & 1));
 				input_report_abs(dev, ABS_HAT0Y, ((data[2] >> 2) & 1) - ((data[2] >> 3) & 1));
 				input_report_abs(dev, ABS_HAT1X, ((data[2] >> 5) & 1) - ((data[2] >> 4) & 1));
-				input_report_abs(dev, ABS_HAt0Y, ((data[2] >> 6) & 1) - ((data[2] >> 7) & 1));
+				input_report_abs(dev, ABS_HAT0Y, ((data[2] >> 6) & 1) - ((data[2] >> 7) & 1));
 
-				buttons[i][0] = (data[3] >> 3) & 0x7ff;
-
+				for (j = 0; j < 11; j++)
+					input_report_key(dev, grip_btn_xt[i], (data[3] >> i) & 1);
 				break;
 
 			case GRIP_MODE_BD:
 
-				if (grip_xt_read_packet(grip->gameport, (i << 1) + 4, data)) return -1;
+				if (grip_xt_read_packet(grip->gameport, (i << 1) + 4, data)) {
+					grip->bads++;
+					break;
+				}
 
-				axes[i][0] =       (data[0] >> 2) & 0x3f;
-				axes[i][1] = 63 - ((data[0] >> 8) & 0x3f);
-				axes[i][2] =       (data[2] >> 8) & 0x3f;
+				input_report_abs(dev, ABS_X,        (data[0] >> 2) & 0x3f);
+				input_report_abs(dev, ABS_Y,  63 - ((data[0] >> 8) & 0x3f));
+				input_report_abs(dev, ABS_THROTTLE, (data[2] >> 8) & 0x3f);
 
-				axes[i][3] = ((data[2] >> 1) & 1) - ( data[2]       & 1);
-				axes[i][4] = ((data[2] >> 2) & 1) - ((data[2] >> 3) & 1);
+				input_report_abs(dev, ABS_HAT0X, ((data[2] >> 1) & 1) - ( data[2]       & 1));
+				input_report_abs(dev, ABS_HAT0Y, ((data[2] >> 2) & 1) - ((data[2] >> 3) & 1));
 
-				buttons[i][0] = ((data[3] >> 6) & 0x01) | ((data[3] >> 3) & 0x06)
-					      | ((data[3] >> 4) & 0x18);
+				for (j = 0; j < 5; j++)
+					input_report_key(dev, grip_btn_bd[i], (data[3] >> (i + 4)) & 1);
 
 				break;
-
-			default:
-				break;
-
 		}
 	}
 
+	mod_timer(&grip->timer, jiffies + GRIP_REFRESH_TIME);
+}
+
+static int grip_open(struct input_dev *dev)
+{
+	struct grip *grip = dev->private;
+	if (!grip->used++)
+		mod_timer(&grip->timer, jiffies + GRIP_REFRESH_TIME);
 	return 0;
 }
 
-/*
- * grip_open() is a callback from the file open routine.
- */
-
-static int grip_open(struct js_dev *jd)
+static void grip_close(struct input_dev *dev)
 {
-	MOD_INC_USE_COUNT;
-	return 0;
+	struct grip *grip = dev->private;
+	if (!--grip->used)
+		del_timer(&grip->timer);
 }
 
-/*
- * grip_close() is a callback from the file release routine.
- */
-
-static int grip_close(struct js_dev *jd)
+static void grip_connect(struct gameport *gameport, struct gameport_dev *dev)
 {
-	MOD_DEC_USE_COUNT;
-	return 0;
-}
-
-/*
- * grip_init_corr() initializes correction values of
- * GrIP joysticks.
- */
-
-static void __init grip_init_corr(int mode, struct js_corr *corr)
-{
-	int i;
-
-	switch (mode) {
-
-		case GRIP_MODE_GPP:
-
-			for (i = 0; i < 2; i++) {
-				corr[i].type = JS_CORR_BROKEN;
-				corr[i].prec = 0;
-				corr[i].coef[0] = 0;
-				corr[i].coef[1] = 0;
-				corr[i].coef[2] = (1 << 29);
-				corr[i].coef[3] = (1 << 29);
-			}
-
-			break;
-
-		case GRIP_MODE_XT:
-
-			for (i = 0; i < 5; i++) {
-				corr[i].type = JS_CORR_BROKEN;
-				corr[i].prec = 0;
-				corr[i].coef[0] = 31 - 4;
-				corr[i].coef[1] = 32 + 4;
-				corr[i].coef[2] = (1 << 29) / (32 - 14);
-				corr[i].coef[3] = (1 << 29) / (32 - 14);
-			}
-
-			for (i = 5; i < 9; i++) {
-				corr[i].type = JS_CORR_BROKEN;
-				corr[i].prec = 0;
-				corr[i].coef[0] = 0;
-				corr[i].coef[1] = 0;
-				corr[i].coef[2] = (1 << 29);
-				corr[i].coef[3] = (1 << 29);
-			}
-
-			break;
-
-		case GRIP_MODE_BD:
-
-			for (i = 0; i < 3; i++) {
-				corr[i].type = JS_CORR_BROKEN;
-				corr[i].prec = 0;
-				corr[i].coef[0] = 31 - 4;
-				corr[i].coef[1] = 32 + 4;
-				corr[i].coef[2] = (1 << 29) / (32 - 14);
-				corr[i].coef[3] = (1 << 29) / (32 - 14);
-			}
-
-			for (i = 3; i < 5; i++) {
-				corr[i].type = JS_CORR_BROKEN;
-				corr[i].prec = 0;
-				corr[i].coef[0] = 0;
-				corr[i].coef[1] = 0;
-				corr[i].coef[2] = (1 << 29);
-				corr[i].coef[3] = (1 << 29);
-			}
-			
-			break;
-
-	}
-}
-
-/*
- * grip_probe() probes for GrIP joysticks.
- */
-
-static struct js_port __init *grip_probe(int io, struct js_port *port)
-{
-	struct grip grip;
-	char *names[] = { NULL, "Gravis GamePad Pro", "Gravis Xterminator", "Gravis Blackhawk Digital"};
-	char axes[] = { 0, 2, 9, 5};
-	char buttons[] = { 0, 10, 11, 5};
+	struct grip *grip;
 	unsigned int data[GRIP_LENGTH_XT];
-	int i;
+	int i, j, t;
 
-	if (check_region(io, 1)) return port;
+	if (!(grip = kmalloc(sizeof(struct grip), GFP_KERNEL)))
+		return;
+	memset(grip, 0, sizeof(struct grip));
 
-	grip.mode[0] = grip.mode[1] = 0;
+	gameport->private = grip;
+
+	grip->gameport = gameport;
+	init_timer(&grip->timer);
+	grip->timer.data = (long) grip;
+	grip->timer.function = grip_timer;
+
+	 if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW));
+		goto fail1;
 
 	for (i = 0; i < 2; i++) {
-		if (!grip_gpp_read_packet(io, (i << 1) + 4, data)) grip.mode[i] = GRIP_MODE_GPP;
-		if (!grip_xt_read_packet(io, (i << 1) + 4, data)) {
-			if ((data[3] & 7) == 7)
-				grip.mode[i] = GRIP_MODE_XT;
-			if ((data[3] & 7) == 0)
-				grip.mode[i] = GRIP_MODE_BD;
+		if (!grip_gpp_read_packet(gameport, (i << 1) + 4, data)) {
+			grip->mode[i] = GRIP_MODE_GPP;
+			continue;
+		}
+		if (!grip_xt_read_packet(gameport, (i << 1) + 4, data)) {
+			grip->mode[i] = (data[3] & 7) + 2;
+			continue;
 		}
 	}
 
-	if (!grip.mode[0] && !grip.mode[1]) return port;
+	for (i = 0; i < 2; i++) 
+		if (!grip_name[grip->mode[i]]) {
+			printk(KERN_WARNING "grip.c: Unknown joystick ID %d on gameport%d.%d\n",
+				grip->mode[i], gameport->number, i);
+			grip->mode[i] = 0;
+		}	
 
-	grip.io = io;
-
-	request_region(io, 1, "joystick (gravis)");
-	port = js_register_port(port, &grip, 2, sizeof(struct grip), grip_read);
+	if (!grip->mode[0] && !grip->mode[1])
+		goto fail2;
 
 	for (i = 0; i < 2; i++)
-		if (grip.mode[i]) {
-			printk(KERN_INFO "js%d: %s at %#x\n",
-				js_register_device(port, i, axes[grip.mode[i]], buttons[grip.mode[i]],
-					names[grip.mode[i]], grip_open, grip_close),
-				names[grip.mode[i]], io);
-			grip_init_corr(grip.mode[i], port->corr[i]);
+		if (grip->mode[i]) {
+
+			grip->dev[i].private = grip;
+
+			grip->dev[i].name = grip_name[grip->mode[i]];
+			grip->dev[i].open = grip_open;
+			grip->dev[i].close = grip_close;
+		
+			grip->dev[i].evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
+
+			for (j = 0; (t = grip_abs[grip->mode[i]][j]); j++) {
+
+				set_bit(t, grip->dev[i].absbit);
+
+				if (j < grip_anx[grip->mode[i]]) {
+					grip->dev[i].absmin[t] = 1;
+					grip->dev[i].absmax[t] = 30;
+					grip->dev[i].absflat[t] = 1;
+				} else {
+					grip->dev[i].absmin[t] = -1;
+					grip->dev[i].absmax[t] = 1;
+				}
+			}
+
+			for (j = 0; (t = grip_btn[grip->mode[i]][j]); j++)
+				if (t > 0)
+					set_bit(t, grip->dev[i].absbit);
+
+			input_register_device(grip->dev + i);
+
+			printk(KERN_INFO "input%d: %s on gameport%d.%d\n",
+				grip->dev[i].number, grip_name[grip->mode[i]], gameport->number, i);
 		}
 
-	return port;
+	return;
+fail2:	gameport_close(gameport);
+fail1:	kfree(grip);
 }
 
-#ifdef MODULE
-int init_module(void)
-#else
-int __init grip_init(void)
-#endif
-{
-	int *p;
-
-	for (p = grip_port_list; *p; p++) grip_port = grip_probe(*p, grip_port);
-	if (grip_port) return 0;
-
-#ifdef MODULE
-	printk(KERN_WARNING "joy-gravis: no joysticks found\n");
-#endif
-
-	return -ENODEV;
-}
-
-#ifdef MODULE
-void cleanup_module(void)
+static void grip_disconnect(struct gameport *gameport)
 {
 	int i;
-	struct grip *grip;
 
-	while (grip_port) {
-		for (i = 0; i < grip_port->ndevs; i++)
-			if (grip_port->devs[i])
-				js_unregister_device(grip_port->devs[i]);
-		grip = grip_port->grip;
-		release_region(grip->io, 1);
-		grip_port = js_unregister_port(grip_port);
-	}
+	struct grip *grip = gameport->private;
+	for (i = 0; i < 2; i++)
+		if (grip->mode[i])
+			input_unregister_device(grip->dev + i);
+	gameport_close(gameport);
+	kfree(grip);
 }
-#endif
+
+static struct gameport_dev grip_dev = {
+	connect:	grip_connect,
+	disconnect:	grip_disconnect,
+};
+
+int __init grip_init(void)
+{
+	gameport_register_device(&grip_dev);
+	return 0;
+}
+
+void __exit grip_exit(void)
+{
+	gameport_unregister_device(&grip_dev);
+}
+
+module_init(grip_init);
+module_exit(grip_exit);

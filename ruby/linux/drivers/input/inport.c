@@ -1,5 +1,5 @@
 /*
- *  inport.c  Version 0.2
+ * $Id$
  *
  *  Copyright (c) 1999-2000 Vojtech Pavlik
  *
@@ -135,6 +135,7 @@ static void inport_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 	outb(INPORT_MODE_IRQ | INPORT_MODE_BASE, INPORT_DATA_PORT);
 }
 
+#ifndef MODULE
 static int __init inport_setup(char *str)
 {
         int ints[4];
@@ -142,6 +143,8 @@ static int __init inport_setup(char *str)
         if (ints[0] > 0) inport_irq = ints[1];
         return 1;
 }
+__setup("inport_irq=", inport_setup);
+#endif
 
 static int __init inport_init(void)
 {
@@ -176,6 +179,5 @@ static void __exit inport_exit(void)
 	release_region(INPORT_BASE, INPORT_EXTENT);
 }
 
-__setup("inport_irq=", inport_setup);
 module_init(inport_init);
 module_exit(inport_exit);

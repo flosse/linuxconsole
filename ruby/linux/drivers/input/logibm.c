@@ -1,5 +1,5 @@
 /*
- *  logibm.c  Version 0.2
+ * $Id$
  *
  *  Copyright (c) 1999-2000 Vojtech Pavlik
  *
@@ -126,6 +126,7 @@ static void logibm_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 	input_report_key(&logibm_dev, BTN_RIGHT,  buttons & 4);
 }
 
+#ifndef MODULE
 static int __init logibm_setup(char *str)
 {
         int ints[4];
@@ -133,6 +134,8 @@ static int __init logibm_setup(char *str)
         if (ints[0] > 0) logibm_irq = ints[1];
         return 1;
 }
+__setup("logibm_irq=", logibm_setup);
+#endif
 
 static int __init logibm_init(void)
 {
@@ -168,6 +171,5 @@ static void __exit logibm_exit(void)
 	release_region(LOGIBM_BASE, LOGIBM_EXTENT);
 }
 
-__setup("logibm_irq=", logibm_setup);
 module_init(logibm_init);
 module_exit(logibm_exit);
