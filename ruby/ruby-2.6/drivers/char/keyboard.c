@@ -1149,7 +1149,7 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
                         if (!vt->keyboard) {
                                 vt->keyboard = handle;
                                 handle->private = vt;
-                                printk(KERN_INFO "keyboard.c: %s vc:%d-%d\n",
+                                printk(KERN_INFO "keyboard.c: [%s] vc:%d-%d\n",
                                        dev->name, vt->first_vc + 1,
 				       vt->first_vc + vt->vc_count);
 				if(test_bit(EV_SND, dev->evbit)) {

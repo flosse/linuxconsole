@@ -141,7 +141,7 @@ static void vt_flush_chars(struct tty_struct *tty);
 static void unblank_screen_t(unsigned long dummy);
 
 #ifdef CONFIG_VT_CONSOLE
-static int kmsg_redirect = 1;	/* kmsg_redirect is the VC for printk */
+static int kmsg_redirect = 0;	/* kmsg_redirect is the VC for printk */
 static int printable;		/* Is console ready for printing? */
 #endif
 
@@ -1026,7 +1026,7 @@ int vc_disallocate(struct vc_data *vc)
 	struct vt_struct *vt = vc->display_fg;
 
 	acquire_console_sem();
-	if (vc) {
+	if (vc && vc->vc_num > MIN_NR_CONSOLES) {
 		sw->con_deinit(vc);
 		vt->vc_cons[cons_num - vt->first_vc] = NULL;
 		if (kmalloced)
@@ -1842,9 +1842,6 @@ int __init vty_init(void)
 #if defined (CONFIG_PROM_CONSOLE)
 	prom_con_init();
 #endif
-#if defined (CONFIG_FRAMEBUFFER_CONSOLE)
-	fb_console_init();
-#endif	
 #if defined (CONFIG_DUMMY_CONSOLE)
         dumb_console_init();
 #endif

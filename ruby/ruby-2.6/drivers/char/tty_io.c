@@ -1299,17 +1299,21 @@ retry_open:
 	}
 #ifdef CONFIG_VT
 	if (device == MKDEV(TTY_MAJOR,0)) {
-                struct vc_data *vc;
-                extern struct tty_driver *console_driver;
-                if (!current->tty)
-                        return -ENXIO;
-                driver = console_driver;
-                vc = (struct vc_data *)current->tty->driver_data;
-                if (!vc)
-                        return -ENXIO;
-                index = vc->display_fg->fg_console->vc_num;
-                noctty = 1;
-                goto got_driver;
+		struct vc_data *vc = NULL;
+		extern struct tty_driver *console_driver;
+
+		driver = console_driver;
+		if (current->tty &&
+		    filp->f_op->write == redirected_tty_write &&
+		    current->tty->index > 0 &&
+		    current->tty->index < MAX_NR_CONSOLES)
+			vc = (struct vc_data *)current->tty->driver_data;
+		if (vc)
+			index = vc->display_fg->fg_console->vc_num;
+		else
+			index = admin_vt->fg_console->vc_num;
+		noctty = 1;
+		goto got_driver;
 	}
 #endif
 	if (device == MKDEV(TTYAUX_MAJOR,1)) {
