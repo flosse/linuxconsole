@@ -146,7 +146,7 @@ struct vc_data {
                  int    vc_utf_char;
         unsigned int    vc_tab_stop[5];         /* Tab stops. 160 columns. */
         unsigned char   vc_palette[16*3];       /* Colour palette for VGA+ */
-        unsigned short * vc_translate;
+        unsigned int    vc_translate;		/* Current ACM */	
         unsigned char   vc_G0_charset;
         unsigned char   vc_G1_charset;
         unsigned char   vc_saved_G0;

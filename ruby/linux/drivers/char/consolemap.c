@@ -9,6 +9,9 @@
  * Support for multiple unimaps by Jakub Jelinek <jj@ultra.linux.cz>, July 1998
  *
  * Fix bug in inverse translation. Stanislav Voronyi <stas@cnti.uanet.kharkov.ua>, Dec 1998
+ *
+ * Adapted for selection in Unicode by <edmund@rano.demon.co.uk>, January 1999
+ *
  */
 
 #include <linux/kd.h>
@@ -128,6 +131,7 @@ static unsigned short translations[][256] = {
   }, 
   /* User mapping -- default to codes for direct font mapping */
   {
+    /* UNI_DIRECT_BASE, ... */	
     0xf000, 0xf001, 0xf002, 0xf003, 0xf004, 0xf005, 0xf006, 0xf007,
     0xf008, 0xf009, 0xf00a, 0xf00b, 0xf00c, 0xf00d, 0xf00e, 0xf00f,
     0xf010, 0xf011, 0xf012, 0xf013, 0xf014, 0xf015, 0xf016, 0xf017,
@@ -163,88 +167,138 @@ static unsigned short translations[][256] = {
   }
 };
 
+static unsigned char ***inverse_translations[4] = { NULL, NULL, NULL, NULL };
+
 /* The standard kernel character-to-font mappings are not invertible
    -- this is just a best effort. */
 
 #define MAX_GLYPH 512		/* Max possible glyph value */
 
-static int inv_translate[MAX_NR_CONSOLES];
-
 struct uni_pagedir {
 	u16 		**uni_pgdir[32];
 	unsigned long	refcount;
 	unsigned long	sum;
-	unsigned char	*inverse_translations[4];
+	u16		*inverse_map;
 	int		readonly;
 };
 
-static struct uni_pagedir *dflt;
-
-static void set_inverse_transl(struct vc_data *vc, struct uni_pagedir *p, int i)
-{
-	int j, glyph;
-	unsigned short *t = translations[i];
-	unsigned char *q;
-	
-	if (!p) return;
-	q = p->inverse_translations[i];
-
-	if (!q) {
-		q = p->inverse_translations[i] = (unsigned char *) 
-			kmalloc(MAX_GLYPH, GFP_KERNEL);
-		if (!q) return;
-	}
-	memset(q, 0, MAX_GLYPH);
-
-	for (j = 0; j < E_TABSZ; j++) {
-		glyph = conv_uni_to_pc(vc, t[j]);
-		if (glyph >= 0 && glyph < MAX_GLYPH && q[glyph] < 32) {
-			/* prefer '-' above SHY etc. */
-		  	q[glyph] = j;
-		}
-	}
-}
-
-unsigned short *set_translate(int m, struct vc_data *vc)
-{
-	inv_translate[vc->vc_num] = m;
-	return translations[m];
-}
+static struct uni_pagedir *dflt = NULL;
 
 /*
- * Inverse translation is impossible for several reasons:
- * 1. The font<->character maps are not 1-1.
- * 2. The text may have been written while a different translation map
- *    was active, or using Unicode.
- * Still, it is now possible to a certain extent to cut and paste non-ASCII.
+ * There are two kinds of mapping:
+ *
+ * Application-Charset Map (ACM) maps from 8-bit character to 16-bit Unicode.
+ * Data structures: translations[4][256], inverse_translations[4]
+ * Functions: clear_inverse_translations, set_inverse_translations,
+ *            set_translate, get_acm, inverse_translate, con_[gs]et_trans_*
+ *
+ * Screen Font Map (SFM) maps from 16-bit Unicode to font position.
+ * Data structures: struct uni_pagedir
+ * Functions: clear_inverse_map, set_inverse_map,
+ *            inverse_convert, *_unimap, conv_uni_to_pc
+ *
+ * An inverse SFM is calculated when it is required by inverse_convert,
+ * but an inverse ACM is calculated from sys_setup and whenever the ACM
+ * changes. This is because inverse_translate may get called from inside
+ * an interrupt in keyboard.c.
+ *
  */
-unsigned char inverse_translate(struct vc_data *vc, int glyph)
+
+inline void set_translate(struct vc_data *vc, int m)
 {
-	struct uni_pagedir *p;
-	if (glyph < 0 || glyph >= MAX_GLYPH)
-		return 0;
-	else if (!(p = (struct uni_pagedir *)*vc->vc_uni_pagedir_loc) ||
-		 !p->inverse_translations[inv_translate[vc->vc_num]])
-		return glyph;
-	else
-		return p->inverse_translations[inv_translate[vc->vc_num]][glyph];
+	vc->vc_translate = m;
 }
 
-static void update_user_maps(struct vt_struct *vt)
+unsigned short *get_acm(int m)
 {
-	int i;
-	struct uni_pagedir *p, *q = NULL;
-	
-	for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
-		struct vc_data *vc = vt->vcs.vc_cons[i];	
-		if (!vc)
-			continue;
-		p = (struct uni_pagedir *)*vc->vc_uni_pagedir_loc;
-		if (p && p != q) {
-			set_inverse_transl(vc, p, USER_MAP);
-			q = p;
-		}
-	}
+       	return translations[m];
+}
+
+unsigned char inverse_translate(int m, int ucs)
+{
+	unsigned char ***q, **p1, *p2, c;
+
+        if (ucs > 0xffff)
+        	return 0;
+	if ((q = inverse_translations[m]) &&
+            (p1 = q[ucs >> 11]) &&
+            (p2 = p1[(ucs >> 6) & 0x1f]) &&
+            (c = p2[ucs &0x3f]))
+        	return c;
+        else
+		return 0;
+}
+
+static void clear_inverse_translations(int m)
+{
+	unsigned char ***q = inverse_translations[m];
+	unsigned char **p1;
+        int i, j;
+
+	if (!q) return;
+
+        for (i = 0; i < 32; i++) {
+        	if ((p1 = q[i]) != NULL) {
+                	for (j = 0; j < 32; j++)
+                        	if (p1[j])
+                                	kfree(p1[j]);
+                       	kfree(p1);
+               	}
+        }
+	kfree(q);
+       	inverse_translations[m] = NULL;
+}
+
+static void set_inverse_translations(int m)
+{
+	int i, c, n;
+        unsigned char ***q, **p1, *p2;
+        u16 *t = translations[m];
+        u16 unicode;
+
+        clear_inverse_translations(m);
+        q = inverse_translations[m] = (unsigned char ***)
+                kmalloc(32*sizeof(unsigned char **), GFP_KERNEL);
+        if (!q) return;
+        for (i = 0; i < 32; i++)
+                q[i] = NULL;
+
+        /* The ACM may not be 1-1. In inverting it we prefer
+           lower characters over higher ones,
+           while excluding control characters (0..31, 127),
+           except that we force '\r' to be translated correctly.
+           */
+        for (c = E_TABSZ-1; c >= 0; c--) {
+                if (c < 32) {
+                        if (c == '\r')
+                                unicode = c;
+                        else
+                                continue;
+                } else {
+                        if (c == 127)
+                                continue;
+                        else
+                                unicode = t[c];
+                }
+                if (!(p1 = q[n = unicode >> 11])) {
+                	p1 = q[n] = kmalloc(32*sizeof(unsigned char *), GFP_KERNEL);
+                	if (!p1) {
+                                clear_inverse_translations(m);
+                                return;
+                        }
+                        for (i = 0; i < 32; i++)
+                                p1[i] = NULL;
+                }
+                if (!(p2 = p1[n = (unicode >> 6) & 0x1f])) {
+                        p2 = p1[n] = kmalloc(64*sizeof(unsigned char), GFP_KERNEL);
+                        if (!p2) {
+                                clear_inverse_translations(m);
+                                return;
+                        }
+                        memset(p2, 0, 64*sizeof(unsigned char));
+                }
+       		p2[unicode & 0x3f] = c;
+       	}
 }
 
 /*
@@ -269,8 +323,7 @@ int con_set_trans_old(struct vc_data *vc, unsigned char * arg)
 		__get_user(uc, arg+i);
 		p[i] = UNI_DIRECT_BASE | uc;
 	}
-
-	update_user_maps(vc->display_fg);
+	set_inverse_translations(USER_MAP);
 	return 0;
 }
 
@@ -305,8 +358,7 @@ int con_set_trans_new(struct vc_data *vc, ushort * arg)
 		__get_user(us, arg+i);
 		p[i] = us;
 	}
-
-	update_user_maps(vc->display_fg);
+	set_inverse_translations(USER_MAP);
 	return 0;
 }
 
@@ -336,8 +388,71 @@ int con_get_trans_new(struct vc_data *vc, ushort * arg)
  * this 3-level paged table scheme to be comparable to a hash table.
  */
 
-extern u8 dfont_unicount[];	/* Defined in console_defmap.c */
+extern u8 dfont_unicount[];	/* Defined in consolemap_deftbl.c */
 extern u16 dfont_unitable[];
+
+static void clear_inverse_map(struct uni_pagedir *p)
+{
+  if (p->inverse_map) {
+    kfree(p->inverse_map);
+    p->inverse_map = NULL;
+  }
+}
+
+static void set_inverse_map(struct uni_pagedir *p)
+{
+	int i, j, k;
+       	u16 *q;
+       	u16 **p1, *p2;
+       	int ucs;
+
+       	q = p->inverse_map;
+       	if (!q) {
+        	q = p->inverse_map = (u16 *)
+        	kmalloc(MAX_GLYPH*sizeof(u16), GFP_KERNEL);
+               	if (!q) return;
+       	}
+       	memset(q, 0xff, MAX_GLYPH*sizeof(u16));
+
+	/* The SFM is often not 1-1. In inverting it we prefer
+           lower characters over higher ones,
+           while excluding control characters (0..31, 127..159).
+           This has the desirable side effect that ' ' overrides
+           any other character mapped to the same glyph.
+           One might think about preferring Unicode characters that are
+           in the current ACM over ones that are not, but this couldn't
+           be implemented cleanly: we don't know what ACM will be used
+           with this SFM.
+           */
+        for (i = 31; i >= 0; i--)
+        if ((p1 = p->uni_pgdir[i]))
+                for (j = 31; j >= 0; j--)
+                if ((p2 = p1[j]))
+                        for (k = 63; k >= 0; k--)
+                        if (p2[k] < MAX_GLYPH) {
+                                ucs = (i << 11) | (j << 6) | k;
+                                if (ucs < 160 && (ucs >= 127 || ucs < 32))
+                                        continue;
+                                q[p2[k]] = ucs;
+                        }
+}
+
+u16 inverse_convert(struct vc_data *vc, int glyph)
+{
+	struct uni_pagedir *p;
+
+	if (glyph < 0 || glyph >= MAX_GLYPH)
+        	return 0xffff;
+        if (!(p = (struct uni_pagedir *)*vc->vc_uni_pagedir_loc))
+                /* This shouldn't happen! */
+                return UNI_DIRECT_BASE | glyph;
+        if (!p->inverse_map) {
+                set_inverse_map(p);
+                if (!p->inverse_map)
+                        return 0xffff;
+        }
+        return p->inverse_map[glyph];
+}
 
 static void con_release_unimap(struct uni_pagedir *p)
 {
@@ -354,11 +469,7 @@ static void con_release_unimap(struct uni_pagedir *p)
 		}
 		p->uni_pgdir[i] = NULL;
 	}
-	for (i = 0; i < 4; i++)
-		if (p->inverse_translations[i]) {
-			kfree(p->inverse_translations[i]);
-			p->inverse_translations[i] = NULL;
-		}
+	clear_inverse_map(p);
 }
 
 void con_free_unimap(struct vc_data *vc)
@@ -454,6 +565,7 @@ int con_clear_unimap(struct vc_data *vc, struct unimapinit *ui)
 			if (p) p->refcount++;
 			return -ENOMEM;
 		}
+		/* makes the pointers NULL, one hopes */
 		memset(q, 0, sizeof(*q));
 		q->refcount=1;
 		*vc->vc_uni_pagedir_loc = (unsigned long)q;
@@ -466,8 +578,7 @@ int con_clear_unimap(struct vc_data *vc, struct unimapinit *ui)
 	return 0;
 }
 
-int
-con_set_unimap(struct vc_data *vc, ushort ct, struct unipair *list)
+int con_set_unimap(struct vc_data *vc, ushort ct, struct unipair *list)
 {
 	int err = 0, err1, i;
 	struct uni_pagedir *p, *q;
@@ -516,9 +627,7 @@ con_set_unimap(struct vc_data *vc, ushort ct, struct unipair *list)
 	if (con_unify_unimap(vc, p))
 		return err;
 
-	for (i = 0; i <= 3; i++)
-		set_inverse_transl(vc, p, i); /* Update all inverse translations */
-  
+	clear_inverse_map(p);
 	return err;
 }
 
@@ -526,9 +635,7 @@ con_set_unimap(struct vc_data *vc, ushort ct, struct unipair *list)
    The representation used was the most compact I could come up
    with.  This routine is executed at sys_setup time, and when the
    PIO_FONTRESET ioctl is called. */
-
-int
-con_set_default_unimap(struct vc_data *vc)
+int con_set_default_unimap(struct vc_data *vc)
 {
 	int i, j, err = 0, err1;
 	u16 *q;
@@ -567,9 +674,7 @@ con_set_default_unimap(struct vc_data *vc)
 		return err;
 	}
 
-	for (i = 0; i <= 3; i++)
-		/* Update all inverse translations */
-		set_inverse_transl(vc, p, i);	
+	clear_inverse_map(p);
 	dflt = p;
 	return err;
 }
@@ -626,8 +731,7 @@ void con_protect_unimap(struct vc_data *vc, int rdonly)
 	if (p) p->readonly = rdonly;
 }
 
-int
-conv_uni_to_pc(struct vc_data *vc, long ucs) 
+int conv_uni_to_pc(struct vc_data *vc, long ucs) 
 {
 	struct uni_pagedir *p;
 	u16 **p1, *p2;
@@ -668,10 +772,13 @@ conv_uni_to_pc(struct vc_data *vc, long ucs)
 void __init console_map_init(void)
 {
 	struct vt_struct *vt = vt_cons;
+	int i;
 
 	while (vt) {
 		if (!vt->kmalloced && !*vt->vcs.vc_cons[0]->vc_uni_pagedir_loc)
                 	con_set_default_unimap(vt->vcs.vc_cons[0]);
                	vt = vt->next;
        	}
+	for (i = 0; i < 4; i++)
+        	set_inverse_translations(i);
 }

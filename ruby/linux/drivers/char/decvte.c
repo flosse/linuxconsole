@@ -315,19 +315,18 @@ static void vte_sgr(struct vc_data *vc)
                                 reverse = 1;
                                 break;
                         case 10:        /*  primary (default) font */
-                                translate = set_translate(charset == 0
-                                                ? G0_charset
-                                                : G1_charset, vc);
+                                set_translate(vc, charset == 0 ? 
+						  G0_charset : G1_charset);
                                 disp_ctrl = 0;
                                 toggle_meta = 0;
                                 break;
                         case 11:        /* first alternative font */
-                                translate = set_translate(IBMPC_MAP, vc);
+                                set_translate(vc, IBMPC_MAP);
                                 disp_ctrl = 1;
                                 toggle_meta = 0;
                                 break;
                         case 12:        /* second alternative font */
-                                translate = set_translate(IBMPC_MAP, vc);
+                                set_translate(vc, IBMPC_MAP);
                                 disp_ctrl = 1;
                                 toggle_meta = 1;
                                 break;
@@ -946,7 +945,7 @@ static void vte_decrc(struct vc_data *vc)
         G2_charset      = saved_G2;
         G3_charset      = saved_G3;
 #endif /* ndef CONFIG_VT_EXTENDED */
-        translate       = set_translate(charset ? G1_charset : G0_charset, vc);
+        set_translate(vc, charset ? G1_charset : G0_charset);
         update_attr(vc);
         need_wrap = 0;
 }
@@ -975,7 +974,7 @@ void vte_ris(struct vc_data *vc, int do_clear)
         priv2           = 0;
         priv3           = 0;
         priv4           = 0;
-        translate       = set_translate(LAT1_MAP, vc);
+        set_translate(vc, LAT1_MAP);
         G0_charset      = LAT1_MAP;
         G1_charset      = GRAF_MAP;
         charset         = 0;
@@ -1136,12 +1135,12 @@ void terminal_emulation(struct tty_struct *tty, int c)
                 return;
         case 0x0e:      /* SO - Shift out / LS1 - Locking shift 1 */
                 charset = 1;
-                translate = set_translate(G1_charset, vc);
+                set_translate(vc, G1_charset);
                 disp_ctrl = 1;
                 return;
         case 0x0f:      /* SI - Shift in / LS0 - Locking shift 0 */
                 charset = 0;
-                translate = set_translate(G0_charset, vc);
+                set_translate(vc, G0_charset);
                 disp_ctrl = 0;
                 return;
         case 0x10:      /* DLE - */
@@ -2003,7 +2002,7 @@ attribute */
                         break;
                 }
                 if (charset == 0)
-                        translate = set_translate(G0_charset, vc);
+                        set_translate(vc, G0_charset);
                 vc_state = ESinit;
                 return;
         case ESg1d4:
@@ -2030,7 +2029,7 @@ attribute */
                         break;
                 }
                 if (charset == 1)
-                        translate = set_translate(G1_charset, vc);
+                        set_translate(vc, G1_charset);
                 vc_state = ESinit;
                 return;
 #ifdef CONFIG_VT_EXTENDED
@@ -2058,7 +2057,7 @@ attribute */
                         break;
                 }
                 if (charset == 1)
-                        translate = set_translate(G2_charset, vc);
+                        set_translate(vc, G2_charset);
                 vc_state = ESinit;
                 return;
         case ESg3d4:
@@ -2085,7 +2084,7 @@ attribute */
                         break;
                 }
                 if (charset == 1)
-                        translate = set_translate(G3_charset, vc);
+                        set_translate(vc, G3_charset);
                 vc_state = ESinit;
                 return;
 #endif /* CONFIG_VT_EXTENDED */

@@ -48,6 +48,7 @@
 #include <linux/tty.h>
 #include <linux/tty_flip.h>
 #include <linux/vt_kern.h>
+#include <linux/consolemap.h>
 #include <linux/kbd_diacr.h>
 #include <linux/sysrq.h>
 #include <linux/input.h>
@@ -97,7 +98,7 @@ static fn_handler_fn *fn_handler[] = { FN_HANDLERS };
 const int max_vals[] = {
 	255, SIZE(func_table) - 1, SIZE(fn_handler) - 1, NR_PAD - 1,
 	NR_DEAD - 1, 255, 3, NR_SHIFT - 1, 255, NR_ASCII - 1, NR_LOCK - 1,
-	255, NR_LOCK - 1, 255
+	255, 2*NR_LOCK - 1, 255
 };
 const int NR_TYPES = SIZE(max_vals);
 
@@ -152,7 +153,6 @@ static struct ledptr {
 /*
  * Helper functions
  */
-
 static void put_queue(struct tty_struct *tty, int ch)
 {
 	wake_up(&keypress_wait);
@@ -182,17 +182,46 @@ static void applkey(struct tty_struct *tty, int key, char mode)
 }
 
 /*
+ * A note on character conversion:
+ *
+ * A keymap maps keycodes to keysyms, which, at present, are 16-bit
+ * values. If a keysym is < 0xf000 then it specifies a 16-bit Unicode
+ * character to be queued. If a keysym is >= 0xf000, then 0xf000 is
+ * subtracted to give a pair of octets, extracted by KTYP and KVAL.
+ * The KTYP is used as an index into key_handler[] to give a function
+ * which handles the KVAL. The "normal" key_handler is k_self, which
+ * treats the KVAL as an 8-bit character to be queued.
+ *
+ * When a 16-bit Unicode character is queued it is converted to UTF-8
+ * if the keyboard is in Unicode mode; otherwise it is converted to an
+ * 8-bit character using the current ACM (see consolemap.c). An 8-bit
+ * character is assumed to be in the character set defined by the
+ * current ACM, so it is queued unchanged if the keyboard is in 8-bit
+ * mode; otherwise it is converted using the inverse ACM.
+ *
+ * The handling of diacritics uses 8-bit characters, which are
+ * converted using the inverse ACM, when in Unicode mode. The strings
+ * bound to function keys are not converted, so they may already
+ * contain UTF-8. Codes entered using do_ascii() treated as 16-bit and
+ * converted to UTF-8 in Unicode mode; otherwise they are treated as
+ * 8-bit and queued unchanged.
+ *
+ * Since KTYP is not used in the case of Unicode keysyms, it is not
+ * possible to use KT_LETTER to implement CapsLock. Either use 8-bit
+ * keysyms with an appropriate ACM or use the work-around proposed in
+ * k_lock().
+ */
+
+/*
  * Many other routines do put_queue, but I think either
  * they produce ASCII, or they produce some user-assigned
  * string, and in both cases we might assume that it is
  * in utf-8 already. UTF-8 is defined for words of up to 31 bits,
  * but we need only 16 bits here
  */
-
 void to_utf8(struct tty_struct *tty, ushort c)
 {
 	if (c < 0x80)
-		/* 0*******  */
 		put_queue(tty, c);
 	else if (c < 0x800) {
 		/* 110***** 10****** */
@@ -206,12 +235,38 @@ void to_utf8(struct tty_struct *tty, ushort c)
 	}
 }
 
+void put_unicode(struct tty_struct *tty, u16 uc)
+{
+  struct vc_data *vc = (struct vc_data *) tty->driver_data;	
+	
+  if (vc->kbd_table.kbdmode == VC_UNICODE)
+    to_utf8(tty, uc);
+  else if ((uc & ~0x9f) == 0 || uc == 127)
+    /* Don't translate control chars */
+    put_queue(tty, uc);
+  else {
+    unsigned char c;
+    c = inverse_translate(vc->display_fg->fg_console->vc_translate, uc);
+    if (c) put_queue(tty, c);
+  }
+}
+
+static void put_8bit(struct tty_struct *tty, u8 c)
+{
+  struct vc_data *vc = (struct vc_data *) tty->driver_data;	
+
+  if (vc->kbd_table.kbdmode != VC_UNICODE ||
+      c < 32 || c == 127) /* Don't translate control chars */
+    put_queue(tty, c);
+  else
+      to_utf8(tty, get_acm(vc->display_fg->fg_console->vc_translate)[c]);
+}
+
 /*
  * called after returning from RAW mode or when changing consoles -
  * recompute shift_down[] and shift_state from key_down[] 
  * maybe called when keymap is undefined, so that shiftkey release is seen 
  */
-
 void compute_shiftstate(void)
 {
 	int i, j, sym, val;
@@ -250,7 +305,6 @@ void compute_shiftstate(void)
  * Otherwise, conclude that DIACR was not combining after all,
  * queue it and return CH.
  */
-
 unsigned char handle_diacr(struct tty_struct *tty, unsigned char ch)
 {
 	int d = diacr;
@@ -266,20 +320,19 @@ unsigned char handle_diacr(struct tty_struct *tty, unsigned char ch)
 	if (ch == ' ' || ch == d)
 		return d;
 
-	put_queue(tty, d);
+	put_8bit(tty, d);
 	return ch;
 }
 
 /*
  * Special function handlers
  */
-
 static void fn_enter(struct tty_struct *tty)
 {
 	struct vc_data *vc = (struct vc_data *) tty->driver_data;
 
 	if (diacr) {
-		put_queue(tty, diacr);
+		put_8bit(tty, diacr);
 		diacr = 0;
 	}
 	put_queue(tty, 13);
@@ -445,6 +498,7 @@ static void fn_boot_it(struct tty_struct *tty)
 	struct input_handle *handle;
 
 	if (vc->display_fg == admin_vt) {
+		/* Stop other key events from coming */
 		for (handle = kbd_handler.handle; handle; 
 		     handle = handle->hnext) {		 
 			if (handle->private) 
@@ -499,7 +553,7 @@ static void k_self(struct tty_struct *tty, unsigned char value, char up_flag)
 		diacr = value;
 		return;
 	}
-	put_queue(tty, value);
+	put_8bit(tty, value);
 }
 
 /*
@@ -528,9 +582,9 @@ static void k_dead(struct tty_struct *tty, unsigned char value, char up_flag)
 static void k_cons(struct tty_struct *tty, unsigned char value, char up_flag)
 {
 	struct vc_data *tmp = (struct vc_data *) tty->driver_data; 
-	struct vc_data *vc = tmp->display_fg->vcs.vc_cons[value];
+	struct vc_data *vc = find_vc(value);
 
-	if (up_flag || !vc)
+	if (up_flag || !vc || (tmp->display_fg != vc->display_fg))
 		return;	
 	set_console(vc);
 }
@@ -609,7 +663,7 @@ static void k_pad(struct tty_struct *tty, unsigned char value, char up_flag)
 				return;
 		}
 
-	put_queue(tty, pad_chars[value]);
+	put_8bit(tty, pad_chars[value]);
 	if (value == KVAL(K_PENTER) && vc_kbd_mode(&vc->kbd_table, VC_CRLF))
 		put_queue(tty, 10);
 }
@@ -651,7 +705,7 @@ static void k_shift(struct tty_struct *tty, unsigned char value, char up_flag)
 	/* kludge */
 	if (up_flag && shift_state != old_state && npadch != -1) {
 		if (vc->kbd_table.kbdmode == VC_UNICODE)
-			to_utf8(tty, npadch & 0xffff);
+			put_unicode(tty, npadch & 0xffff);
 		else
 			put_queue(tty, npadch & 0xff);
 		npadch = -1;
@@ -699,7 +753,20 @@ static void k_lock(struct tty_struct *tty, unsigned char value, char up_flag)
 
 	if (up_flag || rep)
 		return;
-	chg_vc_kbd_lock(&vc->kbd_table, value);
+	if (value >= NR_LOCK) {
+                /* Change the lock state and
+                   set the CapsLock LED to the new state */
+                unsigned char mask;
+
+                mask = 1 << (value -= NR_LOCK);
+                if ((vc->kbd_table.lockstate ^= mask) & mask)
+                        set_vc_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
+                else
+                        clr_vc_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
+        } else {
+                /* Just change the lock state */
+		chg_vc_kbd_lock(&vc->kbd_table, value);
+	}
 }
 
 static void k_slock(struct tty_struct *tty, unsigned char value, char up_flag)
@@ -909,10 +976,10 @@ void emulate_raw(struct tty_struct *tty,unsigned int code,unsigned char up_flag)
 
 void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down)
 {
+	struct vc_data *vc = vt->fg_console;
 	unsigned short keysym, *key_map;
 	unsigned char type, raw_mode;
 	struct tty_struct *tty;
-	struct vc_data *vc = vt->fg_console;
 	int shift_final;
 
 	pm_access(pm_kbd);

@@ -191,11 +191,9 @@ do_kdsk_ioctl(int cmd, struct kbentry *user_kbe, int perm, struct kbd_struct *kb
 	switch (cmd) {
 	case KDGKBENT:
 		key_map = key_maps[s];
-		if (key_map) {
+		if (key_map) 
 		    val = U(key_map[i]);
-		    if (kbd->kbdmode != VC_UNICODE && KTYP(val) >= NR_TYPES)
-			val = K_HOLE;
-		} else
+		else
 		    val = (i ? K_HOLE : K_NOSUCHMAP);
 		return put_user(val, &user_kbe->kb_value);
 	case KDSKBENT:
@@ -214,12 +212,9 @@ do_kdsk_ioctl(int cmd, struct kbentry *user_kbe, int perm, struct kbd_struct *kb
 			break;
 		}
 
-		if (KTYP(v) < NR_TYPES) {
-		    if (KVAL(v) > max_vals[KTYP(v)])
-				return -EINVAL;
-		} else
-		    if (kbd->kbdmode != VC_UNICODE)
-				return -EINVAL;
+		if ((KTYP(v) >= NR_TYPES || KVAL(v) > max_vals[KTYP(v)]) &&
+			(v & 0xf000))
+                	return -EINVAL;
 
 		/* ++Geert: non-PC keyboards may generate keycode zero */
 #if !defined(__mc68000__) && !defined(__powerpc__)
