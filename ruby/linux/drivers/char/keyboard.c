@@ -1064,7 +1064,7 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 	for (i = KEY_RESERVED; i < BTN_MISC; i++)
 		if (test_bit(i, dev->keybit)) break;
 
-	if ((i == BTN_MISC) || !test_bit(EV_SND, dev->evbit)) 
+	if ((i == BTN_MISC) && !test_bit(EV_SND, dev->evbit)) 
 		return NULL;
 
 	if (!(handle = kmalloc(sizeof(struct input_handle), GFP_KERNEL))) 
@@ -1080,12 +1080,14 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 		} else 
 			vt = vt->next;
 	}	
-
+		
+	/* If we have more keyboards than VTs we still register the handler. 
+	 * It is possible someone might add a graphics card thus needing the
+         * keyboard later */
 	handle->dev = dev;
 	handle->handler = handler;
 	handle->name = kbd_name; /* FIXME, should be vt0, vt1, etc, or similar */
 	input_open_device(handle);
-
 	return handle;
 }
 
@@ -1105,8 +1107,14 @@ static void kbd_disconnect(struct input_handle *handle)
 static struct input_device_id kbd_ids[] = {
 	{
                 flags: INPUT_DEVICE_ID_MATCH_EVBIT,
-                evbit: { BIT(EV_KEY) | BIT(EV_SND) },
+                evbit: { BIT(EV_KEY) },
         },
+	
+	{
+                flags: INPUT_DEVICE_ID_MATCH_EVBIT,
+                evbit: { BIT(EV_SND) },
+        },	
+
 	{ },    /* Terminating entry */
 };
 
