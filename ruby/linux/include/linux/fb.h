@@ -32,7 +32,7 @@
 #define FBIOGET_GLYPH           0x4615
 #define FBIOGET_HWCINFO         0x4616
 #define FBIOPUT_MODEINFO	0x4617
-#define FBIOGET_DISPINFO	0x4618	
+#define FBIOGET_DISPINFO	0x4618
 
 #define FB_TYPE_PACKED_PIXELS		0	/* Packed Pixels	*/
 #define FB_TYPE_PLANES			1	/* Non interleaved planes */
@@ -504,5 +504,27 @@ extern int __init fb_find_mode(struct fb_var_screeninfo *var,
 #define FBCMD_SET_CURRENTPAR	0xDEAD8005
 
 #endif
+
+/* Userland HW accel */
+struct fb_copyarea {
+	u32 sx; /* screen-relative */
+	u32 sy;
+	u32 width;
+	u32 height;
+	u32 dx;
+	u32 dy;
+};
+
+struct fb_fillrect {
+	u32 x1; /* screen-relative */
+	u32 y1;
+	u32 width;
+	u32 height;
+	u32 color;
+	int rop;
+};
+
+#define FBIOPUT_COPYAREA        _IOR('F', 0x19, struct fb_copyarea)
+#define FBIOPUT_FILLRECT        _IOR('F', 0x20, struct fb_fillrect)
 
 #endif /* _LINUX_FB_H */

@@ -526,6 +526,49 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 		if (fb->fb_blank == 0)
 			return -EINVAL;
 		return (*fb->fb_blank)(arg, info);
+	case FBIOPUT_COPYAREA:
+	{
+		struct fb_copyarea fbca;
+		if (copy_from_user(&fbca, (void *) arg, sizeof(var)))
+			return -EFAULT;
+		if ((fbca.sx > info->var.xres) ||
+		    (fbca.sy > info->var.yres) ||
+		    (fbca.dx > info->var.xres) ||
+		    (fbca.dy > info->var.yres) ||
+		    ((fbca.sx + fbca.width) > info->var.xres) ||
+		    ((fbca.sy + fbca.height) > info->var.yres) ||
+		    ((fbca.dx + fbca.width) > info->var.xres) ||
+		    ((fbca.dy + fbca.height) > info->var.yres))
+			return(-EINVAL);
+		fb->fb_copyarea(info,
+				fbca.sx + info->var.xoffset,
+				fbca.sy + info->var.yoffset,
+				fbca.width, fbca.height,
+				fbca.dx + info->var.xoffset,
+				fbca.dy + info->var.yoffset);
+		return(0);
+	}
+	case FBIOPUT_FILLRECT:
+	{
+		struct fb_fillrect fbfr;
+		if (copy_from_user(&fbfr, (void *) arg, sizeof(var)))
+			return -EFAULT;
+		if ((fbfr.x1 > info->var.xres) ||
+		    (fbfr.y1 > info->var.yres) ||
+		    ((fbfr.x1 + fbfr.width) > info->var.xres) ||
+		    ((fbfr.y1 + fbfr.height) > info->var.yres))
+			return(-EINVAL);
+		if ((fbfr.rop != ROP_COPY) && (fbfr.rop != ROP_XOR))
+			return(-EINVAL);
+		fb->fb_fillrect(info,
+				fbfr.x1 + info->var.xoffset,
+				fbfr.y1 + info->var.yoffset,
+				fbfr.width, fbfr.height,
+				fbfr.color,
+				fbfr.rop);
+		return(0);
+	}
+
 	default:
 		if (fb->fb_ioctl)
 			return fb->fb_ioctl(inode, file, cmd, arg, info);
