@@ -100,13 +100,15 @@ static void emumousebtn_input_register(void)
 	input_register_device(&emumousebtn);
 }
 
-static void __init mac_hid_init(void)
+static int __init mac_hid_init(void)
 {
 	emumousebtn_input_register();
 
 #if defined(CONFIG_SYSCTL)
 	mac_hid_sysctl_header = register_sysctl_table(mac_hid_root_dir, 1);
 #endif /* CONFIG_SYSCTL */
+
+	return(0);
 }
 
 static void __exit mac_hid_exit(void)
