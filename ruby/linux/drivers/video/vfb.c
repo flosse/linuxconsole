@@ -117,7 +117,7 @@ static u_long get_line_length(int xres_virtual, int bpp)
 {
     u_long length;
 
-    length = xres_virtual * bpp;
+    length = xres_virtual*bpp;
     length = (length+31)&~31;
     length >>= 3;
     return(length);
@@ -422,9 +422,6 @@ int __init vfb_init(void)
     strcpy(fb_info.modename, vfb_fix.id);
     fb_info.node = -1;
     fb_info.fbops = &vfb_ops;
-
-    if (!mode_option)
-	mode_option = "640x480@60";
 
     retval = fb_find_mode(&fb_info.var, &fb_info, mode_option,
             			NULL, 0, NULL, 8);
