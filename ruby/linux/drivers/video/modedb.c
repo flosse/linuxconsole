@@ -16,7 +16,6 @@
 #include <linux/fb.h>
 #include <linux/sched.h>
 
-
 #undef DEBUG
 
 #define name_matches(v, s, l) \
@@ -272,7 +271,7 @@ static int __init my_atoi(const char *name)
 int __fb_try_mode(struct fb_var_screeninfo *var, struct fb_info *info,
 		  const struct fb_videomode *mode, unsigned int bpp)
 {
-    int err;
+    int err = 1;
 
     DPRINTK("Trying mode %s %dx%d-%d@%d\n", mode->name ? mode->name : "noname",
 	    mode->xres, mode->yres, bpp, mode->refresh);
