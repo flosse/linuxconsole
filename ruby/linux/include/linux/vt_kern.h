@@ -181,7 +181,6 @@ struct consw {
         void    (*con_cursor)(struct vc_data *, int);
         int     (*con_scroll_region)(struct vc_data *, int, int, int, int);
         void    (*con_bmove)(struct vc_data *, int, int, int, int, int, int);
-        int     (*con_switch)(struct vc_data *);
         int     (*con_blank)(struct vc_data *, int);
         int     (*con_font_op)(struct vc_data *, struct console_font_op *);
         int	(*con_resize)(struct vc_data *, unsigned int, unsigned int);
@@ -294,7 +293,6 @@ void set_origin(struct vc_data *vc);
 inline void clear_region(struct vc_data *vc,int x,int y,int height,int width);
 void do_update_region(struct vc_data *vc, unsigned long start, int count);
 void update_region(struct vc_data *vc, unsigned long start, int count);
-inline void save_screen(struct vc_data *vc);
 void update_screen(struct vc_data *vc);
 inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed);
 void invert_screen(struct vc_data *vc, int offset, int count, int viewed);
