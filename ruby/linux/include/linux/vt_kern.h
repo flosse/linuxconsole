@@ -137,8 +137,14 @@ struct vc_data {
         unsigned int    vc_s_blink      : 1;
         unsigned int    vc_s_reverse    : 1;                        
         /* misc */
-        unsigned int    vc_priv4        : 1;    /* indicating a private control
-function (used to be called "ques") */
+	unsigned int    vc_priv1        : 1;    /* indicating a private control
+                                                        function */
+        unsigned int    vc_priv2        : 1;    /* indicating a private control
+                                                        function */
+        unsigned int    vc_priv3        : 1;    /* indicating a private control
+							function */
+	unsigned int    vc_priv4        : 1;    /* indicating a private control
+					function (used to be called "ques") */
         unsigned int    vc_need_wrap    : 1;
         unsigned int    vc_can_do_color : 1;
         unsigned int    vc_report_mouse : 2;
@@ -166,12 +172,6 @@ iable for this console */
         unsigned int    vc_c8bit        : 1;    /* 8-bit controls */
         unsigned int    vc_d8bit        : 1;    /* 8-bit data */
         unsigned int    vc_shift        : 1;    /* single shift */
-        unsigned int    vc_priv1        : 1;    /* indicating a private control
-                                                        function */
-        unsigned int    vc_priv2        : 1;    /* indicating a private control
-                                                        function */
-        unsigned int    vc_priv3        : 1;    /* indicating a private control
-function */
         /* Private modes */
         unsigned int    vc_decckm       : 1;    /* Cursor Keys */
         unsigned int    vc_decsclm      : 1;    /* Scrolling */
