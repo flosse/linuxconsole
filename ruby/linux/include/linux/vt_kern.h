@@ -225,7 +225,7 @@ struct vt_struct {
 	const struct consw *vt_sw;		/* Display driver for VT */
 	const struct consw *cache_sw;		/* Save consw when KD_GRAPHIC */
 	struct vc_data *default_mode;	 	/* Default mode */
-	struct tasklet_struct vt_tasklet;	/* VT tasklet */
+	struct tq_struct vt_tq;			/* VT task queue */
 	struct input_handle *keyboard;		/* Keyboard attached */
 	int first_vc;
         struct vc_data *vc_cons[MAX_NR_USER_CONSOLES];  /* VT's VC pool */
@@ -241,7 +241,7 @@ void (*kd_mksound)(unsigned int hz, unsigned int ticks);
 extern inline void set_console(struct vc_data *vc)
 {
         vc->display_fg->want_vc = vc;
-        tasklet_schedule(&vc->display_fg->vt_tasklet);
+        schedule_task(&vc->display_fg->vt_tq);
 }
 
 /* universal VT emulation functions */
