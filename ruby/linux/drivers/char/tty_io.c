@@ -112,7 +112,6 @@ extern void fb_console_init(void);
 #endif
 extern int rio_init(void);
 
-#define CONSOLE_DEV MKDEV(TTY_MAJOR,0)
 #define TTY_DEV MKDEV(TTYAUX_MAJOR,0)
 #define SYSCONS_DEV MKDEV(TTYAUX_MAJOR,1)
 #define PTMX_DEV MKDEV(TTYAUX_MAJOR,2)
@@ -459,8 +458,7 @@ void do_tty_hangup(void *data)
 		struct file * filp = list_entry(l, struct file, f_list);
 		if (!filp->f_dentry)
 			continue;
-		if (filp->f_dentry->d_inode->i_rdev == CONSOLE_DEV ||
-		    filp->f_dentry->d_inode->i_rdev == SYSCONS_DEV) {
+		if (filp->f_dentry->d_inode->i_rdev == SYSCONS_DEV) {
 			cons_filp = filp;
 			continue;
 		}
@@ -675,7 +673,7 @@ static ssize_t tty_read(struct file * file, char * buf, size_t count,
 	   moved it to there.  This should only be done for the N_TTY
 	   line discipline, anyway.  Same goes for write_chan(). -- jlc. */
 #if 0
-	if ((inode->i_rdev != CONSOLE_DEV) && /* don't stop on /dev/console */
+	if ((inode->i_rdev != SYSCONS_DEV) && /* don't stop on /dev/console */
 	    (tty->pgrp > 0) &&
 	    (current->tty == tty) &&
 	    (tty->pgrp != current->pgrp))
@@ -765,8 +763,7 @@ static ssize_t tty_write(struct file * file, const char * buf, size_t count,
 	 *      well as /dev/tty0.
 	 */
 	inode = file->f_dentry->d_inode;
-	is_console = (inode->i_rdev == SYSCONS_DEV ||
-		      inode->i_rdev == CONSOLE_DEV);
+	is_console = (inode->i_rdev == SYSCONS_DEV); 
 
 	if (is_console && redirect)
 		tty = redirect;
@@ -1312,12 +1309,7 @@ retry_open:
 		filp->f_flags |= O_NONBLOCK; /* Don't let /dev/tty block */
 		/* noctty = 1; */
 	}
-#ifdef CONFIG_VT
-	if (device == CONSOLE_DEV) {
-		device = MKDEV(TTY_MAJOR, vt_cons->fg_console->vc_num + 1);
-		noctty = 1;
-	}
-#endif
+	
 	if (device == SYSCONS_DEV) {
 		struct console *c = console_drivers;
 		while(c && !c->device)
@@ -1524,8 +1516,7 @@ static int tiocswinsz(struct tty_struct *tty, struct tty_struct *real_tty,
 static int tioccons(struct inode *inode,
 	struct tty_struct *tty, struct tty_struct *real_tty)
 {
-	if (inode->i_rdev == SYSCONS_DEV ||
-	    inode->i_rdev == CONSOLE_DEV) {
+	if (inode->i_rdev == SYSCONS_DEV) { 
 		if (!suser())
 			return -EPERM;
 		redirect = NULL;
@@ -2211,9 +2202,6 @@ static struct tty_driver dev_tty_driver, dev_syscons_driver;
 #ifdef CONFIG_UNIX98_PTYS
 static struct tty_driver dev_ptmx_driver;
 #endif
-#ifdef CONFIG_VT
-static struct tty_driver dev_console_driver;
-#endif
 
 /*
  * Ok, now we can initialize the rest of the tty devices and can count
@@ -2276,16 +2264,6 @@ void __init tty_init(void)
 #endif
 	
 #ifdef CONFIG_VT
-	dev_console_driver = dev_tty_driver;
-	dev_console_driver.driver_name = "/dev/vc/0";
-	dev_console_driver.name = dev_console_driver.driver_name + 5;
-	dev_console_driver.major = TTY_MAJOR;
-	dev_console_driver.type = TTY_DRIVER_TYPE_SYSTEM;
-	dev_console_driver.subtype = SYSTEM_TYPE_CONSOLE;
-
-	if (tty_register_driver(&dev_console_driver))
-		panic("Couldn't register /dev/tty0 driver\n");
-
 #if defined (CONFIG_PROM_CONSOLE)
         prom_con_init();
 #endif

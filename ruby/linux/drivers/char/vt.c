@@ -854,6 +854,7 @@ int vc_resize(struct vc_data *vc, unsigned int lines, unsigned int cols)
 	unsigned int occ, oll, oss, osr;
 	unsigned short *newscreens = NULL;
         unsigned int cc, ll, ss, sr;
+	int err = 0;
 
         cc = (cols ? cols : video_num_columns);
         ll = (lines ? lines : video_num_lines);
@@ -862,7 +863,12 @@ int vc_resize(struct vc_data *vc, unsigned int lines, unsigned int cols)
 
         if (!vc || (cc == video_num_columns && ll == video_num_lines))
 		return 0;       
-        
+	
+	if (vc->display_fg->vt_sw->con_resize)
+		err = vc->display_fg->vt_sw->con_resize(vc, ll, cc);    
+	
+	if (err) return err;    
+	
 	newscreens = (unsigned short *) kmalloc(ss, GFP_USER);
         if (!newscreens) 
         	return -ENOMEM;
@@ -1458,7 +1464,7 @@ static kdev_t vt_console_device(struct console *c)
 {
 	struct vc_data *vc = find_vc(c->index);
 
-        return MKDEV(TTY_MAJOR, vc->display_fg->fg_console->vc_num+1);
+        return MKDEV(TTY_MAJOR, vc->display_fg->fg_console->vc_num);
 }
 
 struct console vt_console_driver = {
@@ -1497,9 +1503,9 @@ void __init vt_console_init(void)
         memset(&console_driver, 0, sizeof(struct tty_driver));
         console_driver.magic = TTY_DRIVER_MAGIC;
         console_driver.name = "vc/%d";
-        console_driver.name_base = 1;
+        console_driver.name_base = 0;
         console_driver.major = TTY_MAJOR;
-        console_driver.minor_start = 1;
+        console_driver.minor_start = 0;
         console_driver.num = MAX_NR_CONSOLES;
         console_driver.type = TTY_DRIVER_TYPE_CONSOLE;
         console_driver.init_termios = tty_std_termios;
