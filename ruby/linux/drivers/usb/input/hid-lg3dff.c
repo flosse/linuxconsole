@@ -37,10 +37,10 @@
 
 #define RUN_AT(t) (jiffies + (t))
 
-/* Frequency at which the rendering is updated */
-#define FREQ (HZ/20)
+/* Periodicity of the update */
+#define PERIOD (HZ/10)
 
-/* Effect status */
+/* Effect status: lg3d_effect::flags */
 #define EFFECT_STARTED 0     /* Effect is going to play after some time
 				(ff_replay.delay) */
 #define EFFECT_PLAYING 1     /* Effect is being played */
@@ -66,6 +66,10 @@ struct lg3d_effect {
 	unsigned long started_at;  /* When the effect started to play */
 };
 
+// For lg3d_device::flags
+#define DEVICE_USB_XMIT 0          /* An URB is being sent */
+#define DEVICE_CLOSING 1           /* The driver is being unitialised */
+
 struct lg3d_device {
 	struct hid_device* hid;
 
@@ -80,6 +84,9 @@ struct lg3d_device {
 	struct timer_list timer;
 	unsigned long last_time;     /* Last time the timer handler was
 					executed */
+
+	unsigned long flags[1];      /* Contains various information about the
+				        state of the driver for this device */
 };
 
 static void hid_lg3d_ctrl_out(struct urb *urb);
@@ -138,6 +145,7 @@ int hid_lg3d_init(struct hid_device* hid)
 	printk(KERN_INFO "Force feedback for Logitech *3D devices by Johann Deneux <deneux@ifrance.com>\n");
 
 	/* Start the update task */
+	private->timer.expires = RUN_AT(PERIOD);
 	add_timer(&private->timer);  /*TODO: only run the timer when at least
 				       one effect is playing */
 
@@ -147,6 +155,11 @@ int hid_lg3d_init(struct hid_device* hid)
 static void hid_lg3d_exit(struct hid_device* hid)
 {
 	struct lg3d_device *lg3d = hid->ff_private;
+	unsigned long flags;
+	
+	spin_lock_irqsave(&lg3d->lock, flags);
+	set_bit(DEVICE_CLOSING, lg3d->flags);
+	spin_unlock_irqrestore(&lg3d->lock, flags);
 
 	del_timer_sync(&lg3d->timer);
 
@@ -154,6 +167,8 @@ static void hid_lg3d_exit(struct hid_device* hid)
 		usb_unlink_urb(lg3d->urbffout);
 		usb_free_urb(lg3d->urbffout);
 	}
+
+	kfree(lg3d);
 }
 
 static int hid_lg3d_event(struct hid_device *hid, struct input_dev* input,
@@ -247,7 +262,7 @@ static int hid_lg3d_upload_effect(struct input_dev* input,
 	int id;
 	unsigned long flags;
 	
-	dbg("ioctl rumble");
+	dbg("ioctl upload");
 
 	if (!test_bit(effect->type, input->ffbit)) return -EINVAL;
 
@@ -280,8 +295,6 @@ static int hid_lg3d_upload_effect(struct input_dev* input,
 	new.effect = *effect;
 	new.effect.replay = effect->replay;
 
-	/* If we updated an effect that was being played, we need to remake
-	   the rumble effect */
 	if (test_bit(EFFECT_STARTED, lg3d->effects[id].flags)
 	    || test_bit(EFFECT_STARTED, lg3d->effects[id].flags)) {
 
@@ -306,10 +319,17 @@ static int hid_lg3d_upload_effect(struct input_dev* input,
 static void hid_lg3d_ctrl_out(struct urb *urb)
 {
 	struct hid_device *hid = urb->context;
+	struct lg3d_device *lg3d = hid->ff_private;
+	unsigned long flags;
+
+	spin_lock_irqsave(&lg3d->lock, flags);
 
 	if (urb->status)
 		warn("hid_irq_ffout status %d received", urb->status);
+	clear_bit(DEVICE_USB_XMIT, lg3d->flags);
+	dbg("xmit = 0");
 
+	spin_unlock_irqrestore(&lg3d->lock, flags);
 }
 
 static void hid_lg3d_timer(unsigned long timer_data)
@@ -324,6 +344,22 @@ static void hid_lg3d_timer(unsigned long timer_data)
 	x = 0;
 	y = 0;
 	spin_lock_irqsave(&lg3d->lock, flags);
+
+	if (test_bit(DEVICE_USB_XMIT, lg3d->flags)) {
+		if (lg3d->urbffout->status != -EINPROGRESS) {
+			warn("xmit *not* in progress");
+		}
+		else {
+			dbg("xmit in progress");
+		}
+
+		spin_unlock_irqrestore(&lg3d->lock, flags);
+
+		lg3d->timer.expires = RUN_AT(PERIOD);
+		add_timer(&lg3d->timer);
+
+		return;
+	}
 
  	for (i=0; i<N_EFFECTS; ++i) {
 		struct lg3d_effect* effect = lg3d->effects +i;
@@ -360,8 +396,6 @@ static void hid_lg3d_timer(unsigned long timer_data)
 		}
  	}
 
- 	spin_unlock_irqrestore(&lg3d->lock, flags);
-
 	lg3d->urbffout->pipe = usb_sndctrlpipe(hid->dev, 0);
 	lg3d->ffcr.bRequestType = USB_TYPE_CLASS | USB_DIR_OUT | USB_RECIP_INTERFACE;
 	lg3d->urbffout->transfer_buffer_length = lg3d->ffcr.wLength = 8;
@@ -379,6 +413,13 @@ static void hid_lg3d_timer(unsigned long timer_data)
 
 	if ((err=usb_submit_urb(lg3d->urbffout, GFP_ATOMIC)))
 		warn("usb_submit_urb returned %d", err);
+	else
+		set_bit(DEVICE_USB_XMIT, lg3d->flags);
 
-	add_timer(&lg3d->timer);
+	if (!test_bit(DEVICE_CLOSING, lg3d->flags)) {
+		lg3d->timer.expires = RUN_AT(PERIOD);
+		add_timer(&lg3d->timer);
+	}
+
+ 	spin_unlock_irqrestore(&lg3d->lock, flags);
 }
