@@ -127,6 +127,7 @@ struct atkbd {
 	char ack;
 	char emul;
 	char error;
+	short id;
 };
 
 /*
@@ -288,6 +289,16 @@ static int atkbd_set_3(struct atkbd *atkbd)
 	unsigned char param;
 
 /*
+ * For known special keyboards we can go ahead and set the correct set.
+ */
+
+	if (atkbd->id == 0xaca1) {
+		param = 3;
+		atkbd_command(atkbd, &param, ATKBD_CMD_SSCANSET);
+		return 3;
+	}
+
+/*
  * We check for the extra keys on an some keyboards that need extra
  * command to get enabled. This shouldn't harm any keyboards not
  * knowing the command.
@@ -332,7 +343,6 @@ static int atkbd_set_3(struct atkbd *atkbd)
 static int atkbd_probe(struct atkbd *atkbd)
 {
 	unsigned char param[2];
-	int id;
 
 /*
  * Full reset with selftest can on some keyboards be annoyingly slow,
@@ -356,11 +366,11 @@ static int atkbd_probe(struct atkbd *atkbd)
 	if (atkbd_command(atkbd, param, ATKBD_CMD_GETID))
 		return -1;
 
-	id = (param[0] << 8) | param[1];
+	atkbd->id = (param[0] << 8) | param[1];
 
-	if (id != 0xab83 && id != 0xab84 && id != 0xaca1 &&
-	    id != 0xab02 && id != 0xab03)
-		printk(KERN_WARNING "atkbd.c: Unusual keyboard ID: %#x\n", id);
+	if (atkbd->id != 0xab83 && atkbd->id != 0xab84 && atkbd->id != 0xaca1 &&
+	    atkbd->id != 0xab02 && atkbd->id != 0xab03)
+		printk(KERN_WARNING "atkbd.c: Unusual keyboard ID: %#x\n", atkbd->id);
 
 	return 0;
 }
@@ -487,7 +497,7 @@ static void atkbd_connect(struct serio *serio, struct serio_dev *dev)
 	atkbd->dev.idbus = BUS_I8042;
 	atkbd->dev.idvendor = 0x0001;
 	atkbd->dev.idproduct = atkbd->set;
-	atkbd->dev.idversion = 0x0100;
+	atkbd->dev.idversion = atkbd->id;
 
 	for (i = 0; i < 512; i++)
 		if (atkbd->keycode[i] && atkbd->keycode[i] <= 250)

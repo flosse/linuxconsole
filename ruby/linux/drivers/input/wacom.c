@@ -309,6 +309,8 @@ struct usb_device_id wacom_ids[] = {
 	{ }
 };
 
+MODULE_DEVICE_TABLE(usb, wacom_ids);
+
 static int wacom_open(struct input_dev *dev)
 {
 	struct wacom *wacom = dev->private;
