@@ -651,6 +651,7 @@ struct input_dev {
 	struct timer_list timer;
 
 	struct pm_dev *pm_dev;
+	int state;
 
 	int abs[ABS_MAX + 1];
 	int rep[REP_MAX + 1];

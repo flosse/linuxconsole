@@ -57,25 +57,42 @@ static struct tq_struct suspend_button_task = {
 static int power_event(struct input_handle *handle, unsigned int type, 
 		       unsigned int code, int down)
 {
-	if (type != EV_KEY) return;
+	if (type != EV_KEY || type != EV_PWR) return;
 
-	switch (code) {
-		case KEY_SUSPEND:
-			printk("Handling power key\n");
+	if (type == EV_PWR) {
+		switch (code) {
+			case KEY_SUSPEND:
+				printk("Powering down entire device\n");
 
-			//pm_send_all(pm_request_t rqst, void *data);
+				//pm_send_all(PM_SUSPEND, dev);
 
-			if (!suspend_button_pushed) {
-                		suspend_button_pushed = 1;
-                        	schedule_task(&suspend_button_task);
-                	}
-			break;
-		case KEY_POWER:
-			/* Hum power down the machine. */
-			break;
-		default:	
-			return -1;
-	}
+				if (!suspend_button_pushed) {
+                			suspend_button_pushed = 1;
+                        		schedule_task(&suspend_button_task);
+                		}
+				break;
+			case KEY_POWER:
+				/* Hum power down the machine. */
+				break;
+			default:	
+				return -1;
+		}
+	} else {
+		switch (code) {
+			case KEY_SUSPEND:
+				printk("Powering down input device\n");
+				/* This is risky. See pm.h for details. */
+				if (dev->state != PM_RESUME)
+					dev->state = PM_RESUME;
+				else 
+					dev->state = PM_SUSPEND;	
+				pm_send(dev->pm_dev, dev->state, dev); 	
+				break;
+			case KEY_POWER:
+				/* Turn the input device off completely ? */
+				break;
+			default:
+				return -1;
 	return 0;
 }
 
