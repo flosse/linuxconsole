@@ -1,0 +1,140 @@
+#ifndef _I8042_H
+#define _I8042_H
+
+/*
+ * i8042.h  Version 0.1
+ *
+ * Copyright (C) 1999 Vojtech Pavlik
+ */
+
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or 
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ * 
+ * Should you need to contact me, the author, you can do so either by
+ * e-mail - mail your message to <vojtech@ucw.cz>, or by paper mail:
+ * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
+ */
+
+/*
+ * If you want to reset your i8042 upon boot, define this.
+ */
+
+#undef I8042_RESET
+
+/*
+ * If you want to override the keylock setting (useful when you
+ * don't want anyone to mess with your BIOS and LILO settings,
+ * and you can't make BIOS password-protected), define this.
+ */
+
+#undef I8042_OVERRIDE_KEYLOCK
+
+/*
+ * If you want to trace all the i/o the i8042 module does for
+ * debugging purposes, define this.
+ */
+
+#undef I8042_DEBUG_IO
+
+/*
+ * On most PC based systems the keyboard IRQ is 1.
+ */
+
+#define I8042_KBD_IRQ 1
+
+/*
+ * On most PC based systems the aux port IRQ is 12. There are exceptions,
+ * though. Unfortunately IRQ probing is not possible without touching
+ * the device attached to the port.
+ */
+
+#if defined(__alpha__) && !defined(CONFIG_PCI)
+#define I8042_AUX_IRQ 9		/* This is for Jensen Alpha */
+#else
+#define I8042_AUX_IRQ 12	/* This is for everyone else */
+#endif
+
+/*
+ * The speed of the i8042's varies. This timeout equals 100 ms on a system
+ * with 8.3 MHz i8042 clock, which should be most common. It should not need
+ * to be raised / lowered.
+ */
+
+#define I8042_CTL_TIMEOUT 83000
+
+/*
+ * Register numbers.
+ */
+
+#define I8042_COMMAND_REG	0x64
+#define I8042_STATUS_REG	0x64
+#define I8042_DATA_REG		0x60
+
+/*
+ * Status register bits.
+ */
+
+#define I8042_STR_PARITY	0x80
+#define I8042_STR_TIMEOUT	0x40
+#define I8042_STR_AUXDATA	0x20
+#define I8042_STR_KEYLOCK	0x10
+#define I8042_STR_CMDDAT	0x08
+#define I8042_STR_IBF		0x02
+#define	I8042_STR_OBF		0x01
+
+/*
+ * Control register bits.
+ */
+
+#define I8042_CTR_KBDINT	0x01
+#define I8042_CTR_AUXINT	0x02
+#define I8042_CTR_IGNKEYLOCK	0x08
+#define I8042_CTR_KBDDIS	0x10
+#define I8042_CTR_AUXDIS	0x20
+#define I8042_CTR_XLATE		0x40
+
+/*
+ * Commands.
+ */
+
+#define I8042_CMD_CTL_RCTR	0x0120
+#define I8042_CMD_CTL_WCTR	0x1060
+#define I8042_CMD_CTL_TEST	0x01aa
+
+#define I8042_CMD_KBD_DISABLE	0x00ad
+#define I8042_CMD_KBD_ENABLE	0x00ae
+#define I8042_CMD_KBD_TEST	0x01ab
+#define I8042_CMD_KBD_LOOP	0x11d2
+
+#define I8042_CMD_AUX_DISABLE	0x00a7
+#define I8042_CMD_AUX_ENABLE	0x00a8
+#define I8042_CMD_AUX_TEST	0x01a9
+#define I8042_CMD_AUX_SEND	0x10d4
+#define I8042_CMD_AUX_LOOP	0x11d3
+
+/*
+ * Return codes.
+ */
+
+#define I8042_RET_CTL_TEST	0x55
+
+/*
+ * Expected maximum internal i8042 buffer size. This is used for flushing
+ * the i8042 buffers. 32 should be more than enough.
+ */
+
+#define I8042_BUFFER_SIZE	32
+
+#endif _I8042_H

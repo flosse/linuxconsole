@@ -1,0 +1,258 @@
+/*
+ *  ns558.c  Version 0.1
+ *
+ *  Copyright (c) 1999 Vojtech Pavlik
+ *
+ *  Driver for the NS 558 based standard IBM game port
+ */
+
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or 
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ * 
+ * Should you need to contact me, the author, you can do so either by
+ * e-mail - mail your message to <vojtech@ucw.cz>, or by paper mail:
+ * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
+ */
+
+#include <asm/io.h>
+
+#include <linux/module.h>
+#include <linux/ioport.h>
+#include <linux/config.h>
+#include <linux/init.h>
+#include <linux/gameport.h>
+#include <linux/malloc.h>
+#include <linux/isapnp.h>
+
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+
+#define NS558_ISA	1
+#define NS558_PNP	2
+#define NS558_PCI	3
+
+static int ns558_isa_portlist[] = { 0x201, 0x202, 0x203, 0x204, 0x205, 0x207, 0x209,
+				    0x20b, 0x20c, 0x20e, 0x20f, 0x211, 0x219, 0x101, 0 };
+
+struct ns558 {
+	int type;
+	struct pci_dev *dev;
+	struct ns558 *next;
+	struct gameport gameport;
+};
+	
+static struct ns558 *ns558 = NULL;
+
+/*
+ * ns558_isa_probe() tries to find an isa gameport at the
+ * specified address, and also checks for mirrors.
+ * A joystick must be attached for this to work.
+ */
+
+static struct ns558* ns558_isa_probe(int io, struct ns558 *next)
+{
+	int i, j, b;
+	unsigned char c, u, v;
+	struct ns558 *port;
+
+/*
+ * No one should be using this address.
+ */
+
+	if (check_region(io, 1))
+		return next;
+
+/*
+ * We must not be able to write arbitrary values to the port.
+ * The lower two axis bits must be 1 after a write.
+ */
+
+	c = inb(io);
+	outb(~c & ~3, io);
+	if (~(u = v = inb(io)) & 3) {
+		outb(c, io);
+		return next;
+	}
+/*
+ * After a trigger, there must be at least some bits changing.
+ */
+
+	for (i = 0; i < 1000; i++) v &= inb(io);
+
+	if (u == v) {
+		outb(c, io);
+		return next;
+	}
+	wait_ms(3);
+/*
+ * After some time (4ms) the axes shouldn't change anymore.
+ */
+
+	u = inb(io);
+	for (i = 0; i < 1000; i++)
+		if ((u ^ inb(io)) & 0xf) {
+			outb(c, io);
+			return next;
+		}
+/* 
+ * And now find the number of mirrors of the port.
+ */
+
+	for (i = 1; i < 5; i++) {
+
+		if (check_region(io & (-1 << i), (1 << i)))	/* Don't disturb anyone */
+			break;
+
+		outb(0xff, io & (-1 << i));
+		for (j = b = 0; j < 1000; j++)
+			if (inb(io & (-1 << i)) != inb((io & (-1 << i)) + (1 << i) - 1)) b++;
+		wait_ms(3);
+
+		if (b > 100)					/* We allow 10% difference */
+			break;
+	}
+
+	i--;
+
+	if (!(port = kmalloc(sizeof(struct ns558), GFP_KERNEL))) {
+		printk("Memory allocation failed.\n");
+		return next;
+	}
+       	memset(port, 0, sizeof(struct ns558));
+	
+	port->next = next;
+	port->type = NS558_ISA;
+	port->gameport.io = io & (-1 << i);
+	port->gameport.size = (1 << i);
+
+	request_region(port->gameport.io, port->gameport.size, "gameport");
+
+	gameport_register_port(&port->gameport);
+
+	printk(KERN_INFO "gameport%d: NS558 ISA at %#x", port->gameport.number, port->gameport.io);
+	if (port->gameport.size > 1) printk("-%#x", port->gameport.io + port->gameport.size - 1);
+	printk(" speed %d kHz\n", port->gameport.speed);
+
+	return port;
+}
+
+#ifdef CONFIG_ISAPNP
+static struct ns558* ns558_pnp_probe(struct pci_dev *dev, struct ns558 *next)
+{
+	struct ns558 *port;
+
+	if (dev->prepare(dev) < 0)
+		return next;
+
+	if (!(dev->resource[0].flags & IORESOURCE_IO)) {
+		printk("No i/o ports on a gameport? Weird\n");
+		return next;
+	}
+
+	if (dev->activate(dev) < 0) {
+		printk("PnP resource allocation failed\n");
+		return next;
+	}
+
+	if (!(port = kmalloc(sizeof(struct ns558), GFP_KERNEL))) {
+		printk("Memory allocation failed.\n");
+		dev->deactivate(port->dev);
+		return next;
+	}
+       	memset(port, 0, sizeof(struct ns558));
+
+	port->next = next;
+	port->type = NS558_PNP;
+	port->gameport.io = dev->resource[0].start;
+	port->gameport.size = dev->resource[0].end - dev->resource[0].start + 1;
+
+	gameport_register_port(&port->gameport);
+
+	printk(KERN_INFO "gameport%d: NS558 PnP at %#x", port->gameport.number, port->gameport.io);
+	if (port->gameport.size > 1) printk("-%#x", port->gameport.io + port->gameport.size - 1);
+	printk(" speed %d kHz\n", port->gameport.speed);
+
+	return port;
+}
+#endif
+
+
+#ifdef MODULE
+void cleanup_module(void)
+{
+	struct ns558 *port = ns558;
+
+	while (port) {
+		switch (port->type) {
+
+			case NS558_ISA:
+				release_region(port->gameport.io, port->gameport.size);
+				break;
+		
+#ifdef CONFIG_ISAPNP
+			case NS558_PNP:
+				port->dev->deactivate(port->dev);
+#endif
+		
+			default:
+				break;
+		}
+		
+		gameport_unregister_port(&port->gameport);
+		port = port->next;
+	}
+}
+
+int init_module(void)
+#else
+int __init ns558_init(void)
+#endif
+{
+	int i = 0;
+#ifdef CONFIG_ISAPNP
+	struct pci_dev *dev = NULL;
+#endif
+
+/*
+ * Probe for ISA ports.
+ */
+
+	while (ns558_isa_portlist[i]) 
+		ns558 = ns558_isa_probe(ns558_isa_portlist[i++], ns558);
+
+/*
+ * Probe for PnP ports.
+ *
+ * PnP IDs:
+ *
+ * CTL00c1 - SB AWE32 PnP
+ * CTL00c3 - SB AWE64 PnP
+ * CTL00f0 - SB16 PnP / Vibra 16x
+ * CTL7001 - SB Vibra16C PnP
+ * CSC0b35 - Crystal ** doesn't have compatibility ID **
+ * TER1141 - Terratec AD1818
+ * YMM0800 - Yamaha OPL3-SA3
+ *
+ * PNPb02f - Generic gameport
+ */
+
+#ifdef CONFIG_ISAPNP
+	while ((dev = isapnp_find_dev(NULL, ISAPNP_VENDOR('P','N','P'), ISAPNP_FUNCTION(0xb02f), dev)))
+		ns558 = ns558_pnp_probe(dev, ns558);
+	while ((dev = isapnp_find_dev(NULL, ISAPNP_VENDOR('C','S','C'), ISAPNP_FUNCTION(0x0b35), dev)))
+		ns558 = ns558_pnp_probe(dev, ns558);
+#endif
+
+	return -!ns558;
+}

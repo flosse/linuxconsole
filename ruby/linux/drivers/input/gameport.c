@@ -1,0 +1,197 @@
+/*
+ *  gameport.c  Version 0.1
+ *
+ *  Copyright (c) 1999 Vojtech Pavlik
+ *
+ *  Driver for the NS 558 based standard IBM game port
+ */
+
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or 
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ * 
+ * Should you need to contact me, the author, you can do so either by
+ * e-mail - mail your message to <vojtech@suse.cz>, or by paper mail:
+ * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
+ */
+
+#include <asm/io.h>
+#include <linux/module.h>
+#include <linux/ioport.h>
+#include <linux/config.h>
+#include <linux/init.h>
+#include <linux/gameport.h>
+#include <linux/malloc.h>
+#include <linux/isapnp.h>
+#include <linux/stddef.h>
+#include <linux/module.h>
+#include <linux/gameport.h>
+#include <linux/delay.h>
+
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
+
+#ifndef MODULE
+EXPORT_SYMBOL(gameport_register_port);
+EXPORT_SYMBOL(gameport_unregister_port);
+EXPORT_SYMBOL(gameport_register_device);
+EXPORT_SYMBOL(gameport_unregister_device);
+EXPORT_SYMBOL(gameport_open);
+EXPORT_SYMBOL(gameport_close);
+EXPORT_SYMBOL(gameport_rescan);
+EXPORT_SYMBOL(gameport_cooked_read);
+#endif
+
+static struct gameport *gameport_list = NULL;
+static struct gameport_dev *gameport_dev = NULL;
+static int gameport_number = 0;
+
+/*
+ * gameport_measure_speed() measures the gameport i/o speed.
+ */
+
+static int gameport_measure_speed(struct gameport *gameport)
+{
+#ifdef __i386__
+
+#define GET_TIME(x)     do { outb(0, 0x43); x = inb(0x40); x |= inb(0x40) << 8; } while (0)
+#define DELTA(x,y)      ((y)-(x)+((y)<(x)?1193180L/HZ:0))
+
+	unsigned int i, t, t1, t2, t3, tx;
+	unsigned long flags;
+
+	gameport_set_mode(gameport, GAMEPORT_MODE_RAW);
+
+	tx = 1 << 30;
+
+	for(i = 0; i < 50; i++) {
+		save_flags(flags);	/* Yes, all CPUs */
+		cli();
+		GET_TIME(t1);
+		for(t = 0; t < 50; t++) gameport_read(gameport);
+		GET_TIME(t2);
+		GET_TIME(t3);
+		restore_flags(flags);
+		udelay(i * 10);
+		if ((t = DELTA(t2,t1) - DELTA(t3,t2)) < tx) tx = t;
+	}
+
+	return 59659 / (tx < 1 ? 1 : tx);
+
+#else
+
+	unsigned int j, t = 0;
+
+	j = jiffies; while (j == jiffies);
+	j = jiffies; while (j == jiffies) { t++; inb(0x201); }
+
+	return t * HZ / 1000;
+
+#endif
+}
+
+static void gameport_find_dev(struct gameport *gameport)
+{
+        struct gameport_dev *dev = gameport_dev;
+
+        while (dev && !gameport->dev) {
+		if (dev->connect)
+                	dev->connect(gameport, dev);
+                dev = dev->next;
+        }
+}
+
+void gameport_rescan(struct gameport *gameport)
+{
+	gameport_close(gameport);
+	gameport_find_dev(gameport);
+}
+
+void gameport_register_port(struct gameport *gameport)
+{
+	MOD_INC_USE_COUNT;
+
+	gameport->number = gameport_number++;
+	gameport->next = gameport_list;	
+	gameport_list = gameport;
+
+	gameport->speed = gameport_measure_speed(gameport);
+
+	gameport_find_dev(gameport);
+}
+
+void gameport_unregister_port(struct gameport *gameport)
+{
+        struct gameport **gameportptr = &gameport_list;
+
+        while (*gameportptr && (*gameportptr != gameport)) gameportptr = &((*gameportptr)->next);
+        *gameportptr = (*gameportptr)->next;
+
+	if (gameport->dev && gameport->dev->disconnect)
+		gameport->dev->disconnect(gameport);
+
+	gameport_number--;
+
+	MOD_DEC_USE_COUNT;
+}
+
+void gameport_register_device(struct gameport_dev *dev)
+{
+	struct gameport *gameport = gameport_list;
+
+	MOD_INC_USE_COUNT;
+
+	dev->next = gameport_dev;	
+	gameport_dev = dev;
+
+	while (gameport) {
+		if (!gameport->dev && dev->connect)
+			dev->connect(gameport, dev);
+		gameport = gameport->next;
+	}
+}
+
+void gameport_unregister_device(struct gameport_dev *dev)
+{
+        struct gameport_dev **devptr = &gameport_dev;
+	struct gameport *gameport = gameport_list;
+
+        while (*devptr && (*devptr != dev)) devptr = &((*devptr)->next);
+        *devptr = (*devptr)->next;
+
+	while (gameport) {
+		if (gameport->dev == dev && dev->disconnect)
+			dev->disconnect(gameport);
+		gameport_find_dev(gameport);
+		gameport = gameport->next;
+	}
+
+	MOD_DEC_USE_COUNT;
+}
+
+int gameport_open(struct gameport *gameport, struct gameport_dev *dev)
+{
+	if (gameport->open && gameport->open(gameport))
+		return -1;
+	gameport->dev = dev;
+	MOD_INC_USE_COUNT;
+	
+	return 0;
+}
+
+void gameport_close(struct gameport *gameport)
+{
+	MOD_DEC_USE_COUNT;
+	gameport->dev = NULL;
+	if (gameport->close) gameport->close(gameport);
+}
