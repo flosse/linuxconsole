@@ -13,8 +13,46 @@
 #include <linux/gfxfs_fs.h>
 #include <linux/pagemap.h>
 #include <linux/dcache.h>
+#include <linux/slab.h>
+#include <linux/string.h>
 
 static struct vfsmount *gfxfs_mnt;
+
+struct gfxfs_dentry *gfxfs_register_entry(const char *name, int mode,
+					  struct gfxfs_dentry *oparent)
+{
+	struct gfxfs_dentry *g_dentry;
+	struct gfxfs_dentry *parent = oparent;
+
+	if (!parent && gfxfs_mnt->mnt_sb) {
+		parent = gfxfs_mnt->mnt_sb->s_root;
+
+		/*
+		 * Should hopefully never get here.
+		 */
+		if (!parent) {
+			printk(KERN_WARNING "gfxfs: Valid super mount, "
+			       "but no valid root inode??\n");
+			return NULL;
+		}
+	}
+
+	g_dentry = kmalloc(sizeof(struct gfxfs_dentry), GFP_KERNEL);
+
+	if (!g_dentry) {
+		printk(KERN_WARNING "gfxfs: Unable to allocate memory\n");
+		return NULL;
+	}
+
+	/* FIXME: f_dentry needs fixing */
+	g_dentry->f_dentry->d_name.name = name;
+	g_dentry->f_dentry->d_name.len  = strlen(name);
+	g_dentry->f_dentry->d_name.hash = full_name_hash(name, strlen(name));
+
+	gfxfs_mknod(parent->f_dentry->d_inode, g_dentry->f_dentry, mode, 0);
+
+	return g_dentry;
+}
 
 static int gfxfs_statfs(struct super_block *sb, struct statfs *buf)
 {
@@ -27,6 +65,7 @@ static int gfxfs_statfs(struct super_block *sb, struct statfs *buf)
 
 static struct super_operations gfxfs_super_ops = {
 	statfs:		gfxfs_statfs,
+	put_inode:	force_delete,
 };
 
 static struct super_block *gfxfs_read_super(struct super_block *sb,
@@ -81,12 +120,12 @@ static void __exit exit_gfxfs_fs(void)
 	unregister_filesystem(&gfxfs_fs_type);
 }
 
-EXPORT_NO_SYMBOLS;
-
 MODULE_AUTHOR("Paul Mundt <pmundt@mvista.com>");
 MODULE_DESCRIPTION("graphics file system");
 MODULE_LICENSE("GPL");
 
 module_init(init_gfxfs_fs);
 module_exit(exit_gfxfs_fs);
+
+EXPORT_SYMBOL(gfxfs_register_entry);
 
