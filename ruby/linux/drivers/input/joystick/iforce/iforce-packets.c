@@ -110,7 +110,7 @@ int iforce_send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 #ifdef IFORCE_USB
 		case IFORCE_USB: 
 
-		if (empty & !iforce->out.status) {
+		if (iforce->usbdev && empty && !iforce->out.status) {
 			iforce_usb_xmit(iforce);
 		}
 		break;
