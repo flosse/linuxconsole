@@ -487,6 +487,8 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 	}
 	vgacon_state.mode = MODE_TEXT;
 
+	vt->data_hook = (void *) &vgacon_state;
+	
 	if (init) {
 		/* Use default font */
 		if (vga_512_chars)
@@ -535,7 +537,6 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 	/* This maybe be suboptimal but is a safe bet - go with it */
 	vc->vc_scan_lines = vc->vc_font.height * vc->vc_rows; 
 	vc->vc_scrollback = 1;
-	vt->data_hook = &vgacon_state;
 	return display_desc;
 }
 
