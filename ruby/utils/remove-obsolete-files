@@ -96,7 +96,7 @@ rm -fv drivers/video/fbcon-mac.c
 rm -fv drivers/video/fbcon-mfb.c
 rm -fv drivers/video/fbcon-vga-planes.c
 rm -fv drivers/video/fbcon-vga.c
-rm -fv drivers/video/atyfb.h
+rm -fv drivers/video/atyfb.c
 rm -fv drivers/video/atyfb.h
 rm -fv drivers/video/tdfxfb.c
 rm -fv include/asm-m68k/adb_mouse.h
