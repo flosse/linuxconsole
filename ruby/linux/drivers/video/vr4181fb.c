@@ -25,7 +25,7 @@
 #include <linux/delay.h>
 #include <linux/config.h>
 #include <asm/addrspace.h>
-#include <asm/vr41xx.h>
+#include <asm/vr41xx/vr41xx.h>
 #include <asm/uaccess.h>
 
 // #define VR4181FB_DEBUG KERN_INFO

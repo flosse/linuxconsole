@@ -653,6 +653,9 @@ void unblank_screen(struct vt_struct *vt)
 		vt->timer.expires = jiffies + vt->blank_interval;
 		add_timer(&vt->timer);
         }
+	
+	if (vt->fg_console->vc_mode != KD_TEXT)
+               	return; /* but leave console_blanked != 0 */
 
         vt->vt_blanked = 0;
         if (console_blank_hook)

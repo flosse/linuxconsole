@@ -108,7 +108,6 @@ extern void prom_con_init(void);
 extern void fb_console_init(void);
 #endif
 #endif
-extern int rio_init(void);
 
 #define TTY_DEV MKDEV(TTYAUX_MAJOR,0)
 #define SYSCONS_DEV MKDEV(TTYAUX_MAJOR,1)
@@ -156,7 +155,7 @@ extern void hwc_tty_init(void);
 extern void con3215_init(void);
 extern void tty3215_init(void);
 extern void tub3270_con_init(void);
-extern void tub3270_initfunc(void);
+extern void tub3270_init(void);
 extern void rs285_console_init(void);
 extern void sa1100_rs_console_init(void);
 extern void ambauart_console_init(void);
@@ -405,13 +404,8 @@ static int hung_up_tty_ioctl(struct inode * inode, struct file * file,
 	return cmd == TIOCSPGRP ? -ENOTTY : -EIO;
 }
 
-static loff_t tty_lseek(struct file * file, loff_t offset, int orig)
-{
-	return -ESPIPE;
-}
-
 static struct file_operations tty_fops = {
-	llseek:		tty_lseek,
+	llseek:		no_llseek,
 	read:		tty_read,
 	write:		tty_write,
 	poll:		tty_poll,
@@ -422,7 +416,7 @@ static struct file_operations tty_fops = {
 };
 
 static struct file_operations hung_up_tty_fops = {
-	llseek:		tty_lseek,
+	llseek:		no_llseek,
 	read:		hung_up_tty_read,
 	write:		hung_up_tty_write,
 	poll:		hung_up_tty_poll,
@@ -1506,7 +1500,7 @@ static int tiocswinsz(struct tty_struct *tty, struct tty_struct *real_tty,
 #ifdef CONFIG_VT
 	if (tty->driver.type == TTY_DRIVER_TYPE_CONSOLE) {
 		struct vc_data *vc = (struct vc_data *) tty->driver_data;
-		
+
 		if (!vc || vc_resize(vc, tmp_ws.ws_col, tmp_ws.ws_row))
 			return -ENXIO;
 	}
@@ -1523,7 +1517,7 @@ static int tiocswinsz(struct tty_struct *tty, struct tty_struct *real_tty,
 static int tioccons(struct inode *inode,
 	struct tty_struct *tty, struct tty_struct *real_tty)
 {
-	if (inode->i_rdev == SYSCONS_DEV) { 
+	if (inode->i_rdev == SYSCONS_DEV) {
 		if (!suser())
 			return -EPERM;
 		redirect = NULL;
@@ -2095,7 +2089,7 @@ int tty_register_driver(struct tty_driver *driver)
 	if (!(driver->flags & TTY_DRIVER_CONSOLE))
 		init_MUTEX(&driver->tty_lock);
 	
-	if (!(driver->flags & TTY_DRIVER_NO_DEVFS) ) {
+	if ( !(driver->flags & TTY_DRIVER_NO_DEVFS) ) {
 		for(i = 0; i < driver->num; i++)
 		    tty_register_devfs(driver, 0, driver->minor_start + i);
 	}
@@ -2200,7 +2194,9 @@ void __init console_init(void)
 #if (defined(CONFIG_8xx) || defined(CONFIG_8260))
 	console_8xx_init();
 #elif defined(CONFIG_MAC_SERIAL)
-        mac_scc_console_init();
+ 	mac_scc_console_init();
+#elif defined(CONFIG_PARISC)
+	pdc_console_init();
 #elif defined(CONFIG_SERIAL)
 	serial_console_init();
 #endif /* CONFIG_8xx */
@@ -2217,14 +2213,17 @@ void __init console_init(void)
 	sci_console_init();
 #endif
 #endif
-#ifdef CONFIG_3215
-        con3215_init();
-#endif
-#ifdef CONFIG_3270_CONSOLE
+#ifdef CONFIG_TN3270_CONSOLE
 	tub3270_con_init();
+#endif
+#ifdef CONFIG_TN3215
+	con3215_init();
 #endif
 #ifdef CONFIG_HWC
         hwc_console_init();
+#endif
+#ifdef CONFIG_STDIO_CONSOLE
+	stdio_console_init();
 #endif
 #ifdef CONFIG_SERIAL_21285_CONSOLE
 	rs285_console_init();
@@ -2236,10 +2235,10 @@ void __init console_init(void)
 	ambauart_console_init();
 #endif
 #ifdef CONFIG_SERIAL_CLPS711X_CONSOLE
-       clps711xuart_console_init();
+       	clps711xuart_console_init();
 #endif
 #ifdef CONFIG_SERIAL_ANAKIN_CONSOLE
-       anakin_console_init();
+       	anakin_console_init();
 #endif
 }
 
@@ -2255,7 +2254,7 @@ static struct tty_driver dev_ptmx_driver;
 void __init tty_init(void)
 {
 	struct tty_driver *p;
-	int i;
+       	int i;
 
 	/*
 	 * dev_tty_driver and dev_console_driver are actually magic
@@ -2289,15 +2288,16 @@ void __init tty_init(void)
 		panic("Couldn't register /dev/console driver\n");
 
 	/* 
-         * Some consoles calls tty_register_driver() before kmalloc() works.
-	 * Thus, we can't devfs_register() then.  Do so now, instead. 
+	 * Some consoles calls tty_register_driver() before kmalloc() works.
+         * Thus, we can't devfs_register() then.  Do so now, instead.
 	 */
 	for (p = tty_drivers; p; p = p->next) {
 		if (p->flags && TTY_DRIVER_NO_DEVFS) {
-			for (i = 0; i < p->num; i++) 
-               			tty_register_devfs(p, DEVFS_FL_AOPEN_NOTIFY, p->minor_start + i);
+			for (i = 0; i < p->num; i++)
+				tty_register_devfs(p, DEVFS_FL_AOPEN_NOTIFY, p->minor_start + i);
 		}
 	}
+
 
 #ifdef CONFIG_UNIX98_PTYS
 	dev_ptmx_driver = dev_tty_driver;
@@ -2314,10 +2314,10 @@ void __init tty_init(void)
 	
 #ifdef CONFIG_VT
 #if defined (CONFIG_PROM_CONSOLE)
-        prom_con_init();
+       	prom_con_init();
 #endif
 #if defined (CONFIG_FRAMEBUFFER_CONSOLE)
-	fb_console_init();
+       	fb_console_init();
 #endif
 	kbd_init();
 	console_map_init();
@@ -2356,9 +2356,6 @@ void __init tty_init(void)
 #ifdef CONFIG_SPECIALIX
 	specialix_init();
 #endif
-#ifdef CONFIG_RIO
-	rio_init();
-#endif
 #if (defined(CONFIG_8xx) || defined(CONFIG_8260))
 	rs_8xx_init();
 #endif /* CONFIG_8xx */
@@ -2369,10 +2366,10 @@ void __init tty_init(void)
 #ifdef CONFIG_MOXA_INTELLIO
 	moxa_init();
 #endif	
-#ifdef CONFIG_3270
-	tub3270_initfunc();
+#ifdef CONFIG_TN3270
+	tub3270_init();
 #endif
-#ifdef CONFIG_3215
+#ifdef CONFIG_TN3215
 	tty3215_init();
 #endif
 #ifdef CONFIG_HWC

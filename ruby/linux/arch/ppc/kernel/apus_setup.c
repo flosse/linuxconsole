@@ -1,5 +1,5 @@
 /*
- * BK Id: SCCS/s.apus_setup.c 1.11 05/17/01 18:14:21 cort
+ * BK Id: SCCS/s.apus_setup.c 1.14 07/06/01 09:19:28 trini
  */
 /*
  *  linux/arch/ppc/kernel/apus_setup.c
@@ -79,32 +79,32 @@ static u_short driveid_types[] = {
 
 #include "local_irq.h"
 
-unsigned long m68k_machtype __apusdata;
-char debug_device[6] __apusdata = "";
+unsigned long m68k_machtype;
+char debug_device[6] = "";
 
 extern void amiga_init_IRQ(void);
 
 void (*mach_sched_init) (void (*handler)(int, void *, struct pt_regs *)) __initdata = NULL;
 /* machine dependent irq functions */
 void (*mach_init_IRQ) (void) __initdata = NULL;
-void (*(*mach_default_handler)[]) (int, void *, struct pt_regs *) __apusdata = NULL;
-void (*mach_get_model) (char *model) __apusdata = NULL;
-int (*mach_get_hardware_list) (char *buffer) __apusdata = NULL;
-int (*mach_get_irq_list) (char *) __apusdata = NULL;
-void (*mach_process_int) (int, struct pt_regs *) __apusdata = NULL;
+void (*(*mach_default_handler)[]) (int, void *, struct pt_regs *) = NULL;
+void (*mach_get_model) (char *model) = NULL;
+int (*mach_get_hardware_list) (char *buffer) = NULL;
+int (*mach_get_irq_list) (char *) = NULL;
+void (*mach_process_int) (int, struct pt_regs *) = NULL;
 /* machine dependent timer functions */
-unsigned long (*mach_gettimeoffset) (void) __apusdata;
-void (*mach_gettod) (int*, int*, int*, int*, int*, int*) __apusdata;
-int (*mach_hwclk) (int, struct hwclk_time*) __apusdata = NULL;
-int (*mach_set_clock_mmss) (unsigned long) __apusdata = NULL;
-void (*mach_reset)( void ) __apusdata;
-long mach_max_dma_address __apusdata = 0x00ffffff; /* default set to the lower 16MB */
+unsigned long (*mach_gettimeoffset) (void);
+void (*mach_gettod) (int*, int*, int*, int*, int*, int*);
+int (*mach_hwclk) (int, struct hwclk_time*) = NULL;
+int (*mach_set_clock_mmss) (unsigned long) = NULL;
+void (*mach_reset)( void );
+long mach_max_dma_address = 0x00ffffff; /* default set to the lower 16MB */
 #if defined(CONFIG_AMIGA_FLOPPY)
 void (*mach_floppy_setup) (char *, int *) __initdata = NULL;
-void (*mach_floppy_eject) (void) __apusdata = NULL;
+void (*mach_floppy_eject) (void) = NULL;
 #endif
 #ifdef CONFIG_HEARTBEAT
-void (*mach_heartbeat) (int) __apusdata = NULL;
+void (*mach_heartbeat) (int) = NULL;
 extern void apus_heartbeat (void);
 #endif
 
@@ -113,29 +113,28 @@ extern unsigned decrementer_count;/* count value for 1e6/HZ microseconds */
 extern unsigned count_period_num; /* 1 decrementer count equals */
 extern unsigned count_period_den; /* count_period_num / count_period_den us */
 
-int num_memory __apusdata = 0;
-struct mem_info memory[NUM_MEMINFO] __apusdata;/* memory description */
+int num_memory = 0;
+struct mem_info memory[NUM_MEMINFO];/* memory description */
 /* FIXME: Duplicate memory data to avoid conflicts with m68k shared code. */
-int m68k_realnum_memory __apusdata = 0;
-struct mem_info m68k_memory[NUM_MEMINFO] __apusdata;/* memory description */
+int m68k_realnum_memory = 0;
+struct mem_info m68k_memory[NUM_MEMINFO];/* memory description */
 
-struct mem_info ramdisk __apusdata;
+struct mem_info ramdisk;
 
 extern void amiga_floppy_setup(char *, int *);
 extern void config_amiga(void);
 
-static int __60nsram __apusdata = 0;
+static int __60nsram = 0;
 
 /* for cpuinfo */
-static int __bus_speed __apusdata = 0;
-static int __speed_test_failed __apusdata = 0;
+static int __bus_speed = 0;
+static int __speed_test_failed = 0;
 
 /********************************************** COMPILE PROTECTION */
 /* Provide some stubs that links to Amiga specific functions. 
  * This allows CONFIG_APUS to be removed from generic PPC files while
  * preventing link errors for other PPC targets.
  */
-__apus
 unsigned long apus_get_rtc_time(void)
 {
 #ifdef CONFIG_APUS
@@ -147,7 +146,6 @@ unsigned long apus_get_rtc_time(void)
 #endif
 }
 
-__apus
 int apus_set_rtc_time(unsigned long nowtime)
 {
 #ifdef CONFIG_APUS
@@ -220,7 +218,6 @@ void __init apus_setup_arch(void)
 #endif
 }
 
-__apus
 int
 apus_get_cpuinfo(char *buffer)
 {
@@ -242,7 +239,6 @@ apus_get_cpuinfo(char *buffer)
 #endif
 }
 
-__apus
 static void get_current_tb(unsigned long long *time)
 {
 	__asm __volatile ("1:mftbu 4      \n\t"
@@ -258,7 +254,6 @@ static void get_current_tb(unsigned long long *time)
 }
 
 
-__apus
 void apus_calibrate_decr(void)
 {
 #ifdef CONFIG_APUS
@@ -343,7 +338,6 @@ void apus_calibrate_decr(void)
 #endif
 }
 
-__apus
 void arch_gettod(int *year, int *mon, int *day, int *hour,
 		 int *min, int *sec)
 {
@@ -355,6 +349,7 @@ void arch_gettod(int *year, int *mon, int *day, int *hour,
 #endif
 }
 
+
 /*********************************************************** FLOPPY */
 #if defined(CONFIG_AMIGA_FLOPPY)
 __init 
@@ -364,7 +359,6 @@ void floppy_setup(char *str, int *ints)
 		mach_floppy_setup (str, ints);
 }
 
-__apus
 void floppy_eject(void)
 {
 	if (mach_floppy_eject)
@@ -374,11 +368,10 @@ void floppy_eject(void)
 
 /*********************************************************** MEMORY */
 #define KMAP_MAX 32
-unsigned long kmap_chunks[KMAP_MAX*3] __apusdata;
-int kmap_chunk_count __apusdata = 0;
+unsigned long kmap_chunks[KMAP_MAX*3];
+int kmap_chunk_count = 0;
 
 /* From pgtable.h */
-__apus
 static __inline__ pte_t *my_find_pte(struct mm_struct *mm,unsigned long va)
 {
 	pgd_t *dir = 0;
@@ -401,7 +394,6 @@ static __inline__ pte_t *my_find_pte(struct mm_struct *mm,unsigned long va)
 
 
 /* Again simulating an m68k/mm/kmap.c function. */
-__apus
 void kernel_set_cachemode( unsigned long address, unsigned long size,
 			   unsigned int cmode )
 {
@@ -444,7 +436,6 @@ void kernel_set_cachemode( unsigned long address, unsigned long size,
 	}
 }
 
-__apus
 unsigned long mm_ptov (unsigned long paddr)
 {
 	unsigned long ret;
@@ -473,7 +464,6 @@ exit:
 	return ret;
 }
 
-__apus
 int mm_end_of_chunk (unsigned long addr, int len)
 {
 	if (memory[0].addr + memory[0].size == addr + len)
@@ -485,7 +475,6 @@ int mm_end_of_chunk (unsigned long addr, int len)
 
 #define L1_CACHE_BYTES 32
 #define MAX_CACHE_SIZE 8192
-__apus
 void cache_push(__u32 addr, int length)
 {
 	addr = mm_ptov(addr);
@@ -505,7 +494,6 @@ void cache_push(__u32 addr, int length)
 	       : : "r" (addr));
 }
 
-__apus
 void cache_clear(__u32 addr, int length)
 {
 	if (MAX_CACHE_SIZE < length)
@@ -655,13 +643,11 @@ void apus_ide_init_hwif_ports (hw_regs_t *hw, ide_ioreg_t data_port,
 #endif
 /****************************************************** IRQ stuff */
 
-__apus
 static unsigned int apus_irq_cannonicalize(unsigned int irq)
 {
 	return irq;
 }
 
-__apus
 int apus_get_irq_list(char *buf)
 {
 #ifdef CONFIG_APUS
@@ -674,7 +660,6 @@ int apus_get_irq_list(char *buf)
 }
 
 /* IPL must be between 0 and 7 */
-__apus
 static inline void apus_set_IPL(unsigned long ipl)
 {
 	APUS_WRITE(APUS_IPL_EMU, IPLEMU_SETRESET | IPLEMU_DISABLEINT);
@@ -683,7 +668,6 @@ static inline void apus_set_IPL(unsigned long ipl)
 	APUS_WRITE(APUS_IPL_EMU, IPLEMU_DISABLEINT);
 }
 
-__apus
 static inline unsigned long apus_get_IPL(void)
 {
 	/* This returns the present IPL emulation level. */
@@ -692,7 +676,6 @@ static inline unsigned long apus_get_IPL(void)
 	return ((~__f) & IPLEMU_IPLMASK);
 }
 
-__apus
 static inline unsigned long apus_get_prev_IPL(struct pt_regs* regs)
 {
 	/* The value saved in mq is the IPL_EMU value at the time of
@@ -743,7 +726,6 @@ int sys_request_irq(unsigned int irq, void (*handler)(int, void *, struct pt_reg
 }
 #endif
 
-__apus
 int apus_get_irq(struct pt_regs* regs)
 {
 #ifdef CONFIG_APUS
@@ -764,8 +746,6 @@ int apus_get_irq(struct pt_regs* regs)
 #endif
 }
 
-
-__apus
 void apus_post_irq(struct pt_regs* regs, int level)
 {
 #ifdef __INTERRUPT_DEBUG
@@ -797,7 +777,6 @@ static __inline__ void ser_RTSon(void)
     ciab.pra &= ~SER_RTS; /* active low */
 }
 
-__apus
 int __debug_ser_out( unsigned char c )
 {
 	custom.serdat = c | 0x100;
@@ -807,7 +786,6 @@ int __debug_ser_out( unsigned char c )
 	return 1;
 }
 
-__apus
 unsigned char __debug_ser_in( void )
 {
 	unsigned char c;
@@ -821,7 +799,6 @@ unsigned char __debug_ser_in( void )
 	return c;
 }
 
-__apus
 int __debug_serinit( void )
 {	
 	unsigned long flags;
@@ -853,7 +830,6 @@ int __debug_serinit( void )
 	return 0;
 }
 
-__apus
 void __debug_print_hex(unsigned long x)
 {
 	int i;
@@ -867,7 +843,6 @@ void __debug_print_hex(unsigned long x)
 	__debug_ser_out('\r');
 }
 
-__apus
 void __debug_print_string(char* s)
 {
 	unsigned char c;
@@ -877,7 +852,6 @@ void __debug_print_string(char* s)
 	__debug_ser_out('\r');
 }
 
-__apus
 static void apus_progress(char *s, unsigned short value)
 {
 	__debug_print_string(s);
