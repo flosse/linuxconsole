@@ -844,9 +844,9 @@ int __init nvvgacon_module_init(void)
 	vt->vt_sw = &nvvga_con;
 	vt->vcs.vc_cons[0] = vc;
 #ifdef MODULE
-        display_desc = create_vt(vt, 1);
+        display_desc = vt_map_display(vt, 1);
 #else 	
-	display_desc = create_vt(vt, 0);
+	display_desc = vt_map_display(vt, 0);
 #endif
 	q = (long) kmalloc(vc->vc_screenbuf_size, GFP_KERNEL);
         if (!display_desc || !q) {

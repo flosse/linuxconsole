@@ -1078,6 +1078,7 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
                 if (!vt->keyboard) {
                         vt->keyboard = handle;
 			handle->private = vt;
+			vt_map_input(vt);
 			break;
 		} else 
 			vt = vt->next;

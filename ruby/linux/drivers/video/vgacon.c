@@ -965,7 +965,7 @@ int __init vga_console_init(void)
         vga_vt.kmalloced = 0;
 #endif
         vga_vt.vt_sw = &vga_con;
-        display_desc = create_vt(&vga_vt, 1);
+        display_desc = vt_map_display(&vga_vt, 1);
         if (!display_desc) return -ENODEV;
 	printk("Console: %s %s %dx%d\n",
                 vga_vt.default_mode->vc_can_do_color ? "colour" : "mono",

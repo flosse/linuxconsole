@@ -592,7 +592,7 @@ int __init mda_console_init(void)
         mda_vt.kmalloced = 0;
 #endif
         mda_vt.vt_sw = &mda_con;
-        display_desc = create_vt(&mda_vt, 1);
+        display_desc = vt_map_display(&mda_vt, 1);
         if (!display_desc) return -ENODEV;
         printk("Console: mono %s %dx%d\n", display_desc,
                 mda_vt.default_mode->vc_cols, mda_vt.default_mode->vc_rows);

@@ -736,7 +736,7 @@ int __init fb_console_init(void)
 
    vt->kmalloced = 1;
    vt->vt_sw = &fb_con;
-   display_desc = create_vt(vt, 0);
+   display_desc = vt_map_display(vt, 0);
  
    if (!display_desc) return -ENODEV; 
    printk("Console: %s %s %dx%d\n", vt->default_mode->vc_can_do_color ? "colour" : "mono",display_desc, vt->default_mode->vc_cols, vt->default_mode->vc_rows);

@@ -1497,9 +1497,9 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
 }
 
 /*
- * Mapping and unmapping VT display  
+ * Mapping and unmapping devices to a VT  
  */
-const char *create_vt(struct vt_struct *vt, int init)
+const char *vt_map_display(struct vt_struct *vt, int init)
 {
 	const char *display_desc = vt->vt_sw->con_startup(vt, init);
 
@@ -1543,6 +1543,50 @@ const char *create_vt(struct vt_struct *vt, int init)
 	return display_desc;
 }
 
+/* 
+ * This is called when we have detected a keyboard and have a VT lacking one 
+ */
+void vt_map_input(struct vt_struct *vt)
+{
+	struct tty_driver *vty_driver;
+
+	vty_driver = kmalloc(sizeof(struct tty_driver), GFP_KERNEL);
+	memset(vty_driver, 0, sizeof(struct tty_driver));
+
+	vty_driver->refcount = kmalloc(sizeof(int), GFP_KERNEL);
+	vty_driver->table = kmalloc(sizeof(struct tty_struct) * MAX_NR_USER_CONSOLES, GFP_KERNEL);
+	vty_driver->termios = kmalloc(sizeof(struct termios) * MAX_NR_USER_CONSOLES, GFP_KERNEL);
+	vty_driver->termios_locked = kmalloc(sizeof(struct termios) * MAX_NR_USER_CONSOLES, GFP_KERNEL);
+	
+	vty_driver->magic = TTY_DRIVER_MAGIC;
+	vty_driver->name = "vc/%d";
+	vty_driver->name_base = vt->first_vc;
+	vty_driver->major = TTY_MAJOR;
+	vty_driver->minor_start = vt->first_vc;
+	vty_driver->num = MAX_NR_USER_CONSOLES;
+	vty_driver->type = TTY_DRIVER_TYPE_CONSOLE;
+	vty_driver->init_termios = tty_std_termios;
+	vty_driver->flags = TTY_DRIVER_REAL_RAW | TTY_DRIVER_RESET_TERMIOS;
+#ifdef CONFIG_VT_CONSOLE
+	if (admin_vt == vt)
+		vty_driver->console = &vt_console_driver;
+#endif
+	vty_driver->open = vt_open;
+	vty_driver->close = vt_close;
+	vty_driver->write = vt_write;
+	vty_driver->write_room = vt_write_room;
+	vty_driver->put_char = vt_put_char;
+	vty_driver->flush_chars = vt_flush_chars;
+	vty_driver->chars_in_buffer = vt_chars_in_buffer;
+	vty_driver->ioctl = vt_ioctl;
+	vty_driver->stop = vt_stop;
+	vty_driver->start = vt_start;
+	vty_driver->throttle = vt_throttle;
+	vty_driver->unthrottle = vt_unthrottle;
+	if (tty_register_driver(vty_driver))
+		printk("Couldn't register console driver\n");
+}
+
 int release_vt(struct vt_struct *vt)
 {
 	return 0;
@@ -1565,8 +1609,6 @@ void __init vt_console_init(void)
 
 int __init vty_init(void)
 {
-	struct tty_driver *vty_driver;
-
 #if defined (CONFIG_PROM_CONSOLE)
 	prom_con_init();
 #endif
@@ -1575,41 +1617,6 @@ int __init vty_init(void)
 #endif
 	kbd_init();
 	console_map_init();
-	
-	vty_driver = kmalloc(sizeof(struct tty_driver), GFP_KERNEL);
-	memset(vty_driver, 0, sizeof(struct tty_driver));
-
-        vty_driver->refcount = kmalloc(sizeof(int), GFP_KERNEL);
-        vty_driver->table = kmalloc(sizeof(struct tty_struct) * MAX_NR_USER_CONSOLES, GFP_KERNEL);
-        vty_driver->termios = kmalloc(sizeof(struct termios) * MAX_NR_USER_CONSOLES, GFP_KERNEL);
-        vty_driver->termios_locked = kmalloc(sizeof(struct termios) * MAX_NR_USER_CONSOLES, GFP_KERNEL);
-	
-	vty_driver->magic = TTY_DRIVER_MAGIC;
-        vty_driver->name = "vc/%d";
-        vty_driver->name_base = 0; //current_vc;
-        vty_driver->major = TTY_MAJOR;
-        vty_driver->minor_start = 0; //current_vc;
-        vty_driver->num = MAX_NR_USER_CONSOLES;
-        vty_driver->type = TTY_DRIVER_TYPE_CONSOLE;
-        vty_driver->init_termios = tty_std_termios;
-        vty_driver->flags = TTY_DRIVER_REAL_RAW | TTY_DRIVER_RESET_TERMIOS;
-#ifdef CONFIG_VT_CONSOLE
-	vty_driver->console = &vt_console_driver;
-#endif
-        vty_driver->open = vt_open;
-        vty_driver->close = vt_close;
-        vty_driver->write = vt_write;
-        vty_driver->write_room = vt_write_room;
-        vty_driver->put_char = vt_put_char;
-        vty_driver->flush_chars = vt_flush_chars;
-        vty_driver->chars_in_buffer = vt_chars_in_buffer;
-        vty_driver->ioctl = vt_ioctl;
-        vty_driver->stop = vt_stop;
-        vty_driver->start = vt_start;
-        vty_driver->throttle = vt_throttle;
-        vty_driver->unthrottle = vt_unthrottle;
-       	if (tty_register_driver(vty_driver))
-                printk("Couldn't register console driver\n");
 	vcs_init();
 	return 0;
 }
@@ -1689,7 +1696,7 @@ EXPORT_SYMBOL(color_table);
 EXPORT_SYMBOL(default_red);
 EXPORT_SYMBOL(default_grn);
 EXPORT_SYMBOL(default_blu);
-EXPORT_SYMBOL(create_vt);
+EXPORT_SYMBOL(vt_map_display);
 EXPORT_SYMBOL(release_vt);
 EXPORT_SYMBOL(vc_resize);
 EXPORT_SYMBOL(vc_init);
