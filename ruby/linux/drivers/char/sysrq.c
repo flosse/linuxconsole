@@ -23,13 +23,12 @@
 #include <linux/major.h>
 #include <linux/reboot.h>
 #include <linux/sysrq.h>
+#include <linux/vt_kern.h>
 #include <linux/quotaops.h>
 #include <linux/smp_lock.h>
 #include <linux/module.h>
+
 #include <linux/spinlock.h>
-#ifdef CONFIG_VT
-#include <linux/vt_kern.h>
-#endif
 
 #include <asm/ptrace.h>
 
@@ -43,7 +42,8 @@ void (*sysrq_power_off)(void);
 
 /* Loglevel sysrq handler */
 static void sysrq_handle_loglevel(int key, struct pt_regs *pt_regs,
-		struct kbd_struct *kbd, struct tty_struct *tty) {
+				  struct tty_struct *tty) 
+{
 	int i;
 	i = key - '0';
 	console_loglevel = 7;
@@ -60,13 +60,14 @@ static struct sysrq_key_op sysrq_loglevel_op = {
 /* SAK sysrq handler */
 #ifdef CONFIG_VT
 static void sysrq_handle_SAK(int key, struct pt_regs *pt_regs,
-		struct kbd_struct *kbd, struct tty_struct *tty) 
+			     struct tty_struct *tty) 
 {
 	struct vc_data *vc = (struct vc_data *) tty->driver_data;
 
 	if (tty)
 		do_SAK(tty);
-	reset_vc(vc);
+	if ((tty->driver.subtype == SYSTEM_TYPE_CONSOLE) && vc)
+		reset_vc(vc->display_fg->fg_console);
 }
 static struct sysrq_key_op sysrq_SAK_op = {
 	handler:	sysrq_handle_SAK,
@@ -78,11 +79,12 @@ static struct sysrq_key_op sysrq_SAK_op = {
 
 /* unraw sysrq handler */
 static void sysrq_handle_unraw(int key, struct pt_regs *pt_regs,
-		struct kbd_struct *kbd, struct tty_struct *tty) {
-#if CONFIG_VT
-	if (kbd)
-		kbd->kbdmode = VC_XLATE;
-#endif
+				struct tty_struct *tty) 
+{
+	struct vc_data *vc = (struct vc_data *) tty->driver_data;
+	
+	if ((tty->driver.subtype == SYSTEM_TYPE_CONSOLE) && vc)
+		vc->kbd_table.kbdmode = VC_XLATE;
 }
 static struct sysrq_key_op sysrq_unraw_op = {
 	handler:	sysrq_handle_unraw,
@@ -93,7 +95,8 @@ static struct sysrq_key_op sysrq_unraw_op = {
 
 /* reboot sysrq handler */
 static void sysrq_handle_reboot(int key, struct pt_regs *pt_regs,
-		struct kbd_struct *kbd, struct tty_struct *tty) {
+				struct tty_struct *tty) 
+{
 	machine_restart(NULL);
 }
 static struct sysrq_key_op sysrq_reboot_op = {
@@ -101,8 +104,6 @@ static struct sysrq_key_op sysrq_reboot_op = {
 	help_msg:	"reBoot",
 	action_msg:	"Resetting",
 };
-
-
 
 /* SYNC SYSRQ HANDLERS BLOCK */
 
@@ -223,7 +224,8 @@ void do_emergency_sync(void) {
 }
 
 static void sysrq_handle_sync(int key, struct pt_regs *pt_regs,
-		struct kbd_struct *kbd, struct tty_struct *tty) {
+			      struct tty_struct *tty) 
+{
 	emergency_sync_scheduled = EMERG_SYNC;
 	wakeup_bdflush();
 }
@@ -234,7 +236,8 @@ static struct sysrq_key_op sysrq_sync_op = {
 };
 
 static void sysrq_handle_mountro(int key, struct pt_regs *pt_regs,
-		struct kbd_struct *kbd, struct tty_struct *tty) {
+				 struct tty_struct *tty) 
+{
 	emergency_sync_scheduled = EMERG_REMOUNT;
 	wakeup_bdflush();
 }
@@ -250,7 +253,8 @@ static struct sysrq_key_op sysrq_mountro_op = {
 /* SHOW SYSRQ HANDLERS BLOCK */
 
 static void sysrq_handle_showregs(int key, struct pt_regs *pt_regs,
-		struct kbd_struct *kbd, struct tty_struct *tty) {
+				  struct tty_struct *tty) 
+{
 	if (pt_regs)
 		show_regs(pt_regs);
 }
@@ -262,7 +266,8 @@ static struct sysrq_key_op sysrq_showregs_op = {
 
 
 static void sysrq_handle_showstate(int key, struct pt_regs *pt_regs,
-		struct kbd_struct *kbd, struct tty_struct *tty) {
+				   struct tty_struct *tty) 
+{
 	show_state();
 }
 static struct sysrq_key_op sysrq_showstate_op = {
@@ -271,9 +276,9 @@ static struct sysrq_key_op sysrq_showstate_op = {
 	action_msg:	"Show State",
 };
 
-
 static void sysrq_handle_showmem(int key, struct pt_regs *pt_regs,
-		struct kbd_struct *kbd, struct tty_struct *tty) {
+				 struct tty_struct *tty) 
+{
 	show_mem();
 }
 static struct sysrq_key_op sysrq_showmem_op = {
@@ -305,7 +310,8 @@ static void send_sig_all(int sig, int even_init)
 }
 
 static void sysrq_handle_term(int key, struct pt_regs *pt_regs,
-		struct kbd_struct *kbd, struct tty_struct *tty) {
+			      struct tty_struct *tty) 
+{
 	send_sig_all(SIGTERM, 0);
 	console_loglevel = 8;
 }
@@ -316,7 +322,8 @@ static struct sysrq_key_op sysrq_term_op = {
 };
 
 static void sysrq_handle_kill(int key, struct pt_regs *pt_regs,
-		struct kbd_struct *kbd, struct tty_struct *tty) {
+			      struct tty_struct *tty) 
+{
 	send_sig_all(SIGKILL, 0);
 	console_loglevel = 8;
 }
@@ -327,7 +334,8 @@ static struct sysrq_key_op sysrq_kill_op = {
 };
 
 static void sysrq_handle_killall(int key, struct pt_regs *pt_regs,
-		struct kbd_struct *kbd, struct tty_struct *tty) {
+				 struct tty_struct *tty) 
+{
 	send_sig_all(SIGKILL, 1);
 	console_loglevel = 8;
 }
@@ -341,7 +349,7 @@ static struct sysrq_key_op sysrq_killall_op = {
 
 
 /* Key Operations table and lock */
-spinlock_t sysrq_key_table_lock = SPIN_LOCK_UNLOCKED;
+static spinlock_t sysrq_key_table_lock = SPIN_LOCK_UNLOCKED;
 #define SYSRQ_KEY_TABLE_LENGTH 36
 static struct sysrq_key_op *sysrq_key_table[SYSRQ_KEY_TABLE_LENGTH] = {
 /* 0 */	&sysrq_loglevel_op,
@@ -436,13 +444,13 @@ void __sysrq_put_key_op (int key, struct sysrq_key_op *op_p) {
  * and any other keycode arrives.
  */
 
-void handle_sysrq(int key, struct pt_regs *pt_regs,
-		  struct kbd_struct *kbd, struct tty_struct *tty) {
+void handle_sysrq(int key, struct pt_regs *pt_regs, struct tty_struct *tty)
+{
 	if (!sysrq_enabled)
 		return;
 
 	__sysrq_lock_table();
-	__handle_sysrq_nolock(key, pt_regs, kbd, tty);
+	__handle_sysrq_nolock(key, pt_regs, tty);
 	__sysrq_unlock_table();
 }
 
@@ -453,7 +461,8 @@ void handle_sysrq(int key, struct pt_regs *pt_regs,
  */
 
 void __handle_sysrq_nolock(int key, struct pt_regs *pt_regs,
-		  struct kbd_struct *kbd, struct tty_struct *tty) {
+		  	   struct tty_struct *tty) 
+{
 	struct sysrq_key_op *op_p;
 	int orig_log_level;
 	int i, j;
@@ -467,9 +476,9 @@ void __handle_sysrq_nolock(int key, struct pt_regs *pt_regs,
 
         op_p = __sysrq_get_key_op(key);
         if (op_p) {
-                printk ("%s\n", op_p->action_msg);
-        	console_loglevel = orig_log_level;        
-		op_p->handler(key, pt_regs, kbd, tty);
+		printk ("%s\n", op_p->action_msg);
+		console_loglevel = orig_log_level;
+		op_p->handler(key, pt_regs, tty);
 	} else {
 		printk("HELP : ");
 		/* Only print the help msg once per handler */
