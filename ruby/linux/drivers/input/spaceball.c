@@ -46,10 +46,20 @@
  */
 
 #define SPACEBALL_MAX_LENGTH	128
+#define SPACEBALL_MAX_ID	8
+
+#define SPACEBALL_1003      1
+#define SPACEBALL_2003B     3
+#define SPACEBALL_2003C     4
+#define SPACEBALL_3003C     7
+#define SPACEBALL_4000FLX   8
+#define SPACEBALL_4000FLX_L 9
+
 static int spaceball_axes[] = { ABS_X, ABS_Z, ABS_Y, ABS_RX, ABS_RZ, ABS_RY };
-static int spaceball_buttons[] = { BTN_1, BTN_2, BTN_3, BTN_4, BTN_5, BTN_6, BTN_7, BTN_8, BTN_9,
-					BTN_A, BTN_B, BTN_C, BTN_MODE };
-static char *spaceball_name = "SpaceTec SpaceBall 2003/3003/4000 FLX"; 
+static char *spaceball_names[] = {
+	"?", "SpaceTec SpaceBall 1003", "SpaceTec SpaceBall 2003", "SpaceTec SpaceBall 2003B", 
+	"SpaceTec SpaceBall 2003C", "SpaceTec SpaceBall 3003", "SpaceTec SpaceBall SpaceController", 
+	"SpaceTec SpaceBall 3003C", "SpaceTec SpaceBall 4000FLX", "SpaceTec SpaceBall 4000FLX Lefty" };
 
 /*
  * Per-Ball data.
@@ -75,8 +85,6 @@ static void spaceball_process_packet(struct spaceball* spaceball)
 	int i;
 
 	if (spaceball->idx < 2) return;
-
-	printk("%c %d\n", spaceball->data[0], spaceball->idx);
 
 	switch (spaceball->data[0]) {
 
@@ -158,10 +166,8 @@ static void spaceball_interrupt(struct serio *serio, unsigned char data, unsigne
 				data &= 0x1f;
 			}
 		default:
-			if (spaceball->escape) {
+			if (spaceball->escape)
 				spaceball->escape = 0;
-				printk(KERN_WARNING "spaceball.c: Unknown escaped character: %#x (%c)\n", data, data);
-			}
 			if (spaceball->idx < SPACEBALL_MAX_LENGTH)
 				spaceball->data[spaceball->idx++] = data;
 			return;
@@ -189,9 +195,12 @@ static void spaceball_disconnect(struct serio *serio)
 static void spaceball_connect(struct serio *serio, struct serio_dev *dev)
 {
 	struct spaceball *spaceball;
-	int i, t;
+	int i, t, id;
 
-	if (serio->type != (SERIO_RS232 | SERIO_SPACEBALL))
+	if ((serio->type & ~SERIO_ID) != (SERIO_RS232 | SERIO_SPACEBALL))
+		return;
+
+	if ((id = (serio->type & SERIO_ID) >> 8) > SPACEBALL_MAX_ID)
 		return;
 
 	if (!(spaceball = kmalloc(sizeof(struct spaceball), GFP_KERNEL)))
@@ -199,11 +208,17 @@ static void spaceball_connect(struct serio *serio, struct serio_dev *dev)
 	memset(spaceball, 0, sizeof(struct spaceball));
 
 	spaceball->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);	
-	spaceball->dev.keybit[LONG(BTN_0)] = BIT(BTN_0) | BIT(BTN_1);
 
-	for (i = 0; i < 13; i++) {
-		printk(KERN_DEBUG "%d\n", spaceball_buttons[i]);
-		set_bit(spaceball_buttons[i], spaceball->dev.keybit);
+	switch (id) {
+		case SPACEBALL_4000FLX:
+		case SPACEBALL_4000FLX_L:
+			spaceball->dev.keybit[LONG(BTN_0)] |= BIT(BTN_9);
+			spaceball->dev.keybit[LONG(BTN_A)] |= BIT(BTN_A) | BIT(BTN_B) | BIT(BTN_C) | BIT(BTN_MODE);
+		default:
+			spaceball->dev.keybit[LONG(BTN_0)] |= BIT(BTN_2) | BIT(BTN_3) | BIT(BTN_4) 
+				| BIT(BTN_5) | BIT(BTN_6) | BIT(BTN_7) | BIT(BTN_8);
+		case SPACEBALL_3003C:
+			spaceball->dev.keybit[LONG(BTN_0)] |= BIT(BTN_1) | BIT(BTN_8);
 	}
 
 	for (i = 0; i < 6; i++) {
@@ -218,10 +233,10 @@ static void spaceball_connect(struct serio *serio, struct serio_dev *dev)
 	spaceball->serio = serio;
 	spaceball->dev.private = spaceball;
 
-	spaceball->dev.name = spaceball_name;
+	spaceball->dev.name = spaceball_names[id];
 	spaceball->dev.idbus = BUS_RS232;
 	spaceball->dev.idvendor = SERIO_SPACEBALL;
-	spaceball->dev.idproduct = 0x0001;
+	spaceball->dev.idproduct = id;
 	spaceball->dev.idversion = 0x0100;
 	
 	serio->private = spaceball;
@@ -234,7 +249,7 @@ static void spaceball_connect(struct serio *serio, struct serio_dev *dev)
 	input_register_device(&spaceball->dev);
 
 	printk(KERN_INFO "input%d: %s on serio%d\n",
-		spaceball->dev.number, spaceball_name, serio->number);
+		spaceball->dev.number, spaceball_names[id], serio->number);
 }
 
 /*
