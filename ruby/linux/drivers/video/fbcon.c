@@ -119,7 +119,6 @@
 #define CM_SOFTBACK	(8)
 
 #define advance_row(p, delta) (unsigned short *)((unsigned long)(p) + (delta) * vc->vc_size_row)
-#define fontwidthvalid(p,w) ((p)->dispsw->fontwidthmask & FONTWIDTH(w))
 
 static char __initdata fontname[40] = { 0 };
 
@@ -139,12 +138,6 @@ static char __initdata fontname[40] = { 0 };
 #define ATARI_CURSOR_BLINK_RATE		(42)
 #define MAC_CURSOR_BLINK_RATE		(32)
 #define DEFAULT_CURSOR_BLINK_RATE	(20)
-
-static inline void cursor_undrawn(struct fbvt_data *par)
-{
-    par->vbl_cursor_cnt = 0;
-    par->cursor_drawn = 0;
-}
 
 #define divides(a, b)	((!(a) || (b)%(a)) ? 0 : 1)
 
@@ -203,7 +196,7 @@ static const char *fbcon_startup(struct vt_struct *vt, int init)
     struct fbcon_font_desc *font = NULL;
     struct fb_info *info;
     struct module *owner;	
-    int index;	
+    int logo, index;	
 
     /*
      *  If num_registered_fb is zero, this is a call for the dummy part.
@@ -229,60 +222,82 @@ static const char *fbcon_startup(struct vt_struct *vt, int init)
     if (info->flags & FBINFO_FLAG_MODULE)
         logo = 0;
 
-    p->var.xoffset = p->var.yoffset = 0;  /* reset wrap/pan */
+    info->var.xoffset = info->var.yoffset = 0;  /* reset wrap/pan */
 
-    if (!fontname[0] || !(font = fbcon_find_font(fontname[0]))) 
+    if (!fontname[0] || !(font = fbcon_find_font(fontname))) 
 	font = fbcon_get_default_font(info->var.xres, info->var.yres);
 
-    if (!font)
-	prinkt(KERN_ERR "fbcon_startup: No default font detect.\n");	
+    if (!font) {
+	printk(KERN_ERR "fbcon_startup: No default font detect.\n");	
+	return NULL;
+    }
 
+#ifdef CONFIG_FBCON_FONTWIDTH8_ONLY
+    if (!font->width%8) {
+        /* ++Geert: changed from panic() to `correct and continue' */
+        printk(KERN_ERR "fbcon_startup: No support for fontwidth %d\n", vc->vc_font.width);
+    }
+#endif
+	
     vc->vc_font.width = font->width;
     vc->vc_font.height = font->height;
     vc->vc_font.data = font->data;
 	
-    if (!fontwidthvalid(p, vc->vc_font.width)) {
-        /* ++Geert: changed from panic() to `correct and continue' */
-        printk(KERN_ERR "fbcon_startup: No support for fontwidth %d\n", fontwidth(p));
-    }
-
     vc->vc_cols = info->var.xres/vc->vc_font.width;
     vc->vc_rows = info->var.yres/vc->vc_font.height;
     	
-    vrows = info->var.yres_virtual/vc->vc_font.height;
-    if ((info->var.yres % vc->vc_font.height) &&
-    	(info->var.yres_virtual % vc->vc_font.height < info->var.yres % vc->vc_font.height))
-        p->vrows--;
+    vc->vc_scrollback = info->var.yres_virtual/info->var.yres;
 
     if (logo) {
 	/* Need to make room for the logo */
     }	
 
-    vt->data_hook = par;  
+    vt->data_hook = info;  
 
     return display_desc;
 }
 
 static void fbcon_init(struct vc_data *vc)
 {
-    vc->vc_can_do_color = p->var.bits_per_pixel != 1;
+    struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
+
+    vc->vc_can_do_color = info->var.bits_per_pixel != 1;
     vc->vc_complement_mask = vc->vc_can_do_color ? 0x7700 : 0x0800;
-    if (charcnt == 256) 
+    if (vc->vc_font.charcount == 256) 
         vc->vc_hi_font_mask = 0;
+    else {
+	vc->vc_hi_font_mask = 0x100;
+	if (vc->vc_can_do_color)
+		vc->vc_complement_mask <<= 1; 
+    }	
 }
 
 static void fbcon_deinit(struct vc_data *vc)
 {
+/*
+    struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
+
+    fbcon_free_font(info);
+*/
 }
 
 static void fbcon_clear(struct vc_data *vc, int sy, int sx, int height,
 			int width)
 {
+    struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
+    unsigned long color;	
+
+    info->fbops->fb_fillrect(info, sx, sy, width, height, color, ROP_COPY);	
 }
 
 static void fbcon_putc(struct vc_data *vc, int c, int ypos, int xpos)
 {
-    	
+    struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
+    unsigned int dy = ypos * vc->vc_font.height;	 	
+    unsigned int dx = xpos * vc->vc_font.width;
+
+    info->fbops->fb_imageblit(info, vc->vc_font.width, vc->vc_font.height,
+                              image, 1, dx, dy);
 }
 
 static void fbcon_putcs(struct vc_data *vc, const unsigned short *s, 
@@ -297,6 +312,10 @@ static void fbcon_cursor(struct vc_data *vc, int mode)
 static int fbcon_scroll_region(struct vc_data *vc, int t, int b, int dir, 
 				int count)
 {
+    struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
+    int sy = 0, dy = 0, height = 0;	
+
+    info->fbops->fb_copyarea(info, 0, sy, info->var.xres, height, 0, dy);
     return 0;
 }
 
@@ -307,7 +326,33 @@ static void fbcon_bmove(struct vc_data *vc, int sy, int sx, int dy, int dx,
 
 static int fbcon_blank(struct vc_data *vc, int blank)
 {
- //   (*info->fbops->fb_blank)(blank, info);
+    struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
+
+    if (info->fbops->fb_blank) {
+	info->fbops->fb_blank(blank, info);
+    } else {
+	if (info->var.accel_flags != FB_ACCEL_NONE) {
+		unsigned long color = 0;		
+
+		info->fbops->fb_fillrect(info, 0, 0, info->var.xres, 
+					 info->var.yres, color, ROP_COPY);	
+	} else {
+		if ((info->fix.visual == FB_VISUAL_PSEUDOCOLOR || 
+            	    info->fix.visual == FB_VISUAL_DIRECTCOLOR) && blank) {
+			struct fb_cmap cmap;
+    			u16 black[16];
+
+       			memset(black, 0, 16*sizeof(u16));
+       			cmap.red = black;
+       			cmap.green = black;
+       			cmap.blue = black;
+       			cmap.transp = NULL;
+       			cmap.start = 0;
+      			cmap.len = 16;
+       			fb_set_cmap(&cmap, 1, info);
+		}
+	}
+    }			
     return 0;
 }
 
@@ -336,16 +381,11 @@ static int fbcon_resize(struct vc_data *vc,unsigned int rows,unsigned int cols)
 
 static int fbcon_set_palette(struct vc_data *vc, unsigned char *table)
 {
-    struct fbvt_data *par = vc->display_fg->data_hook; 	
-    struct display *p = par->fb_display[vc->vc_num];
-    struct fb_info *info = par->fb_info;	
+    struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;	
     struct fb_cmap palette_cmap;	
     int size, i, j, k;
     u8 val;
 
-    if ((!p->can_soft_blank && vc->display_fg->vt_blanked) ||
-	!vc->vc_can_do_color)
-	return -EINVAL;
     if (info->var.bits_per_pixel <= 4)
     	palette_cmap.len = 1<<info->var.bits_per_pixel;
     else
