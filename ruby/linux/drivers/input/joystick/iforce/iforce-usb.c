@@ -140,7 +140,9 @@ static void iforce_usb_disconnect(struct usb_device *dev, void *ptr)
 	struct iforce *iforce = ptr;
 	usb_unlink_urb(&iforce->irq);
 	input_unregister_device(&iforce->dev);
+#if 0
 	kfree(iforce);
+#endif
 }
 
 static struct usb_device_id iforce_usb_ids [] = {
