@@ -41,7 +41,7 @@ static int __init button_init(void)
 static void __exit button_exit(void)
 {
         input_unregister_device(&button_dev);
-	free_irq(IRQ_AMIGA_VERTB, amimouse_interrupt);
+	free_irq(BUTTON_IRQ, button_interrupt);
 }
 
 module_init(button_init);
