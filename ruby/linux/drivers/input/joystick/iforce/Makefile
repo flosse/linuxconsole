@@ -8,12 +8,16 @@ O_TARGET := iforce-drv.o
 
 CONFIG_JOYSTICK_IFORCE := n
 
+# Enable iforce if at least one of iforce-rs232 or iforce-usb is enabled
 ifeq ($(CONFIG_JOYSTICK_IFORCE_232),y)
-	ifeq ($(CONFIG_JOYSTICK_IFORCE_USB),y)
-		CONFIG_JOYSTICK_IFORCE := y
-	endif
+	CONFIG_JOYSTICK_IFORCE := y
 endif
 
+ifeq ($(CONFIG_JOYSTICK_IFORCE_USB),y)
+	CONFIG_JOYSTICK_IFORCE := y
+endif
+
+# Compile as module if at least one of the choices is m
 ifeq ($(CONFIG_JOYSTICK_IFORCE_232),m)
 	CONFIG_JOYSTICK_IFORCE := m
 endif
