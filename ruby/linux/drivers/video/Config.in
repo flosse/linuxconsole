@@ -186,7 +186,7 @@ fi
 if [ "$CONFIG_VT" = "y" ]; then
 comment 'Console drivers'
 # where can't vga exist? m68k mip64 sparc(64)
-   define_bool CONFIG_DUMMY_CONSOLE y
+   #define_bool CONFIG_DUMMY_CONSOLE y
    if [ "$ARCH" = "sparc" -o "$ARCH" = "sparc64" ]; then
       bool 'PROM console' CONFIG_PROM_CONSOLE
    fi
@@ -203,11 +203,11 @@ comment 'Console drivers'
       bool 'STI console' CONFIG_STI_CONSOLE
       if [ "$CONFIG_IODC_CONSOLE" = "n" ]; then
 	 if [ "$CONFIG_GSC_PS2" = "y" ]; then
-	    define_bool DUMMY_CONSOLE
+	    define_bool DUMMY_CONSOLE y
 	 fi
       fi
       if [ "$CONFIG_STI_CONSOLE" = "y" ]; then
-	 define_bool DUMMY_CONSOLE
+	 define_bool DUMMY_CONSOLE y
       fi				 	
    fi
    if [ "$CONFIG_ARCH_ACORN" != "y" -a "$CONFIG_ARCH_EBSA110" != "y" ]; then
