@@ -62,7 +62,6 @@ struct offb_par {
 int offb_init(void);
 
 static int offb_check_var(struct fb_var_screeninfo *var, struct fb_info *info); 
-static int offb_set_par(struct fb_info *info);
 static int offb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                           u_int transp, struct fb_info *info);
 static void offb_blank(int blank, struct fb_info *info);
@@ -95,17 +94,12 @@ static struct fb_ops offb_ops = {
 static int offb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 {
     if (var->xres > info->var.xres || var->yres > info->var.yres ||
-        var->xres_virtual > info->var.xres_virtual ||
+        var->xres_virtual > info->var.xres_virtual || var->nonstd || 
         var->yres_virtual > info->var.yres_virtual ||
         var->bits_per_pixel > info->var.bits_per_pixel ||
-        var->nonstd ||
         (var->vmode & FB_VMODE_MASK) != FB_VMODE_NONINTERLACED)
         return -EINVAL;
-}
-
-static int offb_set_par(struct fb_info *info)
-{
-    return 0;		
+     return 0;					
 }
 
     /*
