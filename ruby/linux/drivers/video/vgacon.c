@@ -297,7 +297,7 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 	no_vga:
 #ifdef CONFIG_DUMMY_CONSOLE
 		vt->vt_sw = &dummy_con;
-		return vt->vt_sw->con_startup(vt);
+		return vt->vt_sw->con_startup(vt, init);
 #else
 		return NULL;
 #endif
