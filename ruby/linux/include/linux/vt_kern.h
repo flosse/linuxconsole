@@ -141,7 +141,6 @@ function (used to be called "ques") */
         unsigned int    vc_need_wrap    : 1;
         unsigned int    vc_can_do_color : 1;
         unsigned int    vc_report_mouse : 2;
-        unsigned int    vc_kmalloced    : 1;
         unsigned char   vc_utf          : 1;    /* Unicode UTF-8 encoding */
         unsigned char   vc_utf_count;
                  int    vc_utf_char;
@@ -245,6 +244,7 @@ struct vt_struct {
         struct vc_data 	*last_console;     	/* VC we last switched from */
 	int scrollback_delta;			
 	int cursor_original;
+	char kmalloced;
 	char vt_dont_switch;			/* VC switching flag */
 	char vt_blanked;             		/* Is this display blanked */
 	int blank_mode;	       /* 0:none 1:suspendV 2:suspendH 3:powerdown */
@@ -275,7 +275,6 @@ struct console_font_op;
 void create_vt(struct vt_struct *vt, struct consw *sw);
 struct vc_data* find_vc(int currcons);
 int vc_allocate(unsigned int console);
-int vc_cons_allocated(unsigned int console);
 int vc_resize(unsigned int lines, unsigned int cols,
 	      unsigned int first, unsigned int last);
 #define vc_resize_all(l, c) vc_resize(l, c, 0, MAX_NR_CONSOLES-1)
@@ -317,7 +316,7 @@ int tioclinux(struct tty_struct *tty, unsigned long arg);
 struct unimapinit;
 struct unipair;
 
-void console_map_init(struct vt_struct *vt);
+void console_map_init(void);
 int con_set_trans_old(struct vc_data *vc, unsigned char * table);
 int con_get_trans_old(struct vc_data *vc, unsigned char * table);
 int con_set_trans_new(struct vc_data *vc, unsigned short * table);
