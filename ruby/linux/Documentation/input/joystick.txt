@@ -105,10 +105,13 @@ usually you'll have an analog joystick:
 
 	modprobe analog
 	
-  For automatic module loading, something like this might work:
+  For automatic module loading, something like this might work - tailor to
+your needs:
 
 	alias tty-ldisc-2 serport
-	probeall char-major-13 joydev ns558 analog
+	alias char-major-13 input
+	above input joydev ns558 analog
+	options analog js=gameport
 
 2.5 Verifying that it works
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
