@@ -185,17 +185,18 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 
 			int i;
 			unsigned char csum = 0x2b ^ HI(cmd) ^ LO(cmd);
+			unsigned char header[3];
 
-			serio_write(iforce->serio, 0x2b);
-			serio_write(iforce->serio, HI(cmd));
-			serio_write(iforce->serio, LO(cmd));
+			header[0] = 0x2b;
+			header[1] = HI(cmd);
+			header[2] = LO(cmd);
 
-			for (i = 0; i < LO(cmd); i++) {
-				serio_write(iforce->serio, data[i]);
+			for (i=0; i<LO(cmd); ++i) {
 				csum = csum ^ data[i];
 			}
-
-			serio_write(iforce->serio, csum);
+			serio_async_write(iforce->serio, header, 3);
+			serio_async_write(iforce->serio, data, LO(cmd));
+			serio_async_write(iforce->serio, &csum, 1);
 			return;
 		}
 #endif

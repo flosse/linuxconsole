@@ -33,6 +33,7 @@
 #include <linux/stddef.h>
 #include <linux/module.h>
 #include <linux/serio.h>
+#include <linux/errno.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
 
@@ -43,6 +44,7 @@ EXPORT_SYMBOL(serio_unregister_device);
 EXPORT_SYMBOL(serio_open);
 EXPORT_SYMBOL(serio_close);
 EXPORT_SYMBOL(serio_rescan);
+EXPORT_SYMBOL(serio_async_write);
 
 static struct serio *serio_list;
 static struct serio_dev *serio_dev;
@@ -130,3 +132,5 @@ void serio_close(struct serio *serio)
 	serio->close(serio);
 	serio->dev = NULL;
 }
+
+
