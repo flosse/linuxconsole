@@ -7,6 +7,7 @@
 #define screenbuf	(vc->vc_screenbuf)
 #define screenbuf_size	(vc->vc_screenbuf_size)
 #define screensize	(vc->vc_screensize)
+#define scrollback	(vc->vc_scrollback)
 #define origin		(vc->vc_origin)
 #define scr_top		(vc->vc_scr_top)
 #define visible_origin  (vc->vc_visible_origin)
