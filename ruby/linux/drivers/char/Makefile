@@ -88,7 +88,7 @@ obj-$(CONFIG_SERIAL) += $(SERIAL)
 obj-$(CONFIG_SERIAL_21285) += serial_21285.o
 
 ifndef CONFIG_SUN_KEYBOARD
-  obj-$(CONFIG_VT) += keyboard.o $(KEYMAP) 
+  obj-$(CONFIG_VT) += keyboard.o $(KEYMAP) $(KEYBD)
 else
   obj-$(CONFIG_PCI) += keyboard.o $(KEYMAP)
 endif
@@ -122,40 +122,37 @@ obj-$(CONFIG_SPECIALIX) += specialix.o
 obj-$(CONFIG_AMIGA_BUILTIN_SERIAL) += amiserial.o
 obj-$(CONFIG_SX) += sx.o
 
+# If either SX or RIO is in the kernel, generic_serial goes in the
+# kernel, and the module is no longer required. The "in kernel" case
+# is last to be able to override the module case....  This is an
+# example of the new "makefile automatically figures out the
+# dependencies"....  -- REW
 
-# If either is in the kernel, generic_serial goes in the kernel, and
-# the module is no longer required. The "in kernel" case is last to be
-# able to override the module case....  This is an example of the new
-# "makefile automatically figures out the dependencies"....  -- REW
-
-GS = n
-ifeq ($(CONFIG_SX),m)
+GS=n
+ifeq ($(CONFIG_RIO),m)
+  M_OBJS += generic_serial.o
+  MOD_SUB_DIRS += rio
   GS = m
 endif
-ifeq ($(CONFIG_RIO),m)
-  GS = m 
-endif
-ifeq ($(CONFIG_SX),y)
-  GS = y 
-endif
-ifeq ($(CONFIG_RIO),y)
-  GS = y 
-endif
-obj-$(GS) += generic_serial.o
 
-
-
+ifeq ($(CONFIG_SX),m)
+  GS = m
+  M_OBJS += sx.o
+endif
 
 ifeq ($(CONFIG_RIO),y)
-obj-y += rio/rio.o  generic_serial.o
-SUB_DIRS += rio
-MOD_SUB_DIRS += rio
-else
-  ifeq ($(CONFIG_RIO),m)
-  obj-m += generic_serial.o
+  L_OBJS += rio/rio.o  generic_serial.o
+  SUB_DIRS += rio
   MOD_SUB_DIRS += rio
-  endif
+  GS = y
 endif
+
+ifeq ($(CONFIG_SX),y)
+  L_OBJS += sx.o
+  GS = y
+endif
+
+obj-$(GS) += generic_serial.o
 
 obj-$(CONFIG_PRINTER) += lp.o
 obj-$(CONFIG_DTLK) += dtlk.o
