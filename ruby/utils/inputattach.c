@@ -4,6 +4,9 @@
  *  Copyright (c) 1999-2000 Vojtech Pavlik
  *
  *  Sponsored by SuSE
+ *
+ *  Twiddler support Copyright (c) 2001 Arndt Schoenewald
+ *  Sponsored by Quelltext AG (http://www.quelltext-ag.de), Dortmund, Germany
  */
 
 /*
@@ -32,6 +35,14 @@
 
 #include <linux/serio.h>
 
+#ifndef SERIO_TWIDKBD
+#define SERIO_TWIDKBD 4710	/* Please assign a number in linux/serio.h! */
+#endif
+
+#ifndef SERIO_TWIDJOY
+#define SERIO_TWIDJOY 4711	/* Please assign a number in linux/serio.h! */
+#endif
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
@@ -44,6 +55,7 @@
 #include <termios.h>
 #include <string.h>
 #include <assert.h>
+#include <ctype.h>
 
 int readchar(int fd, unsigned char *c, int timeout)
 {
@@ -57,8 +69,7 @@ int readchar(int fd, unsigned char *c, int timeout)
 	FD_SET(fd, &set);
 
 	if (!select(fd+1, &set, NULL, NULL, &tv)) return -1;
-
-	read(fd, c, 1);
+	if (read(fd, c, 1) != 1) return -1;
 
 	return 0;
 }
@@ -264,6 +275,54 @@ int newton_init(int fd, long *id, long *extra)
   return 0;
 }
 
+int twiddler_init(int fd, long *id, long *extra)
+{
+	unsigned char c[10];
+	int count, line;
+
+	/* Turn DTR off, otherwise the Twiddler won't send any data. */
+	if (ioctl(fd, TIOCMGET, &line)) return -1;
+	line &= ~TIOCM_DTR;
+	if (ioctl(fd, TIOCMSET, &line)) return -1;
+
+	/* Check whether the device on the serial line is the Twiddler.
+	 *
+	 * The Twiddler sends data packets of 5 bytes which have the following
+	 * properties: the MSB is 0 on the first and 1 on all other bytes, and
+	 * the high order nibble of the last byte is always 0x8.
+	 *
+	 * We read and check two of those 5 byte packets to be sure that we
+	 * are indeed talking to a Twiddler. */
+
+	/* Read at most 5 bytes until we find one with the MSB set to 0 */
+	for (count = 0; count < 5; count++) {
+		if (readchar(fd, c+0, 500)) return -1;
+		if ((c[0] & 0x80) == 0) break;
+	}
+
+	if (count == 5) {
+		/* Could not find header byte in data stream */
+		return -1;
+	}
+
+	/* Read remaining 4 bytes plus the full next data packet */
+	for (count = 1; count < 10; count++) {
+		if (readchar(fd, c+count, 500)) return -1;
+	}
+
+	/* Check whether the bytes of both data packets obey the rules */
+	for (count = 1; count < 10; count++) {
+		if ((count % 5 == 0 && (c[count] & 0x80) != 0)
+		    || (count % 5 == 4 && (c[count] & 0xF0) != 0x80)
+		    || (count % 5 != 0 && (c[count] & 0x80) != 0x80)) {
+		    	/* Invalid byte in data packet */
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
 int dump_init(int fd, long *id, long *extra)
 {
 	unsigned char c, o = 0;
@@ -311,6 +370,8 @@ struct input_types input_types[] = {
 { "--h3600ts",          "-ipaq",     	B115200, CS8,                   SERIO_H3600,	0x00,   0,      NULL },
 { "--stowawaykbd",      "-ipaqkbd",     B115200, CS8,                   SERIO_STOWAWAY, 0x00,   0,      NULL },
 { "--ps2serkbd",	"-ps2ser",	B1200, CS8,			SERIO_PS2SER,	0x00,	1,	NULL },
+{ "--twiddler",		"-twid",	B2400, CS8,			SERIO_TWIDKBD,	0x00,	0,	twiddler_init },
+{ "--twiddler-joy",	"-twidjoy",	B2400, CS8,			SERIO_TWIDJOY,	0x00,	0,	twiddler_init },
 { "--dump",		"-dump",	B1200, CS7, 			0,		0x00,	0,	dump_init },
 { "", "", 0, 0 }
 
@@ -347,6 +408,8 @@ int main(int argc, char **argv)
                 puts("  --h3600ts       -ipaq  Ipaq h3600 touchscreen");
 		puts("  --stowawaykbd   -ipaqkbd  Stowaway keyboard");
 		puts("  --ps2serkbd     -ps2ser PS/2 via serial keyboard");
+		puts("  --twiddler      -twid   Handykey Twiddler chording keyboard");
+		puts("  --twiddler-joy  -twidjoy  Handykey Twiddler used as a joystick");
 		puts("");
                 return 1;
         }
