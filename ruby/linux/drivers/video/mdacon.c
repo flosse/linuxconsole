@@ -399,10 +399,8 @@ static void mdacon_clear(struct vc_data *vc, int y, int x,
 	if (width <= 0 || height <= 0)
 		return;
 
-	height++;
-
 	if (x==0 && width == vc->vc_cols) {
-		scr_memsetw(dest, eattr, height*width*2);
+		scr_memsetw(dest, eattr, (height+1)*width*2);
 	} else {
 		for (; height > 0; height--, dest += vc->vc_cols)
 			scr_memsetw(dest, eattr, width*2);
@@ -475,7 +473,7 @@ static int mdacon_font_op(struct vc_data *vc, struct console_font_op *op)
 	return -ENOSYS;
 }
 
-static int mdacon_scrolldelta(struct vc_data *vc, int lines)
+static int mdacon_scroll(struct vc_data *vc, int lines)
 {
 	return 0;
 }
@@ -500,7 +498,8 @@ static void mdacon_cursor(struct vc_data *vc, int mode)
 	}
 }
 
-static int mdacon_scroll(struct vc_data *vc, int t, int b, int dir, int lines)
+static int mdacon_scroll_region(struct vc_data *vc, int t, int b, int dir, 
+				int lines)
 {
 	u16 eattr = mda_convert_attr(vc->vc_video_erase_char);
 
@@ -513,14 +512,14 @@ static int mdacon_scroll(struct vc_data *vc, int t, int b, int dir, int lines)
 	switch (dir) {
 
 	case SM_UP:
-		scr_memmovew(MDA_ADDR(0,t), MDA_ADDR(0,t+lines),
+		scr_memmovew(MDA_ADDR(0, t), MDA_ADDR(0, t+lines),
 				(b-t-lines)*vc->vc_cols*2);
-		scr_memsetw(MDA_ADDR(0,b-lines), eattr,
+		scr_memsetw(MDA_ADDR(0, b-lines), eattr,
 				lines*vc->vc_cols*2);
 		break;
 
 	case SM_DOWN:
-		scr_memmovew(MDA_ADDR(0,t+lines), MDA_ADDR(0,t),
+		scr_memmovew(MDA_ADDR(0, t+lines), MDA_ADDR(0, t),
 				(b-t-lines)*vc->vc_cols*2);
 		scr_memsetw(MDA_ADDR(0,t), eattr, lines*vc->vc_cols*2);
 		break;
@@ -542,13 +541,13 @@ const struct consw mda_con = {
 	con_putc:		mdacon_putc,
 	con_putcs:		mdacon_putcs,
 	con_cursor:		mdacon_cursor,
-	con_scroll:		mdacon_scroll,
+	con_scroll_region:	mdacon_scroll_region,
 	con_bmove:		mdacon_bmove,
 	con_switch:		mdacon_switch,
 	con_blank:		mdacon_blank,
 	con_font_op:		mdacon_font_op,
 	con_set_palette:	mdacon_set_palette,
-	con_scrolldelta:	mdacon_scrolldelta,
+	con_scroll:		mdacon_scroll,
 	con_build_attr:		mdacon_build_attr,
 	con_invert_region:	mdacon_invert_region,
 };
