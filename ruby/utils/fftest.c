@@ -24,10 +24,6 @@
  * Johann Deneux <deneux@ifrance.com>
  */
 
-// Quick fix for #define mess
-#define uint16_t unsigned short
-#define uint32_t unsigned short
-
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
