@@ -399,9 +399,8 @@ struct fb_info {
 extern int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info);
 extern int fbgen_pan_display(struct fb_var_screeninfo *var, 
 			     struct fb_info *info);
-extern int cfb_fillrect(struct fb_info *p, unsigned int x1, unsigned int y1,
-                  	unsigned int width, unsigned int rows, 
-			unsigned long color, int rop);
+extern void cfb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,
+                  	 unsigned int rows, unsigned long color, int rop); 
 extern void cfb_copyarea(struct fb_info *p, int sx, int sy, unsigned int width,
                   	 unsigned int rows, int dx, int dy);
 extern void cfb_imageblit(struct fb_info *p, struct fb_image *image); 
