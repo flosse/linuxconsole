@@ -1851,6 +1851,7 @@ int __init vty_init(void)
 #ifdef CONFIG_PROC_FS
         vt_proc_init();
 #endif
+	vt_sysfs_init();
 	return 0;
 }
 

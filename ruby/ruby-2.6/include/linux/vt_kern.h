@@ -9,6 +9,7 @@
 #include <linux/pm.h>
 #include <linux/vt.h>
 #include <linux/kbd_kern.h>
+#include <linux/device.h>
 
 #define MIN_NR_CONSOLES 1	/* must be at least 1 */
 #define MAX_NR_CONSOLES 63	/* serial lines start at 64 */
@@ -245,10 +246,13 @@ struct vt_struct {
 	unsigned char vt_ledstate;
 	unsigned char vt_ledioctl;
 	char *display_desc;
+	struct	device	dev;		/* Generic device interface */
 };
 
 extern struct list_head vt_list;
 extern struct vt_struct *admin_vt;
+
+#define	to_vt_struct(n) container_of(n, struct vt_struct, dev)
 
 /* universal VT emulation functions */
 void vte_ris(struct vc_data *vc, int do_clear);
@@ -323,4 +327,7 @@ int con_copy_unimap(struct vc_data *dst, struct vc_data *src);
 void complete_change_console(struct vc_data *new_vc, struct vc_data *old_vc);
 void change_console(struct vc_data *new_vc, struct vc_data *old_vc);
 
+/* vt_sysfs.c*/
+int __init vt_create_sysfs_dev_files (struct vt_struct *vt);
+void __init vt_sysfs_init(void);
 #endif				/* _VT_KERN_H */

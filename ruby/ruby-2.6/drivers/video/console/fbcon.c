@@ -2302,6 +2302,7 @@ int fbcon_add(int unit, int vc_count)
 	        return -ENODEV;
 	}
 	vt_proc_attach(vt);
+	vt_create_sysfs_dev_files(vt);
 	printk("Console: %s %s %dx%d vc:%d-%d\n",
 	        vt->default_mode->vc_can_do_color ? "Colour" : "Mono",
 	        display_desc,
