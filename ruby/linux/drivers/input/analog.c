@@ -83,8 +83,8 @@ static int analog_options[ANALOG_PORTS];
 #define ANALOG_LOOP_TIME	1750	/* 1.75 * loop */
 #define ANALOG_REFRESH_TIME	HZ/100	/* 10 ms */
 #define ANALOG_AXIS_TIME	2	/* 2 * refresh */
-#define ANALOG_RESOLUTION	12	/* 10 bits */
-#define ANALOG_FUZZ		8	/* 3 bit gauss */
+#define ANALOG_RESOLUTION	12	/* 12 bits */
+#define ANALOG_FUZZ		16	/* 4 bit gauss */
 
 #define ANALOG_MAX_NAME_LENGTH  128
 
