@@ -408,32 +408,40 @@ static void fbcon_cursor(struct vc_data *vc, int mode)
 
     switch (mode) {
         case CM_ERASE:
-		info->cursor.enable = 0;
-		info->cursor.set = FB_CUR_SETCUR;
-		info->fbops->fb_cursor(info, &info->cursor);
+		if (info->fbops->fb_cursor) {
+			info->cursor.enable = 0;
+			info->cursor.set = FB_CUR_SETCUR;
+			info->fbops->fb_cursor(info, &info->cursor);
+		} else {
+			unsigned int sx = vc->vc_x * vc->vc_font.width;
+			unsigned int sy = vc->vc_y * vc->vc_font.height; 
+			unsigned long color = -1;
+
+    			info->fbops->fb_fillrect(info, sx, sy,vc->vc_font.width,
+					vc->vc_font.height, color, ROP_XOR);	
+		}
             	break;
         case CM_MOVE:
         case CM_DRAW:
-		info->cursor.set = FB_CUR_SETCUR|FB_CUR_SETPOS|FB_CUR_SETHOT;
-		info->cursor.enable = 1;
-		info->cursor.pos.x = vc->vc_x * vc->vc_font.width;
-		info->cursor.pos.y = vc->vc_y * vc->vc_font.height;
-		info->cursor.hot.x = info->cursor.pos.x;
-		info->cursor.hot.y = info->cursor.pos.y;
-		info->fbops->fb_cursor(info, &info->cursor); 
+		if (info->fbops->fb_cursor) {
+			info->cursor.set = FB_CUR_SETCUR|FB_CUR_SETPOS|FB_CUR_SETHOT;
+			info->cursor.enable = 1;
+			info->cursor.pos.x = vc->vc_x * vc->vc_font.width;
+			info->cursor.pos.y = vc->vc_y * vc->vc_font.height;
+			info->cursor.hot.x = info->cursor.pos.x;
+			info->cursor.hot.y = info->cursor.pos.y;
+			info->fbops->fb_cursor(info, &info->cursor); 
+		} else {
+			unsigned int sx = vc->vc_x * vc->vc_font.width;
+			unsigned int sy = vc->vc_y * vc->vc_font.height; 
+			unsigned long color = -1;
+
+    			info->fbops->fb_fillrect(info, sx, sy,vc->vc_font.width,
+					vc->vc_font.height, color, ROP_XOR);	
+		}
 		break;
 	case CM_CHANGE: {
 		int top_scanline, bottom_scanline = vc->vc_font.height;
-		char *pixmap, *mask;
-
-		cursor.size.x = vc->vc_font.width;
-    		cursor.size.y = vc->vc_font.height;
-		cursor.cmap.len = 2;
-		cursor.cmap.start = 0;
-		fb_alloc_cmap(&cursor.cmap, 0, 0);
-
-		pixmap = kmalloc(((cursor.size.x*cursor.size.y)>>3),GFP_KERNEL);
-		mask = kmalloc(((cursor.size.x*cursor.size.y)>>3),GFP_KERNEL);
 
 		if (bottom_scanline >= 10) bottom_scanline--;
 		switch (vc->vc_cursor_type & CUR_HWMASK) {
@@ -458,14 +466,37 @@ static void fbcon_cursor(struct vc_data *vc, int mode)
 				top_scanline = bottom_scanline - 2;
 				break;
 		}
-		for (i = 0; i < top_scanline; i++) 
-			pixmap[i] = 0; mask[i] = -1;
-		for (;i < bottom_scanline; i++) 
-			pixmap[i] = -1; mask[i] = -1;
+
+		if (info->fbops->fb_cursor) {
+			char *pixmap, *mask;
+
+			cursor.size.x = vc->vc_font.width;
+    			cursor.size.y = vc->vc_font.height;
+			cursor.cmap.len = 2;
+			cursor.cmap.start = 0;
+			fb_alloc_cmap(&cursor.cmap, 0, 0);
+
+			pixmap = kmalloc(((cursor.size.x * cursor.size.y) >> 3),
+						GFP_KERNEL);
+			mask = kmalloc(((cursor.size.x * cursor.size.y) >> 3),
+						GFP_KERNEL);
+
+			for (i = 0; i < top_scanline; i++) 
+				pixmap[i] = 0; mask[i] = -1;
+			for (;i < bottom_scanline; i++) 
+				pixmap[i] = -1; mask[i] = -1;
 		
-		cursor.image = pixmap;
-		cursor.mask = mask;
-		info->fbops->fb_cursor(info, &cursor); 
+			cursor.image = pixmap;
+			cursor.mask = mask;
+			info->fbops->fb_cursor(info, &cursor); 
+		} else {
+			unsigned int sx = vc->vc_x * vc->vc_font.width;
+			unsigned int sy = vc->vc_y * vc->vc_font.height; 
+			unsigned long color = -1;
+
+    			info->fbops->fb_fillrect(info, sx, sy,vc->vc_font.width,
+					vc->vc_font.height, color, ROP_XOR);	
+		}
             	break;
         }
     }
@@ -476,7 +507,7 @@ static int fbcon_scroll_region(struct vc_data *vc, int t, int b, int dir,
 {
     struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
     unsigned int height = (b-t-count) * vc->vc_font.height;
-    unsigned int sy, dy;	 	
+    unsigned int sy = 0, dy = 0;	 	
 
     switch (dir) {
 	case SM_UP:
@@ -624,7 +655,7 @@ const struct consw fb_con = {
     con_clear: 		fbcon_clear,
     con_putc: 		fbcon_putc,
     con_putcs: 		fbcon_putcs,
-    //con_cursor: 	fbcon_cursor,
+    con_cursor: 	fbcon_cursor,
     con_scroll_region: 	fbcon_scroll_region,
     con_bmove: 		fbcon_bmove,
     con_blank: 		fbcon_blank,
