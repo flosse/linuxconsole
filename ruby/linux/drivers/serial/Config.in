@@ -9,7 +9,7 @@ mainmenu_option next_comment
 comment 'Serial port support'
 
 tristate 'Serial port support' CONFIG_UART
-if [ "$CONFIG_UART" = "y" ]; then
+if [ "$CONFIG_UART" != "n" ]; then
    if [ "$CONFIG_ARM" = "y" ]; then
       dep_bool 'DC21285 serial port support' CONFIG_SERIAL_21285 $CONFIG_FOOTBRIDGE
       dep_bool '  Use /dev/ttyS0 device (OBSOLETE)' CONFIG_SERIAL_21285_OLD $CONFIG_SERIAL_21285 $CONFIG_OBSOLETE
@@ -34,7 +34,7 @@ if [ "$CONFIG_UART" = "y" ]; then
 #     dep_tristate 'Anakin touchscreen support' CONFIG_TOUCHSCREEN_ANAKIN $CONFIG_ARCH_ANAKIN
    fi
    # The new 8250/16550 serial drivers
-   dep_tristate '8250/16550 and compatible serial support (EXPERIMENTAL)' CONFIG_SERIAL_8250 $CONFIG_EXPERIMENTAL
+   dep_tristate '8250/16550 and compatible serial support (EXPERIMENTAL)' CONFIG_SERIAL_8250 $CONFIG_UART $CONFIG_EXPERIMENTAL
    dep_bool '  Console on 8250/16550 and compatible serial port (EXPERIMENTAL)' CONFIG_SERIAL_8250_CONSOLE $CONFIG_SERIAL_8250 $CONFIG_EXPERIMENTAL	
    if [ "$CONFIG_SERIAL_AMBA_CONSOLE" = "y" -o \
         "$CONFIG_SERIAL_CLPS711X_CONSOLE" = "y" -o \
