@@ -582,7 +582,7 @@ static void sw_connect(struct gameport *gameport, struct gameport_dev *dev)
 	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW))
 		goto fail1;
 
-	dbg("Init 0: Opened gameport %d, io %#x, speed %d,
+	dbg("Init 0: Opened gameport %d, io %#x, speed %d",
 		gameport->number, gameport->io, gameport->speed);
 
 	i = sw_read_packet(gameport, buf, SW_LENGTH, 0);		/* Read normal packet */
