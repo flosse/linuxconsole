@@ -1029,7 +1029,8 @@ void kbd_keycode(void  *private, unsigned int keycode, int down)
 		vc->kbd_table.slockstate = 0;
 }
 
-void kbd_event(struct input_handle *handle, unsigned int event_type, unsigned int keycode, int down)
+static void kbd_event(struct input_handle *handle, unsigned int event_type, 
+		      unsigned int keycode, int down)
 {
 	if (event_type != EV_KEY) return;
 	if (handle->private)
@@ -1043,7 +1044,9 @@ void kbd_event(struct input_handle *handle, unsigned int event_type, unsigned in
  * likes it, it can open it and get events from it. In this (kbd_connect)
  * function, we should decide which VT to bind that keyboard to initially.
  */
-static struct input_handle *kbd_connect(struct input_handler *handler, struct input_dev *dev)
+static struct input_handle *kbd_connect(struct input_handler *handler, 
+					struct input_dev *dev,
+					struct input_device_id *id)
 {
 	struct input_handle *handle;
 	struct vt_struct *vt = vt_cons;
@@ -1086,11 +1089,23 @@ static void kbd_disconnect(struct input_handle *handle)
 	input_close_device(handle);
 	kfree(handle);
 }
-	
+
+static struct input_device_id kbd_ids[] = {
+	{
+                flags: INPUT_DEVICE_ID_MATCH_EVBIT,
+                evbit: { BIT(EV_KEY) },
+        },
+	{ },    /* Terminating entry */
+};
+
+MODULE_DEVICE_TABLE(input, kbd_ids);
+
 static struct input_handler kbd_handler = {
 	event:		kbd_event,
 	connect:	kbd_connect,
 	disconnect:	kbd_disconnect,
+	name:		"kbd",
+	id_table:	kbd_ids,
 };
 
 int __init kbd_init(void)
