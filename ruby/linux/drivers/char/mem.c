@@ -28,12 +28,6 @@
 #ifdef CONFIG_I2C
 extern int i2c_init_all(void);
 #endif
-#ifdef CONFIG_SOUND
-void soundcore_init(void);
-#ifdef CONFIG_SOUND_OSS
-void soundcard_init(void);
-#endif
-#endif
 #ifdef CONFIG_SPARCAUDIO
 extern int sparcaudio_init(void);
 #endif
@@ -48,9 +42,6 @@ extern void fbmem_init(void);
 #endif
 #if defined(CONFIG_ADB)
 extern void adbdev_init(void);
-#endif
-#ifdef CONFIG_PHONE
-extern void telephony_init(void);
 #endif
      
 static ssize_t do_write_mem(struct file * file, void *p, unsigned long realp,
@@ -252,25 +243,27 @@ static ssize_t read_kmem(struct file *file, char *buf,
 		count -= read;
 	}
 
-	kbuf = (char *)__get_free_page(GFP_KERNEL);
-	if (!kbuf)
-		return -ENOMEM;
-	while (count > 0) {
-		int len = count;
+	if (count > 0) {
+		kbuf = (char *)__get_free_page(GFP_KERNEL);
+		if (!kbuf)
+			return -ENOMEM;
+		while (count > 0) {
+			int len = count;
 
-		if (len > PAGE_SIZE)
-			len = PAGE_SIZE;
-		len = vread(kbuf, (char *)p, len);
-		if (len && copy_to_user(buf, kbuf, len)) {
-			free_page((unsigned long)kbuf);
-			return -EFAULT;
+			if (len > PAGE_SIZE)
+				len = PAGE_SIZE;
+			len = vread(kbuf, (char *)p, len);
+			if (len && copy_to_user(buf, kbuf, len)) {
+				free_page((unsigned long)kbuf);
+				return -EFAULT;
+			}
+			count -= len;
+			buf += len;
+			virtr += len;
+			p += len;
 		}
-		count -= len;
-		buf += len;
-		virtr += len;
-		p += len;
+		free_page((unsigned long)kbuf);
 	}
-	free_page((unsigned long)kbuf);
  	*ppos = p;
  	return virtr + read;
 }
@@ -630,15 +623,6 @@ int __init chr_dev_init(void)
 	lp_m68k_init();
 #endif
 	misc_init();
-#ifdef CONFIG_SOUND
-	soundcore_init();
-#ifdef CONFIG_SOUND_OSS
-	soundcard_init();
-#endif
-#endif
-#ifdef CONFIG_SPARCAUDIO
-	sparcaudio_init();
-#endif
 #if CONFIG_QIC02_TAPE
 	qic02_tape_init();
 #endif
@@ -654,8 +638,5 @@ int __init chr_dev_init(void)
 #ifdef CONFIG_VIDEO_DEV
 	videodev_init();
 #endif
-#ifdef CONFIG_PHONE
-	telephony_init();
-#endif	
 	return 0;
 }

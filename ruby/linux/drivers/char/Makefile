@@ -37,7 +37,7 @@ obj-y	 += tty_io.o n_tty.o tty_ioctl.o mem.o raw.o pty.o misc.o random.o
 # This list comes from 'grep -l EXPORT_SYMBOL *.[hc]'.
 
 export-objs     :=	vt.o keyboard.o sysrq.o misc.o pty.o random.o \
-			selection.o serial.o tty_io.o 
+			selection.o serial.o tty_io.o
 
 list-multi	:=	
 
@@ -49,12 +49,6 @@ ifeq ($(ARCH),m68k)
    SERIAL   =
 endif
 
-ifeq ($(ARCH),arm)
-  ifneq ($(CONFIG_PC_KEYMAP),y)
-    KEYMAP   =
-  endif
-endif
-
 ifeq ($(ARCH),sh)
   KEYMAP   =
   ifeq ($(CONFIG_SH_HP600),y)
@@ -64,10 +58,12 @@ ifeq ($(ARCH),sh)
 endif
 
 ifeq ($(CONFIG_DECSTATION),y)
+  KEYBD    =
   SERIAL   =
 endif
 
 ifeq ($(CONFIG_BAGET_MIPS),y)
+  KEYBD    =
   SERIAL   =
 endif
 
@@ -75,15 +71,12 @@ ifneq ($(CONFIG_SUN_SERIAL),)
   SERIAL   =
 endif
 
+
 obj-$(CONFIG_VT) += vt_ioctl.o decvte.o vc_screen.o consolemap.o consolemap_deftbl.o $(CONSOLE) selection.o
 obj-$(CONFIG_SERIAL) += $(SERIAL)
 obj-$(CONFIG_SERIAL_21285) += serial_21285.o
-
-ifndef CONFIG_SUN_KEYBOARD
-  obj-$(CONFIG_VT) += keyboard.o $(KEYMAP) $(KEYBD)
-else
-  obj-$(CONFIG_PCI) += keyboard.o $(KEYMAP)
-endif
+obj-$(CONFIG_SERIAL_SA1100) += serial_sa1100.o
+obj-$(CONFIG_SERIAL_AMBA) += serial_amba.o
 
 obj-$(CONFIG_MAGIC_SYSRQ) += sysrq.o
 obj-$(CONFIG_ATARI_DSP56K) += dsp56k.o
@@ -119,22 +112,12 @@ obj-$(CONFIG_PRINTER) += lp.o
 obj-$(CONFIG_DTLK) += dtlk.o
 obj-$(CONFIG_R3964) += n_r3964.o
 obj-$(CONFIG_APPLICOM) += applicom.o
-obj-$(CONFIG_SOFT_WATCHDOG) += softdog.o
-obj-$(CONFIG_PCWATCHDOG) += pcwd.o
-obj-$(CONFIG_ACQUIRE_WDT) += acquirewdt.o
-obj-$(CONFIG_MIXCOMWD) += mixcomwd.o
-obj-$(CONFIG_60XX_WDT) += sbc60xxwdt.o
-obj-$(CONFIG_WDT) += wdt.o
-obj-$(CONFIG_WDTPCI) += wdt_pci.o
 obj-$(CONFIG_RTC) += rtc.o
 obj-$(CONFIG_EFI_RTC) += efirtc.o
 ifeq ($(CONFIG_PPC),)
   obj-$(CONFIG_NVRAM) += nvram.o
 endif
-
-obj-$(CONFIG_21285_WATCHDOG) += wdt285.o
-obj-$(CONFIG_977_WATCHDOG) += wdt977.o
-obj-$(CONFIG_I810_TCO) += i810-tco.o
+obj-$(CONFIG_TOSHIBA) += toshiba.o
 obj-$(CONFIG_DS1620) += ds1620.o
 obj-$(CONFIG_INTEL_RNG) += i810_rng.o
 
@@ -184,6 +167,23 @@ else
     MOD_SUB_DIRS += agp
   endif
 endif
+
+# Only one watchdog can succeed. We probe the hardware watchdog
+# drivers first, then the softdog driver.  This means if your hardware
+# watchdog dies or is 'borrowed' for some reason the software watchdog
+# still gives you some cover.
+
+obj-$(CONFIG_PCWATCHDOG) += pcwd.o
+obj-$(CONFIG_ACQUIRE_WDT) += acquirewdt.o
+obj-$(CONFIG_MIXCOMWD) += mixcomwd.o
+obj-$(CONFIG_60XX_WDT) += sbc60xxwdt.o
+obj-$(CONFIG_WDT) += wdt.o
+obj-$(CONFIG_WDTPCI) += wdt_pci.o
+obj-$(CONFIG_21285_WATCHDOG) += wdt285.o
+obj-$(CONFIG_977_WATCHDOG) += wdt977.o
+obj-$(CONFIG_I810_TCO) += i810-tco.o
+obj-$(CONFIG_SOFT_WATCHDOG) += softdog.o
+
 
 # Extract lists of the multi-part drivers.
 # The 'int-*' lists are the intermediate files used to build the multi's.

@@ -95,22 +95,22 @@
  * Machine setup..
  */
 
-char ignore_irq13 = 0;		/* set if exception 16 works */
+char ignore_irq13;		/* set if exception 16 works */
 struct cpuinfo_x86 boot_cpu_data = { 0, 0, 0, 0, -1, 1, 0, 0, -1 };
 
-unsigned long mmu_cr4_features = 0;
+unsigned long mmu_cr4_features;
 
 /*
  * Bus types ..
  */
-int EISA_bus = 0;
-int MCA_bus = 0;
+int EISA_bus;
+int MCA_bus;
 
 /* for MCA, but anyone else can use it if they want */
-unsigned int machine_id = 0;
-unsigned int machine_submodel_id = 0;
-unsigned int BIOS_revision = 0;
-unsigned int mca_pentium_flag = 0;
+unsigned int machine_id;
+unsigned int machine_submodel_id;
+unsigned int BIOS_revision;
+unsigned int mca_pentium_flag;
 
 /*
  * Setup options
@@ -123,7 +123,7 @@ struct sys_desc_table_struct {
 	unsigned char table[0];
 };
 
-struct e820map e820 = { 0 };
+struct e820map e820;
 
 unsigned char aux_device_present;
 
@@ -135,7 +135,7 @@ extern int rd_image_start;	/* starting block # of image */
 
 extern int root_mountflags;
 extern char _text, _etext, _edata, _end;
-extern unsigned long cpu_hz;
+extern unsigned long cpu_khz;
 
 /*
  * This is set up by the setup-routine at boot-time
@@ -291,7 +291,7 @@ visws_get_board_type_and_rev(void)
 #endif
 
 
-static char command_line[COMMAND_LINE_SIZE] = { 0, };
+static char command_line[COMMAND_LINE_SIZE];
        char saved_command_line[COMMAND_LINE_SIZE];
 
 struct resource standard_io_resources[] = {
@@ -874,7 +874,8 @@ static int __init amd_model(struct cpuinfo_x86 *c)
 	 * Set MTRR capability flag if appropriate
 	 */
 	if(boot_cpu_data.x86 == 5) {
-		if((boot_cpu_data.x86_model == 9) ||
+		if((boot_cpu_data.x86_model == 13) ||
+		   (boot_cpu_data.x86_model == 9) ||
 		   ((boot_cpu_data.x86_model == 8) && 
 		    (boot_cpu_data.x86_mask >= 8)))
 			c->x86_capability |= X86_FEATURE_MTRR;
@@ -915,7 +916,7 @@ static int __init amd_model(struct cpuinfo_x86 *c)
 				}
 				break;
 			}
-			if (c->x86_model == 8 || c->x86_model == 9)
+			if (c->x86_model == 8 || c->x86_model == 9 || c->x86_model == 13)
 			{
 				/* The more serious chips .. */
 				
@@ -1672,7 +1673,7 @@ int get_cpuinfo(char * buffer)
 
 		if (c->x86_capability & X86_FEATURE_TSC) {
 			p += sprintf(p, "cpu MHz\t\t: %lu.%06lu\n",
-				cpu_hz / 1000000, (cpu_hz % 1000000));
+				cpu_khz / 1000, (cpu_khz % 1000));
 		}
 
 		/* Cache size */

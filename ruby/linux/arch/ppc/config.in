@@ -88,10 +88,14 @@ fi
 if [ "$CONFIG_4xx" = "y" -o "$CONFIG_8xx" = "y" ]; then
   bool 'Math emulation' CONFIG_MATH_EMULATION
 fi
+
 endmenu
 
 mainmenu_option next_comment
 comment 'General setup'
+
+bool 'High memory support (experimental)' CONFIG_HIGHMEM
+bool 'Mac-on-Linux support' CONFIG_MOL
 
 define_bool CONFIG_ISA n
 define_bool CONFIG_SBUS n
@@ -134,20 +138,6 @@ fi
 source drivers/parport/Config.in
 
 if [ "$CONFIG_4xx" != "y" -a "$CONFIG_8xx" != "y" ]; then
-  bool 'Power management support for PowerBooks' CONFIG_PMAC_PBOOK
-  bool 'Support for PowerMac floppy' CONFIG_MAC_FLOPPY
-  tristate 'Support for PowerMac serial ports' CONFIG_MAC_SERIAL
-  if [ "$CONFIG_MAC_SERIAL" = "y" ]; then
-     bool '   Support for console on serial port' CONFIG_SERIAL_CONSOLE
-  fi
-  bool 'Apple Desktop Bus (ADB) support' CONFIG_ADB
-  if [ "$CONFIG_ADB" = "y" ]; then
-     bool '   Include CUDA ADB driver' CONFIG_ADB_CUDA
-     bool '   Include MacIO ADB driver' CONFIG_ADB_MACIO
-     bool '   Include PMU (Powerbook) ADB driver' CONFIG_ADB_PMU
-     bool 'Support for ADB keyboard' CONFIG_ADB_KEYBOARD 
-     bool 'Support for ADB mouse' CONFIG_ADBMOUSE
-  fi
   tristate 'Support for /dev/rtc' CONFIG_PPC_RTC
   bool 'Support for Open Firmware device tree in /proc' CONFIG_PROC_DEVICETREE
   bool 'Support for early boot text console (BootX only)' CONFIG_BOOTX_TEXT
@@ -186,7 +176,7 @@ endmenu
 source drivers/mtd/Config.in
 source drivers/pnp/Config.in
 source drivers/block/Config.in
-#source drivers.new/Config.in
+source drivers/md/Config.in
 
 if [ "$CONFIG_NET" = "y" ]; then
   source net/Config.in
@@ -248,6 +238,38 @@ comment 'Old CD-ROM drivers (not SCSI, not IDE)'
 bool 'Support non-SCSI/IDE/ATAPI CDROM drives' CONFIG_CD_NO_IDESCSI
 if [ "$CONFIG_CD_NO_IDESCSI" != "n" ]; then
   source drivers/cdrom/Config.in
+fi
+endmenu
+
+mainmenu_option next_comment
+comment 'Console drivers'
+source drivers/video/Config.in
+endmenu
+
+source drivers/input/Config.in
+
+mainmenu_option next_comment
+comment 'Macintosh device drivers'
+
+if [ "$CONFIG_ALL_PPC" = "y" ]; then
+  # we want to change this to something like CONFIG_SYSCTRL_CUDA/PMU
+  bool 'Support for CUDA based PowerMacs' CONFIG_ADB_CUDA
+  bool 'Support for PMU  based PowerMacs' CONFIG_ADB_PMU
+  if [ "$CONFIG_ADB_PMU" = "y" ]; then
+     bool '   Power management support for PowerBooks' CONFIG_PMAC_PBOOK
+     # made a separate option since backlight may end up beeing used
+     # on non-powerbook machines (but only on PMU based ones AFAIK)
+     bool '   Backlight control for LCD screens' CONFIG_PMAC_BACKLIGHT
+  fi
+  bool 'Support for PowerMac floppy' CONFIG_MAC_FLOPPY
+  tristate 'Support for PowerMac serial ports' CONFIG_MAC_SERIAL
+  if [ "$CONFIG_MAC_SERIAL" = "y" ]; then
+     bool '   Support for console on serial port' CONFIG_SERIAL_CONSOLE
+  fi
+  bool 'Apple Desktop Bus (ADB) support' CONFIG_ADB
+  if [ "$CONFIG_ADB" = "y" ]; then
+     bool '   Include MacIO (CHRP) ADB driver' CONFIG_ADB_MACIO
+  fi
 fi
 endmenu
 

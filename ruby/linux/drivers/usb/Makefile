@@ -6,7 +6,6 @@
 
 SUB_DIRS	:=
 MOD_SUB_DIRS	:= $(SUB_DIRS)
-MOD_IN_SUB_DIRS	:= $(SUB_DIRS)
 ALL_SUB_DIRS	:= $(SUB_DIRS) serial storage
 
 # The target object and module list name.
@@ -60,25 +59,26 @@ obj-$(CONFIG_USB_RIO500)	+= rio500.o
 obj-$(CONFIG_USB_DSBR)		+= dsbr100.o
 obj-$(CONFIG_USB_MICROTEK)	+= microtek.o
 obj-$(CONFIG_USB_BLUETOOTH)	+= bluetooth.o
+obj-$(CONFIG_USB_NET1080)	+= net1080.o
 
 # Object files in subdirectories
 
 ifeq ($(CONFIG_USB_SERIAL),y)
-       SUB_DIRS += serial
-       obj-y += serial/usb-serial.o
+	SUB_DIRS += serial
+	obj-y += serial/usb-serial.o
 else
-       ifeq ($(CONFIG_USB_SERIAL),m)
-               MOD_IN_SUB_DIRS += serial
-       endif
+	ifeq ($(CONFIG_USB_SERIAL),m)
+		MOD_SUB_DIRS += serial
+	endif
 endif
 
 ifeq ($(CONFIG_USB_STORAGE),y)
-       SUB_DIRS += storage
-       obj-y += storage/storage.o
+	SUB_DIRS += storage
+	obj-y += storage/storage.o
 else
-       ifeq ($(CONFIG_USB_STORAGE),m)
-               MOD_IN_SUB_DIRS += storage
-       endif
+	ifeq ($(CONFIG_USB_STORAGE),m)
+		MOD_SUB_DIRS += storage
+	endif
 endif
 
 # Extract lists of the multi-part drivers.
@@ -93,10 +93,6 @@ int-m		:= $(sort $(foreach m, $(multi-m), $($(basename $(m))-objs)))
 
 obj-m		:= $(filter-out $(obj-y), $(obj-m))
 int-m		:= $(filter-out $(int-y), $(int-m))
-
-# Take multi-part drivers out of obj-y and put components in.
-
-obj-y		:= $(filter-out $(list-multi), $(obj-y)) $(int-y)
 
 # Translate to Rules.make lists.
 
@@ -115,3 +111,4 @@ include $(TOPDIR)/Rules.make
 
 usbcore.o: $(usbcore-objs)
 	$(LD) -r -o $@ $(usbcore-objs)
+
