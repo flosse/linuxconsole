@@ -130,8 +130,8 @@ if [ "$CONFIG_FB" = "y" ]; then
       tristate '  ATI Rage 128 display support (EXPERIMENTAL)' CONFIG_FB_ATY128
       tristate '  3Dfx acceleration support' CONFIG_FB_TDFX 
       if [ "$CONFIG_FB_TDFX" != "n" ]; then		
-      	 bool '    Voodoo 1 display support (EXPERIMENTAL)' CONFIG_FB_SST	
          bool '    3Dfx Banshee/Voodoo3 display support (EXPERIMENTAL)' CONFIG_FB_3DFX
+      	 bool '    Voodoo 1 display support (EXPERIMENTAL)' CONFIG_FB_SST	
       fi	
       tristate '  SIS 630/540 display support (EXPERIMENTAL)' CONFIG_FB_SIS
    fi
