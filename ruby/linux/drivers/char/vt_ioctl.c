@@ -1142,7 +1142,7 @@ void reset_vc(unsigned int new_console)
 	vt_cons[new_console]->vt_mode.frsig = 0;
 	vt_cons[new_console]->vt_pid = -1;
 	vt_cons[new_console]->vt_newvt = -1;
-	reset_palette (new_console) ;
+	reset_palette(vc_cons[new_console].d);
 }
 
 /*
