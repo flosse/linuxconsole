@@ -132,9 +132,7 @@ static int tmdc_read_packet(struct gameport *gameport, unsigned char data[2][TMD
 
 	__restore_flags(flags);
 
-	printk(KERN_DEBUG "tmdc.c: t0 %d t1 %d i0 %d i1 %d\n", t[0], t[1], i[0], i[1]);
-
-	return (i[0] == TMDC_MAX_LENGTH) | ((t[1] == TMDC_MAX_LENGTH) << 1);
+	return (i[0] == TMDC_MAX_LENGTH) | ((i[1] == TMDC_MAX_LENGTH) << 1);
 }
 
 /*
@@ -260,17 +258,13 @@ static void tmdc_connect(struct gameport *gameport, struct gameport_dev *dev)
 	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW))
 		goto fail1;
 
-	if (!(tmdc->exists = tmdc_read_packet(gameport, data))) {
-		printk(KERN_DEBUG "tmdc.c: No joysticks found.\n");
+	if (!(tmdc->exists = tmdc_read_packet(gameport, data)))
 		goto fail2;
-	}
 
 	for (j = 0; j < 2; j++)
 		if (tmdc->exists & (1 << j)) {
 
 			tmdc->mode[j] = data[j][TMDC_BYTE_ID];
-
-			printk(KERN_DEBUG "tmdc.c: %d id=%d\n", j, tmdc->mode[j]);
 
 			for (m = 0; models[m].id && models[m].id != tmdc->mode[j]; m++);
 
