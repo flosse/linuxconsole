@@ -225,47 +225,6 @@ static int hid_lgff_event(struct hid_device *hid, struct input_dev* input,
 
 }
 
-static void hid_lgff_make_rumble(struct hid_device* hid)
-{
-	struct hid_ff_logitech *lgff = hid->ff_private;
-	char packet[] = {0x03, 0x42, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00};
-	int err;
-	int left = 0, right = 0;
-	int i;
-
-	dbg("in hid_make_rumble");
-	memcpy(lgff->buf, packet, 8);
-
-
-	for (i=0; i<LGFF_EFFECTS; ++i) {
-		if (test_bit(EFFECT_USED, lgff->effects[i].flags)
-		    && test_bit(EFFECT_PLAYING, lgff->effects[i].flags)) {
-			left += lgff->effects[i].left;
-			right += lgff->effects[i].right;
-		}
-	}
-
-	lgff->buf[3] = left > 0x7f ? 0x7f : left;
-	lgff->buf[4] = right > 0x7f ? 0x7f : right;
-
-	/*FIXME: needs a queue. I should at least check if the urb is
-	  available */
-	lgff->urbffout->pipe = usb_sndctrlpipe(hid->dev, 0);
-	lgff->ffcr.bRequestType = USB_TYPE_CLASS | USB_DIR_OUT | USB_RECIP_INTERFACE;
-	lgff->urbffout->transfer_buffer_length = lgff->ffcr.wLength = 8;
-	lgff->ffcr.bRequest = 9;
-	lgff->ffcr.wValue = 0x0203;    /*NOTE: Potential problem with 
-					 little/big endian */
-	lgff->ffcr.wIndex = 0;
-	
-	lgff->urbffout->dev = hid->dev;
-	
-	if ((err=usb_submit_urb(lgff->urbffout, GFP_ATOMIC)))
-		warn("usb_submit_urb returned %d", err);
-	dbg("rumble urb submited");
-}
-
-
 /* Erase all effects this process owns */
 static int hid_lgff_flush(struct input_dev *dev, struct file *file)
 {
@@ -305,16 +264,6 @@ static int hid_lgff_erase(struct input_dev *dev, int id)
 	spin_unlock_irqrestore(&lgff->lock, flags);
 
 	return 0;
-}
-
-static void hid_lgff_ctrl_out(struct urb *urb)
-{
-	struct hid_device *hid = urb->context;
-
-	if (urb->status)
-		warn("hid_irq_ffout status %d received", urb->status);
-
-	wake_up(&((struct hid_ff_logitech *)(hid->ff_private))->wait);
 }
 
 static int hid_lgff_upload_effect(struct input_dev* input,
@@ -382,6 +331,56 @@ static int hid_lgff_upload_effect(struct input_dev* input,
 
 	spin_unlock_irqrestore(&lgff->lock, flags);
 	return 0;
+}
+
+static void hid_lgff_make_rumble(struct hid_device* hid)
+{
+	struct hid_ff_logitech *lgff = hid->ff_private;
+	char packet[] = {0x03, 0x42, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00};
+	int err;
+	int left = 0, right = 0;
+	int i;
+
+	dbg("in hid_make_rumble");
+	memcpy(lgff->buf, packet, 8);
+
+
+	for (i=0; i<LGFF_EFFECTS; ++i) {
+		if (test_bit(EFFECT_USED, lgff->effects[i].flags)
+		    && test_bit(EFFECT_PLAYING, lgff->effects[i].flags)) {
+			left += lgff->effects[i].left;
+			right += lgff->effects[i].right;
+		}
+	}
+
+	lgff->buf[3] = left > 0x7f ? 0x7f : left;
+	lgff->buf[4] = right > 0x7f ? 0x7f : right;
+
+	/*FIXME: needs a queue. I should at least check if the urb is
+	  available */
+	lgff->urbffout->pipe = usb_sndctrlpipe(hid->dev, 0);
+	lgff->ffcr.bRequestType = USB_TYPE_CLASS | USB_DIR_OUT | USB_RECIP_INTERFACE;
+	lgff->urbffout->transfer_buffer_length = lgff->ffcr.wLength = 8;
+	lgff->ffcr.bRequest = 9;
+	lgff->ffcr.wValue = 0x0203;    /*NOTE: Potential problem with 
+					 little/big endian */
+	lgff->ffcr.wIndex = 0;
+	
+	lgff->urbffout->dev = hid->dev;
+	
+	if ((err=usb_submit_urb(lgff->urbffout, GFP_ATOMIC)))
+		warn("usb_submit_urb returned %d", err);
+	dbg("rumble urb submited");
+}
+
+static void hid_lgff_ctrl_out(struct urb *urb)
+{
+	struct hid_device *hid = urb->context;
+
+	if (urb->status)
+		warn("hid_irq_ffout status %d received", urb->status);
+
+	wake_up(&((struct hid_ff_logitech *)(hid->ff_private))->wait);
 }
 
 /* Lock must be held by caller */
