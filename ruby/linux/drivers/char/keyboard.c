@@ -740,6 +740,8 @@ static void k_ascii(struct vc_data *vc, unsigned char value, char up_flag)
 
 static void k_lock(struct vc_data *vc, unsigned char value, char up_flag)
 {
+	struct kbd_struct* kbd = &vc->kbd_table;
+
 	if (up_flag || rep)
 		return;
 
