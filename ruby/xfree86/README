@@ -1,0 +1,130 @@
+							-*- Outline -*-
+ 
+
+				 Tuntitko 0.0.1
+			       -=-=-=-=-=-=-=-=-
+
+* Compilation
+
+** XFree86 v 3.3.x
+
+  Untar source tarball and edit makefile to meed your needs. For now Makefile
+expects that XFree86 source code is untared in /usr/src/xc directory (this
+should change in future and tuntitko will cary necessary include files so users
+can compile tuntitko without need of untared source code for whole X server...)
+
+* Configuration (/etc/XF86Config)
+
+** Section "Module"
+
+  For XFree86 3.3 add folowing line:
+
+	Load "tuntitko-33.so"
+
+** Section "Xinput"
+
+ Up to four SubSections "LInputX" (x = 0..3), in each subsection these
+lines can be used:
+
+*** DeviceName STRING
+
+  Where string is name of device as it will be known to X
+applications.
+
+*** Device PATH
+
+  Where PATH is path to Linux Input Driver's event device file which
+you want to use as X input device - for example "/dev/input/event0"
+
+*** NumberOfValuators NUMBER
+
+  NUMBER of valuators to be supported by your X device. Up to 6
+valuators are supported by X input devices (FIXME: afaik, have to find
+some reference in other docs :)
+
+*** Valuator N
+
+  This keyword starts small sub-subsection to specify attributes of
+N-th valuator. This subsection should be ended using EndValuator
+keyword.
+
+
+**** Map "VALUATORNAME"
+
+  Maps N-th valuator to Linux Input Device VALUATORNAME. This name of
+valuator is the same as reported from (for example) evtest utility
+from linux input utilities package.
+
+**** Reverse NUMBER
+
+  If non zero, valuator will be reported reverted (upside down)
+
+*** Button NUMBER BUTTON_NAME
+
+  Maps BUTTON_NAME (which is any valid button name as reported from evtest
+utility) to button NUMBER. NUMBER is positive integer (in X buttons start from 1)
+If you supply -1 as button NUMBER, button reporting will be disabled...
+
+** Default vaues for LInputX 
+
+  (where X is number between 0 and 3)
+
+  DeviceName	"LInputX"
+  Device	"/dev/input/eventX"
+  NumberOfValuators 2
+  Valuator 0
+    Map "X"
+  EndValuator 
+  Valuator 1
+    Map "Y"
+  EndValuator   
+
+** Example for "KYE SYSTEM Corp Tablet"
+
+   Section "Xinput"
+       SubSection "LInput1"
+   	   DeviceName      "Tablet"
+   	   Device          "/dev/input/event0"
+   	   NumberOfValuators 3
+   	   Valuator 0
+   	     Map	"X"
+   	   EndValuator
+   	   Valuator 1
+   	     Map   "Y"
+   	     Reverse 1
+   	   EndValuator
+   	   Valuator 2
+   	     Map    "Pressure"
+   	   EndValuator	
+	   Button  "Touch"   1
+	   Button  "Stylus"  2
+	   Button  "ToolPen" "disabled"   # ??? pen near tablet reported by
+					  # linux input ??? -=> disable ! :)
+       EndSubSection
+   EndSection
+
+* Usage
+
+** Changing core pointer `xsetpointer NAME'
+  
+  Where NAME is name of our input device - for example `xsetpointer Tablet' from
+our "KYE SYSTEM Corp Tablet" example above.
+
+** Using devices in Gnome/Gtk applications
+
+*** Compiling Gtk+
+
+  Gtk+ 1.2.x should be configured with xfree input support (--with-xinput=xfree). 
+Do not know why but second option (gxid) did not worked... (so I should figure
+later... :)
+
+  After compile you should try to run gtk+-1.2.x/gtk/testinput and check if your
+device appeared in input dialog.
+
+*** Gimp
+
+  If testinput program (from gtk source code tree) worked for you, using Gimp & Linux
+input devices should be stright forward. Just bring down Input dialog and
+Configure your device according to your needs.
+
+  Happy Gimping!

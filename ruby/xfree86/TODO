@@ -1,0 +1,11 @@
+							-*- Outline -*-
+
+* Documentation (? doxygen)
+
+* XFree86 v4.0 part
+
+* what's the difference between gtk's xfree & gxid input handling?
+
+* more heuristics for device type recognition in `tunAutoconfigDeviceRec'
+
+* incorporate valuator resolution (min, max,..)
