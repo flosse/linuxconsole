@@ -642,6 +642,7 @@ static __inline__ void *fb_memmove(void *d, const void *s, size_t count)
 	    src--;
 	    dst--;
 	    fb_writeb(fb_readb(src), dst);
+	}
     }
 
     return d;
@@ -709,6 +710,7 @@ static __inline__ void fast_memmove(char *d, const char *s, size_t count)
 	    src--;
 	    dst--;	
 	    fb_writeb(fb_readb(src), dst);
+	}
     }
 }
 
