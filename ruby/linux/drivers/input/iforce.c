@@ -439,6 +439,7 @@ static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char 
 			if (data[1] & 0x80) {
 				if (!test_and_set_bit(FF_CORE_IS_PLAYED, iforce->core_effects[i].flags)) {
 				/* Report play event */
+				input_report_ff_status(dev, i, FF_STATUS_PLAYING);	
 printk(KERN_DEBUG "iforce.c: effect %d started to play\n", i);
 				}
 			}
@@ -446,19 +447,19 @@ printk(KERN_DEBUG "iforce.c: effect %d started to play\n", i);
 				if (!test_bit(FF_CORE_SHOULD_PLAY, iforce->core_effects[i].flags)) {
 					if (test_and_clear_bit(FF_CORE_IS_PLAYED, iforce->core_effects[i].flags)) {
 					/* Report stop event */
+					input_report_ff_status(dev, i, FF_STATUS_STOPPED);	
 printk(KERN_DEBUG "iforce.c: effect %d stopped to play\n", i);
 					}
 				}
 				else {
-printk(KERN_DEBUG "iforce.c: effect %d stopped, while it should not\nStarting again\n", i);
-					iforce_input_event(dev, EV_FF, i, 1);
+printk(KERN_WARNING "iforce.c: effect %d stopped, while it should not\nStarting again\n", i);
 				}
 			}
 			if (LO(cmd) > 3) {
 				int j;
-dump_packet("ff status", cmd, data);
 				for (j=3; j<LO(cmd); j+=2) {
-					mark_core_as_ready(iforce, data[j] | (data[j+1]<<8));
+					if (mark_core_as_ready(iforce, data[j] | (data[j+1]<<8)))
+						dump_packet("ff status", cmd, data);
 				}
 			}
 			break;
@@ -1217,7 +1218,7 @@ static int iforce_init_device(struct iforce *iforce)
  * Set input device bitfields and ranges.
  */
 
-	iforce->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS) | BIT(EV_FF);
+	iforce->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS) | BIT(EV_FF) | BIT(EV_FF_STATUS);
 
 	for (i = 0; iforce->type->btn[i] >= 0; i++) {
 		signed short t = iforce->type->btn[i];
