@@ -501,12 +501,10 @@ struct ff_constant_effect {
         __s16 level;            /* Strength of effect */
 	__u16 direction;        /* Direction of effect (see periodic effects) */ 
 	struct ff_shape shape;
-	struct ff_trigger trigger;
-	struct ff_replay replay;
 };
 
 /* FF_SPRING of FF_FRICTION */
-struct ff_position_effect {
+struct ff_interactive_effect {
 	__u16 axis;		/* Axis along which effect must be created */
  
 	__s16 right_saturation; /* Max level when joystick is on the right */
@@ -519,8 +517,6 @@ struct ff_position_effect {
 	__u16 deadband;         /* Size of area where no force is produced */
 	__s16 center;           /* Position of dead dead zone */
  
-	struct ff_trigger trigger;
-	struct ff_replay replay;
 };
 
 /* FF_PERIODIC */
@@ -534,8 +530,6 @@ struct ff_periodic_effect {
                                               90 deg -> 0x4000 */
  
 	struct ff_shape shape;
-	struct ff_trigger trigger;
-	struct ff_replay replay;
 };
 
 /*
@@ -544,10 +538,14 @@ struct ff_periodic_effect {
 struct ff_effect {
 	__u16 type;
 	__u16 id;	/* Unique id of created effect */
+
+	struct ff_trigger trigger;
+	struct ff_replay replay;
+
 	union {
 		struct ff_constant_effect constant;
 		struct ff_periodic_effect periodic;
-		struct ff_position_effect spring;
+		struct ff_interactive_effect interactive;
 	} u;
 };
 
