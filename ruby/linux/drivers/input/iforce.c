@@ -35,6 +35,7 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/spinlock.h>
+#include <asm/semaphore.h>
 #include <linux/usb.h>
 #include <linux/serio.h>
 #include <linux/config.h>
@@ -63,7 +64,8 @@ struct iforce {
         int open;
         int idx, pkt, len, id;
         unsigned char csum;
-	int ff_next_id;		/* The id to assign to the next component of an effect */
+	int ff_next_id;		/* FF: The id to assign to the next component of an effect */
+	struct semaphore ff_mutex;	/* FF: to avoid that several threads send commands at the same time to the device */
 };
 
 static struct {
@@ -105,7 +107,8 @@ static void send_serio(struct serio* pserio, unsigned char* data)
  */
 static int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {
-	struct serio* serio = ((struct iforce*)(dev->private))->serio;
+	struct iforce* iforce = (struct iforce*)(dev->private);
+	struct serio* serio = iforce->serio;
 
 printk(KERN_DEBUG "iforce ff: input event %d %d %d\n", type, code, value);
 
@@ -118,7 +121,9 @@ printk(KERN_DEBUG "iforce ff: input event %d %d %d\n", type, code, value);
 	        data[4] = (value == 1)?0x01:0x41;
 	        data[5] = (unsigned char)value;
  
+		down_interruptible(&(iforce->ff_mutex));
 	        send_serio(serio, data);
+		up(&(iforce->ff_mutex));
 
 		return 0; 
 	}
@@ -129,7 +134,9 @@ printk(KERN_DEBUG "iforce ff: input event %d %d %d\n", type, code, value);
 		printk(KERN_DEBUG "iforce ff: stop effect %d\n", effect_id); 
 		data[3] = (unsigned char)effect_id;
  
+		down_interruptible(&(iforce->ff_mutex));
 		send_serio(serio, data);
+		up(&(iforce->ff_mutex));
 
 		return 0; 
 	}
@@ -139,6 +146,8 @@ printk(KERN_DEBUG "iforce ff: input event %d %d %d\n", type, code, value);
 /*
  * Set the magnitude of a constant force effect
  * Return the id of the modifier
+ *
+ * Note: caller must ensure exclusive access to device
  */
 static int make_magnitude_modifier(struct iforce* iforce, __s16 level)
 {
@@ -405,7 +414,6 @@ static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* ef
 /*
  * Function called when an ioctl is performed on the event dev entry.
  * It uploads an effect to the device
- * TODO: Need mutex ?
  */
 static void iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 {
@@ -419,6 +427,7 @@ static void iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect
 		iforce->ff_next_id = 0;
 	}
 
+	down_interruptible(&(iforce->ff_mutex));
 	switch (effect->type) {
 	case FF_PERIODIC:
 		iforce_upload_periodic(iforce, effect);
@@ -433,6 +442,7 @@ static void iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect
 		iforce_upload_interactive(iforce, effect);
 		break;
 	};
+	up(&(iforce->ff_mutex));
 }
 
 static void iforce_process_packet(struct input_dev *dev, unsigned char id, int idx, unsigned char *data)
@@ -660,6 +670,10 @@ static void iforce_serio_irq(struct serio *serio, unsigned char data, unsigned i
 static void iforce_serio_connect(struct serio *serio, struct serio_dev *dev)
 {
 	struct iforce *iforce;
+	/*
+	 * HACK: this mutex is only used to initialize iforce->ff_mutex
+	 */
+	DECLARE_MUTEX(ff_mutex_initializer);
 
 	if (serio->type != (SERIO_RS232 | SERIO_IFORCE))
 		return;
@@ -678,6 +692,9 @@ static void iforce_serio_connect(struct serio *serio, struct serio_dev *dev)
 
 	/* FF: iforce_input_event() needs a reference to serio */
 	iforce->serio = serio;
+
+	/* FF: initialize semaphore protecting write access to the device */
+	iforce->ff_mutex = ff_mutex_initializer;
 
 	serio->private = iforce;
 
