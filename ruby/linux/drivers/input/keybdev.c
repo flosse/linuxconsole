@@ -244,5 +244,3 @@ static void __exit keybdev_exit(void)
 module_init(keybdev_init);
 module_exit(keybdev_exit);
 
-MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
-MODULE_DESCRIPTION("Input driver to keyboard driver binding");
