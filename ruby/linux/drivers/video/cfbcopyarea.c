@@ -31,16 +31,11 @@ void cfb_copyarea(struct fb_info *p, int sx, int sy, unsigned int width,
 		   unsigned int rows, int dx, int dy)
 {
   unsigned long start_index, end_index, start_mask, end_mask, last,tmp, height;
-  int lineincr, shift, shift_right, shift_left, old_dx,old_dy;
-  int x2, y2, n, j; 
-  int linesize = p->fix.line_length;
-#if defined(__sparc64__) || defined(__alpha__)
-  u64 *dst = NULL, *src = NULL;
-#else
-  u32 *dst = NULL, *src = NULL;
-#endif
+  int x2, y2, n, j, lineincr, shift, shift_right, shift_left, old_dx,old_dy;
+  int linesize = p->fix.line_length, bpl = sizeof(unsigned long);
+  unsigned long *dst = NULL, *src = NULL;
   char *src1,*dst1;
-  
+ 
   /* clip the destination */
   old_dx=dx;
   old_dy=dy;
@@ -52,7 +47,7 @@ void cfb_copyarea(struct fb_info *p, int sx, int sy, unsigned int width,
   dx = dx > 0 ? dx : 0;
   dy = dy > 0 ? dy : 0;
   x2 = x2 < p->var.xres_virtual ? x2 : p->var.xres_virtual;
-  y2 = y2 > p->var.yres_virtual ? y2 : p->var.yres_virtual;
+  y2 = y2 < p->var.yres_virtual ? y2 : p->var.yres_virtual;
   width = x2 - dx;
   rows = y2 - dy;
   
@@ -67,149 +62,154 @@ void cfb_copyarea(struct fb_info *p, int sx, int sy, unsigned int width,
       (sy + height) > p->var.yres_virtual) return;
   
   if (dy < sy || (dy == sy && dx < sx)) {
-    /* start at the top */
-    src1 = p->screen_base + sy * linesize + 
-      ((sx * p->var.bits_per_pixel) >> 3);
-    dst1 = p->screen_base + dy * linesize +
-      ((dx * p->var.bits_per_pixel) >> 3);
-    lineincr = linesize;
+    	/* start at the top */
+    	src1 = p->screen_base + sy * linesize + 
+      		((sx * p->var.bits_per_pixel) >> 3);
+    	dst1 = p->screen_base + dy * linesize +
+      		((dx * p->var.bits_per_pixel) >> 3);
+    	lineincr = linesize;
   } else {
-    /* start at the bottom */
-    src1 = p->screen_base + (sy + height - 1) * linesize + 
-      (((sx + width - 1) * p->var.bits_per_pixel) >> 3); 
-    dst1 = p->screen_base + (dy + height - 1) * linesize + 
-      (((dx+ width - 1) * p->var.bits_per_pixel) >> 3); 
-    lineincr = -linesize;
+    	/* start at the bottom */
+    	src1 = p->screen_base + (sy + height - 1) * linesize + 
+      		(((sx + width - 1) * p->var.bits_per_pixel) >> 3); 
+    	dst1 = p->screen_base + (dy + height - 1) * linesize + 
+      		(((dx + width - 1) * p->var.bits_per_pixel) >> 3); 
+    	lineincr = -linesize;
   }
     
   if ((BITS_PER_LONG % p->var.bits_per_pixel) == 0) {
-    int ppw = BITS_PER_LONG/p->var.bits_per_pixel;
-    
-    shift = (dx & (ppw-1)) - (sx & (ppw-1));
-    
-    start_mask = end_mask = -1;
-    
-    start_index = (sx && (ppw-1));
-    end_index = (ppw-1) - ((sx + width) && (ppw-1));
-    
-    start_mask = start_mask >> (start_index * p->var.bits_per_pixel);
-    end_mask = end_mask << (end_index * p->var.bits_per_pixel);
-    
-    if ((((start_index + shift) && (ppw-1)) + width) > ppw) {
-      n = (width - start_index - end_index)/ppw;
-      
-      /* This happens the most often. Saves a jump */
-      if (shift) {
-	if (shift > 0) {
-	  /* dest is over to right more */
-	  shift_right= shift * p->var.bits_per_pixel; 
-	  shift_left= (ppw - shift) * p->var.bits_per_pixel;
-	} else {
-	  /* source is to the right more */
-	  shift_right= (ppw + shift) * p->var.bits_per_pixel; 
-	  shift_left= -shift * p->var.bits_per_pixel; 
+    	int ppw = BITS_PER_LONG/p->var.bits_per_pixel;
+	int n = ((width * p->var.bits_per_pixel) >> 3);   
+
+    	start_index = ((unsigned long) src1 & (bpl-1));
+    	end_index = ((unsigned long) (src1 + n) & (bpl-1));
+    	shift = ((unsigned long)dst1 & (bpl-1)) - ((unsigned long) src1 & (bpl-1));
+    	start_mask = end_mask = 0;
+   
+	if (start_index) { 
+    		start_mask = -1 >> (start_index << 3);
+    		n -= (bpl - start_index);
 	}
 	
-	/* general case, positive increment */
-	if (lineincr > 0) {
-	  if (shift < 0)
-	    n++;
-	  do {
-#if defined(__sparc64__) || defined(__alpha__)
-	    dst=(u64 *)dst1;
-            src=(u64 *)src1;
+	if (end_index) {
+		end_mask = -1 << ((bpl - end_index) << 3);
+		n -= end_index;
+	}   
+	n = n/bpl;
 
-            last = (readq(src) & start_mask);
-#else
-	    dst=(u32 *)dst1;
-	    src=(u32 *)src1;
+	if (n <= 0) {
+		if (start_mask) {
+        		if (end_mask)
+                		end_mask &= start_mask;
+        		else
+                		end_mask = start_mask;
+        		start_mask = 0;
+    		}
+    		n = 0;
+  	}
 
-            last = (readl(src) & start_mask);
-#endif
-	    if (shift > 0) 
-#if defined(__sparc64__) || defined(__alpha__)
-	      writeq(readq(dst) | (last >> shift_right), dst);	
-#else
-	      writel(readl(dst) | (last >> shift_right), dst);	
-#endif
-	    for(j=0;j<n;j++) {
-	      dst++;
-	      tmp = readl(src);
-	      src++;	
-	      *dst = (last << shift_left) | (tmp >> shift_right);
-	      writel ((last << shift_left) | (tmp >> shift_right), dst);
-	      last = tmp;
-	      src++;
-	    }
-	    writel (readl(dst) | (last << shift_left), dst);	
-	    src1 += lineincr;
-	    dst1 += lineincr;
-	  } while (--height);
+	if (shift) {
+		if (shift > 0) {
+                        /* dest is over to right more */
+                        shift_right= shift * p->var.bits_per_pixel;
+                        shift_left= (ppw - shift) * p->var.bits_per_pixel;
+                } else {
+                        /* source is to the right more */
+                        shift_right= (ppw + shift) * p->var.bits_per_pixel;
+                        shift_left= -shift * p->var.bits_per_pixel;
+                }
+		/* general case, positive increment */
+                if (lineincr > 0) {
+                        if (shift < 0)
+                                n++;
+                        do {
+                                dst = (unsigned long *)dst1;
+                                src = (unsigned long *)src1;
+
+                                last = (fb_readl(src) & start_mask);
+
+                                if (shift > 0)
+                         		fb_writel(fb_readl(dst) | (last >> shift_right), dst);
+                                for (j = 0; j<n; j++) {
+                                        dst++;
+                                        tmp = fb_readl(src);
+                                        src++;
+                                        fb_writel((last << shift_left) | 
+						  (tmp >> shift_right),dst);
+                                        last = tmp;
+                                        src++;
+                                }
+                                fb_writel(fb_readl(dst) | (last << shift_left),
+					  dst);
+                                src1 += lineincr;
+				dst1 += lineincr;
+                        } while (--height);
+		} else {
+			/* general case, negative increment */
+                        if (shift > 0)
+                                n++;
+                        do {
+                                dst = (unsigned long *)dst1;
+                                src = (unsigned long *)src1;
+
+                                last = (fb_readl(src) & end_mask);
+
+                                if (shift < 0)
+					fb_writel(fb_readl(dst) | (last >> shift_right), dst);
+                                for ( j=0; j<n; j++) {
+                                        dst--;
+                                        tmp = fb_readl(src);
+                                	src--;
+				        fb_writel((tmp << shift_left) | 
+						  (last >> shift_right),dst);
+                                        last = tmp;
+					src--;
+                                }
+                                fb_writel(fb_readl(dst) | (last >> shift_right),
+					  dst);
+				src1 += lineincr;
+                                dst1 += lineincr;
+                        } while (--height);
+                }
 	} else {
-	  /* general case, negative increment */
-	  if (shift > 0) 
-	    n++;
-	  do {
-	    dst=(unsigned long *)dst1;
-	    src=(unsigned long *)src1;
-	    
-	    last = (*src & end_mask);
-	    if (shift < 0) 
-	      *dst |= (last << shift_left);
-	    for(j=0;j<n;j++) {
-	      dst--;
-	      tmp = *src--;
-	      *dst = (tmp << shift_left) | (last >> shift_right);
-	      last = tmp;
-	      src--;
-	    }
-	    *dst |= last >> shift_right;
-	    src1 += lineincr;
-	    dst1 += lineincr;
-	  } while (--height);
-	}
-      } else {
-	/* no shift needed */
-	if (lineincr > 0) {
-	  /* positive increment */	
-	  do {
-	    dst=(unsigned long *)dst1;
-	    src=(unsigned long *)src1;
-	    *dst |= (start_mask & *src);
-	    for(j=0;j<n;j++) 
-	      *dst++ = *src++;
-	    *dst |= (end_mask & *src++);
-	    src1 += lineincr;
-	    dst1 += lineincr;
-	  } while (--height);
-	} else {
-	  /* negative increment */
-	  do {
-	    dst=(unsigned long *)dst1;
-	    src=(unsigned long *)src1;
+		/* no shift needed */
+		if (lineincr > 0) {
+  			/* positive increment */	
+  			do {
+    				dst = (unsigned long *) (dst1 - start_index);
+    				src = (unsigned long *) (src1 - start_index);
+    		
+				if (start_mask)	
+					fb_writel(fb_readl(src) | start_mask, dst);
+    			
+				for (j = 0; j < n; j++) { 
+					fb_writel(fb_readl(src), dst); 
+      					dst++;
+					src++;
+				}
+    				
+				if (end_mask)
+                			fb_writel(fb_readl(src) | end_mask,dst);
+    				src1 += lineincr;
+    				dst1 += lineincr;
+  			} while (--height);
+		} else {
+  			/* negative increment */
+  			do {
+    				dst = (unsigned long *)dst1;
+    				src = (unsigned long *)src1;
 
-	    *dst |= (end_mask & *src);
-	    for(j=0;j<n;j++) 
-	      *dst-- = *src--;
-	    *dst |= (start_mask & *src);
-	    src1 += lineincr;
-	    dst1 += lineincr;
-	  } while (--height);
-	}
-      }
-    } else {
-      start_mask = start_mask && end_mask;
-      do {
-	*dst |= (start_mask & *src);
-	dst += lineincr;
-      }	while (--height);
-    } 
-  } else {
-    int w = (width * p->var.bits_per_pixel) >> 3;
-    do {
-      memmove(dst1,src1,w);
-      src1+=lineincr;
-      dst1+=lineincr;
-    } while (--height);
-  }
+    				if (start_mask)
+					fb_writel(fb_readl(src) | start_mask, dst);
+				for (j = 0; j < n; j++) { 
+					fb_writel(fb_readl(src), dst); 
+      					dst--;
+    					src--;
+    				}
+    				src1 += lineincr;
+    				dst1 += lineincr;
+  			} while (--height);
+		}
+      	}
+   }
 }

@@ -21,9 +21,8 @@
 #include <linux/fb.h>
 #include <asm/types.h>
 
-int cfb_fillrect(struct fb_info *p, unsigned int x1, unsigned int y1, 
-		  unsigned int width, unsigned int rows, unsigned long color, 
-	          int rop)
+void cfb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,  
+		  unsigned int rows, unsigned long color, int rop) 
 {
   unsigned long start_index, end_index, start_mask = 0, end_mask = 0;
   unsigned long height, ppw, fg;
@@ -32,7 +31,7 @@ int cfb_fillrect(struct fb_info *p, unsigned int x1, unsigned int y1,
   unsigned long *dst;
   char *dst1;	
 
-  if (!width || !rows) return -ENXIO;	
+  if (!width || !rows) return;	
  
   /* We could use hardware clipping but on many cards you get around hardware
      clipping by writing to framebuffer directly. */
@@ -51,9 +50,9 @@ int cfb_fillrect(struct fb_info *p, unsigned int x1, unsigned int y1,
   start_index = ((unsigned long) dst1 & (bpl-1));
   end_index = ((unsigned long)(dst1 + n) & (bpl-1));	
 
-  printk("start_index is %ld\n", start_index);
-  printk("end_index is %ld\n", end_index);	
-  printk("width is %d\n", width);	
+ // printk("start_index is %ld\n", start_index);
+ // printk("end_index is %ld\n", end_index);	
+ // printk("width is %d\n", width);	
 
   fg = color;
   
@@ -75,19 +74,19 @@ int cfb_fillrect(struct fb_info *p, unsigned int x1, unsigned int y1,
   n = n/bpl;
 
   if (n <= 0) {
-    if (start_mask) {
-	if (end_mask) 
-		end_mask &= start_mask;
-	else 
-		end_mask = start_mask;
-	start_mask = 0;
-    }
-    n = 0;	
+	if (start_mask) {
+		if (end_mask) 
+			end_mask &= start_mask;
+		else 
+			end_mask = start_mask;
+		start_mask = 0;
+    	}
+    	n = 0;	
   }
 
-  printk("start_mask is %ld\n", start_mask);
-  printk("end_mask is %ld\n", end_mask);
-  printk("n is %d\n", n); 	
+ // printk("start_mask is %ld\n", start_mask);
+//  printk("end_mask is %ld\n", end_mask);
+//  printk("n is %d\n", n); 	
 
   if ((BITS_PER_LONG % p->var.bits_per_pixel) == 0) {
     switch(rop) {
@@ -173,5 +172,5 @@ int cfb_fillrect(struct fb_info *p, unsigned int x1, unsigned int y1,
       break;
     }  
   }
-  return 0;	
+  return;	
 }
