@@ -230,11 +230,10 @@ struct vt_struct {
 	struct vt_struct *next;				
 }; 
 
-extern int current_vc;
 extern struct vt_struct *vt_cons;
 extern struct vt_struct *admin_vt;
 
-void (*kd_mksound)(unsigned int hz, unsigned int ticks);
+void kd_mksound(unsigned int hz, unsigned int ticks);
 
 extern inline void set_console(struct vc_data *vc)
 {
@@ -286,6 +285,7 @@ void update_region(struct vc_data *vc, unsigned long start, int count);
 void update_screen(struct vc_data *vc);
 inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed);
 void invert_screen(struct vc_data *vc, int offset, int count, int viewed);
+void kd_mksound(unsigned int hz, unsigned int ticks);
 void unblank_screen(struct vt_struct *vt);
 void poke_blanked_console(struct vt_struct *vt);
 int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data);
