@@ -640,44 +640,38 @@ static devfs_handle_t devfs_handle = NULL;
 int
 register_framebuffer(struct fb_info *fb_info)
 {
-	int i, j;
+	const char *display_desc = NULL;
+        struct vt_struct *vt;
 	char name_buf[8];
-	static int fb_ever_opened[FB_MAX];
-	static int first = 1;
+	int i, j;
 
-	if (num_registered_fb == FB_MAX)
+	if (num_registered_fb == FB_MAX || fb_info->open)
 		return -ENXIO;
 	num_registered_fb++;
+	fb_info->open++;
 	for (i = 0 ; i < FB_MAX; i++)
 		if (!registered_fb[i])
 			break;
 	fb_info->node = MKDEV(FB_MAJOR, i);
 	registered_fb[i] = fb_info;
-	if (!fb_ever_opened[i]) {
-		struct module *owner = fb_info->fbops->owner;
-		/*
-		 *  We assume initial frame buffer devices can be opened this
-		 *  many times
-		 */
-		for (j = 0; j < MAX_NR_CONSOLES; j++)
-			if (con2fb_map[j] == i) {
-				if (owner)
-					__MOD_INC_USE_COUNT(owner);
-				if (!fb_info->fbops->fb_open)
-					continue;
-				if (!fb_info->fbops->fb_open(fb_info,0))
-					continue;
-				if (owner)
-					__MOD_DEC_USE_COUNT(owner);
-			}
-		fb_ever_opened[i] = 1;
-	}
 
-	if (first) {
-		first = 0;
-		/* take_over_console(&fb_con, first_fb_vc, last_fb_vc, 
-		   fbcon_is_default); */
-	}
+	vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
+        if (!vt) return -ENOMEM;
+        display_desc = create_vt(vt, &fb_con);
+        if (!display_desc) {
+        	kfree(vt);
+                return -ENXIO;
+        }
+        i = vc_allocate(vt->vcs.first_vc);
+        if (i)  {
+        	kfree(vt);
+                return -ENXIO;
+        }
+	vt->last_console = vt->fg_console = vt->vcs.vc_cons[0];
+	printk("Console: %s %s %dx%d", can_do_color ? "colour" : "mono",
+                display_desc, vc->vc_cols, vc->vc_rows);
+        /* take_over_console(vt, &fb_con); */
+
 	sprintf (name_buf, "%d", i);
 	fb_info->devfs_handle =
 	    devfs_register (devfs_handle, name_buf, DEVFS_FL_DEFAULT,
@@ -693,9 +687,8 @@ unregister_framebuffer(struct fb_info *fb_info)
 	int i, j;
 
 	i = GET_FB_IDX(fb_info->node);
-	for (j = 0; j < MAX_NR_CONSOLES; j++)
-		if (con2fb_map[j] == i)
-			return -EBUSY;
+	if (fb_info->open)
+		return -EBUSY; 
 	if (!registered_fb[i])
 		return -EINVAL;
 	devfs_unregister (fb_info->devfs_handle);
