@@ -3397,7 +3397,9 @@ static void con_flush_chars(struct tty_struct *tty)
 	struct vt_struct *vt = (struct vt_struct *)tty->driver_data;
 
 	pm_access(pm_con);
+	spin_lock_irqsave(&console_lock, flags);
 	set_cursor(vt->vc_num);
+	spin_unlock_irqrestore(&console_lock, flags);
 }
 
 /*
