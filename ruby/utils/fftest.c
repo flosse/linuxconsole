@@ -37,7 +37,7 @@
 #define LONG(x) ((x)/BITS_PER_LONG)
 #define test_bit(bit, array)    ((array[LONG(bit)] >> OFF(bit)) & 1)
 
-#define N_EFFECTS 4
+#define N_EFFECTS 5
 
 int main(int argc, char** argv)
 {
@@ -97,7 +97,6 @@ int main(int argc, char** argv)
 
 	if (ioctl(fd, EVIOCGEFFECTS, &n_effects) == -1) {
 		perror("Ioctl number of effects");
-		exit(1);
 	}
 
 	printf("%d\n", n_effects);
@@ -118,7 +117,6 @@ int main(int argc, char** argv)
 
 	if (ioctl(fd, EVIOCSFF, &effects[1]) == -1) {
 		perror("Upload effects[1]");
-		exit(1);
 	}
 
 	/* download a periodic sinusoidal effect */
@@ -141,7 +139,6 @@ int main(int argc, char** argv)
 
 	if (ioctl(fd, EVIOCSFF, &effects[0]) == -1) {
 		perror("Upload effects[0]");
-		exit(1);
 	}
 
 	/* download an condition spring effect */
@@ -161,7 +158,6 @@ int main(int argc, char** argv)
 
 	if (ioctl(fd, EVIOCSFF, &effects[2]) == -1) {
 		perror("Upload effects[2]");
-		exit(1);
 	}
 
 	/* download an condition damper effect */
@@ -181,7 +177,12 @@ int main(int argc, char** argv)
 
 	if (ioctl(fd, EVIOCSFF, &effects[3]) == -1) {
 		perror("Upload effects[3]");
-		exit(1);
+	}
+
+	effects[4].type = FF_RUMBLE;
+	
+	if (ioctl(fd, EVIOCSFF, &effects[4]) == -1) {
+		perror("Upload effects[4]");
 	}
 
 	/* Ask user what effects to play */
