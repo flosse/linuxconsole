@@ -32,7 +32,6 @@ define_bool CONFIG_ISA n
 define_bool CONFIG_PCMCIA n
 define_bool CONFIG_SBUS y
 define_bool CONFIG_SBUSCHAR y
-define_bool CONFIG_BUSMOUSE y
 define_bool CONFIG_SUN_MOUSE y
 define_bool CONFIG_SERIAL y
 define_bool CONFIG_SUN_SERIAL y
@@ -73,32 +72,37 @@ endmenu
 
 source drivers/sbus/char/Config.in
 source drivers/sbus/audio/Config.in
-source drivers/input/Config.in
-source drivers/video/Config.in
 source drivers/mtd/Config.in
+source drivers/video/Config.in
+
 mainmenu_option next_comment
 comment 'Block devices'
 
 bool 'Normal floppy disk support' CONFIG_BLK_DEV_FD
 
-bool 'Multiple devices driver support' CONFIG_BLK_DEV_MD
-if [ "$CONFIG_BLK_DEV_MD" = "y" ]; then
-   tristate '  Linear (append) mode' CONFIG_MD_LINEAR
-   tristate '  RAID-0 (striping) mode' CONFIG_MD_STRIPED
-#   tristate '  RAID-1 (mirroring) mode' CONFIG_MD_MIRRORING
-#   tristate '  RAID-4/RAID-5 mode' CONFIG_MD_RAID5
-fi
+tristate 'Loopback device support' CONFIG_BLK_DEV_LOOP
+dep_tristate 'Network block device support' CONFIG_BLK_DEV_NBD $CONFIG_NET
+
+#tristate 'Logical volume manager (LVM) support' CONFIG_BLK_DEV_LVM N
+#if [ "$CONFIG_BLK_DEV_LVM" != "n" ]; then
+#   bool '   LVM information in proc filesystem' CONFIG_LVM_PROC_FS Y
+#fi
+
+tristate 'Multiple devices driver support' CONFIG_BLK_DEV_MD
+dep_tristate '  Linear (append) mode' CONFIG_MD_LINEAR $CONFIG_BLK_DEV_MD
+dep_tristate '  RAID-0 (striping) mode' CONFIG_MD_RAID0 $CONFIG_BLK_DEV_MD
+dep_tristate '  RAID-1 (mirroring) mode' CONFIG_MD_RAID1 $CONFIG_BLK_DEV_MD
+#dep_tristate '  RAID-4/RAID-5 mode' CONFIG_MD_RAID5 $CONFIG_BLK_DEV_MD
+#if [ "$CONFIG_MD_LINEAR" = "y" -o "$CONFIG_MD_RAID0" = "y" -o "$CONFIG_MD_RAID1" = "y" -o "$CONFIG_MD_RAID5" = "y" ]; then
+#        bool '  Boot support' CONFIG_MD_BOOT
+#        bool '  Auto Detect support' CONFIG_AUTODETECT_RAID
+#fi
 
 tristate 'RAM disk support' CONFIG_BLK_DEV_RAM
 if [ "$CONFIG_BLK_DEV_RAM" = "y" -o "$CONFIG_BLK_DEV_RAM" = "m" ]; then
 	int '   Default RAM disk size' CONFIG_BLK_DEV_RAM_SIZE 4096
 fi
-if [ "$CONFIG_BLK_DEV_RAM" = "y" ]; then
-   bool '  Initial RAM disk (initrd) support' CONFIG_BLK_DEV_INITRD
-fi
-
-tristate 'Loopback device support' CONFIG_BLK_DEV_LOOP
-tristate 'Network block device support' CONFIG_BLK_DEV_NBD
+dep_bool '  Initial RAM disk (initrd) support' CONFIG_BLK_DEV_INITRD $CONFIG_BLK_DEV_RAM
 
 endmenu
 
@@ -226,9 +230,10 @@ if [ "$CONFIG_NET" = "y" ]; then
    if [ "$CONFIG_NETDEVICES" = "y" ]; then
       tristate '  Dummy net driver support' CONFIG_DUMMY
       tristate '  Bonding driver support' CONFIG_BONDING
+      tristate '  Universal TUN/TAP device driver support' CONFIG_TUN
       if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
         if [ "$CONFIG_NETLINK" = "y" ]; then
-          tristate '  Ethertap network tap (EXPERIMENTAL)' CONFIG_ETHERTAP
+          tristate '  Ethertap network tap (OBSOLETE)' CONFIG_ETHERTAP
         fi
       fi
       tristate '  PPP (point-to-point) support' CONFIG_PPP
