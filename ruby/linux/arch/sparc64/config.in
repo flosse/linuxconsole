@@ -23,10 +23,12 @@ comment 'General setup'
 
 define_bool CONFIG_VT y
 define_bool CONFIG_VT_CONSOLE y
-define_bool CONFIG_VT_EXTENED y
 define_bool CONFIG_INPUT y
 
 bool 'Symmetric multi-processing support' CONFIG_SMP
+
+# Identify this as a Sparc64 build
+define_bool CONFIG_SPARC64 y
 
 # Global things across all Sun machines.
 define_bool CONFIG_HAVE_DEC_LOCK y
@@ -69,6 +71,7 @@ dep_tristate '  Parallel printer support' CONFIG_PRINTER $CONFIG_PARPORT
 if [ "$CONFIG_PCI" = "y" ]; then
    tristate 'SUNW, envctrl support' CONFIG_ENVCTRL
    tristate '7-Segment Display support' CONFIG_DISPLAY7SEG
+   tristate 'CP1XXX Hardware Watchdog support' CONFIG_WATCHDOG_CP1XXX
 fi
 endmenu
 
@@ -295,9 +298,6 @@ if [ "$CONFIG_UNIX98_PTYS" = "y" ]; then
 fi
 endmenu
 
-source drivers/input/Config.in
-source drivers/video/Config.in
-
 mainmenu_option next_comment
 comment 'Video For Linux'
 tristate 'Video For Linux' CONFIG_VIDEO_DEV
@@ -315,6 +315,8 @@ dep_tristate '  Creator/Creator3D' CONFIG_DRM_FFB $CONFIG_DRM
 endmenu
 
 source fs/Config.in
+source drivers/input/Config.in
+source drivers/video/Config.in
 
 mainmenu_option next_comment
 comment 'Watchdog'

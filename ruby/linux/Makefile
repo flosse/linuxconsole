@@ -1,6 +1,6 @@
 VERSION = 2
 PATCHLEVEL = 4
-SUBLEVEL = 0
+SUBLEVEL = 1
 EXTRAVERSION = -ruby
 
 KERNELRELEASE=$(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
@@ -110,8 +110,7 @@ export ROOT_DEV = CURRENT
 export SVGA_MODE = -DSVGA_MODE=NORMAL_VGA
 
 #
-# if you want the RAM disk device, define this to be the
-# size in blocks.
+# if you want the RAM disk device, define this to be the size in blocks.
 # This is i386 specific.
 #
 
@@ -457,9 +456,8 @@ export	MODVERFILE
 
 depend dep: dep-files
 
-# make checkconfig: Prune 'scripts' directory to avoid "false positives".
 checkconfig:
-	find * -name '*.[hcS]' -type f -print | grep -v scripts/ | sort | xargs $(PERL) -w scripts/checkconfig.pl
+	find * -name '*.[hcS]' -type f -print | sort | xargs $(PERL) -w scripts/checkconfig.pl
 
 checkhelp:
 	find * -name [cC]onfig.in -print | sort | xargs $(PERL) -w scripts/checkhelp.pl

@@ -146,6 +146,7 @@ extern char _text, _etext, _edata, _end;
 extern unsigned long cpu_khz;
 
 static int disable_x86_serial_nr __initdata = 1;
+static int disable_x86_fxsr __initdata = 0;
 
 /*
  * This is set up by the setup-routine at boot-time
@@ -516,7 +517,7 @@ void __init setup_memory_region(void)
 
 		e820.nr_map = 0;
 		add_memory_region(0, LOWMEMSIZE(), E820_RAM);
-		add_memory_region(HIGH_MEMORY, (mem_size << 10) - HIGH_MEMORY, E820_RAM);
+		add_memory_region(HIGH_MEMORY, mem_size << 10, E820_RAM);
   	}
 	printk("BIOS-provided physical RAM map:\n");
 	print_memory_map(who);
@@ -1390,9 +1391,6 @@ static void __init init_centaur(struct cpuinfo_x86 *c)
 					wrmsr (0x1107, lo, hi);
 
 					set_bit(X86_FEATURE_CX8, &c->x86_capability);
-					rdmsr (0x80000001, lo, hi);
-					if (hi & (1<<31))
-						set_bit(X86_FEATURE_3DNOW, &c->x86_capability);
 
 					get_model_name(c);
 					display_cacheinfo(c);
@@ -1786,6 +1784,13 @@ int __init x86_serial_nr_setup(char *s)
 }
 __setup("serialnumber", x86_serial_nr_setup);
 
+int __init x86_fxsr_setup(char * s)
+{
+	disable_x86_fxsr = 1;
+	return 1;
+}
+__setup("nofxsr", x86_fxsr_setup);
+
 
 /* Standard macro to see if a specific flag is changeable */
 static inline int flag_is_changeable_p(u32 flag)
@@ -1856,7 +1861,8 @@ static int __init id_and_try_enable_cpuid(struct cpuinfo_x86 *c)
 	/* Detect Cyrix with disabled CPUID */
 	if ( c->x86 == 4 && test_cyrix_52div() ) {
 		strcpy(c->x86_vendor_id, "CyrixInstead");
-	}
+	        c->x86_vendor = X86_VENDOR_CYRIX;
+	} else
 
 	/* Detect NexGen with old hypercode */
 	if ( deep_magic_nexgen_probe() ) {
@@ -1990,10 +1996,16 @@ void __init identify_cpu(struct cpuinfo_x86 *c)
 	 */
 
 	/* TSC disabled? */
-#ifdef CONFIG_TSC
+#ifndef CONFIG_X86_TSC
 	if ( tsc_disable )
 		clear_bit(X86_FEATURE_TSC, &c->x86_capability);
 #endif
+
+	/* FXSR disabled? */
+	if (disable_x86_fxsr) {
+		clear_bit(X86_FEATURE_FXSR, &c->x86_capability);
+		clear_bit(X86_FEATURE_XMM, &c->x86_capability);
+	}
 
 	/* Disable the PN if appropriate */
 	squash_the_stupid_serial_number(c);

@@ -26,10 +26,12 @@ comment 'General setup'
 
 define_bool CONFIG_VT y
 define_bool CONFIG_VT_CONSOLE y
-define_bool CONFIG_VT_EXTENDED y
 define_bool CONFIG_INPUT y
 
 bool 'Symmetric multi-processing support (does not work on sun4/sun4c)' CONFIG_SMP
+
+# Identify this as a Sparc32 build
+define_bool CONFIG_SPARC32 y
 
 # Global things across all Sun machines.
 define_bool CONFIG_ISA n
@@ -47,7 +49,6 @@ define_bool CONFIG_SUN_IO y
 
 bool 'Support for SUN4 machines (disables SUN4[CDM] support)' CONFIG_SUN4
 if [ "$CONFIG_SUN4" != "y" ]; then
-   bool 'Support for PCI and PS/2 keyboard/mouse' CONFIG_PCI
    source drivers/pci/Config.in
 else
    define_bool CONFIG_PCI n
