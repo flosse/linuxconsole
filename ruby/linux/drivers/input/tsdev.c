@@ -47,6 +47,14 @@
 #define CONFIG_INPUT_TSDEV_SCREEN_Y	768
 #endif
 
+/* From Compaq's Touch Screen Specification version 0.2 (draft) */
+typedef struct {
+    short pressure;
+    short x;
+    short y;
+    short millisecs;
+} TS_EVENT;
+
 struct tsdev {
 	int exist;
 	int open;
@@ -61,11 +69,11 @@ struct tsdev_list {
 	struct fasync_struct *fasync;
 	struct tsdev *tsdev;
 	struct tsdev_list *next;
-	int dx, dy, dz, oldx, oldy;
+	int dx, dy, oldx, oldy;
 	signed char ps2[6];
 	unsigned long buttons;
 	unsigned char ready, buffer, bufsiz;
-	unsigned char mode, imexseq, impsseq;
+	unsigned char mode;
 };
 
 #define TSDEV_SEQ_LEN	6
@@ -78,88 +86,40 @@ static struct tsdev tsdev_mix;
 static int xres = CONFIG_INPUT_TSDEV_SCREEN_X;
 static int yres = CONFIG_INPUT_TSDEV_SCREEN_Y;
 
-static void tsdev_event(struct input_handle *handle, unsigned int type, unsigned int code, int value)
+static int tsdev_open(struct inode * inode, struct file * file)
 {
-	struct tsdev *tsdevs[3] = { handle->private, &tsdev_mix, NULL };
-	struct tsdev **tsdev = tsdevs;
 	struct tsdev_list *list;
-	int index, size;
+	int i = MINOR(inode->i_rdev) - TSDEV_MINOR_BASE;
 
-	/* Yes it is not a mouse but it is great for the entropy pool */
-	add_mouse_randomness((type << 4) ^ code ^ (code >> 4) ^ value);
+	if (i >= TSDEV_MINORS || !tsdev_table[i])
+		return -ENODEV;
 
-	while (*tsdev) {
-		list = (*tsdev)->list;
-		while (list) {
-			switch (type) {
-				case EV_ABS:
-					if (test_bit(BTN_TRIGGER, handle->dev->keybit))
-						break;
-					switch (code) {
-						case ABS_X:	
-							size = handle->dev->absmax[ABS_X] - handle->dev->absmin[ABS_X];
-							list->dx += (value * xres - list->oldx) / size;
-							list->oldx += list->dx * size;
-							break;
-						case ABS_Y:
-							size = handle->dev->absmax[ABS_Y] - handle->dev->absmin[ABS_Y];
-							list->dy -= (value * yres - list->oldy) / size;
-							list->oldy -= list->dy * size;
-							break;
-					}
-					break;
+	if (!(list = kmalloc(sizeof(struct tsdev_list), GFP_KERNEL)))
+		return -ENOMEM;
+	memset(list, 0, sizeof(struct tsdev_list));
 
-				case EV_REL:
-					switch (code) {
-						case REL_X:	list->dx += value; break;
-						case REL_Y:	list->dy -= value; break;
-						case REL_WHEEL:	if (list->mode) list->dz -= value; break;
-					}
-					break;
+	list->tsdev = tsdev_table[i];
+	list->next = tsdev_table[i]->list;
+	tsdev_table[i]->list = list;
+	file->private_data = list;
 
-				case EV_KEY:
-					switch (code) {
-						case BTN_0:
-						case BTN_TOUCH:
-						case BTN_LEFT:   index = 0; break;
-						case BTN_4:
-						case BTN_EXTRA:  if (list->mode == 2) { index = 4; break; }
-						case BTN_STYLUS:
-						case BTN_1:
-						case BTN_RIGHT:  index = 1; break;
-						case BTN_3:
-						case BTN_SIDE:   if (list->mode == 2) { index = 3; break; }
-						case BTN_2:
-						case BTN_STYLUS2:
-						case BTN_MIDDLE: index = 2; break;	
-						default: return;
-					}
-					switch (value) {
-						case 0: clear_bit(index, &list->buttons); break;
-						case 1: set_bit(index, &list->buttons); break;
-						case 2: return;
-					}
-					break;
+	if (!list->tsdev->open++) {
+		if (list->tsdev->minor == TSDEV_MIX) {
+			struct input_handle *handle = tsdev_handler.handle;
+			while (handle) {
+				struct tsdev *tsdev = handle->private;
+				if (!tsdev->open)
+					if (tsdev->exist)	
+						input_open_device(handle);
+				handle = handle->hnext;
 			}
-					
-			list->ready = 1;
-
-			kill_fasync(&list->fasync, SIGIO, POLL_IN);
-
-			list = list->next;
+		} else {
+			if (!tsdev_mix.open)
+				if (list->tsdev->exist)	
+					input_open_device(&list->tsdev->handle);
 		}
-
-		wake_up_interruptible(&((*tsdev)->wait));
-		tsdev++;
 	}
-}
-
-static int tsdev_fasync(int fd, struct file *file, int on)
-{
-	int retval;
-	struct tsdev_list *list = file->private_data;
-	retval = fasync_helper(fd, file, on, &list->fasync);
-	return retval < 0 ? retval : 0;
+	return 0;
 }
 
 static int tsdev_release(struct inode * inode, struct file * file)
@@ -203,81 +163,9 @@ static int tsdev_release(struct inode * inode, struct file * file)
 			}
 		}
 	}
-	
 	kfree(list);
 	unlock_kernel();
-
 	return 0;
-}
-
-static int tsdev_open(struct inode * inode, struct file * file)
-{
-	struct tsdev_list *list;
-	int i = MINOR(inode->i_rdev) - TSDEV_MINOR_BASE;
-
-	if (i >= TSDEV_MINORS || !tsdev_table[i])
-		return -ENODEV;
-
-	if (!(list = kmalloc(sizeof(struct tsdev_list), GFP_KERNEL)))
-		return -ENOMEM;
-	memset(list, 0, sizeof(struct tsdev_list));
-
-	list->tsdev = tsdev_table[i];
-	list->next = tsdev_table[i]->list;
-	tsdev_table[i]->list = list;
-	file->private_data = list;
-
-	if (!list->tsdev->open++) {
-		if (list->tsdev->minor == TSDEV_MIX) {
-			struct input_handle *handle = tsdev_handler.handle;
-			while (handle) {
-				struct tsdev *tsdev = handle->private;
-				if (!tsdev->open)
-					if (tsdev->exist)	
-						input_open_device(handle);
-				handle = handle->hnext;
-			}
-		} else {
-			if (!tsdev_mix.open)
-				if (list->tsdev->exist)	
-					input_open_device(&list->tsdev->handle);
-		}
-	}
-
-	return 0;
-}
-
-static ssize_t tsdev_write(struct file * file, const char * buffer, size_t count, loff_t *ppos)
-{
-	struct tsdev_list *list = file->private_data;
-	unsigned char c;
-	int i;
-
-	for (i = 0; i < count; i++) {
-
-		if (get_user(c, buffer + i))
-			return -EFAULT;
-
-		switch (c) {
-
-			case 0xeb: /* Poll */
-				break;
-
-			case 0xf2: /* Get ID */
-				break;
-
-			case 0xe9: /* Get info */
-				break;
-		}
-
-		list->buffer = list->bufsiz;
-	}
-
-	kill_fasync(&list->fasync, SIGIO, POLL_IN);
-
-	wake_up_interruptible(&list->tsdev->wait);
-		
-	return count;
 }
 
 static ssize_t tsdev_read(struct file * file, char * buffer, size_t count, loff_t *ppos)
@@ -301,10 +189,8 @@ static ssize_t tsdev_read(struct file * file, char * buffer, size_t count, loff_
 				retval = -ERESTARTSYS;
 				break;
 			}
-
 			schedule();
 		}
-
 		current->state = TASK_RUNNING;
 		remove_wait_queue(&list->tsdev->wait, &wait);
 	}
@@ -312,10 +198,13 @@ static ssize_t tsdev_read(struct file * file, char * buffer, size_t count, loff_
 	if (retval)
 		return retval;
 
+	if (!list->buffer)
+		tsdev_packet();
+
 	if (count > list->buffer)
 		count = list->buffer;
 
-	if (copy_to_user(buffer, list->ps2 + list->bufsiz - list->buffer, count))
+	if (copy_to_user(buffer,list->ps2 + list->bufsiz - list->buffer, count))
 		return -EFAULT;
 	
 	list->buffer -= count;
@@ -327,21 +216,99 @@ static ssize_t tsdev_read(struct file * file, char * buffer, size_t count, loff_
 static unsigned int tsdev_poll(struct file *file, poll_table *wait)
 {
 	struct tsdev_list *list = file->private_data;
+	
 	poll_wait(file, &list->tsdev->wait, wait);
 	if (list->ready || list->buffer)
 		return POLLIN | POLLRDNORM;
 	return 0;
 }
 
+static int tsdev_fasync(int fd, struct file *file, int on)
+{
+	struct tsdev_list *list = file->private_data;
+	int retval;
+
+	retval = fasync_helper(fd, file, on, &list->fasync);
+	return retval < 0 ? retval : 0;
+}
+
 struct file_operations tsdev_fops = {
 	owner:		THIS_MODULE,
-	read:		tsdev_read,
-	write:		tsdev_write,
-	poll:		tsdev_poll,
 	open:		tsdev_open,
 	release:	tsdev_release,
+	read:		tsdev_read,
+	poll:		tsdev_poll,
 	fasync:		tsdev_fasync,
 };
+
+static void tsdev_event(struct input_handle *handle, unsigned int type, unsigned int code, int value)
+{
+	struct tsdev *tsdevs[3] = { handle->private, &tsdev_mix, NULL };
+	struct tsdev **tsdev = tsdevs;
+	struct tsdev_list *list;
+	int index, size;
+
+	/* Yes it is not a mouse but it is great for the entropy pool */
+	add_mouse_randomness((type << 4) ^ code ^ (code >> 4) ^ value);
+
+	while (*tsdev) {
+		list = (*tsdev)->list;
+		while (list) {
+			switch (type) {
+				case EV_ABS:
+					if (test_bit(BTN_TRIGGER, handle->dev->keybit))
+						break;
+					switch (code) {
+						case ABS_X:	
+							size = handle->dev->absmax[ABS_X] - handle->dev->absmin[ABS_X];
+							list->dx += (value * xres - list->oldx) / size;
+							list->oldx += list->dx * size;
+							break;
+						case ABS_Y:
+							size = handle->dev->absmax[ABS_Y] - handle->dev->absmin[ABS_Y];
+							list->dy -= (value * yres - list->oldy) / size;
+							list->oldy -= list->dy * size;
+							break;
+					}
+					break;
+
+				case EV_REL:
+					switch (code) {
+						case REL_X:	
+							list->dx += value; 
+							break;
+						case REL_Y:	
+							list->dy -= value; 
+							break;
+					}
+					break;
+
+				case EV_KEY:
+					switch (code) {
+						case BTN_TOUCH:
+							index = 0; 
+							break;
+						default: 
+							return;
+					}
+					switch (value) {
+						case 0: clear_bit(index, &list->buttons); break;
+						case 1: set_bit(index, &list->buttons); break;
+						case 2: return;
+					}
+					break;
+			}
+			list->ready = 1;
+
+			kill_fasync(&list->fasync, SIGIO, POLL_IN);
+
+			list = list->next;
+		}
+		wake_up_interruptible(&((*tsdev)->wait));
+		tsdev++;
+	}
+}
+
 
 static struct input_handle *tsdev_connect(struct input_handler *handler, struct input_dev *dev)
 {
@@ -375,13 +342,12 @@ static struct input_handle *tsdev_connect(struct input_handler *handler, struct 
 	tsdev->handle.handler = handler;
 	tsdev->handle.private = tsdev;
 
-	tsdev->devfs = input_register_minor("ts%d", minor, TSDEV_MINOR_BASE);
+	tsdev->devfs = input_register_minor("ts", minor, TSDEV_MINOR_BASE);
 
 	if (tsdev_mix.open)
 		input_open_device(&tsdev->handle);
 
-//	printk(KERN_INFO "ts%d: PS/2 ts device for input%d\n", minor, dev->number);
-
+	printk(KERN_INFO "ts: touchscreen device for input%d\n", dev->number);
 	return &tsdev->handle;
 }
 
@@ -419,10 +385,8 @@ static int __init tsdev_init(void)
 	tsdev_table[TSDEV_MIX] = &tsdev_mix;
 	tsdev_mix.exist = 1;
 	tsdev_mix.minor = TSDEV_MIX;
-	tsdev_mix.devfs = input_register_minor("mice", TSDEV_MIX, TSDEV_MINOR_BASE);
-
-	printk(KERN_INFO "mice: PS/2 ts device common for all mice\n");
-
+	tsdev_mix.devfs = input_register_minor("ts", TSDEV_MIX, TSDEV_MINOR_BASE);
+	printk(KERN_INFO "ts: Backwards compatiable touchscreen device\n");
 	return 0;
 }
 
@@ -435,8 +399,8 @@ static void __exit tsdev_exit(void)
 module_init(tsdev_init);
 module_exit(tsdev_exit);
 
-MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
-MODULE_DESCRIPTION("Input driver to xxPS/2 or ImPS/2 device driver");
+MODULE_AUTHOR("James Simmons <jsimmons@transvirtual.com>");
+MODULE_DESCRIPTION("Input driver to Touchscreen device driver");
 MODULE_PARM(xres, "i");
 MODULE_PARM_DESC(xres, "Horizontal screen resolution");
 MODULE_PARM(yres, "i");
