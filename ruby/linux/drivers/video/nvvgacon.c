@@ -35,25 +35,29 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/tty.h>
-#include <linux/console.h>
 #include <linux/string.h>
 #include <linux/kd.h>
 #include <linux/malloc.h>
+#include <linux/console.h>
+#include <linux/vt_buffer.h>
 #include <linux/vt_kern.h>
-#include <linux/selection.h>
 #include <linux/ioport.h>
 #include <linux/init.h>
+#include <linux/spinlock.h>
 #include <linux/pci.h>
-#include <asm/io.h>
+
+#include "vga.h"
 
 #define BLANK 0x0020
+
+static spinlock_t nvvgacon_lock = SPIN_LOCK_UNLOCKED;
 
 /*
  *  Interface used by the world
  */
 
-static const char *nvvgacon_startup(struct vt_struct *vt);
-static void nvvgacon_init(struct vc_data *c, int init);
+static const char *nvvgacon_startup(struct vt_struct *vt, int init);
+static void nvvgacon_init(struct vc_data *c);
 static void nvvgacon_deinit(struct vc_data *c);
 static void nvvgacon_cursor(struct vc_data *c, int mode);
 static int nvvgacon_switch(struct vc_data *c);
@@ -80,8 +84,6 @@ static char *nvvga_mmio_base0;		/* misc, seq and graphics*/
 static char *nvvga_mmio_base1;		/* crt and attribute */
 static char *nvvga_mmio_base2;		/* dac */
 
-static unsigned int    nvvga_video_num_columns;	/* Number of text columns */
-static unsigned int    nvvga_video_num_lines;	/* Number of text lines */
 static unsigned char   nvvga_font_is_default = 1;
 static int	       nvvga_vesa_blanked;
 static int	       nvvga_palette_blanked;
@@ -142,17 +144,48 @@ static inline void scr_memmovew(u16 *dest, u16 *src, unsigned int length) {
     }
 }
 
+int nvvgacon_detect(void)
+{
+	unsigned long vram_base, mmio_base;
+    	struct pci_dev *dev =  NULL;
+        
+       	while ((dev = pci_find_device(PCI_VENDOR_ID_NVIDIA,PCI_ANY_ID,dev))) { 
+	        vram_base = dev->resource[1].start;
+        	mmio_base = dev->resource[0].start;
+        	nvvga_vram_base=ioremap(vram_base,8*64*1024);
+        	nvvga_mmio_base0=ioremap(mmio_base+0x0c0000,1024);
+        	nvvga_mmio_base1=ioremap(mmio_base+0x601000,1024);
+        	nvvga_mmio_base2=ioremap(mmio_base+0x681000,1024);
+
+        	nvvga_video_port_reg=nvvga_mmio_base1+0x3d4;
+        	nvvga_video_port_val=nvvga_mmio_base1+0x3d5;
+        	seq_port_reg=nvvga_mmio_base0+0x3c4;
+        	seq_port_val=nvvga_mmio_base0+0x3c5;
+        	video_misc_wr=nvvga_mmio_base0+0x3c2;
+        	video_misc_rd=nvvga_mmio_base0+0x3cc;
+        	dac_reg=nvvga_mmio_base2+0x3c8;
+       	 	dac_val=nvvga_mmio_base2+0x3c9;
+        	attrib_port=nvvga_mmio_base1+0x3c0;
+	}
+	if (!dev)
+		return 1;
+	return 0;
+}
+
 #ifdef MODULE
-static const char *nvvgacon_startup(struct vt_struct *vt)
+static const char *nvvgacon_startup(struct vt_struct *vt, int init)
 #else
-__initfunc(static const char *nvvgacon_startup(struct vt_struct *vt))
+static const char __init *nvvgacon_startup(struct vt_struct *vt, int init)
 #endif
 {
+	struct vc_data *vc = vt->default_mode;
         int i;
-        
-	nvvga_video_num_lines = 25;
-	nvvga_video_num_columns = 80;
-
+       
+	if (!nvvgacon_detect()) {
+		printk("nvvgacon: NVIDIA card not detected\n");
+		return NULL;
+	}
+ 
 	for (i=0; i<16; i++) {
             	readb(nvvga_mmio_base1+0x3da);
             	writeb(i, attrib_port);
@@ -167,24 +200,20 @@ __initfunc(static const char *nvvgacon_startup(struct vt_struct *vt))
                 writeb (default_blu[i], dac_val) ;
         }
 	
-	vt->default_font.height = 16;
+	vc->vc_cols = 80;
+	vc->vc_rows = 25;	
+	vc->vc_font.height = 16;
+	MOD_INC_USE_COUNT;
 	return "NVVGACON";
 }
 
-static void nvvgacon_init(struct vc_data *vc, int init)
+static void nvvgacon_init(struct vc_data *vc)
 {
 	vc->vc_can_do_color = 1;
 	vc->vc_complement_mask = 0x7700;
 
-	if (init) {
-		vc->vc_cols = nvvga_video_num_columns;
-		vc->vc_rows = nvvga_video_num_lines;
-	} else {
-		vc_resize(vc, nvvga_video_num_lines, nvvga_video_num_columns);
-        }
-	vc->vc_font = &vc->display_fg->default_font;	
-	vc->vc_scan_lines = vc->display_fg->default_font.height * nvvga_video_num_lines;
-	MOD_INC_USE_COUNT;
+	vc->vc_cols = vc->display_fg->default_mode->vc_cols;
+	vc->vc_rows = vc->display_fg->default_mode->vc_rows;
 }
 
 static inline void nvvga_set_mem_top(struct vc_data *c)
@@ -194,7 +223,7 @@ static inline void nvvga_set_mem_top(struct vc_data *c)
 
 static void nvvgacon_deinit(struct vc_data *c)
 {
-	MOD_DEC_USE_COUNT;
+	/* MOD_DEC_USE_COUNT; */
 }
 
 static u8 nvvgacon_build_attr(struct vc_data *c, u8 color, u8 intensity, u8 blink, u8 underline, u8 reverse)
@@ -219,7 +248,8 @@ static void nvvgacon_invert_region(struct vc_data *c, u16 *p, int count)
 	while (count--) {
 		u16 a = scr_readw(p);
 			a = ((a) & 0x88ff) | (((a) & 0x7000) >> 4) | (((a) & 0x0700) << 4);
-		scr_writew(a, p++);
+		scr_writew(a, p);
+		p++;
 	}
 }
 
@@ -232,7 +262,7 @@ static void nvvgacon_set_cursor_size(int xpos, int from, int to)
 	if ((from == lastfrom) && (to == lastto)) return;
 	lastfrom = from; lastto = to;
 
-	save_flags(flags); cli();
+	spin_lock_irqsave(&nvvgacon_lock, flags);
 	writeb(0x0a, nvvga_video_port_reg);		/* Cursor start */
 	curs = readb(nvvga_video_port_val);
 	writeb(0x0b, nvvga_video_port_reg);		/* Cursor end */
@@ -245,7 +275,7 @@ static void nvvgacon_set_cursor_size(int xpos, int from, int to)
         writeb(curs, nvvga_video_port_val);
         writeb(0x0b, nvvga_video_port_reg);		/* Cursor end */
         writeb(cure, nvvga_video_port_val);
-	restore_flags(flags);
+	spin_unlock_irqrestore(&nvvgacon_lock, flags);
 }
 
 static void nvvgacon_cursor(struct vc_data *vc, int mode)
@@ -263,27 +293,27 @@ static void nvvgacon_cursor(struct vc_data *vc, int mode)
 	    switch (vc->vc_cursor_type & 0x0f) {
 		case CUR_UNDERLINE:
 			nvvgacon_set_cursor_size(vc->vc_x,  
-					vc->vc_font->height - (vc->vc_font->height < 10 ? 2 : 3),
-					vc->vc_font->height - (vc->vc_font->height < 10 ? 1 : 2));
+					vc->vc_font.height - (vc->vc_font.height < 10 ? 2 : 3),
+					vc->vc_font.height - (vc->vc_font.height < 10 ? 1 : 2));
 			break;
 		case CUR_TWO_THIRDS:
-			nvvgacon_set_cursor_size(vc->vc_x, vc->vc_font->height/3, 
-					 vc->vc_font->height - (vc->vc_font->height < 10 ? 1 : 2));
+			nvvgacon_set_cursor_size(vc->vc_x, vc->vc_font.height/3, 
+					 vc->vc_font.height - (vc->vc_font.height < 10 ? 1 : 2));
 			break;
 		case CUR_LOWER_THIRD:
 			nvvgacon_set_cursor_size(vc->vc_x, 
-					 (vc->vc_font->height*2) / 3,
-					  vc->vc_font->height - (vc->vc_font->height < 10 ? 1 : 2));
+					 (vc->vc_font.height*2) / 3,
+					  vc->vc_font.height - (vc->vc_font.height < 10 ? 1 : 2));
 			break;
 		case CUR_LOWER_HALF:
-			nvvgacon_set_cursor_size(vc->vc_x,vc->vc_font->height/2,
-					 vc->vc_font->height - (vc->vc_font->height < 10 ? 1 : 2));
+			nvvgacon_set_cursor_size(vc->vc_x,vc->vc_font.height/2,
+					 vc->vc_font.height - (vc->vc_font.height < 10 ? 1 : 2));
 			break;
 		case CUR_NONE:
 			nvvgacon_set_cursor_size(vc->vc_x, 31, 30);
 			break;
           	default:
-			nvvgacon_set_cursor_size(vc->vc_x,1,vc->vc_font->height);
+			nvvgacon_set_cursor_size(vc->vc_x,1,vc->vc_font.height);
 			break;
 		}
 	    break;
@@ -340,11 +370,11 @@ static void nvvga_vesa_blank(int mode)
 {
 	/* save original values of VGA controller registers */
 	if(!nvvga_vesa_blanked) {
-		cli();
+		spin_lock_irq(&nvvgacon_lock);
 		nvvga_state.SeqCtrlIndex = readb(seq_port_reg);
 		nvvga_state.CrtCtrlIndex = readb(nvvga_video_port_reg);
 		nvvga_state.CrtMiscIO = readb(video_misc_rd);
-		sti();
+		spin_unlock_irq(&nvvgacon_lock);
 
 		writeb(0x00,nvvga_video_port_reg);	/* HorizontalTotal */
 		nvvga_state.HorizontalTotal = readb(nvvga_video_port_val);
@@ -368,7 +398,7 @@ static void nvvga_vesa_blank(int mode)
 
 	/* assure that video is enabled */
 	/* "0x20" is VIDEO_ENABLE_bit in register 01 of sequencer */
-	cli();
+	spin_lock_irq(&nvvgacon_lock);
 	writeb(0x01,seq_port_reg);
 	writeb(nvvga_state.ClockingMode | 0x20,seq_port_val);
 
@@ -405,13 +435,13 @@ static void nvvga_vesa_blank(int mode)
 	/* restore both index registers */
 	writeb(nvvga_state.SeqCtrlIndex,seq_port_reg);
 	writeb(nvvga_state.CrtCtrlIndex,nvvga_video_port_reg);
-	sti();
+	spin_unlock_irq(&nvvgacon);
 }
 
 static void nvvga_vesa_unblank(void)
 {
 	/* restore original values of VGA controller registers */
-	cli();
+	spin_lock_irq(&nvvgacon_lock);
 	writeb(nvvga_state.CrtMiscIO,video_misc_wr);
 
 	writeb(0x00,nvvga_video_port_reg);		/* HorizontalTotal */
@@ -436,7 +466,7 @@ static void nvvga_vesa_unblank(void)
 	/* restore index/control registers */
 	writeb(nvvga_state.SeqCtrlIndex,seq_port_reg);
 	writeb(nvvga_state.CrtCtrlIndex,nvvga_video_port_reg);
-	sti();
+	spin_unlock_irq(&nvvgacon_lock);
 }
 
 static void nvvga_pal_blank(void)
@@ -562,7 +592,7 @@ nvvgacon_do_font_op(char *arg, int set, int ch512)
 		}
 	}
 	
-	cli();
+	spin_lock_irq(&nvvgacon_lock);
 	writeb( 0x00, seq_port_reg );   /* First, the sequencer */
 	writeb( 0x01, seq_port_val );   /* Synchronous reset */
 	if (set) {
@@ -571,9 +601,7 @@ nvvgacon_do_font_op(char *arg, int set, int ch512)
 	}
 	writeb( 0x00, seq_port_reg );
 	writeb( 0x03, seq_port_val );   /* clear synchronous reset */
-
-	sti();
-
+	spin_unlock_irq(&nvvgacon_lock);	
 	return 0;
 }
 
@@ -586,10 +614,10 @@ nvvgacon_adjust_height(struct vc_data *vc, unsigned fontheight)
 	int rows, maxscan;
 	unsigned char ovr, vde, fsr;
 
-	if (fontheight == vc->vc_font->height)
+	if (fontheight == vc->vc_font.height)
 		return 0;
 
-	vc->vc_font->height = fontheight;
+	vc->vc_font.height = fontheight;
 
 	rows = vc->vc_scan_lines/fontheight;	/* Number of video rows we end up with */
 	maxscan = rows*fontheight - 1;		/* Scan lines to actually display-1 */
@@ -604,12 +632,12 @@ nvvgacon_adjust_height(struct vc_data *vc, unsigned fontheight)
 	   registers; they are write-only on EGA, but it appears that they
 	   are all don't care bits on EGA, so I guess it doesn't matter. */
 
-	cli();
+	spin_lock_irq(&nvvgacon_lock);
 	writeb( 0x07, nvvga_video_port_reg );		/* CRTC overflow register */
 	ovr = readb(nvvga_video_port_val);
 	writeb( 0x09, nvvga_video_port_reg );		/* Font size register */
 	fsr = readb(nvvga_video_port_val);
-	sti();
+	spin_unlock_irq(&nvvgacon_lock);
 
 	vde = maxscan & 0xff;			/* Vertical display end reg */
 	ovr = (ovr & 0xbd) +			/* Overflow register */
@@ -617,14 +645,14 @@ nvvgacon_adjust_height(struct vc_data *vc, unsigned fontheight)
 	      ((maxscan & 0x200) >> 3);
 	fsr = (fsr & 0xe0) + (fontheight-1);    /*  Font size register */
 
-	cli();
+	spin_lock_irq(&nvvgacon_lock);
 	writeb( 0x07, nvvga_video_port_reg );		/* CRTC overflow register */
 	writeb( ovr, nvvga_video_port_val );
 	writeb( 0x09, nvvga_video_port_reg );		/* Font size */
 	writeb( fsr, nvvga_video_port_val );
 	writeb( 0x12, nvvga_video_port_reg );		/* Vertical display limit */
 	writeb( vde, nvvga_video_port_val );
-	sti();
+	spin_unlock_irq(&nvvgacon_lock);
 
         vc_resize(vc, rows, 0);   /* Adjust console size */
 	return 0;
@@ -642,7 +670,7 @@ static int nvvgacon_font_op(struct vc_data *vc, struct console_font_op *op)
 			rc = nvvgacon_adjust_height(vc, op->height);
 	} else if (op->op == KD_FONT_OP_GET) {
 		op->width = 8;
-		op->height = vc->vc_font->height;
+		op->height = vc->vc_font.height;
 		op->charcount = nvvga_512_chars ? 512 : 256;
 		if (!op->data) return 0;
 		rc = nvvgacon_do_font_op(op->data, 0, 0);
@@ -780,90 +808,70 @@ const struct consw nvvga_con = {
 };
 
 #ifndef MODULE
-__initfunc(void nvvgacon_setup(char *str, int *ints))
+void __init nvvgacon_setup(char *str, int *ints)
 {
-
-	if (ints[0] < 2)
-		return;
+	return;
 }
 #endif
 
 #ifdef MODULE
 void nvvga_console_init(void)
 #else
-__initfunc(void nvvga_console_init(void))
+void __init nvvga_console_init(void)
 #endif
 {
 	const char *display_desc = NULL;
         struct vt_struct *vt;
-        int i;
+	struct vc_data *vc;
+        long q;
 
+	/* Allocate the memory we need */
         vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
         if (!vt) return;
-        display_desc = create_vt(vt, &nvvga_con);
-        if (!display_desc) {
+	vt->default_mode = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
+	if (!vt->default_mode) {
+		kfree(vt);
+		return;
+	}
+	vc = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
+	if (!vc) {
+		kfree(vt->default_mode);
+		kfree(vt);
+		return;
+	}
+	vt->kmalloced = 1;
+	vt->vt_sw = &nvvga_con;
+	vt->vcs.vc_cons[0] = vc;
+#ifdef MODULE
+        display_desc = create_vt(vt, 1);
+#else 	
+	display_desc = create_vt(vt, 0);
+#endif
+	q = (long) kmalloc(vc->vc_screenbuf_size, GFP_KERNEL);
+        if (!display_desc || !q) {
+		kfree(vt->vcs.vc_cons[0]);
+		kfree(vt->default_mode);
                 kfree(vt);
+		if (q)
+			kfree((char *) q);
                 return;
         }
-        i = vc_allocate(vt->vcs.first_vc);
-        if (i)  {
-                kfree(vt);
-                return;
-        }
-        printk("Console: color %s %dx%d",display_desc,vc->vc_cols,vc->vc_rows);
+	vc->vc_screenbuf = (unsigned short *) q;
+	vc_init(vc, 1);
+	tasklet_enable(&vt->vt_tasklet);
+	tasklet_schedule(&vt->vt_tasklet);	
+        printk("Console: color %s %dx%d\n", display_desc, vc->vc_cols, vc->vc_rows);
 }
 
 #ifdef MODULE
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,3,0)
-#define base_address0 dev->resource[0].start
-#define base_address1 dev->resource[1].start
-#else
-#define base_address0 (dev->base_address[0]&PCI_BASE_ADDRESS_MEM_MASK)
-#define base_address1 (dev->base_address[1]&PCI_BASE_ADDRESS_MEM_MASK)
-#endif
 int init_module(void)
 {
-    	struct pci_dev *dev;
-        int found;
-        unsigned long vram_base, mmio_base; 
-        
-        dev=pci_find_class(PCI_CLASS_DISPLAY_VGA<<8,NULL);
-        found=0;
-        while(!found && dev) {
-            if(((dev->vendor==PCI_VENDOR_ID_NVIDIA)||(dev->vendor==PCI_VENDOR_ID_NVIDIA_SGS))&&
-               (!vram || (vram==base_address1))
-               )found=1; else
-            dev=pci_find_class(PCI_CLASS_DISPLAY_VGA<<8,dev);
-        }
-
-        if(!found) return 1;
-
-        vram_base=base_address1;
-        mmio_base=base_address0;
-        nvvga_vram_base=ioremap(vram_base,8*64*1024);
-        nvvga_mmio_base0=ioremap(mmio_base+0x0c0000,1024);
-        nvvga_mmio_base1=ioremap(mmio_base+0x601000,1024);
-        nvvga_mmio_base2=ioremap(mmio_base+0x681000,1024);
-
-        nvvga_video_port_reg=nvvga_mmio_base1+0x3d4;
-        nvvga_video_port_val=nvvga_mmio_base1+0x3d5;
-        seq_port_reg=nvvga_mmio_base0+0x3c4;
-        seq_port_val=nvvga_mmio_base0+0x3c5;
-        video_misc_wr=nvvga_mmio_base0+0x3c2;
-        video_misc_rd=nvvga_mmio_base0+0x3cc;
-        dac_reg=nvvga_mmio_base2+0x3c8;
-        dac_val=nvvga_mmio_base2+0x3c9;
-        attrib_port=nvvga_mmio_base1+0x3c0;
-
-	nvvga_console_init();
-
-	return 0;
+	nvvgacon_console_init();
 }
 
 void cleanup_module(void)
 {
 	/* release_vt(&nvvga_vt); */
 }
-
 #endif
