@@ -257,7 +257,7 @@ struct input_event {
 #define KEY_RECORD		167		
 #define KEY_REWIND		168		
 #define KEY_PHONE		169
-
+#define KEY_ISO			170
 #define KEY_CONFIG		171
 #define KEY_HOMEPAGE		172
 #define KEY_REFRESH		173
@@ -288,7 +288,14 @@ struct input_event {
 #define KEY_LANG8		197
 #define KEY_LANG9		198
 
-#define KEY_UNKNOWN		200
+#define KEY_PLAYCD		200
+#define KEY_PAUSECD		201
+#define KEY_PROG3		202
+#define KEY_PROG4		203
+#define KEY_SUSPEND		205
+#define KEY_CLOSE		206
+
+#define KEY_UNKNOWN		220
 
 #define BTN_MISC		0x100
 #define BTN_0			0x100
@@ -407,6 +414,9 @@ struct input_event {
 #define LED_SCROLLL		0x02
 #define LED_COMPOSE		0x03
 #define LED_KANA		0x04
+#define LED_SLEEP		0x05
+#define LED_SUSPEND		0x06
+#define LED_MUTE		0x07
 #define LED_MAX			0x0f
 
 /*

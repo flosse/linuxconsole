@@ -1,4 +1,7 @@
-#define from	usb
+#include <stdio.h>
+#include <string.h>
+
+#define from	at2
 #define to	code
 
 #include "scancodes.h"

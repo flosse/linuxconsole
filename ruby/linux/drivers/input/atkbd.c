@@ -61,14 +61,13 @@ static unsigned char atkbd_set2_keycode[512] = {
 	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
 	252,253,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
 	254,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,
-	  0,  0, 92, 90, 85,  0,137,  0,  0,  0,  0, 91, 89,144,  0,  0,
+	  0,  0, 92, 90, 85,  0,137,  0,  0,  0,  0, 91, 89,144,115,  0,
 	136,100,255,  0, 97,149,164,  0,156,  0,  0,140,115,  0,  0,125,
 	  0,150,  0,154,152,163,151,126,112,166,  0,140,  0,147,  0,127,
 	159,167,139,160,163,  0,  0,116,158,  0,150,165,  0,  0,  0,142,
 	157,  0,114,166,168,  0,  0,  0,155,  0, 98,113,  0,148,  0,138,
 	  0,  0,  0,  0,  0,  0,153,140,  0,  0, 96,  0,  0,  0,143,  0,
-	133,  0,116,  0,143,  0,176,133,  0,107,  0,105,102,  0,  0,112,
-	110,111,108,112,106,103,  0,119,  0,118,109,  0, 99,104,119,
+	133,  0,116,  0,143,  0,174,133,  0,107,  0,105,102,  0,  0,112,
 };
 
 static unsigned char atkbd_set3_keycode[512] = {
@@ -97,6 +96,8 @@ static unsigned char atkbd_set3_keycode[512] = {
 #define ATKBD_CMD_ENABLE	0x00f4
 #define ATKBD_CMD_RESET_DIS	0x00f5
 #define ATKBD_CMD_SETALL_MB	0x00f8
+#define ATKBD_CMD_EX_ENABLE	0x10ea
+#define ATKBD_CMD_EX_SETLEDS	0x20eb
 
 #define ATKBD_RET_ACK		0xfa
 #define ATKBD_RET_NAK		0xfe
@@ -249,15 +250,26 @@ static int atkbd_command(struct atkbd *atkbd, unsigned char *param, int command)
 static int atkbd_event(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {
 	struct atkbd *atkbd = dev->private;
-	char param;
+	char param[2];
 
 	switch (type) {
 
 		case EV_LED:
-			param = (test_bit(LED_SCROLLL, dev->led) ? 1 : 0)
-			      | (test_bit(LED_NUML,    dev->led) ? 2 : 0)
-			      | (test_bit(LED_CAPSL,   dev->led) ? 4 : 0);
-		        atkbd_command(atkbd, &param, ATKBD_CMD_SETLEDS);
+
+			*param = (test_bit(LED_SCROLLL, dev->led) ? 1 : 0)
+			       | (test_bit(LED_NUML,    dev->led) ? 2 : 0)
+			       | (test_bit(LED_CAPSL,   dev->led) ? 4 : 0);
+		        atkbd_command(atkbd, param, ATKBD_CMD_SETLEDS);
+
+			if (atkbd->set == 4) {
+				param[0] = 0;
+				param[1] = (test_bit(LED_COMPOSE, dev->led) ? 0x01 : 0)
+					 | (test_bit(LED_SLEEP,   dev->led) ? 0x02 : 0)
+					 | (test_bit(LED_SUSPEND, dev->led) ? 0x04 : 0)
+				         | (test_bit(LED_MUTE,    dev->led) ? 0x20 : 0);
+				atkbd_command(atkbd, param, ATKBD_CMD_RA_SETLEDS);
+			}
+
 			return 0;
 	}
 
@@ -273,6 +285,16 @@ static int atkbd_event(struct input_dev *dev, unsigned int type, unsigned int co
 static int atkbd_set_3(struct atkbd *atkbd)
 {
 	unsigned char param;
+
+/*
+ * We check for the extra keys on an some keyboards that need extra
+ * command to get enabled. This shouldn't harm any keyboards not
+ * knowing the command.
+ */
+
+	param = 0x71;
+	if (!atkbd_command(atkbd, &param, ATKBD_CMD_EX_ENABLE))
+		return 4;
 
 /*
  * Try to set the set we want.
@@ -431,12 +453,6 @@ static void atkbd_connect(struct serio *serio, struct serio_dev *dev)
 	atkbd->dev.event = atkbd_event;
 	atkbd->dev.private = atkbd;
 
-	atkbd->dev.name = atkbd->name;
-	atkbd->dev.idbus = BUS_I8042;
-	atkbd->dev.idvendor = 0x0001;
-	atkbd->dev.idproduct = atkbd->set;
-	atkbd->dev.idversion = 0x0100;
-
 	atkbd->tq.routine = atkbd_powerup;
 	atkbd->tq.data = atkbd;
 
@@ -455,12 +471,22 @@ static void atkbd_connect(struct serio *serio, struct serio_dev *dev)
 	
 	atkbd->set = atkbd_set_3(atkbd);
 
+	if (atkbd->set == 4) {
+		atkbd->dev.ledbit[0] |= BIT(LED_COMPOSE) | BIT(LED_SUSPEND) | BIT(LED_SLEEP) | BIT(LED_MUTE);
+		sprintf(atkbd->name, "AT Set 2 Extended keyboard\n");
+	} else
+		sprintf(atkbd->name, "AT Set %d keyboard", atkbd->set);
+
 	if (atkbd->set == 3)
 		memcpy(atkbd->keycode, atkbd_set3_keycode, sizeof(atkbd->keycode));
 	else
 		memcpy(atkbd->keycode, atkbd_set2_keycode, sizeof(atkbd->keycode));
 
-	sprintf(atkbd->name, "AT Set %d keyboard", atkbd->set);
+	atkbd->dev.name = atkbd->name;
+	atkbd->dev.idbus = BUS_I8042;
+	atkbd->dev.idvendor = 0x0001;
+	atkbd->dev.idproduct = atkbd->set;
+	atkbd->dev.idversion = 0x0100;
 
 	for (i = 0; i < 512; i++)
 		if (atkbd->keycode[i] && atkbd->keycode[i] <= 250)

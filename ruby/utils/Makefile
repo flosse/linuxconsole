@@ -41,3 +41,6 @@ clean:
 
 jscal: jscal.o
 	$(CC) $(CFLAGS) $(CPPFLAGS) -lm $^ -o $@
+
+gencodes: gencodes.c scancodes.h
+	$(CC) $(CFLAGS) $(CPPFLAGS) gencodes.c -o gencodes
