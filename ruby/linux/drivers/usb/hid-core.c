@@ -745,8 +745,20 @@ static void hid_process_event(struct hid_device *hid, struct hid_field *field, s
 	if (hid->claimed & HID_CLAIMED_INPUT)
 		hidinput_hid_event(hid, field, usage, value);
 #ifdef CONFIG_USB_HIDDEV
-	if (hid->claimed & HID_CLAIMED_HIDDEV)
-		hiddev_hid_event(hid, usage->hid, value);
+	if (hid->claimed & HID_CLAIMED_HIDDEV) {
+		struct hiddev_usage_ref uref;
+		unsigned type = field->report_type;
+		uref.report_type = 
+		  (type == HID_INPUT_REPORT) ? HID_REPORT_TYPE_INPUT :
+		  ((type == HID_OUTPUT_REPORT) ? HID_REPORT_TYPE_OUTPUT : 
+		   ((type == HID_FEATURE_REPORT) ? HID_REPORT_TYPE_FEATURE:0));
+		uref.report_id = field->report->id;
+		uref.field_index = field->index;
+		uref.usage_index = (usage - field->usage);
+		uref.usage_code = usage->hid;
+		uref.value = value;
+		hiddev_hid_event(hid, &uref);
+	}
 #endif
 }
 
