@@ -523,8 +523,10 @@ struct input_event {
  */
 
 struct ff_replay {
-	__u16 length; /* Duration of an effect in ms. All other times are also expressed in ms */
-	__u16 delay;  /* Time to wait before to start playing an effect */
+	__u16 length;  /* Duration of an effect in ms.
+			  All other times are also expressed in ms.
+			  0 means "play for ever" */
+	__u16 delay;   /* Time to wait before to start playing an effect */
 };
 
 struct ff_trigger {
@@ -561,17 +563,17 @@ struct ff_condition_effect {
 				   joystick moves to the right */
 	__s16 left_coeff;	/* Same for left side */
 
-	__u16 deadband;	/* Size of area where no force is produced */
-	__s16 center;	/* Position of dead zone */
+	__u16 deadband;		/* Size of area where no force is produced */
+	__s16 center;		/* Position of dead zone */
 
 };
 
 /* FF_PERIODIC */
 struct ff_periodic_effect {
-	__u16 waveform;	/* Kind of wave (sine, square...) */
-	__u16 period;	/* in ms */
+	__u16 waveform;		/* Kind of wave (sine, square...) */
+	__u16 period;		/* in ms */
 	__s16 magnitude;	/* Peak value */
-	__s16 offset;	/* Mean value of wave (roughly) */
+	__s16 offset;		/* Mean value of wave (roughly) */
 	__u16 phase;		/* 'Horizontal' shift */
 
 	struct ff_envelope envelope;
