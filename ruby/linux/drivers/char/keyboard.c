@@ -361,7 +361,7 @@ static void fn_dec_console(struct tty_struct *tty)
 
        for (i = j-1; i != j; i--) {
                if (i == -1)
-                       i = MAX_NR_CONSOLES-1;
+                       i = MAX_NR_USER_CONSOLES-1;
                if (vc_cons_allocated(i))
                        break;
        }
@@ -374,7 +374,7 @@ static void fn_inc_console(struct tty_struct *tty)
        int i, j = vc->display_fg->fg_console->vc_num;
 
        for (i = j+1; i != j; i++) {
-               if (i == MAX_NR_CONSOLES)
+               if (i == MAX_NR_USER_CONSOLES)
                        i = 0;
                if (vc_cons_allocated(i))
                        break;
