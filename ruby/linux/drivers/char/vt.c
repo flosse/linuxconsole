@@ -735,7 +735,7 @@ static void vt_callback(void *private)
                       sw->con_scroll(vt->fg_console, vt->scrollback_delta);
                 vt->scrollback_delta = 0;
         }
-        release_console_sem(&vt->fg_console->vc_tty->driver);
+        release_console_sem(&vt->want_vc->vc_tty->driver);
 }
 
 /*
