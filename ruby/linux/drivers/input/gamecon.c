@@ -53,13 +53,15 @@ MODULE_PARM(gc_3,"2-6i");
 #define GC_MULTI2	5
 #define GC_N64		6	
 #define GC_PSX		7
-#define GC_PSX_NEGCON	9
-#define GC_PSX_ANALOG	10
+
+#define GC_MAX		7
+
+#define GC_REFRESH_TIME	HZ/100
  
 struct gc {
 	struct pardevice *pd;
 	struct input_dev dev[5];
-	struct timer_list *timer;
+	struct timer_list timer;
 	unsigned char pads[GC_PSX + 1];
 	int used;
 };
@@ -79,8 +81,8 @@ static char *gc_names[] = { NULL, "SNES pad", "NES pad", "NES FourPort", "Multis
  * N64 support.
  */
 
-static unsigned char gc_n64_bytes = { 0, 1, 13, 15, 14, 12, 10, 11, 2, 3 };
-static short gc_n64_btn[] = { BTN_A, BTN_B, BTN_C, BTN_D, BTN_X, BTN_Y, BTN_TL, BTN_TR, BTN_TRIGGER, BTN_START };
+static unsigned char gc_n64_bytes[] = { 0, 1, 13, 15, 14, 12, 10, 11, 2, 3 };
+static short gc_n64_btn[] = { BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_TL, BTN_TR, BTN_TRIGGER, BTN_START };
 
 #define GC_N64_LENGTH		32		/* N64 bit length, not including stop bit */
 #define GC_N64_REQUEST_LENGTH	37		/* transmit request sequence is 9 bits long */
@@ -220,8 +222,8 @@ static void gc_multi_read_packet(struct gc *gc, int length, unsigned char *data)
 #define GC_PSX_SELECT	0x02	/* Pin 2 */
 #define GC_PSX_NOPOWER  0x04
 
-static short cg_psx_axes = { ABS_X, ABS_Y, ABS_RX, ABS_RY, ABS_HAT0X, ABS_HAT0Y };
-static short cg_psx_buttons = { BTN_TL, BTN_TR, BTN_TL2, BTN_TR2, BTN_A, BTN_B, BTN_X, BTN_Y,
+static short gc_psx_abs[] = { ABS_X, ABS_Y, ABS_RX, ABS_RY, ABS_HAT0X, ABS_HAT0Y };
+static short gc_psx_btn[] = { BTN_TL, BTN_TR, BTN_TL2, BTN_TR2, BTN_A, BTN_B, BTN_X, BTN_Y,
 				BTN_START, BTN_SELECT, BTN_THUMB, BTN_THUMB2 };
 
 /*
@@ -285,7 +287,7 @@ static int gc_psx_read_packet(struct gc *gc, int length, unsigned char *data)
 static void gc_timer(unsigned long private)
 {
 	struct gc *gc = (void *) private;
-	struct input_dev *dev = db9->dev;
+	struct input_dev *dev = gc->dev;
 	unsigned char data[GC_MAX_LENGTH];
 	int i, j, s;
 
@@ -354,7 +356,7 @@ static void gc_timer(unsigned long private)
  * Multi and Multi2 joysticks
  */
 
-	if ((gc->pads[GC_MULTI] || gc->pads[GC_MULTI2]) {
+	if (gc->pads[GC_MULTI] || gc->pads[GC_MULTI2]) {
 
 		gc_multi_read_packet(gc, gc->pads[GC_MULTI2] ? GC_MULTI2_LENGTH : GC_MULTI_LENGTH, data);
 
@@ -388,13 +390,13 @@ static void gc_timer(unsigned long private)
 			case GC_PSX_ANALOGG:
 	
 				for (j = 0; j < 4; j++)
-					input_report_abs(dev + i, cg_psx_axes[j], data[j + 2]);
+					input_report_abs(dev + i, gc_psx_abs[j], data[j + 2]);
 
-				input_report_abs(dev + i, ABS_HAT0X, !!(data[0]&0x20) - !!(data[0]&0x80);
-				input_report_abs(dev + i, ABS_HAT0Y, !!(data[0]&0x40) - !!(data[0]&0x10);
+				input_report_abs(dev + i, ABS_HAT0X, !!(data[0]&0x20) - !!(data[0]&0x80));
+				input_report_abs(dev + i, ABS_HAT0Y, !!(data[0]&0x40) - !!(data[0]&0x10));
 
 				for (j = 0; j < 8; j++)
-					input_report_key(dev + i, cg_psx_buttons[j], ~data[1] & (1 << i));
+					input_report_key(dev + i, gc_psx_btn[j], ~data[1] & (1 << i));
 
 				input_report_key(dev + i, BTN_START,  ~data[0] & 0x08);
 				input_report_key(dev + i, BTN_SELECT, ~data[0] & 0x01);
@@ -410,10 +412,10 @@ static void gc_timer(unsigned long private)
 			case GC_PSX_NEGCON:
 
 				input_report_abs(dev + i, ABS_X, 128 + !!(data[0] & 0x20) * 127 - !!(data[0] & 0x80) * 128);
-				input_report_abs(dev + i, ABS_Y, 128 + !!(data[0] & 0x40) * 127 - !!(data[0] & 0x10 * 128);
+				input_report_abs(dev + i, ABS_Y, 128 + !!(data[0] & 0x40) * 127 - !!(data[0] & 0x10) * 128);
 
 				for (j = 0; j < 8; j++)
-					input_report_key(dev + i, cg_psx_buttons[j], ~data[1] & (1 << i));
+					input_report_key(dev + i, gc_psx_btn[j], ~data[1] & (1 << i));
 
 				input_report_key(dev + i, BTN_START,  ~data[0] & 0x08);
 				input_report_key(dev + i, BTN_SELECT, ~data[0] & 0x01);
@@ -422,8 +424,31 @@ static void gc_timer(unsigned long private)
 		}
 	}
 
+	mod_timer(&gc->timer, jiffies + GC_REFRESH_TIME);
+}
+
+static int gc_open(struct input_dev *dev)
+{
+	struct gc *gc = dev->private;
+	if (!gc->used++) {
+		parport_claim(gc->pd);
+		parport_write_control(gc->pd->port, 0x04);
+		mod_timer(&gc->timer, jiffies + GC_REFRESH_TIME);
+	}
 	return 0;
 }
+
+static void gc_close(struct input_dev *dev)
+{
+	struct gc *gc = dev->private;
+	if (!--gc->used) {
+		del_timer(&gc->timer);
+		parport_write_control(gc->pd->port, 0x00);
+		parport_release(gc->pd);
+	}
+}
+
+
 
 static struct gc __init *gc_probe(int *config)
 {
@@ -463,18 +488,17 @@ static struct gc __init *gc_probe(int *config)
 
 	for (i = 0; i < 5; i++) {
 
-		if (config[i + 1] < 1 || config[i + 1] > GC_MAX)
+		if (!config[i + 1])
 			continue;
+
+		if (config[i + 1] < 1 || config[i + 1] > GC_MAX) {
+			printk(KERN_WARNING "gamecon.c: Pad type %d unknown\n", config[i + 1]);
+			continue;
+		}
 
                 gc->dev[i].private = gc;
                 gc->dev[i].open = gc_open;
                 gc->dev[i].close = gc_close;
-
-                gc->dev[i].name = gc_names[gc->mode];
-                gc->dev[i].idbus = BUS_PARPORT;
-                gc->dev[i].idvendor = 0x0001;
-                gc->dev[i].idproduct = config[i + 1];
-                gc->dev[i].idversion = 0x0100;
 
                 gc->dev[i].evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 
@@ -489,7 +513,7 @@ static struct gc __init *gc_probe(int *config)
 
 		switch(config[i + 1]) {
 
-			case GC_N64_PAD:
+			case GC_N64:
 				for (j = 0; j < 10; j++)
 					set_bit(gc_n64_btn[j], gc->dev[j].keybit);
 
@@ -505,40 +529,40 @@ static struct gc __init *gc_probe(int *config)
 
 				break;
 
-			case GC_SNES_PAD:
+			case GC_SNES:
 				for (j = 0; j < 8; j++)
 					set_bit(gc_snes_btn[j], gc->dev[j].keybit);
 				break;
 
-			case GC_NES_PAD:
+			case GC_NES:
 				for (j = 0; j < 4; j++)
 					set_bit(gc_snes_btn[j], gc->dev[j].keybit);
 				break;
 
-			case GC_MULTI2_STICK:
+			case GC_MULTI2:
 				set_bit(BTN_THUMB, gc->dev[i].keybit);
 
-			case GC_MULTI_STICK:
+			case GC_MULTI:
 				set_bit(BTN_TRIGGER, gc->dev[i].keybit);
 				break;
 
-			case GC_PSX_PAD:
+			case GC_PSX:
 				
-				psx = gc_psx_read_packet(&gc, 2, data);
-				psx = gc_psx_read_packet(&gc, 2, data);
-				gc->pads[GC_PSX] &= ~gc_status_bit[i];
+				psx = gc_psx_read_packet(gc, 2, data);
 
 				switch(psx) {
 					case GC_PSX_NEGCON:
+						config[i + 1] += 1;
 					case GC_PSX_NORMAL:
 						pbtn = 10;
 						break;
 
 					case GC_PSX_ANALOGG:
 					case GC_PSX_ANALOGR:
+						config[i + 1] += 2;
 						pbtn = 12;
 						for (j = 0; j < 6; j++) {
-							psx = gc_psx_axes[j];
+							psx = gc_psx_abs[j];
 							set_bit(psx, gc->dev[i].absbit);
 							gc->dev[i].absmin[psx] = 4;
 							gc->dev[i].absmax[psx] = 252;
@@ -547,10 +571,14 @@ static struct gc __init *gc_probe(int *config)
 						break;
 
 					case -1:
+						gc->pads[GC_PSX] &= ~gc_status_bit[i];
+						pbtn = 0;
 						printk(KERN_ERR "gamecon.c: No PSX controller found.\n");
 						break;
 
 					default:
+						gc->pads[GC_PSX] &= ~gc_status_bit[i];
+						pbtn = 0;
 						printk(KERN_WARNING "gamecon.c: Unsupported PSX controller %#x,"
 							" please report to <vojtech@suse.cz>.\n", psx);
 				}
@@ -559,15 +587,19 @@ static struct gc __init *gc_probe(int *config)
 					set_bit(gc_psx_btn[j], gc->dev[i].keybit);
 
 				break;
-
-			default: 
-				printk(KERN_WARNING "gamecon.c: Pad type %d unknown\n", config[i + 1]);
 		}
+
+                gc->dev[i].name = gc_names[config[i + 1]];
+                gc->dev[i].idbus = BUS_PARPORT;
+                gc->dev[i].idvendor = 0x0001;
+                gc->dev[i].idproduct = config[i + 1];
+                gc->dev[i].idversion = 0x0100;
 	}
 
+	parport_release(gc->pd);
+
 	if (!gc->pads[0]) {
-		parport_release(gc.port);
-		parport_unregister_device(gc.port);
+		parport_unregister_device(gc->pd);
 		kfree(gc);
 		return NULL;
 	}
@@ -575,10 +607,8 @@ static struct gc __init *gc_probe(int *config)
 	for (i = 0; i < 5; i++) 
 		if (gc->pads[0] & gc_status_bit[i]) {
 			input_register_device(gc->dev + i);
-			printk(KERN_INFO "input%d: %s on %s\n", gc->dev[i].name, gc->pd->port->name);
+			printk(KERN_INFO "input%d: %s on %s\n", gc->dev[i].number, gc->dev[i].name, gc->pd->port->name);
 		}
-
-	parport_release(gc->pd);
 
 	return gc;
 }
