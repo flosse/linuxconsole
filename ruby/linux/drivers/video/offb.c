@@ -58,7 +58,6 @@ struct offb_par {
      */
 int offb_init(void);
 
-static int offb_check_var(struct fb_var_screeninfo *var, struct fb_info *info); 
 static int offb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                           u_int transp, struct fb_info *info);
 static int offb_blank(int blank, struct fb_info *info);
@@ -77,28 +76,12 @@ static void offb_init_fb(const char *name, const char *full_name, int width,
 
 static struct fb_ops offb_ops = {
 	owner:		THIS_MODULE,
-	fb_check_var:	offb_check_var,
 	fb_setcolreg:	offb_setcolreg,
 	fb_blank:	offb_blank,
 	fb_fillrect:	cfb_fillrect,
 	fb_copyarea:	cfb_copyarea,
 	fb_imageblit:	cfb_imageblit,
 };
-
-    /*
-     *  Set the User Defined Part of the Display
-     */
-
-static int offb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
-{
-    if (var->xres > info->var.xres || var->yres > info->var.yres ||
-        var->xres_virtual > info->var.xres_virtual || var->nonstd || 
-        var->yres_virtual > info->var.yres_virtual ||
-        var->bits_per_pixel > info->var.bits_per_pixel ||
-        (var->vmode & FB_VMODE_MASK) != FB_VMODE_NONINTERLACED)
-        return -EINVAL;
-     return 0;					
-}
 
     /*
      *  Initialisation
