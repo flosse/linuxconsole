@@ -258,6 +258,9 @@ static int atkbd_event(struct input_dev *dev, unsigned int type, unsigned int co
 	struct atkbd *atkbd = dev->private;
 	char param[2];
 
+	if (!serio->write)
+		return -1;
+
 	switch (type) {
 
 		case EV_LED:
@@ -462,8 +465,10 @@ static void atkbd_connect(struct serio *serio, struct serio_dev *dev)
 
 	memset(atkbd, 0, sizeof(struct atkbd));
 
-	atkbd->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_LED) | BIT(EV_REP);
-	atkbd->dev.ledbit[0] = BIT(LED_NUML) | BIT(LED_CAPSL) | BIT(LED_SCROLLL);
+	if (serio->write) {
+		atkbd->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_LED) | BIT(EV_REP);
+		atkbd->dev.ledbit[0] = BIT(LED_NUML) | BIT(LED_CAPSL) | BIT(LED_SCROLLL);
+	} else  atkbd->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_REP);
 
 	atkbd->serio = serio;
 
@@ -481,13 +486,20 @@ static void atkbd_connect(struct serio *serio, struct serio_dev *dev)
 		return;
 	}
 
-	if (atkbd_probe(atkbd)) {
-		serio_close(serio);
-		kfree(atkbd);
-		return;
+	if (serio->write) {
+
+		if (atkbd_probe(atkbd)) {
+			serio_close(serio);
+			kfree(atkbd);
+			return;
+		}
+		
+		atkbd->set = atkbd_set_3(atkbd);
+
+	} else {
+		atkbd->set = 2;
+		atkbd->id = 0xab00;
 	}
-	
-	atkbd->set = atkbd_set_3(atkbd);
 
 	if (atkbd->set == 4) {
 		atkbd->dev.ledbit[0] |= BIT(LED_COMPOSE) | BIT(LED_SUSPEND) | BIT(LED_SLEEP) | BIT(LED_MUTE);
@@ -517,7 +529,8 @@ static void atkbd_connect(struct serio *serio, struct serio_dev *dev)
 
 	printk(KERN_INFO "input: %s on %s\n", atkbd->name, serio->phys);
 
-	atkbd_initialize(atkbd);
+	if (serio->write)
+		atkbd_initialize(atkbd);
 }
 
 
