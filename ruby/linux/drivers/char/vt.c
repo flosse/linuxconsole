@@ -1505,35 +1505,6 @@ const char *create_vt(struct tty_driver *drv, struct vt_struct *vt, int init)
 
 	if (!display_desc) return NULL;	
 
-	/* Must be done before register_console */
-	drv->magic = TTY_DRIVER_MAGIC;
-        drv->name = "vc/%d";
-        drv->name_base = current_vc;
-        drv->major = TTY_MAJOR;
-        drv->minor_start = current_vc;
-        drv->num = MAX_NR_USER_CONSOLES;
-        drv->type = TTY_DRIVER_TYPE_CONSOLE;
-        drv->init_termios = tty_std_termios;
-        drv->flags = TTY_DRIVER_REAL_RAW | TTY_DRIVER_RESET_TERMIOS;
-        /* Tell tty_register_driver() to skip consoles because they are
-         * registered before kmalloc() is ready. We'll patch them in later.
-         * See comments at console_init(); see also con_init_devfs().
-         */
-        drv->flags |= TTY_DRIVER_NO_DEVFS;
-        drv->open = vt_open;
-        drv->close = vt_close;
-        drv->write = vt_write;
-        drv->write_room = vt_write_room;
-        drv->put_char = vt_put_char;
-        drv->flush_chars = vt_flush_chars;
-        drv->chars_in_buffer = vt_chars_in_buffer;
-        drv->ioctl = vt_ioctl;
-        drv->stop = vt_stop;
-        drv->start = vt_start;
-        drv->throttle = vt_throttle;
-        drv->unthrottle = vt_unthrottle;
-       	if (tty_register_driver(drv))
-                printk("Couldn't register console driver\n");
 	/* Now to setup the VT */
 	vt->first_vc = current_vc;
 	init_MUTEX(&vt->lock);
@@ -1592,6 +1563,12 @@ void __init vt_console_init(void)
 #endif
 }
 
+static struct tty_struct *vty_table[MAX_NR_USER_CONSOLES];
+static struct termios *vty_termios[MAX_NR_USER_CONSOLES];
+static struct termios *vty_termios_locked[MAX_NR_USER_CONSOLES];
+struct tty_driver vty_driver;
+static int vty_refcount;
+
 int __init vty_init(void)
 {
 #if defined (CONFIG_PROM_CONSOLE)
@@ -1602,6 +1579,36 @@ int __init vty_init(void)
 #endif
 	kbd_init();
 	console_map_init();
+
+        vty_driver.refcount = &vty_refcount;
+        vty_driver.table = vty_table;
+        vty_driver.termios = vty_termios;
+        vty_driver.termios_locked = vty_termios_locked;
+	
+	memset(&vty_driver, 0, sizeof(struct tty_driver));
+	vty_driver.magic = TTY_DRIVER_MAGIC;
+        vty_driver.name = "vc/%d";
+        vty_driver.name_base = 0; //current_vc;
+        vty_driver.major = TTY_MAJOR;
+        vty_driver.minor_start = 0; //current_vc;
+        vty_driver.num = MAX_NR_USER_CONSOLES;
+        vty_driver.type = TTY_DRIVER_TYPE_CONSOLE;
+        vty_driver.init_termios = tty_std_termios;
+        vty_driver.flags = TTY_DRIVER_REAL_RAW | TTY_DRIVER_RESET_TERMIOS;
+        vty_driver.open = vt_open;
+        vty_driver.close = vt_close;
+        vty_driver.write = vt_write;
+        vty_driver.write_room = vt_write_room;
+        vty_driver.put_char = vt_put_char;
+        vty_driver.flush_chars = vt_flush_chars;
+        vty_driver.chars_in_buffer = vt_chars_in_buffer;
+        vty_driver.ioctl = vt_ioctl;
+        vty_driver.stop = vt_stop;
+        vty_driver.start = vt_start;
+        vty_driver.throttle = vt_throttle;
+        vty_driver.unthrottle = vt_unthrottle;
+       	if (tty_register_driver(&vty_driver))
+                printk("Couldn't register console driver\n");
 	vcs_init();
 	return 0;
 }

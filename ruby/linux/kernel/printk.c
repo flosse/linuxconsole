@@ -534,11 +534,12 @@ void release_console_sem(kdev_t device)
 			wake_up_interruptible(&log_wait);
 		up(&con->lock);
 	}
-
+/*
 	if (driver) {
 		driver->may_schedule = 0;
 		up(&driver->tty_lock);
 	}
+*/
 }
 
 /** console_conditional_schedule - yield the CPU if required
