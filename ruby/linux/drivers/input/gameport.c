@@ -41,7 +41,6 @@
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 
-#ifndef MODULE
 EXPORT_SYMBOL(gameport_register_port);
 EXPORT_SYMBOL(gameport_unregister_port);
 EXPORT_SYMBOL(gameport_register_device);
@@ -50,7 +49,6 @@ EXPORT_SYMBOL(gameport_open);
 EXPORT_SYMBOL(gameport_close);
 EXPORT_SYMBOL(gameport_rescan);
 EXPORT_SYMBOL(gameport_cooked_read);
-#endif
 
 static struct gameport *gameport_list = NULL;
 static struct gameport_dev *gameport_dev = NULL;

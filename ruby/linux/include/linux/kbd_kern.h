@@ -3,48 +3,17 @@
 
 #include <linux/interrupt.h>
 #include <linux/keyboard.h>
-#include <linux/input.h>
+
+extern struct pt_regs *kbd_pt_regs;
 
 extern struct tasklet_struct keyboard_tasklet;
 
-/*
- * Per-keyboard state.
- */
+extern int shift_state;
 
-struct keyboard {
-	unsigned char k_down[NR_SHIFT];    /* Shift state counters */
-       	int dead_key_next;
-       	int shift_state;
-       	int npadch;                        /* -1 or number assembled on pad */
-       	unsigned char diacr;
-       	unsigned char ledstate;            /* 0xff = undefined */
-       	unsigned char ledioctl;
-#ifdef CONFIG_MAGIC_SYSRQ
-       	unsigned char sysrq_pressed;
-#endif
-       	int spawnpid, spawnsig;
-
-       	/* Consoles this keyboard has access to */
-       	unsigned long consoles[256/BITS_PER_LONG]; 
-      	/* Foreground console for this kbd */
-       	int fg_console;    
-       	/* Console we want to switch to */
-       	int want_console;  
-	/* Last console we've used */
-       	int last_console;
-	/* kbd_struct of our fg console */
-	struct kbd_struct *current_kbd;
-	/* Our connection to input layer */
-        struct input_handle handle;                    
-};
-
-extern char *func_table[MAX_NR_FUNC]; /* FIXME: Move ioctl's to keyboard.c? */
-extern char func_buf[];  	/* FIXME: Keymaps should be local to consoles */
+extern char *func_table[MAX_NR_FUNC];
+extern char func_buf[];
 extern char *funcbufptr;
 extern int funcbufsize, funcbufleft;
-
-/* Where did keyboard interrupt get us */
-extern struct pt_regs *kbd_pt_regs;
 
 /*
  * kbd->xxx contains the VC-local things (flag settings etc..)
@@ -56,14 +25,10 @@ extern struct pt_regs *kbd_pt_regs;
  * Note: lockstate is used as index in the array key_map.
  */
 struct kbd_struct {
-	/* FIXME: Kill bitfields? */
-	/* keyboard we were connected to last time */
-	struct keyboard *keyb;     
-	/* number of keyboards attached to this console */
-	unsigned char kbd_count;  
+
 	unsigned char lockstate;
-	/* 8 modifiers - the names do not have any meaning at all;
-	   they can be associated to arbitrarily chosen keys */
+/* 8 modifiers - the names do not have any meaning at all;
+   they can be associated to arbitrarily chosen keys */
 #define VC_SHIFTLOCK	KG_SHIFT	/* shift lock mode */
 #define VC_ALTGRLOCK	KG_ALTGR	/* altgr lock mode */
 #define VC_CTRLLOCK	KG_CTRL 	/* control lock mode */
@@ -74,23 +39,24 @@ struct kbd_struct {
 #define VC_CTRLRLOCK	KG_CTRLR 	/* ctrlr lock mode */
 	unsigned char slockstate; 	/* for `sticky' Shift, Ctrl, etc. */
 
-	unsigned char ledmode; 	/* one 2-bit value */
+	unsigned char ledmode:2; 	/* one 2-bit value */
 #define LED_SHOW_FLAGS 0        /* traditional state */
 #define LED_SHOW_IOCTL 1        /* only change leds upon ioctl */
+#define LED_SHOW_MEM 2          /* `heartbeat': peek into memory */
 
-	unsigned char ledflagstate;	/* flags, not lights */
-	unsigned char default_ledflagstate;
+	unsigned char ledflagstate:3;	/* flags, not lights */
+	unsigned char default_ledflagstate:3;
 #define VC_SCROLLOCK	0	/* scroll-lock mode */
 #define VC_NUMLOCK	1	/* numeric lock mode */
 #define VC_CAPSLOCK	2	/* capslock mode */
 
-	unsigned char kbdmode;	/* one 2-bit value */
+	unsigned char kbdmode:2;	/* one 2-bit value */
 #define VC_XLATE	0	/* translate keycodes using keymap */
 #define VC_MEDIUMRAW	1	/* medium raw (keycode) mode */
 #define VC_RAW		2	/* raw (scancode) mode */
 #define VC_UNICODE	3	/* Unicode mode */
 
-	unsigned char modeflags;
+	unsigned char modeflags:5;
 #define VC_APPLIC	0	/* application key mode */
 #define VC_CKMODE	1	/* cursor key mode */
 #define VC_REPEAT	2	/* keyboard repeat */
@@ -99,19 +65,33 @@ struct kbd_struct {
 };
 
 extern struct kbd_struct kbd_table[];
+
+extern int kbd_init(void);
+
+extern unsigned char getledstate(void);
+extern void setledstate(struct kbd_struct *kbd, unsigned int led);
+
 extern struct tasklet_struct console_tasklet;
 
 extern int do_poke_blanked_console;
 
-static inline void kbd_set_console(struct keyboard *keyb, int cons)
+extern void (*kbd_ledfunc)(unsigned int led);
+
+extern inline void show_console(void)
 {
-	keyb->want_console = cons;
+	do_poke_blanked_console = 1;
+	tasklet_schedule(&console_tasklet);
+}
+
+extern inline void set_console(int nr)
+{
+	want_console = nr;
 	tasklet_schedule(&console_tasklet);
 }
 
 extern inline void set_leds(void)
 {
-	tasklet_schedule(&console_tasklet);
+	tasklet_schedule(&keyboard_tasklet);
 }
 
 extern inline int vc_kbd_mode(struct kbd_struct * kbd, int flag)
@@ -170,15 +150,10 @@ extern inline void chg_vc_kbd_led(struct kbd_struct * kbd, int flag)
 
 struct console;
 
-void compute_shiftstate(struct keyboard *keyb);
+int getkeycode(unsigned int scancode);
+int setkeycode(unsigned int scancode, unsigned int keycode);
+void compute_shiftstate(void);
 int keyboard_wait_for_keypress(struct console *);
-int kbd_init(void);
-unsigned char getledstate(struct kbd_struct *kbd);
-void setledstate(struct kbd_struct *kbd, unsigned int led);
-/* FIXME: Who's calling it? */
-void put_queue(struct kbd_struct *kbd, int data);      
-void keyboard_bh(void);
-
 
 /* defkeymap.c */
 
@@ -193,9 +168,5 @@ extern inline void con_schedule_flip(struct tty_struct *t)
 	queue_task(&t->flip.tqueue, &con_task_queue);
 	tasklet_schedule(&console_tasklet);
 }
-
-/* misc */
-
-extern void ctrl_alt_del(void);
 
 #endif

@@ -78,8 +78,12 @@ static int serport_ldisc_open(struct tty_struct *tty)
 {
 	struct serport *serport;
 
-	if (!(serport = kmalloc(sizeof(struct serport), GFP_KERNEL)))
+	MOD_INC_USE_COUNT;
+
+	if (!(serport = kmalloc(sizeof(struct serport), GFP_KERNEL))) {
+		MOD_DEC_USE_COUNT;
 		return -ENOMEM;
+	}
 
 	memset(serport, 0, sizeof(struct serport));
 
@@ -93,9 +97,6 @@ static int serport_ldisc_open(struct tty_struct *tty)
 	serport->serio.driver = serport;
 
 	init_waitqueue_head(&serport->wait);
-
-
-	MOD_INC_USE_COUNT;
 
 	return 0;
 }
@@ -200,11 +201,7 @@ static struct tty_ldisc serport_ldisc = {
  * The functions for insering/removing us as a module.
  */
 
-#ifdef MODULE
-int init_module(void)
-#else
 int __init serport_init(void)
-#endif
 {
         if (tty_register_ldisc(N_MOUSE, &serport_ldisc)) {
                 printk(KERN_ERR "serport.c: Error registering line discipline.\n");
@@ -214,9 +211,10 @@ int __init serport_init(void)
 	return  0;
 }
 
-#ifdef MODULE
-void cleanup_module(void)
+void __exit serport_exit(void)
 {
 	tty_register_ldisc(N_MOUSE, NULL);
 }
-#endif
+
+module_init(serport_init);
+module_exit(serport_exit);

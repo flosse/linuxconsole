@@ -270,19 +270,16 @@ static struct serio_dev sunkbd_dev = {
  * The functions for insering/removing us as a module.
  */
 
-#ifdef MODULE
-int init_module(void)
-#else
 int __init sunkbd_init(void)
-#endif
 {
 	serio_register_device(&sunkbd_dev);
 	return 0;
 }
 
-#ifdef MODULE
-void cleanup_module(void)
+void __exit sunkbd_exit(void)
 {
 	serio_unregister_device(&sunkbd_dev);
 }
-#endif
+
+module_init(sunkbd_init);
+module_exit(sunkbd_exit);

@@ -52,15 +52,23 @@ static unsigned char atkbd_set2_keycode[512] = {
 	  0, 51, 37, 23, 24, 11, 10,  0,  0, 52, 53, 38, 39, 25, 12,  0,
 	122, 89, 40,120, 26, 13,  0,  0, 58, 54, 28, 27,  0, 43,  0,  0,
 	 85, 86, 90, 91, 92, 93, 14, 94, 95, 79,  0, 75, 71,121,  0,123,
-	 82, 83, 80, 76, 77, 72,  1, 69, 87, 78, 81, 74, 55, 73, 70,  0,
+	 82, 83, 80, 76, 77, 72,  1, 69, 87, 78, 81, 74, 55, 73, 70, 99,
+	252,  0,  0, 65, 99,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,251,  0,  0,  0,  0,  0,
+	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+	252,253,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+	254,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,
 	  0,  0, 92, 90, 85,  0,137,  0,  0,  0,  0, 91, 89,144,  0,  0,
-	  0,100,  0,  0, 97,149,164,  0,  0,  0,  0,140,115,  0,  0,125,
-	  0,150,  0,154,152,163,151,126,112,166,  0,164,  0,147,  0,127,
-	  0,167,139,160,163,  0,  0,116,  0,  0,161,165,  0,  0,  0,142,
-	146,  0,114,166,168,  0,  0,  0,  0,  0, 98,113,  0,148,  0,138,
+	136,100,255,  0, 97,149,164,  0,156,  0,  0,140,115,  0,  0,125,
+	  0,150,  0,154,152,163,151,126,112,166,  0,140,  0,147,  0,127,
+	159,167,139,160,163,  0,  0,116,158,  0,150,165,  0,  0,  0,142,
+	157,  0,114,166,168,  0,  0,  0,155,  0, 98,113,  0,148,  0,138,
 	  0,  0,  0,  0,  0,  0,153,140,  0,  0, 96,  0,  0,  0,143,  0,
-	  0,  0,116,  0,143,  0,  0,133,  0,107,  0,105,102,  0,  0,112,
-	110,111,108,112,106,103,  0,119,  0,118,109,  0, 99,104,119
+	133,  0,116,  0,143,  0,176,133,  0,107,  0,105,102,  0,  0,112,
+	110,111,108,112,106,103,  0,119,  0,118,109,  0, 99,104,119,
 };
 
 static unsigned char atkbd_set3_keycode[512] = {
@@ -69,12 +77,17 @@ static unsigned char atkbd_set3_keycode[512] = {
 	134, 46, 45, 32, 18,  5,  4, 63,135, 57, 47, 33, 20, 19,  6, 64,
 	136, 49, 48, 35, 34, 21,  7, 65,137,100, 50, 36, 22,  8,  9, 66,
 	125, 51, 37, 23, 24, 11, 10, 67,126, 52, 53, 38, 39, 25, 12, 68,
-	113,114, 40, 43, 26, 13, 87, 99,100, 54, 28, 27, 43, 43, 88, 70,
+	113,114, 40, 84, 26, 13, 87, 99,100, 54, 28, 27, 43, 84, 88, 70,
 	108,105,119,103,111,107, 14,110,  0, 79,106, 75, 71,109,102,104,
 	 82, 83, 80, 76, 77, 72, 69, 98,  0, 96, 81,  0, 78, 73, 55, 85,
 	 89, 90, 91, 92, 74,  0,  0,  0,  0,  0,  0,125,126,127,112,  0,
-	  0,139,150,163,165,115,152,161,166,164,160,154,113,114,167,168,
-	148,149,147,140
+	  0,139,150,163,165,115,152,150,166,140,160,154,113,114,167,168,
+	148,149,147,140,  0,  0,  0,  0,  0,  0,251,  0,  0,  0,  0,  0,
+	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+	252,253,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+	254,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255
 };
 
 /*
@@ -82,7 +95,7 @@ static unsigned char atkbd_set3_keycode[512] = {
  */
 
 struct atkbd {
-	unsigned char keycode[256];
+	unsigned char keycode[512];
 	struct input_dev dev;
 	struct serio *serio;
 	char name[64];
@@ -103,10 +116,14 @@ struct atkbd {
 
 static void atkbd_interrupt(struct serio *serio, unsigned char data, unsigned int flags)
 {
-	unsigned char release = 0;
 	struct atkbd *atkbd = serio->private;
+	int code = data;
 
-	switch (data) {
+#ifdef ATKBD_DEBUG
+	printk("atkbd.c: Received %02x\n", data);
+#endif
+
+	switch (code) {
 		case ATKBD_RET_ACK:
 			atkbd->ack = 1;
 			return;
@@ -116,23 +133,11 @@ static void atkbd_interrupt(struct serio *serio, unsigned char data, unsigned in
 	}
 
 	if (atkbd->cmdcnt) {
-		atkbd->cmdbuf[--atkbd->cmdcnt] = data;
+		atkbd->cmdbuf[--atkbd->cmdcnt] = code;
 		return;
 	}
 
-	release = atkbd->release;
-	atkbd->release = 0;
-
-	if (atkbd->emul) {
-		if (--atkbd->emul) return;
-		data |= 0x100;
-	}
-
-	switch (atkbd->keycode[data]) {
-		case ATKBD_KEY_UNKNOWN:
-			printk(KERN_WARNING "atkbd.c: Unknown key (set %d, scancode %#x) %s.\n",
-				atkbd->set, data, release ? "released" : "pressed");
-			return;
+	switch (atkbd->keycode[code]) {
 		case ATKBD_KEY_BAT:
 			queue_task(&atkbd->tq, &tq_immediate);
 			mark_bh(IMMEDIATE_BH);
@@ -146,11 +151,25 @@ static void atkbd_interrupt(struct serio *serio, unsigned char data, unsigned in
 		case ATKBD_KEY_RELEASE:
 			atkbd->release = 1;
 			return;
-		case ATKBD_KEY_NULL:
-			return;
+		}
+
+	if (atkbd->emul) {
+		if (--atkbd->emul) return;
+		code |= 0x100;
 	}
 
-	input_report_key(&atkbd->dev, atkbd->keycode[data], !release);
+	switch (atkbd->keycode[code]) {
+		case ATKBD_KEY_NULL:
+			break;
+		case ATKBD_KEY_UNKNOWN:
+			printk(KERN_WARNING "atkbd.c: Unknown key (set %d, scancode %#x) %s.\n",
+				atkbd->set, code, atkbd->release ? "released" : "pressed");
+			break;
+		default:
+			input_report_key(&atkbd->dev, atkbd->keycode[code], !atkbd->release);
+	}
+		
+	atkbd->release = 0;
 }
 
 /*
@@ -264,7 +283,6 @@ static int atkbd_set_3(struct atkbd *atkbd)
 	return param;
 }
 
-
 /*
  * atkbd_probe() probes for an AT keyboard on a serio port.
  */
@@ -285,7 +303,8 @@ static int atkbd_probe(struct atkbd *atkbd)
 
 /*
  * Next, we check if it's a keyboard. It should send 0xab83
- * (0xab84 on IBM ThinkPad, and 0xaca1 on a NCD Sun layout keyboard).
+ * (0xab84 on IBM ThinkPad, and 0xaca1 on a NCD Sun layout keyboard,
+ * 0xab02 on unxlated i8042 and 0xab03 on unxlated ThinkPad).
  * If it's a mouse, it'll only send 0x00 (0x03 if it's MS mouse),
  * and we'll time out here, and report an error.
  */
@@ -297,7 +316,8 @@ static int atkbd_probe(struct atkbd *atkbd)
 
 	id = (param[0] << 8) | param[1];
 
-	if (id != 0xab83 && id != 0xab84 && id != 0xaca1)
+	if (id != 0xab83 && id != 0xab84 && id != 0xaca1 &&
+	    id != 0xab02 && id != 0xab03)
 		printk(KERN_WARNING "atkbd.c: Unusual keyboard ID: %#x\n", id);
 
 	return 0;
@@ -435,17 +455,8 @@ static struct serio_dev atkbd_dev = {
 };
 
 /*
- * Module init and cleanup.
+ * Module init and exit.
  */
-
-#ifdef MODULE
-void cleanup_module(void)
-{
-	serio_unregister_device(&atkbd_dev);
-}
-
-int init_module(void)
-#else
 
 void __init atkbd_setup(char *str, int *ints)
 {
@@ -453,9 +464,15 @@ void __init atkbd_setup(char *str, int *ints)
 }
 
 int __init atkbd_init(void)
-#endif
 {
 	serio_register_device(&atkbd_dev);
 	return 0;
 }
 
+void __exit atkbd_exit(void)
+{
+	serio_unregister_device(&atkbd_dev);
+}
+
+module_init(atkbd_init);
+module_exit(atkbd_exit);

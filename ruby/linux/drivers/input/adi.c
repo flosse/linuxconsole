@@ -32,13 +32,13 @@
  */
 
 #include <linux/delay.h>
-#include <linux/errno.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/string.h>
 #include <linux/malloc.h>
 #include <linux/input.h>
-#include "gameport.h"
+#include <linux/gameport.h>
+#include <linux/init.h>
 
 /*
  * Times, array sizes, flags, ids.
@@ -124,10 +124,10 @@ struct adi {
 struct adi_port {
 	struct gameport *gameport;
 	struct timer_list timer;
+	struct adi adi[2];
 	int bad;
 	int reads;
 	int used;
-	struct adi adi[2];
 };
 
 /*
@@ -411,7 +411,7 @@ static void adi_init_input(struct adi *adi, struct adi_port *port)
 	adi->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 
 	for (i = 0; i < adi->axes10 + adi->axes8 + adi->hats * 2; i++)
-		set_bit(t = adi->abs[i], &adi->dev.absbit);
+		set_bit(adi->abs[i], &adi->dev.absbit);
 
 	for (i = 0; i < adi->buttons; i++)
 		set_bit(adi->key[i], &adi->dev.keybit);
@@ -456,13 +456,10 @@ static void adi_init_center(struct adi *adi)
  * adi_connect() probes for Logitech ADI joysticks.
  */
 
-void adi_connect(struct gameport *gameport, struct gameport_dev *dev)
+static void adi_connect(struct gameport *gameport, struct gameport_dev *dev)
 {
 	struct adi_port *port;
 	int i;
-
-	if (gameport_set_mode(gameport, GAMEPORT_MODE_RAW))
-		return;
 
 	if (!(port = kmalloc(sizeof(struct adi_port), GFP_KERNEL)))
 		return;
@@ -476,6 +473,12 @@ void adi_connect(struct gameport *gameport, struct gameport_dev *dev)
 	port->timer.function = adi_timer;
 
 	if (gameport_open(gameport, dev)) {
+		kfree(port);
+		return;
+	}
+
+	if (gameport_set_mode(gameport, GAMEPORT_MODE_RAW)) {
+		gameport_close(gameport);
 		kfree(port);
 		return;
 	}
@@ -508,7 +511,7 @@ void adi_connect(struct gameport *gameport, struct gameport_dev *dev)
 			adi_init_center(port->adi + i);
 			input_register_device(&port->adi[i].dev);
 			printk(KERN_INFO "input%d: %s [%s] on gameport%d\n",
-				port->adi[i].dev.number, port->adi[i].name, port->adi[i].cname, port->gameport->number);
+				port->adi[i].dev.number, port->adi[i].name, port->adi[i].cname, gameport->number);
 		}
 }
 
@@ -533,16 +536,16 @@ static struct gameport_dev adi_dev = {
 	disconnect:	adi_disconnect,
 };
 
-#ifdef MODULE
-void cleanup_module(void)
-{
-	gameport_unregister_device(&adi_dev);
-}
-int init_module(void)
-#else
 int __init adi_init(void)
-#endif
 {
 	gameport_register_device(&adi_dev);
 	return 0;
 }
+
+void __exit adi_exit(void)
+{
+	gameport_unregister_device(&adi_dev);
+}
+
+module_init(adi_init);
+module_exit(adi_exit);

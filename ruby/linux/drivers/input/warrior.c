@@ -35,6 +35,7 @@
 #include <linux/malloc.h>
 #include <linux/input.h>
 #include <linux/serio.h>
+#include <linux/init.h>
 
 /*
  * Constants.
@@ -178,19 +179,16 @@ static struct serio_dev warrior_dev = {
  * The functions for inserting/removing us as a module.
  */
 
-#ifdef MODULE
-int init_module(void)
-#else
-int warrior_init(void)
-#endif
+int __init warrior_init(void)
 {
 	serio_register_device(&warrior_dev);
 	return 0;
 }
 
-#ifdef MODULE
-void cleanup_module(void)
+void __exit warrior_exit(void)
 {
 	serio_unregister_device(&warrior_dev);
 }
-#endif
+
+module_init(warrior_init);
+module_exit(warrior_exit);

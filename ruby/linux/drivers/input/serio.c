@@ -32,7 +32,6 @@
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
 
-#ifndef MODULE
 EXPORT_SYMBOL(serio_register_port);
 EXPORT_SYMBOL(serio_unregister_port);
 EXPORT_SYMBOL(serio_register_device);
@@ -40,7 +39,6 @@ EXPORT_SYMBOL(serio_unregister_device);
 EXPORT_SYMBOL(serio_open);
 EXPORT_SYMBOL(serio_close);
 EXPORT_SYMBOL(serio_rescan);
-#endif
 
 static struct serio *serio_list = NULL;
 static struct serio_dev *serio_dev = NULL;
@@ -125,10 +123,12 @@ void serio_unregister_device(struct serio_dev *dev)
 
 int serio_open(struct serio *serio, struct serio_dev *dev)
 {
-	if (serio->open(serio))
-		return -1;
-	serio->dev = dev;
 	MOD_INC_USE_COUNT;
+	if (serio->open(serio)) {
+		MOD_DEC_USE_COUNT;
+		return -1;
+	}
+	serio->dev = dev;
 	
 	return 0;
 }

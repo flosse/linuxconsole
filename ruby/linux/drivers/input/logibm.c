@@ -1,7 +1,7 @@
 /*
- *  logibm.c  Version 0.1
+ *  logibm.c  Version 0.2
  *
- *  Copyright (c) 1999 Vojtech Pavlik
+ *  Copyright (c) 2000 Vojtech Pavlik
  *
  *  Logitech Bus Mouse Driver for Linux
  */
@@ -65,21 +65,23 @@ static void logibm_interrupt(int irq, void *dev_id, struct pt_regs *regs);
 
 static int logibm_open(struct input_dev *dev)
 {
-	if (!logibm_used++) {
-		if (request_irq(logibm_irq, logibm_interrupt, 0, "logibm", NULL))
-			return -EBUSY;
-		outb(LOGIBM_ENABLE_IRQ, LOGIBM_CONTROL_PORT);
+	if (logibm_used++)
+		return 0;
+	if (request_irq(logibm_irq, logibm_interrupt, 0, "logibm", NULL)) {
+		logibm_used--;
+		printk(KERN_ERR "logibm.c: Can't allocate irq %d\n", logibm_irq);
+		return -EBUSY;
 	}
-
+	outb(LOGIBM_ENABLE_IRQ, LOGIBM_CONTROL_PORT);
 	return 0;
 }
 
 static void logibm_close(struct input_dev *dev)
 {
-	if (!--logibm_used) {
-		outb(LOGIBM_DISABLE_IRQ, LOGIBM_CONTROL_PORT);
-		free_irq(logibm_irq, NULL);
-	}
+	if (--logibm_used)
+		return;
+	outb(LOGIBM_DISABLE_IRQ, LOGIBM_CONTROL_PORT);
+	free_irq(logibm_irq, NULL);
 }
 
 static struct input_dev logibm_dev = {
@@ -106,45 +108,40 @@ static void logibm_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 	dy |= (buttons & 0xf) << 4;
 	buttons = ~buttons;
 
-	input_event(&logibm_dev, EV_REL, REL_X, dx);
-	input_event(&logibm_dev, EV_REL, REL_Y, 255 - dy);
-	input_event(&logibm_dev, EV_KEY, BTN_MIDDLE,  buttons       & 1);
-	input_event(&logibm_dev, EV_KEY, BTN_LEFT,   (buttons >> 1) & 1);
-	input_event(&logibm_dev, EV_KEY, BTN_RIGHT,  (buttons >> 2) & 1);
+	input_report_rel(&logibm_dev, REL_X, dx);
+	input_report_rel(&logibm_dev, REL_Y, 255 - dy);
+	input_report_btn(&logibm_dev, BTN_MIDDLE, buttons & 1);
+	input_report_btn(&logibm_dev, BTN_LEFT,   buttons & 2);
+	input_report_btn(&logibm_dev, BTN_RIGHT,  buttons & 4);
 }
 
-#ifdef MODULE
-void cleanup_module(void)
+static int __init logibm_setup(char *str)
 {
-	input_unregister_device(&logibm_dev);
-	release_region(LOGIBM_BASE, LOGIBM_EXTENT);
-}
-
-int init_module(void)
-#else
-
-void __init logibm_setup(char *str, int *ints)
-{
-	if (!ints[0]) logibm_irq = ints[1];
+        int ints[4];
+        str = get_options(str, ARRAY_SIZE(ints), ints);
+        if (ints[0] > 0) logibm_irq = ints[1];
+        return 1;
 }
 
 int __init logibm_init(void)
-#endif
 {
-	if (check_region(LOGIBM_BASE, LOGIBM_EXTENT))
+	if (request_region(LOGIBM_BASE, LOGIBM_EXTENT, "logibm")) {
+		printk(KERN_ERR "logibm.c: Can't allocate ports at %#x\n", LOGIBM_BASE);
 		return -EBUSY;
+	}
 
 	outb(LOGIBM_CONFIG_BYTE, LOGIBM_CONFIG_PORT);
 	outb(LOGIBM_SIGNATURE_BYTE, LOGIBM_SIGNATURE_PORT);
 	udelay(100);
 
-	if (inb(LOGIBM_SIGNATURE_PORT) != LOGIBM_SIGNATURE_BYTE)
+	if (inb(LOGIBM_SIGNATURE_PORT) != LOGIBM_SIGNATURE_BYTE) {
+		release_region(LOGIBM_BASE, LOGIBM_EXTENT);
+		printk(KERN_ERR "logibm.c: Didn't find Logitech busmouse at %#x\n", LOGIBM_BASE);
 		return -ENODEV;
+	}
 
 	outb(LOGIBM_DEFAULT_MODE, LOGIBM_CONFIG_PORT);
 	outb(LOGIBM_DISABLE_IRQ, LOGIBM_CONTROL_PORT);
-	
-	request_region(LOGIBM_BASE, LOGIBM_EXTENT, "logibm");
 
 	input_register_device(&logibm_dev);
 
@@ -153,3 +150,13 @@ int __init logibm_init(void)
 
 	return 0;
 }
+
+void __exit logibm_exit(void)
+{
+	input_unregister_device(&logibm_dev);
+	release_region(LOGIBM_BASE, LOGIBM_EXTENT);
+}
+
+__setup("logibm_irq=", logibm_setup);
+module_init(logibm_init);
+module_exit(logibm_exit);

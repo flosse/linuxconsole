@@ -57,11 +57,6 @@ SUB_DIRS += macintosh
 MOD_SUB_DIRS += macintosh
 endif
 
-ifdef CONFIG_INPUT
-SUB_DIRS += input
-MOD_SUB_DIRS += input
-endif
-
 ifdef CONFIG_PPC
 SUB_DIRS += macintosh
 MOD_SUB_DIRS += macintosh
@@ -73,6 +68,15 @@ MOD_SUB_DIRS += usb
 else
   ifeq ($(CONFIG_USB),m)
   MOD_SUB_DIRS += usb
+  endif
+endif 
+
+ifeq ($(CONFIG_INPUT),y)
+SUB_DIRS += input
+MOD_SUB_DIRS += input
+else
+  ifeq ($(CONFIG_INPUT),m)
+  MOD_SUB_DIRS += input
   endif
 endif 
 

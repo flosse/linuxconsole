@@ -69,19 +69,16 @@ static struct input_handler evbug_handler = {
 	disconnect:	evbug_disconnect,
 };
 
-#ifdef MODULE
-int init_module(void)
-#else
 int __init evbug_init(void)
-#endif
 {
 	input_register_handler(&evbug_handler);
 	return 0;
 }
 
-#ifdef MODULE
-void cleanup_module(void)
+void __exit evbug_exit(void)
 {
 	input_unregister_handler(&evbug_handler);
 }
-#endif
+
+module_init(evbug_init);
+module_exit(evbug_exit);

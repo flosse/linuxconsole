@@ -147,93 +147,72 @@ static struct ns558* ns558_isa_probe(int io, struct ns558 *next)
 	return port;
 }
 
-#ifdef CONFIG_ISAPNP
-static struct ns558* ns558_pnp_probe(struct pci_dev *dev, struct ns558 *next)
+#ifdef CONFIG_PCI
+static struct pci_device_id ns558_pci_tbl[] __devinitdata = {
+	{ 0x1102, 0x7002, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0 }, /* SBLive! Gameport */
+	{ 0, }
+};
+MODULE_DEVICE_TABLE(pci, ns558_pci_tbl);
+
+static int __devinit ns558_pci_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
+	int ioport, iolen;
+	int rc;
 	struct ns558 *port;
-
-	if (dev->prepare(dev) < 0)
-		return next;
-
-	if (!(dev->resource[0].flags & IORESOURCE_IO)) {
-		printk("No i/o ports on a gameport? Weird\n");
-		return next;
+        
+	rc = pci_enable_device(pdev);
+	if (rc) {
+		printk(KERN_ERR "ns558: Cannot enable PCI gameport (bus %d, devfn %d) error=%d\n",
+			pdev->bus->number, pdev->devfn, rc);
+		return rc;
 	}
+	ioport = pci_resource_start(pdev, 0);
+	iolen = pci_resource_len(pdev, 0);
 
-	if (dev->activate(dev) < 0) {
-		printk("PnP resource allocation failed\n");
-		return next;
-	}
+	if (!request_region(ioport, iolen, "gameport"))
+		return -EBUSY;
 
 	if (!(port = kmalloc(sizeof(struct ns558), GFP_KERNEL))) {
 		printk("Memory allocation failed.\n");
-		dev->deactivate(port->dev);
-		return next;
+		return -ENOMEM;
 	}
-       	memset(port, 0, sizeof(struct ns558));
+	memset(port, 0, sizeof(struct ns558));
 
-	port->next = next;
-	port->type = NS558_PNP;
-	port->gameport.io = dev->resource[0].start;
-	port->gameport.size = dev->resource[0].end - dev->resource[0].start + 1;
+	port->next = ns558;
+	port->type = NS558_PCI;
+	port->gameport.io = ioport;
+	port->gameport.size = iolen;
+	port->dev = pdev;
+	ns558 = port;
+
+	pdev->driver_data = port;
 
 	gameport_register_port(&port->gameport);
 
-	printk(KERN_INFO "gameport%d: NS558 PnP at %#x", port->gameport.number, port->gameport.io);
+	printk(KERN_INFO "gameport%d: NS558 PCI at %#x", port->gameport.number, port->gameport.io);
 	if (port->gameport.size > 1) printk("-%#x", port->gameport.io + port->gameport.size - 1);
 	printk(" speed %d kHz\n", port->gameport.speed);
 
-	return port;
-}
-#endif
-
-
-#ifdef MODULE
-void cleanup_module(void)
-{
-	struct ns558 *port = ns558;
-
-	while (port) {
-		switch (port->type) {
-
-			case NS558_ISA:
-				release_region(port->gameport.io, port->gameport.size);
-				break;
-		
-#ifdef CONFIG_ISAPNP
-			case NS558_PNP:
-				port->dev->deactivate(port->dev);
-#endif
-		
-			default:
-				break;
-		}
-		
-		gameport_unregister_port(&port->gameport);
-		port = port->next;
-	}
+	return 0;
 }
 
-int init_module(void)
-#else
-int __init ns558_init(void)
-#endif
+static void __devexit ns558_pci_exit_one(struct pci_dev *pdev)
 {
-	int i = 0;
+	struct ns558 *port = (struct ns558 *)pdev->driver_data;
+	release_region(port->gameport.io, port->gameport.size);
+}
+
+static struct pci_driver ns558_pci_driver = {
+        name:           "PCI Gameport",
+        id_table:       ns558_pci_tbl,
+        probe:          ns558_pci_init_one,
+        remove:         ns558_pci_exit_one,
+};
+#endif /* CONFIG_PCI */
+
+
 #ifdef CONFIG_ISAPNP
-	struct pci_dev *dev = NULL;
-#endif
-
 /*
- * Probe for ISA ports.
- */
-
-	while (ns558_isa_portlist[i]) 
-		ns558 = ns558_isa_probe(ns558_isa_portlist[i++], ns558);
-
-/*
- * Probe for PnP ports.
- *
  * PnP IDs:
  *
  * CTL00c1 - SB AWE32 PnP
@@ -247,12 +226,133 @@ int __init ns558_init(void)
  * PNPb02f - Generic gameport
  */
 
+static struct pnp_devid {
+	unsigned int vendor, device;
+} pnp_devids[] = {
+	{ ISAPNP_VENDOR('C','T','L'), ISAPNP_DEVICE(0x7002) },
+	{ ISAPNP_VENDOR('C','S','C'), ISAPNP_DEVICE(0x0b35) },
+	{ ISAPNP_VENDOR('P','N','P'), ISAPNP_DEVICE(0xb02f) },
+	{ 0, },
+};
+
+static struct ns558* ns558_pnp_probe(struct pci_dev *dev, struct ns558 *next)
+{
+	int ioport, iolen;
+	struct ns558 *port;
+
+	if (dev->prepare && dev->prepare(dev) < 0)
+		return next;
+
+	if (!(dev->resource[0].flags & IORESOURCE_IO)) {
+		printk("No i/o ports on a gameport? Weird\n");
+		return next;
+	}
+
+	if (dev->activate && dev->activate(dev) < 0) {
+		printk("PnP resource allocation failed\n");
+		return next;
+	}
+	
+	ioport = pci_resource_start(dev, 0);
+	iolen = pci_resource_len(dev, 0);
+
+	if (!request_region(ioport, iolen, "gameport"))
+		goto deactivate;
+
+	if (!(port = kmalloc(sizeof(struct ns558), GFP_KERNEL))) {
+		printk("Memory allocation failed.\n");
+		goto deactivate;
+	}
+	memset(port, 0, sizeof(struct ns558));
+
+	port->next = next;
+	port->type = NS558_PNP;
+	port->gameport.io = ioport;
+	port->gameport.size = iolen;
+	port->dev = dev;
+
+	gameport_register_port(&port->gameport);
+
+	printk(KERN_INFO "gameport%d: NS558 PnP at %#x", port->gameport.number, port->gameport.io);
+	if (port->gameport.size > 1) printk("-%#x", port->gameport.io + port->gameport.size - 1);
+	printk(" speed %d kHz\n", port->gameport.speed);
+
+	return port;
+
+deactivate:
+	if (dev->deactivate)
+		dev->deactivate(dev);
+	return next;
+}
+#endif
+
+int __init ns558_init(void)
+{
+	int i = 0;
 #ifdef CONFIG_ISAPNP
-	while ((dev = isapnp_find_dev(NULL, ISAPNP_VENDOR('P','N','P'), ISAPNP_FUNCTION(0xb02f), dev)))
-		ns558 = ns558_pnp_probe(dev, ns558);
-	while ((dev = isapnp_find_dev(NULL, ISAPNP_VENDOR('C','S','C'), ISAPNP_FUNCTION(0x0b35), dev)))
-		ns558 = ns558_pnp_probe(dev, ns558);
+	struct pci_dev *dev = NULL;
+	struct pnp_devid *devid;
+#endif
+
+/*
+ * Probe for ISA ports.
+ */
+
+	while (ns558_isa_portlist[i]) 
+		ns558 = ns558_isa_probe(ns558_isa_portlist[i++], ns558);
+
+/*
+ * Probe for PCI ports.
+ */
+#ifdef CONFIG_PCI
+	pci_register_driver(&ns558_pci_driver);
+#endif
+
+/*
+ * Probe for PnP ports.
+ */
+
+#ifdef CONFIG_ISAPNP
+	for (devid = pnp_devids; devid->vendor; devid++) {
+		while ((dev = isapnp_find_dev(NULL, devid->vendor, devid->device, dev))) {
+			ns558 = ns558_pnp_probe(dev, ns558);
+		}
+	}
 #endif
 
 	return -!ns558;
 }
+
+void __exit ns558_exit(void)
+{
+	struct ns558 *port = ns558;
+
+	while (port) {
+		gameport_unregister_port(&port->gameport);
+		switch (port->type) {
+
+#ifdef CONFIG_ISAPNP
+			case NS558_PNP:
+				if (port->dev->deactivate)
+					port->dev->deactivate(port->dev);
+				/* fall through */
+#endif
+
+			case NS558_ISA:
+				release_region(port->gameport.io, port->gameport.size);
+				break;
+		
+			default:
+				break;
+		}
+		
+		port = port->next;
+	}
+
+#ifdef CONFIG_PCI
+	pci_unregister_driver(&ns558_pci_driver);
+#endif
+}
+
+module_init(ns558_init);
+module_exit(ns558_exit);

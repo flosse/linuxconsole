@@ -33,6 +33,7 @@
 #include <linux/input.h>
 #include <linux/config.h>
 #include <linux/serio.h>
+#include <linux/init.h>
 
 static char *sermouse_protocols[] = { "None", "Mouse Systems", "Sun", "Microsoft", "Logitech M+",
 						"Microsoft MZ", "Logitech MZ+", "Logitech MZ++"};
@@ -266,19 +267,16 @@ static struct serio_dev sermouse_dev = {
 	disconnect:	sermouse_disconnect
 };
 
-#ifdef MODULE
-int init_module(void)
-#else
-int sermouse_init(void)
-#endif
+int __init sermouse_init(void)
 {
 	serio_register_device(&sermouse_dev);
 	return 0;
 }
 
-#ifdef MODULE
-void cleanup_module(void)
+void __exit sermouse_exit(void)
 {
 	serio_unregister_device(&sermouse_dev);
 }
-#endif
+
+module_init(sermouse_init);
+module_exit(sermouse_exit);

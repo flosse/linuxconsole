@@ -1,56 +1,98 @@
 #
-# Input layer configuration
+# Input driver configuration
 #
 
 mainmenu_option next_comment
 comment 'Input device support'
 
-bool 'Input device support' CONFIG_INPUT
-
+bool 'Input device support (* = not functional yet)' CONFIG_INPUT
 if [ "$CONFIG_INPUT" != "n" ]; then
+   comment 'PS/2 port support'
+      tristate '  i8042 aux+kbd controller' CONFIG_INPUT_I8042
+      tristate '  ct82c710 aux controller' CONFIG_INPUT_CT82C710
+      tristate ' *Q40 kbd controller' CONFIG_INPUT_Q40KBD
+      tristate ' *Sun PCI kbd controller' CONFIG_INPUT_SUNPCIKBD
+      tristate '  Parallel port kbd converter' CONFIG_INPUT_PARKBD
+   
+   comment 'Serial port support'
+      tristate '  Serial port input line discipline' CONFIG_INPUT_SERPORT
+      tristate ' *Sun Zilog serial keyboard and mouse ports' CONFIG_INPUT_SUNZS
+   
+   comment 'Game port support'
+      tristate '  ns558 gameports' CONFIG_INPUT_NS558
+      tristate ' *PDPI Lightning 4 gamecard' CONFIG_INPUT_LIGHTNING
+      tristate ' *Aureal Vortex and Trident 4DWave gameports' CONFIG_INPUT_PCIGAME
+   
+   comment 'PS/2 port input devices'
+      tristate '  AT keyboard' CONFIG_INPUT_ATKBD
+      tristate '  XT keyboard' CONFIG_INPUT_XTKBD
+      tristate '  PS/2 mouse' CONFIG_INPUT_PSMOUSE
+   
+   comment 'Serial port input devices'
+      tristate '  Serial mouse' CONFIG_INPUT_SERMOUSE
+      tristate '  Sun keyboard' CONFIG_INPUT_SUNKBD
+      tristate '  Logitech WingMan Warrior joystick' CONFIG_INPUT_WARRIOR
+      tristate '  LogiCad3d Magellan/SpaceMouse 6dof controller' CONFIG_INPUT_MAGELLAN
+      tristate '  SpaceTec SpaceOrb/Avenger 6dof controller' CONFIG_INPUT_SPACEORB
+      tristate '  SpaceTec SpaceBall 4000 FLX 6dof controller' CONFIG_INPUT_SPACEBALL
+   
+   comment 'Gameport devices'
+      tristate '  Analog joysticks and gamepads' CONFIG_INPUT_ANALOG
+      tristate ' *Assasin 3D and MadCatz Panther devices' CONFIG_INPUT_A3D
+      tristate '  Logitech ADI digital joysticks and gamepads' CONFIG_INPUT_ADI
+      tristate '  Creative Labs Blaster Cobra gamepad' CONFIG_INPUT_COBRA
+      tristate ' *Genius Flight2000 Digital joysticks and gamepads' CONFIG_INPUT_GF2K
+      tristate ' *Gravis GrIP joysticks and gamepads' CONFIG_INPUT_GRIP
+      tristate ' *ThrustMaster DirectConnects joysticks and gamepads' CONFIG_INPUT_TMDC
+      tristate ' *Microsoft SideWinder digital joysticks and gamepads' CONFIG_INPUT_SIDEWINDER
+   
+   comment 'Bus devices'
+      tristate '  InPort/MS/ATIXL busmouse' CONFIG_INPUT_INPORT
+      if [ "$CONFIG_INPUT_INPORT" != "n" ]; then
+         bool '  ATI XL variant' CONFIG_INPUT_ATIXL
+      fi
+      tristate '  Logitech busmouse' CONFIG_INPUT_LOGIBM
+      tristate ' *PC110 touchpad' CONFIG_INPUT_PC100PAD
+      tristate ' *Amiga keyboard' CONFIG_INPUT_AMIKBD
+      tristate ' *Amiga mouse' CONFIG_INPUT_AMIMOUSE
+      tristate '  Amiga joystick' CONFIG_INPUT_AMIJOY
+      tristate ' *Atari keyboard' CONFIG_INPUT_ATAKBD
+      tristate ' *Atari mouse' CONFIG_INPUT_ATAMOUSE
+      tristate ' *Atari joystick' CONFIG_INPUT_ATAJOY
 
-   comment 'Ports'
+   comment 'Parallel port devices'
+      tristate ' *Multisystem, Sega Genesis, Saturn joysticks and gamepads' CONFIG_INPUT_DB9
+      tristate ' *Multisystem, NES, SNES, N64, PSX joysticks and gamepads' CONFIG_INPUT_GAMECON
+      tristate ' *Multisystem joysticks via TurboGraFX device' CONFIG_INPUT_TURBOGRAFX
+   
+   comment 'USB devices'
+      tristate '  USB Human Interface Device (HID)' CONFIG_INPUT_HID
+      if [ "$CONFIG_INPUT_HID" != "y" ]; then
+         tristate '  USB HIDBP keyboard' CONFIG_INPUT_USBKBD
+         tristate '  USB HIDBP mouse' CONFIG_INPUT_USBMOUSE
+      fi
+      tristate '  Wacom Intuos/Graphire tablet' CONFIG_INPUT_WACOMUSB
+      tristate '  Logitech WingMan Force joystick' CONFIG_INPUT_WMFORCEUSB
 
-   tristate '  i8042 keyboard controller support' CONFIG_INPUT_I8042
-   tristate '  C&T 82c710 mouse port support' CONFIG_INPUT_CT82C710
-   if [ "CONFIG_PARPORT" != "n" ]; then
-      tristate '  PS/2 on parport support' CONFIG_INPUT_PARKBD
-   fi
-   tristate '  Serial port support' CONFIG_INPUT_SERPORT
-
-   comment 'Keyboards'
-
-   tristate '  AT keyboard support' CONFIG_INPUT_ATKBD
-   tristate '  XT keyboard support' CONFIG_INPUT_XTKBD
-   tristate '  Sun keyboard support' CONFIG_INPUT_SUNKBD
-
-   comment 'Mice'
-
-   tristate '  Serial mouse support' CONFIG_INPUT_SERMOUSE
-   tristate '  PS/2 mouse support' CONFIG_INPUT_PSMOUSE
-
-   tristate '  Inport mouse support' CONFIG_INPUT_INPORT
-   if [ "$CONFIG_INPUT_INPORT" != "n" ]; then
-      bool '    ATI XL variant' CONFIG_INPUT_INPORT_ATIXL
-   fi
-   tristate '  Logitech busmouse support' CONFIG_INPUT_LOGIBM
-
-   comment '6DOF devices'
-
-   tristate '  Magellan and Space Mouse support' CONFIG_INPUT_MAGELLAN
-
-   comment 'Joysticks'
-
-   tristate '  Logitech WingMan Warrior support' CONFIG_INPUT_WARRIOR
-
+   comment 'ADB devices'
+      tristate ' *Mac keyboard' CONFIG_INPUT_ADBKBD
+      tristate ' *Mac mouse' CONFIG_INPUT_ADBMOUSE
+      tristate ' *Microsoft SideWinder 3D Pro for Mac' CONFIG_INPUT_ADBSW
+      tristate ' *Gravis MouseStick' CONFIG_INPUT_MOUSESTICK
+   
    comment 'Userland interfaces'
-
-   tristate '  /dev/inputX generic input devices' CONFIG_INPUT_EVDEV
-   tristate '  /dev/mouseX PS/2-like devices' CONFIG_INPUT_MOUSEDEV
-   if [ ! "$CONFIG_INPUT_MOUSEDEV" = "n" ]; then
-      bool '    Mix all mice into one device' CONFIG_INPUT_MOUSEDEV_MIX
-   fi
-   tristate '  /dev/jsX joystick devices' CONFIG_INPUT_JOYDEV
+      tristate '  Mouse interface' CONFIG_INPUT_MOUSEDEV
+      if [ "$CONFIG_INPUT_MOUSEDEV" != "n" ]; then
+         bool '    Mix all mice into one device' CONFIG_INPUT_MOUSEDEV_MIX
+         bool '    Support for digitizers' CONFIG_INPUT_MOUSEDEV_DIGITIZER
+         if [ "$CONFIG_INPUT_MOUSEDEV_DIGITIZER" != "n" ]; then
+            int '     Horizontal screen resolution' CONFIG_INPUT_MOUSEDEV_SCREEN_X 1024
+            int '     Vertical screen resolution' CONFIG_INPUT_MOUSEDEV_SCREEN_Y  768
+         fi
+      fi
+      tristate '  Joystick interface' CONFIG_INPUT_JOYDEV
+      tristate '  Event interface' CONFIG_INPUT_EVDEV
+      tristate '  Event logging' CONFIG_INPUT_EVBUG
 fi
-
+   
 endmenu

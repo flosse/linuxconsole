@@ -47,6 +47,38 @@ struct input_event {
 };
 
 /*
+ * The device ID structure;
+ */
+
+struct input_id {
+	__u16 bus;
+	__u16 vendor;
+	__u16 product;
+};
+
+/*
+ * Protocol version.
+ */
+
+#define EV_VERSION		0x010000
+
+/*
+ * IOCTLs (0x00 - 0x7f)
+ */
+
+#define EVIOCGVERSION		_IOR('E', 0x01, __u32)                  /* get driver version */
+#define EVIOCGID		_IOR('E', 0x02, struct input_id)	/* get device ID */
+#define EVIOCGREP		_IOR('E', 0x03, int[2])			/* get repeat settings */
+#define EVIOCSREP		_IOW('E', 0x03, int[2])			/* get repeat settings */
+#define EVIOCGKEYCODE		_IOR
+#define EVIOCSKEYCODE		_IOW
+#define EVIOCGNAME(len)		_IOC(_IOC_READ, 'E', 0x03, len)		/* get device name */
+#define EVIOCGBIT(ev,len)	_IOC(_IOC_READ, 'E', 0x20 + ev, len)	/* get event bits */
+#define EVIOCGABSLIM(num)	_IOR('E', 0x40 + num, int[4])		/* get abs event limits */ 
+#define EVIOCGABS(num)		_IOR('E', 0x80 + num, int)		/* get abs value */
+#define EVIOCGKEY		_IOR
+
+/*
  * Event types
  */
 
@@ -383,6 +415,7 @@ struct input_event {
  */
 
 #include <linux/sched.h>
+#include <linux/devfs_fs_kernel.h>
 
 #define NBITS(x) ((((x)-1)/BITS_PER_LONG)+1)
 #define BIT(x)	(1<<((x)%BITS_PER_LONG))
@@ -393,6 +426,8 @@ struct input_dev {
 	void *private;
 
 	int number;
+	char *name;
+	struct input_id id;
 
 	unsigned long evbit[NBITS(EV_MAX)];
 	unsigned long keybit[NBITS(KEY_MAX)];
@@ -433,8 +468,10 @@ struct input_handler {
 	int (*connect)(struct input_handler *handler, struct input_dev *dev);
 	void (*disconnect)(struct input_handle *handle);
 
-	struct input_handle *handle;
+	struct file_operations *fops;
+	int minor;
 
+	struct input_handle *handle;
 	struct input_handler *next;
 };
 
@@ -457,6 +494,9 @@ void input_unregister_handler(struct input_handler *);
 
 void input_open_device(struct input_handle *);
 void input_close_device(struct input_handle *);
+
+devfs_handle_t input_register_minor(char *name, int minor, int minor_base);
+void input_unregister_minor(devfs_handle_t handle);
 
 void input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value);
 

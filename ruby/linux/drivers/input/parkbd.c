@@ -166,11 +166,7 @@ static int parkbd_getport(void)
 }
 
 
-#ifdef MODULE
-int init_module(void)
-#else
 int __init parkbd_init(void)
-#endif
 {
 	if (parkbd_getport()) return -1;
 	parkbd_writelines(3);
@@ -184,11 +180,12 @@ int __init parkbd_init(void)
 	return 0;
 }
 
-#ifdef MODULE
-void cleanup_module(void)
+void __exit parkbd_exit(void)
 {
 	parport_release(parkbd_dev);
 	serio_unregister_port(&parkbd_port);
 	parport_unregister_device(parkbd_dev);
 }
-#endif
+
+module_init(parkbd_init);
+module_exit(parkbd_exit);

@@ -125,19 +125,16 @@ struct serio_dev xtkbd_dev = {
 	disconnect:	xtkbd_disconnect
 };
 
-#ifdef MODULE
-int init_module(void)
-#else
 int __init xtkbd_init(void)
-#endif
 {
 	serio_register_device(&xtkbd_dev);
 	return 0;
 }
 
-#ifdef MODULE
-void cleanup_module(void)
+void __exit xtkbd_exit(void)
 {
 	serio_unregister_device(&xtkbd_dev);
 }
-#endif
+
+module_init(xtkbd_init);
+module_exit(xtkbd_exit);

@@ -1,137 +1,111 @@
 #
-# Makefile for Linux input driver
-#
-# (c) 1998-1999 Vojtech Pavlik
-#
-# Sponsored by SuSE
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
-#
-# Should you need to contact me, the author, you can do so either by
-# e-mail - mail your message to <vojtech@suse.cz>, or by paper mail:
-# Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
-#
-#
-# Edit the options below to suit your needs
+# Makefile for the kernel Input device drivers.
 #
 
-CC		= gcc
+# Subdirs.
 
-CPPFLAGS        = -I.#                                          # for *.h
+SUB_DIRS	:=
+MOD_SUB_DIRS	:= $(SUB_DIRS)
+MOD_IN_SUB_DIRS	:= $(SUB_DIRS)
+ALL_SUB_DIRS	:= $(SUB_DIRS)
 
-CFLAGS		= -O2 -Wall -pipe -m486 -fomit-frame-pointer#	# i386
-# CFLAGS	= -O2 -Wall -pipe -m68020 -ffixed-a2#		# m68k
-# CFLAGS	= -O2 -Wall -pipe -fomit-frame-pointer -ffixed-8# Alpha
-# CFLAGS	= -O2 -Wall -pipe#				# Generic
+# The target object and module list name.
 
-MODFLAGS	= -D__KERNEL__ -DMODULE#			# Normal modules
-# MODFLAGS	= -D__KERNEL__ -DMODULE -DMODVERSIONS\
-#		  -include /usr/src/linux/include/linux/modversions.h # Versioned modules
+O_TARGET	:= inputdrv.o
+M_OBJS		:=
+O_OBJS		:=
+MOD_LIST_NAME	:= INPUT_MODULES
 
-DRIVERS		= atkbd.o ct82c710.o evbug.o evdev.o \
-		  i8042.o inport.o input.o iobug.o joydev.o \
-		  logibm.o magellan.o mousedev.o parkbd.o \
-		  psmouse.o serio.o sermouse.o serport.o sunkbd.o\
-		  warrior.o xtkbd.o gameport.o adi.o sidewinder.o ns558.o
+# Objects that export symbols.
 
-PROGRAMS	= evtest inputattach jstest jscal
+export-objs	:= input.o serio.o gameport.o
 
-#
-# Nothing should need to be changed below this line
-#
+# Object file lists.
 
-compile: $(DRIVERS) $(PROGRAMS)
+obj-y	:=
+obj-m	:=
+obj-n	:=
+obj-	:=
 
-atkbd.o: atkbd.c atkbd.h input.h serio.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c atkbd.c -o atkbd.o
+# Each configuration option enables a list of files.
 
-ct82c710.o: ct82c710.c serio.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c ct82c710.c -o ct82c710.o
+obj-$(CONFIG_INPUT)		+= input.o
 
-evbug.o: evbug.c input.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c evbug.c -o evbug.o
+obj-$(CONFIG_INPUT_I8042)	+= i8042.o serio.o
+obj-$(CONFIG_INPUT_CT82C710)	+= ct82c710.o serio.o
+#obj-$(CONFIG_INPUT_Q40KBD)	+= q40kbd.o serio.o
+#obj-$(CONFIG_INPUT_SUNPCIKBD)	+= sunpcikbd.o serio.o
+obj-$(CONFIG_INPUT_PARKBD)	+= parkbd.o serio.o
 
-evdev.o: evdev.c input.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c evdev.c -o evdev.o
+obj-$(CONFIG_INPUT_SERPORT)	+= serport.o serio.o
 
-i8042.o: i8042.c i8042.h serio.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c i8042.c -o i8042.o
+obj-$(CONFIG_INPUT_NS558)	+= ns558.o gameport.o
+#obj-$(CONFIG_INPUT_LIGHTNIG)	+= lightning.o gameport.o
+#obj-$(CONFIG_INPUT_PCIGAME)	+= pcigame.o gameport.o
 
-inport.o: inport.c input.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c inport.c -o inport.o
+obj-$(CONFIG_INPUT_ATKBD)	+= atkbd.o serio.o
+obj-$(CONFIG_INPUT_XTKBD)	+= xtkbd.o serio.o
+obj-$(CONFIG_INPUT_PSMOUSE)	+= psmouse.o serio.o
 
-input.o: input.c input.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c input.c -o input.o
+obj-$(CONFIG_INPUT_SERMOUSE)	+= sermouse.o serio.o
+obj-$(CONFIG_INPUT_SUNKBD)	+= sunkbd.o serio.o
+obj-$(CONFIG_INPUT_WARRIOR)	+= warrior.o serio.o
+obj-$(CONFIG_INPUT_MAGELLAN)	+= magellan.o serio.o
+obj-$(CONFIG_INPUT_SPACEORB)	+= spaceorb.o serio.o
+obj-$(CONFIG_INPUT_SPACEBALL)	+= spaceball.o serio.o
 
-iobug.o: iobug.c serio.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c iobug.c -o iobug.o
+obj-$(CONFIG_INPUT_ANALOG)	+= analog.o gameport.o
+#obj-$(CONFIG_INPUT_A3D)	+= a3d.o gameport.o
+obj-$(CONFIG_INPUT_ADI)		+= adi.o gameport.o
+obj-$(CONFIG_INPUT_COBRA)	+= cobra.o gameport.o
+#obj-$(CONFIG_INPUT_GF2K)	+= gf2k.o gameport.o
+#obj-$(CONFIG_INPUT_GRIP)	+= grip.o gameport.o
+#obj-$(CONFIG_INPUT_TMDC)	+= tmdc.o gameport.o
+#obj-$(CONFIG_INPUT_SIDEWINDER)	+= sidewinder.o gameport.o
 
-joydev.o: joydev.c input.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c joydev.c -o joydev.o
+obj-$(CONFIG_INPUT_INPORT)	+= inport.o
+obj-$(CONFIG_INPUT_LOGIBM)	+= logibm.o
+#obj-$(CONFIG_INPUT_PC110PAD)	+= pc110pad.o
+#obj-$(CONFIG_INPUT_AMIKEYB)	+= amikeyb.o
+#obj-$(CONFIG_INPUT_AMIMOUSE)	+= amimouse.o
+#obj-$(CONFIG_INPUT_AMIJOY)	+= amijoy.o
+#obj-$(CONFIG_INPUT_ATARIKBD)	+= atarikbd.o
+#obj-$(CONFIG_INPUT_ATARIMOUSE) += atarimouse.o
+#obj-$(CONFIG_INPUT_ATARIJOY)	+= atarijoy.o
 
-logibm.o: logibm.c input.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c logibm.c -o logibm.o
+#obj-$(CONFIG_INPUT_DB9)	+= db9.o
+#obj-$(CONFIG_INPUT_GAMECON)	+= gamecon.o
+#obj-$(CONFIG_INPUT_TURBOGRAFX)	+= turbografx.o
 
-magellan.o: magellan.c input.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c magellan.c -o magellan.o
+obj-$(CONFIG_INPUT_HID)		+= hid.o
+obj-$(CONFIG_INPUT_USBMOUSE)	+= usbmouse.o
+obj-$(CONFIG_INPUT_USBKBD)	+= usbkbd.o
+obj-$(CONFIG_INPUT_WACOMUSB)	+= wacom.o
+obj-$(CONFIG_INPUT_WMFORCEUSB)	+= wmforce.o
 
-mousedev.o: mousedev.c input.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c mousedev.c -o mousedev.o
+#obj-$(CONFIG_INPUT_ADBMOUSE)	+= adbmouse.o
+#obj-$(CONFIG_INPUT_ADBKBD)	+= adbkbd.o
+#obj-$(CONFIG_INPUT_ADBSW)	+= adbsw.o
+#obj-$(CONFIG_INPUT_MOUSESTICK) += mousestick.o
 
-parkbd.o: parkbd.c serio.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c parkbd.c -o parkbd.o
+obj-$(CONFIG_INPUT_KEYBDEV)	+= keybdev.o
+obj-$(CONFIG_INPUT_MOUSEDEV)	+= mousedev.o
+obj-$(CONFIG_INPUT_JOYDEV)	+= joydev.o
+obj-$(CONFIG_INPUT_EVDEV)	+= evdev.o
+obj-$(CONFIG_INPUT_EVBUG)	+= evbug.o
 
-psmouse.o: psmouse.c serio.h input.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c psmouse.c -o psmouse.o
+# Files that are both resident and modular: remove from modular.
 
-serio.o: serio.c serio.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c serio.c -o serio.o
+obj-m		:= $(filter-out $(obj-y), $(obj-m))
+int-m		:= $(filter-out $(int-y), $(int-m))
 
-sermouse.o: sermouse.c serio.h input.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c sermouse.c -o sermouse.o
+# Translate to Rules.make lists.
 
-serport.o: serport.c input.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c serport.c -o serport.o
+O_OBJS		:= $(sort $(filter-out $(export-objs), $(obj-y)))
+OX_OBJS		:= $(sort $(filter     $(export-objs), $(obj-y)))
+M_OBJS		:= $(sort $(filter-out $(export-objs), $(obj-m)))
+MX_OBJS		:= $(sort $(filter     $(export-objs), $(obj-m)))
 
-sunkbd.o: sunkbd.c sunkbd.h serio.h input.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c sunkbd.c -o sunkbd.o
+# The global Rules.make.
 
-warrior.o: warrior.c serio.h input.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c warrior.c -o warrior.o
-
-xtkbd.o: xtkbd.c serio.h input.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c xtkbd.c -o xtkbd.o
-
-gameport.o: gameport.c gameport.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c gameport.c -o gameport.o
-
-adi.o: adi.c gameport.h input.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c adi.c -o adi.o
-
-sidewinder.o: sidewinder.c gameport.h input.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c sidewinder.c -o sidewinder.o
-
-ns558.o: ns558.c gameport.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(MODFLAGS) -c ns558.c -o ns558.o
-
-clean:
-	-$(RM) *.o *.swp $(PROGRAMS) *.orig *.rej map *~
-
-jscal: jscal.o
-	$(CC) $(CFLAGS) $(CPPFLAGS) -lm $^ -o $@
-
-jstest.o: jstest.c joystick.h
-jscal.o: jscal.c joystick.h
-jsattach.o: jsattach.c
+include $(TOPDIR)/Rules.make

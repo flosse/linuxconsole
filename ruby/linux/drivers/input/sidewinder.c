@@ -812,26 +812,17 @@ static struct js_port __init *sw_probe(int io, struct js_port *port)
 	return port;
 }
 
-#ifdef MODULE
-int init_module(void)
-#else
 int __init sw_init(void)
-#endif
 {
 	int *p;
 
 	for (p = sw_port_list; *p; p++) sw_port = sw_probe(*p, sw_port);
 	if (sw_port) return 0;
 
-#ifdef MODULE
-	printk(KERN_WARNING "sidewinder.c: no joysticks found\n");
-#endif
-
 	return -ENODEV;
 }
 
-#ifdef MODULE
-void cleanup_module(void)
+void __exit sw_exit(void)
 {
 	int i;
 	struct sw *sw;
@@ -846,4 +837,6 @@ void cleanup_module(void)
 	}
 
 }
-#endif
+
+module_init(sw_init);
+module_exit(sw_exit);

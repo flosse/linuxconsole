@@ -35,6 +35,7 @@
 #include <linux/malloc.h>
 #include <linux/input.h>
 #include <linux/serio.h>
+#include <linux/init.h>
 
 /*
  * Definitions & global arrays.
@@ -48,7 +49,6 @@ static int magellan_axes[] = { ABS_X, ABS_Y, ABS_Z, ABS_RX, ABS_RY, ABS_RZ};
 /*
  * Per-Magellan data.
  */
-
 
 struct magellan {
 	struct input_dev dev;
@@ -78,12 +78,6 @@ static int magellan_crunch_nibbles(unsigned char *data, int count)
 	return 0;
 }
 
-/*
- * magellan_process_packet() decodes packets the driver receives from the
- * Magellan. It updates the data accordingly, and sets an ACK flag
- * to the type of last packet received, if received OK.
- */
-
 static void magellan_process_packet(struct magellan* magellan)
 {
 	struct input_dev *dev = &magellan->dev;
@@ -111,12 +105,6 @@ static void magellan_process_packet(struct magellan* magellan)
 			break;
 	}
 }
-
-/*
- * magellan_interrupt() is called by the low level driver when characters
- * are ready for us. We then buffer them for further processing, or call the
- * packet processing routine.
- */
 
 static void magellan_interrupt(struct serio *serio, unsigned char data, unsigned int flags)
 {
@@ -195,19 +183,16 @@ static struct serio_dev magellan_dev = {
  * The functions for inserting/removing us as a module.
  */
 
-#ifdef MODULE
-int init_module(void)
-#else
-int magellan_init(void)
-#endif
+int __init magellan_init(void)
 {
 	serio_register_device(&magellan_dev);
 	return 0;
 }
 
-#ifdef MODULE
-void cleanup_module(void)
+void __exit magellan_exit(void)
 {
 	serio_unregister_device(&magellan_dev);
 }
-#endif
+
+module_init(magellan_init);
+module_exit(magellan_exit);

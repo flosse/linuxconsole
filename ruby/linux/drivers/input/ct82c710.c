@@ -184,17 +184,7 @@ static int __init ct82c710_probe(void)
 	return 0;
 }
 
-#ifdef MODULE
-void cleanup_module(void)
-{
-	serio_unregister_port(&ct82c710_port);
-	release_region(ct82c710_data, 2);
-}
-
-int init_module(void)
-#else
 int __init ct82c710_init(void)
-#endif
 {
 	if (ct82c710_probe())
 		return -ENODEV;
@@ -210,3 +200,12 @@ int __init ct82c710_init(void)
 
 	return 0;
 }
+
+void __exit ct82c710_exit(void)
+{
+	serio_unregister_port(&ct82c710_port);
+	release_region(ct82c710_data, 2);
+}
+
+module_init(ct82c710_init);
+module_exit(ct82c710_exit);

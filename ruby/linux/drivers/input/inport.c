@@ -125,23 +125,12 @@ static void inport_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 	outb(INPORT_MODE_IRQ | INPORT_MODE_BASE, INPORT_DATA_PORT);
 }
 
-#ifdef MODULE
-void cleanup_module(void)
-{
-	input_unregister_device(&inport_dev);
-	release_region(INPORT_BASE, INPORT_EXTENT);
-}
-
-int init_module(void)
-#else
-
 void __init inport_setup(char *str, int *ints)
 {
         if (!ints[0]) inport_irq = ints[1];
 }
 
 int __init inport_init(void)
-#endif
 {
 	unsigned char a,b,c;
 
@@ -167,3 +156,12 @@ int __init inport_init(void)
 
 	return 0;
 }
+
+void __exit inport_exit(void)
+{
+	input_unregister_device(&inport_dev);
+	release_region(INPORT_BASE, INPORT_EXTENT);
+}
+
+module_init(inport_init);
+module_exit(inport_exit);

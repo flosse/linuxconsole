@@ -36,10 +36,6 @@
 #include <linux/init.h>
 #include <linux/serio.h>
 
-#ifndef CONFIG_INPUT
-#undef CONFIG_VT
-#endif
-
 #include "i8042.h"
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
@@ -616,24 +612,6 @@ static int __init i8042_port_register(struct i8042_values *values, struct serio 
  * Module init and cleanup functions.
  */
 
-#ifdef MODULE
-
-void cleanup_module(void)
-{
-	if (i8042_kbd_values.exists)
-		serio_unregister_port(&i8042_kbd_port);
-
-	if (i8042_aux_values.exists)
-		serio_unregister_port(&i8042_aux_port);
-
-	i8042_controller_cleanup();
-
-	release_region(I8042_DATA_REG, 16);
-}
-
-int init_module(void)
-#else
-
 void __init i8042_setup(char *str, int *ints)
 {
 	if (!strcmp(str, "i8042_reset=1"))
@@ -647,7 +625,6 @@ void __init i8042_setup(char *str, int *ints)
 }
 
 int __init i8042_init(void)
-#endif
 {
 #ifdef I8042_DEBUG_IO
 	i8042_start = jiffies;
@@ -665,3 +642,19 @@ int __init i8042_init(void)
 
 	return 0;
 }
+
+void __exit i8042_exit(void)
+{
+	if (i8042_kbd_values.exists)
+		serio_unregister_port(&i8042_kbd_port);
+
+	if (i8042_aux_values.exists)
+		serio_unregister_port(&i8042_aux_port);
+
+	i8042_controller_cleanup();
+
+	release_region(I8042_DATA_REG, 16);
+}
+
+module_init(i8042_init);
+module_exit(i8042_exit);

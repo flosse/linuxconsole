@@ -23,7 +23,7 @@ obj-		:=
 
 SUB_DIRS     := 
 MOD_SUB_DIRS := $(SUB_DIRS)
-ALL_SUB_DIRS := $(SUB_DIRS) ftape joystick pcmcia
+ALL_SUB_DIRS := $(SUB_DIRS) ftape pcmcia
 
 #
 # This file contains the font map for the default (hardware) font
@@ -38,24 +38,32 @@ obj-y	 += tty_io.o n_tty.o tty_ioctl.o mem.o raw.o pty.o misc.o random.o
 
 export-objs     :=	busmouse.o console.o i2c-old.o keyboard.o sysrq.o \
 			misc.o pty.o random.o selection.o serial.o videodev.o \
-			tty_io.o bttv.o
+			tty_io.o bttv.o cpia.o
 
 KEYMAP   =defkeymap.o
+KEYBD    =
 CONSOLE  =console.o
 SERIAL   =serial.o
 
 ifeq ($(ARCH),m68k)
+   ifdef CONFIG_AMIGA
+      KEYBD = amikeyb.o
+   else
+      KEYBD    =
+   endif
    SERIAL   =
 endif
 
 ifeq ($(ARCH),arm)
   KEYMAP   =
+  KEYBD    =
   CONSOLE  =
   SERIAL   =
 endif
 
 ifeq ($(ARCH),sh)
   KEYMAP   =
+  KEYBD    =
   CONSOLE  =
   SERIAL =
   ifeq ($(CONFIG_SERIAL),y)
@@ -68,10 +76,12 @@ ifeq ($(ARCH),sh)
 endif
 
 ifeq ($(CONFIG_DECSTATION),y)
+  KEYBD    =
   SERIAL   =
 endif
 
 ifeq ($(CONFIG_BAGET_MIPS),y)
+  KEYBD    =
   SERIAL   =
 endif
 
@@ -84,9 +94,8 @@ obj-$(CONFIG_VT) += vt.o vc_screen.o consolemap.o consolemap_deftbl.o $(CONSOLE)
 obj-$(CONFIG_SERIAL) += $(SERIAL)
 obj-$(CONFIG_SERIAL_21285) += serial_21285.o
 
-/* What do I do here ? */
 ifndef CONFIG_SUN_KEYBOARD
-  obj-$(CONFIG_VT) += keyboard.o $(KEYMAP) 
+  obj-$(CONFIG_VT) += keyboard.o $(KEYMAP) $(KEYBD)
 else
   obj-$(CONFIG_PCI) += keyboard.o $(KEYMAP)
 endif
@@ -127,13 +136,12 @@ endif
 
 obj-$(CONFIG_PRINTER) += lp.o
 
-ifeq ($(CONFIG_JOYSTICK),y)
-obj-y += joystick/js.o
-SUB_DIRS += joystick
-MOD_SUB_DIRS += joystick
+obj-$(CONFIG_BUSMOUSE) += busmouse.o
+ifeq ($(CONFIG_BUSMOUSE),y)
+M = y
 else
-  ifeq ($(CONFIG_JOYSTICK),m)
-  MOD_SUB_DIRS += joystick
+  ifeq ($(CONFIG_BUSMOUSE),m)
+  MM = m
   endif
 endif
 
@@ -144,7 +152,12 @@ obj-$(CONFIG_SOFT_WATCHDOG) += softdog.o
 obj-$(CONFIG_PCWATCHDOG) += pcwd.o
 obj-$(CONFIG_ACQUIRE_WDT) += acquirewdt.o
 obj-$(CONFIG_MIXCOMWD) += mixcomwd.o
+obj-$(CONFIG_AMIGAMOUSE) += amigamouse.o
+obj-$(CONFIG_ATARIMOUSE) += atarimouse.o
+obj-$(CONFIG_ADBMOUSE) += adbmouse.o busmouse.o
+obj-$(CONFIG_PC110_PAD) += pc110pad.o
 obj-$(CONFIG_WDT) += wdt.o
+obj-$(CONFIG_WDTPCI) += wdt_pci.o
 obj-$(CONFIG_RTC) += rtc.o
 obj-$(CONFIG_EFI_RTC) += efirtc.o
 ifeq ($(CONFIG_PPC),)
@@ -153,7 +166,7 @@ endif
 
 obj-$(CONFIG_VIDEO_DEV) += videodev.o
 
-obj-$(CONFIG_21825_WATCHDOG) += wdt285.o
+obj-$(CONFIG_21285_WATCHDOG) += wdt285.o
 obj-$(CONFIG_977_WATCHDOG) += wdt977.o
 obj-$(CONFIG_DS1620) += ds1620.o
 
@@ -226,6 +239,9 @@ obj-$(CONFIG_VIDEO_PMS) += pms.o
 obj-$(CONFIG_VIDEO_PLANB) += planb.o
 obj-$(CONFIG_VIDEO_VINO) += vino.o
 obj-$(CONFIG_VIDEO_STRADIS) += stradis.o
+obj-$(CONFIG_VIDEO_CPIA) += cpia.o
+obj-$(CONFIG_VIDEO_CPIA_PP) += cpia_pp.o
+obj-$(CONFIG_VIDEO_CPIA_USB) += cpia_usb.o
 obj-$(CONFIG_RADIO_AZTECH) += radio-aztech.o
 obj-$(CONFIG_RADIO_RTRACK2) += radio-rtrack2.o
 obj-$(CONFIG_RADIO_SF16FMI) += radio-sf16fmi.o

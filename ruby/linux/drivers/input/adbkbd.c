@@ -1,0 +1,1 @@
+/System.map /System.old /arch /bin /boot /cdrom /dev /etc /floppy /home /lib /lost+found /mnt /nfs /old /opt /proc /root /sbin /tmp /usr /var /vmlinuz /vmlinuz.old /x ADB Keyboard driver not yet here */

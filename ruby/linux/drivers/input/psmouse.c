@@ -30,6 +30,7 @@
 #include <linux/interrupt.h>
 #include <linux/input.h>
 #include <linux/serio.h>
+#include <linux/init.h>
 
 #include "psmouse.h"
 
@@ -565,19 +566,16 @@ static struct serio_dev psmouse_dev = {
 	disconnect:	psmouse_disconnect
 };
 
-#ifdef MODULE
-int init_module(void)
-#else
-int psmouse_init(void)
-#endif
+int __init psmouse_init(void)
 {
 	serio_register_device(&psmouse_dev);
 	return 0;
 }
 
-#ifdef MODULE
-void cleanup_module(void)
+void __exit psmouse_exit(void)
 {
 	serio_unregister_device(&psmouse_dev);
 }
-#endif
+
+module_init(psmouse_init);
+module_exit(psmouse_exit);
