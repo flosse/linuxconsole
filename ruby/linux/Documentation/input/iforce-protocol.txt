@@ -114,24 +114,30 @@ FF LEN QUERY VALUE_QUERIED CHECKSUM2
 where LEN = 1 + length(VALUE_QUERIED)
 
 **** Query ram size ****
-QUERY = 42
+QUERY = 42 ('B'uffer size)
 The driver should reply with the same packet plus two additionnal bytes
 containing the size of the memory:
 ff 03 42 03 e8 CS would mean that the device has 1000 bytes of ram available.
 
 **** Query number of effects ****
-QUERY = 4e
+QUERY = 4e ('N'umber of effects)
 The driver should respond by sending the number of effects that can be played
 at the same time (one byte)
 ff 02 4e 14 CS would stand for 20 effects.
 
 **** Vendor's id ****
-QUERY = 4d
+QUERY = 4d ('M'anufacturer)
 Query the vendors'id (2 bytes)
 
 **** Product id *****
-QUERY = 50
+QUERY = 50 ('P'roduct)
 Query the product id (2 bytes)
+
+**** Other features ****
+QUERY = 43 ('C') - sends back 'C' and 0 bytes
+QUERY = 45 ('E') - sends back 2 bytes (00 01)
+QUERY = 4f ('O') - sends back 'O' and 0 bytes
+QUERY = 56 ('V'ersion) - sends back 3 bytes (02 03 00 or 02 04 00 or 02 05 00)
 
 *** Initialisation of the device ***
 
