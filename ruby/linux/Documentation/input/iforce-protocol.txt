@@ -86,8 +86,8 @@ LEN= 0a
 00-01 Address
 02 Positive Coeff
 03 Negative Coeff (Val 14 = 2000 (decimal))
-04 Offset (Val 64 = 2000 (decimal))
-05 ??? Val = 00
+04 Offset (Val 64 = 2000 (decimal)) | center ?
+05 ??? Val = 00                     |
 06+07 Dead band (Val 01F4 = 5000 (decimal))
 08 Positive saturation (Val 0a = 1000 (decimal) Val 64 = 10000 (decimal))
 09 Negative saturation
@@ -155,8 +155,10 @@ OP=  42
 42 01 05 and 42 01 04 enable force feedback
 42 01 01 disables it.
 
+**** Setting overall gain ****
 OP=  43
-???
+LEN= 1
+00 Gain: Val 00 = 0%, Val 80 = 100%
 
 ** Parameters' memory **
 
