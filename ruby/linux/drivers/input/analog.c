@@ -427,34 +427,44 @@ static int analog_init_device(struct analog_port *port, struct analog *analog)
  * analog_init_devices() sets up device-specific values and registers the input devices.
  */
 
-static int analog_init_devices(struct analog_port *port)
+static int analog_init_masks(struct analog_port *port)
 {
 	int i;
 	int mask = port->mask;
 	struct analog *analog = port->analog;
 
-	if (!mask)
+	if (!port->mask)
 		return -1;
 
-	if ((mask & 3) != 3 && mask != 0xc) {
+	if ((port->mask & 3) != 3 && port->mask != 0xc) {
 		printk(KERN_WARNING "analog: Unknown joystick device found  "
 			"(data=%#x), probably not analog joystick.\n", mask);
 		return -1;
 	}
 
-	if (1 /* Some options */) {
-	} else analog[0].mask = 0xff;
+	if (0 /* Some options */) {
+	} else {
+		analog[0].mask = 0xff;
+		analog[0].buttons = analog_joy_btn;
+	}
 
-	analog[0].mask &= ~(ANALOG_AXES_STD | ANALOG_HAT_FCS | ANALOG_BTNS_GAMEPAD) |
-				mask | ((mask & 0x80) << 4) | ((mask & 0xc0) << 6) | ((mask & 0xc0) << 8);
+	analog[0].mask &= ~(ANALOG_AXES_STD | ANALOG_HAT_FCS | ANALOG_BTNS_GAMEPAD)
+			| port->mask | ((port->mask & 0x80) << 4)
+			| ((port->mask & 0xc0) << 6) | ((port->mask & 0xc0) << 8);
 
-	/* Manual specified ... ADD */
+	analog[0].mask &= ~(ANALOG_AXES_STD | ANALOG_BTNS_GAMEPAD)
+			| ~((analog[0].mask & ANALOG_HAT_FCS) >> 4)
+			| ~((analog[0].mask & ANALOG_HAT_FCS) << 2)
+			| ~((analog[0].mask & ANALOG_HAT_FCS) << 4);
 
-	for (i = 0; i < 2; i++)
-		if (port->analog[i].mask)
-			analog_init_device(port, analog + i);
+	analog[0].mask &= ~ANALOG_AXES_STD
+			| ~(((analog[0].mask & ANALOG_BTNS_TLR ) >> 6)
+			|   ((analog[0].mask & ANALOG_BTNS_TLR2) >> 8));
 
-	return 0;	
+	analog[1].mask &= (analog[0].mask & ANALOG_EXTENSIONS) ? 0 
+			: ((ANALOG_BUTTONS_STD | mask) & ~analog[0].mask);
+
+	return -!(analog[0].mask || analog[1].mask);	
 }
 
 static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
@@ -493,11 +503,15 @@ static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
 		analog_cooked_read(port);
 	}
 
-	if (analog_init_devices(port)) {
+	if (analog_init_masks(port)) {
 		gameport_close(gameport);
 		kfree(port);
 		return;
 	}
+
+	for (i = 0; i < 2; i++)
+		if (port->analog[i].mask)
+			analog_init_device(port, port->analog + i);
 }
 
 static void analog_disconnect(struct gameport *gameport)
