@@ -244,6 +244,7 @@ struct vt_struct {
         struct proc_dir_entry *procdir;
 	unsigned char vt_ledstate;
 	unsigned char vt_ledioctl;
+	char *display_desc;
 };
 
 extern struct list_head vt_list;

@@ -46,6 +46,19 @@ generic_read(char *page, char **start, off_t off, int count, int *eof, int len)
 }
 
 static int
+read_display_desc(char *page, char **start, off_t off, int count, int *eof, void *data)
+{
+        struct vt_struct *vt = (struct vt_struct*) data;
+        int len;
+
+	if(!vt) return 0;
+
+        len = sprintf(page, "%s\n", vt->display_desc ? vt->display_desc : "");
+
+        return generic_read(page, start, off, count, eof, len);
+}
+
+static int
 read_kbd_phys(char *page, char **start, off_t off, int count, int *eof, void *data)
 {
         struct vt_struct *vt = (struct vt_struct*) data;
@@ -89,11 +102,15 @@ write_kbd_phys(struct file *file, const char *buffer,
 			vt->keyboard = handle;
 		}
 		handle->private = vt;
+		printk("keyboard: [%s] bound to [%s] vc:%d-%d\n",
+			handle->dev->name, vt->display_desc, vt->first_vc + 1,
+			vt->first_vc + vt->vc_count);
 	}
 	return count;
 }
 
 static vt_proc_entry vt_proc_list[] = {
+        {"display_desc",       read_display_desc,             0, 0},
         {"keyboard",           read_kbd_phys,    write_kbd_phys, 0},
         {"", 0, 0, 0}
 };

@@ -206,17 +206,22 @@ void add_softcursor(struct vc_data *vc)
 		sw->con_putc(vc, i, y, x);
 }
 
-void hide_cursor(struct vc_data *vc)
+static void hide_softcursor(struct vc_data *vc)
 {
-	if (cons_num == sel_cons)
-		clear_selection();
 	if (softcursor_original != -1) {
 		scr_writew(softcursor_original,(u16 *) pos);
 		if (DO_UPDATE)
 			sw->con_putc(vc, softcursor_original, y, x);
 		softcursor_original = -1;
 	}
+}
+
+void hide_cursor(struct vc_data *vc)
+{
+	if (cons_num == sel_cons)
+		clear_selection();
 	sw->con_cursor(vc, CM_ERASE);
+	hide_softcursor(vc);
 }
 
 void set_cursor(struct vc_data *vc)
@@ -1380,7 +1385,7 @@ static int vt_open(struct tty_struct *tty, struct file * filp)
 		if (!vc) {
 			vc = vc_allocate(index);
 			if (!vc)
-				return index;
+				return -ENODEV;
 		}	
 		tty->driver_data = vc;
 		vc->vc_tty = tty;
@@ -1401,10 +1406,11 @@ static void vt_close(struct tty_struct *tty, struct file * filp)
 	
 	if (!tty || tty->count != 1)
 		return;
-	vcs_remove_devfs(tty);
 	vc = (struct vc_data *)tty->driver_data;
-	if (vc)
+	if (vc) {
+		vcs_remove_devfs(tty);
 		vc->vc_tty = NULL;
+	}
 	tty->driver_data = NULL;
 }
 
@@ -1735,6 +1741,7 @@ const char *vt_map_display(struct vt_struct *vt, int init, int vc_count)
 	/* Now to setup VT */
 	init_MUTEX(&vt->lock);
 	vt->vt_num = current_vt;
+	vt->display_desc = (char *)display_desc;
 	vt->first_vc = current_vc;
 	vt->vc_count = vc_count;
 	list_add_tail(&vt->node, &vt_list);
@@ -1876,6 +1883,7 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
 		return;
 	}
 	vt->vt_sw = csw;
+	vt->display_desc = (char *)desc;
 
 	/* Set the VC states to the new default mode */
 	for (i = 0; i < vt->vc_count; i++) {
