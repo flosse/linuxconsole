@@ -212,14 +212,13 @@ endmenu
 fi # !HP_SIM
 
 #
-# input before char - char/joystick depends on it. As does USB.
+# input before char - char depends on it.
 #
+source drivers/usb/Config.in
 source drivers/input/Config.in
 source drivers/char/Config.in
 
 #source drivers/misc/Config.in
-
-source drivers/media/Config.in
 
 source fs/Config.in
 
@@ -234,8 +233,7 @@ if [ "$CONFIG_SOUND" != "n" ]; then
 fi
 endmenu
 
-source drivers/usb/Config.in
-source drivers/input/Config.in
+source drivers/media/Config.in
 source drivers/video/Config.in
 
 fi # !HP_SIM
