@@ -1012,6 +1012,7 @@ int __init kbd_init(void)
 	for (i = 0 ; i < MAX_NR_CONSOLES ; i++)
 		kbd_table[i] = kbd0;
 
+	console_map_init();
 	ttytab = console_driver.table;
 
 	tasklet_enable(&keyboard_tasklet);
