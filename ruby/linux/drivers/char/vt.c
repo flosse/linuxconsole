@@ -579,18 +579,10 @@ void complement_pos(struct vc_data *vc, int offset)
 inline int resize_screen(struct vc_data *vc, int cols, int rows)
 {
         /* Resizes the resolution of the display adapater */
-	int err = 1;
+	int err = 0;
 
-        if (IS_VISIBLE && vcmode != KD_GRAPHICS && sw->con_resize) {
-		err = 0;
-		if ((rows != video_num_lines) || (cols != video_num_columns))
-                	err = sw->con_resize(vc, cols, rows);
-		if (!err) {
-			video_num_columns = cols;
-			video_num_lines = rows;
-			video_size_row = cols << 1;
-		} 
-	}
+        if (IS_VISIBLE && vcmode != KD_GRAPHICS && sw->con_resize)
+               	err = sw->con_resize(vc, cols, rows);
 	return err;
 }
 

@@ -1366,6 +1366,7 @@ inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
 			vt->vt_sw->con_font_op(new_vc, &new_vc->vc_font);
 		}	
 */	
+		resize_screen(new_vc, new_vc->vc_cols, new_vc->vc_rows);
 		set_origin(new_vc);	
 
 		set_palette(new_vc);
