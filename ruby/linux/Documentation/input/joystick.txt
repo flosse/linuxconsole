@@ -565,7 +565,7 @@ to the joystick driver development:
 	Carlos Puchol		<cpg@cs.utexas.edu>
 	Matt Rhoten		<mrhoten@oz.net>
 	Dan Fandrich		<dan@fch.wimsey.bc.ca>
-	Sverker Wilberg		<sverkerw@manila.docs.uu.se>
+	Sverker Wiberg		<sverkerw@swipnet.se>
 	Hal Maney		<maney@norden.com>
 	Bernd Schmidt		<crux@pool.informatik.rwth-aachen.de>
 	Alan Cox		<alan@lxorguk.ukuu.org.uk>
