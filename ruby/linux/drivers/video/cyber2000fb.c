@@ -921,9 +921,6 @@ cyber2000fb_set_var(struct fb_var_screeninfo *var, int con,
 	if (var->activate & FB_ACTIVATE_ALL)
 		cfb->fb.disp->var = cfb->fb.var;
 
-	if (chgvar && info)
-		fbcon_changevar(cfb->fb.disp->conp);
-
 	cyber2000fb_update_start(cfb, var);
 	cyber2000fb_set_timing(cfb, &hw);
 	fb_set_cmap(&cfb->fb.cmap, 1, &cfb->fb);

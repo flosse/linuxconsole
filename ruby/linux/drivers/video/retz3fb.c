@@ -1272,8 +1272,6 @@ static int retz3fb_set_var(struct fb_var_screeninfo *var, int con,
 			 * between X and a text console.
 			 */
 			retz3_set_video(info, var, &zinfo->current_par);
-
-			fbcon_changevar(&display->conp);
 		}
 
 		if (oldbpp != var->bits_per_pixel) {

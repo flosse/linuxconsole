@@ -528,11 +528,6 @@ sa1100fb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 		break;
 	}
 
-	/* If the console has changed and the console has defined */
-	/* a changevar function, call that function. */
-	if (chgvar && info)
-		fbcon_changevar(display->conp);
-
         /* If the current console is selected and it's not truecolor, 
 	 *  update the palette 
 	 */

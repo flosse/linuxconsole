@@ -265,7 +265,6 @@ static int control_set_var(struct fb_var_screeninfo *var, int con,
 		struct fb_fix_screeninfo	fix;
 		control_par_to_fix(&par, &fix, p);
 		control_par_to_display(&par, disp, &fix, p);
-		fbcon_changevar(&display->conp);
 	} else
 		disp->var = *var;
 	/*p->disp = *disp;*/

@@ -100,7 +100,6 @@ struct display {
 /* drivers/video/fbcon.c */
 extern struct display fb_display[MAX_NR_CONSOLES];
 extern char con2fb_map[MAX_NR_CONSOLES];
-extern int fbcon_changevar(struct vc_data *vc);
 extern int PROC_CONSOLE(const struct fb_info *info);
 extern void set_con2fb_map(int unit, int newidx);
 extern int set_all_vcs(int fbidx, struct fb_ops *fb,

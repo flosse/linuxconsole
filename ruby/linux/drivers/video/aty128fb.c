@@ -1379,8 +1379,6 @@ aty128fb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *fb)
 	    display->scrollmode = SCROLL_YNOMOVE;
 	else
 	    display->scrollmode = SCROLL_YREDRAW;
-
-	fbcon_changevar(display->conp);
     }
 
     if (!info->fb_info.display_fg || info->fb_info.display_fg->vc_num == con)

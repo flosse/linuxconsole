@@ -425,7 +425,6 @@ int hga_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 	}
 	if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
 		info->var = *var;
-		fbcon_changevar(&fb_display[con].conp);
 	}
 	return 0;
 }

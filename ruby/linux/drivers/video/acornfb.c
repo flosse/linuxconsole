@@ -1037,9 +1037,6 @@ acornfb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 		break;
 	}
 
-	if (chgvar && info)
-		fbcon_changevar(display->conp);
-
 	if (con == current_par.currcon) {
 		struct fb_cmap *cmap;
 		unsigned long start, size;

@@ -2880,7 +2880,6 @@ static int atyfb_set_var(struct fb_var_screeninfo *var, int con,
 	    	display->scrollmode = (info->bus_type == PCI) ? SCROLL_YNOMOVE : 0;
 	    else
 	    	display->scrollmode = SCROLL_YREDRAW;
-	    fbcon_changevar(display->conp);
 	}
 	if (!info->fb_info.display_fg ||
 	    info->fb_info.display_fg->vc_num == con)

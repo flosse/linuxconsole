@@ -357,8 +357,6 @@ static int matroxfb_dh_set_var(struct fb_var_screeninfo* var, int con,
 	p->can_soft_blank = 0;
 	p->inverse = 0;	/* TBD */
 	initMatroxDH(m2info, p);
-	if (chgvar && info)
-		fbcon_changevar(p->conp);
 	if (con == m2info->currcon) {
 		struct my_timming mt;
 		struct matrox_hw_state* hw;

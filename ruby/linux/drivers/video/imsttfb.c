@@ -1482,8 +1482,6 @@ imsttfb_set_var (struct fb_var_screeninfo *var, int con, struct fb_info *info)
 
 	set_disp(disp, p);
 
-	fbcon_changevar(disp->conp);
-
 	if (con == currcon) {
 		if (oldgreenlen != disp->var.green.length) {
 			if (disp->var.green.length == 6)

@@ -787,7 +787,6 @@ static int rivafb_set_var (struct fb_var_screeninfo *var, int con,
 	dsp = (con < 0) ? rivainfo->info.disp : &fb_display[con];
 	assert (dsp != NULL);
 
-	/* if var has changed, we should call changevar() later */
 	if (con >= 0) {
 		chgvar = ((dsp->var.xres != var->xres) ||
 			  (dsp->var.yres != var->yres) ||
@@ -959,9 +958,6 @@ static int rivafb_set_var (struct fb_var_screeninfo *var, int con,
 	memcpy (&dsp->var, &v, sizeof (v));
 
 	riva_load_video_mode (rivainfo, &v);
-
-	if (chgvar && info)
-		fbcon_changevar(dsp->conp);
 
 	DPRINTK ("EXIT, returning 0\n");
 	return 0;

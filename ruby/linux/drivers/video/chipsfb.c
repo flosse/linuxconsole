@@ -387,9 +387,6 @@ static void chips_set_bitdepth(struct fb_info_chips *p, struct display* disp, in
 	display_info.depth = bpp;
 	display_info.pitch = fix->line_length;
 #endif
-	
-	fbcon_changevar(display_info.conp);
-
 	if ((err = fb_alloc_cmap(&disp->cmap, 0, 0)))
 		return;
 	do_install_cmap(con, (struct fb_info *)p);

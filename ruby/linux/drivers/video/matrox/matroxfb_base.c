@@ -772,8 +772,6 @@ static int matroxfb_set_var(struct fb_var_screeninfo *var, int con,
 	initMatrox(PMINFO display);	/* dispsw */
 	/* dispsw, scrollmode, yscroll */
 	/* fgshift, bgshift, charmask */
-	if (chgvar && info)
-		fbcon_changevar(display->conp);
 	if (con == ACCESS_FBINFO(currcon)) {
 		unsigned int pos;
 

@@ -220,10 +220,6 @@ static int valkyrie_set_var(struct fb_var_screeninfo *var, int con,
 	valkyrie_par_to_display(&par, disp, &p->fix, p);
 	p->disp = *disp;
 	
-	if (!switching) {
-		/* Don't want to do this if just switching consoles. */
-		fbcon_changevar(&disp->conp);
-	}
 	if (con == currcon)
 		valkyrie_set_par(&par, p);
 	if (depthchange)

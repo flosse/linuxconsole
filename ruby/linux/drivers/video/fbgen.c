@@ -93,7 +93,6 @@ int fbgen_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 	    oldbpp != var->bits_per_pixel ||
 	    oldyoffset != var->yoffset) {
 	    fbgen_set_disp(con, info2);
-	    fbcon_changevar(&fb_display[con].conp);
 	    if ((err = fb_alloc_cmap(&fb_display[con].cmap, 0, 0)))
 		return err;
 	    fbgen_install_cmap(con, info2);
