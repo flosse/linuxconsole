@@ -48,7 +48,7 @@ if [ "$CONFIG_INPUT" != "n" ]; then
          tristate '  PDPI Lightning 4 gamecard' CONFIG_INPUT_LIGHTNING
          tristate '  Aureal Vortex and Trident 4DWave gameports' CONFIG_INPUT_PCIGAME
          tristate '  Crystal SoundFusion gameports' CONFIG_INPUT_CS461X
-	 tristate '  Emu10k1 gameports' CONFIG_INPUT_EMU10K1
+	 tristate '  SoundBlaster Live gameports' CONFIG_INPUT_EMU10K1
       fi
       comment 'Gameport devices'
       tristate '  Analog joysticks and gamepads' CONFIG_INPUT_ANALOG
