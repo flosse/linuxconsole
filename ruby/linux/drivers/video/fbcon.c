@@ -54,7 +54,7 @@
  *  more details.
  */
 
-#undef FBCONDEBUG
+#define FBCONDEBUG
 
 #include <linux/config.h>
 #include <linux/module.h>
@@ -268,17 +268,17 @@ static const char *fbcon_startup(struct vt_struct *vt, int init)
     info->cursor.size.y = vc->vc_font.height;
     info->fbops->fb_cursor(info, &info->cursor); 
 */
+    vc->vc_cols = info->var.xres/vc->vc_font.width;
+    vc->vc_rows = info->var.yres/vc->vc_font.height;
+    //vc->vc_scrollback = info->var.yres_virtual/info->var.yres;
+    vc->vc_scrollback = 1;	
+
     DPRINTK("mode:   %s\n", info->fix.id);
     DPRINTK("visual: %d\n", info->fix.visual);
     DPRINTK("res:    %dx%d-%d\n",info->var.xres, info->var.yres, info->var.bits_per_pixel); 
     DPRINTK("Using %dx%d resolution\n", vc->vc_cols, vc->vc_rows);
     DPRINTK("With %dx%d font set\n", vc->vc_font.width, vc->vc_font.height);
 	
-    vc->vc_cols = info->var.xres/vc->vc_font.width;
-    vc->vc_rows = info->var.yres/vc->vc_font.height;
-    //vc->vc_scrollback = info->var.yres_virtual/info->var.yres;
-    vc->vc_scrollback = 1;	
-
     vc->vc_can_do_color = (info->var.bits_per_pixel != 1);
     vc->vc_complement_mask = vc->vc_can_do_color ? 0x7700 : 0x0800;
     
@@ -592,6 +592,7 @@ static int fbcon_font_op(struct vc_data *vc, struct console_font_op *op)
 #endif
     if ((info->var.xres % op->width) || (info->var.yres % op->width))	
 	return -ENXIO;
+    return 0;	
 }
 
 static int fbcon_resize(struct vc_data *vc,unsigned int cols,unsigned int rows)
@@ -603,7 +604,7 @@ static int fbcon_resize(struct vc_data *vc,unsigned int cols,unsigned int rows)
     /* We grab what works and then modify the resolution only. */
     memcpy(&var, &info->var, sizeof(struct fb_var_screeninfo));		 
     var.xres = var.xres_virtual = cols * vc->vc_font.width;
-    var.yres = rows * vc->vc_font.height;
+    var.yres = var.yres_virtual = rows * vc->vc_font.height;
     var.activate = FB_ACTIVATE_NOW;		
 
     DPRINTK("attempting to set mode to %d rows x cols%d\n", rows, cols);
