@@ -55,14 +55,14 @@ static struct tq_struct suspend_button_task = {
         routine: suspend_button_task_handler
 };
 
-static int power_event(struct input_handle *handle, unsigned int type, 
-		       unsigned int code, int down)
+static void power_event(struct input_handle *handle, unsigned int type, 
+		        unsigned int code, int down)
 {
 	struct input_dev *dev = handle->dev;
 
 	printk("Entering power_event\n");
 
-	if (type != EV_KEY || type != EV_PWR) return -1;
+	if (type != EV_KEY || type != EV_PWR) return;
 
 	if (type == EV_PWR) {
 		switch (code) {
@@ -80,7 +80,7 @@ static int power_event(struct input_handle *handle, unsigned int type,
 				/* Hum power down the machine. */
 				break;
 			default:	
-				return -1;
+				return;
 		}
 	} else {
 		switch (code) {
@@ -97,14 +97,15 @@ static int power_event(struct input_handle *handle, unsigned int type,
 				/* Turn the input device off completely ? */
 				break;
 			default:
-				return -1;
+				return;
 		}
 	}
-	return 0;
+	return;
 }
 
 static struct input_handle *power_connect(struct input_handler *handler, 
-					  struct input_dev *dev)
+					  struct input_dev *dev, 
+					  struct input_device_id *id)
 {
 	struct input_handle *handle;
 	int i;
@@ -146,7 +147,7 @@ static struct input_device_id power_ids[] = {
 		keybit: { BIT(KEY_POWER) }
 	},	
 	{
-		flags: INPUT_DEVICE_ID_MATCH_EVBIT
+		flags: INPUT_DEVICE_ID_MATCH_EVBIT,
 		evbit: { BIT(EV_PWR) },
 	},	
 	{ }, 	/* Terminating entry */
