@@ -608,7 +608,9 @@ static int
 fb_open(struct inode *inode, struct file *file)
 {
 	int fbidx = GET_FB_IDX(inode->i_rdev);
+#ifdef CONFIG_VT
 	struct tty_struct *tty = current->tty;
+#endif
 	struct fb_info *info;
 	int res = 0;
 
@@ -642,7 +644,9 @@ static int
 fb_release(struct inode *inode, struct file *file)
 {
 	int fbidx = GET_FB_IDX(inode->i_rdev);
+#ifdef CONFIG_VT
 	struct tty_struct *tty = current->tty;
+#endif
 	struct fb_info *info;
 
 	lock_kernel();
