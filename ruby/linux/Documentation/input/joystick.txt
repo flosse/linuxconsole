@@ -503,15 +503,16 @@ and the /dev/input/jsX device should become usable.
 
 3.21 I-Force devices 
 ~~~~~~~~~~~~~~~~~~~~
-  All I-Force devices are supported by the iforce.c module. This includes:
+  All I-Force devices are supported by the iforce.o module. This includes:
 
 * AVB Mag Turbo Force
 * AVB Top Shot Pegasus
+* AVB Top Shot Force Feedback Racing Wheel
 * Logitech WingMan Force
-* Logitech WingMan Force 3D (no force feedback support)
 * Logitech WingMan Force Wheel 
-* Logitech WingMan Strike Force 3D (no force feedback support)
 * Guillemot Race Leader Force Feedback
+* Guillemot Force Feedback Racing Wheel
+* Thrustmaster Motor Sport GT
 
   To use it, you need to attach the serial port to the driver using the
 
@@ -523,9 +524,11 @@ command. After that the I-Force device will be detected, and the
   In case you're using the device via the USB port, the inputattach command
 isn't needed.
 
-  The I-Force driver now supports force feedback via the event interface for
-*some* of the I-Force devices. The recent Logitech * 3D devices are not
-supported. I-Force rumble pads are not supported either.
+  The I-Force driver now supports force feedback via the event interface.
+
+  Please note that Logitech WingMan *3D devices are _not_ supported by this
+module, rather by hid. Force feedback is not supported for those devices.
+Logitech gamepads are also hid devices.
 
 3.22 Gravis Stinger gamepad 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
