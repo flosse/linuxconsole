@@ -1,6 +1,6 @@
 /*
  * decvte.c - DEC VT terminal emulation code. 
- * Copyright (C) 2000  James Simmons
+ * Copyright (C) 2002  James Simmons (jsimmons@infradead.org)
  *
  * I moved all the VT emulation code out of console.c to here. It makes life
  * much easier and the code smaller. It also allows other devices to emulate
@@ -30,7 +30,6 @@
 #include <linux/kernel.h>
 #include <linux/string.h>
 #include <linux/errno.h>
-#include <linux/kd.h>
 #include <linux/slab.h>
 #include <linux/major.h>
 #include <linux/mm.h>
@@ -38,6 +37,7 @@
 #include <linux/devfs_fs_kernel.h>
 #include <linux/vt_kern.h>
 #include <linux/vt_buffer.h>
+#include <linux/selection.h>
 #include <linux/consolemap.h>
 #include <linux/config.h>
 #include <linux/version.h>
@@ -317,18 +317,31 @@ static void vte_sgr(struct vc_data *vc)
 		case 7:	/* negative image */
 			reverse = 1;
 			break;
-		case 10:	/*  primary (default) font */
+		case 10:	/*  primary (default) font
+				 * ANSI X3.64-1979 (SCO-ish?)
+				 * Select primary font, don't display
+				 * control chars if defined, don't set
+				 * bit 8 on output.
+				 */
 			set_translate(vc, charset == 0 ?
 				      G0_charset : G1_charset);
 			disp_ctrl = 0;
 			toggle_meta = 0;
 			break;
-		case 11:	/* first alternative font */
+		case 11:	/* first alternative font
+				 * ANSI X3.64-1979 (SCO-ish?)
+				 * Select first alternate font, lets
+				 * chars < 32 be displayed as ROM chars.
+				 */
 			set_translate(vc, IBMPC_MAP);
 			disp_ctrl = 1;
 			toggle_meta = 0;
 			break;
-		case 12:	/* second alternative font */
+		case 12:	/* second alternative font 
+				 * ANSI X3.64-1979 (SCO-ish?)
+				 * Select second alternate font, toggle
+				 * high bit before displaying as ROM char.      
+				 */
 			set_translate(vc, IBMPC_MAP);
 			disp_ctrl = 1;
 			toggle_meta = 1;
@@ -346,11 +359,22 @@ static void vte_sgr(struct vc_data *vc)
 		case 27:	/* positive image */
 			reverse = 0;
 			break;
-		case 38:	/* foreground color (ISO 8613-6/ITU T.416) */
+		case 38:	/* 
+				 * foreground color (ISO 8613-6/ITU T.416) 
+				 * Enables underscore, white foreground
+				 * with white underscore (Linux - use
+				 * default foreground).
+				 */
 			color = (def_color & 0x0f) | background;
 			underline = 1;
 			break;
-		case 39:	/* default display color */
+		case 39:	/*
+				 * default display color 
+				 * ANSI X3.64-1979 (SCO-ish?)
+                                 * Disable underline option.
+                                 * Reset colour to default? It did this
+                                 * before...
+				 */
 			color = (def_color & 0x0f) | background;
 			underline = 0;
 			break;
@@ -378,7 +402,7 @@ static void vte_fake_dec_dsr(struct tty_struct *tty, char *reply)
 	char buf[40];
 
 	sprintf(buf, "%s?%sn", __VTE_CSI, reply);
-	respond_string(buf, tty);
+	puts_queue(vc, buf);
 }
 
 /*
@@ -401,7 +425,7 @@ static void vte_cpr(struct tty_struct *tty, int ext)
 		sprintf(buf, "%s%d;%dR", __VTE_CSI,
 			y + (decom ? top + 1 : 1), x + 1);
 	}
-	respond_string(buf, tty);
+	puts_queue(vc, buf);
 }
 
 /*
@@ -413,7 +437,7 @@ static inline void vte_dsr(struct tty_struct *tty)
 	char buf[40];
 
 	sprintf(buf, "%s0n", __VTE_CSI);
-	respond_string(buf, tty);
+	puts_queue(vc, buf);
 }
 
 /*
@@ -421,7 +445,9 @@ static inline void vte_dsr(struct tty_struct *tty)
  */
 static inline void vte_answerback(struct tty_struct *tty)
 {
-	respond_string("l i n u x", tty);
+	struct vc_data *vc = (struct vc_data *) tty->driver_data;
+	
+	puts_queue(vc, "linux");
 }
 
 /*
@@ -434,7 +460,7 @@ static inline void vte_da(struct tty_struct *tty)
 
 	/* We claim VT220 compatibility... */
 	sprintf(buf, "%s?62;1;2;6;7;8;9c", __VTE_CSI);
-	respond_string(buf, tty);
+	puts_queue(vc, buf);
 }
 
 #define VTE_VERSION        211
@@ -452,7 +478,7 @@ static void vte_dec_da2(struct tty_struct *tty)
 	char buf[40];
 
 	sprintf(buf, "%s>%d;%d;0c", __VTE_CSI, 1, VTE_VERSION / 10);
-	respond_string(buf, tty);
+	puts_queue(vc, buf);
 }
 
 /*
@@ -466,7 +492,7 @@ static void vte_dec_da3(struct tty_struct *tty)
 	char buf[40];
 
 	sprintf(buf, "%s!|%s%s", __VTE_DCS, "0", __VTE_ST);
-	respond_string(buf, tty);
+	puts_queue(vc, buf);
 }
 
 /*
@@ -478,7 +504,7 @@ static void vte_decreptparm(struct tty_struct *tty)
 	char buf[40];
 
 	sprintf(buf, "\033[%d;1;1;120;120;1;0x", par[0] + 2);
-	respond_string(buf, tty);
+	puts_queue(vc, buf);
 }
 
 /*
@@ -495,10 +521,10 @@ static void set_mode(struct vc_data *vc, int on_off)
 			switch (par[i]) {
 			case 1:	/* DECCKM - Cursor keys mode */
 				if (on_off)
-					set_kbd_mode(&vc->kbd_table,
+					set_kbd_mode(vc->kbd_table,
 						     VC_CKMODE);
 				else
-					clr_kbd_mode(&vc->kbd_table,
+					clr_kbd_mode(vc->kbd_table,
 						     VC_CKMODE);
 				break;
 			case 2:	/* DECANM - ANSI mode */
@@ -532,10 +558,10 @@ static void set_mode(struct vc_data *vc, int on_off)
 			case 8:	/* DECARM - Autorepeat mode */
 				decarm = on_off;
 				if (on_off)
-					set_kbd_mode(&vc->kbd_table,
+					set_kbd_mode(vc->kbd_table,
 						     VC_REPEAT);
 				else
-					clr_kbd_mode(&vc->kbd_table,
+					clr_kbd_mode(vc->kbd_table,
 						     VC_REPEAT);
 				break;
 			case 9:
@@ -555,10 +581,10 @@ static void set_mode(struct vc_data *vc, int on_off)
 			case 66:	/* DECNKM - Numeric keybad mode */
 				decnkm = on_off;
 				if (on_off)
-					set_kbd_mode(&vc->kbd_table,
+					set_kbd_mode(vc->kbd_table,
 						     VC_APPLIC);
 				else
-					clr_kbd_mode(&vc->kbd_table,
+					clr_kbd_mode(vc->kbd_table,
 						     VC_APPLIC);
 				break;
 			case 67:	/* DECBKM - Backarrow key mode */
@@ -585,10 +611,10 @@ static void set_mode(struct vc_data *vc, int on_off)
 				break;
 			case 20:	/* Lf, Enter == CrLf/Lf */
 				if (on_off)
-					set_kbd_mode(&vc->kbd_table,
+					set_kbd_mode(vc->kbd_table,
 						     VC_CRLF);
 				else
-					clr_kbd_mode(&vc->kbd_table,
+					clr_kbd_mode(vc->kbd_table,
 						     VC_CRLF);
 				break;
 			}
@@ -611,7 +637,7 @@ static void vte_decmsr(struct tty_struct *tty)
 	char buf[40];
 
 	sprintf(buf, "%s%d*{", __VTE_CSI, 0);	/* No space left */
-	respond_string(buf, tty);
+	puts_queue(vc, buf);
 }
 
 /*
@@ -635,7 +661,7 @@ static void vte_decrpm(struct tty_struct *tty, int priv, int mode,
 		sprintf(buf, "%s?%d;%d$y", __VTE_CSI, mode, status);
 	else
 		sprintf(buf, "%s%d;%d$y", __VTE_CSI, mode, status);
-	respond_string(buf, tty);
+	puts_queue(vc, buf);
 }
 
 /*
@@ -826,8 +852,10 @@ static void setterm_command(struct vc_data *vc)
 			bell_duration = DEFAULT_BELL_DURATION;
 		break;
 	case 12:		/* bring specified console to the front */
-		if (par[1] >= 1 && find_vc(par[1]))
-			set_console(find_vc(par[1]));
+		if (par[1] >= 0) {
+			struct vc_data *tmp = find_vc(par[1]);
+			set_console(tmp);
+		}	
 		break;
 	case 13:		/* unblank the screen */
 		poke_blanked_console(vc->display_fg);
@@ -985,10 +1013,10 @@ void vte_ris(struct vc_data *vc, int do_clear)
 	irm = 0;		/* replace */
 	lnm = 0;		/* line feed */
 
-	set_kbd_mode(&vc->kbd_table, VC_REPEAT);
-	clr_kbd_mode(&vc->kbd_table, VC_CKMODE);
-	clr_kbd_mode(&vc->kbd_table, VC_APPLIC);
-	clr_kbd_mode(&vc->kbd_table, VC_CRLF);
+	set_kbd_mode(vc->kbd_table, VC_REPEAT);
+	clr_kbd_mode(vc->kbd_table, VC_CKMODE);
+	clr_kbd_mode(vc->kbd_table, VC_APPLIC);
+	clr_kbd_mode(vc->kbd_table, VC_CRLF);
 	vc->kbd_table.lockstate = KBD_DEFLOCK;
 	vc->kbd_table.slockstate = 0;
 	vc->kbd_table.ledmode = LED_SHOW_FLAGS;
@@ -1083,7 +1111,7 @@ void terminal_emulation(struct tty_struct *tty, int c)
 		return;
 	case 0x07:		/* BEL - Bell */
 		if (bell_duration)
-			kd_mksound(vc, bell_pitch, bell_duration);
+			kd_mksound(vc->display_fg->keyboard, bell_pitch, bell_duration);
 		return;
 	case 0x08:		/* BS - Back space */
 		vte_bs(vc);
@@ -1109,7 +1137,7 @@ void terminal_emulation(struct tty_struct *tty, int c)
 		 * DEC VT series processes FF as LF.
 		 */
 		vte_lf(vc);
-		if (!get_kbd_mode(&vc->kbd_table, VC_CRLF))
+		if (!get_kbd_mode(vc->kbd_table, VC_CRLF))
 			return;
 	case 0x0d:		/* CR - Carriage return */
 		vte_cr(vc);
@@ -1283,11 +1311,11 @@ void terminal_emulation(struct tty_struct *tty, int c)
 			return;
 		case '=':	/* DECKPAM - Keypad application mode */
 			decnkm = 1;
-			set_kbd_mode(&vc->kbd_table, VC_APPLIC);
+			set_kbd_mode(vc->kbd_table, VC_APPLIC);
 			return;
 		case '>':	/* DECKPNM - Keypad numeric mode */
 			decnkm = 0;
-			clr_kbd_mode(&vc->kbd_table, VC_APPLIC);
+			clr_kbd_mode(vc->kbd_table, VC_APPLIC);
 			return;
 
 			/* ===== C1 control functions ===== */
@@ -1527,7 +1555,7 @@ void terminal_emulation(struct tty_struct *tty, int c)
 			break;
 		case 'm':
 			if (priv4) {
-				/* clear_selection(); */
+				clear_selection();
 				if (par[0])
 					complement_mask =
 					    par[0] << 8 | par[1];
@@ -1968,7 +1996,7 @@ void terminal_emulation(struct tty_struct *tty, int c)
 			G1_charset = DEC_TECH_MAP;
 			break;
 #endif
-		case 'A':	/* Latin-1 supplemental */
+		case 'A':	/* ISO Latin-1 supplemental */
 			G1_charset = LAT1_MAP;
 			break;
 		case 'B':	/* ASCII */
