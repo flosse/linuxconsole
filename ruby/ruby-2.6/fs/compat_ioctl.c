@@ -1587,8 +1587,8 @@ struct consolefontdesc32 {
 
 static int do_fontx_ioctl(unsigned int fd, int cmd, struct consolefontdesc32 *user_cfd, struct file *file)
 {
-        struct tty_struct *tty = (struct tty_struct *) file->private_data;
-        struct vc_data *vc = (struct vc_data *) tty->driver_data;
+	struct tty_struct *tty = (struct tty_struct *) file->private_data;
+	struct vc_data *vc = (struct vc_data *) tty->driver_data;
 	struct consolefontdesc cfdarg;
 	struct console_font_op op;
 	int i, perm;
@@ -1644,10 +1644,10 @@ struct console_font_op32 {
                                         
 static int do_kdfontop_ioctl(unsigned int fd, unsigned int cmd, struct console_font_op32 *fontop, struct file *file)
 {
-        struct tty_struct *tty = (struct tty_struct *) file->private_data;
-        struct vc_data *vc = (struct vc_data *) tty->driver_data;
-	struct console_font_op op;
+	struct tty_struct *tty = (struct tty_struct *) file->private_data;
+	struct vc_data *vc = (struct vc_data *) tty->driver_data;
 	int perm = vt_check(file), i;
+	struct console_font_op op;
 	struct vt_struct *vt;
 	
 	if (perm < 0) return perm;
@@ -1673,10 +1673,10 @@ struct unimapdesc32 {
 
 static int do_unimap_ioctl(unsigned int fd, unsigned int cmd, struct unimapdesc32 *user_ud, struct file *file)
 {
-        struct tty_struct *tty = (struct tty_struct *) file->private_data;
-        struct vc_data *vc = (struct vc_data *) tty->driver_data;
-	struct unimapdesc32 tmp;
+	struct tty_struct *tty = (struct tty_struct *) file->private_data;
+	struct vc_data *vc = (struct vc_data *) tty->driver_data;
 	int perm = vt_check(file);
+	struct unimapdesc32 tmp;
 	
 	if (perm < 0) return perm;
 	if (copy_from_user(&tmp, user_ud, sizeof tmp))

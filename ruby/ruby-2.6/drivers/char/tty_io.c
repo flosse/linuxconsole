@@ -1490,6 +1490,7 @@ static int tiocswinsz(struct tty_struct *tty, struct tty_struct *real_tty,
 #ifdef CONFIG_VT
 	if (tty->driver->type == TTY_DRIVER_TYPE_CONSOLE) {
 		struct vc_data *vc = (struct vc_data *) tty->driver_data;
+		
 		if (!vc || vc_resize(vc, tmp_ws.ws_col, tmp_ws.ws_row))
 			return -ENXIO;
 	}
@@ -2372,6 +2373,7 @@ int tty_unregister_driver(struct tty_driver *driver)
 }
 
 EXPORT_SYMBOL(tty_unregister_driver);
+
 
 /*
  * Initialize the console device. This is called *early*, so

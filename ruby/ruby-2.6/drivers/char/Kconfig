@@ -36,11 +36,11 @@ config VT
 	  shiny Linux system :-)
 
 config VT_BDSM
-        bool "ISO6429 bidirectional support"
-        depends on VT
-        ---help---
-          If you say yes you will get support for the ability to type left to
-          right or right to left.
+	bool "ISO6429 bidirectional support"
+	depends on VT
+	---help---
+	  If you say yes you will get support for the ability to type left to
+	  right or right to left.
 
 config VT_CONSOLE
 	bool "Support for console on virtual terminal" if EMBEDDED

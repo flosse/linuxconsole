@@ -36,6 +36,7 @@
 
 #include <asm/ptrace.h>
 
+
 /* Whether we react on sysrq keys or just ignore them */
 int sysrq_enabled = 1;
 

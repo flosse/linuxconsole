@@ -332,6 +332,7 @@ extern void tty_write_flush(struct tty_struct *);
 
 extern struct termios tty_std_termios;
 extern struct tty_ldisc ldiscs[];
+
 extern void console_init(void);
 extern int vcs_init(void);
 extern int vty_init(void);
