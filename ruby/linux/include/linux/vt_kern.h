@@ -59,13 +59,21 @@
 
 int softcursor_original;
 struct console_font_op; 
-extern int fg_console, want_console, kmsg_redirect;
+extern int fg_console, kmsg_redirect;
 
 extern unsigned char color_table[];
 extern int default_red[];
 extern int default_grn[];
 extern int default_blu[];      
-                          
+
+extern struct vc_data *want_console;
+                         
+extern inline void set_console(struct vc_data *vc)
+{
+	want_console = vc;
+        tasklet_schedule(&console_tasklet);
+}
+ 
 /*
  * this is what the terminal answers to a ESC-Z or csi0c query.
  */
@@ -237,7 +245,7 @@ struct vc_pool {
 
 extern struct vt_struct {
 	unsigned char	vc_mode;		/* KD_TEXT, ... */
-        unsigned int 	last_console;     	/* VC we last switched from */
+        struct vc_data 	*last_console;     	/* VC we last switched from */
 	char            vt_blanked;             /* Is this display blanked */
 	struct consw	*sw;			/* Display driver for VT */
 	struct vc_pool  vcs;			 
@@ -264,7 +272,7 @@ void set_palette(struct vc_data *vc);
 inline void save_screen(struct vc_data *vc);
 void set_origin(struct vc_data *vc);
 void unblank_screen(void);
-void poke_blanked_console(void);
+void poke_blanked_console(struct vt_struct *vt);
 inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed);
 void scrollback(struct vc_data *vc, int);
 void scrollfront(struct vc_data *vc, int);
