@@ -1,9 +1,9 @@
-mainmenu_name "Kernel configuration of Linux for IA-64 machines"
+mainmenu_name "IA-64 Linux Kernel Configuration"
 
 source init/Config.in
 
 mainmenu_option next_comment
-comment 'General setup'
+comment 'Processor type and features'
 
 define_bool CONFIG_IA64 y
 
@@ -13,13 +13,6 @@ define_bool CONFIG_MCA n
 define_bool CONFIG_SBUS n
 define_bool CONFIG_RWSEM_GENERIC_SPINLOCK y
 define_bool CONFIG_RWSEM_XCHGADD_ALGORITHM n
-
-if [ "$CONFIG_IA64_HP_SIM" = "n" ]; then
-  define_bool CONFIG_ACPI y
-  define_bool CONFIG_ACPI_EFI y
-  define_bool CONFIG_ACPI_INTERPRETER y
-  define_bool CONFIG_ACPI_KERNEL_CONFIG y
-fi
 
 choice 'IA-64 processor type' \
 	"Itanium			CONFIG_ITANIUM \
@@ -37,6 +30,13 @@ choice 'Kernel page size'						\
 	 8KB			CONFIG_IA64_PAGE_SIZE_8KB		\
 	 16KB			CONFIG_IA64_PAGE_SIZE_16KB		\
 	 64KB			CONFIG_IA64_PAGE_SIZE_64KB" 16KB
+
+if [ "$CONFIG_IA64_HP_SIM" = "n" ]; then
+  define_bool CONFIG_ACPI y
+  define_bool CONFIG_ACPI_EFI y
+  define_bool CONFIG_ACPI_INTERPRETER y
+  define_bool CONFIG_ACPI_KERNEL_CONFIG y
+fi
 
 if [ "$CONFIG_ITANIUM" = "y" ]; then
 	define_bool CONFIG_IA64_BRL_EMU y
@@ -119,6 +119,7 @@ if [ "$CONFIG_IA64_HP_SIM" = "n" ]; then
 source drivers/mtd/Config.in
 source drivers/pnp/Config.in
 source drivers/block/Config.in
+source drivers/ieee1394/Config.in
 source drivers/message/i2o/Config.in
 source drivers/md/Config.in
 
@@ -130,11 +131,21 @@ tristate 'ATA/IDE/MFM/RLL support' CONFIG_IDE
 if [ "$CONFIG_IDE" != "n" ]; then
   source drivers/ide/Config.in
 else
-  define_bool CONFIG_BLK_DEV_IDE_MODES n
   define_bool CONFIG_BLK_DEV_HD n
 fi
 endmenu
 
+else # ! HP_SIM
+mainmenu_option next_comment
+comment 'Block devices'
+tristate 'Loopback device support' CONFIG_BLK_DEV_LOOP
+dep_tristate 'Network block device support' CONFIG_BLK_DEV_NBD $CONFIG_NET
+
+tristate 'RAM disk support' CONFIG_BLK_DEV_RAM
+if [ "$CONFIG_BLK_DEV_RAM" = "y" -o "$CONFIG_BLK_DEV_RAM" = "m" ]; then
+   int '  Default RAM disk size' CONFIG_BLK_DEV_RAM_SIZE 4096
+fi
+endmenu
 fi # !HP_SIM
 
 mainmenu_option next_comment
@@ -216,15 +227,7 @@ fi
 fi # !HP_SIM
 
 if [ "$CONFIG_IA64_HP_SIM" != "n" -o "$CONFIG_IA64_GENERIC" != "n" ]; then
-  mainmenu_option next_comment
-  comment 'Simulated drivers'
-
-  tristate 'Simulated Ethernet ' CONFIG_SIMETH
-  bool 'Simulated serial driver support' CONFIG_SIM_SERIAL
-  if [ "$CONFIG_SCSI" != "n" ]; then
-    bool 'Simulated SCSI disk' CONFIG_SCSI_SIM
-  fi
-  endmenu
+  source arch/ia64/hp/Config.in
 fi
 
 
@@ -241,9 +244,7 @@ if [ "$CONFIG_DEBUG_KERNEL" != "n" ]; then
    bool '  Disable VHPT' CONFIG_DISABLE_VHPT
    bool '  Magic SysRq key' CONFIG_MAGIC_SYSRQ
 
-# early printk is currently broken for SMP: the secondary processors get stuck...
-#   bool '  Early printk support (requires VGA!)' CONFIG_IA64_EARLY_PRINTK
-
+   bool '  Early printk support (requires VGA!)' CONFIG_IA64_EARLY_PRINTK
    bool '  Debug memory allocations' CONFIG_DEBUG_SLAB
    bool '  Spinlock debugging' CONFIG_DEBUG_SPINLOCK
    bool '  Turn on compare-and-exchange bug checking (slow!)' CONFIG_IA64_DEBUG_CMPXCHG
