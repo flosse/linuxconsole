@@ -961,8 +961,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 
 		if (!perm)
 			return -EPERM;
-		if (arg == vc->display_fg->fg_console->vc_num || 
-		    arg > MAX_NR_CONSOLES || !tmp)
+		if (arg > MAX_NR_CONSOLES || !tmp)
 			return -ENXIO;
 		
 		return vt_waitactive(tmp);
