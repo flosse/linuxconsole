@@ -354,7 +354,6 @@ endmenu
 #
 # input before char - char/joystick depends on it. As does USB.
 #
-source drivers/usb/Config.in
 source drivers/input/Config.in
 source drivers/char/Config.in
 
@@ -373,6 +372,7 @@ endmenu
 
 source drivers/media/Config.in
 source drivers/video/Config.in
+source drivers/usb/Config.in
 
 if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
    source net/bluetooth/Config.in
