@@ -297,6 +297,10 @@ static void __exit xxxfb_cleanup(void)
      *  Setup
      */
 
+/* 
+ * Only necessary if your driver takes special options,
+ * otherwise we fall back on the generic fb_setup().
+ */
 int __init xxxfb_setup(char *options)
 {
     /* Parse user speficied options (`video=xxxfb:') */
