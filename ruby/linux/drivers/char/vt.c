@@ -64,7 +64,7 @@ static struct termios *console_termios[MAX_NR_CONSOLES];
 static struct termios *console_termios_locked[MAX_NR_CONSOLES];
 
 struct vt_struct *admin_vt;		/* Administrative VT */
-static int current_vc;			/* Which /dev/vc/X to allocate next */
+static unsigned int current_vc;		/* Which /dev/vc/X to allocate next */
 
 #ifdef CONFIG_VT_CONSOLE
 struct console vt_console_driver;
@@ -988,13 +988,15 @@ const char *create_vt(struct vt_struct *vt, int init)
 	vt->vc_cons[0] = vc_allocate(current_vc);
 	vt->keyboard = NULL;
 	if (!admin_vt) {
+		struct vc_data *vc = vt->vc_cons[0];		
+
 		admin_vt = vt;
 #ifdef CONFIG_VT_CONSOLE
 		vt_console_driver.driver = &vt_driver;
 		register_console(&vt_console_driver);
         	printable = 1;
 #endif
-                gotoxy(vt->vc_cons[0], x, y);
+                gotoxy(vc, x, y);
                 vte_ed(vt->vc_cons[0], 0);
                 update_screen(vt->vc_cons[0]);
 	}
