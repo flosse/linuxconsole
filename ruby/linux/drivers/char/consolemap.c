@@ -235,7 +235,7 @@ static void update_user_maps(struct vt_struct *vt)
 	int i;
 	struct uni_pagedir *p, *q = NULL;
 	
-	for (i = 0; i < MAX_NR_CONSOLES; i++) {
+	for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
 		struct vc_data *vc = vt->vcs.vc_cons[i];	
 		if (!vc_cons_allocated(i))
 			continue;
@@ -378,7 +378,7 @@ static int con_unify_unimap(struct vc_data *vc, struct uni_pagedir *p)
 	int i, j, k;
 	struct uni_pagedir *q;
 	
-	for (i = 0; i < MAX_NR_CONSOLES; i++) {
+	for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
 		if (!vc_cons_allocated(i))
 			continue;
 		vc = vc->display_fg->vcs.vc_cons[i];
@@ -668,7 +668,7 @@ void __init console_map_init(struct vt_struct *vt)
 {
 	int i;
 	
-	for (i = 0; i < MAX_NR_CONSOLES; i++)
+	for (i = 0; i < MAX_NR_USER_CONSOLES; i++)
 		if (vc_cons_allocated(i) && !*vt->vcs.vc_cons[i]->vc_uni_pagedir_loc)
 			con_set_default_unimap(vt->vcs.vc_cons[i]);
 }
