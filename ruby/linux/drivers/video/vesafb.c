@@ -380,6 +380,10 @@ int __init vesafb_init(void)
 	fb_info.fix = vesafb_fix;
 	fb_info.flags=FBINFO_FLAG_DEFAULT;
 
+	/* Alloc but do not set the default color map. */
+	fb_info.cmap.len = video_cmap_len; 
+    	fb_alloc_cmap(&fb_info.cmap, fb_info.cmap.len, 0);
+
 	if (register_framebuffer(&fb_info)<0)
 		return -EINVAL;
 
