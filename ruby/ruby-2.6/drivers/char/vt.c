@@ -1890,11 +1890,11 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
 		if (vc) {
 			old_was_color = vc->vc_can_do_color;
 			cons_num = vt->first_vc + i;
-			vc_resize(vc, vt->default_mode->vc_cols,
-					vt->default_mode->vc_rows);
 			visual_init(vc, 0);
 			update_attr(vc);
-
+			vc_resize(vc, vt->default_mode->vc_cols,
+				  vt->default_mode->vc_rows);
+			
 			/* If the console changed between mono <-> color, then
 			 * the attributes in the screenbuf will be wrong.  The
 			 * following resets all attributes to something sane.
