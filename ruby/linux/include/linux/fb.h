@@ -272,6 +272,16 @@ struct fb_ops {
     int (*fb_blank)(int blank, struct fb_info *info);
     /* pan display */
     int (*fb_pan_display)(struct fb_var_screeninfo *var, struct fb_info *info); 
+    /* draws a rectangle */
+    void (*fb_rectfill)(struct fb_info *p, int x1, int y1, unsigned int width,
+                        unsigned int height, unsigned long color, int rop);
+    /* Copy data from area to another */	
+    void (*fb_copyarea)(struct fb_info *p, int sx, int sy, unsigned int width,
+                        unsigned int height, int dx, int dy);
+    /* Draws a image to the display */ 		 	
+    void xxxfb_imageblit(struct fb_info *p, unsigned int width,
+                    	 unsigned int height, unsigned long *image,
+                     	 int image_depth, int dx, int dy);
     /* perform fb specific ioctl */
     int (*fb_ioctl)(struct inode *inode, struct file *file, unsigned int cmd,
 		    unsigned long arg, struct fb_info *info);
