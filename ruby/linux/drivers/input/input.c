@@ -50,7 +50,7 @@ EXPORT_SYMBOL(input_register_minor);
 EXPORT_SYMBOL(input_unregister_minor);
 EXPORT_SYMBOL(input_open_device);
 EXPORT_SYMBOL(input_close_device);
-EXPORT_SYMBOL(input_accept_device);
+EXPORT_SYMBOL(input_accept_process);
 EXPORT_SYMBOL(input_flush_device);
 EXPORT_SYMBOL(input_event);
 
@@ -201,7 +201,7 @@ static void input_repeat_key(unsigned long data)
 	mod_timer(&dev->timer, jiffies + dev->rep[REP_PERIOD]);
 }
 
-int input_accept_device(struct input_handle *handle, struct file *file)
+int input_accept_process(struct input_handle *handle, struct file *file)
 {
 	if (handle->dev->accept)
 		return handle->dev->accept(handle->dev, file);

@@ -530,7 +530,6 @@ struct ff_shape {
 /* FF_CONSTANT */
 struct ff_constant_effect {
 	__s16 level;		/* Strength of effect. Negative values are OK */
-	__u16 direction;	/* Direction of effect (see periodic effects) */
 	struct ff_shape shape;
 };
 
@@ -539,9 +538,10 @@ struct ff_interactive_effect {
 /* Axis along which effect must be created. If null, the field named direction
  * is used
  * It is a bit array (ie to enable axes X and Y, use BIT(ABS_X) | BIT(ABS_Y)
+ * It overrides the value of ff_effect::direction, which is used only if
+ * axis == 0
  */
 	__u16 axis;
-	__u16 direction;
 
 	__s16 right_saturation; /* Max level when joystick is on the right */
 	__s16 left_saturation;	/* Max level when joystick in on the left */
@@ -562,11 +562,6 @@ struct ff_periodic_effect {
 	__s16 magnitude;	/* Peak value */
 	__s16 offset;		/* Mean value of wave (roughly) */
 	__u16 phase;		/* 'Horizontal' shift */
-	__u16 direction;	/* Direction. 0 deg -> 0x0000 (down)
-					     90 deg -> 0x4000 (left)
-					    180 deg -> 0x8000 (up)
-					    270 deg -> 0xC000 (right)
-				*/
 
 	struct ff_shape shape;
 };
@@ -581,6 +576,12 @@ struct ff_effect {
  * Else, the user sets it to the effect id it wants to update.
  */
 	__s16 id;
+
+	__u16 direction;	/* Direction. 0 deg -> 0x0000 (down)
+					     90 deg -> 0x4000 (left)
+					    180 deg -> 0x8000 (up)
+					    270 deg -> 0xC000 (right)
+				*/
 
 	struct ff_trigger trigger;
 	struct ff_replay replay;
@@ -793,7 +794,7 @@ void input_unregister_handler(struct input_handler *);
 int input_open_device(struct input_handle *);
 void input_close_device(struct input_handle *);
 
-int input_accept_device(struct input_handle *handle, struct file *file);
+int input_accept_process(struct input_handle *handle, struct file *file);
 int input_flush_device(struct input_handle* handle, struct file* file);
 
 devfs_handle_t input_register_minor(char *name, int minor, int minor_base);
