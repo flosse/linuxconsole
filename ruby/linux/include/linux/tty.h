@@ -10,7 +10,7 @@
 #include <linux/fs.h>
 #include <linux/major.h>
 #include <linux/termios.h>
-#include <linux/tqueue.h>
+#include <linux/workqueue.h>
 #include <linux/tty_driver.h>
 #include <linux/tty_ldisc.h>
 
@@ -79,7 +79,8 @@ struct screen_info {
 	unsigned short vesapm_seg;		/* 0x2e */
 	unsigned short vesapm_off;		/* 0x30 */
 	unsigned short pages;			/* 0x32 */
-						/* 0x34 -- 0x3f reserved for future expansion */
+	unsigned short vesa_attributes;		/* 0x34 */
+						/* 0x36 -- 0x3f reserved for future expansion */
 };
 
 extern struct screen_info screen_info;
@@ -127,7 +128,7 @@ extern struct screen_info screen_info;
 #define TTY_FLIPBUF_SIZE 512
 
 struct tty_flip_buffer {
-	struct tq_struct tqueue;
+	struct work_struct		work;
 	struct semaphore pty_sem;
 	char		*char_buf_ptr;
 	unsigned char	*flag_buf_ptr;
@@ -268,7 +269,7 @@ struct tty_struct {
 	int alt_speed;		/* For magic substitution of 38400 bps */
 	wait_queue_head_t write_wait;
 	wait_queue_head_t read_wait;
-	struct tq_struct tq_hangup;
+	struct work_struct hangup_work;
 	void *disc_data;
 	void *driver_data;
 	struct list_head tty_files;
@@ -298,7 +299,7 @@ struct tty_struct {
 	struct semaphore atomic_write;
 	spinlock_t read_lock;
 	/* If the tty has a pending do_SAK, queue it here - akpm */
-        struct tq_struct SAK_tq;
+	struct work_struct SAK_work;
 };
 
 /* tty magic number */

@@ -12,7 +12,7 @@ obj-y	 += mem.o tty_io.o n_tty.o tty_ioctl.o pty.o misc.o random.o eventpoll.o
 # All of the (potential) objects that export symbols.
 # This list comes from 'grep -l EXPORT_SYMBOL *.[hc]'.
 
-export-objs     :=	vt.o generic_serial.o ip2main.o \
+export-objs     :=	busmouse.o vt.o generic_serial.o ip2main.o \
 			ite_gpio.o keyboard.o misc.o nvram.o random.o rtc.o \
 			selection.o sonypi.o sysrq.o tty_io.o tty_ioctl.o eventpoll.o
 
@@ -52,10 +52,12 @@ obj-$(CONFIG_RAW_DRIVER) += raw.o
 obj-$(CONFIG_PRINTER) += lp.o
 obj-$(CONFIG_TIPAR) += tipar.o
 
+obj-$(CONFIG_BUSMOUSE) += busmouse.o
 obj-$(CONFIG_DTLK) += dtlk.o
 obj-$(CONFIG_R3964) += n_r3964.o
 obj-$(CONFIG_APPLICOM) += applicom.o
 obj-$(CONFIG_SONYPI) += sonypi.o
+obj-$(CONFIG_ATARIMOUSE) += atarimouse.o
 obj-$(CONFIG_RTC) += rtc.o
 obj-$(CONFIG_GEN_RTC) += genrtc.o
 obj-$(CONFIG_EFI_RTC) += efirtc.o
@@ -112,3 +114,18 @@ $(obj)/consolemap_deftbl.c: $(src)/$(FONTMAPFILE)
 
 $(obj)/defkeymap.o:  $(obj)/defkeymap.c
 
+$(obj)/qtronixmap.o: $(obj)/qtronixmap.c
+
+# Uncomment if you're changing the keymap and have an appropriate
+# loadkeys version for the map. By default, we'll use the shipped
+# versions.
+# GENERATE_KEYMAP := 1
+
+ifdef GENERATE_KEYMAP
+
+$(obj)/defkeymap.c $(obj)/qtronixmap.c: $(obj)/%.c: $(src)/%.map
+	loadkeys --mktable $< > $@.tmp
+	sed -e 's/^static *//' $@.tmp > $@
+	rm $@.tmp
+
+endif

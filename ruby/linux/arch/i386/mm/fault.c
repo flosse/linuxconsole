@@ -18,28 +18,31 @@
 #include <linux/interrupt.h>
 #include <linux/init.h>
 #include <linux/tty.h>
-#include <linux/vt_kern.h>		/* For unblank_screen() */
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
 #include <asm/pgalloc.h>
 #include <asm/hardirq.h>
+#include <asm/desc.h>
 
 extern void die(const char *,struct pt_regs *,long);
 
 extern int console_loglevel;
 
+#ifndef CONFIG_X86_WP_WORKS_OK
 /*
  * Ugly, ugly, but the goto's result in better assembly..
  */
 int __verify_write(const void * addr, unsigned long size)
 {
+	struct mm_struct *mm = current->mm;
 	struct vm_area_struct * vma;
 	unsigned long start = (unsigned long) addr;
 
-	if (!size)
+	if (!size || segment_eq(get_fs(),KERNEL_DS))
 		return 1;
 
+	down_read(&mm->mmap_sem);
 	vma = find_vma(current->mm, start);
 	if (!vma)
 		goto bad_area;
@@ -79,6 +82,13 @@ good_area:
 		if (!(vma->vm_flags & VM_WRITE))
 			goto bad_area;;
 	}
+	/*
+	 * We really need to hold mmap_sem over the whole access to
+	 * userspace, else another thread could change permissions.
+	 * This is unfixable, so don't use i386-class machines for
+	 * critical servers.
+	 */
+	up_read(&mm->mmap_sem);
 	return 1;
 
 check_stack:
@@ -88,6 +98,7 @@ check_stack:
 		goto good_area;
 
 bad_area:
+	up_read(&mm->mmap_sem);
 	return 0;
 
 out_of_memory:
@@ -97,39 +108,9 @@ out_of_memory:
 	}
 	goto bad_area;
 }
-
-extern spinlock_t timerlist_lock;
-
-/*
- * Unlock any spinlocks which will prevent us from getting the
- * message out (timerlist_lock is acquired through the
- * console unblank code)
- */
-void bust_spinlocks(int yes)
-{
-	spin_lock_init(&timerlist_lock);
-	if (yes) {
-		oops_in_progress = 1;
-#ifdef CONFIG_SMP
-		global_irq_lock = 0;	/* Many serial drivers do __global_cli() */
 #endif
-	} else {
-		int loglevel_save = console_loglevel;
-		
-		oops_in_progress = 0;
-		/*
-		 * OK, the message is on the console.  Now we call printk()
-		 * without oops_in_progress set so that printk will give klogd
-		 * a poke.  Hold onto your hats...
-		 */
-		console_loglevel = 15;		/* NMI oopser may have shut the console up */
-		printk(" ");
-		console_loglevel = loglevel_save;
-	}
-}
 
 asmlinkage void do_invalid_op(struct pt_regs *, unsigned long);
-extern unsigned long idt;
 
 /*
  * This routine handles page faults.  It determines the address,
@@ -181,10 +162,10 @@ asmlinkage void do_page_fault(struct pt_regs *regs, unsigned long error_code)
 	info.si_code = SEGV_MAPERR;
 
 	/*
-	 * If we're in an interrupt or have no user
-	 * context, we must not take the fault..
+	 * If we're in an interrupt, have no user context or are running in an
+	 * atomic region then we must not take the fault..
 	 */
-	if (in_interrupt() || !mm)
+	if (in_atomic() || !mm)
 		goto no_context;
 
 	down_read(&mm->mmap_sem);
@@ -293,7 +274,7 @@ bad_area:
 	if (boot_cpu_data.f00f_bug) {
 		unsigned long nr;
 		
-		nr = (address - idt) >> 3;
+		nr = (address - idt_descr.address) >> 3;
 
 		if (nr == 6) {
 			do_invalid_op(regs, 0);
