@@ -1224,7 +1224,8 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 		sprintf(hid->name, "%04x:%04x", dev->descriptor.idVendor, dev->descriptor.idProduct);
 
 	usb_make_path(dev, buf, 63);
-	snprintf(hid->phys, 128, "%s.%d", buf, ifnum);
+	//snprintf(hid->phys, 128, "%s.%d", buf, ifnum);
+	sprintf(hid->phys, "%s.%d", buf, ifnum);
 
 	kfree(buf);
 
