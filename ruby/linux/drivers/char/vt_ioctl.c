@@ -38,8 +38,6 @@
 #include <asm/vc_ioctl.h>
 #endif /* CONFIG_FB_COMPAT_XPMAC */
 
-extern struct tty_driver console_driver;
-
 #define VT_IS_IN_USE(vc) (vc->vc_tty && vc->vc_tty->count)
 #define VT_BUSY(vc)	(VT_IS_IN_USE(vc) ||vc->vc_num == sel_cons)
 
@@ -701,6 +699,24 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		return sys_ioperm(GPFIRST, GPNUM,
 				  (cmd == KDENABIO)) ? -ENXIO : 0;
 #endif
+	case KDKBDREP:
+	{
+		struct input_handle *handle = vc->display_fg->keyboard;
+		struct kbd_repeat kbrep;
+		
+                if (copy_from_user(&kbrep, (void *)arg,
+                                  	sizeof(struct kbd_repeat)))
+                	return -EFAULT;
+
+		input_event(handle->dev, EV_REP, REP_PERIOD, (HZ * kbrep.rate) / 1000);
+		input_event(handle->dev, EV_REP, REP_DELAY, (HZ * kbrep.delay) / 1000);
+		kbrep.rate  = (handle->dev->rep[REP_PERIOD] * 1000)/HZ;
+		kbrep.delay = (handle->dev->rep[REP_DELAY] * 1000)/HZ; 
+                if (copy_to_user((void *)arg, &kbrep,
+                               		sizeof(struct kbd_repeat)))
+                        return -EFAULT;
+		return 0;
+	}
 
 	case KDSETMODE:
 		/*
