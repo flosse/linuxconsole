@@ -41,8 +41,6 @@ static int make_magnitude_modifier(struct iforce* iforce,
 {
 	unsigned char data[3];
 
-	printk(KERN_DEBUG "iforce: in make_magnitude_modifier\n");
-
 	if (!no_alloc) {
 		down(&iforce->mem_mutex);
 		if (allocate_resource(&(iforce->device_memory), mod_chunk, 2,
@@ -182,6 +180,7 @@ static int make_interactive_modifier(struct iforce* iforce,
 	data[9] = (100*lsat)>>16;
 
 	iforce_send_packet(iforce, FF_CMD_INTERACT, data);
+	iforce_dump_packet("interactive", FF_CMD_INTERACT, data);
 
 	return 0;
 }
@@ -408,9 +407,6 @@ int iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effect, int 
 			effect->trigger.interval,
 			effect->direction);
 	}
-	else {
-		printk(KERN_DEBUG "iforce.c: no effect packet was needed\n");
-	}
 
 	/* If one of the parameter creation failed, we already returned an
 	 * error code.
@@ -437,8 +433,6 @@ int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effect, int 
 	int param1_err = 1;
 	int param2_err = 1;
 	int core_err = 0;
-
-	printk(KERN_DEBUG "iforce.c: make constant effect\n");
 
 	if (!is_update || need_magnitude_modifier(iforce, effect)) {
 		param1_err = make_magnitude_modifier(iforce, mod1_chunk,
@@ -471,9 +465,6 @@ int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effect, int 
 			effect->trigger.interval,
 			effect->direction);
 	}
-	else {
-		printk(KERN_DEBUG "iforce.c: no effect packet was needed\n");
-	}
 
 	/* If one of the parameter creation failed, we already returned an
 	 * error code.
@@ -496,8 +487,6 @@ int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* effect, i
 	u16 mod1, mod2, direction;
 	int param_err = 1;
 	int core_err = 0;
-
-	printk(KERN_DEBUG "iforce.c: make interactive effect\n");
 
 	switch (effect->type) {
 		case FF_SPRING:		type = 0x40; break;

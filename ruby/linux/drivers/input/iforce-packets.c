@@ -142,11 +142,10 @@ static int mark_core_as_ready(struct iforce *iforce, unsigned short addr)
 		    (iforce->core_effects[i].mod1_chunk.start == addr ||
 		     iforce->core_effects[i].mod2_chunk.start == addr)) {
 			clear_bit(FF_CORE_UPDATE, iforce->core_effects[i].flags);
-printk(KERN_DEBUG "iforce.c: marked effect %d as ready\n", i);
 			return 0;
 		}
 	}
-	printk(KERN_DEBUG "iforce.c: unused effect %04x updated !!!\n", addr);
+	printk(KERN_WARNING "iforce-packets.c: unused effect %04x updated !!!\n", addr);
 	return -1;
 }
 
@@ -157,7 +156,7 @@ void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char *data)
 	static int being_used = 0;
 
 	if (being_used)
-		printk(KERN_WARNING "iforce.c: re-entrant call to iforce_process %d\n", being_used);
+		printk(KERN_WARNING "iforce-packets.c: re-entrant call to iforce_process %d\n", being_used);
 	being_used++;
 
 #ifdef IFORCE_232
@@ -218,8 +217,7 @@ void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char *data)
 			if (LO(cmd) > 3) {
 				int j;
 				for (j=3; j<LO(cmd); j+=2) {
-					if (mark_core_as_ready(iforce, data[j] | (data[j+1]<<8)))
-						iforce_dump_packet("ff status", cmd, data);
+					mark_core_as_ready(iforce, data[j] | (data[j+1]<<8));
 				}
 			}
 			break;

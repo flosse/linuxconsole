@@ -120,8 +120,6 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 	int ret;
 	int is_update;
 
-	printk(KERN_DEBUG "iforce.c: upload effect\n");
-
 /*
  * If we want to create a new effect, get a free id
  */
@@ -149,7 +147,6 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 
 		/* Check the effect is not already being updated */
 		if (test_bit(FF_CORE_UPDATE, iforce->core_effects[effect->id].flags)) {
-			printk(KERN_DEBUG "iforce.c: update too frequent refused\n");
 			return -EAGAIN;
 		}
 
@@ -203,8 +200,6 @@ static int iforce_erase_effect(struct input_dev *dev, int effect_id)
 		return -EACCES;
 	}
 
-	printk(KERN_DEBUG "iforce.c: erase effect %d\n", effect_id);
-
 	if (effect_id < 0 || effect_id >= FF_EFFECTS_MAX)
 		return -EINVAL;
 
@@ -238,7 +233,7 @@ static int iforce_open(struct input_dev *dev)
 #endif
 	}
 
-	/* Reset device */
+	/* Enable force feedback */
 	iforce_send_packet(iforce, FF_CMD_ENABLE, "\004");
 
 	return 0;
@@ -256,7 +251,7 @@ static int iforce_flush(struct input_dev *dev, struct file *file)
 			current->pid == iforce->core_effects[i].owner) {
 			
 			/* Stop effect */
-			iforce_input_event(dev, EV_FF, i, 0);
+			input_report_ff(dev, i, 0);
 
 			/* Free ressources assigned to effect */
 			if (iforce_erase_effect(dev, i)) {
@@ -322,7 +317,6 @@ int iforce_init_device(struct iforce *iforce)
 
 	iforce->dev.idbus = BUS_USB;
 	iforce->dev.private = iforce;
-	iforce->dev.name = iforce->name;
 	iforce->dev.name = iforce->phys;
 	iforce->dev.open = iforce_open;
 	iforce->dev.close = iforce_close;
