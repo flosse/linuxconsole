@@ -1500,6 +1500,14 @@ static int tiocswinsz(struct tty_struct *tty, struct tty_struct *real_tty,
 		return -EFAULT;
 	if (!memcmp(&tmp_ws, &tty->winsize, sizeof(*arg)))
 		return 0;
+#ifdef CONFIG_VT
+	if (tty->driver.type == TTY_DRIVER_TYPE_CONSOLE) {
+		struct vc_data *vc = (struct vc_data *) tty->driver_data;
+		
+		if (!vc || vc_resize(vc, tmp_ws.ws_row, tmp_ws.ws_col))
+			return -ENXIO;
+	}
+#endif
 	if (tty->pgrp > 0)
 		kill_pg(tty->pgrp, SIGWINCH, 1);
 	if ((real_tty->pgrp != tty->pgrp) && (real_tty->pgrp > 0))
