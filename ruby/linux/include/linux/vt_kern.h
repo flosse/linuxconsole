@@ -230,26 +230,34 @@ void take_over_console(struct consw *sw, int first, int last, int deflt);
 void give_up_console(struct consw *sw);
 
 struct vc_pool {
-	/* First VC attached to VT. Their are always 16 VC per pool */
-	unsigned int first_vc;		
+	/* 
+	 * First VC for first vc pool in linked list is always allocated. 
+	 * Their are always 16 VC per pool 
+	 */
+	int first_vc;
 	struct vc_data *vc_cons[MAX_NR_USER_CONSOLES];	/* VT's VC pool */
+	struct vc_pool *next;				/* more VC pools */
 };
 
-extern struct vt_struct {
+struct vt_struct {
 	unsigned char	vc_mode;		/* KD_TEXT, ... */
 	struct vc_data  *fg_console;		/* VC being displayed */
         struct vc_data 	*last_console;     	/* VC we last switched from */
 	int scrollback_delta;			
 	int cursor_original;
-	char		vt_dont_switch;		/* VC switching flag */
-	char            vt_blanked;             /* Is this display blanked */
+	char vt_dont_switch;			/* VC switching flag */
+	char vt_blanked;             		/* Is this display blanked */
 	int blank_mode;	       /* 0:none 1:suspendV 2:suspendH 3:powerdown */
 	int blank_interval;			/* How long before blanking */
 	int off_interval;			
 	struct timer_list timer;		/* Timer for VT blanking */
 	struct consw	*vt_sw;			/* Display driver for VT */
 	struct vc_pool  vcs;			 
-} *vt_cons; 
+	struct vt_struct *next;				
+}; 
+
+extern int current_vc;
+extern struct vt_struct *vt_cons;
 
 void (*kd_mksound)(unsigned int hz, unsigned int ticks);
 
@@ -264,7 +272,8 @@ void terminal_emulation(struct tty_struct *tty, int c);
 
 /* vt.c */
 struct console_font_op;
-
+void create_vt(struct vt_struct *vt, struct consw *sw);
+struct vc_data* find_vc(int currcons);
 int vc_allocate(unsigned int console);
 int vc_cons_allocated(unsigned int console);
 int vc_resize(unsigned int lines, unsigned int cols,
@@ -329,7 +338,6 @@ extern unsigned int video_scan_lines;
 
 void change_console(struct vc_data *new_vc, struct vc_data *old_vc);
 void complete_change_console(struct vc_data *new_vc, struct vc_data *old_vc);
-int vt_waitactive(int vt);
 void reset_vc(struct vc_data *vc);
 
 #endif /* _VT_KERN_H */
