@@ -34,7 +34,8 @@ struct gameport;
 
 struct gameport {
 
-	void *private;
+	void *private;	/* Private pointer for joystick drivers */
+	void *driver;	/* Private pointer for gameport drivers */
 	char *name;
 	char *phys;
 

@@ -194,7 +194,7 @@ static void a3d_timer(unsigned long private)
 
 int a3d_adc_cooked_read(struct gameport *gameport, int *axes, int *buttons)
 {
-	struct a3d *a3d = gameport->private;
+	struct a3d *a3d = gameport->driver;
 	int i;
 	for (i = 0; i < 4; i++)
 		axes[i] = (a3d->axes[i] < 254) ? a3d->axes[i] : -1;
@@ -209,7 +209,7 @@ int a3d_adc_cooked_read(struct gameport *gameport, int *axes, int *buttons)
 
 int a3d_adc_open(struct gameport *gameport, int mode)
 {
-	struct a3d *a3d = gameport->private;
+	struct a3d *a3d = gameport->driver;
 	if (mode != GAMEPORT_MODE_COOKED)
 		return -1;
 	if (!a3d->used++)
@@ -223,7 +223,7 @@ int a3d_adc_open(struct gameport *gameport, int mode)
 
 static void a3d_adc_close(struct gameport *gameport)
 {
-	struct a3d *a3d = gameport->private;
+	struct a3d *a3d = gameport->driver;
 	if (!--a3d->used)
 		del_timer(&a3d->timer);
 }
@@ -329,7 +329,7 @@ static void a3d_connect(struct gameport *gameport, struct gameport_dev *dev)
 		a3d->dev.relbit[0] |= BIT(REL_X) | BIT(REL_Y);
 		a3d->dev.keybit[LONG(BTN_MOUSE)] |= BIT(BTN_RIGHT) | BIT(BTN_LEFT) | BIT(BTN_MIDDLE);
 
-		a3d->adc.private = a3d;
+		a3d->adc.driver = a3d;
 		a3d->adc.open = a3d_adc_open;
 		a3d->adc.close = a3d_adc_close;
 		a3d->adc.cooked_read = a3d_adc_cooked_read;
