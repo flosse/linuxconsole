@@ -44,12 +44,12 @@ static char *sel_buffer = NULL;
 
 /* set reverse video on characters s-e of console with selection. */
 inline static void highlight(const int s, const int e) {
-	invert_screen(vt_cons->vcs.vc_cons[sel_cons], s, e-s+2, 1);
+	invert_screen(find_vc(sel_cons), s, e-s+2, 1);
 }
 
 /* use complementary color to show the pointer */
 inline static void highlight_pointer(const int where) {
-	complement_pos(vt_cons->vcs.vc_cons[sel_cons], where);
+	complement_pos(find_vc(sel_cons), where);
 }
 
 /* used by selection */
@@ -64,7 +64,7 @@ u16 screen_glyph(struct vc_data *vc, int offset)
 
 static unsigned char sel_pos(int n)
 {
-	return inverse_translate(vt_cons->vcs.vc_cons[sel_cons], screen_glyph(vt_cons->vcs.vc_cons[sel_cons], n));
+	return inverse_translate(find_vc(sel_cons), screen_glyph(find_vc(sel_cons), n));
 }
 
 /* 
