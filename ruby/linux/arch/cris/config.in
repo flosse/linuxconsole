@@ -8,33 +8,19 @@ define_bool CONFIG_UID16 y
 define_bool CONFIG_RWSEM_GENERIC_SPINLOCK y
 define_bool CONFIG_RWSEM_XCHGADD_ALGORITHM n
 
-mainmenu_option next_comment
-comment 'Code maturity level options'
-bool 'Prompt for development and/or incomplete code/drivers' CONFIG_EXPERIMENTAL
-endmenu
-
-mainmenu_option next_comment
-comment 'Loadable module support'
-bool 'Enable loadable module support' CONFIG_MODULES
-if [ "$CONFIG_MODULES" = "y" ]; then
-   bool '  Set version information on all module symbols' CONFIG_MODVERSIONS
-   bool '  Kernel module loader' CONFIG_KMOD
-fi
-endmenu
+source init/Config.in
 
 mainmenu_option next_comment
 comment 'General setup'
-
-bool 'Networking support' CONFIG_NET
-bool 'System V IPC' CONFIG_SYSVIPC
-bool 'BSD Process Accounting' CONFIG_BSD_PROCESS_ACCT
-bool 'Sysctl support' CONFIG_SYSCTL
 
 tristate 'Kernel support for ELF binaries' CONFIG_BINFMT_ELF
 
 bool 'Use kernel gdb debugger' CONFIG_ETRAX_KGDB
 
 bool 'Enable Etrax100 watchdog' CONFIG_ETRAX_WATCHDOG
+if [ "$CONFIG_ETRAX_WATCHDOG" = "y" ]; then
+	bool 'Disable watchdog during Oops printouts' CONFIG_ETRAX_WATCHDOG_NICE_DOGGY
+fi
 
 endmenu
 
@@ -250,6 +236,6 @@ bool 'Kernel profiling support' CONFIG_PROFILE
 if [ "$CONFIG_PROFILE" = "y" ]; then
   int ' Profile shift count' CONFIG_PROFILE_SHIFT 2
 fi
-endmenu
 
 source lib/Config.in
+endmenu

@@ -84,6 +84,8 @@ extern int atyfb_init(void);
 extern int atyfb_setup(char*);
 extern int aty128fb_init(void);
 extern int aty128fb_setup(char*);
+extern int neofb_init(void);
+extern int neofb_setup(char*);
 extern int igafb_init(void);
 extern int igafb_setup(char*);
 extern int imsttfb_init(void);
@@ -100,6 +102,7 @@ extern int vesafb_setup(char*);
 extern int vga16fb_init(void);
 extern int vga16fb_setup(char*);
 extern int hgafb_init(void);
+extern int hgafb_setup(char*);
 extern int matroxfb_init(void);
 extern int matroxfb_setup(char*);
 extern int hpfb_init(void);
@@ -132,12 +135,12 @@ extern int stifb_setup(char*);
 extern int tx3912fb_init(void);
 extern int radeonfb_init(void);
 extern int radeonfb_setup(char*);
-extern int sstfb_init(void);
-extern int sstfb_setup(char*);
 extern int e1355fb_init(void);
 extern int e1355fb_setup(char*);
 extern int pvr2fb_init(void);
 extern int pvr2fb_setup(char*);
+extern int sstfb_init(void);
+extern int sstfb_setup(char*);
 extern int anakinfb_init(void);
 extern int sfb_init(void);
 extern int sed1345fb_init(void);
@@ -196,6 +199,9 @@ static struct {
 #ifdef CONFIG_FB_ATY128
 	{ "aty128fb", aty128fb_init, aty128fb_setup },
 #endif
+#ifdef CONFIG_FB_NEOMAGIC
+	{ "neo", neofb_init, neofb_setup },
+#endif
 #ifdef CONFIG_FB_VIRGE
 	{ "virge", virgefb_init, virgefb_setup },
 #endif
@@ -229,10 +235,7 @@ static struct {
 #ifdef CONFIG_FB_SIS
 	{ "sisfb", sisfb_init, sisfb_setup },
 #endif
-#ifdef CONFIG_FB_VOODOO1
-	{ "sstfb", sstfb_init, sstfb_setup },
-#endif
-
+	
 	/*
 	 * Generic drivers that are used as fallbacks
 	 * 
@@ -271,7 +274,7 @@ static struct {
 	{ "macfb", macfb_init, macfb_setup },
 #endif
 #ifdef CONFIG_FB_HGA
-	{ "hga", hgafb_init, NULL },
+	{ "hga", hgafb_init, hgafb_setup },
 #endif 
 #ifdef CONFIG_FB_IGA
 	{ "igafb", igafb_init, igafb_setup },
@@ -308,6 +311,9 @@ static struct {
 #endif
 #ifdef CONFIG_FB_PVR2
        	{ "pvr2", pvr2fb_init, pvr2fb_setup },
+#endif
+#ifdef CONFIG_FB_VOODOO1
+	{ "sstfb", sstfb_init, sstfb_setup },
 #endif
 #ifdef CONFIG_FB_SED1345
 	{ "sed1345fb", sed1345fb_init, NULL },
@@ -639,7 +645,7 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 	vma->vm_flags |= VM_IO;
 #if defined(__sparc_v9__)
 	vma->vm_flags |= (VM_SHM | VM_LOCKED);
-	if (io_remap_page_range(vma->vm_start, off,
+	if (io_remap_page_range(vma, vma->vm_start, off,
 				vma->vm_end - vma->vm_start, vma->vm_page_prot, 0))
 		return -EAGAIN;
 #else
@@ -672,7 +678,7 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 #else
 #warning What do we have to do here??
 #endif
-	if (io_remap_page_range(vma->vm_start, off,
+	if (io_remap_page_range(vma, vma->vm_start, off,
 			     vma->vm_end - vma->vm_start, vma->vm_page_prot))
 		return -EAGAIN;
 #endif /* !__sparc_v9__ */

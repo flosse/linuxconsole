@@ -1,4 +1,4 @@
-# BK Id: SCCS/s.config.in 1.47 12/01/01 20:09:06 benh
+# BK Id: SCCS/s.config.in 1.45 11/08/01 07:57:40 paulus
 #
 # For a description of the syntax of this configuration file,
 # see Documentation/kbuild/config-language.txt.
@@ -185,7 +185,7 @@ if [ "$CONFIG_CMDLINE_BOOL" = "y" ] ; then
 fi
 
 if [ "$CONFIG_APUS" = "y" ]; then
-  define_bool CONFIG_FB_CONSOLE y
+  define_bool CONFIG_FRAMEBUFFER_CONSOLE y
   define_bool CONFIG_AMIGA y
   define_bool CONFIG_ZORRO y
   define_bool CONFIG_ABSTRACT_CONSOLE y
@@ -286,14 +286,6 @@ if [ "$CONFIG_CD_NO_IDESCSI" != "n" ]; then
 fi
 endmenu
 
-mainmenu_option next_comment
-comment 'Console drivers'
-if [ "$CONFIG_4xx" != "y" -a "$CONFIG_8xx" != "y" ]; then
-  bool 'Support for VGA Console' CONFIG_VGA_CONSOLE
-fi
- source drivers/video/Config.in
-endmenu
-
 source drivers/input/Config.in
 
 mainmenu_option next_comment
@@ -305,10 +297,6 @@ if [ "$CONFIG_ALL_PPC" = "y" ]; then
   bool 'Support for PMU  based PowerMacs' CONFIG_ADB_PMU
   if [ "$CONFIG_ADB_PMU" = "y" ]; then
     bool '   Power management support for PowerBooks' CONFIG_PMAC_PBOOK
-    if [ "$CONFIG_PMAC_PBOOK" = "y" ]; then
-      define_bool CONFIG_PM y
-      tristate '     APM emulation' CONFIG_PMAC_APM_EMU
-    fi
     # made a separate option since backlight may end up beeing used
     # on non-powerbook machines (but only on PMU based ones AFAIK)
     bool '   Backlight control for LCD screens' CONFIG_PMAC_BACKLIGHT
@@ -321,13 +309,18 @@ if [ "$CONFIG_ALL_PPC" = "y" ]; then
   bool 'Apple Desktop Bus (ADB) support' CONFIG_ADB
   if [ "$CONFIG_ADB" = "y" ]; then
     bool '   Include MacIO (CHRP) ADB driver' CONFIG_ADB_MACIO
-    dep_bool '   Support for ADB input devices (keyboard, mice, ...)' CONFIG_INPUT_ADBHID $CONFIG_INPUT
+    dep_bool '   Use input layer for ADB devices' CONFIG_INPUT_ADBHID $CONFIG_INPUT
     if [ "$CONFIG_INPUT_ADBHID" = "y" ]; then
+      bool '     Support for ADB raw keycodes' CONFIG_MAC_ADBKEYCODES
       bool '     Support for mouse button 2+3 emulation' CONFIG_MAC_EMUMOUSEBTN
+    else
+      bool '   Support for ADB keyboard (old driver)' CONFIG_ADB_KEYBOARD
     fi
   fi
-  if [ "$CONFIG_ADB_CUDA" != "n" ]; then
-    bool 'Support for ANS LCD display' CONFIG_ANSLCD
+  # This is for drivers/macintosh/mac_hid.o, which is needed if the input
+  # layer is used.
+  if [ "$CONFIG_INPUT" != "n" ]; then
+    define_bool CONFIG_MAC_HID y
   fi
 fi
 endmenu
@@ -357,6 +350,7 @@ source arch/ppc/8260_io/Config.in
 fi
 
 source drivers/usb/Config.in
+source drivers/video/Config.in
 
 if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
    source net/bluetooth/Config.in

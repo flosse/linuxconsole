@@ -700,10 +700,8 @@ void __init setup_arch(char **cmdline_p)
 #define PFN_PHYS(x)	((x) << PAGE_SHIFT)
 
 /*
- * 128MB for vmalloc and initrd
+ * Reserved space for vmalloc and iomap - defined in asm/page.h
  */
-#define VMALLOC_RESERVE	(unsigned long)(128 << 20)
-#define MAXMEM		(unsigned long)(-PAGE_OFFSET-VMALLOC_RESERVE)
 #define MAXMEM_PFN	PFN_DOWN(MAXMEM)
 #define MAX_NONPAE_PFN	(1 << 20)
 
@@ -2793,9 +2791,10 @@ void __init cpu_init (void)
 	load_TR(nr);
 	load_LDT(&init_mm);
 
-	/*
-	 * Clear all 6 debug registers:
-	 */
+	/* Clear %fs and %gs. */
+	asm volatile ("xorl %eax, %eax; movl %eax, %fs; movl %eax, %gs");
+
+	/* Clear all 6 debug registers: */
 
 #define CD(register) __asm__("movl %0,%%db" #register ::"r"(0) );
 
