@@ -516,8 +516,6 @@ static void mdacon_cursor(struct vc_data *vc, int mode)
 static int mdacon_scroll_region(struct vc_data *vc, int t, int b, int dir, 
 				int lines)
 {
-	u16 eattr = mda_convert_attr(vc->vc_video_erase_char);
-
 	if (!lines)
 		return 0;
 
