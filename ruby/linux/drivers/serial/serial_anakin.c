@@ -64,27 +64,22 @@
 #define CALLOUT_ANAKIN_MINOR	32
 
 static struct tty_driver normal, callout;
-static u_int txenable[NR_IRQS];		/* Software interrupt register */
-
-struct uart_anakin_port {
-	struct uart_port	port;
-	struct uart_info	*info;
-};
+static unsigned int txenable[NR_IRQS];		/* Software interrupt register */
 
 static inline unsigned int
-anakin_in(struct uart_port *port, u_int offset)
+anakin_in(struct uart_port *port, unsigned int offset)
 {
 	return __raw_readl(port->base + offset);
 }
 
 static inline void
-anakin_out(struct uart_port *port, u_int offset, unsigned int value)
+anakin_out(struct uart_port *port, unsigned int offset, unsigned int value)
 {
 	__raw_writel(value, port->base + offset);
 }
 
 static void
-anakin_stop_tx(struct uart_port *port, u_int from_tty)
+anakin_stop_tx(struct uart_port *port, unsigned int tty_stop)
 {
 	txenable[port->irq] = 0;
 }
@@ -92,13 +87,15 @@ anakin_stop_tx(struct uart_port *port, u_int from_tty)
 static inline void
 anakin_transmit_buffer(struct uart_port *port)
 {
+	struct circ_buf *xmit = &port->info->xmit;
+
 	while (!(anakin_in(port, 0x10) & TXEMPTY));
-	anakin_out(port, 0x14, port->xmit.buf[port->xmit.tail]);
+	anakin_out(port, 0x14, xmit->buf[xmit->tail]);
 	anakin_out(port, 0x18, anakin_in(port, 0x18) | SENDREQUEST);
-	port->xmit.tail = (port->xmit.tail + 1) & (UART_XMIT_SIZE-1);
+	xmit->tail = (xmit->tail + 1) & (UART_XMIT_SIZE-1);
         port->icount.tx++;
 
-	if (port->xmit.head == port->xmit.tail)
+	if (uart_circ_empty(xmit))
 		anakin_stop_tx(port, 0); 
 }
 
@@ -112,22 +109,22 @@ anakin_transmit_x_char(struct uart_port *port)
 }
 
 static void
-anakin_start_tx(struct uart_port *port, u_int nonempty, u_int from_tty)
+anakin_start_tx(struct uart_port *port, unsigned int tty_start)
 {
-	struct uart_anakin_port *up = (struct uart_anakin_port *)port;
 	unsigned int flags;
 
-	save_flags_cli(flags);
+	spin_lock_irqsave(&port->lock, flags);
 
-	// is it this... or below: if (nonempty
+	// is it this... or below
 	if (!txenable[port->irq]) {
 		txenable[port->irq] = TXENABLE;
 
-		if ((anakin_in(port, 0x10) & TXEMPTY) && nonempty) {
-		    anakin_transmit_buffer(up->port);
+		if ((anakin_in(port, 0x10) & TXEMPTY)) {
+		    anakin_transmit_buffer(port);
 		}
 	}
-	restore_flags(flags);
+
+	spin_unlock_irqrestore(&port->lock, flags);
 }
 
 static void
@@ -135,11 +132,11 @@ anakin_stop_rx(struct uart_port *port)
 {
 	unsigned long flags;
 
-	save_flags_cli(flags);
+	spin_lock_irqsave(&port->lock, flags);
 	while (anakin_in(port, 0x10) & RXRELEASE) 
 	    anakin_in(port, 0x14);
 	anakin_out(port, 0x18, anakin_in(port, 0x18) | BLOCKRX);
-	restore_flags(flags);
+	spin_unlock_irqrestore(&port->lock, flags);
 }
 
 static void
@@ -148,20 +145,20 @@ anakin_enable_ms(struct uart_port *port)
 }
 
 static inline void
-anakin_rx_chars(struct uart_info *info)
+anakin_rx_chars(struct uart_port *port)
 {
 	unsigned int ch;
-	struct tty_struct *tty = info->tty;
+	struct tty_struct *tty = port->info->tty;
 
-	if (!(anakin_in(info->port, 0x10) & RXRELEASE))
+	if (!(anakin_in(port, 0x10) & RXRELEASE))
 		return;
 
-	ch = anakin_in(info->port, 0x14) & 0xff;
+	ch = anakin_in(port, 0x14) & 0xff;
 
 	if (tty->flip.count < TTY_FLIPBUF_SIZE) {
 		*tty->flip.char_buf_ptr++ = ch;
 		*tty->flip.flag_buf_ptr++ = TTY_NORMAL;
-		info->port->icount.rx++;
+		port->icount.rx++;
 		tty->flip.count++;
 	} 
 	tty_flip_buffer_push(tty);
@@ -177,55 +174,51 @@ anakin_overrun_chars(struct uart_port *port)
 }
 
 static inline void
-anakin_tx_chars(struct uart_info *info)
+anakin_tx_chars(struct uart_port *port)
 {
-	struct uart_port *port = info->port;
+	struct circ_buf *xmit = &port->info->xmit;
 
 	if (port->x_char) {
 		anakin_transmit_x_char(port);
 		return; 
 	}
 
-	if (port->xmit.head == port->xmit.tail
-	    || info->tty->stopped
-	    || info->tty->hw_stopped) {
+	if (uart_circ_empty(xmit) || uart_tx_stopped(port)) {
 		anakin_stop_tx(port, 0);
 		return;
 	}
 
 	anakin_transmit_buffer(port);
 
-	if (CIRC_CNT(port->xmit.head,
-		     port->xmit.tail,
-		     UART_XMIT_SIZE) < WAKEUP_CHARS)
-		uart_event(info, EVT_WRITE_WAKEUP);
+	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
+		uart_event(port, EVT_WRITE_WAKEUP);
 }
 
 static void
 anakin_int(int irq, void *dev_id, struct pt_regs *regs)
 {
 	unsigned int status;
-	struct uart_info *info = dev_id;
+	struct uart_port *port = dev_id;
 
-	status = anakin_in(info->port, 0x1c);
+	status = anakin_in(port, 0x1c);
 
 	if (status & RX) 
-		anakin_rx_chars(info);
+		anakin_rx_chars(port);
 
 	if (status & OVERRUN) 
-		anakin_overrun_chars(info->port);
+		anakin_overrun_chars(port);
 
-	if (txenable[info->port->irq] && (status & TX)) 
-		anakin_tx_chars(info);
+	if (txenable[port->irq] && (status & TX)) 
+		anakin_tx_chars(port);
 }
 
-static u_int
+static unsigned int
 anakin_tx_empty(struct uart_port *port)
 {
 	return anakin_in(port, 0x10) & TXEMPTY ? TIOCSER_TEMT : 0;
 }
 
-static u_int
+static unsigned int
 anakin_get_mctrl(struct uart_port *port)
 {
 	unsigned int status = 0;
@@ -239,7 +232,7 @@ anakin_get_mctrl(struct uart_port *port)
 }
 
 static void
-anakin_set_mctrl(struct uart_port *port, u_int mctrl)
+anakin_set_mctrl(struct uart_port *port, unsigned int mctrl)
 {
 	unsigned int status;
 
@@ -261,8 +254,10 @@ anakin_set_mctrl(struct uart_port *port, u_int mctrl)
 static void
 anakin_break_ctl(struct uart_port *port, int break_state)
 {
+	unsigned long flags;
 	unsigned int status;
 
+	spin_lock_irqsave(&port->lock, flags);
 	status = anakin_in(port, 0x20);
 
 	if (break_state == -1)
@@ -271,23 +266,21 @@ anakin_break_ctl(struct uart_port *port, int break_state)
 		status &= ~SETBREAK;
 
 	anakin_out(port, 0x20, status);
+	spin_unlock_irqrestore(&port->lock, flags);
 }
 
-static int
-anakin_startup(struct uart_port *port, struct uart_info *info)
+static int anakin_startup(struct uart_port *port)
 {
-	struct uart_anakin_port *up = (struct uart_anakin_port *)port;
-	unsigned int read,write;
 	int retval;
+	unsigned int read,write;
 
 	/*
 	 * Allocate the IRQ
 	 */
-	retval = request_irq(port->irq, anakin_int, SA_INTERRUPT, "serial_anakin", info);
+	retval = request_irq(port->irq, anakin_int, SA_INTERRUPT,
+			     "serial_anakin", port);
 	if (retval)
 		return retval;
-
-	port->ops->set_mctrl(port, info->mctrl);
 
 	/*
 	 * initialise the old status of the modem signals
@@ -302,19 +295,15 @@ anakin_startup(struct uart_port *port, struct uart_info *info)
 	write = (read & ~(RTS | DTR | BLOCKRX)) | IRQENABLE;
 	anakin_out(port, 0x18, write);
 
-	/* Store the uart_info pointer so we can reference it in 
-	 * anakin_start_tx() */
-	up->info = info;
 	return 0;
 }
 
-static void
-anakin_shutdown(struct uart_port *port, struct uart_info *info)
+static void anakin_shutdown(struct uart_port *port)
 {
 	/*
 	 * Free the interrupt
 	 */
-	free_irq(port->irq, info);
+	free_irq(port->irq, port);
 
 	/*
 	 * disable all interrupts, disable the port
@@ -323,18 +312,19 @@ anakin_shutdown(struct uart_port *port, struct uart_info *info)
 }
 
 static void
-anakin_change_speed(struct uart_port *port, u_int cflag, u_int iflag, u_int quot)
+anakin_change_speed(struct uart_port *port, unsigned int cflag,
+		    unsigned int iflag, unsigned int quot)
 {
 	unsigned int flags;
 
-	save_flags_cli(flags);
+	spin_lock_irqsave(&port->lock, flags);
 	while (!(anakin_in(port, 0x10) & TXEMPTY));
 	anakin_out(port, 0x10, (anakin_in(port, 0x10) & ~PRESCALER)
 			| (quot << 3));
 
 	//parity always set to none
 	anakin_out(port, 0x18, anakin_in(port, 0x18) & ~PARITY);
-	restore_flags(flags);
+	spin_unlock_irqrestore(&port->lock, flags);
 }
 
 static const char *anakin_type(struct port *port)
@@ -357,51 +347,51 @@ static struct uart_ops anakin_pops = {
 	type:		anakin_type,
 };
 
-static struct uart_anakin_port anakin_ports[UART_NR] = {
+static struct uart_port anakin_ports[UART_NR] = {
 	{
-		port:	{
-			base:		IO_BASE + UART0,
-			irq:		IRQ_UART0,
-			uartclk:	3686400,
-			fifosize:	0,
-			ops:		&anakin_pops,
-		},
+		base:		IO_BASE + UART0,
+		irq:		IRQ_UART0,
+		uartclk:	3686400,
+		fifosize:	0,
+		ops:		&anakin_pops,
+		flags:		ASYNC_BOOT_AUTOCONF,
+		line:		0,
 	},
 	{
-		port:	{
-			base:		IO_BASE + UART1,
-			irq:		IRQ_UART1,
-			uartclk:	3686400,
-			fifosize:	0,
-			ops:		&anakin_pops,
-		},
+		base:		IO_BASE + UART1,
+		irq:		IRQ_UART1,
+		uartclk:	3686400,
+		fifosize:	0,
+		ops:		&anakin_pops,
+		flags:		ASYNC_BOOT_AUTOCONF,
+		line:		1,
 	},
 	{
-		port:	{
-			base:		IO_BASE + UART2,
-			irq:		IRQ_UART2,
-			uartclk:	3686400,
-			fifosize:	0,
-			ops:		&anakin_pops,
-		},
+		base:		IO_BASE + UART2,
+		irq:		IRQ_UART2,
+		uartclk:	3686400,
+		fifosize:	0,
+		ops:		&anakin_pops,
+		flags:		ASYNC_BOOT_AUTOCONF,
+		line:		2,
 	},
 	{
-		port:	{
-			base:		IO_BASE + UART3,
-			irq:		IRQ_UART3,
-			uartclk:	3686400,
-			fifosize:	0,
-			ops:		&anakin_pops,
-		},
+		base:		IO_BASE + UART3,
+		irq:		IRQ_UART3,
+		uartclk:	3686400,
+		fifosize:	0,
+		ops:		&anakin_pops,
+		flags:		ASYNC_BOOT_AUTOCONF,
+		line:		3,
 	},
 	{
-		port:	{
-			base:		IO_BASE + UART4,
-			irq:		IRQ_UART4,
-			uartclk:	3686400,
-			fifosize:	0,
-			ops:		&anakin_pops,
-		},
+		base:		IO_BASE + UART4,
+		irq:		IRQ_UART4,
+		uartclk:	3686400,
+		fifosize:	0,
+		ops:		&anakin_pops,
+		flags:		ASYNC_BOOT_AUTOCONF,
+		line:		4,
 	},
 };
 
@@ -409,18 +399,18 @@ static struct uart_anakin_port anakin_ports[UART_NR] = {
 #ifdef CONFIG_SERIAL_ANAKIN_CONSOLE
 
 static void
-anakin_console_write(struct console *co, const char *s, u_int count)
+anakin_console_write(struct console *co, const char *s, unsigned int count)
 {
-	struct uart_port *port = &anakin_ports[co->index].port;
+	struct uart_port *port = &anakin_ports[co->index];
 	unsigned int flags, status, i;
 
 	/*
 	 *	First save the status then disable the interrupts
 	 */
-	save_flags_cli(flags);
+	local_irq_save(flags);
 	status = anakin_in(port, 0x18);
 	anakin_out(port, 0x18, status & ~IRQENABLE);
-	restore_flags(flags);
+	local_irq_restore(flags);
 
 	/*
 	 *	Now, do each character
@@ -450,38 +440,16 @@ anakin_console_write(struct console *co, const char *s, u_int count)
 	while (!(anakin_in(port, 0x10) & TXEMPTY));
 
 	if (status & IRQENABLE) {
-		save_flags_cli(flags);
+		local_irq_save(flags);
  		anakin_out(port, 0x18, anakin_in(port, 0x18) | IRQENABLE);
-		restore_flags(flags);
+		local_irq_restore(flags);
 	}
 }
 
 static kdev_t
 anakin_console_device(struct console *co)
 {
-	return MKDEV(SERIAL_ANAKIN_MAJOR, SERIAL_ANAKIN_MINOR + co->index);
-}
-
-static int
-anakin_console_wait_key(struct console *co)
-{
-	struct uart_port *port = &anakin_ports[co->index].port;
-	unsigned int flags, status, ch;
-
-	save_flags_cli(flags);
-	status = anakin_in(port, 0x18);
-	anakin_out(port, 0x18, status & ~IRQENABLE);
-	restore_flags(flags);
-
-	while (!(anakin_in(port, 0x10) & RXRELEASE));
-	ch = anakin_in(port, 0x14);
-
-	if (status & IRQENABLE) {
-		save_flags_cli(flags);
-		anakin_out(port, 0x18, anakin_in(port, 0x18) | IRQENABLE);
-		restore_flags(flags);
-	}
-	return ch;
+	return mk_kdev(SERIAL_ANAKIN_MAJOR, SERIAL_ANAKIN_MINOR + co->index);
 }
 
 /*
@@ -515,13 +483,9 @@ anakin_console_setup(struct console *co, char *options)
 	 * if so, search for the first available port that does have
 	 * console support.
 	 */
-#if 0
-	port = uart_get_console(anakin_ports, UART_NR, co);
-#else
 	if (co->index >= UART_NR)
 		co->index = 0;
-	port = &anakin_ports[co->index].port;
-#endif
+	port = &anakin_ports[co->index];
 
 	if (options)
 		uart_parse_options(options, &baud, &parity, &bits);
@@ -535,7 +499,6 @@ static struct console anakin_console = {
 	name:		SERIAL_ANAKIN_NAME,
 	write:		anakin_console_write,
 	device:		anakin_console_device,
-	wait_key:	anakin_console_wait_key,
 	setup:		anakin_console_setup,
 	flags:		CON_PRINTBUFFER,
 	index:		-1,
@@ -553,6 +516,7 @@ anakin_console_init(void)
 #endif
 
 static struct uart_register anakin_reg = {
+	driver_name:		SERIAL_ANAKIN_NAME,
 	normal_major:		SERIAL_ANAKIN_MAJOR,
 	normal_name:		SERIAL_ANAKIN_NAME,
 	normal_driver:		&normal,
@@ -574,7 +538,7 @@ anakin_init(void)
 		int i;
 
 		for (i = 0; i < UART_NR; i++)
-			uart_add_one_port(&anakin_reg, &anakin_ports[i].port);
+			uart_add_one_port(&anakin_reg, &anakin_ports[i]);
 	}
 	return ret;
 }

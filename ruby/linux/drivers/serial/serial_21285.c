@@ -67,15 +67,16 @@ static const char serial21285_name[] = "Footbridge UART";
  *  int((BAUD_BASE - (baud >> 1)) / baud)
  */
 
-static void serial21285_stop_tx(struct uart_port *port, u_int from_tty)
+static void
+serial21285_stop_tx(struct uart_port *port, unsigned int tty_stop)
 {
 	disable_irq(IRQ_CONTX);
 }
 
-static void serial21285_start_tx(struct uart_port *port, u_int nonempty, u_int from_tty)
+static void
+serial21285_start_tx(struct uart_port *port, unsigned int tty_start)
 {
-	if (nonempty)
-		enable_irq(IRQ_CONTX);
+	enable_irq(IRQ_CONTX);
 }
 
 static void serial21285_stop_rx(struct uart_port *port)
@@ -89,9 +90,8 @@ static void serial21285_enable_ms(struct uart_port *port)
 
 static void serial21285_rx_chars(int irq, void *dev_id, struct pt_regs *regs)
 {
-	struct uart_info *info = dev_id;
-	struct uart_port *port = info->port;
-	struct tty_struct *tty = info->tty;
+	struct uart_port *port = dev_id;
+	struct tty_struct *tty = port->info->tty;
 	unsigned int status, ch, rxs, max_count = 256;
 
 	status = *CSR_UARTFLG;
@@ -150,8 +150,8 @@ static void serial21285_rx_chars(int irq, void *dev_id, struct pt_regs *regs)
 
 static void serial21285_tx_chars(int irq, void *dev_id, struct pt_regs *regs)
 {
-	struct uart_info *info = dev_id;
-	struct uart_port *port = info->port;
+	struct uart_port *port = dev_id;
+	struct circ_buf *xmit = &port->info->xmit;
 	int count = 256;
 
 	if (port->x_char) {
@@ -160,87 +160,96 @@ static void serial21285_tx_chars(int irq, void *dev_id, struct pt_regs *regs)
 		port->x_char = 0;
 		return;
 	}
-	if (port->xmit.head == port->xmit.tail
-	    || info->tty->stopped
-	    || info->tty->hw_stopped) {
+	if (uart_circ_empty(xmit) || uart_tx_stopped(port)) {
 		serial21285_stop_tx(port, 0);
 		return;
 	}
 
 	do {
-		*CSR_UARTDR = port->xmit.buf[port->xmit.tail];
-		port->xmit.tail = (port->xmit.tail + 1) & (UART_XMIT_SIZE - 1);
+		*CSR_UARTDR = xmit->buf[xmit->tail];
+		xmit->tail = (xmit->tail + 1) & (UART_XMIT_SIZE - 1);
 		port->icount.tx++;
-		if (port->xmit.head == port->xmit.tail)
+		if (uart_circ_empty(xmit))
 			break;
 	} while (--count > 0 && !(*CSR_UARTFLG & 0x20));
 
-	if (CIRC_CNT(port->xmit.head, port->xmit.tail, UART_XMIT_SIZE) <
-			WAKEUP_CHARS)
-		uart_event(info, EVT_WRITE_WAKEUP);
+	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
+		uart_event(port, EVT_WRITE_WAKEUP);
 
-	if (port->xmit.head == port->xmit.tail)
+	if (uart_circ_empty(xmit))
 		serial21285_stop_tx(port, 0);
 }
 
-static u_int serial21285_tx_empty(struct uart_port *port)
+static unsigned int serial21285_tx_empty(struct uart_port *port)
 {
 	return (*CSR_UARTFLG & 8) ? 0 : TIOCSER_TEMT;
 }
 
 /* no modem control lines */
-static u_int serial21285_get_mctrl(struct uart_port *port)
+static unsigned int serial21285_get_mctrl(struct uart_port *port)
 {
 	return TIOCM_CAR | TIOCM_DSR | TIOCM_CTS;
 }
 
-static void serial21285_set_mctrl(struct uart_port *port, u_int mctrl)
+static void serial21285_set_mctrl(struct uart_port *port, unsigned int mctrl)
 {
 }
 
 static void serial21285_break_ctl(struct uart_port *port, int break_state)
 {
-	u_int h_lcr;
+	unsigned long flags;
+	unsigned int h_lcr;
 
+	spin_lock_irqsave(&port->lock, flags);
 	h_lcr = *CSR_H_UBRLCR;
 	if (break_state)
 		h_lcr |= H_UBRLCR_BREAK;
 	else
 		h_lcr &= ~H_UBRLCR_BREAK;
 	*CSR_H_UBRLCR = h_lcr;
+	spin_unlock_irqrestore(&port->lock, flags);
 }
 
-static int serial21285_startup(struct uart_port *port, struct uart_info *info)
+static int serial21285_startup(struct uart_port *port)
 {
 	int ret;
 
 	ret = request_irq(IRQ_CONRX, serial21285_rx_chars, 0,
-			  serial21285_name, info);
+			  serial21285_name, port);
 	if (ret == 0) {
 		ret = request_irq(IRQ_CONTX, serial21285_tx_chars, 0,
-				  serial21285_name, info);
+				  serial21285_name, port);
 		if (ret)
-			free_irq(IRQ_CONRX, info);
+			free_irq(IRQ_CONRX, port);
 	}
 	return ret;
 }
 
-static void serial21285_shutdown(struct uart_port *port, struct uart_info *info)
+static void serial21285_shutdown(struct uart_port *port)
 {
-	free_irq(IRQ_CONTX, info);
-	free_irq(IRQ_CONRX, info);
+	free_irq(IRQ_CONTX, port);
+	free_irq(IRQ_CONRX, port);
 }
 
 static void
-serial21285_change_speed(struct uart_port *port, u_int cflag, u_int iflag, u_int quot)
+serial21285_change_speed(struct uart_port *port, unsigned int cflag,
+			 unsigned int iflag, unsigned int quot)
 {
-	u_int h_lcr;
+	unsigned int h_lcr;
 
 	switch (cflag & CSIZE) {
-	case CS5:		h_lcr = 0x00;	break;
-	case CS6:		h_lcr = 0x20;	break;
-	case CS7:		h_lcr = 0x40;	break;
-	default: /* CS8 */	h_lcr = 0x60;	break;
+	case CS5:
+		h_lcr = 0x00;
+		break;
+	case CS6:
+		h_lcr = 0x20;
+		break;
+	case CS7:
+		h_lcr = 0x40;
+		break;
+	default: /* CS8 */
+		h_lcr = 0x60;
+		break;
 	}
 
 	if (cflag & CSTOPB)
@@ -353,9 +362,10 @@ static void serial21285_setup_ports(void)
 }
 
 #ifdef CONFIG_SERIAL_21285_CONSOLE
-/************** console driver *****************/
 
-static void serial21285_console_write(struct console *co, const char *s, u_int count)
+static void
+serial21285_console_write(struct console *co, const char *s,
+			  unsigned int count)
 {
 	int i;
 
@@ -373,22 +383,12 @@ static void serial21285_console_write(struct console *co, const char *s, u_int c
 
 static kdev_t serial21285_console_device(struct console *c)
 {
-	return MKDEV(SERIAL_21285_MAJOR, SERIAL_21285_MINOR);
-}
-
-static int serial21285_console_wait_key(struct console *co)
-{
-	int c;
-
-	disable_irq(IRQ_CONRX);
-	while (*CSR_UARTFLG & 0x10);
-	c = *CSR_UARTDR;
-	enable_irq(IRQ_CONRX);
-	return c;
+	return mk_kdev(SERIAL_21285_MAJOR, SERIAL_21285_MINOR);
 }
 
 static void __init
-serial21285_get_options(struct uart_port *port, int *baud, int *parity, int *bits)
+serial21285_get_options(struct uart_port *port, int *baud,
+			int *parity, int *bits)
 {
 }
 
@@ -419,17 +419,12 @@ static int __init serial21285_console_setup(struct console *co, char *options)
 #ifdef CONFIG_SERIAL_21285_OLD
 static struct console serial21285_old_cons =
 {
-	SERIAL_21285_OLD_NAME,
-	serial21285_console_write,
-	NULL,
-	serial21285_console_device,
-	serial21285_console_wait_key,
-	NULL,
-	serial21285_console_setup,
-	CON_PRINTBUFFER,
-	-1,
-	0,
-	NULL
+	name:		SERIAL_21285_OLD_NAME,
+	write:		serial21285_console_write,
+	device:		serial21285_console_device,
+	setup:		serial21285_console_setup,
+	flags:		CON_PRINTBUFFER,
+	index:		-1,
 };
 #endif
 
@@ -438,7 +433,6 @@ static struct console serial21285_console =
 	name:		SERIAL_21285_NAME,
 	write:		serial21285_console_write,
 	device:		serial21285_console_device,
-	wait_key:	serial21285_console_wait_key,
 	setup:		serial21285_console_setup,
 	flags:		CON_PRINTBUFFER,
 	index:		-1,
@@ -457,6 +451,7 @@ void __init rs285_console_init(void)
 
 static struct uart_driver serial21285_reg = {
 	owner:			THIS_MODULE,
+	driver_name:		"ttyFB",
 	normal_major:		SERIAL_21285_MAJOR,
 #ifdef CONFIG_DEVFS_FS
 	normal_name:		"ttyFB%d",

@@ -13,7 +13,6 @@
  *
  *  $Id$
  */
-#include <linux/config.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/pci.h>
@@ -309,14 +308,14 @@ static const struct pnpbios_device_id pnp_dev_table[] = {
 
 static void inline avoid_irq_share(struct pci_dev *dev)
 {
+	unsigned int map = 0x1FF8;
 	struct isapnp_irq *irq;
 	struct isapnp_resources *res = dev->sysdata;
-	int map = 0x1FF8;
 
 	serial8250_get_irq_map(&map);
 
 	for ( ; res; res = res->alt)
-		for(irq = res->irq; irq; irq = irq->next)
+		for (irq = res->irq; irq; irq = irq->next)
 			irq->map = map;
 }
 
@@ -424,8 +423,8 @@ pnp_init_one(struct pci_dev *dev, const struct pnpbios_device_id *ent,
 	if (HIGH_BITS_OFFSET)
 		serial_req.port = pci_resource_start(dev, 0) >> HIGH_BITS_OFFSET;
 
-#ifdef SERIAL_DEBUG_PCI
-	printk("Setup PCI/PNP port: port %x, irq %d, type %d\n",
+#ifdef SERIAL_DEBUG_PNP
+	printk("Setup PNP port: port %x, irq %d, type %d\n",
 	       serial_req.port, serial_req.irq, serial_req.io_type);
 #endif
 
@@ -466,10 +465,11 @@ static char hex[] = "0123456789ABCDEF";
  * This function should vanish when 2.5 comes around and
  * we have pnpbios_module_init()
  */
-static void pnp_init(void)
+static int pnp_init(void)
 {
 	const struct pnpbios_device_id *id;
 	struct pci_dev *dev = NULL;
+	int nr = 0, rc = -ENODEV;
 
 #ifdef SERIAL_DEBUG_PNP
 	printk("Entered probe_serial_pnp()\n");
@@ -501,14 +501,19 @@ static void pnp_init(void)
 				break;
 
 		if (id->id[0])
-			pnp_init_one(dev, id, slot_name);
+			rc = pnp_init_one(dev, id, slot_name);
 		else
-			pnp_init_one(dev, NULL, slot_name);
+			rc = pnp_init_one(dev, NULL, slot_name);
+
+		if (rc == 0)
+			nr++;
 	}
 
 #ifdef SERIAL_DEBUG_PNP
 	printk("Leaving probe_serial_pnp() (probe finished)\n");
 #endif
+
+	return nr == 0 ? rc : 0;
 }
 
 static int __init serial8250_pnp_init(void)
@@ -519,8 +524,7 @@ static int __init serial8250_pnp_init(void)
 #endif
 		return -ENODEV;
 	}
-	pnp_init();
-	return 0;
+	return pnp_init();
 }
 
 static void __exit serial8250_pnp_exit(void)

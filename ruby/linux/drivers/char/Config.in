@@ -7,10 +7,10 @@ comment 'Character devices'
 if [ "$CONFIG_INPUT" = "y" ]; then
    bool 'Virtual terminal' CONFIG_VT
    if [ "$CONFIG_VT" = "y" ]; then
-      bool '  Support for console on virtual terminal' CONFIG_VT_CONSOLE
 #     if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
 #        bool '  ISO6429 bidirectional support (EXPERIMENTAL)' CONFIG_VT_BDSM
 #     fi
+      bool '  Support for console on virtual terminal' CONFIG_VT_CONSOLE
    fi
 fi
 
@@ -35,7 +35,6 @@ if [ "$CONFIG_UART" = "n" ]; then
       bool '  Support the Bell Technologies HUB6 card' CONFIG_HUB6
    fi
 fi
-
 bool 'Non-standard serial port support' CONFIG_SERIAL_NONSTANDARD
 if [ "$CONFIG_SERIAL_NONSTANDARD" = "y" ]; then
    tristate '  Computone IntelliPort Plus serial support' CONFIG_COMPUTONE
@@ -108,10 +107,6 @@ fi
 
 source drivers/i2c/Config.in
 
-#if [ "$CONFIG_ARM" = "y" ]; then
-#   source drivers/l3/Config.in
-#fi
-
 tristate 'QIC-02 tape support' CONFIG_QIC02_TAPE
 if [ "$CONFIG_QIC02_TAPE" != "n" ]; then
    bool '  Do you want runtime configuration for QIC-02' CONFIG_QIC02_DYNCONF
@@ -141,10 +136,11 @@ if [ "$CONFIG_WATCHDOG" != "n" ]; then
    tristate '  Berkshire Products PC Watchdog' CONFIG_PCWATCHDOG
    tristate '  Acquire SBC Watchdog Timer' CONFIG_ACQUIRE_WDT
    tristate '  Advantech SBC Watchdog Timer' CONFIG_ADVANTECH_WDT
-   if [ "$CONFIG_ARM" = "y" ]; then
-      dep_tristate '  DC21285 watchdog' CONFIG_21285_WATCHDOG $CONFIG_FOOTBRIDGE
-      dep_tristate '  NetWinder WB83C977 watchdog' CONFIG_977_WATCHDOG $CONFIG_ARCH_NETWINDER
-      dep_tristate '  SA1100 watchdog' CONFIG_SA1100_WATCHDOG $CONFIG_ARCH_SA1100
+   if [ "$CONFIG_FOOTBRIDGE" = "y" ]; then
+      tristate '  DC21285 watchdog' CONFIG_21285_WATCHDOG
+      if [ "$CONFIG_ARCH_NETWINDER" = "y" ]; then
+         tristate '  NetWinder WB83C977 watchdog' CONFIG_977_WATCHDOG
+      fi
    fi
    tristate '  Eurotech CPU-1220/1410 Watchdog Timer' CONFIG_EUROTECH_WDT
    tristate '  IB700 SBC Watchdog Timer' CONFIG_IB700_WDT
@@ -174,9 +170,6 @@ fi
 if [ "$CONFIG_OBSOLETE" = "y" -a "$CONFIG_ALPHA_BOOK1" = "y" ]; then
    bool 'Tadpole ANA H8 Support'  CONFIG_H8
 fi
-if [ "$CONFIG_ARCH_SA1100" = "y" ]; then
-   tristate 'SA1100 Real Time Clock' CONFIG_SA1100_RTC
-fi
 
 tristate 'Double Talk PC internal speech card support' CONFIG_DTLK
 tristate 'Siemens R3964 line discipline' CONFIG_R3964
@@ -195,7 +188,7 @@ endmenu
 
 dep_tristate '/dev/agpgart (AGP Support)' CONFIG_AGP $CONFIG_DRM_AGP
 if [ "$CONFIG_AGP" != "n" ]; then
-   bool '  Intel 440LX/BX/GX and I815/I830M/I840/I850 support' CONFIG_AGP_INTEL
+   bool '  Intel 440LX/BX/GX and I815/I820/I830M/I840/I845/I850/I860 support' CONFIG_AGP_INTEL
    bool '  Intel I810/I815/I830M (on-board) support' CONFIG_AGP_I810
    bool '  VIA chipset support' CONFIG_AGP_VIA
    bool '  AMD Irongate, 761, and 762 support' CONFIG_AGP_AMD

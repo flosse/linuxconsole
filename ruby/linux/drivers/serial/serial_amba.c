@@ -111,9 +111,6 @@ static struct tty_driver normal, callout;
  *        RTS  DTR
  *  UART0  7    6
  *  UART1  5    4
- *
- * We encode this bit information into port->driver_priv using the
- * following macros.
  */
 #define SC_CTRLC	(IO_ADDRESS(INTEGRATOR_SC_BASE) + INTEGRATOR_SC_CTRLC_OFFSET)
 #define SC_CTRLS	(IO_ADDRESS(INTEGRATOR_SC_BASE) + INTEGRATOR_SC_CTRLS_OFFSET)
@@ -123,59 +120,65 @@ static struct tty_driver normal, callout;
  */
 struct uart_amba_port {
 	struct uart_port	port;
-	u_int			dtr_mask;
-	u_int			rts_mask;
-	u_int			old_status;
+	unsigned int		dtr_mask;
+	unsigned int		rts_mask;
+	unsigned int		old_status;
 };
 
-static void ambauart_stop_tx(struct uart_port *port, u_int from_tty)
+static void ambauart_stop_tx(struct uart_port *port, unsigned int tty_stop)
+{
+	unsigned long flags;
+	unsigned int cr;
+
+	spin_lock_irqsave(&port->lock, flags);
+	cr = UART_GET_CR(port);
+	cr &= ~AMBA_UARTCR_TIE;
+	UART_PUT_CR(port, cr);
+	spin_unlock_irqrestore(&port->lock, flags);
+}
+
+static void ambauart_start_tx(struct uart_port *port, unsigned int tty_start)
 {
 	unsigned int cr;
 
 	cr = UART_GET_CR(port);
-	cr &= ~AMBA_UARTCR_TIE;
+	cr |= AMBA_UARTCR_TIE;
 	UART_PUT_CR(port, cr);
-}
-
-static void ambauart_start_tx(struct uart_port *port, u_int nonempty, u_int from_tty)
-{
-	if (nonempty) {
-		unsigned int cr;
-
-		cr = UART_GET_CR(port);
-		cr |= AMBA_UARTCR_TIE;
-		UART_PUT_CR(port, cr);
-	}
 }
 
 static void ambauart_stop_rx(struct uart_port *port)
 {
+	unsigned long flags;
 	unsigned int cr;
 
+	spin_lock_irqsave(&port->lock, flags);
 	cr = UART_GET_CR(port);
 	cr &= ~(AMBA_UARTCR_RIE | AMBA_UARTCR_RTIE);
 	UART_PUT_CR(port, cr);
+	spin_unlock_irqrestore(&port->lock, flags);
 }
 
 static void ambauart_enable_ms(struct uart_port *port)
 {
+	unsigned long flags;
 	unsigned int cr;
 
+	spin_lock_irqsave(&port->lock, flags);
 	cr = UART_GET_CR(port);
 	cr |= AMBA_UARTCR_MSIE;
 	UART_PUT_CR(port, cr);
+	spin_unlock_irqrestore(&port->lock, flags);
 }
 
 static void
 #ifdef SUPPORT_SYSRQ
-ambauart_rx_chars(struct uart_info *info, struct pt_regs *regs)
+ambauart_rx_chars(struct uart_port *port, struct pt_regs *regs)
 #else
-ambauart_rx_chars(struct uart_info *info)
+ambauart_rx_chars(struct uart_port *port)
 #endif
 {
-	struct tty_struct *tty = info->tty;
+	struct tty_struct *tty = port->info->tty;
 	unsigned int status, ch, rsr, max_count = 256;
-	struct uart_port *port = info->port;
 
 	status = UART_GET_FR(port);
 	while (UART_RX_DATA(status) && max_count--) {
@@ -202,7 +205,7 @@ ambauart_rx_chars(struct uart_info *info)
 			if (rsr & AMBA_UARTRSR_BE) {
 				rsr &= ~(AMBA_UARTRSR_FE | AMBA_UARTRSR_PE);
 				port->icount.brk++;
-				if (uart_handle_break(info, port->cons))
+				if (uart_handle_break(port))
 					goto ignore_char;
 			} else if (rsr & AMBA_UARTRSR_PE)
 				port->icount.parity++;
@@ -221,7 +224,7 @@ ambauart_rx_chars(struct uart_info *info)
 				*tty->flip.flag_buf_ptr = TTY_FRAME;
 		}
 
-		if (uart_handle_sysrq_char(info, ch, regs))
+		if (uart_handle_sysrq_char(port, ch, regs))
 			goto ignore_char;
 
 		if ((rsr & port->ignore_status_mask) == 0) {
@@ -247,9 +250,9 @@ ambauart_rx_chars(struct uart_info *info)
 	return;
 }
 
-static void ambauart_tx_chars(struct uart_info *info)
+static void ambauart_tx_chars(struct uart_port *port)
 {
-	struct uart_port *port = info->port;
+	struct circ_buf *xmit = &port->info->xmit;
 	int count;
 
 	if (port->x_char) {
@@ -258,34 +261,30 @@ static void ambauart_tx_chars(struct uart_info *info)
 		port->x_char = 0;
 		return;
 	}
-	if (port->xmit.head == port->xmit.tail
-	    || info->tty->stopped
-	    || info->tty->hw_stopped) {
+	if (uart_circ_empty(xmit) || uart_tx_stopped(port)) {
 		ambauart_stop_tx(port, 0);
 		return;
 	}
 
 	count = port->fifosize >> 1;
 	do {
-		UART_PUT_CHAR(port, port->xmit.buf[port->xmit.tail]);
-		port->xmit.tail = (port->xmit.tail + 1) & (UART_XMIT_SIZE - 1);
+		UART_PUT_CHAR(port, xmit->buf[xmit->tail]);
+		xmit->tail = (xmit->tail + 1) & (UART_XMIT_SIZE - 1);
 		port->icount.tx++;
-		if (port->xmit.head == port->xmit.tail)
+		if (uart_circ_empty(xmit))
 			break;
 	} while (--count > 0);
 
-	if (CIRC_CNT(port->xmit.head, port->xmit.tail, UART_XMIT_SIZE) <
-			WAKEUP_CHARS)
-		uart_event(info, EVT_WRITE_WAKEUP);
+	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
+		uart_event(port, EVT_WRITE_WAKEUP);
 
-	if (port->xmit.head == port->xmit.tail)
+	if (uart_circ_empty(xmit))
 		ambauart_stop_tx(port, 0);
 }
 
-static void ambauart_modem_status(struct uart_info *info)
+static void ambauart_modem_status(struct uart_port *port)
 {
-	struct uart_amba_port *uap = (struct uart_amba_port *)info->port;
-	struct uart_port *port = info->port;
+	struct uart_amba_port *uap = (struct uart_amba_port *)port;
 	unsigned int status, delta;
 
 	UART_PUT_ICR(&uap->port, 0);
@@ -299,49 +298,49 @@ static void ambauart_modem_status(struct uart_info *info)
 		return;
 
 	if (delta & AMBA_UARTFR_DCD)
-		uart_handle_dcd_change(info, status & AMBA_UARTFR_DCD);
+		uart_handle_dcd_change(&uap->port, status & AMBA_UARTFR_DCD);
 
 	if (delta & AMBA_UARTFR_DSR)
-		port->icount.dsr++;
+		uap->port.icount.dsr++;
 
 	if (delta & AMBA_UARTFR_CTS)
-		uart_handle_cts_change(info, status & AMBA_UARTFR_CTS);
+		uart_handle_cts_change(&uap->port, status & AMBA_UARTFR_CTS);
 
-	wake_up_interruptible(&info->delta_msr_wait);
+	wake_up_interruptible(&uap->port.info->delta_msr_wait);
 }
 
 static void ambauart_int(int irq, void *dev_id, struct pt_regs *regs)
 {
-	struct uart_info *info = dev_id;
+	struct uart_port *port = dev_id;
 	unsigned int status, pass_counter = AMBA_ISR_PASS_LIMIT;
 
-	status = UART_GET_INT_STATUS(info->port);
+	status = UART_GET_INT_STATUS(port);
 	do {
 		if (status & (AMBA_UARTIIR_RTIS | AMBA_UARTIIR_RIS))
 #ifdef SUPPORT_SYSRQ
-			ambauart_rx_chars(info, regs);
+			ambauart_rx_chars(port, regs);
 #else
-			ambauart_rx_chars(info);
+			ambauart_rx_chars(port);
 #endif
-		if (status & AMBA_UARTIIR_TIS)
-			ambauart_tx_chars(info);
 		if (status & AMBA_UARTIIR_MIS)
-			ambauart_modem_status(info);
+			ambauart_modem_status(port);
+		if (status & AMBA_UARTIIR_TIS)
+			ambauart_tx_chars(port);
 
 		if (pass_counter-- == 0)
 			break;
 
-		status = UART_GET_INT_STATUS(info->port);
+		status = UART_GET_INT_STATUS(port);
 	} while (status & (AMBA_UARTIIR_RTIS | AMBA_UARTIIR_RIS |
 			   AMBA_UARTIIR_TIS));
 }
 
-static u_int ambauart_tx_empty(struct uart_port *port)
+static unsigned int ambauart_tx_empty(struct uart_port *port)
 {
 	return UART_GET_FR(port) & AMBA_UARTFR_BUSY ? 0 : TIOCSER_TEMT;
 }
 
-static u_int ambauart_get_mctrl(struct uart_port *port)
+static unsigned int ambauart_get_mctrl(struct uart_port *port)
 {
 	unsigned int result = 0;
 	unsigned int status;
@@ -357,15 +356,15 @@ static u_int ambauart_get_mctrl(struct uart_port *port)
 	return result;
 }
 
-static void ambauart_set_mctrl(struct uart_port *port, u_int mctrl)
+static void ambauart_set_mctrl(struct uart_port *port, unsigned int mctrl)
 {
 	struct uart_amba_port *uap = (struct uart_amba_port *)port;
-	u_int ctrls = 0, ctrlc = 0;
+	unsigned int ctrls = 0, ctrlc = 0;
 
 	if (mctrl & TIOCM_RTS)
 		ctrlc |= uap->rts_mask;
 	else
-		ctrls |= uap->rts_mask; 
+		ctrls |= uap->rts_mask;
 
 	if (mctrl & TIOCM_DTR)
 		ctrlc |= uap->dtr_mask;
@@ -378,17 +377,20 @@ static void ambauart_set_mctrl(struct uart_port *port, u_int mctrl)
 
 static void ambauart_break_ctl(struct uart_port *port, int break_state)
 {
+	unsigned long flags;
 	unsigned int lcr_h;
 
+	spin_lock_irqsave(&port->lock, flags);
 	lcr_h = UART_GET_LCRH(port);
 	if (break_state == -1)
 		lcr_h |= AMBA_UARTLCR_H_BRK;
 	else
 		lcr_h &= ~AMBA_UARTLCR_H_BRK;
 	UART_PUT_LCRH(port, lcr_h);
+	spin_unlock_irqrestore(&port->lock, flags);
 }
 
-static int ambauart_startup(struct uart_port *port, struct uart_info *info)
+static int ambauart_startup(struct uart_port *port)
 {
 	struct uart_amba_port *uap = (struct uart_amba_port *)port;
 	int retval;
@@ -396,7 +398,7 @@ static int ambauart_startup(struct uart_port *port, struct uart_info *info)
 	/*
 	 * Allocate the IRQ
 	 */
-	retval = request_irq(port->irq, ambauart_int, 0, "amba", info);
+	retval = request_irq(port->irq, ambauart_int, 0, "amba", port);
 	if (retval)
 		return retval;
 
@@ -414,12 +416,12 @@ static int ambauart_startup(struct uart_port *port, struct uart_info *info)
 	return 0;
 }
 
-static void ambauart_shutdown(struct uart_port *port, struct uart_info *info)
+static void ambauart_shutdown(struct uart_port *port)
 {
 	/*
 	 * Free the interrupt
 	 */
-	free_irq(port->irq, info);
+	free_irq(port->irq, port);
 
 	/*
 	 * disable all interrupts, disable the port
@@ -431,20 +433,27 @@ static void ambauart_shutdown(struct uart_port *port, struct uart_info *info)
 		~(AMBA_UARTLCR_H_BRK | AMBA_UARTLCR_H_FEN));
 }
 
-static void ambauart_change_speed(struct uart_port *port, u_int cflag, u_int iflag, u_int quot)
+static void
+ambauart_change_speed(struct uart_port *port, unsigned int cflag,
+		      unsigned int iflag, unsigned int quot)
 {
-	u_int lcr_h, old_cr;
+	unsigned int lcr_h, old_cr;
 	unsigned long flags;
 
-#if DEBUG
-	printk("ambauart_set_cflag(0x%x) called\n", cflag);
-#endif
 	/* byte size and parity */
 	switch (cflag & CSIZE) {
-	case CS5: lcr_h = AMBA_UARTLCR_H_WLEN_5; break;
-	case CS6: lcr_h = AMBA_UARTLCR_H_WLEN_6; break;
-	case CS7: lcr_h = AMBA_UARTLCR_H_WLEN_7; break;
-	default:  lcr_h = AMBA_UARTLCR_H_WLEN_8; break; // CS8
+	case CS5:
+		lcr_h = AMBA_UARTLCR_H_WLEN_5;
+		break;
+	case CS6:
+		lcr_h = AMBA_UARTLCR_H_WLEN_6;
+		break;
+	case CS7:
+		lcr_h = AMBA_UARTLCR_H_WLEN_7;
+		break;
+	default: // CS8
+		lcr_h = AMBA_UARTLCR_H_WLEN_8;
+		break;
 	}
 	if (cflag & CSTOPB)
 		lcr_h |= AMBA_UARTLCR_H_STP2;
@@ -485,11 +494,10 @@ static void ambauart_change_speed(struct uart_port *port, u_int cflag, u_int ifl
 		port->ignore_status_mask |= UART_DUMMY_RSR_RX;
 
 	/* first, disable everything */
-	save_flags(flags); cli();
+	spin_lock_irqsave(&port->lock, flags);
 	old_cr = UART_GET_CR(port) & ~AMBA_UARTCR_MSIE;
 
-	if ((port->flags & ASYNC_HARDPPS_CD) ||
-	    (cflag & CRTSCTS) || !(cflag & CLOCAL))
+	if (UART_ENABLE_MS(port, cflag))
 		old_cr |= AMBA_UARTCR_MSIE;
 
 	UART_PUT_CR(port, 0);
@@ -507,7 +515,7 @@ static void ambauart_change_speed(struct uart_port *port, u_int cflag, u_int ifl
 	UART_PUT_LCRH(port, lcr_h);
 	UART_PUT_CR(port, old_cr);
 
-	restore_flags(flags);
+	spin_unlock_irqrestore(&port->lock, flags);
 }
 
 static const char *ambauart_type(struct uart_port *port)
@@ -586,9 +594,9 @@ static struct uart_amba_port amba_ports[UART_NR] = {
 			irq:		IRQ_UARTINT0,
 			uartclk:	14745600,
 			fifosize:	16,
-			unused:		{ 4, 5 }, /*driver_priv:	PORT_CTRLS(5, 4), */
 			ops:		&amba_pops,
 			flags:		ASYNC_BOOT_AUTOCONF,
+			line:		0,
 		},
 		dtr_mask:	1 << 5,
 		rts_mask:	1 << 4,
@@ -601,9 +609,9 @@ static struct uart_amba_port amba_ports[UART_NR] = {
 			irq:		IRQ_UARTINT1,
 			uartclk:	14745600,
 			fifosize:	16,
-			unused:		{ 6, 7 }, /*driver_priv:	PORT_CTRLS(7, 6), */
 			ops:		&amba_pops,
 			flags:		ASYNC_BOOT_AUTOCONF,
+			line:		1,
 		},
 		dtr_mask:	1 << 7,
 		rts_mask:	1 << 6,
@@ -611,32 +619,9 @@ static struct uart_amba_port amba_ports[UART_NR] = {
 };
 
 #ifdef CONFIG_SERIAL_AMBA_CONSOLE
-#ifdef used_and_not_const_char_pointer
-static int ambauart_console_read(struct uart_port *port, char *s, u_int count)
-{
-	unsigned int status;
-	int c;
-#if DEBUG
-	printk("ambauart_console_read() called\n");
-#endif
 
-	c = 0;
-	while (c < count) {
-		status = UART_GET_FR(port);
-		if (UART_RX_DATA(status)) {
-			*s++ = UART_GET_CHAR(port);
-			c++;
-		} else {
-			// nothing more to get, return
-			return c;
-		}
-	}
-	// return the count
-	return c;
-}
-#endif
-
-static void ambauart_console_write(struct console *co, const char *s, u_int count)
+static void
+ambauart_console_write(struct console *co, const char *s, unsigned int count)
 {
 	struct uart_port *port = &amba_ports[co->index].port;
 	unsigned int status, old_cr;
@@ -676,25 +661,15 @@ static void ambauart_console_write(struct console *co, const char *s, u_int coun
 
 static kdev_t ambauart_console_device(struct console *co)
 {
-	return MKDEV(SERIAL_AMBA_MAJOR, SERIAL_AMBA_MINOR + co->index);
-}
-
-static int ambauart_console_wait_key(struct console *co)
-{
-	struct uart_port *port = &amba_ports[co->index].port;
-	unsigned int status;
-
-	do {
-		status = UART_GET_FR(port);
-	} while (!UART_RX_DATA(status));
-	return UART_GET_CHAR(port);
+	return mk_kdev(SERIAL_AMBA_MAJOR, SERIAL_AMBA_MINOR + co->index);
 }
 
 static void __init
-ambauart_console_get_options(struct uart_port *port, int *baud, int *parity, int *bits)
+ambauart_console_get_options(struct uart_port *port, int *baud,
+			     int *parity, int *bits)
 {
 	if (UART_GET_CR(port) & AMBA_UARTCR_UARTEN) {
-		u_int lcr_h, quot;
+		unsigned int lcr_h, quot;
 		lcr_h = UART_GET_LCRH(port);
 
 		*parity = 'n';
@@ -728,14 +703,10 @@ static int __init ambauart_console_setup(struct console *co, char *options)
 	 * if so, search for the first available port that does have
 	 * console support.
 	 */
-#if 0
-	port = uart_get_console(amba_ports, UART_NR, co);
-#else
 	if (co->index >= UART_NR)
 		co->index = 0;
 	port = &amba_ports[co->index].port;
-#endif
-	
+
 	if (options)
 		uart_parse_options(options, &baud, &parity, &bits, &flow);
 	else
@@ -747,11 +718,7 @@ static int __init ambauart_console_setup(struct console *co, char *options)
 static struct console amba_console = {
 	name:		"ttyAM",
 	write:		ambauart_console_write,
-#ifdef used_and_not_const_char_pointer
-	read:		ambauart_console_read,
-#endif
 	device:		ambauart_console_device,
-	wait_key:	ambauart_console_wait_key,
 	setup:		ambauart_console_setup,
 	flags:		CON_PRINTBUFFER,
 	index:		-1,
@@ -769,6 +736,7 @@ void __init ambauart_console_init(void)
 
 static struct uart_driver amba_reg = {
 	owner:			THIS_MODULE,
+	driver_name:		"ttyAM",
 	normal_major:		SERIAL_AMBA_MAJOR,
 #ifdef CONFIG_DEVFS_FS
 	normal_name:		"ttyAM%d",

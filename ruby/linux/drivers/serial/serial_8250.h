@@ -15,6 +15,8 @@
  *  $Id$
  */
 
+#include <linux/config.h>
+
 struct serial8250_probe {
 	struct module	*owner;
 	int		(*pci_init_one)(struct pci_dev *dev);
@@ -24,7 +26,7 @@ struct serial8250_probe {
 
 int serial8250_register_probe(struct serial8250_probe *probe);
 void serial8250_unregister_probe(struct serial8250_probe *probe);
-void serial8250_get_irq_map(int *map);
+void serial8250_get_irq_map(unsigned int *map);
 
 struct old_serial_port {
 	unsigned int uart;
@@ -34,55 +36,7 @@ struct old_serial_port {
 	unsigned int flags;
 };
 
-#undef SERIAL_PARANOIA_CHECK
-#define CONFIG_SERIAL_NOPAUSE_IO
-#define SERIAL_DO_RESTART
-
-#ifdef CONFIG_PCI
-#ifndef CONFIG_SERIAL_SHARE_IRQ
-#define CONFIG_SERIAL_SHARE_IRQ
-#endif
-#ifndef CONFIG_SERIAL_MANY_PORTS
-#define CONFIG_SERIAL_MANY_PORTS
-#endif
-#endif
-
-#ifdef __ISAPNP__
-#ifndef ENABLE_SERIAL_PNP
-#define ENABLE_SERIAL_PNP
-#endif
-#endif
-
-/* Set of debugging defines */
-
-#undef SERIAL_DEBUG_INTR
 #undef SERIAL_DEBUG_PCI
-#undef SERIAL_DEBUG_AUTOCONF
-
-/* Sanity checks */
-
-#ifdef CONFIG_SERIAL_MULTIPORT
-#ifndef CONFIG_SERIAL_SHARE_IRQ
-#define CONFIG_SERIAL_SHARE_IRQ
-#endif
-#endif
-
-#ifdef CONFIG_HUB6
-#ifndef CONFIG_SERIAL_MANY_PORTS
-#define CONFIG_SERIAL_MANY_PORTS
-#endif
-#ifndef CONFIG_SERIAL_SHARE_IRQ
-#define CONFIG_SERIAL_SHARE_IRQ
-#endif
-#endif
-
-#ifdef MODULE
-#undef CONFIG_SERIAL_CONSOLE
-#endif
-
-#define CONFIG_SERIAL_RSA
-
-#define RS_ISR_PASS_LIMIT 256
 
 #if defined(__i386__) && (defined(CONFIG_M386) || defined(CONFIG_M486))
 #define SERIAL_INLINE
@@ -98,5 +52,3 @@ struct old_serial_port {
 #define PROBE_ANY	(~0)
 
 #define HIGH_BITS_OFFSET ((sizeof(long)-sizeof(int))*8)
-
-

@@ -53,6 +53,10 @@
 #include <asm/system.h>
 #include <asm/uaccess.h>
 
+#if defined(CONFIG_SERIAL_CLPS711X_CONSOLE) && defined(CONFIG_MAGIC_SYSRQ)
+#define SUPPORT_SYSRQ
+#endif
+
 #include <linux/serial_core.h>
 
 #include <asm/hardware/clps7111.h>
@@ -61,12 +65,12 @@
 
 #define SERIAL_CLPS711X_NAME	"ttyCL"
 #define SERIAL_CLPS711X_MAJOR	204
-#define SERIAL_CLPS711X_MINOR	40	
+#define SERIAL_CLPS711X_MINOR	40
 #define SERIAL_CLPS711X_NR	UART_NR
 
 #define CALLOUT_CLPS711X_NAME	"cuacl"
 #define CALLOUT_CLPS711X_MAJOR	205
-#define CALLOUT_CLPS711X_MINOR	40	
+#define CALLOUT_CLPS711X_MINOR	40
 #define CALLOUT_CLPS711X_NR	UART_NR
 
 static struct tty_driver normal, callout;
@@ -84,15 +88,16 @@ static struct tty_driver normal, callout;
 
 #define UART_ANY_ERR		(UARTDR_FRMERR | UARTDR_PARERR | UARTDR_OVERR)
 
-static void clps711xuart_stop_tx(struct uart_port *port, u_int from_tty)
+static void
+clps711xuart_stop_tx(struct uart_port *port, unsigned int tty_stop)
 {
 	disable_irq(TX_IRQ(port));
 }
 
-static void clps711xuart_start_tx(struct uart_port *port, u_int nonempty, u_int from_tty)
+static void
+clps711xuart_start_tx(struct uart_port *port, unsigned int tty_start)
 {
-	if (nonempty)
-		enable_irq(TX_IRQ(port));
+	enable_irq(TX_IRQ(port));
 }
 
 static void clps711xuart_stop_rx(struct uart_port *port)
@@ -104,41 +109,11 @@ static void clps711xuart_enable_ms(struct uart_port *port)
 {
 }
 
-#if 0
-static void ambauart_modem_status(struct uart_info *info)
-{
-	unsigned int status, delta;
-	struct uart_icount *icount = &info->port->icount;
-
-	UART_PUT_ICR(info->port, 0);
-
-	status = UART_GET_FR(info->port) & AMBA_UARTFR_MODEM_ANY;
-
-	delta = status ^ info->port->old_status;
-	info->port->old_status = status;
-
-	if (!delta)
-		return;
-
-	if (delta & AMBA_UARTFR_DCD)
-		uart_handle_dcd_change(info, status & AMBA_UARTFR_DCD);
-
-	if (delta & AMBA_UARTFR_DSR)
-		icount->dsr++;
-
-	if (delta & AMBA_UARTFR_CTS)
-		uart_handle_cts_change(info, status & AMBA_UARTFR_CTS);
-
-	wake_up_interruptible(&info->delta_msr_wait);
-}
-#endif
-
 static void clps711xuart_int_rx(int irq, void *dev_id, struct pt_regs *regs)
 {
-	struct uart_info *info = dev_id;
-	struct tty_struct *tty = info->tty;
+	struct uart_port *port = dev_id;
+	struct tty_struct *tty = port->info->tty;
 	unsigned int status, ch, flg, ignored = 0;
-	struct uart_port *port = info->port;
 
 	status = clps_readl(SYSFLG(port));
 	while (!(status & SYSFLG_URXFE)) {
@@ -157,7 +132,7 @@ static void clps711xuart_int_rx(int irq, void *dev_id, struct pt_regs *regs)
 		if (ch & UART_ANY_ERR)
 			goto handle_error;
 
-		if (uart_handle_sysrq_char(info, ch, regs))
+		if (uart_handle_sysrq_char(port, ch, regs))
 			goto ignore_char;
 
 	error_return:
@@ -167,11 +142,11 @@ static void clps711xuart_int_rx(int irq, void *dev_id, struct pt_regs *regs)
 	ignore_char:
 		status = clps_readl(SYSFLG(port));
 	}
-out:
+ out:
 	tty_flip_buffer_push(tty);
 	return;
 
-handle_error:
+ handle_error:
 	if (ch & UARTDR_PARERR)
 		port->icount.parity++;
 	else if (ch & UARTDR_FRMERR)
@@ -205,15 +180,15 @@ handle_error:
 		flg = TTY_OVERRUN;
 	}
 #ifdef SUPPORT_SYSRQ
-	info->sysrq = 0;
+	port->sysrq = 0;
 #endif
 	goto error_return;
 }
 
 static void clps711xuart_int_tx(int irq, void *dev_id, struct pt_regs *regs)
 {
-	struct uart_info *info = dev_id;
-	struct uart_port *port = info->port;
+	struct uart_port *port = dev_id;
+	struct circ_buf *xmit = &port->info->xmit;
 	int count;
 
 	if (port->x_char) {
@@ -222,38 +197,34 @@ static void clps711xuart_int_tx(int irq, void *dev_id, struct pt_regs *regs)
 		port->x_char = 0;
 		return;
 	}
-	if (port->xmit.head == port->xmit.tail
-	    || info->tty->stopped
-	    || info->tty->hw_stopped) {
+	if (uart_circ_empty(xmit) || uart_tx_stopped(port)) {
 		clps711xuart_stop_tx(port, 0);
 		return;
 	}
 
 	count = port->fifosize >> 1;
 	do {
-		clps_writel(port->xmit.buf[port->xmit.tail], UARTDR(port));
-		port->xmit.tail = (port->xmit.tail + 1) & (UART_XMIT_SIZE - 1);
+		clps_writel(xmit->buf[xmit->tail], UARTDR(port));
+		xmit->tail = (xmit->tail + 1) & (UART_XMIT_SIZE - 1);
 		port->icount.tx++;
-		if (port->xmit.head == port->xmit.tail)
+		if (uart_circ_empty(xmit))
 			break;
 	} while (--count > 0);
 
-	if (CIRC_CNT(port->xmit.head,
-		     port->xmit.tail,
-		     UART_XMIT_SIZE) < WAKEUP_CHARS)
-		uart_event(info, EVT_WRITE_WAKEUP);
+	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
+		uart_event(port, EVT_WRITE_WAKEUP);
 
-	if (port->xmit.head == port->xmit.tail)
+	if (uart_circ_empty(xmit))
 		clps711xuart_stop_tx(port, 0);
 }
 
-static u_int clps711xuart_tx_empty(struct uart_port *port)
+static unsigned int clps711xuart_tx_empty(struct uart_port *port)
 {
-	u_int status = clps_readl(SYSFLG(port));
+	unsigned int status = clps_readl(SYSFLG(port));
 	return status & SYSFLG_UBUSY ? 0 : TIOCSER_TEMT;
 }
 
-static u_int clps711xuart_get_mctrl(struct uart_port *port)
+static unsigned int clps711xuart_get_mctrl(struct uart_port *port)
 {
 	unsigned int port_addr;
 	unsigned int result = 0;
@@ -273,43 +244,45 @@ static u_int clps711xuart_get_mctrl(struct uart_port *port)
 	return result;
 }
 
-static void clps711xuart_set_mctrl_null(struct uart_port *port, u_int mctrl)
+static void
+clps711xuart_set_mctrl_null(struct uart_port *port, unsigned int mctrl)
 {
 }
 
 static void clps711xuart_break_ctl(struct uart_port *port, int break_state)
 {
+	unsigned long flags;
 	unsigned int ubrlcr;
 
+	spin_lock_irqsave(&port->lock, flags);
 	ubrlcr = clps_readl(UBRLCR(port));
 	if (break_state == -1)
 		ubrlcr |= UBRLCR_BREAK;
 	else
 		ubrlcr &= ~UBRLCR_BREAK;
 	clps_writel(ubrlcr, UBRLCR(port));
+	spin_unlock_irqrestore(&port->lock, flags);
 }
 
-static int clps711xuart_startup(struct uart_port *port, struct uart_info *info)
+static int clps711xuart_startup(struct uart_port *port)
 {
-	u_int syscon;
+	unsigned int syscon;
 	int retval;
 
 	/*
 	 * Allocate the IRQs
 	 */
 	retval = request_irq(TX_IRQ(port), clps711xuart_int_tx, 0,
-			     "clps711xuart_tx", info);
+			     "clps711xuart_tx", port);
 	if (retval)
 		return retval;
 
 	retval = request_irq(RX_IRQ(port), clps711xuart_int_rx, 0,
-			     "clps711xuart_rx", info);
+			     "clps711xuart_rx", port);
 	if (retval) {
-		free_irq(TX_IRQ(port), info);
+		free_irq(TX_IRQ(port), port);
 		return retval;
 	}
-
-	port->ops->set_mctrl(port, info->mctrl);
 
 	/*
 	 * enable the port
@@ -321,15 +294,15 @@ static int clps711xuart_startup(struct uart_port *port, struct uart_info *info)
 	return 0;
 }
 
-static void clps711xuart_shutdown(struct uart_port *port, struct uart_info *info)
+static void clps711xuart_shutdown(struct uart_port *port)
 {
-	u_int ubrlcr, syscon;
+	unsigned int ubrlcr, syscon;
 
 	/*
 	 * Free the interrupt
 	 */
-	free_irq(TX_IRQ(port), info);	/* TX interrupt */
-	free_irq(RX_IRQ(port), info);	/* RX interrupt */
+	free_irq(TX_IRQ(port), port);	/* TX interrupt */
+	free_irq(RX_IRQ(port), port);	/* RX interrupt */
 
 	/*
 	 * disable the port
@@ -346,21 +319,27 @@ static void clps711xuart_shutdown(struct uart_port *port, struct uart_info *info
 	clps_writel(ubrlcr, UBRLCR(port));
 }
 
-static void clps711xuart_change_speed(struct uart_port *port, u_int cflag, u_int iflag, u_int quot)
+static void
+clps711xuart_change_speed(struct uart_port *port, unsigned int cflag,
+			  unsigned int iflag, unsigned int quot)
 {
-	u_int ubrlcr;
+	unsigned int ubrlcr;
 	unsigned long flags;
 
-#if DEBUG
-	printk("clps711xuart_change_speed(cflag=0x%x, iflag=0x%x, quot=%d) called\n",
-		cflag, iflag, quot);
-#endif
 	/* byte size and parity */
 	switch (cflag & CSIZE) {
-	case CS5: ubrlcr = UBRLCR_WRDLEN5; break;
-	case CS6: ubrlcr = UBRLCR_WRDLEN6; break;
-	case CS7: ubrlcr = UBRLCR_WRDLEN7; break;
-	default:  ubrlcr = UBRLCR_WRDLEN8; break; // CS8
+	case CS5:
+		ubrlcr = UBRLCR_WRDLEN5;
+		break;
+	case CS6:
+		ubrlcr = UBRLCR_WRDLEN6;
+		break;
+	case CS7:
+		ubrlcr = UBRLCR_WRDLEN7;
+		break;
+	default: // CS8
+		ubrlcr = UBRLCR_WRDLEN8;
+		break;
 	}
 	if (cflag & CSTOPB)
 		ubrlcr |= UBRLCR_XSTOP;
@@ -375,8 +354,6 @@ static void clps711xuart_change_speed(struct uart_port *port, u_int cflag, u_int
 	port->read_status_mask = UARTDR_OVERR;
 	if (iflag & INPCK)
 		port->read_status_mask |= UARTDR_PARERR | UARTDR_FRMERR;
-//	if (iflag & (BRKINT | PARMRK))
-//		port->read_status_mask |= AMBA_UARTRSR_BE;
 
 	/*
 	 * Characters to ignore
@@ -385,7 +362,6 @@ static void clps711xuart_change_speed(struct uart_port *port, u_int cflag, u_int
 	if (iflag & IGNPAR)
 		port->ignore_status_mask |= UARTDR_FRMERR | UARTDR_PARERR;
 	if (iflag & IGNBRK) {
-//		port->ignore_status_mask |= AMBA_UARTRSR_BE;
 		/*
 		 * If we're ignoring parity and break indicators,
 		 * ignore overruns to (for real raw support).
@@ -397,11 +373,11 @@ static void clps711xuart_change_speed(struct uart_port *port, u_int cflag, u_int
 	quot -= 1;
 
 	/* first, disable everything */
-	save_flags(flags); cli();
+	spin_lock_irqsave(&port->lock, flags);
 
 	clps_writel(ubrlcr | quot, UBRLCR(port));
 
-	restore_flags(flags);
+	spin_unlock_irqrestore(&port->lock, flags);
 }
 
 static const char *clps711xuart_type(struct uart_port *port)
@@ -465,38 +441,6 @@ static struct uart_port clps711x_ports[UART_NR] = {
 };
 
 #ifdef CONFIG_SERIAL_CLPS711X_CONSOLE
-
-#ifdef used_and_not_const_char_pointer
-/*
- * This code is currently never used; console->read is never called.
- * Therefore, although we have an implementation, we don't use it.
- * FIXME: the "const char *s" should be fixed to "char *s" some day.
- * (when the definition in include/linux/console.h is also fixed)
- */
-static int clps711xuart_console_read(struct uart_port *port, char *s, u_int count)
-{
-	u_int status;
-	int c;
-#if DEBUG
-	printk("clps711xuart_console_read() called\n");
-#endif
-
-	c = 0;
-	while (c < count) {
-		status = clps_readl(SYSFLG(port));
-		if (status & SYSFLG_URXFE) {
-			// nothing more to get, return
-			return c;
-		} else {
-			*s++ = clps_readl(UARTDR(port));
-			c++;
-		}
-	}
-	// return the count
-	return c;
-}
-#endif
-
 /*
  *	Print a string to the serial port trying not to disturb
  *	any possible real use of the port...
@@ -505,7 +449,9 @@ static int clps711xuart_console_read(struct uart_port *port, char *s, u_int coun
  *
  *	Note that this is called with interrupts already disabled
  */
-static void clps711xuart_console_write(struct console *co, const char *s, u_int count)
+static void
+clps711xuart_console_write(struct console *co, const char *s,
+			   unsigned int count)
 {
 	struct uart_port *port = clps711x_ports + co->index;
 	unsigned int status, syscon;
@@ -546,39 +492,15 @@ static void clps711xuart_console_write(struct console *co, const char *s, u_int 
 
 static kdev_t clps711xuart_console_device(struct console *co)
 {
-	return MKDEV(SERIAL_CLPS711X_MAJOR, SERIAL_CLPS711X_MINOR + co->index);
-}
-
-/*
- *	Receive character from the serial port
- *	  what about interrupts?
- */
-static int clps711xuart_console_wait_key(struct console *co)
-{
-	struct uart_port *port = clps711x_ports + co->index;
-	u_int status, syscon, ch;
-
-	/*
-	 *	Ensure that the port is enabled.
-	 */
-	syscon = clps_readl(SYSCON(port));
-	clps_writel(syscon | SYSCON_UARTEN, SYSCON(port));
-
-	do {
-		status = clps_readl(SYSFLG(port));
-	} while (status & SYSFLG_URXFE);
-	ch = clps_readl(UARTDR(port)) & 0xff;
-
-	clps_writel(syscon, SYSCON(port));
-
-	return ch;
+	return mk_kdev(SERIAL_CLPS711X_MAJOR, SERIAL_CLPS711X_MINOR + co->index);
 }
 
 static void __init
-clps711xuart_console_get_options(struct uart_port *port, int *baud, int *parity, int *bits)
+clps711xuart_console_get_options(struct uart_port *port, int *baud,
+				 int *parity, int *bits)
 {
 	if (clps_readl(SYSCON(port)) & SYSCON_UARTEN) {
-		u_int ubrlcr, quot;
+		unsigned int ubrlcr, quot;
 
 		ubrlcr = clps_readl(UBRLCR(port));
 
@@ -626,11 +548,7 @@ static int __init clps711xuart_console_setup(struct console *co, char *options)
 static struct console clps711x_console = {
 	name:		SERIAL_CLPS711X_NAME,
 	write:		clps711xuart_console_write,
-#ifdef used_and_not_const_char_pointer
-	read:		clps711xuart_console_read,
-#endif
 	device:		clps711xuart_console_device,
-	wait_key:	clps711xuart_console_wait_key,
 	setup:		clps711xuart_console_setup,
 	flags:		CON_PRINTBUFFER,
 	index:		-1,
@@ -647,6 +565,7 @@ void __init clps711xuart_console_init(void)
 #endif
 
 static struct uart_driver clps711x_reg = {
+	driver_name:		"ttyCL",
 #ifdef CONFIG_DEVFS_FS
 	normal_name:		SERIAL_CLPS711X_NAME,
 	callout_name:		CALLOUT_CLPS711X_NAME,

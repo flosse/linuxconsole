@@ -21,15 +21,15 @@ obj-y	 += mem.o tty_io.o n_tty.o tty_ioctl.o raw.o pty.o misc.o random.o
 # All of the (potential) objects that export symbols.
 # This list comes from 'grep -l EXPORT_SYMBOL *.[hc]'.
 
-export-objs     :=	vt.o keyboard.o sysrq.o misc.o pty.o random.o \
-			selection.o serial.o sonypi.o tty_io.o tty_ioctl.o \
-			generic_serial.o 
+export-objs     :=	vt.o keyboard.o sysrq.o \
+			misc.o pty.o random.o selection.o serial.o \
+			sonypi.o tty_io.o tty_ioctl.o generic_serial.o
 
 mod-subdirs	:=	ftape drm pcmcia
 
 list-multi	:=	
 
-SERIAL   =serial.o
+SERIAL   = serial.o
 
 ifeq ($(CONFIG_DECSTATION),y)
   SERIAL   = decserial.o
@@ -81,7 +81,6 @@ obj-$(CONFIG_APPLICOM) += applicom.o
 obj-$(CONFIG_SONYPI) += sonypi.o
 obj-$(CONFIG_RTC) += rtc.o
 obj-$(CONFIG_EFI_RTC) += efirtc.o
-obj-$(CONFIG_SA1100_RTC) += sa1100-rtc.o
 ifeq ($(CONFIG_PPC),)
   obj-$(CONFIG_NVRAM) += nvram.o
 endif
@@ -126,18 +125,11 @@ obj-$(CONFIG_I810_TCO) += i810-tco.o
 obj-$(CONFIG_MACHZ_WDT) += machzwd.o
 obj-$(CONFIG_SH_WDT) += shwdt.o
 obj-$(CONFIG_EUROTECH_WDT) += eurotechwdt.o
-obj-$(CONFIG_SA1100_WATCHDOG) += sa1100_wdt.o
 obj-$(CONFIG_SOFT_WATCHDOG) += softdog.o
 
 subdir-$(CONFIG_MWAVE) += mwave
 ifeq ($(CONFIG_MWAVE),y)
   obj-y += mwave/mwave.o
-endif
-
-ifeq ($(CONFIG_ARCH_ACORN),y)
-mod-subdirs    += ../acorn/char
-subdir-y       += ../acorn/char
-obj-y          += ../acorn/char/acorn-char.o
 endif
 
 include $(TOPDIR)/Rules.make

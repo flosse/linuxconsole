@@ -16,3 +16,6 @@
 	  default struct uart_port. From my experience with the fbdev layer
  	  this is a bad idea and will lead to really bad code. This must 
 	  change.
+2002-3-14  James Simmons <jsimmons@user.sf.net>
+	* Grabbed RMK latest work and placed it into CVS. I haven't had time
+	  to properly modify it for the input api.

@@ -235,7 +235,7 @@ static struct {
 #ifdef CONFIG_FB_SIS
 	{ "sisfb", sisfb_init, sisfb_setup },
 #endif
-	
+
 	/*
 	 * Generic drivers that are used as fallbacks
 	 * 
@@ -311,9 +311,6 @@ static struct {
 #endif
 #ifdef CONFIG_FB_PVR2
        	{ "pvr2", pvr2fb_init, pvr2fb_setup },
-#endif
-#ifdef CONFIG_FB_VOODOO1
-	{ "sstfb", sstfb_init, sstfb_setup },
 #endif
 #ifdef CONFIG_FB_SED1345
 	{ "sed1345fb", sed1345fb_init, NULL },
