@@ -237,7 +237,7 @@ static void update_user_maps(struct vt_struct *vt)
 	
 	for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
 		struct vc_data *vc = vt->vcs.vc_cons[i];	
-		if (!vc_cons_allocated(i))
+		if (!vc)
 			continue;
 		p = (struct uni_pagedir *)*vc->vc_uni_pagedir_loc;
 		if (p && p != q) {
@@ -375,14 +375,15 @@ void con_free_unimap(struct vc_data *vc)
   
 static int con_unify_unimap(struct vc_data *vc, struct uni_pagedir *p)
 {
-	int i, j, k;
 	struct uni_pagedir *q;
+	struct vc_data *tmp;
+	int i, j, k;
 	
 	for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
-		if (!vc_cons_allocated(i))
+		tmp = vc->display_fg->vcs.vc_cons[i];
+		if (!tmp)
 			continue;
-		vc = vc->display_fg->vcs.vc_cons[i];
-		q = (struct uni_pagedir *)*vc->vc_uni_pagedir_loc;
+		q = (struct uni_pagedir *)*tmp->vc_uni_pagedir_loc;
 		if (!q || q == p || q->sum != p->sum)
 			continue;
 		for (j = 0; j < 32; j++) {
@@ -405,7 +406,7 @@ static int con_unify_unimap(struct vc_data *vc, struct uni_pagedir *p)
 		}
 		if (j == 32) {
 			q->refcount++;
-			*vc->vc_uni_pagedir_loc = (unsigned long)q;
+			*tmp->vc_uni_pagedir_loc = (unsigned long)q;
 			con_release_unimap(p);
 			kfree(p);
 			return 1;
@@ -577,7 +578,7 @@ int con_copy_unimap(struct vc_data *dconp, struct vc_data *sconp)
 {
 	struct uni_pagedir *q;
 	
-	if (!vc_cons_allocated(sconp->vc_num) || !*sconp->vc_uni_pagedir_loc)
+	if (!sconp || !*sconp->vc_uni_pagedir_loc)
 		return -EINVAL;
 	if (*dconp->vc_uni_pagedir_loc == *sconp->vc_uni_pagedir_loc)
 		return 0;
@@ -664,11 +665,13 @@ conv_uni_to_pc(struct vc_data *vc, long ucs)
  * initialized.  It must be possible to call kmalloc(..., GFP_KERNEL)
  * from this function, hence the call from sys_setup.
  */
-void __init console_map_init(struct vt_struct *vt)
+void __init console_map_init(void)
 {
-	int i;
-	
-	for (i = 0; i < MAX_NR_USER_CONSOLES; i++)
-		if (vc_cons_allocated(i) && !*vt->vcs.vc_cons[i]->vc_uni_pagedir_loc)
-			con_set_default_unimap(vt->vcs.vc_cons[i]);
+	struct vt_struct *vt = vt_cons;
+
+	while (vt) {
+		if (!vt->kmalloced && !*vt->vcs.vc_cons[0]->vc_uni_pagedir_loc)
+                	con_set_default_unimap(vt->vcs.vc_cons[0]);
+               	vt = vt->next;
+       	}
 }
