@@ -50,6 +50,7 @@
 #include <asm/bitops.h>
 #include <asm/hardware.h>
 #include <asm/mach/serial_sa1100.h>
+#include <asm/arch/serial_reg.h>
 
 #if defined(CONFIG_SERIAL_SA1100_CONSOLE) && defined(CONFIG_MAGIC_SYSRQ)
 #define SUPPORT_SYSRQ
