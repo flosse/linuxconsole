@@ -48,6 +48,8 @@
 #include <asm/pgtable.h>
 
 #include <linux/fb.h>
+#define INCLUDE_LINUX_LOGO_DATA
+#include <asm/linux_logo.h>
 
     /*
      *  Frame buffer device initialization and setup routines
@@ -343,6 +345,8 @@ static struct {
 };
 
 #define NUM_FB_DRIVERS	(sizeof(fb_drivers)/sizeof(*fb_drivers))
+#define LOGO_H                  80
+#define LOGO_W                  80
 
 extern const char *global_mode_option;
 
@@ -728,8 +732,69 @@ fb_disable_mtrrs(void)
 }
 #endif
 
-static devfs_handle_t devfs_handle;
+static void __init fbcon_show_logo(struct fb_info *info)
+{
+    u16 palette_red[16], palette_green[16], palette_blue[16];
+    int depth = info->var.bits_per_pixel;		
+    struct fb_cmap palette_cmap;
+    struct fb_image image;
+    int i, j, n, x;	
 
+    /*
+     * Set colors if visual is PSEUDOCOLOR and we have enough colors, or for
+     * DIRECTCOLOR
+     * We don't have to set the colors for the 16-color logo, since that logo
+     * uses the standard VGA text console palette
+     */
+    palette_cmap.red = palette_red;
+    palette_cmap.green = palette_green;	
+    palette_cmap.blue = palette_blue;	
+    palette_cmap.transp = NULL;
+
+    if ((info->fix.visual == FB_VISUAL_PSEUDOCOLOR && depth >= 8) ||
+        (info->fix.visual == FB_VISUAL_DIRECTCOLOR && depth >= 24)) {
+	for (i = 0; i < LINUX_LOGO_COLORS; i += n) {
+            n = LINUX_LOGO_COLORS - i;
+            if (n > 16)
+                /* palette_cmap provides space for only 16 colors at once */
+                n = 16;
+            palette_cmap.start = 32 + i;
+            palette_cmap.len   = n;
+            for( j = 0; j < n; ++j ) {
+                palette_cmap.red[j]   = (linux_logo_red[i+j] << 8) |
+                                        linux_logo_red[i+j];
+                palette_cmap.green[j] = (linux_logo_green[i+j] << 8) |
+                                        linux_logo_green[i+j];
+                palette_cmap.blue[j]  = (linux_logo_blue[i+j] << 8) |
+                                        linux_logo_blue[i+j];
+            }
+            fb_set_cmap(&palette_cmap, 1, info);
+        }
+    }
+    if (depth >= 8) {
+	image.data = linux_logo;
+        image.depth = 8;
+    } else if (depth >= 4) {
+       	image.data = linux_logo16;
+       	image.depth = 4;
+    } else {
+       	image.data = linux_logo_bw;
+       	image.depth = 1;
+    }
+    image.width = LOGO_W;
+    image.height = LOGO_H;
+
+    for (x = 0; x < smp_num_cpus * (LOGO_W + 8) &&
+         	x < info->var.xres - (LOGO_W + 8); x += (LOGO_W + 8)) {
+    	image.x = x;
+    	image.y = 0;		/* For now. We should add in wrap around */
+
+    	if (info->fbops->fb_imageblit)
+     		info->fbops->fb_imageblit(info, &image);
+    }
+}
+
+static devfs_handle_t devfs_handle;
 
 /**
  *	register_framebuffer - registers a frame buffer device
@@ -777,6 +842,7 @@ register_framebuffer(struct fb_info *fb_info)
 		printk("%s: MTRR turned on\n", fb_info->fix.id);
 	}
 #endif
+	
 	return 0;
 }
 

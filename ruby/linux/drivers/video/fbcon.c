@@ -94,8 +94,6 @@
 #ifdef CONFIG_FBCON_VGA_PLANES
 #include <asm/io.h>
 #endif
-#define INCLUDE_LINUX_LOGO_DATA
-#include <asm/linux_logo.h>
 
 #include "fbcon.h"
 #include <video/font.h>
@@ -105,10 +103,6 @@
 #else
 #  define DPRINTK(fmt, args...)
 #endif
-
-#define LOGO_H			80
-#define LOGO_W			80
-#define LOGO_LINE	(LOGO_W/8)
 
 #define REFCOUNT(fd)	(((int *)(fd))[-1])
 #define FNTSIZE(fd)	(((int *)(fd))[-2])
