@@ -4,8 +4,6 @@
 #include <linux/interrupt.h>
 #include <linux/keyboard.h>
 
-extern struct pt_regs *kbd_pt_regs;
-
 extern struct tasklet_struct keyboard_tasklet;
 
 extern int shift_state;

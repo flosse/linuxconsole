@@ -409,6 +409,20 @@ struct input_id {
 #define SND_BELL		0x01
 #define SND_MAX			0x07
 
+/*
+ * Bus IDs.
+ */
+
+#define BUS_PCI			0x01
+#define BUS_ISAPNP		0x02
+#define BUS_USB			0x03
+
+#define BUS_ISA			0x10
+#define BUS_I8042		0x11
+#define BUS_XTKBD		0x12
+#define BUS_SERIAL		0x13
+#define BUS_GAMEPORT		0x14
+
 #ifdef __KERNEL__
 
 /*
@@ -428,7 +442,10 @@ struct input_dev {
 
 	int number;
 	char *name;
-	struct input_id id;
+	unsigned short idbus;
+	unsigned short idvendor;
+	unsigned short idproduct;
+	unsigned short idtype;
 
 	unsigned long evbit[NBITS(EV_MAX)];
 	unsigned long keybit[NBITS(KEY_MAX)];
@@ -437,7 +454,10 @@ struct input_dev {
 	unsigned long ledbit[NBITS(LED_MAX)];
 	unsigned long sndbit[NBITS(SND_MAX)];
 
-	unsigned char *keycode;
+	unsigned void *keycode;
+	unsigned int keycodemax;
+	unsigned int keycodesize;
+
 	unsigned int repeat_key;
 	struct timer_list timer;
 
@@ -503,8 +523,7 @@ void input_unregister_minor(devfs_handle_t handle);
 
 void input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value);
 
-#define input_report_key(a,b,c) input_event(a, EV_KEY, b, c)
-#define input_report_btn(a,b,c) input_event(a, EV_KEY, b, !!(c))
+#define input_report_key(a,b,c) input_event(a, EV_KEY, b, !!(c))
 #define input_report_rel(a,b,c) input_event(a, EV_REL, b, c)
 #define input_report_abs(a,b,c) input_event(a, EV_ABS, b, c)
 
