@@ -113,11 +113,17 @@ int mzp_init(int fd)
 
 int dump_init(int fd)
 {
-	unsigned char c;
+	unsigned char c, o = 0;
 	while (1)
-		if (!readchar(fd, &c, 1)) 
-			printf("%02x ", c);
-		else printf("\n");
+		if (!readchar(fd, &c, 1)) {
+			printf("%02x (%c) ", c, ((c > 32) && (c < 127)) ? c : 'x');
+			o = 1;
+		} else {
+			if (o) {
+				printf("\n");
+				o = 0;
+			}
+		}
 }
 
 struct input_types {
@@ -145,7 +151,7 @@ struct input_types input_types[] = {
 { "--intellimouse",	"-ms3",		B1200, CS7,			SERIO_MZ,	0x11,	1,	NULL },
 { "--mmwheel",		"-mmw",		B1200, CS7 | CSTOPB,		SERIO_MZP,	0x13,	1,	mzp_init },
 { "--iforce",		"-ifor",	B38400, CS8 | CRTSCTS,		SERIO_IFORCE,	0x00,	0,	NULL },
-{ "--dump",		"-dump",	B38400, CS8 | CRTSCTS,		0,		0x00,	0,	dump_init },
+{ "--dump",		"-dump",	B1200, CS7, 			0,		0x00,	0,	dump_init },
 { "", "", 0, 0 }
 
 };

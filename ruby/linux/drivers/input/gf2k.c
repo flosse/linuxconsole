@@ -62,11 +62,11 @@ static char gf2k_hat_to_axis[][2] = {{ 0, 0}, { 0,-1}, { 1,-1}, { 1, 0}, { 1, 1}
 
 static char *gf2k_names[] = {"", "Genius G-09D", "Genius F-30D", "Genius F-30", "Genius F-31D",
 				"Genius F-30-5", "Genius Flight2000 F-23", "Genius F-31"};
-static unsigned char gf2k_hats[] = { 0, 2, 0, 0, 0, 0, 2, 2 };
-static unsigned char gf2k_axes[] = { 0, 2, 0, 0, 0, 0, 4, 4 };
-static unsigned char gf2k_joys[] = { 0, 0, 0, 0, 0, 0, 8,10 };
+static unsigned char gf2k_hats[] = { 0, 2, 0, 0, 2, 0, 2, 0 };
+static unsigned char gf2k_axes[] = { 0, 2, 0, 0, 4, 0, 4, 0 };
+static unsigned char gf2k_joys[] = { 0, 0, 0, 0,10, 0, 8, 0 };
 static unsigned char gf2k_pads[] = { 0, 6, 0, 0, 0, 0, 0, 0 };
-static unsigned char gf2k_lens[] = { 0,18, 0, 0, 0, 0,18,18 };
+static unsigned char gf2k_lens[] = { 0,18, 0, 0,18, 0,18, 0 };
 
 static unsigned char gf2k_abs[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_RUDDER, ABS_TL, ABS_TR };
 static short gf2k_btn_joy[] = { BTN_TRIGGER, BTN_THUMB, BTN_TOP, BTN_TOP2, BTN_BASE, BTN_BASE2, BTN_BASE3, BTN_BASE4 };
