@@ -99,35 +99,54 @@ void cfb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,
 #if BITS_PER_LONG == 32
 		fb_writel(fb_readl(dst) | start_mask, dst);
 #else
-#warning 64 bits not supported yet 
+		fb_writeq(fb_readq(dst) | start_mask, dst);
 #endif
 		dst++;
 	}
   	
 	for(i=0;i<n;i++) {
-	  fb_writel(fg, dst);
-	  dst++;			
+#if BITS_PER_LONG == 32
+	  	fb_writel(fg, dst);
+#else
+		fb_writeq(fg, dst);
+#endif
+	  	dst++;			
 	}
 
-	if (end_mask) 
+	if (end_mask)
+#if BITS_PER_LONG == 32
 		fb_writel(fb_readl(dst) | end_mask, dst);
+#else
+		fb_writeq(fb_readq(dst) | end_mask, dst);
+#endif
 	dst1+=linesize;
       } while (--height);
       break;
     case ROP_XOR:
       do {
 	dst = (unsigned long *) (dst1 - start_index);
-       
+      
+#if BITS_PER_LONG == 32
 	fb_writel(fb_readl(dst) ^ start_mask, dst);
- 
+#else
+	fb_writeq(fb_readq(dst) ^ start_mask, dst);
+#endif
 	for(i=0;i<n;i++) {
-	  dst++;
-	  fb_writel(fb_readl(dst) ^ fg, dst); 
+	  	dst++;
+#if BITS_PER_LONG == 32
+	  	fb_writel(fb_readl(dst) ^ fg, dst); 
+#else
+	  	fb_writeq(fb_readq(dst) ^ fg, dst); 
+#endif
 	}
 	
 	if (end_mask) {
-	  dst++;
-	  fb_writel(fb_readl(dst) ^ end_mask, dst);
+	  	dst++;
+#if BITS_PER_LONG == 32
+	  	fb_writel(fb_readl(dst) ^ end_mask, dst);
+#else
+	  	fb_writeq(fb_readq(dst) ^ end_mask, dst);
+#endif
 	}
 	dst1+=linesize;
       } while (--height);
