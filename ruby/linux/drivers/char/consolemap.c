@@ -230,17 +230,18 @@ unsigned char inverse_translate(struct vc_data *vc, int glyph)
 		return p->inverse_translations[inv_translate[vc->vc_num]][glyph];
 }
 
-static void update_user_maps(void)
+static void update_user_maps(struct vt_struct *vt)
 {
 	int i;
 	struct uni_pagedir *p, *q = NULL;
 	
 	for (i = 0; i < MAX_NR_CONSOLES; i++) {
+		struct vc_data *vc = vt->vcs.vc_cons[i];	
 		if (!vc_cons_allocated(i))
 			continue;
-		p = (struct uni_pagedir *)*vc_cons[i]->vc_uni_pagedir_loc;
+		p = (struct uni_pagedir *)*vc->vc_uni_pagedir_loc;
 		if (p && p != q) {
-			set_inverse_transl(vc_cons[i], p, USER_MAP);
+			set_inverse_transl(vc, p, USER_MAP);
 			q = p;
 		}
 	}
@@ -254,7 +255,7 @@ static void update_user_maps(void)
  * 0xf000-0xf0ff "transparent" Unicodes) whereas the "new" variants set
  * Unicodes explicitly.
  */
-int con_set_trans_old(unsigned char * arg)
+int con_set_trans_old(struct vc_data *vc, unsigned char * arg)
 {
 	int i;
 	unsigned short *p = translations[USER_MAP];
@@ -269,11 +270,11 @@ int con_set_trans_old(unsigned char * arg)
 		p[i] = UNI_DIRECT_BASE | uc;
 	}
 
-	update_user_maps();
+	update_user_maps(vc->display_fg);
 	return 0;
 }
 
-int con_get_trans_old(unsigned char * arg)
+int con_get_trans_old(struct vc_data *vc, unsigned char * arg)
 {
 	int i, ch;
 	unsigned short *p = translations[USER_MAP];
@@ -282,15 +283,14 @@ int con_get_trans_old(unsigned char * arg)
 	if (i)
 		return i;
 
-	for (i=0; i<E_TABSZ ; i++)
-	  {
-	    ch = conv_uni_to_pc(vc_cons[fg_console], p[i]);
+	for (i=0; i<E_TABSZ ; i++) {
+	    ch = conv_uni_to_pc(vc, p[i]);
 	    __put_user((ch & ~0xff) ? 0 : ch, arg+i);
-	  }
+	}
 	return 0;
 }
 
-int con_set_trans_new(ushort * arg)
+int con_set_trans_new(struct vc_data *vc, ushort * arg)
 {
 	int i;
 	unsigned short *p = translations[USER_MAP];
@@ -306,11 +306,11 @@ int con_set_trans_new(ushort * arg)
 		p[i] = us;
 	}
 
-	update_user_maps();
+	update_user_maps(vc->display_fg);
 	return 0;
 }
 
-int con_get_trans_new(ushort * arg)
+int con_get_trans_new(struct vc_data *vc, ushort * arg)
 {
 	int i;
 	unsigned short *p = translations[USER_MAP];
@@ -381,7 +381,8 @@ static int con_unify_unimap(struct vc_data *vc, struct uni_pagedir *p)
 	for (i = 0; i < MAX_NR_CONSOLES; i++) {
 		if (!vc_cons_allocated(i))
 			continue;
-		q = (struct uni_pagedir *)*vc_cons[i]->vc_uni_pagedir_loc;
+		vc = vc->display_fg->vcs.vc_cons[i];
+		q = (struct uni_pagedir *)*vc->vc_uni_pagedir_loc;
 		if (!q || q == p || q->sum != p->sum)
 			continue;
 		for (j = 0; j < 32; j++) {
@@ -668,6 +669,7 @@ void __init console_map_init(void)
 	int i;
 	
 	for (i = 0; i < MAX_NR_CONSOLES; i++)
-		if (vc_cons_allocated(i) && !*vc_cons[i]->vc_uni_pagedir_loc)
-			con_set_default_unimap(vc_cons[i]);
+		if (vc_cons_allocated(i) && 
+			!*vt_cons->vcs.vc_cons[i]->vc_uni_pagedir_loc)
+			con_set_default_unimap(vt_cons->vcs.vc_cons[i]);
 }
