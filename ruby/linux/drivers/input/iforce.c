@@ -106,7 +106,7 @@ struct iforce {
 #ifdef IFORCE_USB
         struct usb_device *usbdev;	/* USB transfer */
         struct urb irq, out;
-	DECLARE_WAIT_QUEUE_HEAD(wait);
+	wait_queue_head_t wait;
 #endif
 #ifdef IFORCE_FF
 	struct semaphore ff_mutex;	/* Force Feedback */
@@ -173,23 +173,23 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 				DECLARE_WAITQUEUE(wait, current);
 				int timeout = 1000;
 
-				memcpy(iforce->writeurb.transfer_buffer + 1, data, LO(CMD));
-				iforce->transfer_buffer[0] = HI(cmd);
-				iforce->out.transfer_buffer_length = LO(CMD) + 1;
+				memcpy(iforce->out.transfer_buffer + 1, data, LO(cmd));
+				((char*)iforce->out.transfer_buffer)[0] = HI(cmd);
+				iforce->out.transfer_buffer_length = LO(cmd) + 1;
 				iforce->out.dev = iforce->usbdev;
 
 				init_waitqueue_head(&iforce->wait); 	
 				current->state = TASK_INTERRUPTIBLE;
 				add_wait_queue(&iforce->wait, &wait);
 
-				if (usb_submit_urb(urb)) {
+				if (usb_submit_urb(&iforce->out)) {
 					current->state = TASK_RUNNING;
 					remove_wait_queue(&iforce->wait, &wait);
-					printk(KERN_WARNING "iforce.c: Failed to submit output urb. (%d)\n", status);
+					printk(KERN_WARNING "iforce.c: Failed to submit output urb.\n");
 					return;
 				}
 
-				while (timeout && urb->status == -EINPROGRESS)
+				while (timeout && iforce->out.status == -EINPROGRESS)
 					timeout = schedule_timeout(timeout);
 
 				current->state = TASK_RUNNING;
@@ -197,7 +197,7 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 
 				if (!timeout) {
 					printk(KERN_WARNING "iforce.c: Output urb: timeout\n");
-					usb_unlink_urb(urb);
+					usb_unlink_urb(&iforce->out);
 				}
 
 				return;
@@ -818,8 +818,8 @@ static void iforce_usb_out(struct urb *urb)
 	if (urb->status)
 		printk(KERN_WARNING "iforce.c: nonzero output urb status %d\n", urb->status);
 
-        if (waitqueue_active(iforce->wait))
-                wake_up(iforce->wait);
+        if (waitqueue_active(&iforce->wait))
+                wake_up(&iforce->wait);
 }
 
 static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
@@ -828,7 +828,8 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	struct usb_endpoint_descriptor *epirq, *epout;
 	struct iforce *iforce;
 
-	endpoint = dev->config[0].interface[ifnum].altsetting[0].endpoint + 0;
+	epirq = dev->config[0].interface[ifnum].altsetting[0].endpoint + 0;
+	epout = dev->config[0].interface[ifnum].altsetting[0].endpoint + 1;
 
 	if (!(iforce = kmalloc(sizeof(struct iforce) + 32, GFP_KERNEL))) return NULL;
 	memset(iforce, 0, sizeof(struct iforce));
@@ -839,8 +840,10 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	iforce->dev.idproduct = dev->descriptor.idProduct;
 	iforce->dev.idversion = dev->descriptor.bcdDevice;
 
+	init_waitqueue_head(&iforce->wait);
+
 	FILL_INT_URB(&iforce->irq, dev, usb_rcvintpipe(dev, epirq->bEndpointAddress),
-			iforce->data, 16, iforce_usb_irq, iforce, endpoint->bInterval);
+			iforce->data, 16, iforce_usb_irq, iforce, epirq->bInterval);
 
 	FILL_BULK_URB(&iforce->out, dev, usb_sndbulkpipe(dev, epout->bEndpointAddress),
                         iforce + 1, 32, iforce_usb_out, iforce);
