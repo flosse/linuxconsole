@@ -448,6 +448,7 @@ asmlinkage int printk(const char *fmt, ...)
 	 	 * We own the drivers list.  We can drop the lock and 
 		 * let release_console_sem() print the text
 		 */
+		spin_unlock(&console_lock);
 		if ((con->flags & CON_ENABLED) && con->write) {
 			driver = get_tty_driver(con->device(con));
 			if (driver && !down_trylock(&driver->tty_lock)) {
@@ -455,6 +456,7 @@ asmlinkage int printk(const char *fmt, ...)
 				release_console_sem(con->device(con));
 			}
 		}
+		spin_lock(&console_lock);
 	}
 	spin_unlock(&console_lock);
 	return printed_len;
@@ -475,8 +477,11 @@ void acquire_console_sem(kdev_t device)
 
 	if (in_interrupt())
 		BUG();
-	down(&driver->tty_lock);
-	driver->may_schedule = 1;
+	
+	if (driver) {
+		down(&driver->tty_lock);
+		driver->may_schedule = 1;
+	}
 }
 EXPORT_SYMBOL(acquire_console_sem);
 
@@ -502,15 +507,15 @@ void release_console_sem(kdev_t device)
 	unsigned long flags;
 	struct console *con;
 
-	if (driver->flags & TTY_DRIVER_CONSOLE) {
-		spin_lock(&console_lock);
-		/* Look for new messages */
-		for (con = console_drivers; con; con = con->next) {
-			if (con->device(con) == device)
-				break;
-		}
-		spin_unlock(&console_lock);
+	spin_lock(&console_lock);
+	/* Look for new messages */
+	for (con = console_drivers; con; con = con->next) {
+		if (con->device(con) == device)
+			break;
+	}
+	spin_unlock(&console_lock);
 
+	if (con) {
 		for ( ; ; ) {
 			spin_lock_irqsave(&logbuf_lock, flags);
 			must_wake_klogd |= log_start - log_end;
@@ -526,8 +531,10 @@ void release_console_sem(kdev_t device)
 		if (must_wake_klogd && !oops_in_progress)
 			wake_up_interruptible(&log_wait);
 	}
-	driver->may_schedule = 0;
-	up(&driver->tty_lock);
+	if (driver) {
+		driver->may_schedule = 0;
+		up(&driver->tty_lock);
+	}
 }
 
 /** console_conditional_schedule - yield the CPU if required
@@ -638,12 +645,10 @@ EXPORT_SYMBOL(register_console);
 
 int unregister_console(struct console * console)
 {
-	struct tty_driver *driver = get_tty_driver(console->device(console));
         struct console *a,*b;
 	int res = 1;
 
-	if (driver)
-		release_console_sem(console->device(console));
+	release_console_sem(console->device(console));
 
 	spin_lock(&console_lock);
 	if (console_drivers == console) {
