@@ -70,6 +70,8 @@
 static void* videomemory;
 static u_long videomemorysize = VIDEOMEMSIZE;
 MODULE_PARM(videomemorysize, "l");
+static const char *mode_option __initdata = NULL;
+
 static struct fb_info fb_info;
 static u32 vfb_pseudo_palette[17];
 
@@ -97,9 +99,8 @@ MODULE_PARM(vfb_enable, "i");
 int vfb_init(void);
 int vfb_setup(char*);
 
-static int vfb_check_var(struct fb_var_screeninfo *var, void *par,
-                         struct fb_info *info);
-static int vfb_set_par(void *par, struct fb_info *info);
+static int vfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info); 
+static int vfb_set_par(struct fb_info *info);
 static int vfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                          u_int transp, struct fb_info *info);
 static int vfb_pan_display(struct fb_var_screeninfo *var,struct fb_info *info); 
@@ -136,8 +137,7 @@ static u_long get_line_length(int xres_virtual, int bpp)
      *  data from it to check this var. 
      */
 
-static int vfb_check_var(struct fb_var_screeninfo *var, void *vfb_par,
-                         struct fb_info *info)
+static int vfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info) 
 {
     u_long line_length;
 
@@ -259,7 +259,7 @@ static int vfb_check_var(struct fb_var_screeninfo *var, void *vfb_par,
  * the hardware state info->par and fix which can be affected by the 
  * change in par. For this driver it doesn't do much. 
  */
-static int vfb_set_par(void *vfb_par, struct fb_info *info)
+static int vfb_set_par(struct fb_info *info)
 {
 	info->fix.line_length = get_line_length(info->var.xres_virtual,
                                                 info->var.bits_per_pixel);
@@ -429,8 +429,11 @@ int __init vfb_init(void)
     fb_info.node = -1;
     fb_info.fbops = &vfb_ops;
 
+    if (!mode_option)
+	mode_option = "640x480@60";
+
     retval = fb_find_mode(&fb_info.var, &fb_info, mode_option,
-            			NULL, 0, DEFAULT_MODE, 8);
+            			NULL, 0, NULL, 8);
 
     if (!retval || (retval == 4))
     	fb_info.var = vfb_default;
