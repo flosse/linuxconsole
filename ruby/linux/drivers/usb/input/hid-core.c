@@ -1159,7 +1159,7 @@ int hid_wait_io(struct hid_device *hid)
 	add_wait_queue(&hid->wait, &wait);
 
 	while (timeout && (test_bit(HID_CTRL_RUNNING, &hid->iofl) ||
-			  test_bit(HID_OUT_RUNNING, &hid->iofl)))
+			   test_bit(HID_OUT_RUNNING, &hid->iofl)))
 		timeout = schedule_timeout(timeout);
 
 	set_current_state(TASK_RUNNING);
@@ -1210,6 +1210,7 @@ void hid_init_reports(struct hid_device *hid)
 	struct hid_report *report;
 	struct list_head *list;
 	int len;
+	int err, ret;
 
 	report_enum = hid->report_enum + HID_INPUT_REPORT;
 	list = report_enum->report_list.next;
@@ -1227,7 +1228,16 @@ void hid_init_reports(struct hid_device *hid)
 		list = list->next;
 	}
 
-	if (hid_wait_io(hid)) {
+	err = 0;
+	while (ret = hid_wait_io(hid)) {
+		err |= ret;
+		if (test_bit(HID_CTRL_RUNNING, &hid->iofl))
+			usb_unlink_urb(hid->urbctrl);
+		if (test_bit(HID_OUT_RUNNING, &hid->iofl))
+			usb_unlink_urb(hid->urbout);
+	}
+
+	if (err) {
 		warn("timeout initializing reports\n");
 		return;
 	}
@@ -1346,6 +1356,7 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 				goto fail;
 			pipe = usb_sndbulkpipe(dev, endpoint->bEndpointAddress);
 			FILL_BULK_URB(hid->urbout, dev, pipe, hid->outbuf, 0, hid_irq_out, hid);
+			hid->urbout->transfer_flags |= USB_ASYNC_UNLINK;
 		}
 	}
 
@@ -1386,6 +1397,7 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 
 	hid->urbctrl = usb_alloc_urb(0, GFP_KERNEL);
 	FILL_CONTROL_URB(hid->urbctrl, dev, 0, (void*) &hid->cr, hid->ctrlbuf, 1, hid_ctrl, hid);
+	hid->urbctrl->transfer_flags |= USB_ASYNC_UNLINK;
 
 	return hid;
 
