@@ -79,8 +79,8 @@ static void stinger_process_packet(struct stinger *stinger)
 	input_report_key(dev, BTN_SELECT, ((data[3] & 0x02) >> 1));
 	input_report_key(dev, BTN_START,   (data[3] & 0x01));
 
-	input_report_abs(dev, ABS_X, ((data[1] & 0x3F) - ((data[0] & 0x01) << 6)));
-	input_report_abs(dev, ABS_Y, ((data[2] & 0x3F) - ((data[0] & 0x02) << 5)));
+	input_report_abs(dev, ABS_X, ((data[0] & 0x01) << 6) - (data[1] & 0x3F));
+	input_report_abs(dev, ABS_Y, ((data[0] & 0x02) << 5) - (data[2] & 0x3F));
 
 	return;
 }
