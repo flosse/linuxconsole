@@ -386,9 +386,6 @@ prep_setup_arch(void)
 #ifdef CONFIG_VGA_CONSOLE
 	/* vgacon.c needs to know where we mapped IO memory in io_block_mapping() */
 	vgacon_remap_base = 0xf0000000;
-	conswitchp = &vga_con;
-#elif defined(CONFIG_DUMMY_CONSOLE)
-	conswitchp = &dummy_con;
 #endif
 }
 

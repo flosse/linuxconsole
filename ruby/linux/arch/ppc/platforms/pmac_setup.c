@@ -44,6 +44,8 @@
 #include <linux/ioport.h>
 #include <linux/major.h>
 #include <linux/blk.h>
+#include <linux/vt_kern.h>
+#include <linux/console.h>
 #include <linux/ide.h>
 #include <linux/pci.h>
 #include <linux/adb.h>
@@ -64,6 +66,7 @@
 #include <asm/ohare.h>
 #include <asm/mediabay.h>
 #include <asm/machdep.h>
+#include <asm/keyboard.h>
 #include <asm/dma.h>
 #include <asm/bootx.h>
 #include <asm/cputable.h>
@@ -84,6 +87,7 @@ extern void pmac_pcibios_fixup(void);
 extern void pmac_find_bridges(void);
 extern int pmac_ide_check_base(ide_ioreg_t base);
 extern ide_ioreg_t pmac_ide_get_base(int index);
+
 extern void pmac_nvram_update(void);
 extern unsigned char pmac_nvram_read_byte(int addr);
 extern void pmac_nvram_write_byte(int addr, unsigned char val);
@@ -305,6 +309,9 @@ pmac_setup_arch(void)
 #endif	
 #ifdef CONFIG_NVRAM
 	pmac_nvram_init();
+#endif
+#ifdef CONFIG_DUMMY_CONSOLE
+	conswitchp = &dummy_con;
 #endif
 #ifdef CONFIG_BLK_DEV_INITRD
 	if (initrd_start)

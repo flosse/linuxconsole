@@ -21,7 +21,6 @@
  *	used for all other board specific instructions needed during
  *	platform_init.
  *	moved RTC to board.c files
- *	moved VT/FB to board.c files
  *	moved r/w4 ide to redwood.c
  *
  */
@@ -58,6 +57,7 @@
 /* Function Prototypes */
 extern void abort(void);
 extern void ppc4xx_find_bridges(void);
+
 extern void ppc4xx_wdt_heartbeat(void);
 extern int wdt_enable;
 extern unsigned long wdt_period;
@@ -74,17 +74,10 @@ unsigned char __res[sizeof (bd_t)];
 static void __init
 ppc4xx_setup_arch(void)
 {
-
 	/* Setup PCI host bridges */
-
 #ifdef CONFIG_PCI
 	ppc4xx_find_bridges();
 #endif
-
-#if defined(CONFIG_FB)
-	conswitchp = &dummy_con;
-#endif
-
 	board_setup_arch();
 }
 

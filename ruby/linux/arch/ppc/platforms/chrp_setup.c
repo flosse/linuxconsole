@@ -36,6 +36,7 @@
 #include <linux/delay.h>
 #include <linux/ide.h>
 #include <linux/irq.h>
+#include <linux/console.h>
 #include <linux/seq_file.h>
 #include <linux/root_dev.h>
 
@@ -67,6 +68,7 @@ void rtas_indicator_progress(char *, unsigned short);
 void btext_progress(char *, unsigned short);
 
 extern unsigned long pmac_find_end_of_memory(void);
+extern void select_adb_keyboard(void);
 extern int of_show_percpuinfo(struct seq_file *, int);
 
 extern kdev_t boot_dev;
@@ -371,6 +373,9 @@ void __init chrp_init_IRQ(void)
 	int i;
 	unsigned long chrp_int_ack;
 	unsigned char init_senses[NR_IRQS - NUM_8259_INTERRUPTS];
+#if defined(CONFIG_VT) && defined(CONFIG_INPUT_ADBHID) && defined(XMON)	
+	struct device_node *kbd;
+#endif
 
 	for (np = find_devices("pci"); np != NULL; np = np->next) {
 		unsigned int *addrp = (unsigned int *)
@@ -395,6 +400,17 @@ void __init chrp_init_IRQ(void)
 	for (i = 0; i < NUM_8259_INTERRUPTS; i++)
 		irq_desc[i].handler = &i8259_pic;
 	i8259_init(chrp_int_ack);
+
+#if defined(CONFIG_VT) && defined(CONFIG_INPUT_ADBHID) && defined(XMON)
+	/* see if there is a keyboard in the device tree
+	   with a parent of type "adb" */
+	for (kbd = find_devices("keyboard"); kbd; kbd = kbd->next)
+		if (kbd->parent && kbd->parent->type
+		    && strcmp(kbd->parent->type, "adb") == 0)
+			break;
+	if (kbd)
+		request_irq(HYDRA_INT_ADB_NMI, xmon_irq, 0, "XMON break", 0);
+#endif
 }
 
 void __init
@@ -414,6 +430,22 @@ chrp_init2(void)
 
 	if (ppc_md.progress)
 		ppc_md.progress("  Have fun!    ", 0x7777);
+
+#if defined(CONFIG_VT) && defined(CONFIG_INPUT)
+	/* see if there is a keyboard in the device tree
+	   with a parent of type "adb" */
+	{
+		struct device_node *kbd;
+
+		for (kbd = find_devices("keyboard"); kbd; kbd = kbd->next) {
+			if (kbd->parent && kbd->parent->type
+			    && strcmp(kbd->parent->type, "adb") == 0) {
+				select_adb_keyboard();
+				break;
+			}
+		}
+	}
+#endif /* CONFIG_VT && CONFIG_INPUT */
 }
 
 void __init
