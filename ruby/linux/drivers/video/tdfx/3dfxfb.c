@@ -326,12 +326,12 @@ static void do_flashcursor(unsigned long ptr)
    struct tdfx_par *par = (struct tdfx_par *) ptr;
    unsigned long flags;	
 
-   spin_lock_irqsave(par->DAClock, flags);
+   spin_lock_irqsave(&par->DAClock, flags);
    banshee_make_room(1);
    tdfx_outl(VIDPROCCFG, tdfx_inl(VIDPROCCFG) ^ VIDCFG_HWCURSOR_ENABLE );
    par->hwcursor.timer.expires=jiffies+HZ/2;
    add_timer(&par->hwcursor.timer);
-   spin_unlock_irqrestore(par->DAClock, flags);
+   spin_unlock_irqrestore(&par->DAClock, flags);
 }
 
 static u32 do_calc_pll(int freq, int* freq_out) 
@@ -803,11 +803,11 @@ static int tdfxfb_cursor(struct fb_info *info, struct fbcursor *cursor)
    /* If we are going to be changing things we should disable 
       the cursor first */
    if (info->cursor.enable) {
-	spin_lock_irqsave(par->DAClock, flags);
+	spin_lock_irqsave(&par->DAClock, flags);
    	info->cursor.enable = 0;
     	del_timer(&(par->hwcursor.timer));
     	tdfx_outl(VIDPROCCFG, par->hwcursor.disable); 
-	spin_unlock_irqrestore(par->DAClock, flags);
+	spin_unlock_irqrestore(&par->DAClock, flags);
    }
  
    /* Disable the Cursor */	
@@ -826,11 +826,11 @@ static int tdfxfb_cursor(struct fb_info *info, struct fbcursor *cursor)
                     (cursor->cmap.green[cursor->cmap.start+1] << 8) | 
 		    (cursor->cmap.blue[cursor->cmap.start+1]));
 	fb_copy_cmap(&cursor->cmap, &info->cursor.cmap, 0);   
-	spin_lock_irqsave(par->DAClock, flags);
+	spin_lock_irqsave(&par->DAClock, flags);
 	banshee_make_room(2);
 	tdfx_outl(HWCURC0, bg_color);
 	tdfx_outl(HWCURC1, fg_color);
-   	spin_unlock_irqrestore(par->DAClock, flags);
+   	spin_unlock_irqrestore(&par->DAClock, flags);
    }
 
    if (cursor->set && FB_CUR_SETPOS) {
@@ -843,10 +843,10 @@ static int tdfxfb_cursor(struct fb_info *info, struct fbcursor *cursor)
 	info->cursor.pos.y = y;
 	x += 63;
 	y += 63;	
-   	spin_lock_irqsave(par->DAClock, flags);
+   	spin_lock_irqsave(&par->DAClock, flags);
 	banshee_make_room(1);
 	tdfx_outl(HWCURLOC, (y << 16) + x);
-   	spin_unlock_irqrestore(par->DAClock, flags);
+   	spin_unlock_irqrestore(&par->DAClock, flags);
    }	
   
    /* Not supported so we fake it */	 
@@ -910,10 +910,10 @@ static int tdfxfb_cursor(struct fb_info *info, struct fbcursor *cursor)
    cursor->enable = 1;
    info->cursor = *cursor;
    mod_timer(&par->hwcursor.timer, jiffies+HZ/2);
-   spin_lock_irqsave(par->DAClock, flags);
+   spin_lock_irqsave(&par->DAClock, flags);
    banshee_make_room(1);
    tdfx_outl(VIDPROCCFG, par->hwcursor.enable);
-   spin_unlock_irqrestore(par->DAClock, flags);
+   spin_unlock_irqrestore(&par->DAClock, flags);
    return 0;     
 }
 
@@ -1244,7 +1244,7 @@ static int __devinit tdfxfb_probe(struct pci_dev *pdev,
       	init_timer(&default_par.hwcursor.timer);
       	default_par.hwcursor.timer.function = do_flashcursor; 
       	default_par.hwcursor.timer.data = (unsigned long)(&default_par);
-      	spin_lock_init(default_par->DAClock);
+      	spin_lock_init(&default_par.DAClock);
       }	
       fb_info.cursor.set = 0;
       fb_info.cursor.enable = 0;	 
