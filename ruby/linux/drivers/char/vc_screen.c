@@ -43,11 +43,11 @@
 #undef addr
 #define HEADER_SIZE	4
 
-/* used by vcs - note the word offset */
+/* note the word offset */
 unsigned short *screen_pos(struct vc_data *vc, int w_offset, int viewed)
 {
         return screenpos(vc, 2 * w_offset, viewed);
-}        
+}
 
 void getconsxy(struct vc_data *vc, char *p)
 {
@@ -59,7 +59,7 @@ void putconsxy(struct vc_data *vc, char *p)
 {
         gotoxy(vc, p[0], p[1]);
         set_cursor(vc);
-}              
+}
 
 u16 vcs_scr_readw(struct vc_data *vc, const u16 *org)
 {
@@ -75,14 +75,13 @@ void vcs_scr_writew(struct vc_data *vc, u16 val, u16 *org)
                 softcursor_original = -1;
                 add_softcursor(vc);
         }
-}                                  
+}
 
-static int
-vcs_size(struct inode *inode)
+static int vcs_size(struct inode *inode)
 {
 	int currcons = MINOR(inode->i_rdev) & 127;
 	struct vc_data *vc = NULL;
-	int size;
+	int size;	
 
 	if (currcons == 0)
 		currcons = fg_console;
@@ -91,7 +90,7 @@ vcs_size(struct inode *inode)
 	if (!vc_cons_allocated(currcons))
 		return -ENXIO;
 
-	vc = vc_cons[currcons];	
+	vc = vc_cons[currcons];
 	
 	size = video_num_lines * video_num_columns;
 
@@ -426,8 +425,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 					this_round--;
 					c = *con_buf0++;
 #ifdef __BIG_ENDIAN
-					vcs_scr_writew(vc, c |
-					     (vcs_scr_readw(vc, org) & 0xff00), org);
+					vcs_scr_writew(vc, c | (vcs_scr_readw(vc, org) & 0xff00), org);
 #else
 					vcs_scr_writew(vc, (c << 8) |
 					     (vcs_scr_readw(vc, org) & 0xff), org);
@@ -517,12 +515,12 @@ void vcs_make_devfs (unsigned int index, int unregister)
     }
     else
     {
-	devfs_register (devfs_handle, name + 1, 0, DEVFS_FL_DEFAULT,
+	devfs_register (devfs_handle, name + 1, DEVFS_FL_DEFAULT,
 			VCS_MAJOR, index + 1,
-			S_IFCHR | S_IRUSR | S_IWUSR, 0, 0, &vcs_fops, NULL);
-	devfs_register (devfs_handle, name, 0, DEVFS_FL_DEFAULT,
+			S_IFCHR | S_IRUSR | S_IWUSR, &vcs_fops, NULL);
+	devfs_register (devfs_handle, name, DEVFS_FL_DEFAULT,
 			VCS_MAJOR, index + 129,
-			S_IFCHR | S_IRUSR | S_IWUSR, 0, 0, &vcs_fops, NULL);
+			S_IFCHR | S_IRUSR | S_IWUSR, &vcs_fops, NULL);
     }
 #endif /* CONFIG_DEVFS_FS */
 }
@@ -537,12 +535,12 @@ int __init vcs_init(void)
 		printk("unable to get major %d for vcs device", VCS_MAJOR);
 
 	devfs_handle = devfs_mk_dir (NULL, "vcc", 3, NULL);
-	devfs_register (devfs_handle, "0", 1, DEVFS_FL_DEFAULT,
+	devfs_register (devfs_handle, "0", DEVFS_FL_DEFAULT,
 			VCS_MAJOR, 0,
-			S_IFCHR | S_IRUSR | S_IWUSR, 0, 0, &vcs_fops, NULL);
-	devfs_register (devfs_handle, "a", 1, DEVFS_FL_DEFAULT,
+			S_IFCHR | S_IRUSR | S_IWUSR, &vcs_fops, NULL);
+	devfs_register (devfs_handle, "a", DEVFS_FL_DEFAULT,
 			VCS_MAJOR, 128,
-			S_IFCHR | S_IRUSR | S_IWUSR, 0, 0, &vcs_fops, NULL);
+			S_IFCHR | S_IRUSR | S_IWUSR, &vcs_fops, NULL);
 
 	return error;
 }
