@@ -5,7 +5,7 @@
  *
  *  Based on the work of:
  *  	Andree Borrmann		John Dahlstrom
- *  	David Kuder
+ *  	David Kuder		Nathan Hand
  *
  *  Sponsored by SuSE
  */
