@@ -238,7 +238,7 @@ static int evdev_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 		case EVIOCSFF:
 			if (dev->upload_effect) {
 				struct ff_effect effect;
-				if (copy_from_user((char *)arg, &effect, sizeof(effect))) {
+				if (copy_from_user((void*)(&effect), (void*)arg, sizeof(effect))) {
 					return -EINVAL;
 				}
 				dev->upload_effect(dev, &effect);
