@@ -265,6 +265,8 @@ static int analog_button_read(struct analog_port *port, char saitek, char chf)
 		return 0;
 	}
 
+	port->buttons = 0;
+
 	while ((~u & 0xf0) && (i < 16) && t) {
 		port->buttons |= 1 << analog_chf[(~u >> 4) & 0xf];
 		if (!saitek) return 0;
@@ -275,7 +277,7 @@ static int analog_button_read(struct analog_port *port, char saitek, char chf)
 		i++;
 	}
 
-	return 0;
+	return -((!t) || (i == 16));
 }
 
 /*
