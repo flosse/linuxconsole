@@ -269,6 +269,25 @@ static void tdfxfb_createcursor(struct display * p);
  * do_xxx: Hardware-specific functions
  */
 static void  do_flashcursor(unsigned long ptr);
+static u32 do_calc_pll(int freq, int* freq_out);
+static void  do_write_regs(struct banshee_reg* reg);
+static unsigned long do_lfb_size(void);
+
+/* 
+ * Accel engine handling
+ */
+
+static void engine_init(void *par);
+static void engine_reset(void *par);
+static int  engine_state(void *par);
+static void context_switch(void *old_par, void *new_par);
+static void tdfx_fillrect(void *par, int x1, int y1, unsigned int width,
+                          unsigned int height, unsigned long color, int rop);
+static void tdfx_copyarea(void *par, int sx, int sy, unsigned int width,
+                          unsigned int height, int dx, int dy);
+static void tdfx_imageblit(void *par, int dx, int dy, unsigned int width,
+                           unsigned int height, int image_depth, void *image);
+
 static void  do_bitblt(u32 curx, u32 cury, u32 dstx,u32 dsty, 
 		      u32 width, u32 height,u32 stride,u32 bpp);
 static void  do_fillrect(u32 x, u32 y, u32 w,u32 h, 
@@ -277,10 +296,6 @@ static void  do_putc(u32 fgx, u32 bgx,struct display *p,
 			int c, int yy,int xx);
 static void  do_putcs(u32 fgx, u32 bgx,struct display *p,
 		     const unsigned short *s,int count, int yy,int xx);
-static u32 do_calc_pll(int freq, int* freq_out);
-static void  do_write_regs(struct banshee_reg* reg);
-static unsigned long do_lfb_size(void);
-
 
 static struct fb_info info;
 
@@ -431,47 +446,45 @@ static void do_flashcursor(unsigned long ptr)
 /*
  * FillRect 2D command (solidfill or invert (via ROP_XOR))   
  */
-static void do_fillrect(u32 x, u32 y, u32 w, u32 h, 
-			u32 color, u32 stride, u32 bpp, u32 rop) {
+static void tdfx_fillrect(void *par, int x1, int y1, unsigned int width,
+                          unsigned int height, unsigned long color, int rop)
+{	
+   /* COMMAND_2D reg. values */
+   #define ROP_COPY        0xcc     // src
+   #define ROP_INVERT      0x55     // NOT dst
+   #define ROP_XOR         0x66     // src XOR dst
 
-   u32 fmt= stride | ((bpp+((bpp==8) ? 0 : 8)) << 13); 
+   u32 fmt = info->fix.line_length | ((bpp+((bpp==8) ? 0 : 8)) << 13); 
 
    banshee_make_room(5);
    tdfx_outl(DSTFORMAT, fmt);
    tdfx_outl(COLORFORE, color);
    tdfx_outl(COMMAND_2D, COMMAND_2D_FILLRECT | (rop << 24));
-   tdfx_outl(DSTSIZE,    w | (h << 16));
-   tdfx_outl(LAUNCH_2D,  x | (y << 16));
+   tdfx_outl(DSTSIZE,    width | (height << 16));
+   tdfx_outl(LAUNCH_2D,  x1 | (y1 << 16));
    banshee_wait_idle();
 }
 
 /*
- * Screen-to-Screen BitBlt 2D command (for the bmove fb op.) 
+ * Screen-to-Screen BitBlt 2D command  
  */
-
-static void do_bitblt(u32 curx, 
-			   u32 cury, 
-			   u32 dstx,
-			   u32 dsty, 
-			   u32 width, 
-			   u32 height,
-			   u32 stride,
-			   u32 bpp) {
-
+static void tdfx_copyarea(void *par, int sx, int sy, unsigned int width,
+                          unsigned int height, int dx, int dy)
+{
    u32 blitcmd = COMMAND_2D_S2S_BITBLT | (ROP_COPY << 24);
-   u32 fmt= stride | ((bpp+((bpp==8) ? 0 : 8)) << 13); 
+   u32 fmt= info->fix.line_length | ((bpp+((bpp==8) ? 0 : 8)) << 13); 
    
-   if (curx <= dstx) {
+   if (sx <= dx) {
      //-X 
      blitcmd |= BIT(14);
-     curx += width-1;
-     dstx += width-1;
+     sx += width-1;
+     dx += width-1;
    }
-   if (cury <= dsty) {
+   if (sy <= dy) {
      //-Y  
      blitcmd |= BIT(15);
-     cury += height-1;
-     dsty += height-1;
+     sy += height-1;
+     dy += height-1;
    }
    
    banshee_make_room(6);
@@ -480,35 +493,35 @@ static void do_bitblt(u32 curx,
    tdfx_outl(DSTFORMAT, fmt);
    tdfx_outl(COMMAND_2D, blitcmd); 
    tdfx_outl(DSTSIZE,   width | (height << 16));
-   tdfx_outl(DSTXY,     dstx | (dsty << 16));
-   tdfx_outl(LAUNCH_2D, curx | (cury << 16)); 
+   tdfx_outl(DSTXY,     dx | (dy << 16));
+   tdfx_outl(LAUNCH_2D, sx | (sy << 16)); 
    banshee_wait_idle();
 }
 
+static void tdfx_imageblit(void *par, int dx, int dy, unsigned int width,
+                           unsigned int height, int image_depth, void *image)
+{
 static void do_putc(u32 fgx, u32 bgx,
 			 struct display *p,
 			 int c, int yy,int xx)
 {   
    int i;
-   int stride=fb_info.current_par.lpitch;
-   u32 bpp=fb_info.current_par.bpp;
-   int fw=(fontwidth(p)+7)>>3;
-   u8 *chardata=p->fontdata+(c&p->charmask)*fontheight(p)*fw;
-   u32 fmt= stride | ((bpp+((bpp==8) ? 0 : 8)) << 13); 
-   
-   xx *= fontwidth(p);
-   yy *= fontheight(p);
+   int stride = info.fix.line_length;
+   u32 bpp = fb_info.var.bits_per_pixel;
+   int fw = (width + 7) >> 3;
+   u8 *chardata = image * fw;
+   u32 fmt= stride | ((bpp + ((bpp==8) ? 0 : 8)) << 13); 
 
-   banshee_make_room(8+((fontheight(p)*fw+3)>>2) );
+   banshee_make_room(8+((height*fw + 3) >> 2));
    tdfx_outl(COLORFORE, fgx);
    tdfx_outl(COLORBACK, bgx);
    tdfx_outl(SRCXY,     0);
-   tdfx_outl(DSTXY,     xx | (yy << 16));
+   tdfx_outl(DSTXY,     dx | (dy << 16));
    tdfx_outl(COMMAND_2D, COMMAND_2D_H2S_BITBLT | (ROP_COPY << 24));
    tdfx_outl(SRCFORMAT, 0x400000);
    tdfx_outl(DSTFORMAT, fmt);
-   tdfx_outl(DSTSIZE,   fontwidth(p) | (fontheight(p) << 16));
-   i=fontheight(p);
+   tdfx_outl(DSTSIZE,   width | height << 16));
+   i = height;
    switch (fw) {
     case 1:
      while (i>=4) {
@@ -533,7 +546,7 @@ static void do_putc(u32 fgx, u32 bgx,
      break;
    default:
      // Is there a font with width more that 16 pixels ?
-     for (i=fontheight(p);i>0;i--) {
+     for (i = height;i > 0; i--) {
 	 tdfx_outl(LAUNCH_2D,*(u32*)chardata);
 	 chardata+=4;
      }
