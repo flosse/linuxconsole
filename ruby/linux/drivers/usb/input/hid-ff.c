@@ -53,6 +53,9 @@ static struct hid_ff_initializer inits[] = {
 #ifdef CONFIG_LOGITECH_RUMBLE
 	{0x46d, 0xc211, hid_lgff_init},
 #endif
+#ifdef CONFIG_LOGITECH_3D
+	{0x46d, 0xc283, hid_lg3d_init},
+#endif
 #ifdef CONFIG_HID_PID
 	{0x45e, 0x001b, hid_pid_init},
 #endif
@@ -79,5 +82,9 @@ int hid_ff_init(struct hid_device* hid)
 	init = hid_get_ff_init(hid->dev->descriptor.idVendor,
 			       hid->dev->descriptor.idProduct);
 
-	return init? init->init(hid) : -ENOSYS;
+	if (!init) {
+		warn("hid_ff_init could not find initializer");
+		return -ENOSYS;
+	}
+	return init->init(hid);
 }

@@ -34,6 +34,7 @@
 #include <linux/circ_buf.h>
 
 #include "hid.h"
+#include "fixp-arith.h"
 
 #define RUN_AT(t) (jiffies + (t))
 
@@ -341,8 +342,6 @@ static void hid_lg3d_timer(unsigned long timer_data)
 	int i;
 	int err;
 
-	x = 0;
-	y = 0;
 	spin_lock_irqsave(&lg3d->lock, flags);
 
 	if (test_bit(DEVICE_USB_XMIT, lg3d->flags)) {
@@ -361,12 +360,21 @@ static void hid_lg3d_timer(unsigned long timer_data)
 		return;
 	}
 
+	x = 0x7f;
+	y = 0x7f;
+
  	for (i=0; i<N_EFFECTS; ++i) {
 		struct lg3d_effect* effect = lg3d->effects +i;
 
 		if (test_bit(EFFECT_PLAYING, effect->flags)) {
+
 			if (effect->effect.type == FF_CONSTANT) {
-				x = y = 0x60;   /*TODO: actual implementation */
+				//TODO: handle envelopes
+				int degrees = effect->effect.direction * 360 >> 16;
+				x += fixp_mult(fixp_sin(degrees),
+					       fixp_new16(effect->effect.u.constant.level));
+				y += fixp_mult(-fixp_cos(degrees),
+					       fixp_new16(effect->effect.u.constant.level));
 			}
 
 			/* One run of the effect is finished playing */
@@ -374,9 +382,13 @@ static void hid_lg3d_timer(unsigned long timer_data)
 					effect->started_at
 					+ effect->effect.replay.delay*HZ/1000
 					+ effect->effect.replay.length*HZ/1000)) {
-				if (--effect->count <= 0)
+				dbg("Finished playing once");
+				if (--effect->count <= 0) {
+					dbg("Stopped");
 					clear_bit(EFFECT_PLAYING, effect->flags);
+				}
 				else {
+					dbg("Start again");
 					if (effect->effect.replay.length != 0) {
 						clear_bit(EFFECT_PLAYING, effect->flags);
 						set_bit(EFFECT_STARTED, effect->flags);
@@ -386,16 +398,23 @@ static void hid_lg3d_timer(unsigned long timer_data)
 			}
 
 		} else if (test_bit(EFFECT_STARTED, lg3d->effects[i].flags)) {
+			dbg("Started");
 			/* Check if we should start playing the effect */
 			if (time_after(jiffies,
 					lg3d->effects[i].started_at
 					+ lg3d->effects[i].effect.replay.delay*HZ/1000)) {
+				dbg("Now playing");
 				clear_bit(EFFECT_STARTED, lg3d->effects[i].flags);
 				set_bit(EFFECT_PLAYING, lg3d->effects[i].flags);
 			}
 		}
  	}
 
+	if (x < 0) x = 0;
+	if (x > 0xff) x = 0xff;
+	if (y < 0) y = 0;
+	if (y > 0xff) y = 0xff;
+	
 	lg3d->urbffout->pipe = usb_sndctrlpipe(hid->dev, 0);
 	lg3d->ffcr.bRequestType = USB_TYPE_CLASS | USB_DIR_OUT | USB_RECIP_INTERFACE;
 	lg3d->urbffout->transfer_buffer_length = lg3d->ffcr.wLength = 8;

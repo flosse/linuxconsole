@@ -1420,8 +1420,10 @@ static void* hid_probe(struct usb_device *dev, unsigned int ifnum,
 
 	dbg("HID probe called for ifnum %d", ifnum);
 
-	if (!(hid = usb_hid_configure(dev, ifnum)))
+	if (!(hid = usb_hid_configure(dev, ifnum))) {
+		err("usb_hid_configure failed");
 		return NULL;
+	}
 
 	hid_init_reports(hid);
 	hid_dump_device(hid);
