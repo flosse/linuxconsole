@@ -158,10 +158,8 @@ static void magellan_connect(struct serio *serio, struct serio_dev *dev)
 	for (i = 0; i < 6; i++) {
 		t = magellan_axes[i];
 		set_bit(t, magellan->dev.absbit);
-		magellan->dev.absmin[t] = -2000;
-		magellan->dev.absmax[t] =  2000;
-		magellan->dev.absflat[t] = 0;
-		magellan->dev.absfuzz[t] = 2;
+		magellan->dev.absmin[t] = -360;
+		magellan->dev.absmax[t] =  360;
 	}
 
 	magellan->serio = serio;
