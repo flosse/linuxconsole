@@ -51,23 +51,25 @@ struct sa1100fb_mach_info {
 
 /* Shadows for LCD controller registers */
 struct sa1100fb_lcd_reg {
-	Word lccr0;
-	Word lccr1;
-	Word lccr2;
-	Word lccr3;
+	unsigned long lccr0;
+	unsigned long lccr1;
+	unsigned long lccr2;
+	unsigned long lccr3;
 };
 
 #define RGB_8	(0)
 #define RGB_16	(1)
 #define NR_RGB	2
 
-struct sa1100_par {
-	struct sa1100fb_rgb     rgb[NR_RGB];
+struct sa1100fb_info {
+	struct fb_info		fb;
+	signed int		currcon;
+
+	struct sa1100fb_rgb	*rgb[NR_RGB];
 
 	u_int			max_bpp;
 	u_int			max_xres;
 	u_int			max_yres;
-	u_int			bpp;
 
 	/*
 	 * These are the addresses we mapped
@@ -92,18 +94,20 @@ struct sa1100_par {
 				cmap_static:1,
 				unused:30;
 
-        u_int                   reg_lccr0;
-        u_int                   reg_lccr1;
-        u_int                   reg_lccr2;
-        u_int                   reg_lccr3;
-
-	int pcd;
+	u_int			reg_lccr0;
+	u_int			reg_lccr1;
+	u_int			reg_lccr2;
+	u_int			reg_lccr3;
 
 	volatile u_char		state;
 	volatile u_char		task_state;
 	struct semaphore	ctrlr_sem;
 	wait_queue_head_t	ctrlr_wait;
 	struct tq_struct	task;
+
+#ifdef CONFIG_PM
+	struct pm_dev		*pm;
+#endif
 #ifdef CONFIG_CPU_FREQ
 	struct notifier_block	clockchg;
 #endif
@@ -111,7 +115,7 @@ struct sa1100_par {
 
 #define __type_entry(ptr,type,member) ((type *)((char *)(ptr)-offsetof(type,member)))
 
-#define TO_INF(ptr,member)	__type_entry(ptr,struct sa1100_par,member)
+#define TO_INF(ptr,member)	__type_entry(ptr,struct sa1100fb_info,member)
 
 #define SA1100_PALETTE_MODE_VAL(bpp)    (((bpp) & 0x018) << 9)
 

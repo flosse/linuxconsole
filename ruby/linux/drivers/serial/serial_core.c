@@ -104,17 +104,23 @@ static void uart_stop(struct tty_struct *tty)
 	spin_unlock_irqrestore(&info->lock, flags);
 }
 
+static void __uart_start(struct tty_struct *tty)
+{
+	struct uart_info *info = tty->driver_data;
+	if (info->xmit.head != info->xmit.tail && info->xmit.buf &&
+	    !tty->stopped && !tty->hw_stopped)
+		info->ops->start_tx(info->port, 1, 1);
+}
+
 static void uart_start(struct tty_struct *tty)
 {
 	struct uart_info *info = tty->driver_data;
 	unsigned long flags;
-	int nonempty;
 
 	pm_access(info->state->pm);
 
 	spin_lock_irqsave(&info->lock, flags);
-	nonempty = (info->xmit.head != info->xmit.tail && info->xmit.buf);
-	info->ops->start_tx(info->port, nonempty, 1);
+	__uart_start(tty);
 	spin_unlock_irqrestore(&info->lock, flags);
 }
 
@@ -373,20 +379,7 @@ static void uart_put_char(struct tty_struct *tty, u_char ch)
 
 static void uart_flush_chars(struct tty_struct *tty)
 {
-	struct uart_info *info = tty->driver_data;
-	unsigned long flags;
-
-	pm_access(info->state->pm);
-
-	if (info->xmit.head == info->xmit.tail
-	    || tty->stopped
-	    || tty->hw_stopped
-	    || !info->xmit.buf)
-		return;
-
-	spin_lock_irqsave(&info->lock, flags);
-	info->ops->start_tx(info->port, 1, 0);
-	spin_unlock_irqrestore(&info->lock, flags);
+	uart_start(tty);
 }
 
 static int uart_write(struct tty_struct *tty, int from_user,
@@ -452,12 +445,7 @@ static int uart_write(struct tty_struct *tty, int from_user,
 		spin_unlock_irqrestore(&info->lock, flags);
 	}
 
-	pm_access(info->state->pm);
-
-	if (info->xmit.head != info->xmit.tail
-	    && !tty->stopped
-	    && !tty->hw_stopped)
-		info->ops->start_tx(info->port, 1, 0);
+	uart_start(tty);
 	return ret;
 }
 
@@ -774,7 +762,7 @@ static int uart_get_lsr_info(struct uart_info *info, unsigned int *value)
 	    ((CIRC_CNT(info->xmit.head, info->xmit.tail,
 		       UART_XMIT_SIZE) > 0) &&
 	     !info->tty->stopped && !info->tty->hw_stopped))
-		result &= TIOCSER_TEMT;
+		result &= ~TIOCSER_TEMT;
 	
 	return put_user(result, value);
 }
@@ -797,7 +785,7 @@ static int uart_set_modem_info(struct uart_info *info, unsigned int cmd,
 	if (get_user(arg, value))
 		return -EFAULT;
 
-	spin_lock_irq(&info->lock, flags);
+	spin_lock_irq(&info->lock);
 	old = info->mctrl;
 	switch (cmd) {
 	case TIOCMBIS:	info->mctrl |= arg;	break;
@@ -1002,33 +990,29 @@ static void uart_set_termios(struct tty_struct *tty, struct termios *old_termios
 
 	uart_change_speed(info, old_termios);
 
+	spin_lock_irqsave(&info->lock, flags);
+
 	/* Handle transition to B0 status */
-	if ((old_termios->c_cflag & CBAUD) &&
-	    !(cflag & CBAUD)) {
-		spin_lock_irqsave(&info->lock, flags);
+	if ((old_termios->c_cflag & CBAUD) && !(cflag & CBAUD)) {
 		info->mctrl &= ~(TIOCM_RTS | TIOCM_DTR);
 		info->ops->set_mctrl(info->port, info->mctrl);
-		spin_unlock_irqrestore(&info->lock, flags);
 	}
 
 	/* Handle transition away from B0 status */
-	if (!(old_termios->c_cflag & CBAUD) &&
-	    (cflag & CBAUD)) {
-		spin_lock_irqsave(&info->lock, flags);
+	if (!(old_termios->c_cflag & CBAUD) && (cflag & CBAUD)) {
 		info->mctrl |= TIOCM_DTR;
 		if (!(cflag & CRTSCTS) ||
 		    !test_bit(TTY_THROTTLED, &tty->flags))
 			info->mctrl |= TIOCM_RTS;
 		info->ops->set_mctrl(info->port, info->mctrl);
-		spin_unlock_irqrestore(&info->lock, flags);
 	}
 
 	/* Handle turning off CRTSCTS */
-	if ((old_termios->c_cflag & CRTSCTS) &&
-	    !(cflag & CRTSCTS)) {
+	if ((old_termios->c_cflag & CRTSCTS) && !(cflag & CRTSCTS)) {
 		tty->hw_stopped = 0;
-		uart_start(tty);
+		__uart_start(tty);
 	}
+	spin_unlock_irqrestore(&info->lock, flags);
 
 #if 0
 	/*
@@ -1936,7 +1920,6 @@ int uart_register_driver(struct uart_driver *drv)
 	 * The callout device is just like the normal device except for
 	 * the major number and the subtype code.
 	 */
-	callout			= normal + 1;
 	*callout		= *normal;
 	callout->name		= drv->callout_name;
 	callout->major		= drv->callout_major;

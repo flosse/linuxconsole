@@ -318,10 +318,12 @@ static inline void
 uart_handle_cts_change(struct uart_info *info, unsigned int status)
 {
 	struct uart_port *port = info->port;
+	unsigned long flags;
 
 	port->icount.cts++;
 
 	if (info->flags & ASYNC_CTS_FLOW) {
+		spin_lock_irqsave(&info->lock, flags);
 		if (info->tty->hw_stopped) {
 			if (status) {
 				info->tty->hw_stopped = 0;
@@ -334,6 +336,7 @@ uart_handle_cts_change(struct uart_info *info, unsigned int status)
 				info->ops->stop_tx(port, 0);
 			}
 		}
+		spin_unlock_irqrestore(&info->lock, flags);
 	}
 }
 
