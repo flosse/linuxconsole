@@ -128,7 +128,6 @@ static struct iforce_device {
 } iforce_device[] = {
 	{ 0x044f, 0xa01c, "Thrustmaster Motor Sport GT",		btn_wheel, abs_wheel, ff_iforce },
 	{ 0x046d, 0xc281, "Logitech WingMan Force",			btn_joystick, abs_joystick, ff_iforce },
-	{ 0x046d, 0xc285, "Logitech WingMan Strike Force 3D",		btn_joystick, abs_joystick, ff_iforce },
 	{ 0x046d, 0xc291, "Logitech WingMan Formula Force",		btn_wheel, abs_wheel, ff_iforce },
 	{ 0x05ef, 0x020a, "AVB Top Shot Pegasus",			btn_joystick, abs_joystick, ff_iforce },
 	{ 0x05ef, 0x8884, "AVB Mag Turbo Force",			btn_wheel, abs_wheel, ff_iforce },
@@ -323,9 +322,6 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 	empty = head == tail;
 	XMIT_INC(iforce->xmit.head, n+2);
 
-	spin_unlock_irqrestore(&iforce->xmit_lock, flags);
-
-
 /*
  * Store packet in xmit buffer
  */
@@ -342,11 +338,12 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 	       c);
 	if (n != c) {
 		memcpy(&iforce->xmit.buf[0],
-		       data,
+		       data + c,
 		       n - c);
 	}
 	XMIT_INC(head, n);
 
+	spin_unlock_irqrestore(&iforce->xmit_lock, flags);
 /*
  * If necessary, start the transmission
  */
@@ -407,8 +404,10 @@ static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char 
 	}
 #endif
 
-	if (!iforce->type)
+	if (!iforce->type) {
+		being_used--;
 		return;
+	}
 
 	switch (HI(cmd)) {
 
@@ -1374,7 +1373,6 @@ static void iforce_usb_disconnect(struct usb_device *dev, void *ptr)
 static struct usb_device_id iforce_usb_ids [] = {
 	{ USB_DEVICE(0x044f, 0xa01c) },		/* Thrustmaster Motor Sport GT */
 	{ USB_DEVICE(0x046d, 0xc281) },		/* Logitech WingMan Force */
-	{ USB_DEVICE(0x046d, 0xc285) },		/* Logitech WingMan Strike Force 3D */
 	{ USB_DEVICE(0x046d, 0xc291) },		/* Logitech WingMan Formula Force */
 	{ USB_DEVICE(0x05ef, 0x020a) },		/* AVB Top Shot Pegasus */
 	{ USB_DEVICE(0x05ef, 0x8884) },		/* AVB Mag Turbo Force */
