@@ -106,6 +106,9 @@ extern void prom_con_init(void);
 #ifdef CONFIG_MDA_CONSOLE
 extern void mda_console_init(void);
 #endif
+#ifdef CONFIG_FB_CONSOLE
+extern void fb_console_init(void);
+#endif
 #endif
 extern int rio_init(void);
 
@@ -2278,6 +2281,9 @@ void __init tty_init(void)
 #endif
 #if defined (CONFIG_MDA_CONSOLE)
         mda_console_init();
+#endif
+#if defined (CONFIG_FB_CONSOLE)
+	fb_console_init();
 #endif
 	kbd_init();
 	console_map_init();
