@@ -289,17 +289,16 @@ asmlinkage long sys_syslog(int type, char * buf, int len)
 static void __call_console_drivers(unsigned long start, unsigned long end)
 {
 	struct console *con;
-	unsigned long flags;
 
        	for (con = console_drivers; con; con = con->next) {
                	if ((con->flags & CON_ENABLED) && con->write) {
 			/* Make sure that we print immediately */
 			if (oops_in_progress)
-				spin_lock_init(&con->lock);
+				init_MUTEX(&con->driver->tty_lock);
 
-			spin_lock_irqsave(&con->lock, flags);
+			down(&con->driver->tty_lock);
                        	con->write(con, &LOG_BUF(start), end - start);
-			spin_unlock_irqrestore(&con->lock, flags);
+			up(&con->driver->tty_lock);
 		}
 	}
 }
@@ -456,6 +455,61 @@ void console_print(const char *s)
 }
 EXPORT_SYMBOL(console_print);
 
+/**
+ * acquire_console_sem - lock the console system for exclusive use.
+ *
+ * Acquires a semaphore which guarantees that the caller has
+ * exclusive access to the console system and the console_drivers list.
+ *
+ * Can sleep, returns nothing.
+ */
+void acquire_console_sem(struct tty_driver *device)
+{
+	if (in_interrupt())
+        	BUG();
+       	down(&device->tty_lock);
+       	//console_may_schedule = 1;
+}
+EXPORT_SYMBOL(acquire_console_sem);
+
+/**
+ * release_console_sem - unlock the console system
+ *
+ * Releases the semaphore which the caller holds on the console system
+ * and the console driver list.
+ *
+ * While the semaphore was held, console output may have been buffered
+ * by printk().  If this is the case, release_console_sem() emits
+ * the output prior to releasing the semaphore.
+ *
+ * If there is output waiting for klogd, we wake it up.
+ *
+ * release_console_sem() may be called from any context.
+ */
+void release_console_sem(struct tty_driver *device)
+{
+	unsigned long _con_start, _log_end;
+        unsigned long must_wake_klogd = 0;
+	unsigned long flags;
+       	
+	for ( ; ; ) {
+        	spin_lock_irqsave(&logbuf_lock, flags);
+               	must_wake_klogd |= log_start - log_end;
+               	if (con_start == log_end)
+                       	break;                  /* Nothing to print */
+               	_con_start = con_start;
+             	_log_end = log_end;
+               	con_start = log_end;            /* Flush */
+               	spin_unlock_irqrestore(&logbuf_lock, flags);
+               	call_console_drivers(_con_start, _log_end);
+       	}
+       	//console_may_schedule = 0;
+       	up(&device->tty_lock);
+       	spin_unlock_irqrestore(&logbuf_lock, flags);
+       	if (must_wake_klogd && !oops_in_progress)
+        	wake_up_interruptible(&log_wait);
+}
+
 /*
  * The console driver calls this routine during kernel initialization
  * to register the console printing procedure with printk() and to
@@ -519,7 +573,8 @@ void register_console(struct console * console)
 		console->next = console_drivers->next;
 		console_drivers->next = console;
 	}
-	spin_lock_init(&console->lock);
+	init_MUTEX(&console->driver->tty_lock);
+	console->driver->flags |= TTY_DRIVER_CONSOLE;
 	up(&console_sem);
 	if (console->flags & CON_PRINTBUFFER) { 
 		/*

@@ -721,7 +721,7 @@ static void vt_callback(void *private)
         struct vt_struct *vt = (struct vt_struct *) private;
         if  (!vt->want_vc) return;
 
-        spin_lock_irq(&vt->want_vc->vc_tty->driver.tty_lock);
+        down(&vt->want_vc->vc_tty->driver.tty_lock);
 
         if (vt->want_vc->vc_num != vt->fg_console->vc_num &&
             !vt->vt_dont_switch) {
@@ -742,7 +742,7 @@ static void vt_callback(void *private)
                       sw->con_scroll(vt->fg_console, vt->scrollback_delta);
                 vt->scrollback_delta = 0;
         }
-        spin_unlock_irq(&vt->fg_console->vc_tty->driver.tty_lock);
+        up(&vt->fg_console->vc_tty->driver.tty_lock);
 }
 
 /*
@@ -991,7 +991,7 @@ const char *create_vt(struct vt_struct *vt, int init)
 	if (!admin_vt) {
 		admin_vt = vt;
 #ifdef CONFIG_VT_CONSOLE
-		vt_console_driver.lock = vt_driver.tty_lock;
+		vt_console_driver.driver = &vt_driver;
 		register_console(&vt_console_driver);
         	printable = 1;
 #endif
@@ -1080,7 +1080,7 @@ again:
          * the console spinlock during the entire write.
          */
 
-        spin_lock_irq(&vc->vc_tty->driver.tty_lock);
+        down(&vc->vc_tty->driver.tty_lock);
 
         himask = hi_font_mask;
         charmask = himask ? 0x1ff : 0xff;
@@ -1213,7 +1213,7 @@ again:
 			      (u16 *)draw_to-(u16 *)draw_from, y, draw_x);
         	draw_x = -1;
         }
-        spin_unlock_irq(&vc->vc_tty->driver.tty_lock);
+        up(&vc->vc_tty->driver.tty_lock);
 out:
         if (from_user) {
                 /* If the user requested something larger than
@@ -1276,14 +1276,13 @@ static int vt_write(struct tty_struct * tty, int from_user,
                     const unsigned char *buf, int count)
 {
         struct vc_data *vc = (struct vc_data *) tty->driver_data;
-	unsigned long flags;
 	int retval;
 
         pm_access(vc->display_fg->pm_con);
         retval = do_con_write(tty, from_user, buf, count);
-	spin_lock_irqsave(&vc->vc_tty->driver.tty_lock, flags);
+	up(&vc->vc_tty->driver.tty_lock);
         set_cursor(vc);
-	spin_unlock_irqrestore(&vc->vc_tty->driver.tty_lock, flags);
+	down(&vc->vc_tty->driver.tty_lock);
         return retval;
 }
 
@@ -1305,12 +1304,11 @@ static int vt_write_room(struct tty_struct *tty)
 static void vt_flush_chars(struct tty_struct *tty)
 {
         struct vc_data *vc = (struct vc_data *)tty->driver_data;
-	unsigned long flags;
 
         pm_access(vc->display_fg->pm_con);
-	spin_lock_irqsave(&vc->vc_tty->driver.tty_lock, flags);
+	down(&vc->vc_tty->driver.tty_lock);
         set_cursor(vc);
-	spin_unlock_irqrestore(&vc->vc_tty->driver.tty_lock, flags);
+	up(&vc->vc_tty->driver.tty_lock);
 }
 
 static int vt_chars_in_buffer(struct tty_struct *tty)

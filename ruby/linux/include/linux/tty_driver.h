@@ -130,7 +130,7 @@ struct tty_driver {
 	struct termios init_termios; /* Initial termios */
 	int	flags;		/* tty driver flags */
 	int	*refcount;	/* for loadable tty drivers */
-	spinlock_t tty_lock;	/* access control for printk and tty layer */
+	struct semaphore tty_lock;/* access control for printk and tty layer */
 	struct proc_dir_entry *proc_entry; /* /proc fs entry */
 	struct tty_driver *other; /* only used for the PTY driver */
 
@@ -202,11 +202,14 @@ struct tty_driver {
  * TTY_DRIVER_NO_DEVFS --- if set, do not create devfs entries. This
  *	is only used by tty_register_driver().
  *
+ * TTY_DRIVER_CONSOLE --- if set, indicates that this driver is also 
+ *	used by printk. It is set by register_console. 
  */
 #define TTY_DRIVER_INSTALLED		0x0001
 #define TTY_DRIVER_RESET_TERMIOS	0x0002
 #define TTY_DRIVER_REAL_RAW		0x0004
 #define TTY_DRIVER_NO_DEVFS		0x0008
+#define TTY_DRIVER_CONSOLE		0x0010
 
 /* tty driver types */
 #define TTY_DRIVER_TYPE_SYSTEM		0x0001
