@@ -437,12 +437,25 @@ static void fn_send_intr(struct vc_data *vc)
 
 static void fn_scroll_forw(struct vc_data *vc)
 {
-//	scroll_up(vc, vc->vc_rows/2);
+	unsigned short *p = (unsigned short *) (vc->vc_visible_origin + vc->vc_size_row);
+
+	if (vc->vc_visible_origin < vc->vc_origin) {
+		vc->vc_visible_origin = (unsigned long) p;
+		do_update_region(vc, vc->vc_visible_origin, vc->vc_screensize); 
+//		scroll_up(vc, vc->vc_rows/2);
+	}
 }
 
 static void fn_scroll_back(struct vc_data *vc)
 {
-//	scroll_down(vc, vc->vc_rows/2);
+	unsigned short *p = (unsigned short *) (vc->vc_visible_origin - vc->vc_size_row);
+	unsigned long q = (unsigned long) p;
+
+	if (q >= ((unsigned long) vc->vc_screenbuf)) {
+		vc->vc_visible_origin = q;
+		do_update_region(vc, q, vc->vc_screensize); 
+//		scroll_down(vc, vc->vc_rows/2);
+	}
 }
 
 static void fn_compose(struct vc_data *vc)
