@@ -18,7 +18,7 @@
 #include <linux/malloc.h>
 #include <linux/delay.h>
 #include <linux/fb.h>
-#include <linux/console.h>
+#include <linux/vt_kern.h>
 #include <linux/selection.h>
 #include <linux/ioport.h>
 #include <linux/init.h>
@@ -26,14 +26,17 @@
 #include <asm/io.h>
 
 #include "fbcon-vga-planes.h"
+#include "fbcon-vga.h"
+#include "fbcon-cfb4.h"
+#include "fbcon-cfb8.h"
 #incldue "fbcon.h"
 #include "vga.h"
 
-#define dac_reg	(0x3c8)
-#define dac_val	(0x3c9)
+#define dac_reg (VGA_PEL_IW)	
+#define dac_val (VGA_PEL_D)	
 
 #define VGA_FB_PHYS 0xA0000
-#define VGA_FB_PHYS_LEN 65535
+#define VGA_FB_PHYS_LEN 65536
 
 /* --------------------------------------------------------------------- */
 
@@ -41,41 +44,33 @@
  * card parameters
  */
 
-static struct vga16fb_info {
-	struct fb_info  fb_info;
-	char *video_vbase;			/* 0xa0000 map address */
-	int isVGA;
-	
-	/* structure holding original VGA register settings when the
-           screen is blanked */
-	struct {
-		unsigned char	SeqCtrlIndex;		/* Sequencer Index reg.   */
-		unsigned char	CrtCtrlIndex;		/* CRT-Contr. Index reg.  */
-		unsigned char	CrtMiscIO;		/* Miscellaneous register */
-		unsigned char	HorizontalTotal;	/* CRT-Controller:00h */
-		unsigned char	HorizDisplayEnd;	/* CRT-Controller:01h */
-		unsigned char	StartHorizRetrace;	/* CRT-Controller:04h */
-		unsigned char	EndHorizRetrace;	/* CRT-Controller:05h */
-		unsigned char	Overflow;		/* CRT-Controller:07h */
-		unsigned char	StartVertRetrace;	/* CRT-Controller:10h */
-		unsigned char	EndVertRetrace;		/* CRT-Controller:11h */
-		unsigned char	ModeControl;		/* CRT-Controller:17h */
-		unsigned char	ClockingMode;		/* Seq-Controller:01h */
-	} vga_state;
-
+struct fb_info  fb_info;
 	int palette_blanked;
 	int vesa_blanked;
 } vga16fb;
 
 
 struct vga16fb_par {
+	char *video_vbase;                      /* 0xa0000 map address */
+        int isVGA;
 	u8 crtc[VGA_CRT_C];
 	u8 atc[VGA_ATT_C];
 	u8 gdc[VGA_GFX_C];
 	u8 seq[VGA_SEQ_C];
 	u8 misc;
+	u8 pel_msk;
 	u8 vss;
-	struct fb_var_screeninfo var;
+	u8 clkdiv;
+	/* structure holding original VGA register settings when the
+           screen is blanked */
+        struct {
+                unsigned char   SeqCtrlIndex;		/* Sequencer Index reg.
+  */
+                unsigned char   CrtCtrlIndex;           /* CRT-Contr. Index reg.  */
+                unsigned char   CrtMiscIO;              /* Miscellaneous register */
+                unsigned char   HorizontalTotal;        /* CRT-Controller:00h */                unsigned char   HorizDisplayEnd;        /* CRT-Controller:01h */                unsigned char   StartHorizRetrace;      /* CRT-Controller:04h */                unsigned char   EndHorizRetrace;        /* CRT-Controller:05h */                unsigned char   Overflow;               /* CRT-Controller:07h */                unsigned char   StartVertRetrace;       /* CRT-Controller:10h */                unsigned char   EndVertRetrace;         /* CRT-Controller:11h */                unsigned char   ModeControl;            /* CRT-Controller:17h */                unsigned char   ClockingMode;           /* Seq-Controller:01h */        } vga_state;
+	int palette_blanked;
+        int vesa_blanked;
 };
 
 /* --------------------------------------------------------------------- */
@@ -98,11 +93,6 @@ static struct fb_var_screeninfo vga16fb_defined = {
 	FB_VMODE_NONINTERLACED,
 	{0,0,0,0,0,0}
 };
-
-static struct display disp;
-static struct { u_short blue, green, red, pad; } palette[256];
-
-static int             currcon   = 0;
 
 /* --------------------------------------------------------------------- */
 
@@ -153,16 +143,6 @@ static int vga16fb_get_fix(struct fb_fix_screeninfo *fix, int con,
 	return 0;
 }
 
-static int vga16fb_get_var(struct fb_var_screeninfo *var, int con,
-			 struct fb_info *info)
-{
-	if(con==-1)
-		memcpy(var, &vga16fb_defined, sizeof(struct fb_var_screeninfo));
-	else
-		*var=fb_display[con].var;
-	return 0;
-}
-
 static void vga16fb_set_disp(int con, struct vga16fb_info *info)
 {
 	struct fb_fix_screeninfo fix;
@@ -192,13 +172,6 @@ static void vga16fb_set_disp(int con, struct vga16fb_info *info)
 	else
 		display->dispsw = &fbcon_ega_planes;
 	display->scrollmode = SCROLL_YREDRAW;
-}
-
-static void vga16fb_encode_var(struct fb_var_screeninfo *var,
-			       const struct vga16fb_par *par,
-			       const struct vga16fb_info *info)
-{
-	*var = par->var;
 }
 
 static void vga16fb_clock_chip(struct vga16fb_par *par,
@@ -553,25 +526,6 @@ static void ega16_setpalette(int regno, unsigned red, unsigned green, unsigned b
 	outb_p(0x20, 0x3C0); /* unblank screen */
 }
 
-static int vga16_getcolreg(unsigned regno, unsigned *red, unsigned *green,
-			  unsigned *blue, unsigned *transp,
-			  struct fb_info *fb_info)
-{
-	/*
-	 *  Read a single color register and split it into colors/transparent.
-	 *  Return != 0 for invalid regno.
-	 */
-
-	if (regno >= 16)
-		return 1;
-
-	*red   = palette[regno].red;
-	*green = palette[regno].green;
-	*blue  = palette[regno].blue;
-	*transp = 0;
-	return 0;
-}
-
 static void vga16_setpalette(int regno, unsigned red, unsigned green, unsigned blue)
 {
 	outb(regno,       dac_reg);
@@ -584,59 +538,38 @@ static int vga16fb_setcolreg(unsigned regno, unsigned red, unsigned green,
 			     unsigned blue, unsigned transp,
 			     struct fb_info *fb_info)
 {
-	int gray;
-
 	/*
 	 *  Set a single color register. The values supplied are
 	 *  already rounded down to the hardware's capabilities
 	 *  (according to the entries in the `var' structure). Return
 	 *  != 0 for invalid regno.
 	 */
-	
+	struct vga16_par *par = (struct vga16_par) fb_info->par;	
+
 	if (regno >= 16)
 		return 1;
 
-	palette[regno].red   = red;
-	palette[regno].green = green;
-	palette[regno].blue  = blue;
-	
-	if (currcon < 0)
-		gray = disp.var.grayscale;
-	else
-		gray = fb_display[currcon].var.grayscale;
-	if (gray) {
+	if (info->var.grayscale) {
 		/* gray = 0.30*R + 0.59*G + 0.11*B */
 		red = green = blue = (red * 77 + green * 151 + blue * 28) >> 8;
 	}
-	if (((struct vga16fb_info *) fb_info)->isVGA) 
+	if (par->isVGA) 
 		vga16_setpalette(regno,red,green,blue);
 	else
 		ega16_setpalette(regno,red,green,blue);
-	
 	return 0;
 }
 
-static void do_install_cmap(int con, struct fb_info *info)
-{
-	if (con != currcon)
-		return;
-	if (fb_display[con].cmap.len)
-		fb_set_cmap(&fb_display[con].cmap, 1, info);
-	else
-		fb_set_cmap(fb_default_cmap(16), 1, info); 
-}
-
-static int vga16fb_pan_display(struct fb_var_screeninfo *var, int con,
+static int vga16fb_pan_display(struct fb_var_screeninfo *var,
 			       struct fb_info *info) 
 {
-	if (var->xoffset + fb_display[con].var.xres > fb_display[con].var.xres_virtual ||
-	    var->yoffset + fb_display[con].var.yres > fb_display[con].var.yres_virtual)
+	if (var->xoffset + info->var.xres > info->var.xres_virtual ||
+	    var->yoffset + info->var.yres > info->var.yres_virtual)
 		return -EINVAL;
-	if (con == currcon)
-		vga16fb_pan_var(info, var);
-	fb_display[con].var.xoffset = var->xoffset;
-	fb_display[con].var.yoffset = var->yoffset;
-	fb_display[con].var.vmode &= ~FB_VMODE_YWRAP;
+	vga16fb_pan_var(info, var);
+	info->var.xoffset = var->xoffset;
+	info->var.yoffset = var->yoffset;
+	info->var.vmode &= ~FB_VMODE_YWRAP;
 	return 0;
 }
 

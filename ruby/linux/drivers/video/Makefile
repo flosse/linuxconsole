@@ -15,7 +15,7 @@ M_OBJS   :=
 # This list comes from 'grep -l EXPORT_SYMBOL *.[hc]'.
 
 export-objs    := fbmem.o fbcmap.o fbcon.o fbmon.o modedb.o \
-		  fbcon-afb.o fbcon-ilbm.o \
+		  fbcon-afb.o fbcon-ilbm.o fbcon-vga8-planes.o \
 		  fbcon-vga.o fbcon-iplan2p2.o fbcon-iplan2p4.o \
 		  fbcon-iplan2p8.o fbcon-vga-planes.o fbcon-cfb16.o \
 		  fbcon-cfb2.o fbcon-cfb24.o fbcon-cfb32.o fbcon-cfb4.o \
@@ -75,7 +75,7 @@ obj-$(CONFIG_FB_CLGEN)            += clgenfb.o fbgen.o
 obj-$(CONFIG_FB_S3TRIO)           += S3triofb.o
 obj-$(CONFIG_FB_TGA)              += tgafb.o fbgen.o
 obj-$(CONFIG_FB_VESA)             += vesafb.o 
-obj-$(CONFIG_FB_VGA16)            += vga16fb.o fbcon-vga-planes.o
+obj-$(CONFIG_FB_VGA16)            += vga16fb.o fbcon-vga-planes.o fbcon-vgaplanes.o
 obj-$(CONFIG_FB_VIRGE)            += virgefb.o
 obj-$(CONFIG_FB_G364)             += g364fb.o
 obj-$(CONFIG_FB_FM2)              += fm2fb.o
