@@ -80,9 +80,10 @@ static int analog_options[ANALOG_PORTS];
 #define ANALOG_GAMEPAD_FLAG1	0x10000000
 
 #define ANALOG_MAX_TIME		3	/* 3 ms */
-#define ANALOG_LOOP_TIME	1750	/* 1.75 * loop */
+#define ANALOG_LOOP_TIME	1500	/* 1.5 * loop */
 #define ANALOG_REFRESH_TIME	HZ/100	/* 10 ms */
 #define ANALOG_AXIS_TIME	2	/* 2 * refresh */
+#define ANALOG_INIT_RETRIES	8	/* 8 times */
 #define ANALOG_RESOLUTION	12	/* 12 bits */
 #define ANALOG_FUZZ		16	/* 4 bit gauss */
 
@@ -341,7 +342,7 @@ static void analog_calibrate_timer(struct analog_port *port)
 
 	port->speed = DELTA(t1, t2) - DELTA(t2, t3);
 
-	tx = 1 << 30;
+	tx = ~0;
 
 	for (i = 0; i < 50; i++) {
 		save_flags(flags);
@@ -351,7 +352,8 @@ static void analog_calibrate_timer(struct analog_port *port)
 		GET_TIME(t3);
 		restore_flags(flags);
 		udelay(i);
-		if ((t = DELTA(t1, t2) - DELTA(t2, t3)) < tx) tx = t;
+		t = DELTA(t1, t2) - DELTA(t2, t3);
+		if (t < tx) tx = t;
 	}
 
         port->loop = (ANALOG_LOOP_TIME * tx) / 50000;
@@ -448,7 +450,7 @@ static void analog_init_device(struct analog_port *port, struct analog *analog)
 		printk(" ["TIME_NAME" timer, %d %sHz clock, %d ns res]\n",
 		port->speed > 10000 ? (port->speed + 800) / 1000 : port->speed,
 		port->speed > 10000 ? "M" : "k",
-		port->loop * 1000000000 / ANALOG_LOOP_TIME / port->speed);
+		((((port->loop * 1000000) / port->speed) * 1000) / ANALOG_LOOP_TIME));
 }
 
 /*
@@ -538,7 +540,9 @@ static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
 	} else port->cooked = 1;
 
 	if (port->cooked) {
-		gameport_cooked_read(gameport, port->axes, &port->buttons);
+		for (i = 0; i < ANALOG_INIT_RETRIES; i++)
+			if (!gameport_cooked_read(gameport, port->axes, &port->buttons))
+				break;
 		for (i = 0; i < 4; i++)
 			if (port->axes[i] != -1) port->mask |= 1 << i;
 		port->fuzz = gameport->fuzz;
@@ -548,7 +552,9 @@ static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
 		port->mask = gameport_read(gameport);
 		wait_ms(ANALOG_MAX_TIME);
 		port->mask = (gameport_read(gameport) ^ port->mask) & port->mask & 0xf;
-		analog_cooked_read(port);
+		for (i = 0; i < ANALOG_INIT_RETRIES; i++)
+			if (!analog_cooked_read(port))
+				break;
 		port->fuzz = ANALOG_FUZZ;
 	}
 
