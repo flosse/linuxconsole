@@ -24,6 +24,7 @@
  * Johann Deneux <deneux@ifrance.com>
  */
 
+#include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -31,7 +32,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/ioctl.h>
-#include <stdio.h>
 
 #define BITS_PER_LONG (sizeof(long) * 8)
 #define OFF(x)  ((x)%BITS_PER_LONG)
@@ -195,6 +195,8 @@ int main(int argc, char** argv)
 	effects[4].id = -1;
 	effects[4].u.rumble.strong_magnitude = 0x8000;
 	effects[4].u.rumble.weak_magnitude = 0;
+	effects[4].replay.length = 5000;
+	effects[4].replay.delay = 1000;
 
 	if (ioctl(fd, EVIOCSFF, &effects[4]) == -1) {
 		perror("Upload effects[4]");
@@ -205,6 +207,8 @@ int main(int argc, char** argv)
 	effects[5].id = -1;
 	effects[5].u.rumble.strong_magnitude = 0;
 	effects[5].u.rumble.weak_magnitude = 0xc000;
+	effects[5].replay.length = 5000;
+	effects[5].replay.delay = 0;
 
 	if (ioctl(fd, EVIOCSFF, &effects[5]) == -1) {
 		perror("Upload effects[5]");
@@ -226,6 +230,11 @@ int main(int argc, char** argv)
 			}
 
 			printf("Now Playing: %s\n", effect_names[i]);
+		}
+		else if (i == -2) {
+			/* Crash test */
+			int i = *((int *)0);
+			printf("Crash test: %d\n", i);
 		}
 		else {
 			printf("No such effect\n");
