@@ -561,9 +561,9 @@ int con_set_cmap(struct vc_data *vc, unsigned char *arg)
                 get_user(default_blu[i], arg++);
         }
         for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
-                if (vc_cons_allocated(i)) {
-			struct vc_data *tmp = vt->vcs.vc_cons[i];
-                        for (j = k = 0; j < 16; j++) {
+		struct vc_data *tmp = vt->vcs.vc_cons[i];
+                if (!tmp) {
+                	for (j = k = 0; j < 16; j++) {
                                 tmp->vc_palette[k++] = default_red[j];
                                 tmp->vc_palette[k++] = default_grn[j];
                                 tmp->vc_palette[k++] = default_blu[j];
@@ -612,7 +612,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	unsigned char ucval;
 	int i, perm;
 
-	if (!vc_cons_allocated(vc->vc_num)) 	/* impossible? */
+	if (!vc) 	/* impossible? */
 		return -ENOIOCTLCMD;
 
 	/*
@@ -1313,7 +1313,7 @@ void reset_vc(struct vc_data *vc)
 
 void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
 {
-        if (!vc_cons_allocated(new_vc->vc_num)) {
+        if (!new_vc) {
                 /* strange ... */
                 /* printk("redraw_screen: tty %d not allocated ??\n", new_console+1); */
                 return;
