@@ -503,7 +503,7 @@ static void vga_set_palette(struct vc_data *c, unsigned char *table)
 static int vgacon_set_palette(struct vc_data *vc, unsigned char *table)
 {
 #ifdef CAN_LOAD_PALETTE
-	if (vga_video_type != VIDEO_TYPE_VGAC || vga_palette_blanked || !IS_VISIBLE)
+	if (vga_video_type != VIDEO_TYPE_VGAC || vga_palette_blanked)
 		return -EINVAL;
 	vga_set_palette(vc, table);
 	return 0;
