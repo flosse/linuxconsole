@@ -1,0 +1,70 @@
+--- mice.c	Mon Jan 24 17:01:13 2000
++++ mice.c.new	Mon Jan 24 17:01:30 2000
+@@ -1405,6 +1405,46 @@
+   return type;
+ }
+ 
++static int M_evdev(Gpm_Event *state,  unsigned char *data)
++{
++  struct input_event *event = (struct input_event *)data;
++  switch (event->type) {
++    case EV_KEY:
++      switch (event->code) {
++        case BTN_LEFT:
++          state->buttons = (state->buttons & ~GPM_B_LEFT) | (GPM_B_LEFT*event->value);
++          break;
++        case BTN_RIGHT:
++          state->buttons = (state->buttons & ~GPM_B_RIGHT) | (GPM_B_RIGHT*event->value);
++          break;
++        case BTN_MIDDLE:
++          state->buttons = (state->buttons & ~GPM_B_MIDDLE) | (GPM_B_MIDDLE*event->value);
++          break;
++        default:
++          break;
++      }
++      break;
++    case EV_REL:
++      switch (event->code) {
++        case REL_X:
++          state->dx = event->value;
++          break;
++	case REL_Y:
++          state->dy = event->value;
++          break;
++        case REL_WHEEL:
++          state->wdx = event->value;
++          break;
++	default:
++	  break;
++      }
++      break;
++    default:
++        break;
++  }
++  return 0;
++}
++
+ 
+ 
+ 
+@@ -1550,6 +1590,9 @@
+            "                     connector with 6 pins), 3 buttons.",
+            "", M_kmiabps2, I_kmiabps2, STD_FLG,
+                                 {0x00, 0x00, 0x00, 0x00}, 3, 1, 0, 0, 0},
++
++  {"evdev",   "Linux input event device", "", M_evdev, NULL, STD_FLG,
++              {0x00, 0x00, 0x00, 0x00}, sizeof(struct input_event),
++              sizeof(struct input_event), 0, 0, 0},
+ 
+   {"",     "",
+            "", NULL, NULL, 0,
+--- mice.c	Mon Jan 24 17:02:09 2000
++++ mice.c.new	Mon Jan 24 17:04:00 2000
+@@ -69,6 +69,7 @@
+ #include <linux/joystick.h>
+ #endif
+ 
++#include <linux/input.h>
+ 
+ #include "gpmInt.h"
+ #include "twiddler.h"
