@@ -177,12 +177,11 @@ static inline void cursor_undrawn(void)
 static const char *fbcon_startup(void);
 static void fbcon_init(struct vc_data *conp, int init);
 static void fbcon_deinit(struct vc_data *conp);
-static int fbcon_changevar(int con);
 static void fbcon_clear(struct vc_data *conp, int sy, int sx, int height,
 		       int width);
 static void fbcon_putc(struct vc_data *conp, int c, int ypos, int xpos);
-static void fbcon_putcs(struct vc_data *conp, const unsigned short *s, int count,
-			int ypos, int xpos);
+static void fbcon_putcs(struct vc_data *conp, const unsigned short *s, 
+			int count, int ypos, int xpos);
 static void fbcon_cursor(struct vc_data *conp, int mode);
 static int fbcon_scroll(struct vc_data *conp, int t, int b, int dir,
 			 int count);
@@ -250,7 +249,7 @@ int set_all_vcs(int fbidx, struct fb_ops *fb, struct fb_var_screeninfo *var,
     int unit, err;
 
     var->activate |= FB_ACTIVATE_TEST;
-    err = fb->fb_set_var(var, info);
+    err = fb_set_var(var, info);
     var->activate &= ~FB_ACTIVATE_TEST;
     if (err)
             return err;
@@ -297,11 +296,8 @@ void set_con2fb_map(int unit, int newidx)
 	   conp->vc_display_fg = &newfb->display_fg;
        if (!newfb->display_fg)
 	   newfb->display_fg = conp;
-       if (!newfb->changevar)
-           newfb->changevar = oldfb->changevar;
        /* tell console var has changed */
-       if (newfb->changevar)
-           newfb->changevar(unit);
+       fbcon_changevar(unit);
    }
 }
 
@@ -445,7 +441,6 @@ static void fbcon_init(struct vc_data *conp, int init)
 	info->count++;	
     } 	
 
-    info->changevar = &fbcon_changevar;
     DPRINTK("mode:   %s\n",info->modename);
     DPRINTK("visual: %d\n",info->fix.visual);
     DPRINTK("res:    %dx%d-%d\n", info->var.xres, info->var.yres, 
@@ -478,7 +473,7 @@ static void fbcon_deinit(struct vc_data *conp)
 }
 
 
-static int fbcon_changevar(int con)
+int fbcon_changevar(int con)
 {
     if (fb_display[con].conp)
 	    fbcon_set_disp(con, 0, 0);
