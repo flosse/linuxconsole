@@ -71,6 +71,7 @@ FB_FM2
       tristate '  ATI Mach64 display support' CONFIG_FB_ATY
    fi
    if [ "$CONFIG_PPC" = "y" ]; then
+      bool 'Backward compatibility mode for Xpmac' CONFIG_FB_COMPAT_XPMAC
       bool '  Open Firmware frame buffer device support' CONFIG_FB_OF
       if [ "$CONFIG_FB_OF" = "y" ]; then
          bool '    Apple "control" display support' CONFIG_FB_CONTROL
@@ -390,6 +391,13 @@ comment 'Console drivers'
    if [ "$ARCH" = "mips" -a "$CONFIG_SGI_IP22" != "y" -a "$CONFIG_DECSTATION" != "y" ]; then
       bool 'VGA text console' CONFIG_VGA_CONSOLE
    fi
+   #  if [ "$CONFIG_PCI" = "y" -a "$CONFIG_VGA_CONSOLE" = "y" ]; then
+   #    bool '   Allow VGA on any bus?' CONFIG_VGA_HOSE
+   #    if [ "$CONFIG_VGA_HOSE" = "y" ]; then
+   #      define_bool CONFIG_DUMMY_CONSOLE y
+   #    fi
+   #  fi
+
    if [ "$ARCH" = "i386" -o "$ARCH" = "sh" ]; then
       bool 'Video mode selection support' CONFIG_VIDEO_SELECT
       if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
