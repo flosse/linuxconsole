@@ -563,20 +563,20 @@ struct ff_effect {
 };
 
 /*
- * Force feedback axes. Those are position in a bit array
+ * Force feedback axes and supported effects types.
+ * Those are position in a bit array
  */
 #define FF_X		0x00
 #define FF_Y		0x01
-#define FF_MAX		0x01
-
-/*
- * Types of force feedback effects
- * Used in field 'type' of struct ff_effect.
- */
-#define FF_PERIODIC	0x00
-#define FF_CONSTANT	0x01
-#define FF_SPRING	0x10
-#define FF_FRICTION	0x11
+#define FF_PERIODIC	0x02
+#define FF_CONSTANT	0x03
+#define FF_SPRING	0x04
+#define FF_FRICTION	0x05
+#define FF_RUMBLE	0x06
+#define FF_N_EFFECTS_0	0x07
+/* ... */
+#define FF_N_EFFECTS_7  0x0e
+#define FF_MAX		0x0e
 
 /*
  * Waveforms of periodic effects
