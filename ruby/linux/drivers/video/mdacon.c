@@ -482,7 +482,21 @@ static int mdacon_font_op(struct vc_data *vc, struct console_font_op *op)
 
 static int mdacon_scroll(struct vc_data *vc, int lines)
 {
-	return 0;
+	u16 eattr = mda_convert_attr(vc->vc_video_erase_char);
+
+        if (lines < 0) {
+               	/* Scroll up */
+                scr_memmovew(MDA_ADDR(0, 0), MDA_ADDR(0, abs(lines)),
+                                (vc->vc_rows + lines)*vc->vc_cols*2);
+                scr_memsetw(MDA_ADDR(0, vc->vc_rows + lines), eattr,
+                               	abs(lines)*vc->vc_cols*2);
+        } else {
+               	/* Scroll down */
+               	scr_memmovew(MDA_ADDR(0, lines), MDA_ADDR(0, 0),
+                                (vc->vc_rows - lines)*vc->vc_cols*2);
+               	scr_memsetw(MDA_ADDR(0, 0), eattr, lines*vc->vc_cols*2);
+        }
+        return 0;
 }
 
 static void mdacon_cursor(struct vc_data *vc, int mode)

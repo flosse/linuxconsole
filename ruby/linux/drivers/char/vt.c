@@ -256,8 +256,8 @@ void scroll_up(struct vc_data *vc, int lines)
        	if (IS_VISIBLE) {
 		if (visible_origin != origin)
 			set_origin(vc);
-		do_update_region(vc, origin, screensize);
-//               sw->con_scroll(vc, -lines);
+		if (!sw->con_scroll || sw->con_scroll(vc, -lines))
+			do_update_region(vc, origin, screensize);
 	}
 }
 
@@ -275,8 +275,8 @@ void scroll_down(struct vc_data *vc, int lines)
        	if (IS_VISIBLE) {
 		if (visible_origin != origin)
 			set_origin(vc);
-		do_update_region(vc, origin, screensize);
-       // 	sw->con_scroll(vc, lines);
+		if (!sw->con_scroll || sw->con_scroll(vc, lines))
+			do_update_region(vc, origin, screensize);
 	}
 }
 
@@ -712,7 +712,7 @@ static void vt_callback(void *private)
 {
         struct vt_struct *vt = (struct vt_struct *) private;
 
-        if  (!vt->want_vc || !vt->want_vc->vc_tty) return;
+        if (!vt || !vt->want_vc || !vt->want_vc->vc_tty) return;
 
         acquire_console_sem(&vt->want_vc->vc_tty->driver);
 
