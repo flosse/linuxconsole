@@ -332,6 +332,9 @@ struct fb_ops {
     int (*fb_set_par)(struct fb_info *info);
     /* cursor control */
     int (*fb_cursor)(struct fb_info *info, struct fbcursor *cursor);		
+    /* get color register */
+    int (*fb_getcolreg)(unsigned regno, unsigned *reg, unsigned *green,
+			unsigned *blue, unsigned *transp, struct fb_info *info);
     /* set color register */
     int (*fb_setcolreg)(unsigned regno, unsigned red, unsigned green,
                         unsigned blue, unsigned transp, struct fb_info *info);
