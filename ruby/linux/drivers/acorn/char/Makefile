@@ -23,9 +23,6 @@ obj-m		:=
 obj-n		:=
 obj-		:=
 
-# All the objects that export symbols.
-export-objs	:= 
-
 obj-$(CONFIG_ATOMWIDE_SERIAL)	+= serial-atomwide.o
 obj-$(CONFIG_DUALSP_SERIAL)	+= serial-dualsp.o
 

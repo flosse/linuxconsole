@@ -4,7 +4,6 @@
 #include <asm/traps.h>
 #include <asm/atarihw.h>
 #include <asm/atariints.h>
-#include <asm/atarikb.h>
 #include <asm/atari_stdma.h>
 #include <asm/atari_stram.h>
 

@@ -5,6 +5,11 @@
  *
  * Based on code from Linus
  *
+ * Teemu Rantanen's Microsoft Busmouse support and Derrick Cole's
+ *   changes incorporated into 0.97pl4
+ *   by Peter Cervasio (pete%q106fm.uucp@wupost.wustl.edu) (08SEP92)
+ *   See busmouse.c for particulars.
+ *
  * Made things a lot mode modular - easy to compile in just one or two
  * of the misc drivers, as they are now completely independent. Linus.
  *
@@ -214,7 +219,6 @@ EXPORT_SYMBOL(misc_deregister);
 int __init misc_init(void)
 {
 	create_proc_read_entry("misc", 0, 0, misc_read_proc, NULL);
-
 /*
  *	Only one watchdog can succeed. We probe the pcwatchdog first,
  *	then the wdt cards and finally the software watchdog which always

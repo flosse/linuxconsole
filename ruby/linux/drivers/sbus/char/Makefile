@@ -50,7 +50,7 @@ endif
 else # !eq($(ARCH),sparc64)
 
 ifeq ($(CONFIG_PCI),y)
-O_OBJS += su.o 
+O_OBJS += su.o
 endif
 
 endif # !eq($(ARCH),sparc64)
