@@ -21,7 +21,7 @@
 	As linux is ported to more and more different flavors of hardware we
 are beginning to see the need to redesign many parts of the kernel. The reason
 is that linux was originally done on the 32 bit intel platform. Thus many
-parts of the kernel design was ix86 centeric. Over time this has changed and
+parts of the kernel design were ix86 centeric. Over time this has changed and
 still continues to change. The console redesign is another such a change to 
 support the needs of these many new devices to linux. 
 

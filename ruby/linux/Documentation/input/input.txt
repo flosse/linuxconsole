@@ -68,7 +68,7 @@ will be available as a character device on major 13, minor 63:
 
 	crw-r--r--   1 root     root      13,  63 Mar 28 22:45 mice
 
-  This device has to be created, unless you use devfs, in which case its
+  This device has to be created, unless you use devfs, in which case it's
 created automatically. The commands to do create it by hand are:
 
 	cd /dev
@@ -197,7 +197,7 @@ can open the device even when no mice are present.
 
   CONFIG_INPUT_MOUSEDEV_SCREEN_[XY] in the kernel configuration are
 the size of your screen (in pixels) in XFree86. This is needed if you
-want to use your digitizer in X, because it's movement is sent to X
+want to use your digitizer in X, because its movement is sent to X
 via a virtual PS/2 mouse and thus needs to be scaled
 accordingly. These values won't be used if you use a mouse only.
 
@@ -291,7 +291,7 @@ release, 1 for keypress and 2 for autorepeat.
 
 6. Contacts
 ~~~~~~~~~~~
-  This effort has it's home page at:
+  This effort has its home page at:
 
 	http://www.suse.cz/development/input/
 

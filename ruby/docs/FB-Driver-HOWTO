@@ -72,7 +72,7 @@
   Much of this information came from the new framebuffer internal API being 
   developed by me for the upcoming next series of kernels. Originally this 
   was based on a patch by Fabrice Bellard. I learned of this patch and 
-  was impressed by it. Later I toke over it development and improved even 
+  was impressed by it. Later I took over development and improved it even 
   more. Much thanks goes to Fabrice for getting the ball rolling. This API is 
   a natural extension of the original API developed by Martin Schaller and 
   now maintained by Geert Uytterhoeven (geert@linux-m68k.org). Thanks
@@ -159,7 +159,7 @@
   2.1 Monitor
 
   First lets discribe one of the biggest but often overlooked components, 
-  the monitor. Today there exist many types of monitors. Flat screen to LED 
+  the monitor. Today there are many types of monitors. Flat screen to LED 
   and so on. For all the many types the basic principle behind the monitor is 
   the same. Basically a monitor builds an image sequentially from the data it 
   gets on its input lines. To achieve this a beam scans over the screen in a
@@ -525,15 +525,15 @@
  
   3.7 Colors
 
-  There exist an endless number of colors but colors have a special property. 
+  There is an endless number of colors but colors have a special property. 
   If you take two colors and mix them together you get a different color. 
-  There exist many models to represent colors but fbdev is based on what is 
-  known as the RGB color model. Out of all the colors there exist three colors 
+  There are many models to represent colors but fbdev is based on what is 
+  known as the RGB color model. Out of all the colors there are three colors 
   in this model which when mixed in different amounts can produce any color. 
-  These colors are known as primary colors. There does exist a physical limit 
-  to mixing colors. If you take and mix red, green, and blue in equal amounts 
+  These colors are known as primary colors. There is a physical limit 
+  to mixing colors. If you mix red, green, and blue in equal amounts 
   you get gray. Now if you make each color component equally brighter the final
-  color will become white. Now there reaches a point where making each component
+  color will become white. Now there is a point where making each component
   brighter and brighter you will still end up with white. You can increase the
   intensity of a color component by any amount from some inital value up to 
   this physical limit. This is where the image depth comes in. As you know on 
@@ -566,7 +566,7 @@
                               
   The way fbdev tells what this video memory to pixel mapping is, is with 
   the type field in fb_fix_screeninfo. Here I'm going to describe the 
-  FB_TYPE_PACKED_PIXELS layout since it is the most common. Here there exists 
+  FB_TYPE_PACKED_PIXELS layout since it is the most common. Here there is 
   a direct mapping from video memory to pixel value. If you place a 5 in video 
   memory then the pixel value at that position will be 5. This is important 
   when you have memory mapped the video memory to userland. Next we consider 
@@ -588,7 +588,7 @@
   colors needed. If your application needs a specific set of colors it would 
   switch the color maps and you would get the needed colors. Of course this 
   also switches the other colors in the applications. That was the trade off.
-  This became what was known as pseudocolor mode. In fbdev API there exist two
+  This became what was known as pseudocolor mode. In fbdev API there are two
   types of pseudocolor mappings. A static one and a dynamic one. 
   FB_VISUAL_STATIC_PSEUDOCOLOR defines a video card that has a non programmable
   color map. What colors you get are what you are stuck with. The other type
@@ -596,9 +596,9 @@
   colors but this required having a larger color map. Also video memory prices
   started to drop and video cards begain to sell with more of it. To properly 
   support 256 color intensity levels for each color component you would need a 
-  color map of 16 million colors. So new mappings where developed in which
-  specific fields of a pixel where directly proportional to the intensity of a 
-  color component. Two types of mappings were developed. One being truecolor 
+  color map of 16 million colors. So new mappings were developed in which
+  specific fields of a pixel were directly proportional to the intensity of a 
+  color component. Two types of mappings were developed. One was truecolor 
   and the other directcolor. In truecolor you cannot change the mappings from
   the pixel value to color intensities. Setting a value of 64 to the red 
   component of the pixel will result in a red intensity of 64. How bright of a 
@@ -634,7 +634,7 @@
   fb_fix_screeninfo, fb_monospecs, and fb_info. The first three can be made 
   available to and from userland. First let me describe what each means and
   how they are used. Fb_var_screeninfo is used to describe the features of
-  a video card you normally can set. Its with fb_var_screeninfo you can define
+  a video card you normally can set. It's with fb_var_screeninfo you can define
   such things as depth and the resolution you want. The next structure is 
   fb_fix_screeninfo. This defines the properties of a card that are created 
   when you set a mode and can't be changed otherwise. A good example is the
@@ -643,11 +643,11 @@
   you. In this case the video hardware tells you the memory location and you 
   have no say about it. The third structure is fb_monospecs. In the old API 
   the importance of fb_monospecs was very little. This allowed for forbidden
-  things such as setting a mode of 800x600 on a fix frequency monitor. With
+  things such as setting a mode of 800x600 on a fixed-frequency monitor. With
   the new API fb_monospecs prevents such things and if used correctly can
   prevent a monitor from being cooked. The final data structure is fb_info. 
   This defines the current state of the video card. Fb_info is only visible
-  from the kernel. Inside of fb_info there exists a fb_ops which is a collection
+  from the kernel. Inside of fb_info there is a fb_ops which is a collection
   of needed functions to make fbdev and fbcon work. 
 
   4.2 Driver layout
@@ -894,7 +894,7 @@
   into xxxfb_setcolreg. Now for truecolor and directcolor mode it's a little 
   different. In this case we simulate a psuedo color map. The reason for this
   is the console system always has a color map which has 16 entries. In fb_info
-  there exists the pseudo_palette which gives a mapping from a non color map
+  there is the pseudo_palette which gives a mapping from a non color map
   mode to a color map based system. The pseudo_palette always has 17 entries. 
   The first 16 for the console colors and the last one for the cursor. So if 
   we wanted to display the 4 entry in the color map of the console we would
