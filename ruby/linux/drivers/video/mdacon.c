@@ -439,11 +439,6 @@ static void mdacon_bmove(struct vc_data *vc, int sy, int sx,
 	}
 }
 
-static int mdacon_switch(struct vc_data *c)
-{
-	return 1;	/* redrawing needed */
-}
-
 static int mdacon_set_palette(struct vc_data *vc, unsigned char *table)
 {
 	return -EINVAL;
@@ -543,7 +538,6 @@ const struct consw mda_con = {
 	con_cursor:		mdacon_cursor,
 	con_scroll_region:	mdacon_scroll_region,
 	con_bmove:		mdacon_bmove,
-	con_switch:		mdacon_switch,
 	con_blank:		mdacon_blank,
 	con_font_op:		mdacon_font_op,
 	con_set_palette:	mdacon_set_palette,
