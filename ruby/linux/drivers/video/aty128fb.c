@@ -258,7 +258,8 @@ struct aty128fb_par {
 };
 
 struct fb_info_aty128 {
-    struct fb_info_aty128 *next;
+	struct fb_info *info;	
+    	struct fb_info_aty128 *next;
 };
 
 static struct fb_info_aty128 *board_list = NULL;
