@@ -1016,7 +1016,7 @@ static int do_con_write(struct tty_struct * tty, int from_user,
             static int error;
             if (!error) {
                 error = 1;
-                printk("con_write: tty %d not allocated\n", cons_num);
+                printk("con_write: tty %d not allocated\n", minor(tty->device));
             }
             return 0;
         }
