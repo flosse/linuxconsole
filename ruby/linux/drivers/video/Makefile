@@ -38,7 +38,7 @@ endif
 
 obj-$(CONFIG_FB_ACORN)            += acornfb.o
 obj-$(CONFIG_FB_AMIGA)            += amifb.o
-obj-$(CONFIG_FB_PM2)              += pm2fb.o fbgen.o
+obj-$(CONFIG_FB_PM2)              += pm2fb.o
 obj-$(CONFIG_FB_PM3)              += pm3fb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 obj-$(CONFIG_FB_APOLLO)           += dnfb.o
 obj-$(CONFIG_FB_Q40)              += q40fb.o
@@ -60,9 +60,9 @@ obj-$(CONFIG_FB_HP300)            += hpfb.o
 obj-$(CONFIG_FB_OF)               += offb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 obj-$(CONFIG_FB_IMSTT)            += imsttfb.o
 obj-$(CONFIG_FB_RETINAZ3)         += retz3fb.o
-obj-$(CONFIG_FB_CLGEN)            += clgenfb.o fbgen.o
+obj-$(CONFIG_FB_CLGEN)            += clgenfb.o
 obj-$(CONFIG_FB_S3TRIO)           += S3triofb.o
-obj-$(CONFIG_FB_TGA)              += tgafb.o fbgen.o
+obj-$(CONFIG_FB_TGA)              += tgafb.o
 obj-$(CONFIG_FB_VESA)             += vesafb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o 
 obj-$(CONFIG_FB_VGA16)            += vga16fb.o vga.o
 obj-$(CONFIG_FB_VIRGE)            += virgefb.o
@@ -76,44 +76,25 @@ obj-$(CONFIG_FB_TCX)              += tcxfb.o sbusfb.o
 obj-$(CONFIG_FB_CGFOURTEEN)       += cgfourteenfb.o sbusfb.o
 obj-$(CONFIG_FB_P9100)            += p9100fb.o sbusfb.o
 obj-$(CONFIG_FB_LEO)              += leofb.o sbusfb.o
-obj-$(CONFIG_FB_STI)             += stifb.o sticore.o fbgen.o
+obj-$(CONFIG_FB_STI)             += stifb.o sticore.o
 obj-$(CONFIG_FB_PMAG_BA)          += pmag-ba-fb.o
 obj-$(CONFIG_FB_PMAGB_B)          += pmagb-b-fb.o
 obj-$(CONFIG_FB_MAXINE)           += maxinefb.o
 obj-$(CONFIG_FB_TX3912)           += tx3912fb.o
 
-subdir-$(CONFIG_FB_MATROX)	  += matrox
-ifeq ($(CONFIG_FB_MATROX),y)
-obj-y				  += matrox/matrox.o
-endif
-
-subdir-$(CONFIG_FB_RIVA)	  += riva
-ifeq ($(CONFIG_FB_RIVA),y)
-obj-y				  += riva/rivafb.o
-endif
-
-subdir-$(CONFIG_FB_SIS)		  += sis
-ifeq ($(CONFIG_FB_SIS),y)
-obj-y				  += sis/sisfb.o
-endif
-
-subdir-$(CONFIG_FB_ATY)           += aty
-ifeq ($(CONFIG_FB_ATY),y)
-obj-y                             += aty/atyfb.o
-endif
-
-subdir-$(CONFIG_FB_TDFX)          += tdfx 
-ifeq ($(CONFIG_FB_TDFX),y)
-obj-y                             += tdfx/tdfxfb.o
-endif
-
+obj-$(CONFIG_FB_MATROX)		  += matrox/
+obj-$(CONFIG_FB_RIVA)		  += riva/
+obj-$(CONFIG_FB_SIS)		  += sis/
+obj-$(CONFIG_FB_ATY)		  += aty/
+obj-$(CONFIG_FB_TDFX)		  += tdfx/
+	
 obj-$(CONFIG_FB_SUN3)             += sun3fb.o
 obj-$(CONFIG_FB_BWTWO)            += bwtwofb.o
 obj-$(CONFIG_FB_HGA)              += hgafb.o  
 obj-$(CONFIG_FB_SA1100)           += sa1100fb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 obj-$(CONFIG_FB_VIRTUAL)          += vfb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o 
-obj-$(CONFIG_FB_HIT)              += hitfb.o fbgen.o
-obj-$(CONFIG_FB_E1355)            += epson1355fb.o fbgen.o
+obj-$(CONFIG_FB_HIT)              += hitfb.o
+obj-$(CONFIG_FB_E1355)            += epson1355fb.o
 obj-$(CONFIG_FB_PVR2)             += pvr2fb.o
 obj-$(CONFIG_FB_VOODOO1)          += sstfb.o
 obj-$(CONFIG_FB_ANAKIN)           += anakinfb.o

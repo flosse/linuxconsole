@@ -105,7 +105,7 @@ void cfb_imageblit(struct fb_info *p, struct fb_image *image)
 				fb_writel((mask & eorx)^bgx, dst);
 				dst++;
 			}
-			l =- pad;		
+			l -= pad;		
 			dst1 += p->fix.line_length;	
 		}	
 	}

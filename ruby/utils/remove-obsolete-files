@@ -1,7 +1,7 @@
 #!/bin/sh
 
 rm -fv Documentation/usb/hid.txt
-rm -fv arch/arm/lib/kbd.o
+rm -fv arch/arm/lib/kbd.c
 rm -fv arch/m68k/atari/atakeyb.c
 rm -fv arch/m68k/atari/joystick.c
 rm -fv arch/m68k/hp300/hil.c
@@ -16,7 +16,11 @@ rm -fv arch/parisc/kernel/lasimap.map
 rm -fv arch/ppc/boot/kbd.c
 rm -fv drivers/acorn/char/keyb_arc.c
 rm -fv drivers/acorn/char/keyb_ps2.c
+rm -fv drivers/acorn/char/mouse_ps2.c
 rm -fv drivers/acorn/char/mouse_rpc.c
+rm -rf drivers/acorn/char/defkeymap-acorn.c
+rm -rf drivers/acorn/char/defkeymap-acorn.map
+rm -rf drivers/acorn/char/defkeymap-l7200.c
 rm -fv drivers/char/console.c
 rm -fv drivers/char/adbmouse.c
 rm -fv drivers/char/amigamouse.c

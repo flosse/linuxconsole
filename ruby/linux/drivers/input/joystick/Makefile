@@ -2,10 +2,6 @@
 # Makefile for the input core drivers.
 #
 
-# The target object and module list name.
-
-O_TARGET	:= joydrv.o
-
 mod-subdirs	:= iforce
 
 # Each configuration option enables a list of files.
@@ -33,7 +29,7 @@ obj-$(CONFIG_JOYSTICK_TURBOGRAFX)	+= turbografx.o
 obj-$(CONFIG_JOYSTICK_TWIDJOY)		+= twidjoy.o
 obj-$(CONFIG_JOYSTICK_WARRIOR)		+= warrior.o
 
-subdir-$(CONFIG_JOYSTICK_IFORCE)	+= iforce
+obj-$(CONFIG_JOYSTICK_IFORCE)		+= iforce/
 
 # The global Rules.make.
 
