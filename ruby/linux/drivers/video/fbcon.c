@@ -148,7 +148,7 @@ static char __initdata fontname[40] = { 0 };
 static const char *fbcon_startup(struct vt_struct *vt, int init);
 static void fbcon_init(struct vc_data *vc);
 static void fbcon_deinit(struct vc_data *vc);
-static void fbcon_clear(struct vc_data *vc,int sy,int sx,int width,int height);
+static void fbcon_clear(struct vc_data *vc,int sx,int sy,int width,int height);
 static void fbcon_putc(struct vc_data *vc, int c, int ypos, int xpos);
 static void fbcon_putcs(struct vc_data *vc,const unsigned short *s, int count,
 			int ypos, int xpos);
@@ -301,7 +301,7 @@ static void fbcon_deinit(struct vc_data *vc)
 */
 }
 
-static void fbcon_clear(struct vc_data *vc,int sy,int sx, int width,int height)
+static void fbcon_clear(struct vc_data *vc,int sx,int sy, int width,int height)
 {
     struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
     unsigned long color;
