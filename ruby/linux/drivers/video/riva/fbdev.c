@@ -1,7 +1,9 @@
 /*
  * linux/drivers/video/rivafb.c - nVidia RIVA 128/TNT/TNT2 fb driver
  *
- * Copyright 1999 Jeff Garzik <jgarzik@mandrakesoft.com>
+ * Maintained by Ani Joshi <ajoshi@shell.unixbox.com>
+ *
+ * Copyright 1999-2000 Jeff Garzik
  *
  * Contributors:
  *
@@ -20,7 +22,7 @@
  */
 
 /* version number of this driver */
-#define RIVAFB_VERSION "0.7.1"
+#define RIVAFB_VERSION "0.7.2"
 
 #include <linux/config.h>
 #include <linux/module.h>
@@ -36,7 +38,7 @@
 #include <linux/init.h>
 #include <linux/pci.h>
 
-#include "fbcon.h"
+#include "../fbcon.h"
 
 #include "riva_hw.h"
 #include "nv4ref.h"
@@ -69,7 +71,7 @@
 	if(!(expr)) { \
         printk( "Assertion failed! %s,%s,%s,line=%d\n",\
         #expr,__FILE__,__FUNCTION__,__LINE__); \
-	BUG();
+	BUG(); \
         }
 #else
 #define assert(expr)
@@ -157,6 +159,9 @@ typedef struct {
 	unsigned char red, green, blue, transp;
 } riva_cfb8_cmap_t;
 
+
+
+struct rivafb_info;
 struct rivafb_info {
 	struct fb_info info;	/* kernel framebuffer info */
 
@@ -205,9 +210,10 @@ struct rivafb_info {
 static struct rivafb_info *riva_boards = NULL;
 
 /* command line data, set in rivafb_setup() */
+static char fontname[40] __initdata = { 0 };
 #ifndef MODULE
-static char noaccel __initdata;	/* unused */
-static const char *mode_option __initdata;
+static char noaccel __initdata = 0;	/* unused */
+static const char *mode_option __initdata = NULL;
 #endif
 
 static struct fb_var_screeninfo rivafb_default_var = {
@@ -221,8 +227,6 @@ static struct fb_var_screeninfo rivafb_default_var = {
 
 /* ------------------- prototypes ------------------------------ */
 
-static int rivafb_open (struct fb_info *info, int user);
-static int rivafb_release (struct fb_info *info, int user);
 static int rivafb_get_fix (struct fb_fix_screeninfo *fix, int con,
 		    struct fb_info *info);
 static int rivafb_get_var (struct fb_var_screeninfo *var, int con,
@@ -233,15 +237,14 @@ static int rivafb_get_cmap (struct fb_cmap *cmap, int kspc, int con,
 		     struct fb_info *info);
 static int rivafb_set_cmap (struct fb_cmap *cmap, int kspc, int con,
 		     struct fb_info *info);
-static int rivafb_setcolreg (unsigned regno, unsigned red, unsigned green,
-                             unsigned blue, unsigned transp,
-                             struct fb_info *info);
-static int rivafb_blank (int blank, struct fb_info *info);
-static int rivafb_pan_display (struct fb_var_screeninfo *var, int con,
-			struct fb_info *info);
-
+static int rivafb_setcolreg(unsigned regno, unsigned red, unsigned green,
+                            unsigned blue, unsigned transp,
+                            struct fb_info *info);
+static int rivafb_pan_display(struct fb_var_screeninfo *var, int con,
+			      struct fb_info *info);
 static int rivafb_switch (int con, struct fb_info *info);
 static int rivafb_updatevar (int con, struct fb_info *info);
+static void rivafb_blank (int blank, struct fb_info *info);
 
 static void riva_load_video_mode (struct rivafb_info *rivainfo,
 				  struct fb_var_screeninfo *video_mode);
@@ -250,38 +253,38 @@ static int riva_getcolreg (unsigned regno, unsigned *red, unsigned *green,
 			   struct fb_info *info);
 static int riva_get_cmap_len (const struct fb_var_screeninfo *var);
 
-static int riva_pci_register (struct pci_dev *pd,
-			      const struct riva_chip_info *rci);
 static int riva_set_fbinfo (struct rivafb_info *rinfo);
 
 static void riva_save_state (struct rivafb_info *rinfo, struct riva_regs *regs);
 static void riva_load_state (struct rivafb_info *rinfo, struct riva_regs *regs);
 static struct rivafb_info *riva_board_list_add (struct rivafb_info *board_list,
 					 struct rivafb_info *new_node);
+static struct rivafb_info *riva_board_list_del (struct rivafb_info *board_list,
+					 struct rivafb_info *del_node);
 static void riva_wclut (unsigned char regnum, unsigned char red,
 			unsigned char green, unsigned char blue);
 
 
+
+
 /* kernel interface */
 static struct fb_ops riva_fb_ops = {
-	fb_open:	rivafb_open,
-	fb_release:	rivafb_release,
+	owner:		THIS_MODULE,
 	fb_get_fix:	rivafb_get_fix,
 	fb_get_var:	rivafb_get_var,
 	fb_set_var:	rivafb_set_var,
 	fb_get_cmap:	rivafb_get_cmap,
-	fb_set_cmap:	fbgen_set_cmap,
+	fb_set_cmap:	rivafb_set_cmap,
 	fb_setcolreg:	rivafb_setcolreg,
 	fb_blank:	rivafb_blank,
-	fb_pan_display: rivafb_pan_display
+	fb_pan_display:	rivafb_pan_display,
 };
-
 
 /* from GGI */
 static const struct riva_regs reg_template = {
 	{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,	/* ATTR */
 	 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
-	 0x41, 0x01, 0x0F, 0x13, 0x00},
+	 0x41, 0x01, 0x0F, 0x00, 0x00},
 	{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	/* CRT  */
 	 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00,
 	 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xE3,	/* 0x10 */
@@ -364,15 +367,15 @@ static void riva_set_dispsw (struct rivafb_info *rinfo)
 	DPRINTK ("EXIT\n");
 }
 
+
+
+
 static int riva_init_disp_var (struct rivafb_info *rinfo)
 {
 #ifndef MODULE
 	if (mode_option)
 		fb_find_mode (&rinfo->disp.var, &rinfo->info, mode_option,
 			      NULL, 0, NULL, 8);
-	else
-		fb_find_mode (&rinfo->disp.var, &rinfo->info,
-			      "640x480-8@60", NULL, 0, NULL, 8);
 #endif				/* !MODULE */
 	return 0;
 }
@@ -395,7 +398,7 @@ static int __devinit riva_init_disp (struct rivafb_info *rinfo)
 	disp->var = rivafb_default_var;
 	info->disp = disp;
 
-#warning FIXME: assure that disp->cmap is completely filled out
+	/* FIXME: assure that disp->cmap is completely filled out */
 
 	disp->screen_base = rinfo->fb_base;
 	disp->visual = FB_VISUAL_PSEUDOCOLOR;
@@ -439,11 +442,13 @@ static int __devinit riva_set_fbinfo (struct rivafb_info *rinfo)
 	info->flags = FBINFO_FLAG_DEFAULT;
 	info->fbops = &riva_fb_ops;
 
-#warning FIXME: set monspecs to what???
+	/* FIXME: set monspecs to what??? */
 
-	info->display_fg = NULL;	/* FIXME: correct? */
+	info->display_fg = NULL;
+	strncpy (info->fontname, fontname, sizeof (info->fontname));
+	info->fontname[sizeof (info->fontname) - 1] = 0;
 
-	info->changevar = NULL;	/* FIXME: needed? */
+	info->changevar = NULL;
 	info->switch_con = rivafb_switch;
 	info->updatevar = rivafb_updatevar;
 
@@ -458,32 +463,6 @@ static int __devinit riva_set_fbinfo (struct rivafb_info *rinfo)
 
 /* ----------------------------- PCI bus ----------------------------- */
 
-
-
-
-static void __devinit riva_init_clut (struct rivafb_info *fb_info)
-{
-	int j, k, red, green, blue;
-
-	for (j = 0; j < 256; j++) {
-		if (j < 16) {
-			/* use default fbcon colors for first 16 */
-			k = color_table[j];
-			red = default_red[k];
-			green = default_grn[k];
-			blue = default_blu[k];
-		} else {
-			/* grey ramp for rest of colors */
-			red = green = blue = j;
-		}
-
-		riva_wclut (j, red, green, blue);
-
-		fb_info->palette[j].red = red;
-		fb_info->palette[j].green = green;
-		fb_info->palette[j].blue = blue;
-	}
-}
 
 
 
@@ -512,8 +491,8 @@ static int __devinit rivafb_init_one (struct pci_dev *pd,
 	assert (rinfo->base0_region_size >= 0x00800000);	/* from GGI */
 	assert (rinfo->base1_region_size >= 0x01000000);	/* from GGI */
 
-	rinfo->ctrl_base_phys = rinfo->pd->resource[0].start;
-	rinfo->fb_base_phys = rinfo->pd->resource[1].start;
+	rinfo->ctrl_base_phys = pci_resource_start (rinfo->pd, 0);
+	rinfo->fb_base_phys = pci_resource_start (rinfo->pd, 1);
 
 	if (!request_mem_region (rinfo->ctrl_base_phys,
 				 rinfo->base0_region_size, "rivafb")) {
@@ -586,7 +565,7 @@ static int __devinit rivafb_init_one (struct pci_dev *pd,
 
 	riva_set_fbinfo (rinfo);
 
-	riva_init_clut (rinfo);
+	fb_memset (rinfo->fb_base, 0, rinfo->ram_amount);
 
 	riva_load_video_mode (rinfo, &rinfo->disp.var);
 
@@ -595,6 +574,8 @@ static int __devinit rivafb_init_one (struct pci_dev *pd,
 			"error registering riva framebuffer\n");
 		goto err_out_iounmap_fb;
 	}
+
+	riva_boards = riva_board_list_add(riva_boards, rinfo);
 
 	pd->driver_data = rinfo;
 
@@ -629,6 +610,8 @@ static void __devexit rivafb_remove_one (struct pci_dev *pd)
 	if (!board)
 		return;
 		
+	riva_boards = riva_board_list_del(riva_boards, board);
+
 	riva_load_state (board, &board->initial_state);
 
 	unregister_framebuffer ((struct fb_info *) board);
@@ -673,7 +656,19 @@ int __init rivafb_setup (char *options)
 
 	for (this_opt = strtok (options, ","); this_opt;
 	     this_opt = strtok (NULL, ",")) {
-		if (!strncmp (this_opt, "noaccel", 7)) {
+		if (!strncmp (this_opt, "font:", 5)) {
+			char *p;
+			int i;
+
+			p = this_opt + 5;
+			for (i = 0; i < sizeof (fontname) - 1; i++)
+				if (!*p || *p == ' ' || *p == ',')
+					break;
+			memcpy (fontname, this_opt + 5, i);
+			fontname[i] = 0;
+		}
+
+		else if (!strncmp (this_opt, "noaccel", 7)) {
 			noaccel = 1;
 		}
 
@@ -694,20 +689,6 @@ int __init rivafb_setup (char *options)
     /*
      *  Frame buffer operations
      */
-
-static int rivafb_open (struct fb_info *info, int user)
-{
-	/* Nothing, only a usage count for the moment */
-	MOD_INC_USE_COUNT;
-	return 0;
-}
-
-static int rivafb_release (struct fb_info *info, int user)
-{
-	MOD_DEC_USE_COUNT;
-	return 0;
-}
-
 
 static int rivafb_get_fix (struct fb_fix_screeninfo *fix, int con,
 		    struct fb_info *info)
@@ -741,7 +722,7 @@ static int rivafb_get_fix (struct fb_fix_screeninfo *fix, int con,
 
 	fix->line_length = p->line_length;
 
-#warning FIXME: set up MMIO region, export via FB_ACCEL_xxx
+	/* FIXME: set up MMIO region, export via FB_ACCEL_xxx */
 	fix->mmio_start = 0;
 	fix->mmio_len = 0;
 	fix->accel = FB_ACCEL_NONE;
@@ -974,7 +955,7 @@ static int rivafb_set_var (struct fb_var_screeninfo *var, int con,
 
 	dsp->type = FB_TYPE_PACKED_PIXELS;
 
-#warning FIXME: verify that the above code sets dsp->* fields correctly
+	/* FIXME: verify that the above code sets dsp->* fields correctly */
 
 	memcpy (&dsp->var, &v, sizeof (v));
 
@@ -1017,6 +998,43 @@ static int rivafb_get_cmap (struct fb_cmap *cmap, int kspc, int con,
 
 	return 0;
 }
+
+
+static int rivafb_set_cmap (struct fb_cmap *cmap, int kspc, int con,
+		     struct fb_info *info)
+{
+	struct rivafb_info *rivainfo = (struct rivafb_info *) info;
+	struct display *dsp;
+	unsigned int cmap_len;
+
+	DPRINTK ("ENTER\n");
+
+	assert (rivainfo != NULL);
+	assert (cmap != NULL);
+
+	dsp = (con < 0) ? rivainfo->info.disp : &fb_display[con];
+
+	cmap_len = riva_get_cmap_len (&dsp->var);
+	if (dsp->cmap.len != cmap_len) {
+		int err = fb_alloc_cmap (&dsp->cmap, cmap_len, 0);
+		if (err) {
+			DPRINTK ("EXIT - returning %d\n", err);
+			return err;
+		}
+	}
+	if (con == rivainfo->currcon) {	/* current console? */
+		int rc = fb_set_cmap (cmap, kspc, info);
+		DPRINTK ("EXIT - returning %d\n", rc);
+		return rc;
+	} else
+		fb_copy_cmap (cmap, &dsp->cmap, kspc ? 0 : 1);
+
+	DPRINTK ("EXIT, returning 0\n");
+
+	return 0;
+}
+
+
 
 /**
  * rivafb_pan_display
@@ -1151,7 +1169,7 @@ static int rivafb_updatevar (int con, struct fb_info *info)
 }
 
 
-static int rivafb_blank (int blank, struct fb_info *info)
+static void rivafb_blank (int blank, struct fb_info *info)
 {
 	unsigned char tmp;
 	struct rivafb_info *rivainfo = (struct rivafb_info *) info;
@@ -1285,12 +1303,13 @@ static int riva_getcolreg (unsigned regno, unsigned *red, unsigned *green,
  *	fbgen.c:fbgen_blank()
  */
 
-static int rivafb_setcolreg (unsigned regno, unsigned red, unsigned green,
-	   		     unsigned blue, unsigned transp,
-			     struct fb_info *info)
+static int rivafb_setcolreg(unsigned regno, unsigned red, unsigned green,
+			    unsigned blue, unsigned transp,
+			    struct fb_info *info)
 {
 	struct rivafb_info *rivainfo = (struct rivafb_info *) info;
 	struct display *p;
+	unsigned shift = 8;
 
 	DPRINTK ("ENTER\n");
 
@@ -1306,11 +1325,22 @@ static int rivafb_setcolreg (unsigned regno, unsigned red, unsigned green,
 		red = green = blue =
 		    (red * 77 + green * 151 + blue * 28) >> 8;
 	}
+
+	switch (rivainfo->riva.Architecture) {
+	case 3:
+		shift = 10;
+		break;
+	case 4:
+	case 5:
+		shift = 8;
+		break;
+	}
+
 #ifdef FBCON_HAS_CFB8
 	switch (p->var.bits_per_pixel) {
 	case 8:
 		/* "transparent" stuff is completely ignored. */
-		riva_wclut (regno, red >> 10, green >> 10, blue >> 10);
+		riva_wclut (regno, red >> shift, green >> shift, blue >> shift);
 		break;
 	default:
 		/* do nothing */
@@ -1405,24 +1435,24 @@ static void riva_load_video_mode (struct rivafb_info *rinfo,
 	newmode.crtc[0x0] = Set8Bits (hTotal - 4);
 	newmode.crtc[0x1] = Set8Bits (hDisplay);
 	newmode.crtc[0x2] = Set8Bits (hDisplay);
-      newmode.crtc[0x3] = SetBitField (hTotal, 4: 0, 4:0) | SetBit (7);
+	newmode.crtc[0x3] = SetBitField (hTotal, 4: 0, 4:0) | SetBit (7);
 	newmode.crtc[0x4] = Set8Bits (hStart);
-      newmode.crtc[0x5] = SetBitField (hTotal, 5: 5, 7:7)
-      | SetBitField (hEnd, 4: 0, 4:0);
-      newmode.crtc[0x6] = SetBitField (vTotal, 7: 0, 7:0);
-      newmode.crtc[0x7] = SetBitField (vTotal, 8: 8, 0:0)
-      | SetBitField (vDisplay, 8: 8, 1:1)
-      | SetBitField (vStart, 8: 8, 2:2)
-      | SetBitField (vDisplay, 8: 8, 3:3)
-	    | SetBit (4)
-      | SetBitField (vTotal, 9: 9, 5:5)
-      | SetBitField (vDisplay, 9: 9, 6:6)
-      | SetBitField (vStart, 9: 9, 7:7);
-      newmode.crtc[0x9] = SetBitField (vDisplay, 9: 9, 5:5)
-	    | SetBit (6);
+	newmode.crtc[0x5] = SetBitField (hTotal, 5: 5, 7:7)
+		| SetBitField (hEnd, 4: 0, 4:0);
+	newmode.crtc[0x6] = SetBitField (vTotal, 7: 0, 7:0);
+	newmode.crtc[0x7] = SetBitField (vTotal, 8: 8, 0:0)
+		| SetBitField (vDisplay, 8: 8, 1:1)
+		| SetBitField (vStart, 8: 8, 2:2)
+		| SetBitField (vDisplay, 8: 8, 3:3)
+		| SetBit (4)
+		| SetBitField (vTotal, 9: 9, 5:5)
+		| SetBitField (vDisplay, 9: 9, 6:6)
+		| SetBitField (vStart, 9: 9, 7:7);
+	newmode.crtc[0x9] = SetBitField (vDisplay, 9: 9, 5:5)
+		| SetBit (6);
 	newmode.crtc[0x10] = Set8Bits (vStart);
-      newmode.crtc[0x11] = SetBitField (vEnd, 3: 0, 3:0)
-	    | SetBit (5);
+	newmode.crtc[0x11] = SetBitField (vEnd, 3: 0, 3:0)
+		| SetBit (5);
 	newmode.crtc[0x12] = Set8Bits (vDisplay);
 	newmode.crtc[0x13] = ((width / 8) * (bpp / 8)) & 0xFF;
 	newmode.crtc[0x15] = Set8Bits (vDisplay);
@@ -1474,7 +1504,7 @@ module_init(rivafb_init);
 #endif				/* MODULE */
 module_exit(rivafb_exit);
 
-MODULE_AUTHOR("Jeff Garzik <jgarzik@mandrakesoft.com>");
+MODULE_AUTHOR("Ani Joshi, maintainer");
 MODULE_DESCRIPTION("Framebuffer driver for nVidia Riva 128, TNT, TNT2");
 
 
@@ -1580,7 +1610,7 @@ void riva_load_state (struct rivafb_info *rinfo, struct riva_regs *regs)
 
 	for (i = 0; i < NUM_ATC_REGS; i++) {
 		io_out8 (i, 0x3C0);
-		io_out8 (regs->attr[i], 0x3C1);
+		io_out8 (regs->attr[i], 0x3C0);
 	}
 
 	for (i = 0; i < NUM_GRC_REGS; i++) {
@@ -1625,3 +1655,33 @@ struct rivafb_info *riva_board_list_add (struct rivafb_info *board_list,
 
 	return board_list;
 }
+
+
+
+/**
+ * riva_board_list_del
+ * @board_list: Root node of list of boards
+ * @del_node: Node to be removed
+ *
+ * DESCRIPTION:
+ * Removes @del_node from the list referenced by @board_list
+ *
+ * RETURNS:
+ * New root node
+ */
+static
+struct rivafb_info *riva_board_list_del (struct rivafb_info *board_list,
+					 struct rivafb_info *del_node)
+{
+	struct rivafb_info *i_p = board_list;
+
+	if (board_list == del_node)
+		return del_node->next;
+
+	while (i_p->next != del_node)
+		i_p = i_p->next;
+	i_p->next = del_node->next;
+
+	return board_list;
+}
+
