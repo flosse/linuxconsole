@@ -242,6 +242,29 @@ static int num_pref_init_funcs __initdata = 0;
 struct fb_info *registered_fb[FB_MAX];
 int num_registered_fb = 0;
 
+int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
+{
+        int err;
+
+        if ((err = info->fbops->fb_check_var(var, info->par, info)))
+                return err;
+        if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
+           if(info->var.xres != var->xres || info->var.yres != var->yres ||
+              info->var.xres_virtual != var->xres_virtual ||
+              info->var.yres_virtual != var->yres_virtual ||
+              info->var.bits_per_pixel != var->bits_per_pixel) {
+                info->fbops->fb_set_par(info->par, info);
+                if (info->var.bits_per_pixel != var->bits_per_pixel) {
+                        if ((err = fb_set_cmap(&info->cmap, 1, info)))
+                                return err;
+                }
+                info->var = *var;
+                fbcon_changevar(fg_console);
+             }
+	}
+        return 0;
+}
+
 static int fbmem_read_proc(char *buf, char **start, off_t offset,
 			   int len, int *eof, void *private)
 {
@@ -249,7 +272,7 @@ static int fbmem_read_proc(char *buf, char **start, off_t offset,
 	int clen;
 
 	clen = 0;
-	for (fi = registered_fb; fi < &registered_fb[FB_MAX] && len < 4000; fi++)
+	for (fi = registered_fb;fi < &registered_fb[FB_MAX] && len < 4000; fi++)
 		if (*fi)
 			clen += sprintf(buf + clen, "%d %s\n",
 				        GET_FB_IDX((*fi)->node),
@@ -341,7 +364,7 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 			return -EFAULT;
 		i = var.activate & FB_ACTIVATE_ALL
 			    ? set_all_vcs(fbidx, fb, &var, info)
-			    : fb->fb_set_var(&var, info);
+			    : fb_set_var(&var, info);
 		if (i)
 			return i;
 		if (copy_to_user((void *) arg, &var, sizeof(var)))
@@ -566,8 +589,7 @@ static struct file_operations fb_fops = {
 
 static devfs_handle_t devfs_handle = NULL;
 
-int
-register_framebuffer(struct fb_info *fb_info)
+int register_framebuffer(struct fb_info *fb_info)
 {
 	char name_buf[8];
  	int i;
@@ -691,6 +713,7 @@ EXPORT_SYMBOL(register_framebuffer);
 EXPORT_SYMBOL(unregister_framebuffer);
 EXPORT_SYMBOL(registered_fb);
 EXPORT_SYMBOL(num_registered_fb);
+EXPORT_SYMBOL(fb_set_var);
 #if 1 /* to go away in 2.5.0 */
 EXPORT_SYMBOL(GET_FB_IDX);
 #endif
