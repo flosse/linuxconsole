@@ -664,12 +664,11 @@ conv_uni_to_pc(struct vc_data *vc, long ucs)
  * initialized.  It must be possible to call kmalloc(..., GFP_KERNEL)
  * from this function, hence the call from sys_setup.
  */
-void __init console_map_init(void)
+void __init console_map_init(struct vt_struct *vt)
 {
 	int i;
 	
 	for (i = 0; i < MAX_NR_CONSOLES; i++)
-		if (vc_cons_allocated(i) && 
-			!*vt_cons->vcs.vc_cons[i]->vc_uni_pagedir_loc)
-			con_set_default_unimap(vt_cons->vcs.vc_cons[i]);
+		if (vc_cons_allocated(i) && !*vt->vcs.vc_cons[i]->vc_uni_pagedir_loc)
+			con_set_default_unimap(vt->vcs.vc_cons[i]);
 }
