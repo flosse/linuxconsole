@@ -52,10 +52,10 @@ MODULE_DESCRIPTION("USB/RS232 I-Force joysticks and wheels driver");
 #define IFORCE_MAX_LENGTH               16
  
 #if defined(CONFIG_INPUT_IFORCE_232) || defined(CONFIG_INPUT_IFORCE_232_MODULE)
-#define IFORCE_232
+#define IFORCE_232	1
 #endif
 #if defined(CONFIG_INPUT_IFORCE_USB) || defined(CONFIG_INPUT_IFORCE_USB_MODULE)
-#define IFORCE_USB
+#define IFORCE_USB	2
 #endif
 
 #define FF_EFFECTS_MAX	32
@@ -106,7 +106,6 @@ static struct iforce_device {
 	signed short *abs;
 	signed short *ff;
 } iforce_device[] = {
-
 	{ 0x046d, 0xc281, "Logitech WingMan Force",			btn_joystick, abs_joystick, ff_joystick },
 	{ 0x046d, 0xc291, "Logitech WingMan Formula Force",		btn_wheel, abs_wheel, ff_wheel },
 	{ 0x05ef, 0x020a, "AVB Top Shot Pegasus",			btn_joystick, abs_joystick, ff_joystick },
@@ -120,6 +119,7 @@ struct iforce {
 	struct iforce_device *type;
 	char name[64];
         int open;
+	int bus;
 
         unsigned char data[IFORCE_MAX_LENGTH];
         unsigned char edata[IFORCE_MAX_LENGTH];
@@ -170,10 +170,10 @@ static void dump_packet(char *msg, u16 cmd, unsigned char *data)
  */
 static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 {
-	switch (iforce->dev.idbus) {
+	switch (iforce->bus) {
 
 #ifdef IFORCE_232
-		case BUS_RS232: {
+		case IFORCE_232: {
 
 			int i;
 			unsigned char csum = 0x2b ^ HI(cmd) ^ LO(cmd);
@@ -192,10 +192,10 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 		}
 #endif
 #ifdef IFORCE_USB
-		case BUS_USB: {
+		case IFORCE_USB: {
 
 			DECLARE_WAITQUEUE(wait, current);
-			int status, timeout = HZ; /* 1 second */
+			int timeout = HZ; /* 1 second */
 
 			memcpy(iforce->out.transfer_buffer + 1, data, LO(cmd));
 			((char*)iforce->out.transfer_buffer)[0] = HI(cmd);
@@ -205,7 +205,7 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 			set_current_state(TASK_INTERRUPTIBLE);
 			add_wait_queue(&iforce->wait, &wait);
 
-			if ((status = usb_submit_urb(&iforce->out))) {
+			if (usb_submit_urb(&iforce->out)) {
 				set_current_state(TASK_RUNNING);
 				remove_wait_queue(&iforce->wait, &wait);
 				return;
@@ -282,13 +282,12 @@ static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char 
 static int get_id_packet(struct iforce *iforce, char *packet)
 {
 	DECLARE_WAITQUEUE(wait, current);
-	int status, timeout = HZ; /* 1 second */
+	int timeout = HZ; /* 1 second */
 
-
-	switch (iforce->dev.idbus) {
+	switch (iforce->bus) {
 
 #ifdef IFORCE_USB
-		case BUS_USB:
+		case IFORCE_USB:
 
 			iforce->dr.request = packet[0];	
 			iforce->ctrl.dev = iforce->usbdev;
@@ -296,7 +295,7 @@ static int get_id_packet(struct iforce *iforce, char *packet)
 			set_current_state(TASK_INTERRUPTIBLE);
 			add_wait_queue(&iforce->wait, &wait);
 
-			if ((status = usb_submit_urb(&iforce->ctrl))) {
+			if (usb_submit_urb(&iforce->ctrl)) {
 				set_current_state(TASK_RUNNING);
 				remove_wait_queue(&iforce->wait, &wait);
 				return -1;
@@ -316,7 +315,7 @@ static int get_id_packet(struct iforce *iforce, char *packet)
 			break;
 #endif
 #ifdef IFORCE_232
-		case BUS_RS232:
+		case IFORCE_232:
 
 			iforce->expect_packet = FF_CMD_QUERY;
 			send_packet(iforce, FF_CMD_QUERY, packet);
@@ -346,9 +345,9 @@ static int iforce_open(struct input_dev *dev)
 {
 	struct iforce *iforce = dev->private;
 
-	switch (dev->idbus) {
+	switch (iforce->bus) {
 #ifdef IFORCE_USB
-		case BUS_USB:
+		case IFORCE_USB:
 			if (iforce->open++)
 				break;
 			iforce->irq.dev = iforce->usbdev;
@@ -364,9 +363,9 @@ static void iforce_close(struct input_dev *dev)
 {
 	struct iforce *iforce = dev->private;
 
-	switch (dev->idbus) {
+	switch (iforce->bus) {
 #ifdef IFORCE_USB
-		case BUS_USB:
+		case IFORCE_USB:
 			if (!--iforce->open)
 				usb_unlink_urb(&iforce->irq);
 			break;
@@ -856,6 +855,7 @@ static int iforce_init_device(struct iforce *iforce)
  * Input device fields.
  */
 
+	iforce->dev.idbus = BUS_USB;
 	iforce->dev.private = iforce;
 	iforce->dev.name = iforce->name;
 	iforce->dev.open = iforce_open;
@@ -1025,7 +1025,7 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	if (!(iforce = kmalloc(sizeof(struct iforce) + 32, GFP_KERNEL))) return NULL;
 	memset(iforce, 0, sizeof(struct iforce));
 
-	iforce->dev.idbus = BUS_USB;
+	iforce->bus = IFORCE_USB;
 	iforce->usbdev = dev;
 
 	iforce->dr.requesttype = USB_TYPE_VENDOR | USB_DIR_IN | USB_RECIP_INTERFACE;
@@ -1066,6 +1066,7 @@ static struct usb_device_id iforce_usb_ids [] = {
 	{ USB_DEVICE(0x046d, 0xc291) },		/* Logitech WingMan Formula Force */
 	{ USB_DEVICE(0x05ef, 0x020a) },		/* AVB Top Shot Pegasus */
 	{ USB_DEVICE(0x05ef, 0x8884) },		/* AVB Mag Turbo Force */
+        { USB_DEVICE(0x06f8, 0x0001) },		/* Guillemot Race Leader Force Feedback */
 	{ }					/* Terminating entry */
 };
 
@@ -1137,7 +1138,7 @@ static void iforce_serio_connect(struct serio *serio, struct serio_dev *dev)
 	if (!(iforce = kmalloc(sizeof(struct iforce), GFP_KERNEL))) return;
 	memset(iforce, 0, sizeof(struct iforce));
 
-	iforce->dev.idbus = BUS_RS232; /* FIXME - need to specify I-Force namespace */
+	iforce->bus = IFORCE_232;
 	iforce->serio = serio;
 	serio->private = iforce;
 
