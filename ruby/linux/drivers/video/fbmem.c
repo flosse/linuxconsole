@@ -129,6 +129,8 @@ extern int e1355fb_init(void);
 extern int e1355fb_setup(char*);
 extern int dcfb_init(void);
 extern int sfb_init(void);
+extern int sed1345fb_init(void);
+extern int r3912fb_init(void);
 
 static struct {
 	const char *name;
@@ -285,6 +287,12 @@ static struct {
 #ifdef CONFIG_FB_DC
         { "dcfb", dcfb_init, NULL },
 #endif          
+#ifdef CONFIG_FB_SED1345
+	{ "sed1345fb", sed1345fb_init, NULL },
+#endif
+#ifdef CONFIG_FB_R3912
+	{ "r3912fb", r3912fb_init, NULL },
+#endif
 
 	/*
 	 * Generic drivers that don't use resource management (yet)

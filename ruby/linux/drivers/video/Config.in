@@ -93,6 +93,10 @@ if [ "$CONFIG_FB" = "y" ]; then
    if [ "$ARCH" = "mips" -a "$CONFIG_CPU_VR41XX" = "y" ]; then
       tristate '  Simple frame buffer display support' CONFIG_FB_SIMPLE
       tristate '  Epson SED1345 Color Graphics LCD/CRT Controller' CONFIG_FB_SED1345
+      tristate '  Toshiba R3912 / Philips PR31700 LCD Controller' CONFIG_FB_R3912
+      if [ "$CONFIG_VTECH_HELIO" = "y" ]; then
+         bool '    Force 1bpp mode' CONFIG_FB_R3912_FORCE_MONO
+      fi
    fi
    if [ "$ARCH" = "i386" ]; then
       bool '  VESA VGA graphics console' CONFIG_FB_VESA

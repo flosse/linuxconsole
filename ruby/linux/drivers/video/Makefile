@@ -109,6 +109,7 @@ obj-$(CONFIG_FB_E1355)            += epson1355fb.o fbgen.o
 obj-$(CONFIG_FB_DC)               += dcfb.o fbgen.o          
 obj-$(CONFIG_FB_SIMPLE)		  += sfb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 obj-$(CONFIG_FB_SED1345)	  += sed1345fb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
+obj-$(CONFIG_FB_R3912)		  += r3912fb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 
 include $(TOPDIR)/Rules.make
 
