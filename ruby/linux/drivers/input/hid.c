@@ -149,7 +149,7 @@ static int open_collection(struct hid_parser *parser, unsigned type)
 
 	usage = parser->local.usage[0];
 
-	if (type == HID_COLLECTION_APPLICATION)
+	if (type == HID_COLLECTION_APPLICATION && !parser->device->application)
 		parser->device->application = usage;
 
 	if (parser->collection_stack_ptr < HID_COLLECTION_STACK_SIZE) { /* PUSH on stack */
