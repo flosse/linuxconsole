@@ -305,11 +305,12 @@ struct input_id {
 #define BTN_THUMB2		0x122
 #define BTN_TOP			0x123
 #define BTN_TOP2		0x124
-#define BTN_BASE		0x125
-#define BTN_BASE2		0x126
-#define BTN_BASE3		0x127
-#define BTN_BASE4		0x128
-#define BTN_BASE5		0x129
+#define BTN_PINKIE		0x125
+#define BTN_BASE		0x126
+#define BTN_BASE2		0x127
+#define BTN_BASE3		0x128
+#define BTN_BASE4		0x129
+#define BTN_BASE5		0x12a
 
 #define BTN_GAMEPAD		0x130
 #define BTN_A			0x130

@@ -472,13 +472,7 @@ static void adi_connect(struct gameport *gameport, struct gameport_dev *dev)
 	port->timer.data = (long) port;
 	port->timer.function = adi_timer;
 
-	if (gameport_open(gameport, dev)) {
-		kfree(port);
-		return;
-	}
-
-	if (gameport_set_mode(gameport, GAMEPORT_MODE_RAW)) {
-		gameport_close(gameport);
+	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW)) {
 		kfree(port);
 		return;
 	}

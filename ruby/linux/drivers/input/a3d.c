@@ -1,5 +1,5 @@
 /*
- *  joy-assassin.c  Version 1.2
+ *  a3d.c.c  Version 1.2
  *
  *  Copyright (c) 1998-1999 Vojtech Pavlik
  *
@@ -31,69 +31,69 @@
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
  */
 
-#include <asm/io.h>
-#include <asm/system.h>
-#include <linux/delay.h>
 #include <linux/errno.h>
-#include <linux/ioport.h>
-#include <linux/joystick.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/string.h>
+#include <linux/malloc.h>
 #include <linux/init.h>
+#include <linux/gameport.h>
+#include <linux/input.h>
 
-#define JS_AS_MAX_START		1000
-#define JS_AS_DELAY_READ	3000
-#define JS_AS_MAX_LENGTH	40
+#define A3D_MAX_START		400	/* 400 us */ 
+#define A3D_MAX_STROBE		40	/* 40 us */ 
+#define A3D_DELAY_READ		3	/* 3 ms */
+#define A3D_MAX_LENGTH		40	/* 40*3 bits */
+#define A3D_REFRESH_TIME	HZ/50	/* 20 ms */
 
-#define JS_AS_MODE_A3D		1	/* Assassin 3D */
-#define JS_AS_MODE_PAN		2	/* Panther */
-#define JS_AS_MODE_OEM		3	/* Panther OEM version */
-#define JS_AS_MODE_PXL		4	/* Panther XL */
+#define A3D_MODE_A3D		1	/* Assassin 3D */
+#define A3D_MODE_PAN		2	/* Panther */
+#define A3D_MODE_OEM		3	/* Panther OEM version */
+#define A3D_MODE_PXL		4	/* Panther XL */
+#define A3D_MODE_PXLR		5	/* Panther XL w/ rudder */
 
-MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
-MODULE_PARM(js_as, "2-24i");
+char *a3d_names[] = { "FP-Gaming Assassin 3D", "MadCatz Panther", "OEM Panther",
+			"MadCatz Panther XL", "MadCatz Panther XL w/ rudder" };
 
-static int __initdata js_as[] = { -1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0 };
-
-static int js_as_port_list[] __initdata = {0x201, 0};
-static struct js_port* js_as_port __initdata = NULL;
-
-#include "joy-analog.h"
-
-struct js_as_info {
-	int io;
-	char mode;
-	char rudder;
-	struct js_an_info an;
+struct a3d {
+	struct gameport *gameport;
+	struct gameport adc;
+	struct input_dev dev;
+	struct timer_list timer;
+	int axes[4];
+	int buttons;
+	int mode;
+	int length;
+	int used;
+	int reads;
+	int bads;
 };
 
 /*
- * js_as_read_packet() reads an Assassin 3D packet.
+ * a3d_read_packet() reads an Assassin 3D packet.
  */
 
-static int js_as_read_packet(int io, int length, char *data)
+static int a3d_read_packet(struct gameport *gameport, int length, char *data)
 {
-	unsigned char u, v;
-	int i;
-	unsigned int t, p;
 	unsigned long flags;
+	unsigned char u, v;
+	unsigned int t, s;
+	int i;
 
 	i = 0;
+	t = gameport_time(gameport, A3D_MAX_START);
+	s = gameport_time(gameport, A3D_MAX_STROBE);
 
 	__save_flags(flags);
 	__cli();
-
-	outb(0xff,io);
-	v = inb(io);
-	t = p = JS_AS_MAX_START;
+	gameport_trigger(gameport);
+	v = gameport_read(gameport);
 
 	while (t > 0 && i < length) {
 		t--;
-		u = v; v = inb(io);
+		u = v; v = gameport_read(gameport);
 		if (~v & u & 0x10) {
 			data[i++] = v >> 5;
-			p = t = (p - t) << 3;
+			t = s;
 		}
 	}
 
@@ -103,10 +103,10 @@ static int js_as_read_packet(int io, int length, char *data)
 }
 
 /*
- * js_as_csum() computes checksum of triplet packet
+ * a3d_csum() computes checksum of triplet packet
  */
 
-static int js_as_csum(char *data, int count)
+static int a3d_csum(char *data, int count)
 {
 	int i, csum = 0;
 	for (i = 0; i < count - 2; i++) csum += data[i];
@@ -114,303 +114,237 @@ static int js_as_csum(char *data, int count)
 }
 
 /*
- * js_as_read() reads and analyzes A3D joystick data.
+ * a3d_read() reads and analyzes A3D joystick data.
  */
 
-static int js_as_read(void *xinfo, int **axes, int **buttons)
+static void a3d_timer(unsigned long private)
 {
-	struct js_as_info *info = xinfo;
-	char data[JS_AS_MAX_LENGTH];
+	struct a3d *a3d = (void *) private;
+	struct input_dev *dev = &a3d->dev;
+	char data[A3D_MAX_LENGTH];
 
-	switch (info->mode) {
+	a3d->reads++;
+	if (a3d_read_packet(a3d->gameport, a3d->length, data) != a3d->length
+	    || data[0] != a3d->mode || a3d_csum(data, a3d->length)) { 
+		a3d->bads++;
+	} else
 
-		case JS_AS_MODE_A3D:
-		case JS_AS_MODE_OEM:
-		case JS_AS_MODE_PAN:
+	switch (a3d->mode) {
 
-			if (js_as_read_packet(info->io, 29, data) != 29) return -1;
-			if (data[0] != info->mode) return -1;
-			if (js_as_csum(data, 29)) return -1;
+		case A3D_MODE_A3D:
+		case A3D_MODE_OEM:
+		case A3D_MODE_PAN:
 
-			axes[0][0] = ((data[5] << 6) | (data[6] << 3) | data[ 7]) - ((data[5] & 4) << 7);
-			axes[0][1] = ((data[8] << 6) | (data[9] << 3) | data[10]) - ((data[8] & 4) << 7);
+			input_report_rel(dev, REL_X, ((data[5] << 6) | (data[6] << 3) | data[ 7]) - ((data[5] & 4) << 7));
+			input_report_rel(dev, REL_Y, ((data[8] << 6) | (data[9] << 3) | data[10]) - ((data[8] & 4) << 7));
+			
+			input_report_btn(dev, BTN_RIGHT,  data[2] & 1);
+			input_report_btn(dev, BTN_LEFT,   data[3] & 2);
+			input_report_btn(dev, BTN_MIDDLE, data[3] & 4);
 
-			buttons[0][0] = (data[2] << 2) | (data[3] >> 1);
+			a3d->axes[0] = ((char)((data[11] << 6) | (data[12] << 3) | (data[13]))) + 128;
+			a3d->axes[1] = ((char)((data[14] << 6) | (data[15] << 3) | (data[16]))) + 128;
+			a3d->axes[2] = ((char)((data[17] << 6) | (data[18] << 3) | (data[19]))) + 128;
+			a3d->axes[3] = ((char)((data[20] << 6) | (data[21] << 3) | (data[22]))) + 128;
 
-			info->an.axes[0] = ((char)((data[11] << 6) | (data[12] << 3) | (data[13]))) + 128;
-			info->an.axes[1] = ((char)((data[14] << 6) | (data[15] << 3) | (data[16]))) + 128;
-			info->an.axes[2] = ((char)((data[17] << 6) | (data[18] << 3) | (data[19]))) + 128;
-			info->an.axes[3] = ((char)((data[20] << 6) | (data[21] << 3) | (data[22]))) + 128;
+			a3d->buttons = ((data[3] << 3) | data[4]) & 0xf;
 
-			info->an.buttons = ((data[3] << 3) | data[4]) & 0xf;
+			break;
 
-			js_an_decode(&info->an, axes + 1, buttons + 1);
+		case A3D_MODE_PXLR:
+		case A3D_MODE_PXL:
 
-			return 0;
+			input_report_rel(dev, REL_X, ((data[ 9] << 6) | (data[10] << 3) | data[11]) - ((data[ 9] & 4) << 7));
+			input_report_rel(dev, REL_Y, ((data[12] << 6) | (data[13] << 3) | data[14]) - ((data[12] & 4) << 7));
 
-		case JS_AS_MODE_PXL:
+			input_report_btn(dev, BTN_RIGHT,  data[2] & 1);
+			input_report_btn(dev, BTN_LEFT,   data[3] & 2);
+			input_report_btn(dev, BTN_MIDDLE, data[3] & 4);
+			input_report_btn(dev, BTN_SIDE,   data[7] & 2);
+			input_report_btn(dev, BTN_EXTRA,  data[7] & 4);
 
-			if (js_as_read_packet(info->io, 33, data) != 33) return -1;
-			if (data[0] != info->mode) return -1;
-			if (js_as_csum(data, 33)) return -1;
+			input_report_abs(dev, ABS_X,        ((char)((data[15] << 6) | (data[16] << 3) | (data[17]))) + 128);
+			input_report_abs(dev, ABS_Y,        ((char)((data[18] << 6) | (data[19] << 3) | (data[20]))) + 128);
+			input_report_abs(dev, ABS_RUDDER,   ((char)((data[21] << 6) | (data[22] << 3) | (data[23]))) + 128);
+			input_report_abs(dev, ABS_THROTTLE, ((char)((data[24] << 6) | (data[25] << 3) | (data[26]))) + 128);
 
-			axes[0][0] = ((char)((data[15] << 6) | (data[16] << 3) | (data[17]))) + 128;
-			axes[0][1] = ((char)((data[18] << 6) | (data[19] << 3) | (data[20]))) + 128;
-			info->an.axes[0] = ((char)((data[21] << 6) | (data[22] << 3) | (data[23]))) + 128;
-			axes[0][2] = ((char)((data[24] << 6) | (data[25] << 3) | (data[26]))) + 128;
+			input_report_abs(dev, ABS_HAT0X, ( data[5]       & 1) - ((data[5] >> 2) & 1));
+			input_report_abs(dev, ABS_HAT0Y, ((data[5] >> 1) & 1) - ((data[6] >> 2) & 1));
+			input_report_abs(dev, ABS_HAT1X, ((data[4] >> 1) & 1) - ( data[3]       & 1));
+			input_report_abs(dev, ABS_HAT1Y, ((data[4] >> 2) & 1) - ( data[4]       & 1));
 
-			axes[0][3] = ( data[5]       & 1) - ((data[5] >> 2) & 1);
-			axes[0][4] = ((data[5] >> 1) & 1) - ((data[6] >> 2) & 1);
-			axes[0][5] = ((data[4] >> 1) & 1) - ( data[3]       & 1);
-			axes[0][6] = ((data[4] >> 2) & 1) - ( data[4]       & 1);
+			input_report_btn(dev, BTN_TRIGGER, data[8] & 1);
+			input_report_btn(dev, BTN_THUMB,   data[8] & 2);
+			input_report_btn(dev, BTN_TOP,     data[8] & 4);
+			input_report_btn(dev, BTN_PINKIE,  data[7] & 1);
 
-			axes[0][7] = ((data[ 9] << 6) | (data[10] << 3) | data[11]) - ((data[ 9] & 4) << 7);
-			axes[0][8] = ((data[12] << 6) | (data[13] << 3) | data[14]) - ((data[12] & 4) << 7);
-
-			buttons[0][0] = (data[2] << 8) | ((data[3] & 6) << 5) | (data[7] << 3) | data[8];
-
-			if (info->rudder) axes[1][0] = info->an.axes[0];
-
-			return 0;
+			break;
 	}
-	return -1;
+
+	mod_timer(&a3d->timer, jiffies + A3D_REFRESH_TIME);
 }
 
 /*
- * js_as_open() is a callback from the file open routine.
+ * a3d_adc_cooked_read() copies the acis and button data to the
+ * callers arrays. It could do the read itself, but the caller could
+ * call this more than 50 times a second, which would use too much CPU.
  */
 
-static int js_as_open(struct js_dev *jd)
+int a3d_adc_cooked_read(struct gameport *gameport, int *axes, int *buttons)
 {
-	MOD_INC_USE_COUNT;
+	struct a3d *a3d = gameport->private;
+	int i;
+	for (i = 0; i < 4; i++)
+		axes[i] = a3d->axes[i] < 254 ? a3d->axes[i] : -1;
+	*buttons = a3d->buttons; 
 	return 0;
 }
 
 /*
- * js_as_close() is a callback from the file release routine.
+ * a3d_adc_open() is the gameport open routine. It refuses to serve
+ * any but cooked data.
  */
 
-static int js_as_close(struct js_dev *jd)
+int a3d_adc_open(struct gameport *gameport, int mode)
 {
-	MOD_DEC_USE_COUNT;
+	struct a3d *a3d = gameport->private;
+	if (mode != GAMEPORT_MODE_COOKED)
+		return -1;
+	if (!a3d->used++)
+		mod_timer(&a3d->timer, jiffies + A3D_REFRESH_TIME);	
 	return 0;
 }
 
 /*
- * js_as_pxl_init_corr() initializes the correction values for
- * the Panther XL.
+ * a3d_adc_close() is a callback from the input close routine.
  */
 
-static void __init js_as_pxl_init_corr(struct js_corr **corr, int **axes)
+static void a3d_adc_close(struct gameport *gameport)
 {
-	int i;
-
-	for (i = 0; i < 2; i++) {
-		corr[0][i].type = JS_CORR_BROKEN;
-		corr[0][i].prec = 0;
-		corr[0][i].coef[0] = axes[0][i] - 4;
-		corr[0][i].coef[1] = axes[0][i] + 4;
-		corr[0][i].coef[2] = (1 << 29) / (127 - 32);
-		corr[0][i].coef[3] = (1 << 29) / (127 - 32);
-	}
-
-	corr[0][2].type = JS_CORR_BROKEN;
-	corr[0][2].prec = 0;
-	corr[0][2].coef[0] = 127 - 4;
-	corr[0][2].coef[1] = 128 + 4;
-	corr[0][2].coef[2] = (1 << 29) / (127 - 6);
-	corr[0][2].coef[3] = (1 << 29) / (127 - 6);
-
-	for (i = 3; i < 7; i++) {
-		corr[0][i].type = JS_CORR_BROKEN;
-		corr[0][i].prec = 0;
-		corr[0][i].coef[0] = 0;
-		corr[0][i].coef[1] = 0;
-		corr[0][i].coef[2] = (1 << 29);
-		corr[0][i].coef[3] = (1 << 29);
-	}
-
-	for (i = 7; i < 9; i++) {
-		corr[0][i].type = JS_CORR_BROKEN;
-		corr[0][i].prec = -1;
-		corr[0][i].coef[0] = 0;
-		corr[0][i].coef[1] = 0;
-		corr[0][i].coef[2] = (104 << 14);
-		corr[0][i].coef[3] = (104 << 14);
-	}
+	struct a3d *a3d = gameport->private;
+	if (!--a3d->used)
+		del_timer(&a3d->timer);
 }
 
 /*
- * js_as_as_init_corr() initializes the correction values for
- * the Panther and Assassin.
+ * a3d_open() is a callback from the input open routine.
  */
 
-static void __init js_as_as_init_corr(struct js_corr **corr)
+static int a3d_open(struct input_dev *dev)
 {
+	struct a3d *a3d = dev->private;
+	if (!a3d->used++)
+		mod_timer(&a3d->timer, jiffies + A3D_REFRESH_TIME);	
+	return 0;
+}
+
+/*
+ * a3d_close() is a callback from the input close routine.
+ */
+
+static void a3d_close(struct input_dev *dev)
+{
+	struct a3d *a3d = dev->private;
+	if (!--a3d->used)
+		del_timer(&a3d->timer);
+}
+
+/*
+ * a3d_connect() probes for A3D joysticks.
+ */
+
+static void a3d_connect(struct gameport *gameport, struct gameport_dev *dev)
+{
+	struct a3d *a3d;
+	char data[A3D_MAX_LENGTH];
 	int i;
 
-	for (i = 0; i < 2; i++) {
-		corr[0][i].type = JS_CORR_BROKEN;
-		corr[0][i].prec = -1;
-		corr[0][i].coef[0] = 0;
-		corr[0][i].coef[1] = 0;
-		corr[0][i].coef[2] = (104 << 14);
-		corr[0][i].coef[3] = (104 << 14);
+	if (!(a3d = kmalloc(sizeof(struct a3d), GFP_KERNEL)))
+		return;
+	memset(a3d, 0, sizeof(struct a3d));
+
+	gameport->private = a3d;
+
+	a3d->gameport = gameport;
+	init_timer(&a3d->timer);
+	a3d->timer.data = (long) a3d;
+	a3d->timer.function = a3d_timer;
+
+	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW))
+		goto fail1;
+
+	i = a3d_read_packet(gameport, A3D_MAX_LENGTH, data);
+
+	if (!i || a3d_csum(data, i))
+		goto fail2;
+
+	a3d->mode = data[0];
+
+	if (!a3d->mode || a3d->mode >= 4) {
+		printk(KERN_WARNING "a3d.c: Unknown A3D device detected "
+			"(gameport%d, id=%d), contact <vojtech@suse.cz>\n", gameport->number, a3d->mode);
+		goto fail2;
 	}
-}
+	
+	if (a3d->mode == A3D_MODE_PXL) {
+		if ((char)((data[21] << 6) | (data[22] << 3) | (data[23])) < 126)
+			a3d->mode = A3D_MODE_PXLR;
+		a3d->length = 33;
 
-/*
- * js_as_rudder_init_corr() initializes the correction values for
- * the Panther XL connected rudder.
- */
+		/* Fill the input structures */
 
-static void __init js_as_rudder_init_corr(struct js_corr **corr, int **axes)
-{
-	corr[1][0].type = JS_CORR_BROKEN;
-	corr[1][0].prec = 0;
-	corr[1][0].coef[0] = axes[1][0] - (axes[1][0] >> 3);
-	corr[1][0].coef[1] = axes[1][0] + (axes[1][0] >> 3);
-	corr[1][0].coef[2] = (1 << 29) / (axes[1][0] - (axes[1][0] >> 2) + 1);
-	corr[1][0].coef[3] = (1 << 29) / (axes[1][0] - (axes[1][0] >> 2) + 1);
-}
-
-/*
- * js_as_probe() probes for A3D joysticks.
- */
-
-static struct js_port __init *js_as_probe(int io, int mask0, int mask1, struct js_port *port)
-{
-	struct js_as_info iniinfo;
-	struct js_as_info *info = &iniinfo;
-	char *name;
-	char data[JS_AS_MAX_LENGTH];
-	unsigned char u;
-	int i;
-	int numdev;
-
-	memset(info, 0, sizeof(struct js_as_info));
-
-	if (io < 0) return port;
-
-	if (check_region(io, 1)) return port;
-
-	i = js_as_read_packet(io, JS_AS_MAX_LENGTH, data);
-
-	printk("%d\n", i);
-
-	if (!i) return port;
-	if (js_as_csum(data, i)) return port;
-
-	if (data[0] && data[0] <= 4) {
-		info->mode = data[0];
-		info->io = io;
-		request_region(io, 1, "joystick (assassin)");
-		port = js_register_port(port, info, 3, sizeof(struct js_as_info), js_as_read);
-		info = port->info;
 	} else {
-		printk(KERN_WARNING "joy-assassin: unknown joystick device detected "
-			"(io=%#x, id=%d), contact <vojtech@suse.cz>\n", io, data[0]);
-		return port;
+		a3d->length = 29;
+
+		/* Fill the input & gameport structures */
+
+		a3d->adc.open = a3d_adc_open;
+		a3d->adc.close = a3d_adc_close;
+		a3d->adc.cooked_read = a3d_adc_cooked_read;
+
+		gameport_register_port(&a3d->adc);
+		printk(KERN_INFO "gameport%d: %s ADC gameport on gameport%d\n",
+			a3d->adc.number, a3d_names[a3d->mode], gameport->number);
 	}
 
-	udelay(JS_AS_DELAY_READ);
+	input_register_device(&a3d->dev);
+	printk(KERN_INFO "input%d: %s on gameport%d\n",
+		a3d->dev.number, a3d_names[a3d->mode], gameport->number);
 
-	if (info->mode == JS_AS_MODE_PXL) {
-			printk(KERN_INFO "js%d: MadCatz Panther XL at %#x\n",
-				js_register_device(port, 0, 9, 9, "MadCatz Panther XL", js_as_open, js_as_close),
-				info->io);
-			js_as_read(port->info, port->axes, port->buttons);
-			js_as_pxl_init_corr(port->corr, port->axes);
-			if (info->an.axes[0] < 254) {
-			printk(KERN_INFO "js%d: Analog rudder on MadCatz Panther XL\n",
-				js_register_device(port, 1, 1, 0, "Analog rudder", js_as_open, js_as_close));
-				info->rudder = 1;
-				port->axes[1][0] = info->an.axes[0];
-				js_as_rudder_init_corr(port->corr, port->axes);
-			}
-			return port;
-	}
-
-	switch (info->mode) {
-		case JS_AS_MODE_A3D: name = "FP-Gaming Assassin 3D"; break;
-		case JS_AS_MODE_PAN: name = "MadCatz Panther"; break;
-		case JS_AS_MODE_OEM: name = "OEM Assassin 3D"; break;
-		default: name = "This cannot happen"; break;
-	}
-
-	printk(KERN_INFO "js%d: %s at %#x\n",
-		js_register_device(port, 0, 2, 3, name, js_as_open, js_as_close),
-		name, info->io);
-
-	js_as_as_init_corr(port->corr);
-
-	js_as_read(port->info, port->axes, port->buttons);
-
-	for (i = u = 0; i < 4; i++) if (info->an.axes[i] < 254) u |= 1 << i;
-
-	if ((numdev = js_an_probe_devs(&info->an, u, mask0, mask1, port)) <= 0)
-		return port;
-
-	for (i = 0; i < numdev; i++)
-		printk(KERN_INFO "js%d: %s on %s\n",
-			js_register_device(port, i + 1, js_an_axes(i, &info->an), js_an_buttons(i, &info->an),
-				js_an_name(i, &info->an), js_as_open, js_as_close),
-			js_an_name(i, &info->an), name);
-
-	js_an_decode(&info->an, port->axes + 1, port->buttons + 1);
-	js_an_init_corr(&info->an, port->axes + 1, port->corr + 1, 0);
-
-	return port;
+	return;
+fail2:	gameport_close(gameport);
+fail1:  kfree(a3d);
 }
 
-#ifndef MODULE
-int __init js_as_setup(SETUP_PARAM)
-{
-	int i;
-	SETUP_PARSE(24);
-	for (i = 0; i <= ints[0] && i < 24; i++) js_as[i] = ints[i+1];
-	return 1;
-}
-__setup("js_as=", js_as_setup);
-#endif
-
-#ifdef MODULE
-int init_module(void)
-#else
-int __init js_as_init(void)
-#endif
+static void a3d_disconnect(struct gameport *gameport)
 {
 	int i;
 
-	if (js_as[0] >= 0) {
-		for (i = 0; (js_as[i*3] >= 0) && i < 8; i++)
-			js_as_port = js_as_probe(js_as[i*3], js_as[i*3+1], js_as[i*3+2], js_as_port);
-	} else {
-		for (i = 0; js_as_port_list[i]; i++) js_as_port = js_as_probe(js_as_port_list[i], 0, 0, js_as_port);
+	struct a3d *a3d = gameport->private;
+	for (i = 0; i < 2; i++) {
+		input_unregister_device(&a3d->dev);
+		if (a3d->mode < A3D_MODE_PXL)
+			gameport_unregister_port(&a3d->adc);
 	}
-	if (js_as_port) return 0;
-
-#ifdef MODULE
-	printk(KERN_WARNING "joy-assassin: no joysticks found\n");
-#endif
-
-	return -ENODEV;
+	gameport_close(gameport);
+	kfree(a3d);
 }
 
-#ifdef MODULE
-void cleanup_module(void)
+static struct gameport_dev a3d_dev = {
+	connect:	a3d_connect,
+	disconnect:	a3d_disconnect,
+};
+
+int __init a3d_init(void)
 {
-	int i;
-	struct js_as_info *info;
-
-	while (js_as_port) {
-		for (i = 0; i < js_as_port->ndevs; i++)
-			if (js_as_port->devs[i])
-				js_unregister_device(js_as_port->devs[i]);
-		info = js_as_port->info;
-		release_region(info->io, 1);
-		js_as_port = js_unregister_port(js_as_port);
-	}
-
+	gameport_register_device(&a3d_dev);
+	return 0;
 }
-#endif
+
+void __exit a3d_exit(void)
+{
+	gameport_unregister_device(&a3d_dev);
+}
+
+module_init(a3d_init);
+module_exit(a3d_exit);

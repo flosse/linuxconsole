@@ -446,13 +446,12 @@ static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
 	port->adi[1].mask = ....
 #endif
 
-	if (gameport_open(gameport, dev)) {
-                kfree(port);
-                return;
-        }
-
-	if (!gameport_set_mode(gameport, GAMEPORT_MODE_COOKED))
-		port->cooked = 1;
+	if (gameport_open(gameport, dev, GAMEPORT_MODE_COOKED)) {
+		if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW)) {
+			kfree(port);
+			return;
+		}
+	} else port->cooked = 1;
 
 	if (port->cooked) {
 		gameport_cooked_read(gameport, port->axes, &port->buttons);
@@ -470,7 +469,11 @@ static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
 		analog_cooked_read(port);
 	}
 
-	analog_init_devices(port);
+	if (analog_init_devices(port)) {
+		gameport_close(gameport);
+		kfree(port);
+		return;
+	}
 
 	for (i = 0; i < 2; i++) 
 		if (port->analog[i].mask) {

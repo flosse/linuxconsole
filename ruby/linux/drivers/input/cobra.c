@@ -120,8 +120,7 @@ static void cobra_timer(unsigned long private)
 
 	if (!(r = cobra_read_packet(cobra->gameport, data))) {
 		cobra->bads++;
-		return;
-	}
+	} else
 
 	for (i = 0; i < 2; i++)
 		if (cobra->exists & r & (1 << i)) {
@@ -145,6 +144,8 @@ static void cobra_timer(unsigned long private)
 			input_report_btn(dev, BTN_TR2,    data[i] & 0x10000);
 
 		}
+
+	mod_timer(&cobra->timer, jiffies + COBRA_REFRESH_TIME);	
 }
 
 static int cobra_open(struct input_dev *dev)
@@ -179,13 +180,8 @@ static void cobra_connect(struct gameport *gameport, struct gameport_dev *dev)
 	cobra->timer.data = (long) cobra;
 	cobra->timer.function = cobra_timer;
 
-	if (gameport_open(gameport, dev)) {
-		kfree(cobra);
-		return;
-	}
-
-	if (gameport_set_mode(gameport, GAMEPORT_MODE_RAW));
-		goto fail;
+	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW));
+		goto fail1;
 
 	cobra->exists = cobra_read_packet(gameport, data);
 
@@ -197,7 +193,7 @@ static void cobra_connect(struct gameport *gameport, struct gameport_dev *dev)
 		}
 
 	if (!cobra->exists)
-		goto fail;
+		goto fail2;
 
 	for (i = 0; i < 2; i++)
 		if ((cobra->exists >> i) & 1) {
@@ -223,10 +219,10 @@ static void cobra_connect(struct gameport *gameport, struct gameport_dev *dev)
 				cobra->dev[i].number, gameport->number);
 		}
 
+
 	return;
-fail:
-	gameport_close(gameport);
-	kfree(cobra);
+fail2:	gameport_close(gameport);
+fail1:	kfree(cobra);
 }
 
 static void cobra_disconnect(struct gameport *gameport)

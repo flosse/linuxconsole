@@ -68,7 +68,8 @@ static int gameport_measure_speed(struct gameport *gameport)
 	unsigned int i, t, t1, t2, t3, tx;
 	unsigned long flags;
 
-	gameport_set_mode(gameport, GAMEPORT_MODE_RAW);
+	if (gameport_open(gameport, NULL, GAMEPORT_MODE_RAW))
+		return 0;
 
 	tx = 1 << 30;
 
@@ -91,11 +92,13 @@ static int gameport_measure_speed(struct gameport *gameport)
 	unsigned int j, t = 0;
 
 	j = jiffies; while (j == jiffies);
-	j = jiffies; while (j == jiffies) { t++; inb(0x201); }
+	j = jiffies; while (j == jiffies) { t++; gameport_read(gameport); }
 
 	return t * HZ / 1000;
 
 #endif
+
+	gameport_close(gameport);
 }
 
 static void gameport_find_dev(struct gameport *gameport)
@@ -177,10 +180,16 @@ void gameport_unregister_device(struct gameport_dev *dev)
 	MOD_DEC_USE_COUNT;
 }
 
-int gameport_open(struct gameport *gameport, struct gameport_dev *dev)
+int gameport_open(struct gameport *gameport, struct gameport_dev *dev, int mode)
 {
-	if (gameport->open && gameport->open(gameport))
-		return -1;
+	if (gameport->open) {
+		if (gameport->open(gameport, mode))
+			return -1;
+	} else {
+		if (mode != GAMEPORT_MODE_RAW)
+			return -1;
+	}
+
 	gameport->dev = dev;
 	MOD_INC_USE_COUNT;
 	

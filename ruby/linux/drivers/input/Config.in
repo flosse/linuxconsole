@@ -38,14 +38,13 @@ if [ "$CONFIG_INPUT" != "n" ]; then
    
    comment 'Gameport devices'
       tristate '  Analog joysticks and gamepads' CONFIG_INPUT_ANALOG
-      tristate ' *Assasin 3D and MadCatz Panther devices' CONFIG_INPUT_A3D
+      tristate '  Assasin 3D and MadCatz Panther devices' CONFIG_INPUT_A3D
       tristate '  Logitech ADI digital joysticks and gamepads' CONFIG_INPUT_ADI
       tristate '  Creative Labs Blaster Cobra gamepad' CONFIG_INPUT_COBRA
       tristate ' *Genius Flight2000 Digital joysticks and gamepads' CONFIG_INPUT_GF2K
       tristate ' *Gravis GrIP joysticks and gamepads' CONFIG_INPUT_GRIP
-      tristate ' *InterAct HammerHead/FX gamepad' CONFIG_INPUT_INTERACT
-      tristate ' *Microsoft SideWinder digital joysticks and gamepads' CONFIG_INPUT_SIDEWINDER
       tristate ' *ThrustMaster DirectConnects joysticks and gamepads' CONFIG_INPUT_TMDC
+      tristate ' *Microsoft SideWinder digital joysticks and gamepads' CONFIG_INPUT_SIDEWINDER
    
    comment 'Bus devices'
       tristate '  InPort/MS/ATIXL busmouse' CONFIG_INPUT_INPORT
