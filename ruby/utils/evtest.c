@@ -98,7 +98,7 @@ int main (int argc, char **argv)
 	int abs[5];
 
 	if (argc < 2) {
-		printf ("Usage: evtest /dev/inputX\n");
+		printf ("Usage: evtest /dev/input/eventX\n");
 		printf ("Where X = input device number\n");
 		exit (1);
 	}
