@@ -985,8 +985,9 @@ void vte_ris(struct vc_data *vc, int do_clear)
 	set_leds();
 
         cursor_type = CUR_DEFAULT;
-        complement_mask = s_complement_mask;
-
+	complement_mask = s_complement_mask;
+	
+	update_cursor_attr(vc);
         default_attr(vc);
         update_attr(vc);
 
@@ -1505,6 +1506,7 @@ void terminal_emulation(struct tty_struct *tty, int c)
                                 else
                                         cursor_type = CUR_DEFAULT;
                                 priv4 = 0;
+				update_cursor_attr(vc);
                                 return;
                         }
                         break;

@@ -171,6 +171,23 @@ void set_cursor(struct vc_data *vc)
 	spin_unlock_irqrestore(&vc->display_fg->vt_lock, flags);
 }
 
+void update_cursor_attr(struct vc_data *vc)
+{
+	unsigned long flags;
+
+	if (!IS_VISIBLE || vc->display_fg->vt_blanked || vcmode == KD_GRAPHICS)
+                return;
+
+    	spin_lock_irqsave(&vc->display_fg->vt_lock, flags);
+	if (dectcem) {
+        	if (cons_num == sel_cons)
+                	clear_selection();
+		if ((cursor_type & 0x0f) != 1)
+			sw->con_cursor(vc, CM_CHANGE);
+        }	
+	spin_unlock_irqrestore(&vc->display_fg->vt_lock, flags);
+}
+
 /*
  * gotoxy() must verify all boundaries, because the arguments
  * might also be negative. If the given position is out of

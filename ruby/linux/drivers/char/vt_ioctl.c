@@ -1356,8 +1356,6 @@ inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
 		vt->fg_console = new_vc;
                 set_origin(old_vc);               
 		
-		set_origin(new_vc);	
-
 /*	
 		if (new_vc->vc_font.height != old_vc->vc_font.height ||
 		    new_vc->vc_font.width != old_vc->vc_font.width || 
@@ -1366,13 +1364,17 @@ inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
 			vt->vt_sw->con_font_op(new_vc, &new_vc->vc_font);
 		}	
 */	
+		set_origin(new_vc);	
+
 		set_palette(new_vc);
+		if (new_vc->vc_cursor_type != old_vc->vc_cursor_type)
+			update_cursor_attr(new_vc);
                 if (new_vc->vc_mode != KD_GRAPHICS) { 
                         /* Update the screen contents */
                         do_update_region(new_vc, new_vc->vc_origin, 
 					 new_vc->vc_screensize);
 		}
-        }                               
+        }
         set_cursor(new_vc);
         set_leds();
         compute_shiftstate();
