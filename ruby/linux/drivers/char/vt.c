@@ -719,7 +719,8 @@ int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
 static void vt_callback(void *private)
 {
         struct vt_struct *vt = (struct vt_struct *) private;
-        if  (!vt->want_vc) return;
+
+        if  (!vt->want_vc || !vt->want_vc->vc_tty) return;
 
         acquire_console_sem(&vt->want_vc->vc_tty->driver);
 
@@ -973,7 +974,6 @@ const char *create_vt(struct vt_struct *vt, int init)
 
 	if (!display_desc) return NULL;	
 	vt->first_vc = current_vc;
-	INIT_TQUEUE(&vt->vt_tq, vt_callback, vt);
 	init_MUTEX(&vt->lock);
 	vt->first_vc = current_vc;
 	vt->next = vt_cons;
@@ -1003,6 +1003,7 @@ const char *create_vt(struct vt_struct *vt, int init)
         vt->timer.data = (long) vt;
         vt->timer.function = blank_screen;
         mod_timer(&vt->timer, jiffies + vt->blank_interval);
+	INIT_TQUEUE(&vt->vt_tq, vt_callback, vt);
 	current_vc += MAX_NR_USER_CONSOLES;
 	return display_desc;
 }
