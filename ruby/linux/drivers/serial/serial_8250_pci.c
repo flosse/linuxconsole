@@ -1078,4 +1078,4 @@ EXPORT_NO_SYMBOLS;
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Generic 8250/16x50 PCI serial probe module");
-MODULE_GENERIC_TABLE(pci, serial_pci_tbl);
+//MODULE_GENERIC_TABLE(pci, serial_pci_tbl);

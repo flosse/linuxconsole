@@ -100,16 +100,18 @@ static void uart_stop(struct tty_struct *tty)
 	unsigned long flags;
 
 	spin_lock_irqsave(&info->lock, flags);
-	info->ops->stop_tx(info->port, 1);
+	info->port->ops->stop_tx(info->port, 1);
 	spin_unlock_irqrestore(&info->lock, flags);
 }
 
 static void __uart_start(struct tty_struct *tty)
 {
 	struct uart_info *info = tty->driver_data;
-	if (info->xmit.head != info->xmit.tail && info->xmit.buf &&
+	struct uart_port *port = info->port;
+
+	if (port->xmit.head != port->xmit.tail && port->xmit.buf &&
 	    !tty->stopped && !tty->hw_stopped)
-		info->ops->start_tx(info->port, 1, 1);
+		info->port->ops->start_tx(port, 1, 1);
 }
 
 static void uart_start(struct tty_struct *tty)
@@ -175,14 +177,14 @@ static int uart_startup(struct uart_info *info)
 		goto errout;
 	}
 
-	if (info->xmit.buf)
+	if (info->port->xmit.buf)
 		free_page(page);
 	else
-		info->xmit.buf = (unsigned char *) page;
+		info->port->xmit.buf = (unsigned char *) page;
 
 	info->mctrl = 0;
 
-	retval = info->ops->startup(info->port, info);
+	retval = info->port->ops->startup(info->port, info);
 	if (retval) {
 		if (capable(CAP_SYS_ADMIN)) {
 			if (info->tty)
@@ -194,7 +196,7 @@ static int uart_startup(struct uart_info *info)
 
 	if (info->tty)
 		clear_bit(TTY_IO_ERROR, &info->tty->flags);
-	info->xmit.head = info->xmit.tail = 0;
+	info->port->xmit.head = info->port->xmit.tail = 0;
 
 	/*
 	 * Set up the tty->alt_speed kludge
@@ -213,7 +215,7 @@ static int uart_startup(struct uart_info *info)
 	 */
 	if (info->tty->termios->c_cflag & CBAUD)
 		info->mctrl = TIOCM_RTS | TIOCM_DTR;
-	info->ops->set_mctrl(info->port, info->mctrl);
+	info->port->ops->set_mctrl(info->port, info->mctrl);
 
 	info->flags |= ASYNC_INITIALIZED;
 	retval = 0;
@@ -245,17 +247,17 @@ static void uart_shutdown(struct uart_info *info)
 	/*
 	 * Free the IRQ and disable the port
 	 */
-	info->ops->shutdown(info->port, info);
+	info->port->ops->shutdown(info->port, info);
 
-	if (info->xmit.buf) {
-		unsigned long pg = (unsigned long) info->xmit.buf;
-		info->xmit.buf = NULL;
+	if (info->port->xmit.buf) {
+		unsigned long pg = (unsigned long) info->port->xmit.buf;
+		info->port->xmit.buf = NULL;
 		free_page(pg);
 	}
 
 	if (!info->tty || (info->tty->termios->c_cflag & HUPCL))
 		info->mctrl &= ~(TIOCM_DTR|TIOCM_RTS);
-	info->ops->set_mctrl(info->port, info->mctrl);
+	info->port->ops->set_mctrl(info->port, info->mctrl);
 
 	/* kill off our tasklet */
 	tasklet_kill(&info->tlet);
@@ -358,21 +360,22 @@ static void uart_change_speed(struct uart_info *info, struct termios *old_termio
 
 	pm_access(info->state->pm);
 
-	info->ops->change_speed(port, cflag, info->tty->termios->c_iflag, quot);
+	info->port->ops->change_speed(port, cflag, info->tty->termios->c_iflag, quot);
 }
 
 static void uart_put_char(struct tty_struct *tty, u_char ch)
 {
 	struct uart_info *info = tty->driver_data;
+	struct uart_port *port = info->port;
 	unsigned long flags;
 
-	if (!tty || !info->xmit.buf)
+	if (!tty || !port->xmit.buf)
 		return;
 
 	spin_lock_irqsave(&info->lock, flags);
-	if (CIRC_SPACE(info->xmit.head, info->xmit.tail, UART_XMIT_SIZE) != 0) {
-		info->xmit.buf[info->xmit.head] = ch;
-		info->xmit.head = (info->xmit.head + 1) & (UART_XMIT_SIZE - 1);
+	if (CIRC_SPACE(port->xmit.head, port->xmit.tail, UART_XMIT_SIZE) != 0) {
+		port->xmit.buf[port->xmit.head] = ch;
+		port->xmit.head = (port->xmit.head + 1) & (UART_XMIT_SIZE - 1);
 	}
 	spin_unlock_irqrestore(&info->lock, flags);
 }
@@ -386,18 +389,19 @@ static int uart_write(struct tty_struct *tty, int from_user,
 			  const u_char * buf, int count)
 {
 	struct uart_info *info = tty->driver_data;
+	struct uart_port *port = info->port;
 	unsigned long flags;
 	int c, ret = 0;
 
-	if (!tty || !info->xmit.buf || !tmp_buf)
+	if (!tty || !port->xmit.buf || !tmp_buf)
 		return 0;
 
 	if (from_user) {
 		down(&tmp_buf_sem);
 		while (1) {
 			int c1;
-			c = CIRC_SPACE_TO_END(info->xmit.head,
-					      info->xmit.tail,
+			c = CIRC_SPACE_TO_END(port->xmit.head,
+					      port->xmit.tail,
 					      UART_XMIT_SIZE);
 			if (count < c)
 				c = count;
@@ -411,13 +415,13 @@ static int uart_write(struct tty_struct *tty, int from_user,
 				break;
 			}
 			spin_lock_irqsave(&info->lock, flags);
-			c1 = CIRC_SPACE_TO_END(info->xmit.head,
-					       info->xmit.tail,
+			c1 = CIRC_SPACE_TO_END(port->xmit.head,
+					       port->xmit.tail,
 					       UART_XMIT_SIZE);
 			if (c1 < c)
 				c = c1;
-			memcpy(info->xmit.buf + info->xmit.head, tmp_buf, c);
-			info->xmit.head = (info->xmit.head + c) &
+			memcpy(port->xmit.buf + port->xmit.head, tmp_buf, c);
+			port->xmit.head = (port->xmit.head + c) &
 					  (UART_XMIT_SIZE - 1);
 			spin_unlock_irqrestore(&info->lock, flags);
 			buf += c;
@@ -428,15 +432,15 @@ static int uart_write(struct tty_struct *tty, int from_user,
 	} else {
 		spin_lock_irqsave(&info->lock, flags);
 		while (1) {
-			c = CIRC_SPACE_TO_END(info->xmit.head,
-					      info->xmit.tail,
+			c = CIRC_SPACE_TO_END(port->xmit.head,
+					      port->xmit.tail,
 					      UART_XMIT_SIZE);
 			if (count < c)
 				c = count;
 			if (c <= 0)
 				break;
-			memcpy(info->xmit.buf + info->xmit.head, buf, c);
-			info->xmit.head = (info->xmit.head + c) &
+			memcpy(port->xmit.buf + port->xmit.head, buf, c);
+			port->xmit.head = (port->xmit.head + c) &
 					  (UART_XMIT_SIZE - 1);
 			buf += c;
 			count -= c;
@@ -452,20 +456,23 @@ static int uart_write(struct tty_struct *tty, int from_user,
 static int uart_write_room(struct tty_struct *tty)
 {
 	struct uart_info *info = tty->driver_data;
+	struct uart_port *port = info->port;
 
-	return CIRC_SPACE(info->xmit.head, info->xmit.tail, UART_XMIT_SIZE);
+	return CIRC_SPACE(port->xmit.head, port->xmit.tail, UART_XMIT_SIZE);
 }
 
 static int uart_chars_in_buffer(struct tty_struct *tty)
 {
 	struct uart_info *info = tty->driver_data;
+	struct uart_port *port = info->port;
 
-	return CIRC_CNT(info->xmit.head, info->xmit.tail, UART_XMIT_SIZE);
+	return CIRC_CNT(port->xmit.head, port->xmit.tail, UART_XMIT_SIZE);
 }
 
 static void uart_flush_buffer(struct tty_struct *tty)
 {
 	struct uart_info *info = tty->driver_data;
+	struct uart_port *port = info->port;
 	unsigned long flags;
 
 #ifdef DEBUG
@@ -473,7 +480,7 @@ static void uart_flush_buffer(struct tty_struct *tty)
 	       MINOR(tty->device) - tty->driver.minor_start);
 #endif
 	spin_lock_irqsave(&info->lock, flags);
-	info->xmit.head = info->xmit.tail = 0;
+	port->xmit.head = port->xmit.tail = 0;
 	spin_unlock_irqrestore(&info->lock, flags);
 	wake_up_interruptible(&tty->write_wait);
 	if ((tty->flags & (1 << TTY_DO_WRITE_WAKEUP)) &&
@@ -491,7 +498,7 @@ static void uart_send_xchar(struct tty_struct *tty, char ch)
 
 	info->port->x_char = ch;
 	if (ch)
-		info->ops->start_tx(info->port, 1, 0);
+		info->port->ops->start_tx(info->port, 1, 0);
 }
 
 static void uart_throttle(struct tty_struct *tty)
@@ -505,7 +512,7 @@ static void uart_throttle(struct tty_struct *tty)
 	if (tty->termios->c_cflag & CRTSCTS) {
 		spin_lock_irqsave(&info->lock, flags);
 		info->mctrl &= ~TIOCM_RTS;
-		info->ops->set_mctrl(info->port, info->mctrl);
+		info->port->ops->set_mctrl(info->port, info->mctrl);
 		spin_unlock_irqrestore(&info->lock, flags);
 	}
 }
@@ -525,7 +532,7 @@ static void uart_unthrottle(struct tty_struct *tty)
 	if (tty->termios->c_cflag & CRTSCTS) {
 		spin_lock_irqsave(&info->lock, flags);
 		info->mctrl |= TIOCM_RTS;
-		info->ops->set_mctrl(info->port, info->mctrl);
+		info->port->ops->set_mctrl(info->port, info->mctrl);
 		spin_unlock_irqrestore(&info->lock, flags);
 	}
 }
@@ -749,7 +756,7 @@ static int uart_get_lsr_info(struct uart_info *info, unsigned int *value)
 	unsigned long flags;
 
 	spin_lock_irqsave(&info->lock, flags);
-	result = info->ops->tx_empty(info->port);
+	result = info->port->ops->tx_empty(info->port);
 	spin_unlock_irqrestore(&info->lock, flags);
 
 	/*
@@ -759,7 +766,7 @@ static int uart_get_lsr_info(struct uart_info *info, unsigned int *value)
 	 * interrupt happens).
 	 */
 	if (info->port->x_char ||
-	    ((CIRC_CNT(info->xmit.head, info->xmit.tail,
+	    ((CIRC_CNT(info->port->xmit.head, info->port->xmit.tail,
 		       UART_XMIT_SIZE) > 0) &&
 	     !info->tty->stopped && !info->tty->hw_stopped))
 		result &= ~TIOCSER_TEMT;
@@ -771,7 +778,7 @@ static int uart_get_modem_info(struct uart_info *info, unsigned int *value)
 {
 	unsigned int result = info->mctrl;
 
-	result |= info->ops->get_mctrl(info->port);
+	result |= info->port->ops->get_mctrl(info->port);
 
 	return put_user(result, value);
 }
@@ -794,7 +801,7 @@ static int uart_set_modem_info(struct uart_info *info, unsigned int cmd,
 	default:	ret = -EINVAL;		break;
 	}
 	if (old != info->mctrl)
-		info->ops->set_mctrl(info->port, info->mctrl);
+		info->port->ops->set_mctrl(info->port, info->mctrl);
 	spin_unlock_irq(&info->lock);
 	return ret;
 }
@@ -806,7 +813,7 @@ static void uart_break_ctl(struct tty_struct *tty, int break_state)
 
 	if (info->port->type != PORT_UNKNOWN) {
 		spin_lock_irqsave(&info->lock, flags);
-		info->ops->break_ctl(info->port, break_state);
+		info->port->ops->break_ctl(info->port, break_state);
 		spin_unlock_irqrestore(&info->lock, flags);
 	}
 }
@@ -910,7 +917,7 @@ static int uart_ioctl(struct tty_struct *tty, struct file *file,
 			/* note the counters on entry */
 			cprev = info->port->icount;
 			/* Force modem status interrupts on */
-			info->ops->enable_ms(info->port);
+			info->port->ops->enable_ms(info->port);
 			spin_unlock_irq(&info->lock);
 			while (1) {
 				interruptible_sleep_on(&info->delta_msr_wait);
@@ -971,8 +978,8 @@ static int uart_ioctl(struct tty_struct *tty, struct file *file,
 			break;
 
 		default:
-			if (info->ops->ioctl)
-				ret = info->ops->ioctl(info->port, cmd, arg);
+			if (info->port->ops->ioctl)
+				ret = info->port->ops->ioctl(info->port, cmd, arg);
 			break;
 	}
 	return ret;
@@ -995,7 +1002,7 @@ static void uart_set_termios(struct tty_struct *tty, struct termios *old_termios
 	/* Handle transition to B0 status */
 	if ((old_termios->c_cflag & CBAUD) && !(cflag & CBAUD)) {
 		info->mctrl &= ~(TIOCM_RTS | TIOCM_DTR);
-		info->ops->set_mctrl(info->port, info->mctrl);
+		info->port->ops->set_mctrl(info->port, info->mctrl);
 	}
 
 	/* Handle transition away from B0 status */
@@ -1004,7 +1011,7 @@ static void uart_set_termios(struct tty_struct *tty, struct termios *old_termios
 		if (!(cflag & CRTSCTS) ||
 		    !test_bit(TTY_THROTTLED, &tty->flags))
 			info->mctrl |= TIOCM_RTS;
-		info->ops->set_mctrl(info->port, info->mctrl);
+		info->port->ops->set_mctrl(info->port, info->mctrl);
 	}
 
 	/* Handle turning off CRTSCTS */
@@ -1103,7 +1110,7 @@ static void uart_close(struct tty_struct *tty, struct file *filp)
 	 * disable the receive line status interrupts.
 	 */
 	if (info->flags & ASYNC_INITIALIZED) {
-		info->ops->stop_rx(info->port);
+		info->port->ops->stop_rx(info->port);
 		/*
 		 * Before we drop DTR, make sure the UART transmitter
 		 * has completely drained; this is especially
@@ -1133,8 +1140,8 @@ static void uart_close(struct tty_struct *tty, struct file *filp)
 		 */
 		pm_send(info->state->pm, PM_SUSPEND, (void *)3);
 #else
-		if (info->ops->pm)
-			info->ops->pm(info->port, 3, 0);
+		if (info->port->ops->pm)
+			info->port->ops->pm(info->port, 3, 0);
 #endif
 	}
 
@@ -1188,7 +1195,7 @@ static void uart_wait_until_sent(struct tty_struct *tty, int timeout)
 	       MINOR(tty->device) - tty->driver.minor_start, jiffies,
 	       expire);
 #endif
-	while (!info->ops->tx_empty(info->port)) {
+	while (!info->port->ops->tx_empty(info->port)) {
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(char_time);
 		if (signal_pending(current))
@@ -1302,7 +1309,7 @@ static int uart_block_til_ready(struct tty_struct *tty, struct file *filp,
 		if (!(info->flags & ASYNC_CALLOUT_ACTIVE) &&
 		    (tty->termios->c_cflag & CBAUD)) {
 			info->mctrl = TIOCM_DTR | TIOCM_RTS;
-			info->ops->set_mctrl(info->port, info->mctrl);
+			info->port->ops->set_mctrl(info->port, info->mctrl);
 		}
 		spin_unlock_irqrestore(&info->lock, flags);
 		set_current_state(TASK_INTERRUPTIBLE);
@@ -1317,7 +1324,7 @@ static int uart_block_til_ready(struct tty_struct *tty, struct file *filp,
 		if (!(info->flags & ASYNC_CALLOUT_ACTIVE) &&
 		    !(info->flags & ASYNC_CLOSING) &&
 		    (do_clocal ||
-		     (info->ops->get_mctrl(info->port) & TIOCM_CAR)))
+		     (info->port->ops->get_mctrl(info->port) & TIOCM_CAR)))
 			break;
 		if (signal_pending(current)) {
 			retval = -ERESTARTSYS;
@@ -1356,7 +1363,6 @@ static struct uart_info *uart_get(struct uart_driver *drv, int line)
 		init_waitqueue_head(&info->delta_msr_wait);
 		info->port  = state->port;
 		info->flags = info->port->flags;
-		info->ops   = info->port->ops;
 		info->state = state;
 		tasklet_init(&info->tlet, uart_tasklet_action,
 			     (unsigned long)info);
@@ -1448,8 +1454,8 @@ static int uart_open(struct tty_struct *tty, struct file *filp)
 #ifdef CONFIG_PM
 		pm_send(info->state->pm, PM_RESUME, (void *)0);
 #else
-		if (info->ops->pm)
-			info->ops->pm(info->port, 0, 3);
+		if (info->port->ops->pm)
+			info->port->ops->pm(info->port, 0, 3);
 #endif
 
 	/*
@@ -1847,7 +1853,7 @@ uart_report_port(struct uart_driver *drv, struct uart_port *port)
 		printk("I/O 0x%x offset 0x%x", port->iobase, port->hub6);
 		break;
 	case SERIAL_IO_MEM:
-		printk("MEM 0x%x", port->mapbase);
+		printk("MEM 0x%lx", port->mapbase);
 		break;
 	}
 	printk(" (irq = %d) is a %s\n", port->irq, uart_type(port));

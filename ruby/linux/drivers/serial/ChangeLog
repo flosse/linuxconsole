@@ -1,5 +1,11 @@
-2001-11-22  James Simmons  <jsimmons@transvirtual.com>
+2001-12-22  James Simmons  <jsimmons@transvirtual.com>
 
         * Final port of Russell King's code. Today we are going to
 	* start working on a better api for 2.5. 
+
+2001-12-24  James Simmons <jsimmons@users.sf.net>
+	* Moved xmit circular buffer from struct uart_info to struct uart_port
+
+2001-12-24  James Simmons <jsimmons@users.sf.net>
+  	* Removed ops field in uart_info. Instead use in in uart_port instead.
 

@@ -262,7 +262,7 @@ static void ambauart_tx_chars(struct uart_info *info)
 		port->x_char = 0;
 		return;
 	}
-	if (info->xmit.head == info->xmit.tail
+	if (port->xmit.head == port->xmit.tail
 	    || info->tty->stopped
 	    || info->tty->hw_stopped) {
 		ambauart_stop_tx(port, 0);
@@ -271,19 +271,19 @@ static void ambauart_tx_chars(struct uart_info *info)
 
 	count = port->fifosize >> 1;
 	do {
-		UART_PUT_CHAR(port, info->xmit.buf[info->xmit.tail]);
-		info->xmit.tail = (info->xmit.tail + 1) & (UART_XMIT_SIZE - 1);
+		UART_PUT_CHAR(port, port->xmit.buf[port->xmit.tail]);
+		port->xmit.tail = (port->xmit.tail + 1) & (UART_XMIT_SIZE - 1);
 		port->icount.tx++;
-		if (info->xmit.head == info->xmit.tail)
+		if (port->xmit.head == port->xmit.tail)
 			break;
 	} while (--count > 0);
 
-	if (CIRC_CNT(info->xmit.head, info->xmit.tail, UART_XMIT_SIZE) <
+	if (CIRC_CNT(port->xmit.head, port->xmit.tail, UART_XMIT_SIZE) <
 			WAKEUP_CHARS)
 		uart_event(info, EVT_WRITE_WAKEUP);
 
-	if (info->xmit.head == info->xmit.tail)
-		ambauart_stop_tx(info->port, 0);
+	if (port->xmit.head == port->xmit.tail)
+		ambauart_stop_tx(port, 0);
 }
 
 static void ambauart_modem_status(struct uart_info *info)

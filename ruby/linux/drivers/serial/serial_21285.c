@@ -163,7 +163,7 @@ static void serial21285_tx_chars(int irq, void *dev_id, struct pt_regs *regs)
 		port->x_char = 0;
 		return;
 	}
-	if (info->xmit.head == info->xmit.tail
+	if (port->xmit.head == port->xmit.tail
 	    || info->tty->stopped
 	    || info->tty->hw_stopped) {
 		serial21285_stop_tx(port, 0);
@@ -171,18 +171,18 @@ static void serial21285_tx_chars(int irq, void *dev_id, struct pt_regs *regs)
 	}
 
 	do {
-		*CSR_UARTDR = info->xmit.buf[info->xmit.tail];
-		info->xmit.tail = (info->xmit.tail + 1) & (UART_XMIT_SIZE - 1);
+		*CSR_UARTDR = port->xmit.buf[port->xmit.tail];
+		port->xmit.tail = (port->xmit.tail + 1) & (UART_XMIT_SIZE - 1);
 		port->icount.tx++;
-		if (info->xmit.head == info->xmit.tail)
+		if (port->xmit.head == port->xmit.tail)
 			break;
 	} while (--count > 0 && !(*CSR_UARTFLG & 0x20));
 
-	if (CIRC_CNT(info->xmit.head, info->xmit.tail, UART_XMIT_SIZE) <
+	if (CIRC_CNT(port->xmit.head, port->xmit.tail, UART_XMIT_SIZE) <
 			WAKEUP_CHARS)
 		uart_event(info, EVT_WRITE_WAKEUP);
 
-	if (info->xmit.head == info->xmit.tail)
+	if (port->xmit.head == port->xmit.tail)
 		serial21285_stop_tx(port, 0);
 }
 

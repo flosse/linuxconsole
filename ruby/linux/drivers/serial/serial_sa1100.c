@@ -237,10 +237,10 @@ static void sa1100_tx_chars(struct uart_info *info)
 		port->x_char = 0;
 		return;
 	}
-	if (info->xmit.head == info->xmit.tail
+	if (port->xmit.head == port->xmit.tail
 	    || info->tty->stopped
 	    || info->tty->hw_stopped) {
-		sa1100_stop_tx(info->port, 0);
+		sa1100_stop_tx(port, 0);
 		return;
 	}
 
@@ -249,19 +249,19 @@ static void sa1100_tx_chars(struct uart_info *info)
 	 * still had the '4 bytes repeated' problem.
 	 */
 	while (UART_GET_UTSR1(port) & UTSR1_TNF) {
-		UART_PUT_CHAR(port, info->xmit.buf[info->xmit.tail]);
-		info->xmit.tail = (info->xmit.tail + 1) & (UART_XMIT_SIZE - 1);
+		UART_PUT_CHAR(port, port->xmit.buf[port->xmit.tail]);
+		port->xmit.tail = (port->xmit.tail + 1) & (UART_XMIT_SIZE - 1);
 		port->icount.tx++;
-		if (info->xmit.head == info->xmit.tail)
+		if (port->xmit.head == port->xmit.tail)
 			break;
 	}
 
-	if (CIRC_CNT(info->xmit.head, info->xmit.tail, UART_XMIT_SIZE) <
+	if (CIRC_CNT(port->xmit.head, port->xmit.tail, UART_XMIT_SIZE) <
 			WAKEUP_CHARS)
 		uart_event(info, EVT_WRITE_WAKEUP);
 
-	if (info->xmit.head == info->xmit.tail)
-		sa1100_stop_tx(info->port, 0);
+	if (port->xmit.head == port->xmit.tail)
+		sa1100_stop_tx(port, 0);
 }
 
 static void sa1100_int(int irq, void *dev_id, struct pt_regs *regs)

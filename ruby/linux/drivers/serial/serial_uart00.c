@@ -243,30 +243,30 @@ static void uart00_tx_chars(struct uart_info *info)
 		
 		return;
 	}
-	if (info->xmit.head == info->xmit.tail
+	if (port->xmit.head == port->xmit.tail
 	    || info->tty->stopped
 	    || info->tty->hw_stopped) {
-		uart00_stop_tx(info->port, 0);
+		uart00_stop_tx(port, 0);
 		return;
 	}
 
 	count = port->fifosize >> 1;
 	do {
 		while((UART_GET_TSR(port)& UART_TSR_TX_LEVEL_MSK)==15);
-		UART_PUT_CHAR(port, info->xmit.buf[info->xmit.tail]);
-		info->xmit.tail = (info->xmit.tail + 1) & (UART_XMIT_SIZE - 1);
+		UART_PUT_CHAR(port, port->xmit.buf[port->xmit.tail]);
+		port->xmit.tail = (port->xmit.tail + 1) & (UART_XMIT_SIZE - 1);
 		port->icount.tx++;
-		if (info->xmit.head == info->xmit.tail)
+		if (port->xmit.head == port->xmit.tail)
 			break;
 	} while (--count > 0);
 
-	if (CIRC_CNT(info->xmit.head,
-		     info->xmit.tail,
+	if (CIRC_CNT(port->xmit.head,
+		     port->xmit.tail,
 		     UART_XMIT_SIZE) < WAKEUP_CHARS)
 		uart_event(info, EVT_WRITE_WAKEUP);
 
-	if (info->xmit.head == info->xmit.tail)
-		uart00_stop_tx(info->port, 0);
+	if (port->xmit.head == port->xmit.tail)
+		uart00_stop_tx(port, 0);
 }
 
 static void uart00_start_tx(struct uart_port *port, u_int nonempty, u_int from_tty)
@@ -322,13 +322,13 @@ static void uart00_modem_status(struct uart_info *info)
 			if (info->tty->hw_stopped) {
 				if (status) {
 					info->tty->hw_stopped = 0;
-					info->ops->start_tx(info->port, 1, 0);
+					info->port->ops->start_tx(info->port, 1, 0);
 					uart_event(info, EVT_WRITE_WAKEUP);
 				}
 			} else {
 				if (!status) {
 					info->tty->hw_stopped = 1;
-					info->ops->stop_tx(info->port, 0);
+					info->port->ops->stop_tx(info->port, 0);
 				}
 			}
 		}

@@ -224,29 +224,29 @@ static void clps711xuart_int_tx(int irq, void *dev_id, struct pt_regs *regs)
 		port->x_char = 0;
 		return;
 	}
-	if (info->xmit.head == info->xmit.tail
+	if (port->xmit.head == port->xmit.tail
 	    || info->tty->stopped
 	    || info->tty->hw_stopped) {
-		clps711xuart_stop_tx(info->port, 0);
+		clps711xuart_stop_tx(port, 0);
 		return;
 	}
 
 	count = port->fifosize >> 1;
 	do {
-		clps_writel(info->xmit.buf[info->xmit.tail], UARTDR(port));
-		info->xmit.tail = (info->xmit.tail + 1) & (UART_XMIT_SIZE - 1);
+		clps_writel(port->xmit.buf[port->xmit.tail], UARTDR(port));
+		port->xmit.tail = (port->xmit.tail + 1) & (UART_XMIT_SIZE - 1);
 		port->icount.tx++;
-		if (info->xmit.head == info->xmit.tail)
+		if (port->xmit.head == port->xmit.tail)
 			break;
 	} while (--count > 0);
 
-	if (CIRC_CNT(info->xmit.head,
-		     info->xmit.tail,
+	if (CIRC_CNT(port->xmit.head,
+		     port->xmit.tail,
 		     UART_XMIT_SIZE) < WAKEUP_CHARS)
 		uart_event(info, EVT_WRITE_WAKEUP);
 
-	if (info->xmit.head == info->xmit.tail)
-		clps711xuart_stop_tx(info->port, 0);
+	if (port->xmit.head == port->xmit.tail)
+		clps711xuart_stop_tx(port, 0);
 }
 
 static u_int clps711xuart_tx_empty(struct uart_port *port)

@@ -88,29 +88,25 @@ anakin_stop_tx(struct uart_port *port, u_int from_tty)
 }
 
 static inline void
-anakin_transmit_buffer(struct uart_info *info)
+anakin_transmit_buffer(struct uart_port *port)
 {
-	struct uart_port *port = info->port;
-
 	while (!(anakin_in(port, 0x10) & TXEMPTY));
-	anakin_out(port, 0x14, info->xmit.buf[info->xmit.tail]);
+	anakin_out(port, 0x14, port->xmit.buf[port->xmit.tail]);
 	anakin_out(port, 0x18, anakin_in(port, 0x18) | SENDREQUEST);
-	info->xmit.tail = (info->xmit.tail + 1) & (UART_XMIT_SIZE-1);
-        info->state->icount.tx++;
+	port->xmit.tail = (port->xmit.tail + 1) & (UART_XMIT_SIZE-1);
+        port->icount.tx++;
 
-	if (info->xmit.head == info->xmit.tail)
+	if (port->xmit.head == port->xmit.tail)
 		anakin_stop_tx(port, 0); 
 }
 
 static inline void
-anakin_transmit_x_char(struct uart_info *info)
+anakin_transmit_x_char(struct uart_port *port)
 {
-	struct uart_port *port = info->port;
-
-	anakin_out(port, 0x14, info->x_char);
+	anakin_out(port, 0x14, port->x_char);
 	anakin_out(port, 0x18, anakin_in(port, 0x18) | SENDREQUEST);
-	info->state->icount.tx++;
-	info->x_char = 0;
+	port->icount.tx++;
+	port->x_char = 0;
 }
 
 static void
@@ -125,10 +121,9 @@ anakin_start_tx(struct uart_port *port, u_int nonempty, u_int from_tty)
 		txenable[port->irq] = TXENABLE;
 
 		if ((anakin_in(port, 0x10) & TXEMPTY) && nonempty) {
-		    anakin_transmit_buffer((struct uart_info*)port->unused);
+		    anakin_transmit_buffer(port);
 		}
 	}
-
 	restore_flags(flags);
 }
 
@@ -163,40 +158,42 @@ anakin_rx_chars(struct uart_info *info)
 	if (tty->flip.count < TTY_FLIPBUF_SIZE) {
 		*tty->flip.char_buf_ptr++ = ch;
 		*tty->flip.flag_buf_ptr++ = TTY_NORMAL;
-		info->state->icount.rx++;
+		info->port->icount.rx++;
 		tty->flip.count++;
 	} 
 	tty_flip_buffer_push(tty);
 }
 
 static inline void
-anakin_overrun_chars(struct uart_info *info)
+anakin_overrun_chars(struct uart_port *port)
 {
 	unsigned int ch;
 
-	ch = anakin_in(info->port, 0x14);
-	info->state->icount.overrun++;
+	ch = anakin_in(port, 0x14);
+	port->icount.overrun++;
 }
 
 static inline void
 anakin_tx_chars(struct uart_info *info)
 {
-	if (info->x_char) {
-		anakin_transmit_x_char(info);
+	struct uart_port *port = info->port;
+
+	if (port->x_char) {
+		anakin_transmit_x_char(port);
 		return; 
 	}
 
-	if (info->xmit.head == info->xmit.tail
+	if (port->xmit.head == port->xmit.tail
 	    || info->tty->stopped
 	    || info->tty->hw_stopped) {
-		anakin_stop_tx(info->port, 0);
+		anakin_stop_tx(port, 0);
 		return;
 	}
 
-	anakin_transmit_buffer(info);
+	anakin_transmit_buffer(port);
 
-	if (CIRC_CNT(info->xmit.head,
-		     info->xmit.tail,
+	if (CIRC_CNT(port->xmit.head,
+		     port->xmit.tail,
 		     UART_XMIT_SIZE) < WAKEUP_CHARS)
 		uart_event(info, EVT_WRITE_WAKEUP);
 }
@@ -213,7 +210,7 @@ anakin_int(int irq, void *dev_id, struct pt_regs *regs)
 		anakin_rx_chars(info);
 
 	if (status & OVERRUN) 
-		anakin_overrun_chars(info);
+		anakin_overrun_chars(info->port);
 
 	if (txenable[info->port->irq] && (status & TX)) 
 		anakin_tx_chars(info);
