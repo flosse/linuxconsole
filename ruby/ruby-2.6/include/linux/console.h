@@ -18,18 +18,6 @@
 #include <linux/spinlock.h>
 
 /*
- *	Array of consoles built from command line options (console=)
- */
-struct console_cmdline
-{
-	char	name[8];			/* Name of the driver	    */
-	int	index;				/* Minor dev. to use	    */
-	char	*options;			/* Options for the driver   */
-};
-#define MAX_CMDLINECONSOLES 8
-extern struct console_cmdline console_list[MAX_CMDLINECONSOLES];
-
-/*
  *	The interface for a console, or any other device that
  *	wants to capture console messages (printer driver?)
  */
@@ -53,6 +41,7 @@ struct console
 	struct	 console *next;
 };
 
+extern int add_preferred_console(char *name, int idx, char *options);
 extern void register_console(struct console *);
 extern int unregister_console(struct console *);
 extern struct console *console_drivers;

@@ -5,6 +5,7 @@
 #include <linux/kd.h>
 #include <linux/interrupt.h>
 #include <linux/keyboard.h>
+#include <linux/input.h>
 
 extern struct tasklet_struct keyboard_tasklet;
 
