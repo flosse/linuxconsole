@@ -68,7 +68,7 @@ obj-$(CONFIG_INPUT_COBRA)	+= cobra.o gameport.o
 
 #obj-$(CONFIG_INPUT_DB9)	+= db9.o
 #obj-$(CONFIG_INPUT_GAMECON)	+= gamecon.o
-#obj-$(CONFIG_INPUT_TURBOGRAFX)	+= turbografx.o
+obj-$(CONFIG_INPUT_TURBOGRAFX)	+= turbografx.o
 
 obj-$(CONFIG_INPUT_HID)		+= hid.o
 obj-$(CONFIG_INPUT_USBMOUSE)	+= usbmouse.o

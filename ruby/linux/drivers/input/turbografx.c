@@ -33,15 +33,10 @@
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
  */
 
-#include <asm/io.h>
-#include <asm/system.h>
-#include <linux/errno.h>
-#include <linux/ioport.h>
-#include <linux/joystick.h>
 #include <linux/kernel.h>
+#include <linux/parport.h>
+#include <linux/input.h>
 #include <linux/module.h>
-#include <linux/string.h>
-#include <linux/delay.h>
 #include <linux/init.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
@@ -66,7 +61,7 @@ static int tgfx[] __initdata = { -1, 0, 0, 0, 0, 0, 0, 0 };
 static int tgfx_2[] __initdata = { -1, 0, 0, 0, 0, 0, 0, 0 };
 static int tgfx_3[] __initdata = { -1, 0, 0, 0, 0, 0, 0, 0 };
 
-static int tgfx_buttons = { BTN_TRIGGER, BTN_THUMB, BTN_THUMB2, BTN_TOP, BTN_TOP2 };
+static int tgfx_buttons[] = { BTN_TRIGGER, BTN_THUMB, BTN_THUMB2, BTN_TOP, BTN_TOP2 };
 
 struct tgfx {
 	struct pardevice *pd;
@@ -80,9 +75,9 @@ struct tgfx {
  * tgfx_timer() reads and analyzes TurboGraFX joystick data.
  */
 
-static int tgfx_timer(unsigned long private)
+static void tgfx_timer(unsigned long private)
 {
-	struct tgfx *tgfx = (void *private);
+	struct tgfx *tgfx = (void *) private;
 	struct input_dev *dev;
 	int data1, data2, i;
 
@@ -92,7 +87,7 @@ static int tgfx_timer(unsigned long private)
  			dev = tgfx->dev + i;
 
 			parport_write_data(tgfx->pd->port, ~(1 << i));
-			data1 = parport_read_status(gfx->pd->port) ^ 0x7f;
+			data1 = parport_read_status(tgfx->pd->port) ^ 0x7f;
 			data2 = parport_read_control(tgfx->pd->port) ^ 0x04;	/* CAVEAT parport */
 
 			input_report_abs(dev, ABS_X, !!(data1 & TGFX_RIGHT) - !!(data1 & TGFX_LEFT));
@@ -133,25 +128,25 @@ static void tgfx_close(struct input_dev *dev)
  * tgfx_probe() probes for tg gamepads.
  */
 
-static int __init *tgfx_probe(int *config)
+static struct tgfx __init *tgfx_probe(int *config)
 {
 	struct tgfx *tgfx;
 	struct parport *pp;
 	int i, j;
 
 	if (config[0] < 0)
-		return -1;
+		return NULL;
 
 	for (pp = parport_enumerate(); pp && (config[0] > 0); pp = pp->next)
 		config[0]--;
 
 	if (!pp) {
 		printk(KERN_ERR "turbografx.c: no such parport\n");
-		return -1;
+		return NULL;
 	}
 
 	if (!(tgfx = kmalloc(sizeof(struct tgfx), GFP_KERNEL)))
-		return -1;
+		return NULL;
 	memset(tgfx, 0, sizeof(struct tgfx));
 
 	tgfx->pd = parport_register_device(pp, "turbografx", NULL, NULL, NULL, PARPORT_DEV_EXCL, NULL);
@@ -159,7 +154,7 @@ static int __init *tgfx_probe(int *config)
 	if (!tgfx->pd) {
 		printk(KERN_ERR "turbografx.c: parport busy already - lp.o loaded?\n");
 		kfree(tgfx);
-		return -1;
+		return NULL;
 	}
 
 	init_timer(&tgfx->timer);
@@ -176,8 +171,8 @@ static int __init *tgfx_probe(int *config)
 			tgfx->dev[i].open = tgfx_open;
 			tgfx->dev[i].close = tgfx_close;
 
-			tgfx->dev[i].evbit = BIT(EV_KEY) | BIT(EV_ABS);
-			tgfx->dev[i].absbit = BIT(ABS_X) | BIT(ABS_Y);
+			tgfx->dev[i].evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
+			tgfx->dev[i].absbit[0] = BIT(ABS_X) | BIT(ABS_Y);
 
 			for (j = 0; j < config[i+1]; j++)
 				set_bit(tgfx_buttons[j], tgfx->dev[i].keybit); 
@@ -193,10 +188,10 @@ static int __init *tgfx_probe(int *config)
         if (!tgfx->sticks) {
 		parport_unregister_device(tgfx->pd);
 		kfree(tgfx);
-		return -1;
+		return NULL;
         }
 		
-	return 0;
+	return tgfx;
 }
 
 #ifndef MODULE
@@ -228,8 +223,6 @@ __setup("tgfx_3=", tgfx_setup_3);
 
 int __init tgfx_init(void)
 {
-	int i = 0;
-
 	tgfx_base[0] = tgfx_probe(tgfx);
 	tgfx_base[1] = tgfx_probe(tgfx_2);
 	tgfx_base[2] = tgfx_probe(tgfx_3);
@@ -242,15 +235,14 @@ int __init tgfx_init(void)
 
 void __exit tgfx_exit(void)
 {
-	struct tgfx *tgfx;
 	int i, j;
 
 	for (i = 0; i < 3; i++) 
 		if (tgfx_base[i]) {
 			for (j = 0; j < 7; j++)
-				if (tgfx_base[i].sticks & (1 << j))
-					input_unregister_device(tgfx_base[i].dev + j);
-		parport_unregister_device(tgfx[base].pd);
+				if (tgfx_base[i]->sticks & (1 << j))
+					input_unregister_device(tgfx_base[i]->dev + j);
+		parport_unregister_device(tgfx_base[i]->pd);
 	}
 }
 
