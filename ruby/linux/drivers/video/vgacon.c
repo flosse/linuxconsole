@@ -288,6 +288,7 @@ int vga_do_font_op(char *arg, int set, int ch512)
 
 static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 {
+	struct vc_data *vc = vt->default_mode;
 	const char *display_desc = NULL;
 	u16 saved1, saved2;
 	volatile u16 *p;
@@ -310,8 +311,8 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
            (ORIG_VIDEO_MODE == 0x6A))   /* 800x600/4, 0x6A is very common */
                goto no_vga;
 
-	vt->default_mode->vc_rows = ORIG_VIDEO_LINES;
-	vt->default_mode->vc_cols = ORIG_VIDEO_COLS;
+	vc->vc_rows = ORIG_VIDEO_LINES;
+	vc->vc_cols = ORIG_VIDEO_COLS;
 
 	if (ORIG_VIDEO_MODE == 7) {	/* Is this a monochrome display? */
 		vga_vram_base = 0xb0000;
@@ -331,11 +332,11 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 			display_desc = "*MDA";
 			request_resource(&ioport_resource, &mda1_console_resource);
 			request_resource(&ioport_resource, &mda2_console_resource);
-			vt->default_mode->vc_font.height = 14;
+			vc->vc_font.height = 14;
 		}
 	} else {
 		/* If not, it is color. */
-		vt->default_mode->vc_can_do_color = 1;
+		vc->vc_can_do_color = 1;
 		vga_vram_base = 0xb8000;
 		vga_video_port_reg = 0x3d4;
 		vga_video_port_val = 0x3d5;
@@ -397,7 +398,7 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 			vga_vram_end = 0xba000;
 			display_desc = "*CGA";
 			request_resource(&ioport_resource, &cga_console_resource);
-			vt->default_mode->vc_font.height = 8;
+			vc->vc_font.height = 8;
 		}
 	}
 
@@ -432,7 +433,7 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 	    || vgacon_state.video_type == VIDEO_TYPE_VGAC
 	    || vgacon_state.video_type == VIDEO_TYPE_EGAM) {
 		vga_hardscroll_enabled = vga_hardscroll_user_enable;
-		vt->default_mode->vc_font.height = ORIG_VIDEO_POINTS;
+		vc->vc_font.height = ORIG_VIDEO_POINTS;
 	}
 	vgacon_state.mode = MODE_TEXT;
 
@@ -463,9 +464,9 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
                        	outb_p (default_blu[i], 0x3c9) ;
                	}
        	}
- 	vt->default_mode->vc_font.data = vga_fonts;	
+ 	vc->vc_font.data = vga_fonts;	
 	/* This maybe be suboptimal but is a safe bet - go with it */
-	vt->default_mode->vc_scan_lines = vt->default_mode->vc_font.height * vt->default_mode->vc_rows; 
+	vc->vc_scan_lines = vc->vc_font.height * vc->vc_rows; 
 	return display_desc;
 }
 
