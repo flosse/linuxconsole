@@ -39,13 +39,10 @@ You also need inputattach.
 
 You then need to insert the modules into the following order:
 % modprobe joydev
-% modprobe serport
+% modprobe serport		# Only for serial
 % modprobe iforce
 % modprobe evdev
 % ./inputattach -ifor $2 &	# Only for serial
-For convenience, you may use the shell script named "ff" available from
-the cvs tree of the Linux Console Project at sourceforge. You can also
-retrieve it from http://www.esil.univ-mrs.fr/~jdeneux/projects/ff/.
 If you are using USB, you don't need the inputattach step.
 
 Please check that you have all the /dev/input entries needed:
@@ -82,19 +79,21 @@ and write() on /dev/input/eventXX.
 #include <linux/input.h>
 #include <sys/ioctl.h>
 
-unsigned long features[4];
+unsigned long features[1 + FF_MAX/sizeof(unsigned long)];
 int ioctl(int file_descriptor, int request, unsigned long *features);
 
-"request" must be EVIOCGBIT(EV_FF, sizeof(unsigned long) * 4)
+"request" must be EVIOCGBIT(EV_FF, size of features array in bytes )
 
 Returns the features supported by the device. features is a bitfield with the
 following bits:
-- FF_X		has an X axis (should allways be the case)
-- FF_Y		has an Y axis (usually not the case for wheels)
+- FF_X		has an X axis (usually joysticks)
+- FF_Y		has an Y axis (usually joysticks)
+- FF_WHEEL	has a wheel (usually sterring wheels)
 - FF_CONSTANT	can render constant force effects
 - FF_PERIODIC	can render periodic effects (sine, ramp, square...)
 - FF_SPRING	can simulate the presence of a spring
-- FF_FRICTION	can simulate friction (aka drag, damper effect...)
+- FF_FRICTION	can simulate friction 
+- FF_DAMPER	can simulate damper effects
 - FF_RUMBLE	rumble effects (normally the only effect supported by rumble
 		pads)
 
