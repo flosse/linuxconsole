@@ -57,8 +57,8 @@ Restructing the framebuffer layer</A>
 </H2>
 
 <P>
-    If you look at the current framebuffer console layer you will see alot 
-of replicated code and and huge of code handling tty/console functionality.
+    If you look at the current framebuffer console layer you will see a lot 
+of replicated code and and huge amount of code handling tty/console functionality.
 
 </P>
 
@@ -77,13 +77,13 @@ work is that it will act to translate data about the tty/console in
 struct vc_data to data in a device independent way in struct fb_info. Then
 various functions in struct fb_ops will be called to store the device
 dependent state in the par field in struct fb_info and to change the
-hardware to that state. This allows a very clean seperation of the fbdev
+hardware to that state. This allows a very clean separation of the fbdev
 layer from the console layer. It also allows one to use fbdev on its own
-which is a bounus for embedded devices. The reason this approach works is
-for each framebuffer device when used as a tty/console device is allocated
+which is a bonus for embedded devices. The reason this approach works is
+because each framebuffer device, when used as a tty/console device, is allocated
 a set of virtual terminals to it. Only one virtual terminal can be active
 per framebuffer device. We already have all the data we need in struct
-vc_data so why store a bunch of colormaps and other fbdev specific data
+vc_data so we shouldn't store a bunch of colormaps and other fbdev specific data
 per virtual terminal.
 </P>
 

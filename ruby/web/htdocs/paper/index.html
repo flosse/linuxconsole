@@ -121,25 +121,25 @@ expands into different hardware sectors we see that these different sectors
 have very different needs and are very different from the classical PC. 
 The initial Linux kernel code was designed on the standard PC which had a large 
 influence on the code design. As Linux appears on new types of hardware devices
-we begain to see limitations to some of the central designs. As Linux kept 
-evolving and expanding to new platforms hardware was encountered that didn't
-fit the "PC" model. So instead often a extra interface of some kind either 
-userland or in kernel space was developed to compensate. 
+we began to see limitations of some of the central designs. As Linux kept 
+evolving and expanding to new platforms, hardware was encountered that didn't
+fit the "PC" model. So instead often an extra interface of some kind, either 
+userland or in kernel space, was developed to compensate. 
 
 <P>
-One of the major areas of the kernel affected by this is the tty layer. Here we 
+One of the major areas of the kernel affected by this is the tty layer. Here
 we witness things like the classical definition for a virtual terminal
 starting to break down and the handling of complex human input devices 
 addressed by the tty layer. Also for embedded devices size is critical 
 especially when dealing with boot loaders which often make certain assumptions 
-or place certain limitations. Modular is also lacking. Often with modern embedded 
+or place certain limitations. Modularity is also lacking. Often with modern embedded 
 devices we have removable pieces of hardware including things like keyboards
-which where in a classic PC sense critical to have.
+which were in a classic PC sense critical to have.
 
 <P>
 A major way of rethinking was needed to rework the tty layer. That way was to 
-reverse the flow of developement. The current way of thinking is expand the tty
-features with new device interfaces that influence the behavior of the TTY. A
+reverse the flow of development. The current way of thinking is to expand the tty
+features with new device interfaces that influence the behavior of the TTY. An
 example of this is for a framebuffer console we use a /dev/fb interface to resize
 a tty device. The proper method to resize would be to use a standard that already
 exist i.e the POSIX tty ioctl call TIOCSWINSZ.  
