@@ -2,9 +2,7 @@
 # For a description of the syntax of this configuration file,
 # see the Configure script.
 #
-mainmenu_name "Linux/SPARC Kernel Configuration"
-
-define_bool CONFIG_UID16 y
+mainmenu_name "Linux/UltraSPARC Kernel Configuration"
 
 mainmenu_option next_comment
 comment 'Code maturity level options'
@@ -17,7 +15,7 @@ comment 'General setup'
 define_bool CONFIG_VT y
 define_bool CONFIG_VT_CONSOLE y
 
-bool 'Symmetric multi-processing support (does not work on sun4/sun4c)' CONFIG_SMP
+bool 'Symmetric multi-processing support' CONFIG_SMP
 
 # Global things across all Sun machines.
 define_bool CONFIG_ISA n
@@ -33,13 +31,8 @@ define_bool CONFIG_SUN_KEYBOARD y
 define_bool CONFIG_SUN_CONSOLE y
 define_bool CONFIG_SUN_AUXIO y
 define_bool CONFIG_SUN_IO y
-
-bool 'Support for SUN4 machines (disables SUN4[CDM] support)' CONFIG_SUN4
-if [ "$CONFIG_SUN4" != "y" ]; then
-   source drivers/pci/Config.in
-else
-   define_bool CONFIG_PCI n
-fi
+bool 'PCI support' CONFIG_PCI
+source drivers/pci/Config.in
 
 tristate 'Openprom tree appears in /proc/openprom' CONFIG_SUN_OPENPROMFS
 bool 'Networking support' CONFIG_NET
@@ -49,12 +42,22 @@ bool 'Sysctl support' CONFIG_SYSCTL
 if [ "$CONFIG_PROC_FS" = "y" ]; then
    define_bool CONFIG_KCORE_ELF y
 fi
-tristate 'Kernel support for a.out binaries' CONFIG_BINFMT_AOUT
-tristate 'Kernel support for ELF binaries' CONFIG_BINFMT_ELF
+bool 'Kernel support for Linux/Sparc 32bit binary compatibility' CONFIG_SPARC32_COMPAT
+if [ "$CONFIG_SPARC32_COMPAT" != "n" ]; then
+   tristate '  Kernel support for 32-bit ELF binaries' CONFIG_BINFMT_ELF32
+   bool '  Kernel support for 32-bit (ie. SunOS) a.out binaries' CONFIG_BINFMT_AOUT32
+fi
+tristate 'Kernel support for 64-bit ELF binaries' CONFIG_BINFMT_ELF
 tristate 'Kernel support for MISC binaries' CONFIG_BINFMT_MISC
 bool 'SunOS binary emulation' CONFIG_SUNOS_EMUL
+if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
+   tristate 'Solaris binary emulation (EXPERIMENTAL)' CONFIG_SOLARIS_EMUL
+fi
 source drivers/parport/Config.in
 dep_tristate '  Parallel printer support' CONFIG_PRINTER $CONFIG_PARPORT
+if [ "$CONFIG_PCI" = "y" ]; then
+   tristate 'SUNW, envctrl support' CONFIG_ENVCTRL
+fi
 endmenu
 
 mainmenu_option next_comment
@@ -67,11 +70,8 @@ fi
 endmenu
 
 source drivers/video/Config.in
-
-if [ "$CONFIG_SUN4" != "y" ]; then
-   source drivers/sbus/char/Config.in
-   source drivers/sbus/audio/Config.in
-fi
+source drivers/sbus/char/Config.in
+source drivers/sbus/audio/Config.in
 
 mainmenu_option next_comment
 comment 'Block devices'
@@ -100,29 +100,16 @@ if [ "$CONFIG_NET" = "y" ]; then
    source net/Config.in
 fi
 
-define_bool CONFIG_IDE n
-define_bool CONFIG_BLK_DEV_IDE_MODES n
-define_bool CONFIG_BLK_DEV_HD n
-
-# mainmenu_option next_comment
-# comment 'ATA/IDE/MFM/RLL support'
-#
-# tristate 'ATA/IDE/MFM/RLL support' CONFIG_IDE
-#
-# if [ "$CONFIG_IDE" != "n" ]; then
-#   source drivers/ide/Config.in
-# else
-#   define_bool CONFIG_BLK_DEV_IDE_MODES n
-#   define_bool CONFIG_BLK_DEV_HD n
-# fi
-# endmenu
-
 mainmenu_option next_comment
-comment 'ISDN subsystem'
+comment 'ATA/IDE/MFM/RLL support'
 
-tristate 'ISDN support' CONFIG_ISDN
-if [ "$CONFIG_ISDN" != "n" ]; then
-   source drivers/isdn/Config.in
+tristate 'ATA/IDE/MFM/RLL support' CONFIG_IDE
+
+if [ "$CONFIG_IDE" != "n" ]; then
+  source drivers/ide/Config.in
+else
+  define_bool CONFIG_BLK_DEV_IDE_MODES n
+  define_bool CONFIG_BLK_DEV_HD n
 fi
 endmenu
 
@@ -166,7 +153,37 @@ if [ "$CONFIG_SCSI" != "n" ]; then
    comment 'SCSI low-level drivers'
 
    tristate 'Sparc ESP Scsi Driver' CONFIG_SCSI_SUNESP $CONFIG_SCSI
-   tristate 'PTI Qlogic,ISP Driver' CONFIG_SCSI_QLOGICPTI $CONFIG_SCSI
+   tristate 'PTI Qlogic, ISP Driver' CONFIG_SCSI_QLOGICPTI $CONFIG_SCSI
+
+   if [ "$CONFIG_PCI" != "n" ]; then
+      dep_tristate 'Adaptec AIC7xxx support' CONFIG_SCSI_AIC7XXX $CONFIG_SCSI
+      if [ "$CONFIG_SCSI_AIC7XXX" != "n" ]; then
+	 bool '  Enable tagged command queueing (TCQ) by default' CONFIG_AIC7XXX_TAGGED_QUEUEING Y
+	 int  '  Maximum number of TCQ commands per device' CONFIG_AIC7XXX_CMDS_PER_DEVICE 8
+  	 bool '  Collect statistics to report in /proc' CONFIG_AIC7XXX_PROC_STATS N
+	 int  '  Delay in seconds after SCSI bus reset' CONFIG_AIC7XXX_RESET_DELAY 5
+      fi
+      dep_tristate 'NCR53C8XX SCSI support' CONFIG_SCSI_NCR53C8XX $CONFIG_SCSI
+      dep_tristate 'SYM53C8XX SCSI support' CONFIG_SCSI_SYM53C8XX $CONFIG_SCSI
+      if [ "$CONFIG_SCSI_NCR53C8XX" != "n" -o "$CONFIG_SCSI_SYM53C8XX" != "n" ]; then
+	 int 'default tagged command queue depth' CONFIG_SCSI_NCR53C8XX_DEFAULT_TAGS 8
+	 int 'maximum number of queued commands' CONFIG_SCSI_NCR53C8XX_MAX_TAGS 32
+	 int 'synchronous transfers frequency in MHz' CONFIG_SCSI_NCR53C8XX_SYNC 10
+	 bool '  enable profiling' CONFIG_SCSI_NCR53C8XX_PROFILE
+         if [ "$CONFIG_SCSI_SYM53C8XX" != "n" ]; then
+	    bool '  include support for the NCR PQS/PDS SCSI card' CONFIG_SCSI_NCR53C8XX_PQS_PDS
+         fi
+	 if [ "$CONFIG_SCSI_NCR53C8XX_DEFAULT_TAGS" = "0" ]; then
+	    bool '  not allow targets to disconnect' CONFIG_SCSI_NCR53C8XX_NO_DISCONNECT
+	 fi
+	 if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
+	    bool '  assume boards are SYMBIOS compatible (EXPERIMENTAL)' CONFIG_SCSI_NCR53C8XX_SYMBIOS_COMPAT
+	 fi
+      fi
+      dep_tristate 'Qlogic ISP SCSI support' CONFIG_SCSI_QLOGIC_ISP $CONFIG_SCSI
+      dep_tristate 'Qlogic ISP FC SCSI support' CONFIG_SCSI_QLOGIC_FC $CONFIG_SCSI
+   fi
+
    endmenu
 fi
 endmenu
@@ -188,10 +205,13 @@ if [ "$CONFIG_NET" = "y" ]; then
       fi
       tristate '  PPP (point-to-point) support' CONFIG_PPP
       if [ ! "$CONFIG_PPP" = "n" ]; then
-        dep_tristate '  PPP support for async serial ports' CONFIG_PPP_ASYNC $CONFIG_PPP
-        dep_tristate '  PPP support for sync tty ports' CONFIG_PPP_SYNC_TTY $CONFIG_PPP
-        dep_tristate '  PPP Deflate compression' CONFIG_PPP_DEFLATE $CONFIG_PPP
-        dep_tristate '  PPP BSD-Compress compression' CONFIG_PPP_BSDCOMP m
+         dep_tristate '  PPP support for async serial ports' CONFIG_PPP_ASYNC $CONFIG_PPP
+         dep_tristate '  PPP support for sync tty ports' CONFIG_PPP_SYNC_TTY $CONFIG_PPP
+         dep_tristate '  PPP Deflate compression' CONFIG_PPP_DEFLATE $CONFIG_PPP
+         dep_tristate '  PPP BSD-Compress compression' CONFIG_PPP_BSDCOMP m
+         if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
+            dep_tristate '  PPP over Ethernet (EXPERIMENTAL)' CONFIG_PPPOE $CONFIG_PPP
+         fi
       fi
       tristate '  SLIP (serial line) support' CONFIG_SLIP
       if [ "$CONFIG_SLIP" != "n" ]; then
@@ -199,20 +219,48 @@ if [ "$CONFIG_NET" = "y" ]; then
 	 bool '    Keepalive and linefill' CONFIG_SLIP_SMART
 	 bool '    Six bit SLIP encapsulation' CONFIG_SLIP_MODE_SLIP6
       fi
-      tristate '  Sun LANCE support' CONFIG_SUNLANCE
-      tristate '  Sun Happy Meal 10/100baseT support' CONFIG_HAPPYMEAL
+
+      mainmenu_option next_comment
+      comment 'Ethernet (10 or 100Mbit)'
+
+      tristate 'Sun LANCE support' CONFIG_SUNLANCE
+      tristate 'Sun Happy Meal 10/100baseT support' CONFIG_HAPPYMEAL
       if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
-	 tristate '  Sun BigMAC 10/100baseT support (EXPERIMENTAL)' CONFIG_SUNBMAC
+	 tristate 'Sun BigMAC 10/100baseT support (EXPERIMENTAL)' CONFIG_SUNBMAC
       fi
       tristate '  Sun QuadEthernet support' CONFIG_SUNQE
-      tristate '  MyriCOM Gigabit Ethernet support' CONFIG_MYRI_SBUS
+      if [ "$CONFIG_PCI" = "y" ]; then
+	 tristate 'Generic DECchip & DIGITAL EtherWORKS PCI/EISA' CONFIG_DE4X5
+	 tristate 'DECchip Tulip (dc21x4x) PCI support' CONFIG_TULIP
+	 tristate '3c590/3c900 series (592/595/597) "Vortex/Boomerang" support' CONFIG_VORTEX
+	 tristate 'RealTek RTL-8139 support' CONFIG_8139TOO
+	 tristate 'PCI NE2000 support' CONFIG_NE2K_PCI
+	 tristate 'VIA Rhine support' CONFIG_VIA_RHINE
+	 tristate 'EtherExpressPro/100 support' CONFIG_EEPRO100
+	 tristate 'Adaptec Starfire support' CONFIG_ADAPTEC_STARFIRE
+      fi
+      endmenu
 
-#      bool '  FDDI driver support' CONFIG_FDDI
-#      if [ "$CONFIG_FDDI" = "y" ]; then
-#      fi
+      mainmenu_option next_comment
+      comment 'Ethernet (1000 Mbit)'
+
+      if [ "$CONFIG_PCI" = "y" ]; then
+	  tristate 'Alteon AceNIC/3Com 3C985/NetGear GA620 Gigabit support' CONFIG_ACENIC
+	  if [ "$CONFIG_ACENIC" != "n" ]; then
+	    bool '  Omit support for old Tigon I based AceNICs' CONFIG_ACENIC_OMIT_TIGON_I
+	  fi
+	  tristate 'SysKonnect SK-98xx support' CONFIG_SK98LIN
+      fi
+      tristate 'MyriCOM Gigabit Ethernet support' CONFIG_MYRI_SBUS
+      endmenu
+
+      bool 'FDDI driver support' CONFIG_FDDI
+      if [ "$CONFIG_FDDI" = "y" ]; then
+          tristate '  SysKonnect FDDI PCI support' CONFIG_SKFP
+      fi
 
       if [ "$CONFIG_ATM" = "y" ]; then
-	 source drivers/atm/Config.in
+	source drivers/atm/Config.in
       fi
    fi
    endmenu
@@ -220,14 +268,29 @@ fi
 
 # This one must be before the filesystem configs. -DaveM
 mainmenu_option next_comment
-comment 'Unix98 PTY support'
+comment 'Unix 98 PTY support'
 bool 'Unix98 PTY support' CONFIG_UNIX98_PTYS
 if [ "$CONFIG_UNIX98_PTYS" = "y" ]; then
    int 'Maximum number of Unix98 PTYs in use (0-2048)' CONFIG_UNIX98_PTY_COUNT 256
 fi
 endmenu
 
-source drivers/input/Config.in
+mainmenu_option next_comment
+comment 'Video For Linux'
+tristate 'Video For Linux' CONFIG_VIDEO_DEV
+if [ "$CONFIG_VIDEO_DEV" != "n" ]; then
+   if [ "$CONFIG_PCI" != "n" ]; then
+      dep_tristate '  BT848 Video For Linux' CONFIG_VIDEO_BT848 $CONFIG_VIDEO_DEV
+   fi
+fi
+endmenu
+
+mainmenu_option next_comment
+comment 'XFree86 DRI support'
+bool 'Direct Rendering Manager (XFree86 DRI support)' CONFIG_DRM
+# dep_tristate '  Creator/Creator3D/Elite3D' CONFIG_DRM_FFB $CONFIG_DRM
+endmenu
+
 source fs/Config.in
 
 mainmenu_option next_comment
@@ -240,4 +303,5 @@ mainmenu_option next_comment
 comment 'Kernel hacking'
 
 bool 'Magic SysRq key' CONFIG_MAGIC_SYSRQ
+#bool 'ECache flush trap support at ta 0x72' CONFIG_EC_FLUSH_TRAP
 endmenu
