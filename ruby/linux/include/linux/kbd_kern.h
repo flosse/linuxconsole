@@ -71,8 +71,6 @@ extern int kbd_init(void);
 extern unsigned char getledstate(void);
 extern void setledstate(struct kbd_struct *kbd, unsigned int led);
 
-extern struct tasklet_struct console_tasklet;
-
 extern void (*kbd_ledfunc)(unsigned int led);
 
 extern inline void set_leds(void)
