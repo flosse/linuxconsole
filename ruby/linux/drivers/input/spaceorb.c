@@ -174,8 +174,6 @@ static void spaceorb_connect(struct serio *serio, struct serio_dev *dev)
 		set_bit(t, spaceorb->dev.absbit);
 		spaceorb->dev.absmin[t] = -508;
 		spaceorb->dev.absmax[t] =  508;
-		spaceorb->dev.absflat[t] = 0;
-		spaceorb->dev.absfuzz[t] = 4;
 	}
 
 	spaceorb->serio = serio;
