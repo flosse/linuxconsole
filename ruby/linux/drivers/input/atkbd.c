@@ -337,7 +337,7 @@ static int atkbd_set_3(struct atkbd *atkbd)
  * itself.
  */
 
-	return param;
+	return (param == atkbd_set) ? atkbd_set : 2;
 }
 
 /*
