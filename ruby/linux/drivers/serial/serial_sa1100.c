@@ -100,6 +100,8 @@
 static struct tty_driver normal, callout;
 static struct tty_struct *sa1100_table[NR_PORTS];
 static struct termios *sa1100_termios[NR_PORTS], *sa1100_termios_locked[NR_PORTS];
+static int (*sa1100_open)(struct uart_port *, struct uart_info *);
+static int (*sa1100_close)(struct uart_port *, struct uart_info *);
 #ifdef SUPPORT_SYSRQ
 static struct console sa1100_console;
 #endif
@@ -337,6 +339,18 @@ static int sa1100_startup(struct uart_port *port, struct uart_info *info)
 		return retval;
 
 	/*
+	 * If there is a specific "open" function (to register
+	 * control line interrupts)
+	 */
+	if (sa1100_open) {
+		retval = sa1100_open(port, info);
+		if (retval) {
+			free_irq(port->irq, info);
+			return retval;
+		}
+	}
+
+	/*
 	 * Finally, clear and enable interrupts
 	 */
 	UART_PUT_UTSR0(port, -1);
@@ -351,6 +365,13 @@ static void sa1100_shutdown(struct uart_port *port, struct uart_info *info)
 	 * Free the interrupt
 	 */
 	free_irq(port->irq, info);
+
+	/*
+	 * If there is a specific "close" function (to unregister
+	 * control line interrupts)
+	 */
+	if (sa1100_close)
+		sa1100_close(port, info);
 
 	/*
 	 * Disable all interrupts, port and break condition.
@@ -535,7 +556,9 @@ void __init sa1100_register_uart_fns(struct sa1100_port_fns *fns)
 		sa1100_pops.get_mctrl = fns->get_mctrl;
 	if (fns->set_mctrl)
 		sa1100_pops.set_mctrl = fns->set_mctrl;
-	sa1100_pops.pm	      = fns->pm;
+	sa1100_open    = fns->open;
+	sa1100_close   = fns->close;
+	sa1100_pops.pm = fns->pm;
 }
 
 void __init sa1100_register_uart(int idx, int port)

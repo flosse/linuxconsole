@@ -1413,15 +1413,16 @@ static int uart_open(struct tty_struct *tty, struct file *filp)
 	 * that we set retval appropriately above, and we rely on
 	 * this.
 	 */
-	down(&tmp_buf_sem);
 	if (!tmp_buf) {
-		tmp_buf = (u_char *) get_zeroed_page(GFP_KERNEL);
+		unsigned long buf = get_zeroed_page(GFP_KERNEL);
 		if (!tmp_buf) {
-			up(&tmp_buf_sem);
-			goto out;
-		}
+			if (buf)
+				tmp_buf = (u_char *)buf;
+			else
+				goto out;
+		} else
+			free_page(buf);
 	}
-	up(&tmp_buf_sem);
 
 	/*
 	 * If the port is in the middle of closing, bail out now.
@@ -2139,10 +2140,8 @@ static int __init uart_init(void)
 
 static void __exit uart_exit(void)
 {
-	down(&tmp_buf_sem);
 	free_page((unsigned long)tmp_buf);
 	tmp_buf = NULL;
-	up(&tmp_buf_sem);
 }
 
 module_init(uart_init);
