@@ -767,46 +767,16 @@ static void visual_init(struct vc_data *vc)
     screenbuf_size = scrollback*video_num_lines*video_size_row;
 }
 
-const char *create_vt(struct vt_struct *vt, int init)
+void vc_init(struct vc_data *vc, int do_clear)
 {
-	const char *display_desc = vt->vt_sw->con_startup(vt, init);
-
-	if (!display_desc) return NULL;	
-	INIT_TQUEUE(&vt->vt_tq, vt_callback, vt);
-	vt->next = vt_cons;
-	vt_cons = vt;
-	vt->vt_dont_switch = 0;
-        vt->scrollback_delta = 0;
-        vt->vt_blanked = 0;
-        vt->blank_interval = 10*60*HZ;
-        vt->off_interval = 0;
-	if (vt->pm_con)
-		vt->pm_con->data = vt;
-	init_MUTEX(&vt->lock);
-	vt->default_mode->display_fg = vt;
-	memcpy(vt->vc_cons[0], vt->default_mode, sizeof(struct vc_data));
-	visual_init(vt->vc_cons[0]);
-	vt->first_vc = vt->vc_cons[0]->vc_num = current_vc;
-	vt->want_vc = vt->fg_console = vt->last_console = vt->vc_cons[0];
-	vt->keyboard = NULL;
-	current_vc += MAX_NR_USER_CONSOLES;
-#ifdef CONFIG_VT_CONSOLE
-	if (!admin_vt) {
-		vt_console_driver.lock = vt_driver.tty_lock;
-		register_console(&vt_console_driver);
-        	printable = 1;
-	}
-#endif
-        init_timer(&vt->timer);
-        vt->timer.data = (long) vt;
-        vt->timer.function = blank_screen;
-        mod_timer(&vt->timer, jiffies + vt->blank_interval);
-	return display_desc;
-}
-
-int release_vt(struct vt_struct *vt)
-{
-	return 0;
+        set_origin(vc);
+        pos = origin;
+        reset_vc(vc);
+        def_color       = 0x07;   /* white */
+        ulcolor         = 0x0f;   /* bold white */
+        halfcolor       = 0x08;   /* grey */
+        init_waitqueue_head(&vc->paste_wait);
+        vte_ris(vc, do_clear);
 }
 
 struct vc_data* find_vc(int currcons)
@@ -819,18 +789,6 @@ struct vc_data* find_vc(int currcons)
         		return vt->vc_cons[currcons - vt->first_vc];
 	}
 	return NULL;
-}
-
-void vc_init(struct vc_data *vc, int do_clear)
-{
-        set_origin(vc);
-        pos = origin;
-        reset_vc(vc);
-        def_color       = 0x07;   /* white */
-        ulcolor         = 0x0f;   /* bold white */
-        halfcolor       = 0x08;   /* grey */
-        init_waitqueue_head(&vc->paste_wait);
-        vte_ris(vc, do_clear);
 }
 
 /* return 0 on success */
@@ -1003,6 +961,55 @@ int vc_resize(struct vc_data *vc, unsigned int cols, unsigned int lines)
         return 0;
 }
 
+/*
+ * Mapping and unmapping VT functions 
+ */
+const char *create_vt(struct vt_struct *vt, int init)
+{
+	const char *display_desc = vt->vt_sw->con_startup(vt, init);
+
+	if (!display_desc) return NULL;	
+	INIT_TQUEUE(&vt->vt_tq, vt_callback, vt);
+	vt->next = vt_cons;
+	vt_cons = vt;
+	vt->vt_dont_switch = 0;
+        vt->scrollback_delta = 0;
+        vt->vt_blanked = 0;
+        vt->blank_interval = 10*60*HZ;
+        vt->off_interval = 0;
+	if (vt->pm_con)
+		vt->pm_con->data = vt;
+	init_MUTEX(&vt->lock);
+	vt->default_mode->display_fg = vt;
+	memcpy(vt->vc_cons[0], vt->default_mode, sizeof(struct vc_data));
+	visual_init(vt->vc_cons[0]);
+	vt->first_vc = vt->vc_cons[0]->vc_num = current_vc;
+	vt->want_vc = vt->fg_console = vt->last_console = vt->vc_cons[0];
+	vt->keyboard = NULL;
+	current_vc += MAX_NR_USER_CONSOLES;
+	if (!admin_vt) {
+		admin_vt = vt;
+#ifdef CONFIG_VT_CONSOLE
+		vt_console_driver.lock = vt_driver.tty_lock;
+		register_console(&vt_console_driver);
+        	printable = 1;
+#endif
+	}
+        init_timer(&vt->timer);
+        vt->timer.data = (long) vt;
+        vt->timer.function = blank_screen;
+        mod_timer(&vt->timer, jiffies + vt->blank_interval);
+	return display_desc;
+}
+
+int release_vt(struct vt_struct *vt)
+{
+	return 0;
+}
+
+/*
+ * Selection stuff for GPM.
+ */
 void mouse_report(struct tty_struct *tty, int butt, int mrx, int mry)
 {
         char buf[8];
@@ -1020,6 +1027,9 @@ int mouse_reporting(struct tty_struct *tty)
         return report_mouse;
 }
 
+/*
+ * tty driver funtions except do_con_write which is a helper function. 
+ */
 #define CON_BUF_SIZE    PAGE_SIZE
 
 static int do_con_write(struct tty_struct * tty, int from_user,
@@ -1566,7 +1576,6 @@ void __init vt_console_init(void)
          * kmalloc is not running yet - we use the bootmem allocator.
          */
 	vt = (struct vt_struct *) alloc_bootmem(sizeof(struct vt_struct));
-	vt->default_mode = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
         vt->vc_cons[0] = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
 #if defined(CONFIG_VGA_CONSOLE)
 	vt->vt_sw = &vga_con;
@@ -1579,11 +1588,9 @@ void __init vt_console_init(void)
 	display_desc = create_vt(vt, 1);
 	if (!display_desc) { 
 		free_bootmem((unsigned long) vt, sizeof(struct vt_struct));
-		free_bootmem((unsigned long) vt->default_mode, sizeof(struct vc_data));
 		free_bootmem((unsigned long) vt->vc_cons[0], sizeof(struct vc_data));
 		return;
 	}
-        admin_vt = vt;
 	vc = vt->vc_cons[0];
         screenbuf = (unsigned short *) alloc_bootmem(screenbuf_size);
         vc_init(vc, 0); 
