@@ -276,12 +276,13 @@ pci_inteli960ni_fn(struct pci_dev *dev,
 
 	if (!enable) /* is there something to deinit? */
 		return(0);
-   
+
+/*   
 #ifdef SERIAL_DEBUG_PCI
 	printk(KERN_DEBUG " Subsystem ID %lx (intel 960)\n",
 	       (unsigned long) board->subdevice);
 #endif
-	/* is firmware started? */
+	is firmware started? */
 	pci_read_config_dword(dev, 0x44, (void*) &oldval); 
 	if (oldval == 0x00001000L) { /* RESET value */ 
 		printk(KERN_DEBUG "Local i960 firmware missing");

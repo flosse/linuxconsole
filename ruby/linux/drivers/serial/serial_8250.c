@@ -355,7 +355,7 @@ static void autoconfig(struct uart_port *port, unsigned int probeflags)
 	unsigned long flags;
 
 #ifdef SERIAL_DEBUG_AUTOCONF
-	printk("Testing ttyS%d (0x%04lx, 0x%08lx)...\n",
+	printk("Testing ttyS%d (0x%04x, 0x%08lx)...\n",
 		port->line, port->iobase, port->mapbase);
 #endif
 
@@ -838,7 +838,7 @@ static void rs_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 			goto next;
 		}
 #ifdef SERIAL_DEBUG_INTR
-		printk("IIR = %x...", serial_in(info, UART_IIR));
+		printk("IIR = %x...", serial_in(info->port, UART_IIR));
 #endif
 		end_mark = NULL;
 
