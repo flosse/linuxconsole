@@ -46,9 +46,9 @@ obj-$(CONFIG_FONT_6x11)           += font_6x11.o
 obj-$(CONFIG_FONT_PEARL_8x8)      += font_pearl_8x8.o
 obj-$(CONFIG_FONT_ACORN_8x8)      += font_acorn_8x8.o
 
-obj-$(CONFIG_FB)                  += fbmem.o fbcmap.o modedb.o fbcon.o fonts.o fbmon.o 
+obj-$(CONFIG_FB)		  += fbmem.o fbcmap.o modedb.o fbcon.o fonts.o fbmon.o
 
-obj-$(CONFIG_FB_COMPAT_XPMAC)     += macmodes.o
+obj-$(CONFIG_PPC)                 += macmodes.o
 
 obj-$(CONFIG_FB_ACORN)            += acornfb.o
 obj-$(CONFIG_FB_AMIGA)            += amifb.o

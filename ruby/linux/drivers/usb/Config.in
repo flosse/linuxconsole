@@ -33,6 +33,7 @@ comment 'USB Devices'
          bool '    USB ConnectTech WhiteHEAT Serial Driver (EXPERIMENTAL)' CONFIG_USB_SERIAL_WHITEHEAT
          bool '    USB FTDI Single Port Serial Driver (EXPERIMENTAL)' CONFIG_USB_SERIAL_FTDI_SIO
          bool '    USB Keyspan PDA Single Port Serial Driver (EXPERIMENTAL)' CONFIG_USB_SERIAL_KEYSPAN_PDA
+         bool '    USB Digi International AccelePort USB Serial Driver (EXPERIMENTAL)' CONFIG_USB_SERIAL_DIGI_ACCELEPORT
          bool '    USB ZyXEL omni.net LCD Plus Driver (EXPERIMENTAL)' CONFIG_USB_SERIAL_OMNINET
       fi
       bool '    USB Serial Converter verbose debug' CONFIG_USB_SERIAL_DEBUG
@@ -42,7 +43,7 @@ comment 'USB Devices'
    dep_tristate '  USB Kodak DC-2xx Camera support' CONFIG_USB_DC2XX $CONFIG_USB
    if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
 	   dep_tristate '  USB Mustek MDC800 Digital Camera support (EXPERIMENTAL)' CONFIG_USB_MDC800 $CONFIG_USB
-      dep_tristate '  USB Mass Storage support (EXPERIMENTAL)' CONFIG_USB_STORAGE $CONFIG_USB m
+      dep_tristate '  USB Mass Storage support (EXPERIMENTAL)' CONFIG_USB_STORAGE $CONFIG_USB
       if [ "$CONFIG_USB_STORAGE" != "n" ]; then
          bool '    USB Mass Storage verbose debug' CONFIG_USB_STORAGE_DEBUG
       fi

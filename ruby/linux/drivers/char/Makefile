@@ -23,7 +23,7 @@ obj-		:=
 
 SUB_DIRS     := 
 MOD_SUB_DIRS := $(SUB_DIRS)
-ALL_SUB_DIRS := $(SUB_DIRS) ftape pcmcia
+ALL_SUB_DIRS := $(SUB_DIRS) ftape pcmcia rio
 
 #
 # This file contains the font map for the default (hardware) font
@@ -36,13 +36,18 @@ obj-y	 += tty_io.o n_tty.o tty_ioctl.o mem.o raw.o pty.o misc.o random.o
 # All of the (potential) objects that export symbols.
 # This list comes from 'grep -l EXPORT_SYMBOL *.[hc]'.
 
-export-objs     :=	vt.o i2c-old.o keyboard.o sysrq.o misc.o pty.o \
-			random.o selection.o serial.o videodev.o tty_io.o \
-			bttv.o cpia.o
+export-objs     :=	vt.o i2c-old.o keyboard.o sysrq.o \
+			misc.o pty.o random.o selection.o serial.o videodev.o \
+			tty_io.o bttv.o cpia.o
 
 KEYMAP   =defkeymap.o
 CONSOLE  =vt.o
 SERIAL   =serial.o
+
+ifeq ($(ARCH),s390)
+  CONSOLE  =
+  SERIAL   =
+endif
 
 ifeq ($(ARCH),m68k)
    SERIAL   =
@@ -115,11 +120,41 @@ obj-$(CONFIG_SYNCLINK) += synclink.o
 obj-$(CONFIG_N_HDLC) += n_hdlc.o
 obj-$(CONFIG_SPECIALIX) += specialix.o
 obj-$(CONFIG_AMIGA_BUILTIN_SERIAL) += amiserial.o
+obj-$(CONFIG_SX) += sx.o
 
+
+# If either is in the kernel, generic_serial goes in the kernel, and
+# the module is no longer required. The "in kernel" case is last to be
+# able to override the module case....  This is an example of the new
+# "makefile automatically figures out the dependencies"....  -- REW
+
+GS = n
+ifeq ($(CONFIG_SX),m)
+  GS = m
+endif
+ifeq ($(CONFIG_RIO),m)
+  GS = m 
+endif
 ifeq ($(CONFIG_SX),y)
-obj-y += sx.o generic_serial.o
+  GS = y 
+endif
+ifeq ($(CONFIG_RIO),y)
+  GS = y 
+endif
+obj-$(GS) += generic_serial.o
+
+
+
+
+ifeq ($(CONFIG_RIO),y)
+obj-y += rio/rio.o  generic_serial.o
+SUB_DIRS += rio
+MOD_SUB_DIRS += rio
 else
-  obj-$(CONFIG_SX) += sx.o
+  ifeq ($(CONFIG_RIO),m)
+  obj-m += generic_serial.o
+  MOD_SUB_DIRS += rio
+  endif
 endif
 
 obj-$(CONFIG_PRINTER) += lp.o
@@ -155,7 +190,8 @@ else
   endif
 endif
 
-obj-$(CONFIG_VIDEO_BT848) += bttv.o msp3400.o tda8425.o tda985x.o tea6300.o
+obj-$(CONFIG_VIDEO_BT848) += bttv.o msp3400.o \
+	tda7432.o tda8425.o tda985x.o tda9875.o tea6300.o tea6420.o
 ifeq ($(CONFIG_VIDEO_BT848),y)
 L_TUNERS=y
 else
