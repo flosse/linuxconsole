@@ -73,14 +73,15 @@ static void iforce_process_packet(struct input_dev *dev, unsigned char id, int i
 
 		case 1:	/* joystick position data */
 		case 3: /* wheel position data */
-			input_report_abs(dev, ABS_X, (__s16) (((__s16)data[1] << 8) | data[0]));
 
 			if (id == 1) {
+				input_report_abs(dev, ABS_X, (__s16) (((__s16)data[1] << 8) | data[0]));
 				input_report_abs(dev, ABS_Y, (__s16) (((__s16)data[3] << 8) | data[2]));
 				input_report_abs(dev, ABS_THROTTLE, 255 - data[4]);
 			} else {
-				input_report_abs(dev, ABS_THROTTLE, 255 - data[2]);
-				input_report_abs(dev, ABS_RUDDER,   255 - data[3]);
+				input_report_abs(dev, ABS_WHEEL, (__s16) (((__s16)data[1] << 8) | data[0]));
+				input_report_abs(dev, ABS_GAS,   255 - data[2]);
+				input_report_abs(dev, ABS_BRAKE, 255 - data[3]);
 			}
 
 			input_report_abs(dev, ABS_HAT0X, iforce_hat_to_axis[data[6] >> 4].x);
@@ -133,7 +134,8 @@ static void iforce_input_setup(struct iforce *iforce)
 	iforce->dev.keybit[LONG(BTN_JOYSTICK)] |= BIT(BTN_TRIGGER) | BIT(BTN_TOP) | BIT(BTN_THUMB) | BIT(BTN_TOP2) |
 					BIT(BTN_BASE) | BIT(BTN_BASE2) | BIT(BTN_BASE3) | BIT(BTN_BASE4) | BIT(BTN_BASE5);
 	iforce->dev.keybit[LONG(BTN_GAMEPAD)] |= BIT(BTN_A) | BIT(BTN_B) | BIT(BTN_C);
-	iforce->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y) | BIT(ABS_THROTTLE) | BIT(ABS_RUDDER) | BIT(ABS_HAT0X) | BIT(ABS_HAT0Y);
+	iforce->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y) | BIT(ABS_THROTTLE) | BIT(ABS_HAT0X) | BIT(ABS_HAT0Y)
+				BIT(ABS_WHEEL) | BIT(ABS_GAS) | BIT(ABS_BRAKE);
 
 	for (i = ABS_X; i <= ABS_Y; i++) {
 		iforce->dev.absmax[i] =  1920;

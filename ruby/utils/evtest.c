@@ -66,8 +66,9 @@ NULL, NULL, NULL,
 
 char *absval[5] = { "Value", "Min  ", "Max  ", "Fuzz ", "Flat " };
 char *relatives[REL_MAX + 1] = { "X", "Y", "Z", NULL, NULL, NULL, "HWheel", "Dial", "Wheel" };
-char *absolutes[ABS_MAX + 1] = { "X", "Y", "Z", "Rx", "Ry", "Rz", "Throttle", "Rudder", NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-NULL, "Hat0X", "Hat0Y", "Hat1X", "Hat1Y", "Hat2X", "Hat2Y", "Hat3X", "Hat 3Y", "Pressure", "Distance", "XTilt", "YTilt"};
+char *absolutes[ABS_MAX + 1] = { "X", "Y", "Z", "Rx", "Ry", "Rz", "Throttle", "Rudder", "Wheel", "Gas", "Brake",
+NULL, NULL, NULL, NULL, NULL,
+"Hat0X", "Hat0Y", "Hat1X", "Hat1Y", "Hat2X", "Hat2Y", "Hat3X", "Hat 3Y", "Pressure", "Distance", "XTilt", "YTilt"};
 char *leds[LED_MAX + 1] = { "NumLock", "CapsLock", "ScrollLock", "Compose", "Kana" };
 char *repeats[REP_MAX + 1] = { "Delay", "Period" };
 char *sounds[SND_MAX + 1] = { "Bell", "Click" };

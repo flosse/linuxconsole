@@ -359,8 +359,9 @@ struct input_event {
 #define ABS_RZ			0x05
 #define ABS_THROTTLE		0x06
 #define ABS_RUDDER		0x07
-#define ABS_TL			0x08
-#define ABS_TR			0x09
+#define ABS_WHEEL		0x08
+#define ABS_GAS			0x09
+#define ABS_BRAKE		0x0a
 #define ABS_HAT0X		0x10
 #define ABS_HAT0Y		0x11
 #define ABS_HAT1X		0x12

@@ -202,8 +202,8 @@ static void grip_timer(unsigned long private)
 				input_report_abs(dev, ABS_Y, ((*data >> 13) & 1) - ((*data >> 12) & 1));
 
 				for (j = 0; j < 12; j++)
-					if (grip_btn_gpp[i])
-						input_report_key(dev, grip_btn_gpp[i], (*data >> i) & 1);
+					if (grip_btn_gpp[j])
+						input_report_key(dev, grip_btn_gpp[j], (*data >> j) & 1);
 				break;
 
 			case GRIP_MODE_XT:
@@ -222,10 +222,10 @@ static void grip_timer(unsigned long private)
 				input_report_abs(dev, ABS_HAT0X, ((data[2] >> 1) & 1) - ( data[2]       & 1));
 				input_report_abs(dev, ABS_HAT0Y, ((data[2] >> 2) & 1) - ((data[2] >> 3) & 1));
 				input_report_abs(dev, ABS_HAT1X, ((data[2] >> 5) & 1) - ((data[2] >> 4) & 1));
-				input_report_abs(dev, ABS_HAT0Y, ((data[2] >> 6) & 1) - ((data[2] >> 7) & 1));
+				input_report_abs(dev, ABS_HAT1Y, ((data[2] >> 6) & 1) - ((data[2] >> 7) & 1));
 
 				for (j = 0; j < 11; j++)
-					input_report_key(dev, grip_btn_xt[i], (data[3] >> (i + 3)) & 1);
+					input_report_key(dev, grip_btn_xt[j], (data[3] >> (j + 3)) & 1);
 				break;
 
 			case GRIP_MODE_BD:
@@ -243,7 +243,7 @@ static void grip_timer(unsigned long private)
 				input_report_abs(dev, ABS_HAT0Y, ((data[2] >> 2) & 1) - ((data[2] >> 3) & 1));
 
 				for (j = 0; j < 5; j++)
-					input_report_key(dev, grip_btn_bd[i], (data[3] >> (i + 4)) & 1);
+					input_report_key(dev, grip_btn_bd[j], (data[3] >> (j + 4)) & 1);
 
 				break;
 		}
@@ -313,10 +313,15 @@ static void grip_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 			grip->dev[i].private = grip;
 
-			grip->dev[i].name = grip_name[grip->mode[i]];
 			grip->dev[i].open = grip_open;
 			grip->dev[i].close = grip_close;
-		
+
+			grip->dev[i].name = grip_name[grip->mode[i]];
+			grip->dev[i].idbus = BUS_GAMEPORT;
+			grip->dev[i].idvendor = GAMEPORT_ID_VENDOR_GRAVIS;
+			grip->dev[i].idproduct = grip->mode[i];
+			grip->dev[i].idversion = 0x0100;
+
 			grip->dev[i].evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 
 			for (j = 0; (t = grip_abs[grip->mode[i]][j]) >= 0; j++) {
@@ -325,7 +330,7 @@ static void grip_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 				if (j < grip_anx[grip->mode[i]]) {
 					grip->dev[i].absmin[t] = 1;
-					grip->dev[i].absmax[t] = 30;
+					grip->dev[i].absmax[t] = 62;
 					grip->dev[i].absflat[t] = 1;
 				} else {
 					grip->dev[i].absmin[t] = -1;
