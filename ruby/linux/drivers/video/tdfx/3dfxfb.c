@@ -71,10 +71,6 @@
 #include <asm/io.h>
 #include <linux/timer.h>
 
-#ifdef CONFIG_MTRR
-#include <asm/mtrr.h>
-#endif
-
 #include <video/tdfx.h>
 #include <linux/spinlock.h>
 
@@ -160,9 +156,6 @@ static u32 psuedo_palette[17];
 static int  nopan   = 0;
 static int  nowrap  = 1;      // not implemented (yet)
 static int  inverse = 0;
-#ifdef CONFIG_MTRR
-static int  nomtrr = 0;
-#endif
 static int  nohwcursor = 0;
 static const char *mode_option __initdata = NULL;
 
@@ -1156,15 +1149,6 @@ int __init tdfxfb_init(void)
       
       printk("fb: %s memory = %dK\n", tdfx_fix.id, tdfx_fix.smem_len >> 10);
 
-#ifdef CONFIG_MTRR
-      if (!nomtrr) {
-          default_par.mtrr_idx = mtrr_add(tdfx_fix.smem_start, 
-					  tdfx_fix.smem_len,
-	  			      	  MTRR_TYPE_WRCOMB, 1);
-	    printk("fb: MTRR's  turned on\n");
-      }
-#endif
-
       /* clear framebuffer memory */
       memset_io(fb_info.screen_base, 0, tdfx_fix.smem_len);
 	
@@ -1217,13 +1201,6 @@ static void __exit tdfxfb_exit (void)
 
 	unregister_framebuffer(&fb_info);
 	del_timer_sync(&par->hwcursor.timer);
-
-#ifdef CONFIG_MTRR
-	if (!nomtrr) {
-       	  mtrr_del(par->mtrr_idx, fb_info.fix.smem_start, fb_info.fix.smem_len);
-	  printk("fb: MTRR's  turned off\n");
-        }
-#endif
 	iounmap(par->regbase_virt);
 	iounmap(fb_info.screen_base);
 }
@@ -1259,7 +1236,7 @@ void tdfxfb_setup(char *options, int *ints)
       nohwcursor = 1;
 #ifdef CONFIG_MTRR
     } else if (!strcmp(this_opt, "nomtrr")) {
-      nomtrr = 1;
+      fb_disable_mtrrs();
 #endif
     } else {
       mode_option = this_opt;
