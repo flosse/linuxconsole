@@ -82,10 +82,10 @@ static int vesa_off_interval = 0;
 
 /*
  * fg_console is the current virtual console,
- * want_console is the console we want to switch to,
- * kmsg_redirect is the console for kernel messages,
+ * want_vc is the virtual console we want to switch to,
+ * kmsg_redirect is the virtual console for kernel messages,
  */
-struct vc_data *want_console = NULL;
+struct vc_data *want_vc = NULL;
 int kmsg_redirect = 0;
 int fg_console = 0;
 
@@ -227,26 +227,25 @@ void reset_palette(struct vc_data *vc)
 /*
  * Functions to handle console scrolling.
  */
-static int scrollback_delta = 0;
-
-static inline void scrolldelta(int lines)
+static inline void scrolldelta(struct vc_data *vc, int lines)
 {
-        scrollback_delta += lines;
-        tasklet_schedule(&console_tasklet);
+        vc->display_fg->scrollback_delta += lines;
+	want_vc = vc;
+	tasklet_schedule(&console_tasklet);
 }
 
 void scrollback(struct vc_data *vc, int lines)
 {
         if (!lines)
                 lines = video_num_lines/2;
-        scrolldelta(-lines);
+        scrolldelta(vc, -lines);
 }
 
 void scrollfront(struct vc_data *vc, int lines)
 {
         if (!lines)
                 lines = video_num_lines/2;
-        scrolldelta(lines);
+        scrolldelta(vc, lines);
 }
 
 static void scrup(struct vc_data *vc, unsigned int t, unsigned int b, int nr)
@@ -3216,30 +3215,27 @@ static void console_softint(unsigned long ignored)
 
         spin_lock_irq(&console_lock);
 
-        if (want_console) {
-                if (want_console->vc_num != fg_console && vc_cons_allocated(want_console->vc_num)) {
-                        hide_cursor(vt_cons->vcs.vc_cons[fg_console]);
-			/* New console, old console */
-                        change_console(want_console,
-				       vt_cons->vcs.vc_cons[fg_console]);
-                        /* we only changed when the console had already
-                           been allocated - a new console is not created
-                           in an interrupt routine */
-                }
-                want_console = NULL;
+        if (want_vc->vc_num != fg_console && vc_cons_allocated(want_vc->vc_num) 
+	    && !want_vc->display_fg->vt_dont_switch) { 
+		hide_cursor(vt_cons->vcs.vc_cons[fg_console]);
+		/* New console, old console */
+                change_console(want_vc, vt_cons->vcs.vc_cons[fg_console]);
+                /* we only changed when the console had already
+                   been allocated - a new console is not created
+                   in an interrupt routine */
         }
-        if (do_poke_blanked_console) { /* do not unblank for a LED change */
+	/* do not unblank for a LED change */
+	if (do_poke_blanked_console) { 
                 do_poke_blanked_console = 0;
-                poke_blanked_console(want_console->display_fg);
+                poke_blanked_console(want_vc->display_fg);
         }
-        if (scrollback_delta) {
+	if (want_vc->display_fg->scrollback_delta) {
 		struct vc_data *vc = vt_cons->vcs.vc_cons[fg_console];
                 clear_selection();
                 if (vcmode == KD_TEXT)
-                        sw->con_scrolldelta(vc, scrollback_delta);
-                scrollback_delta = 0;
+                	sw->con_scrolldelta(vc, vc->display_fg->scrollback_delta); 
+                vc->display_fg->scrollback_delta = 0;
         }
-
         spin_unlock_irq(&console_lock);
 }
 
@@ -3619,6 +3615,8 @@ void __init vt_console_init(void)
          * kmalloc is not running yet - we use the bootmem allocator.
          */
 	vt_cons = (struct vt_struct *) alloc_bootmem(sizeof(struct vt_struct));
+	vt_cons->vt_dont_switch = 0;
+	vt_cons->scrollback_delta = 0;
 	vt_cons->vt_blanked = 0;
 	vt_cons->vcs.first_vc = 0;
 	vt_cons->vcs.last_vc = MAX_NR_USER_CONSOLES;
@@ -3648,6 +3646,7 @@ void __init vt_console_init(void)
 #ifdef CONFIG_VT_CONSOLE
         register_console(&vt_console_driver);
 #endif
+	want_vc = vc;
         tasklet_enable(&console_tasklet);
         tasklet_schedule(&console_tasklet);
 }

@@ -912,7 +912,8 @@ void kbd_keycode(unsigned int keycode, int down)
 	}
 	vc = (struct vc_data *) tty->driver_data;
 
-	do_poke_blanked_console = 1;
+	/* If the console is blanked unblank it */
+	want_vc = vc;
         tasklet_schedule(&console_tasklet);
 
 	if ((raw_mode = (vc->kbd_table.kbdmode == VC_RAW)))
