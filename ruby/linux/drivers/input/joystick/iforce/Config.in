@@ -6,5 +6,7 @@ dep_tristate 'I-Force devices' CONFIG_JOYSTICK_IFORCE $CONFIG_INPUT $CONFIG_INPU
 
 if [ "$CONFIG_JOYSTICK_IFORCE" != "n" ]; then
 	dep_bool '  I-Force USB joysticks and wheels' CONFIG_JOYSTICK_IFORCE_USB $CONFIG_USB
-	dep_bool '  I-Force Serial joysticks and wheels' CONFIG_JOYSTICK_IFORCE_232 $CONFIG_SERIO
+	if [ "$CONFIG_INPUT_SERIO" != "n" -a "$CONFIG_INPUT_SERPORT" != "n" ]; then
+		bool '  I-Force Serial joysticks and wheels' CONFIG_JOYSTICK_IFORCE_232
+	fi
 fi
