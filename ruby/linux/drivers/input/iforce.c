@@ -156,25 +156,17 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 		case BUS_RS232: {
 
 				unsigned char i;
-				unsigned char csum = 0;
+				unsigned char csum = 0x2b ^ HI(cmd) ^ LO(cmd);
 			 
-				printk(KERN_DEBUG "iforce.c: serio_data: 2b ");
 				serio_write(iforce->serio, 0x2b);
-				printk("%02x ", HI(cmd));
 				serio_write(iforce->serio, HI(cmd));
-				printk("%02x ", LO(cmd));
 				serio_write(iforce->serio, LO(cmd));
-				csum = 0x2b ^ HI(cmd) ^ LO(cmd);
 
 				for (i = 0; i < LO(cmd); i++) {
-					printk("%02x ", data[i]);
 					serio_write(iforce->serio, data[i]);
 					csum = csum ^ data[i];
 				}
-
 				serio_write(iforce->serio, csum);
-				printk("%02x\n", csum);
-
 				return;
 			}
 
@@ -592,7 +584,7 @@ static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* ef
 	u16 mod1, mod2, direction;
 	int err = 0;
 
-	printk(KERN_DEBUG "iforce ff: make interactive effect");
+	printk(KERN_DEBUG "iforce ff: make interactive effect\n");
 
 	switch (effect->type) {
 		case FF_SPRING:      type = 0x40; break;
