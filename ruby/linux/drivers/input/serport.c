@@ -1,15 +1,14 @@
 /*
- *  serport.c  Version 0.1
+ * $Id$
  *
  *  Copyright (c) 1999 Vojtech Pavlik
+ *
+ *  Sponsored by SuSE
  */
 
 /*
  * This is a module that converts a tty line into a much simpler
- * 'serial io port' abstraction that the input devices use. It of course
- * could have been done the other way, converting devices like psaux
- * into ttys, but that'd be much more work and more code, that is not
- * necessary at all.
+ * 'serial io port' abstraction that the input device drivers use.
  */
 
 /*
@@ -33,13 +32,12 @@
  */
 
 #include <asm/uaccess.h>
-#include <linux/errno.h>
 #include <linux/kernel.h>
-#include <linux/module.h>
 #include <linux/malloc.h>
-#include <linux/tty.h>
-#include <linux/serio.h>
+#include <linux/module.h>
 #include <linux/init.h>
+#include <linux/serio.h>
+#include <linux/tty.h>
 
 struct serport {
 	struct tty_struct *tty;
@@ -148,11 +146,13 @@ static ssize_t serport_ldisc_read(struct tty_struct * tty, struct file * file, u
 {
 	struct serport *serport = (struct serport*) tty->disc_data;
 	DECLARE_WAITQUEUE(wait, current);
+	char name[32];
+
+	sprintf(name, tty->driver.name, MINOR(tty->device) - tty->driver.minor_start);
 
 	serio_register_port(&serport->serio);
 
-	printk(KERN_INFO "serio%d: Serial port %s%d\n", serport->serio.number,
-		tty->driver.name, MINOR(tty->device) - tty->driver.minor_start);
+	printk(KERN_INFO "serio%d: Serial port %s\n", serport->serio.number, name);
 
 	add_wait_queue(&serport->wait, &wait);
 	current->state = TASK_INTERRUPTIBLE;
@@ -177,7 +177,7 @@ static int serport_ldisc_ioctl(struct tty_struct * tty, struct file * file, unsi
 	
 	switch (cmd) {
 		case SPIOCSTYPE:
-			return  get_user(serport->serio.type, (unsigned long *) arg);
+			return get_user(serport->serio.type, (unsigned long *) arg);
 	}
 
 	return -EINVAL;
