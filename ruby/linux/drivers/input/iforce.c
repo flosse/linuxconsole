@@ -216,59 +216,55 @@ static struct ff_init_data {
 } ff_init_data[] =  {
 
 #if 0
-	{ FF_CMD_INIT_F,   { 0x4F, 0x9A } },
-	{ FF_CMD_INIT_F,   { 0x56, 0x83 } },
-	{ FF_CMD_INIT_F,   { 0x4E, 0x9B } },
-	{ FF_CMD_INIT_F,   { 0x42, 0x97 } },
-	{ FF_CMD_INIT_F,   { 0x4D, 0x98 } },
-	{ FF_CMD_INIT_F,   { 0x50, 0x85 } },
+	{ FF_CMD_INIT_F,   { 0x4F } },
+	{ FF_CMD_INIT_F,   { 0x56 } },
+	{ FF_CMD_INIT_F,   { 0x4E } },
+	{ FF_CMD_INIT_F,   { 0x42 } },
+	{ FF_CMD_INIT_F,   { 0x4D } },
+	{ FF_CMD_INIT_F,   { 0x50 } },
 
-	{ FF_CMD_INIT_0_B, { 0x06, 0xF4, 0x01, 0x9B } },
-	{ FF_CMD_INIT_3,   { 0x80, 0xE9 } },
-	{ FF_CMD_INIT_2,   { 0x04, 0x6C } },
-	{ FF_CMD_INIT_2,   { 0x04, 0x6C } },
-	{ FF_CMD_INIT_2,   { 0x05, 0x6D } },
-	{ FF_CMD_INIT_0_A, { 0x04, 0x00, 0x6D } },
-	{ FF_CMD_INIT_2,   { 0x05, 0x6D } },
-	{ FF_CMD_INIT_0_A, { 0x04, 0x00, 0x6D } },
-	{ FF_CMD_INIT_3,   { 0x80, 0xE9 } },
-	{ FF_CMD_INIT_2,   { 0x05, 0x6D } },
-	{ FF_CMD_INIT_0_A, { 0x04, 0x00, 0x6D } },
-	{ FF_CMD_INIT_2,   { 0x01, 0x69 } },
-	{ FF_CMD_INIT_2,   { 0x00, 0x68 } },
+	{ FF_CMD_INIT_0_B, { 0x06, 0xF4, 0x01 } },
+	{ FF_CMD_INIT_3,   { 0x80 } },
+	{ FF_CMD_INIT_2,   { 0x04 } },
+	{ FF_CMD_INIT_2,   { 0x04 } },
+	{ FF_CMD_INIT_2,   { 0x05 } },
+	{ FF_CMD_INIT_0_A, { 0x04, 0x00 } },
+	{ FF_CMD_INIT_2,   { 0x05 } },
+	{ FF_CMD_INIT_0_A, { 0x04, 0x00 } },
+	{ FF_CMD_INIT_3,   { 0x80 } },
+	{ FF_CMD_INIT_2,   { 0x05 } },
+	{ FF_CMD_INIT_0_A, { 0x04, 0x00 } },
+	{ FF_CMD_INIT_2,   { 0x01 } },
+	{ FF_CMD_INIT_2,   { 0x00 } },
 
-	{ FF_CMD_INIT_F,   { 0x4F, 0x9A } },
-	{ FF_CMD_INIT_F,   { 0x56, 0x83 } },
-	{ FF_CMD_INIT_F,   { 0x4E, 0x9B } },
-	{ FF_CMD_INIT_F,   { 0x42, 0x97 } },
-	{ FF_CMD_INIT_F,   { 0x4D, 0x98 } },
-	{ FF_CMD_INIT_F,   { 0x50, 0x85 } },
+	{ FF_CMD_INIT_F,   { 0x4F } },
+	{ FF_CMD_INIT_F,   { 0x56 } },
+	{ FF_CMD_INIT_F,   { 0x4E } },
+	{ FF_CMD_INIT_F,   { 0x42 } },
+	{ FF_CMD_INIT_F,   { 0x4D } },
+	{ FF_CMD_INIT_F,   { 0x50 } },
 
-	{ FF_CMD_INIT_0_B, { 0x06, 0xF4, 0x01, 0x9B } },
-	{ FF_CMD_INIT_3,   { 0x80, 0xE9 } },
-	{ FF_CMD_INIT_2,   { 0x04, 0x6C } },
-	{ FF_CMD_INIT_2,   { 0x04, 0x6C } },
-	{ FF_CMD_INIT_2,   { 0x05, 0x6D } },
-	{ FF_CMD_INIT_2,   { 0x04, 0x6C } },
-	{ FF_CMD_INIT_0_A, { 0x04, 0x00, 0x6D } },
-	{ FF_CMD_INIT_2,   { 0x05, 0x6D } },
-	{ FF_CMD_INIT_0_A, { 0x04, 0x00, 0x6D } },
-	{ FF_CMD_INIT_3,   { 0x80, 0xE9 } },
+	{ FF_CMD_INIT_0_B, { 0x06, 0xF4, 0x01 } },
+	{ FF_CMD_INIT_3,   { 0x80 } },
+	{ FF_CMD_INIT_2,   { 0x04 } },
+	{ FF_CMD_INIT_2,   { 0x04 } },
+	{ FF_CMD_INIT_2,   { 0x05 } },
+	{ FF_CMD_INIT_2,   { 0x04 } },
+	{ FF_CMD_INIT_0_A, { 0x04, 0x00 } },
+	{ FF_CMD_INIT_2,   { 0x05 } },
+	{ FF_CMD_INIT_0_A, { 0x04, 0x00 } },
+	{ FF_CMD_INIT_3,   { 0x80 } },
 #endif
-
 	/* Disable auto-centering */
-	{ FF_CMD_INIT_2,   { 0x04, 0x6C } },
+	{ FF_CMD_INIT_2,   { 0x04 } },
 	{ 0, }
  };
 
 static void iforce_init_ff(struct iforce *iforce)
 {
 	int i;
-	
-	down_interruptible(&(iforce->ff_mutex));
 	for (i = 0; ff_init_data[i].cmd; i++)
 		send_packet(iforce, ff_init_data[i].cmd, ff_init_data[i].data);
-	up(&(iforce->ff_mutex));
 }
 
 /*
@@ -711,14 +707,17 @@ static int iforce_erase_effect(struct input_dev *dev, int effect_id)
 }
 #endif /* IFORCE_FF */
 
-static void iforce_process_packet(struct input_dev *dev, unsigned char id, unsigned char *data)
+static void iforce_process_packet(struct input_dev *dev, u16 cmd, unsigned char *data)
 {
-	switch (id) {
+	int i;
+
+
+	switch (HI(cmd)) {
 
 		case 1:	/* joystick position data */
 		case 3: /* wheel position data */
 
-			if (id == 1) {
+			if (HI(cmd) == 1) {
 				input_report_abs(dev, ABS_X, (__s16) (((__s16)data[1] << 8) | data[0]));
 				input_report_abs(dev, ABS_Y, (__s16) (((__s16)data[3] << 8) | data[2]));
 				input_report_abs(dev, ABS_THROTTLE, 255 - data[4]);
@@ -745,8 +744,33 @@ static void iforce_process_packet(struct input_dev *dev, unsigned char id, unsig
 			input_report_key(dev, BTN_C,       data[6] & 0x08);
 			break;
 
-		case 2: /* force feedback effect status */
+
+		case 2: /* status report */
+
+		/*
+		Offset Size Meaning
+		  0      1  Device Status Flags:
+			      bit 7..4: not really used
+			      bit 3: output is paused
+			      bit 2: output is enabled
+			      bit 1: deadman switch (1: deadman switch covered by hand)
+			      bit 0: power supply OK
+		  1      1  EffectStatus
+			      bit 7: effect is playing
+			      bit 6..0: effect number
+		  2      1  EffectChecksum (for detecting transmit errors)
+		  3..?      Blocks which changed since last
+			    update. These are pointers into the effect parameter memory which have
+			    changed since last update. This is meant to be used to detect transmission
+			    errors.
+		*/
 			break;
+
+		default:
+			printk(KERN_DEBUG "iforce.c: process_packet( cmd = %04x, data = ", cmd);
+			for (i = 0; i < LO(cmd); i++)
+				printk("%02x ", data[i]);
+			printk(")\n");
 	}
 }
 
@@ -855,7 +879,9 @@ static void iforce_usb_irq(struct urb *urb)
 {
 	struct iforce *iforce = urb->context;
 	if (urb->status) return;
-	iforce_process_packet(&iforce->dev, iforce->data[0], iforce->data + 1);
+	iforce_process_packet(&iforce->dev,
+		(iforce->data[0] << 8) | (urb->actual_length - 1),
+		iforce->data + 1);
 }
 
 static void iforce_usb_out(struct urb *urb)
@@ -898,7 +924,6 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
                         iforce + 1, 32, iforce_usb_out, iforce);
 
 	iforce_input_setup(iforce);
-
 	iforce_init_ff(iforce);
 
 	printk(KERN_INFO "input%d: %s on usb%d:%d.%d\n",
@@ -970,7 +995,7 @@ static void iforce_serio_irq(struct serio *serio, unsigned char data, unsigned i
 	}
 
         if (iforce->idx == iforce->len) {
-		iforce_process_packet(&iforce->dev, iforce->id, iforce->data);
+		iforce_process_packet(&iforce->dev, (iforce->id << 8) | iforce->idx, iforce->data);
 		iforce->pkt = 0;
 		iforce->id  = 0;
                 iforce->len = 0;
@@ -1004,6 +1029,7 @@ static void iforce_serio_connect(struct serio *serio, struct serio_dev *dev)
 		return;
 	}
 
+	iforce_init_ff(iforce);
 	iforce_input_setup(iforce);
 
 	printk(KERN_INFO "input%d: %s on serio%d\n",

@@ -232,7 +232,7 @@ int iforce_init(int fd)
 		if (write(fd, &(data[i]), len-i) != len-i) return -1;
 	}
 
-printf("I-Force device initialised\n");
+	printf("I-Force device initialised\n");
 	/* TODO FF: check responses from device to detect errors */
 	return 0;
 #undef IFORCE_BLK_SIZE
