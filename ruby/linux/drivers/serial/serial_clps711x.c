@@ -39,7 +39,7 @@
 #include <linux/ptrace.h>
 #include <linux/ioport.h>
 #include <linux/mm.h>
-#include <linux/malloc.h>
+#include <linux/slab.h>
 #include <linux/init.h>
 #include <linux/circ_buf.h>
 #include <linux/serial.h>
@@ -73,10 +73,13 @@ static struct tty_driver normal, callout;
 static struct tty_struct *clps711x_table[UART_NR];
 static struct termios *clps711x_termios[UART_NR], *clps711x_termios_locked[UART_NR];
 
-#define UBRLCR(port)		((port)->iobase + UBRLCR1)
-#define UARTDR(port)		((port)->iobase + UARTDR1)
-#define SYSFLG(port)		((port)->iobase + SYSFLG1)
-#define SYSCON(port)		((port)->iobase + SYSCON1)
+/*
+ * We use the relevant SYSCON register as a base address for these ports.
+ */
+#define UBRLCR(port)		((port)->iobase + UBRLCR1 - SYSCON1)
+#define UARTDR(port)		((port)->iobase + UARTDR1 - SYSCON1)
+#define SYSFLG(port)		((port)->iobase + SYSFLG1 - SYSCON1)
+#define SYSCON(port)		((port)->iobase + SYSCON1 - SYSCON1)
 
 #define TX_IRQ(port)		((port)->irq)
 #define RX_IRQ(port)		((port)->irq + 1)
@@ -401,6 +404,24 @@ static void clps711xuart_change_speed(struct uart_port *port, u_int cflag, u_int
 	restore_flags(flags);
 }
 
+/*
+ * Configure/autoconfigure the port.
+ */
+static void clps711xuart_config_port(struct uart_port *port, int flags)
+{
+	if (flags & UART_CONFIG_TYPE)
+		port->type = PORT_CLPS711X;
+}
+
+static void clps711xuart_release_port(struct uart_port *port)
+{
+}
+
+static int clps711xuart_request_port(struct uart_port *port)
+{
+	return 0;
+}
+
 static struct uart_ops clps711x_pops = {
 	tx_empty:	clps711xuart_tx_empty,
 	set_mctrl:	clps711xuart_set_mctrl_null,
@@ -413,22 +434,27 @@ static struct uart_ops clps711x_pops = {
 	startup:	clps711xuart_startup,
 	shutdown:	clps711xuart_shutdown,
 	change_speed:	clps711xuart_change_speed,
+	config_port:	clps711xuart_config_port,
+	release_port:	clps711xuart_request_port,
+	request_port:	clps711xuart_release_port,
 };
 
 static struct uart_port clps711x_ports[UART_NR] = {
 	{
-		iobase:		0,
+		iobase:		SYSCON1,
 		irq:		IRQ_UTXINT1, /* IRQ_URXINT1, IRQ_UMSINT */
 		uartclk:	3686400,
 		fifosize:	16,
 		ops:		&clps711x_pops,
+		flags:		ASYNC_BOOT_AUTOCONF,
 	},
 	{
-		iobase:		SYSCON2 - SYSCON1,
+		iobase:		SYSCON2,
 		irq:		IRQ_UTXINT2, /* IRQ_URXINT2 */
 		uartclk:	3686400,
 		fifosize:	16,
 		ops:		&clps711x_pops,
+		flags:		ASYNC_BOOT_AUTOCONF,
 	}
 };
 

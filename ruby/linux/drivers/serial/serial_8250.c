@@ -1535,6 +1535,14 @@ static void serial8250_config_port(struct uart_port *port, int flags)
 	struct resource *res_std, *res_rsa;
 	int probeflags = PROBE_ANY;
 
+#ifdef CONFIG_MCA
+	/*
+	 * Don't probe for MCA ports on non-MCA machines.
+	 */
+	if (port->flags & ASYNC_BOOT_ONLYMCA && !MCA_bus)
+		return;
+#endif
+
 	/*
 	 * Find the region that we can probe for.  This in turn
 	 * tells us whether we can probe for the type of port.
@@ -1546,7 +1554,7 @@ static void serial8250_config_port(struct uart_port *port, int flags)
 	res_rsa = serial8250_request_rsa_resource(port);
 	if (!res_rsa)
 		probeflags &= ~PROBE_RSA;
-	
+
 	if (flags & UART_CONFIG_TYPE)
 		autoconfig(port, probeflags);
 	if (port->type != PORT_UNKNOWN && flags & UART_CONFIG_IRQ)
@@ -1605,7 +1613,7 @@ static void __init serial8250_isa_init_ports(void)
 
 	for (i = 0; i < ARRAY_SIZE(old_serial_port); i++) {
 		serial8250_ports[i].iobase  = old_serial_port[i].port;
-		serial8250_ports[i].irq     = old_serial_port[i].irq;
+		serial8250_ports[i].irq     = irq_cannonicalize(old_serial_port[i].irq);
 		serial8250_ports[i].uartclk = old_serial_port[i].base_baud * 16;
 		serial8250_ports[i].flags   = old_serial_port[i].flags;
 		serial8250_ports[i].ops     = &serial8250_pops;

@@ -39,7 +39,7 @@
 #include <linux/ptrace.h>
 #include <linux/ioport.h>
 #include <linux/mm.h>
-#include <linux/malloc.h>
+#include <linux/slab.h>
 #include <linux/init.h>
 #include <linux/circ_buf.h>
 #include <linux/console.h>
@@ -624,6 +624,7 @@ static int uart_set_info(struct uart_info *info,
 		if (change_irq || change_port ||
 		    (new_serial.baud_base != port->uartclk / 16) ||
 		    (new_serial.close_delay != state->close_delay) ||
+		    (new_serial.closing_wait != state->closing_wait) ||
 		    (new_serial.xmit_fifo_size != port->fifosize) ||
 		    ((new_serial.flags & ~ASYNC_USR_MASK) !=
 		     (port->flags & ~ASYNC_USR_MASK)))
@@ -1775,16 +1776,8 @@ uart_setup_port(struct uart_driver *drv, struct uart_state *state)
 #ifdef CONFIG_PM
 	state->cons = drv->cons;
 	state->pm = pm_register(PM_SYS_DEV, PM_SYS_COM, uart_pm);
-	if (state->pm) {
+	if (state->pm)
 		state->pm->data = state;
-
-		/*
-		 * Power down all ports by default, except
-		 * the console if we have one.
-		 */
-		if (!drv->cons || port->line != drv->cons->index)
-			pm_send(state->pm, PM_SUSPEND, (void *)3);
-	}
 #endif
 
 	/*
@@ -1811,6 +1804,14 @@ uart_setup_port(struct uart_driver *drv, struct uart_state *state)
 		tty_register_devfs(drv->callout_driver, 0, drv->minor +
 					state->port->line);
 	}
+
+#ifdef CONFIG_PM
+	/*
+	 * Power down all ports by default, except the console if we have one.
+	 */
+	if (state->pm && (!drv->cons || port->line != drv->cons->index))
+		pm_send(state->pm, PM_SUSPEND, (void *)3);
+#endif
 }
 
 /*
