@@ -1,20 +1,57 @@
 ** Introduction
-This document describes what I managed to discover about the protocole used to specify force effects to I-Force 2.0 devices.
-None of this information comes from Immerse. That's why you should not trust what is written in this document. This document is intended to help undertstanding the protocole.
-This is not a reference. Comments and corrections are welcome. I made all these tests on my Boeder I-Force ForceFeedback Wheel. Please note I haven't made any test on joysticks.
-To contact me, send email to: deneux@ifrance.com
+This document describes what I managed to discover about the protocol used to
+specify force effects to I-Force 2.0 devices.  None of this information comes
+from Immerse. That's why you should not trust what is written in this
+document. This document is intended to help understanding the protocol.
+This is not a reference. Comments and corrections are welcome.  To contact me,
+send an email to: deneux@ifrance.com
 
 ** WARNING **
-I may not be held responsible for any dammage or harm caused if you try to send data to your I-Force device based on what you read in this document.
+I may not be held responsible for any dammage or harm caused if you try to
+send data to your I-Force device based on what you read in this document.
 
 ** Preliminary Notes:
-All values are hexadecimal with big-endian encoding (msb on the left). Beware, values inside packets are encoded using little-endian.
-Bytes whose roles are unknown are marked ???
-Information that needs deeper inspection is marked (?)
+All values are hexadecimal with big-endian encoding (msb on the left). Beware,
+values inside packets are encoded using little-endian.  Bytes whose roles are
+unknown are marked ???  Information that needs deeper inspection is marked (?)
 
 ** General form of a packet **
+This is how packets look when the device uses the rs232 to communicate.
 2B OP LEN DATA CS
 CS is the checksum. It is equal to the exclusive or of all bytes.
+
+When using USB:
+OP DATA
+The 2B, LEN and CS fields have disappeared, probably because USB handles frames and
+data corruption is handled or unsignificant.
+
+First, I describe effects that are sent by the device to the computer
+
+** Device input state
+This packet is used to indicate the state of each button and the value of each
+axis
+OP= 01 for a joystick, 03 for a wheel
+LEN= Varies from device to device
+00 X-Axis lsb
+01 X-Axis msb
+02 Y-Axis lsb, or gas pedal for a wheel
+03 Y-Axis msb, or brake pedal for a wheel
+04 Throttle
+05 Buttons
+06 Lower 4 bits: Buttons
+   Upper 4 bits: Hat
+07 Rudder
+
+** Device effects states
+OP= 02
+LEN= Varies
+00 ? Bit 1 (Value 2) is the value of the deadman switch
+01 Bit 8 is set if the effect is playing. Bits 0 to 7 are the effect id.
+02 ??
+03 Address of parameter block changed (lsb)
+04 Address of parameter block changed (msb)
+05 Address of second parameter block changed (lsb)
+... depending on the number of parameter blocks updated
 
 ** Force effect **
 OP=  01
@@ -206,7 +243,6 @@ At first glance, this soft seems, hum, well... buggy. In fact, data appear with 
 Remember it's free (as in free beer) and alpha!
 
 ** URLS **
-Well, I don't have them at hand (unluckyly, I do not have internet at home).
 Check www.immerse.com for Immersion Studio, and www.fcoder.com for ComPortSpy.
 
 ** Author of this document **
