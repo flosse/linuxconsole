@@ -424,6 +424,7 @@ struct input_event {
 #define BUS_GAMEPORT		0x14
 #define BUS_PARPORT		0x15
 #define BUS_AMIGA		0x16
+#define BUS_ADB			0x17
 
 #ifdef __KERNEL__
 
