@@ -131,6 +131,7 @@ extern int stifb_setup(char*);
 extern int radeonfb_init(void);
 extern int radeonfb_setup(char*);
 extern int sstfb_init(void);
+extern int sstfb_setup(char*);
 extern int e1355fb_init(void);
 extern int e1355fb_setup(char*);
 extern int pvr2fb_init(void);
@@ -226,8 +227,8 @@ static struct {
 #ifdef CONFIG_FB_SIS
 	{ "sisfb", sisfb_init, sisfb_setup },
 #endif
-#ifdef CONFIG_FB_SST
-	{ "sstfb", sstfb_init, NULL },
+#ifdef CONFIG_FB_VOODOO1
+	{ "sstfb", sstfb_init, sstfb_setup },
 #endif
 
 	/*
