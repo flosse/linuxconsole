@@ -203,17 +203,11 @@ static const struct aty128_meminfo sdr_sgram =
 static const struct aty128_meminfo ddr_sgram =
     { 4, 4, 3, 3, 2, 3, 1, 16, 31, 16, "64-bit DDR SGRAM" };
 
-static char fontname[40] __initdata = { 0 };
-
 static int  noaccel __initdata = 0;
 static char *mode __initdata = NULL;
 static int  nomtrr __initdata = 0;
 
 static const char *mode_option __initdata = NULL;
-
-#ifdef CONFIG_MTRR
-static int mtrr = 1;
-#endif
 
 /* PLL constants */
 struct aty128_constants {
@@ -249,9 +243,6 @@ struct aty128_ddafifo {
 
 /* register values for a specific mode */
 struct aty128fb_par {
-#ifdef CONFIG_MTRR
-    struct { int vram; int vram_valid; } mtrr;
-#endif
     struct aty128_constants constants;  /* PLL and others      */
     const struct aty128_meminfo *mem;   /* onboard mem info    */
     struct aty128_ddafifo fifo_reg;
@@ -1108,11 +1099,6 @@ aty128fb_setup(char *options)
 	} else if (!strncmp(this_opt, "noaccel", 7)) {
 	    noaccel = 1;
         }
-#ifdef CONFIG_MTRR
-        else if(!strncmp(this_opt, "nomtrr", 6)) {
-            mtrr = 0;
-        }
-#endif
         else
             mode_option = this_opt;
     }
@@ -1340,17 +1326,6 @@ aty128_pci_register(struct pci_dev *pdev,
 
 	if (!aty128_init(info, pdev, "PCI"))
 		goto err_out;
-
-#ifdef CONFIG_MTRR
-	if (mtrr) {
-		default_par.mtrr.vram = mtrr_add(info->fix.smem_start,
-				info->fix.smem_len, MTRR_TYPE_WRCOMB, 1);
-		default_par.mtrr.vram_valid = 1;
-		/* let there be speed */
-		printk(KERN_INFO "aty128fb: Rage128 MTRR set to ON\n");
-	}
-#endif /* CONFIG_MTRR */
-
 	return 0;
 
 err_out:
@@ -1737,14 +1712,8 @@ MODULE_AUTHOR("(c)1999-2000 Brad Douglas <brad@neruo.com>");
 MODULE_DESCRIPTION("FBDev driver for ATI Rage128 / Pro cards");
 MODULE_PARM(noaccel, "i");
 MODULE_PARM_DESC(noaccel, "Disable hardware acceleration (0 or 1=disabled) (default=0)");
-MODULE_PARM(font, "s");
-MODULE_PARM_DESC(font, "Specify one of the compiled-in fonts (default=none)");
 MODULE_PARM(mode, "s");
 MODULE_PARM_DESC(mode, "Specify resolution as \"<xres>x<yres>[-<bpp>][@<refresh>]\" ");
-#ifdef CONFIG_MTRR
-MODULE_PARM(nomtrr, "i");
-MODULE_PARM_DESC(nomtrr, "Disable MTRR support (0 or 1=disabled) (default=0)");
-#endif
 
 int __init
 init_module(void)
@@ -1753,20 +1722,10 @@ init_module(void)
         noaccel = 1;
         printk(KERN_INFO "aty128fb: Parameter NOACCEL set\n");
     }
-    if (font) {
-        strncpy(fontname, font, sizeof(fontname)-1);
-        printk(KERN_INFO "aty128fb: Parameter FONT set to %s\n", font);
-    }
     if (mode) {
         mode_option = mode;
         printk(KERN_INFO "aty128fb: Parameter MODE set to %s\n", mode);
     }
-#ifdef CONFIG_MTRR
-    if (nomtrr) {
-        mtrr = 0;
-        printk(KERN_INFO "aty128fb: Parameter NOMTRR set\n");
-    }
-#endif
     aty128fb_init();
     return 0;
 }
@@ -1784,12 +1743,8 @@ cleanup_module(void)
 	par = info->par;	
 	
         unregister_framebuffer(&info);
-#ifdef CONFIG_MTRR
-        if (par->mtrr.vram_valid)
-            mtrr_del(par->mtrr.vram, info->fix.smem_start,
-                     info->fix.smem_len);
-#endif /* CONFIG_MTRR */
-        iounmap(par->regbase);
+        
+	iounmap(par->regbase);
         iounmap(info->screen_base);
 
         release_mem_region(pci_resource_start(par->pdev, 0),
