@@ -24,7 +24,6 @@
 #include <linux/devfs_fs_kernel.h>
 #include <linux/vt_kern.h>
 #include <linux/selection.h>
-#include <linux/console_struct.h>
 #include <linux/kbd_kern.h>
 #include <linux/consolemap.h>
 #include <linux/timer.h>
@@ -43,7 +42,6 @@
 #include <asm/linux_logo.h>
 
 #include "console_macros.h"
-
 
 struct consw *conswitchp = NULL;
 
@@ -76,8 +74,8 @@ struct vc vc_cons [MAX_NR_CONSOLES];
 static struct consw *con_driver_map[MAX_NR_CONSOLES];
 #endif
 
-static void vte_decsc(int currcons);
-static void vte_ris(int currcons, int do_clear);
+static void vte_decsc(struct vc_data *vc);
+static void vte_ris(struct vc_data *vc, int do_clear);
 static void con_flush_chars(struct tty_struct *tty);
 
 static int printable = 0;		/* Is console ready for printing? */
@@ -127,8 +125,8 @@ int (*console_blank_hook)(int) = NULL;
  *	Low-Level Functions
  */
 
-#define IS_FG (currcons == fg_console)
-#define IS_VISIBLE CON_IS_VISIBLE(vc_cons[currcons].d)
+#define IS_FG (cons_num == fg_console)
+#define IS_VISIBLE CON_IS_VISIBLE(vc)
 
 #ifdef VT_BUF_VRAM_ONLY
 #define DO_UPDATE 0
@@ -136,7 +134,6 @@ int (*console_blank_hook)(int) = NULL;
 #define DO_UPDATE IS_VISIBLE
 #endif
 
-static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data);
 static struct pm_dev *pm_con = NULL;
 
 /*
@@ -144,9 +141,10 @@ static struct pm_dev *pm_con = NULL;
  */
 static int softcursor_original;
 
-static void add_softcursor(int currcons)
+static void add_softcursor(struct vc_data *vc)
 {
-        int i = scr_readw((u16 *) pos);                                                 u32 type = cursor_type;
+        int i = scr_readw((u16 *) pos); 
+	u32 type = cursor_type;
 
         if (! (type & 0x10)) return;                                                    if (softcursor_original != -1) return;                                          softcursor_original = i;
         i |= ((type >> 8) & 0xff00 );
@@ -155,34 +153,34 @@ static void add_softcursor(int currcons)
         if ((type & 0x40) && ((i & 0x700) == ((i & 0x7000) >> 4))) i ^= 0x0700;
         scr_writew(i, (u16 *) pos);
         if (DO_UPDATE)
-                sw->con_putc(vc_cons[currcons].d, i, y, x);
+                sw->con_putc(vc, i, y, x);
 }                                      
 
-static void hide_cursor(int currcons)
+static void hide_cursor(struct vc_data *vc)
 {
-        if (currcons == sel_cons)
+        if (vc->vc_num == sel_cons)
                 clear_selection();
         if (softcursor_original != -1) {
                 scr_writew(softcursor_original,(u16 *) pos);
-                if (DO_UPDATE)                                                                          sw->con_putc(vc_cons[currcons].d, softcursor_original, y
-, x);
+                if (DO_UPDATE)
+			sw->con_putc(vc, softcursor_original, y, x);
                 softcursor_original = -1;
         }
-        sw->con_cursor(vc_cons[currcons].d,CM_ERASE);
+        sw->con_cursor(vc, CM_ERASE);
 }                   
 
-static void set_cursor(int currcons)
+static void set_cursor(struct vc_data *vc)
 {
-    if (!IS_FG || console_blanked || vcmode == KD_GRAPHICS)
+    if (!IS_FG || console_blanked || vt_cons[cons_num]->vc_mode == KD_GRAPHICS)
         return;
     if (dectcem) {
-        if (currcons == sel_cons)
+        if (vc->vc_num == sel_cons)
                 clear_selection();
-        add_softcursor(currcons);
+        add_softcursor(vc);
         if ((cursor_type & 0x0f) != 1)
-            sw->con_cursor(vc_cons[currcons].d,CM_DRAW);
+            sw->con_cursor(vc, CM_DRAW);
     } else
-        hide_cursor(currcons);
+        hide_cursor(vc);
 }               
 
 /*
@@ -190,7 +188,7 @@ static void set_cursor(int currcons)
  * might also be negative. If the given position is out of
  * bounds, the cursor is placed at the nearest margin.
  */
-static void gotoxy(int currcons, int new_x, int new_y)
+static void gotoxy(struct vc_data *vc, int new_x, int new_y)
 {
         int min_y, max_y;
 
@@ -218,22 +216,22 @@ static void gotoxy(int currcons, int new_x, int new_y)
 }                     
 
 /* for absolute user moves, when decom is set */
-static void gotoxay(int currcons, int new_x, int new_y)
+static void gotoxay(struct vc_data *vc, int new_x, int new_y)
 {
-        gotoxy(currcons, new_x, decom ? (top+new_y) : new_y);
+        gotoxy(vc, new_x, decom ? (top+new_y) : new_y);
 }          
 
 /*
  *      Palettes
  */
 
-void set_palette(int currcons)
+void set_palette(struct vc_data *vc)
 {
-        if (vcmode != KD_GRAPHICS)
-                sw->con_set_palette(vc_cons[currcons].d, color_table);
+        if (vt_cons[cons_num]->vc_mode != KD_GRAPHICS)
+                sw->con_set_palette(vc, color_table);
 }            
 
-void reset_palette(int currcons)
+void reset_palette(struct vc_data *vc)
 {
         int j, k;
         for (j=k=0; j<16; j++) {
@@ -241,7 +239,7 @@ void reset_palette(int currcons)
                 palette[k++] = default_grn[j];
                 palette[k++] = default_blu[j];
         }
-        set_palette(currcons);
+        set_palette(vc);
 }              
 
 /*
@@ -271,7 +269,7 @@ static int set_get_cmap(unsigned char *arg, int set)
                     vc_cons[i].d->vc_palette[k++] = default_grn[j];
                     vc_cons[i].d->vc_palette[k++] = default_blu[j];
                 }
-                set_palette(i);
+                set_palette(vc_cons[i].d);
             }
     }
     return 0;
@@ -299,7 +297,8 @@ static inline void scrolldelta(int lines)
 }            
 
 void scrollback(int lines)
-{                                                                                       int currcons = fg_console;
+{
+	struct vc_data *vc = vc_cons[fg_console].d;
 
         if (!lines)
                 lines = video_num_lines/2;
@@ -308,14 +307,14 @@ void scrollback(int lines)
 
 void scrollfront(int lines)
 {
-        int currcons = fg_console;
+	struct vc_data *vc = vc_cons[fg_console].d;
 
         if (!lines)
                 lines = video_num_lines/2;
         scrolldelta(lines);
 }                        
 
-static void scrup(int currcons, unsigned int t, unsigned int b, int nr)
+static void scrup(struct vc_data *vc, unsigned int t, unsigned int b, int nr)
 {
 	unsigned short *d, *s;
 
@@ -323,7 +322,7 @@ static void scrup(int currcons, unsigned int t, unsigned int b, int nr)
 		nr = b - t;
 	if (b > video_num_lines || t >= b || nr < 1)
 		return;
-	if (IS_VISIBLE && sw->con_scroll(vc_cons[currcons].d, t, b, SM_UP, nr))
+	if (IS_VISIBLE && sw->con_scroll(vc, t, b, SM_UP, nr))
 		return;
 	d = (unsigned short *) (origin+video_size_row*t);
 	s = (unsigned short *) (origin+video_size_row*(t+nr));
@@ -331,8 +330,7 @@ static void scrup(int currcons, unsigned int t, unsigned int b, int nr)
 	scr_memsetw(d + (b-t-nr) * video_num_columns, video_erase_char, video_size_row*nr);
 }
 
-static void
-scrdown(int currcons, unsigned int t, unsigned int b, int nr)
+static void scrdown(struct vc_data *vc, unsigned int t, unsigned int b, int nr)
 {
 	unsigned short *s;
 	unsigned int step;
@@ -341,7 +339,7 @@ scrdown(int currcons, unsigned int t, unsigned int b, int nr)
 		nr = b - t;
 	if (b > video_num_lines || t >= b || nr < 1)
 		return;
-	if (IS_VISIBLE && sw->con_scroll(vc_cons[currcons].d, t, b, SM_DOWN, nr))
+	if (IS_VISIBLE && sw->con_scroll(vc, t, b, SM_DOWN, nr))
 		return;
 	s = (unsigned short *) (origin+video_size_row*t);
 	step = video_num_columns * nr;
@@ -352,10 +350,10 @@ scrdown(int currcons, unsigned int t, unsigned int b, int nr)
 /*	
  * Console attribute handling. Structure of attributes is hardware-dependent 
  */
-static u8 build_attr(int currcons, u8 _color, u8 _intensity, u8 _blink, u8 _underline, u8 _reverse)
+static u8 build_attr(struct vc_data *vc, u8 _color, u8 _intensity, u8 _blink, u8 _underline, u8 _reverse)
 {
 	if (sw->con_build_attr)
-		return sw->con_build_attr(vc_cons[currcons].d, _color, _intensity, _blink, _underline, _reverse);
+		return sw->con_build_attr(vc, _color, _intensity, _blink, _underline, _reverse);
 
 #ifndef VT_BUF_VRAM_ONLY
 /*
@@ -394,16 +392,16 @@ static u8 build_attr(int currcons, u8 _color, u8 _intensity, u8 _blink, u8 _unde
 #endif
 }
 
-static void update_attr(int currcons)
+static void update_attr(struct vc_data *vc)
 {
-	attr = build_attr(currcons, color, intensity, blink, underline, reverse ^ decscnm);
-	video_erase_char = (build_attr(currcons, color, intensity, 0, 0, decscnm) << 8) | ' ';
+	attr = build_attr(vc, color, intensity, blink, underline, reverse ^ decscnm);
+	video_erase_char = (build_attr(vc, color, intensity, 0, 0, decscnm) << 8) | ' ';
 }
 
 /*
  *  Character management
  */    
-void insert_char(int currcons, unsigned int nr)
+void insert_char(struct vc_data *vc, unsigned int nr)
 {
 	unsigned short *p, *q = (unsigned short *) pos;
 
@@ -414,17 +412,15 @@ void insert_char(int currcons, unsigned int nr)
 	need_wrap = 0;
 	if (DO_UPDATE) {
 		unsigned short oldattr = attr;
-		sw->con_bmove(vc_cons[currcons].d,y,x,y,x+nr,1,
-			      video_num_columns-x-nr);
+		sw->con_bmove(vc, y, x, y, x+nr,1, video_num_columns-x-nr);
 		attr = video_erase_char >> 8;
 		while (nr--)
-			sw->con_putc(vc_cons[currcons].d,
-				     video_erase_char,y,x+nr);
+			sw->con_putc(vc, video_erase_char, y, x+nr);
 		attr = oldattr;
 	}
 }
 
-static void delete_char(int currcons, unsigned int nr)
+static void delete_char(struct vc_data *vc, unsigned int nr)
 {
 	unsigned int i = x;
 	unsigned short *p = (unsigned short *) pos;
@@ -437,51 +433,46 @@ static void delete_char(int currcons, unsigned int nr)
 	need_wrap = 0;
 	if (DO_UPDATE) {
 		unsigned short oldattr = attr;
-		sw->con_bmove(vc_cons[currcons].d, y, x+nr, y, x, 1,
-			      video_num_columns-x-nr);
+		sw->con_bmove(vc, y, x+nr, y, x, 1, video_num_columns-x-nr);
 		attr = video_erase_char >> 8;
 		while (nr--)
-			sw->con_putc(vc_cons[currcons].d,
-				     video_erase_char, y,
-				     video_num_columns-1-nr);
+			sw->con_putc(vc, video_erase_char, y, video_num_columns-1-nr);
 		attr = oldattr;
 	}
 }
 
-static void insert_line(int currcons, unsigned int nr)
+static void insert_line(struct vc_data *vc, unsigned int nr)
 {
-	scrdown(currcons,y,bottom,nr);
+	scrdown(vc, y, bottom, nr);
 	need_wrap = 0;
 }
 
 
-static void delete_line(int currcons, unsigned int nr)
+static void delete_line(struct vc_data *vc, unsigned int nr)
 {
-	scrup(currcons,y,bottom,nr);
+	scrup(vc, y, bottom, nr);
 	need_wrap = 0;
 }
 
 /*
  * Functions that manage whats displayed on the screen
  */     
-static void set_origin(int currcons)
+static void set_origin(struct vc_data *vc)
 {
-	if (!IS_VISIBLE ||
-	    !sw->con_set_origin ||
-	    !sw->con_set_origin(vc_cons[currcons].d))
+	if (!IS_VISIBLE || !sw->con_set_origin || !sw->con_set_origin(vc))
 		origin = (unsigned long) screenbuf;
 	visible_origin = origin;
 	scr_end = origin + screenbuf_size;
 	pos = origin + video_size_row*y + 2*x;
 }
 
-static inline void save_screen(int currcons)
+static inline void save_screen(struct vc_data *vc)
 {
 	if (sw->con_save_screen)
-		sw->con_save_screen(vc_cons[currcons].d);
+		sw->con_save_screen(vc);
 }
 
-static void do_update_region(int currcons, unsigned long start, int count)
+static void do_update_region(struct vc_data *vc, unsigned long start, int count)
 {
 #ifndef VT_BUF_VRAM_ONLY
 	unsigned int xx, yy, offset;
@@ -494,7 +485,7 @@ static void do_update_region(int currcons, unsigned long start, int count)
 		yy = offset / video_num_columns;
 	} else {
 		int nxx, nyy;
-		start = sw->con_getxy(vc_cons[currcons].d, start, &nxx, &nyy);
+		start = sw->con_getxy(vc, start, &nxx, &nyy);
 		xx = nxx; yy = nyy;
 	}
 	for(;;) {
@@ -504,7 +495,7 @@ static void do_update_region(int currcons, unsigned long start, int count)
 		while (xx < video_num_columns && count) {
 			if (attrib != (scr_readw(p) & 0xff00)) {
 				if (p > q)
-					sw->con_putcs(vc_cons[currcons].d, q, p-q, yy, startx);
+					sw->con_putcs(vc, q, p-q, yy, startx);
 				startx = xx;
 				q = p;
 				attrib = scr_readw(p) & 0xff00;
@@ -514,29 +505,29 @@ static void do_update_region(int currcons, unsigned long start, int count)
 			count--;
 		}
 		if (p > q)
-			sw->con_putcs(vc_cons[currcons].d, q, p-q, yy, startx);
+			sw->con_putcs(vc, q, p-q, yy, startx);
 		if (!count)
 			break;
 		xx = 0;
 		yy++;
 		if (sw->con_getxy) {
 			p = (u16 *)start;
-			start = sw->con_getxy(vc_cons[currcons].d, start, NULL, NULL);
+			start = sw->con_getxy(vc, start, NULL, NULL);
 		}
 	}
 #endif
 }
 
-void update_region(int currcons, unsigned long start, int count)
+void update_region(struct vc_data *vc, unsigned long start, int count)
 {
 	if (DO_UPDATE) {
-		hide_cursor(currcons);
-		do_update_region(currcons, start, count);
-		set_cursor(currcons);
+		hide_cursor(vc);
+		do_update_region(vc, start, count);
+		set_cursor(vc);
 	}
 }
 
-static inline unsigned short *screenpos(int currcons, int offset, int viewed)
+static inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed)
 {
         unsigned short *p;
 
@@ -545,19 +536,20 @@ static inline unsigned short *screenpos(int currcons, int offset, int viewed)
         else if (!sw->con_screen_pos)
                 p = (unsigned short *)(visible_origin + offset);
         else
-                p = sw->con_screen_pos(vc_cons[currcons].d, offset);
+                p = sw->con_screen_pos(vc, offset);
         return p;
 }              
 
 /* Note: inverting the screen twice should revert to the original state */
 void invert_screen(int currcons, int offset, int count, int viewed)
 {
+	struct vc_data *vc = vc_cons[currcons].d;
 	unsigned short *p;
 
 	count /= 2;
-	p = screenpos(currcons, offset, viewed);
+	p = screenpos(vc, offset, viewed);
 	if (sw->con_invert_region)
-		sw->con_invert_region(vc_cons[currcons].d, p, count);
+		sw->con_invert_region(vc, p, count);
 #ifndef VT_BUF_VRAM_ONLY
 	else {
 		u16 *q = p;
@@ -581,12 +573,13 @@ void invert_screen(int currcons, int offset, int count, int viewed)
 	}
 #endif
 	if (DO_UPDATE)
-		do_update_region(currcons, (unsigned long) p, count);
+		do_update_region(vc, (unsigned long) p, count);
 }
 
 /* used by selection: complement pointer position */
 void complement_pos(int currcons, int offset)
 {
+	struct vc_data *vc = vc_cons[currcons].d;
 	static unsigned short *p = NULL;
 	static unsigned short old = 0;
 	static unsigned short oldx = 0, oldy = 0;
@@ -594,20 +587,20 @@ void complement_pos(int currcons, int offset)
 	if (p) {
 		scr_writew(old, p);
 		if (DO_UPDATE)
-			sw->con_putc(vc_cons[currcons].d, old, oldy, oldx);
+			sw->con_putc(vc, old, oldy, oldx);
 	}
 	if (offset == -1)
 		p = NULL;
 	else {
 		unsigned short new;
-		p = screenpos(currcons, offset, 1);
+		p = screenpos(vc, offset, 1);
 		old = scr_readw(p);
 		new = old ^ complement_mask;
 		scr_writew(new, p);
 		if (DO_UPDATE) {
 			oldx = (offset >> 1) % video_num_columns;
 			oldy = (offset >> 1) / video_num_columns;
-			sw->con_putc(vc_cons[currcons].d, new, oldy, oldx);
+			sw->con_putc(vc, new, oldy, oldx);
 		}
 	}
 }
@@ -618,9 +611,10 @@ void complement_pos(int currcons, int offset)
 
 void redraw_screen(int new_console, int is_switch)
 {
-	int redraw = 1;
 	int currcons, old_console;
-
+	struct vc_data *vc = NULL;
+	int redraw = 1;
+	
 	if (!vc_cons_allocated(new_console)) {
 		/* strange ... */
 		/* printk("redraw_screen: tty %d not allocated ??\n", new_console+1); */
@@ -629,16 +623,17 @@ void redraw_screen(int new_console, int is_switch)
 
 	if (is_switch) {
 		currcons = fg_console;
-		hide_cursor(currcons);
+		hide_cursor(vc_cons[currcons].d);
 		if (fg_console != new_console) {
 			struct vc_data **display = vc_cons[new_console].d->vc_display_fg;
 			old_console = (*display) ? (*display)->vc_num : fg_console;
 			*display = vc_cons[new_console].d;
 			fg_console = new_console;
 			currcons = old_console;
+			vc = vc_cons[currcons].d;
 			if (!IS_VISIBLE) {
-				save_screen(currcons);
-				set_origin(currcons);
+				save_screen(vc);
+				set_origin(vc);
 			}
 			currcons = new_console;
 			if (old_console == new_console)
@@ -646,18 +641,18 @@ void redraw_screen(int new_console, int is_switch)
 		}
 	} else {
 		currcons = new_console;
-		hide_cursor(currcons);
+		hide_cursor(vc_cons[currcons].d);
 	}
 
 	if (redraw) {
 		if (sw->con_switch(vc_cons[currcons].d) && vcmode != KD_GRAPHICS)
 			/* Change the palette after a VT switch. */
-			set_origin(currcons);
+			set_origin(vc_cons[currcons].d);
 			sw->con_set_palette(vc_cons[currcons].d, color_table);
 			/* Update the screen contents */
-			do_update_region(currcons, origin, screenbuf_size/2);
+			do_update_region(vc_cons[currcons].d, origin, screenbuf_size/2);
 	}
-	set_cursor(currcons);
+	set_cursor(vc_cons[currcons].d);
 	if (is_switch) {
 		set_leds();
 		compute_shiftstate();
@@ -677,7 +672,7 @@ static void set_vesa_blanking(unsigned long arg)
 
 static void vesa_powerdown(void)
 {
-    struct vc_data *c = vc_cons[fg_console].d;
+    struct vc_data *vc = vc_cons[fg_console].d;
     /*
      *  Power down if currently suspended (1 or 2),
      *  suspend if currently blanked (0),
@@ -686,11 +681,11 @@ static void vesa_powerdown(void)
      */
     switch (vesa_blank_mode) {
 	case VESA_NO_BLANKING:
-	    c->vc_sw->con_blank(c, VESA_VSYNC_SUSPEND+1);
+	    sw->con_blank(vc, VESA_VSYNC_SUSPEND+1);
 	    break;
 	case VESA_VSYNC_SUSPEND:
 	case VESA_HSYNC_SUSPEND:
-	    c->vc_sw->con_blank(c, VESA_POWERDOWN+1);
+	    sw->con_blank(vc, VESA_POWERDOWN+1);
 	    break;
     }
 }
@@ -702,7 +697,7 @@ static void blank_screen(void)
 
 void unblank_screen(void)
 {
-	int currcons;
+	struct vc_data *vc = vc_cons[fg_console].d;
 
 	if (!console_blanked)
 		return;
@@ -717,14 +712,13 @@ void unblank_screen(void)
 		timer_active |= 1<<BLANK_TIMER;
 	}
 
-	currcons = fg_console;
 	console_blanked = 0;
 	if (console_blank_hook)
 		console_blank_hook(0);
-	if (sw->con_blank(vc_cons[currcons].d, 0))
+	if (sw->con_blank(vc, 0))
 		/* Low-level driver cannot restore -> do it ourselves */
 		update_screen(fg_console);
-	set_cursor(fg_console);
+	set_cursor(vc);
 }
 
 static void vesa_powerdown_screen(void)
@@ -737,7 +731,7 @@ static void vesa_powerdown_screen(void)
 
 void do_blank_screen(int entering_gfx)
 {
-	int currcons = fg_console;
+	struct vc_data *vc = vc_cons[fg_console].d;
 	int i;
 
 	if (console_blanked)
@@ -745,21 +739,21 @@ void do_blank_screen(int entering_gfx)
 
 	/* entering graphics mode? */
 	if (entering_gfx) {
-		hide_cursor(currcons);
-		save_screen(currcons);
-		sw->con_blank(vc_cons[currcons].d, -1);
+		hide_cursor(vc);
+		save_screen(vc);
+		sw->con_blank(vc, -1);
 		console_blanked = fg_console + 1;
-		set_origin(currcons);
+		set_origin(vc);
 		return;
 	}
 
 	/* don't blank graphics */
-	if (vcmode != KD_TEXT) {
+	if (vt_cons[cons_num]->vc_mode != KD_TEXT) {
 		console_blanked = fg_console + 1;
 		return;
 	}
 
-	hide_cursor(currcons);
+	hide_cursor(vc);
 	if (vesa_off_interval) {
 		timer_table[BLANK_TIMER].fn = vesa_powerdown_screen;
 		timer_table[BLANK_TIMER].expires = jiffies + vesa_off_interval;
@@ -769,17 +763,17 @@ void do_blank_screen(int entering_gfx)
 		timer_table[BLANK_TIMER].fn = unblank_screen;
 	}
 
-	save_screen(currcons);
+	save_screen(vc);
 	/* In case we need to reset origin, blanking hook returns 1 */
-	i = sw->con_blank(vc_cons[currcons].d, 1);
+	i = sw->con_blank(vc, 1);
 	console_blanked = fg_console + 1;
 	if (i)
-		set_origin(currcons);
+		set_origin(vc);
 
 	if (console_blank_hook && console_blank_hook(1))
 		return;
     	if (vesa_blank_mode)
-		sw->con_blank(vc_cons[currcons].d, vesa_blank_mode + 1);
+		sw->con_blank(vc, vesa_blank_mode + 1);
 }
 
 void poke_blanked_console(void)
@@ -803,10 +797,10 @@ void poke_blanked_console(void)
 static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
 {
   switch (rqst) {
-  case PM_RESUME:
+	  case PM_RESUME:
                         unblank_screen();
                         break;
-  case PM_SUSPEND:
+ 	 case PM_SUSPEND:
                         blank_screen();
                         break;
   }
@@ -825,6 +819,8 @@ int vc_cons_allocated(unsigned int i)
 static void visual_init(int currcons, int init)
 {
     /* ++Geert: sw->con_init determines console size */
+    struct vc_data *vc = vc_cons[currcons].d;		
+    
     sw = conswitchp;
 #ifndef VT_SINGLE_DRIVER
     if (con_driver_map[currcons])
@@ -845,7 +841,7 @@ static void visual_init(int currcons, int init)
     screenbuf_size = video_num_lines*video_size_row;
 }
 
-static void vc_init(unsigned int currcons, unsigned int rows, unsigned int cols, int do_clear)
+static void vc_init(struct vc_data *vc, unsigned int rows, unsigned int cols, int do_clear)
 {
 	int j, k ;
 
@@ -854,19 +850,19 @@ static void vc_init(unsigned int currcons, unsigned int rows, unsigned int cols,
 	video_size_row = cols<<1;
 	screenbuf_size = video_num_lines * video_size_row;
 
-	set_origin(currcons);
+	set_origin(vc);
 	pos = origin;
-	reset_vc(currcons);
+	reset_vc(cons_num);
 	for (j=k=0; j<16; j++) {
-		vc_cons[currcons].d->vc_palette[k++] = default_red[j] ;
-		vc_cons[currcons].d->vc_palette[k++] = default_grn[j] ;
-		vc_cons[currcons].d->vc_palette[k++] = default_blu[j] ;
+		palette[k++] = default_red[j] ;
+		palette[k++] = default_grn[j] ;
+		palette[k++] = default_blu[j] ;
 	}
 	def_color       = 0x07;   /* white */
 	ulcolor		= 0x0f;   /* bold white */
 	halfcolor       = 0x08;   /* grey */
-	init_waitqueue_head(&vt_cons[currcons]->paste_wait);
-	vte_ris(currcons, do_clear);
+	init_waitqueue_head(&vt_cons[cons_num]->paste_wait);
+	vte_ris(vc, do_clear);
 }
 
 int vc_allocate(unsigned int currcons)	/* return 0 on success */
@@ -874,6 +870,7 @@ int vc_allocate(unsigned int currcons)	/* return 0 on success */
 	if (currcons >= MAX_NR_CONSOLES)
 		return -ENXIO;
 	if (!vc_cons[currcons].d) {
+	    struct vc_data *vc;	
 	    long p, q;
 
 	    /* prevent users from taking too much memory */
@@ -889,7 +886,7 @@ int vc_allocate(unsigned int currcons)	/* return 0 on success */
 	    p = (long) kmalloc(structsize, GFP_KERNEL);
 	    if (!p)
 		return -ENOMEM;
-	    vc_cons[currcons].d = (struct vc_data *)p;
+	    vc_cons[currcons].d = vc = (struct vc_data *)p;
 	    vt_cons[currcons] = (struct vt_struct *)(p+sizeof(struct vc_data));
 	    visual_init(currcons, 1);
 	    if (!*vc_cons[currcons].d->vc_uni_pagedir_loc)
@@ -903,12 +900,10 @@ int vc_allocate(unsigned int currcons)	/* return 0 on success */
 	    }
 	    screenbuf = (unsigned short *) q;
 	    kmalloced = 1;
-	    vc_init(currcons, video_num_lines, video_num_columns, 1);
+	    vc_init(vc_cons[currcons].d, video_num_lines, video_num_columns, 1);
 
 	    if (!pm_con) {
-		    pm_con = pm_register(PM_SYS_DEV,
-					 PM_SYS_VGA,
-					 pm_con_request);
+		    pm_con = pm_register(PM_SYS_DEV,PM_SYS_VGA,pm_con_request);
 	    }
 	}
 	return 0;
@@ -923,8 +918,9 @@ int vc_resize(unsigned int lines, unsigned int cols,
 	      unsigned int first, unsigned int last)
 {
 	unsigned int cc, ll, ss, sr, todo = 0;
-	unsigned int currcons = fg_console, i;
+	unsigned int currcons, i;
 	unsigned short *newscreens[MAX_NR_CONSOLES];
+	struct vc_data *vc = vc_cons[fg_console].d;
 
 	cc = (cols ? cols : video_num_columns);
 	ll = (lines ? lines : video_num_lines);
@@ -932,6 +928,7 @@ int vc_resize(unsigned int lines, unsigned int cols,
 	ss = sr * ll;
 
  	for (currcons = first; currcons <= last; currcons++) {
+		vc = vc_cons[currcons].d;
 		if (!vc_cons_allocated(currcons) ||
 		    (cc == video_num_columns && ll == video_num_lines))
 			newscreens[currcons] = NULL;
@@ -955,7 +952,8 @@ int vc_resize(unsigned int lines, unsigned int cols,
 		unsigned long ol, nl, nlend, rlth, rrem;
 		if (!newscreens[currcons] || !vc_cons_allocated(currcons))
 			continue;
-
+	
+		vc = vc_cons[currcons].d;
 		oll = video_num_lines;
 		occ = video_num_columns;
 		osr = video_size_row;
@@ -974,7 +972,7 @@ int vc_resize(unsigned int lines, unsigned int cols,
 		if (ll < oll)
 			ol += (oll - ll) * osr;
 
-		update_attr(currcons);
+		update_attr(vc);
 
 		while (ol < scr_end) {
 			scr_memcpyw((unsigned short *) nl, (unsigned short *) ol, rlth);
@@ -990,13 +988,13 @@ int vc_resize(unsigned int lines, unsigned int cols,
 		screenbuf = newscreens[currcons];
 		kmalloced = 1;
 		screenbuf_size = ss;
-		set_origin(currcons);
+		set_origin(vc);
 
 		/* do part of a vte_ris() */
 		top = 0;
 		bottom = video_num_lines;
-		gotoxy(currcons, x, y);
-		vte_decsc(currcons);
+		gotoxy(vc, x, y);
+		vte_decsc(vc);
 
 		if (console_table[currcons]) {
 			struct winsize ws, *cws = &console_table[currcons]->winsize;
@@ -1018,14 +1016,15 @@ int vc_resize(unsigned int lines, unsigned int cols,
 
 void vc_disallocate(unsigned int currcons)
 {
-	if (vc_cons_allocated(currcons)) {
-	    sw->con_deinit(vc_cons[currcons].d);
-	    if (kmalloced)
-		kfree_s(screenbuf, screenbuf_size);
-	    if (currcons >= MIN_NR_CONSOLES)
-		kfree_s(vc_cons[currcons].d, structsize);
-	    vc_cons[currcons].d = NULL;
-	}
+        if (vc_cons_allocated(currcons)) {
+	    struct vc_data *vc = vc_cons[currcons].d;	
+            sw->con_deinit(vc);
+            if (kmalloced)
+                kfree_s(screenbuf, screenbuf_size);
+            if (currcons >= MIN_NR_CONSOLES)
+                kfree_s(vc, structsize);
+            vc_cons[currcons].d = NULL;
+        }
 }
 
 /*
@@ -1058,9 +1057,9 @@ enum {	ESinit,
 #define __VTE_ST	(c8bit == 0 ? "\033\\" : "\234")
 #define __VTE_APC	(c8bit == 0 ? "\033_" : "\237")
 
-#define set_kbd(x) set_vc_kbd_mode(kbd_table+currcons,x)
-#define clr_kbd(x) clr_vc_kbd_mode(kbd_table+currcons,x)
-#define is_kbd(x) vc_kbd_mode(kbd_table+currcons,x)
+#define set_kbd(x) set_vc_kbd_mode(kbd_table+cons_num, x)
+#define clr_kbd(x) clr_vc_kbd_mode(kbd_table+cons_num, x)
+#define is_kbd(x) vc_kbd_mode(kbd_table+cons_num, x)
 
 unsigned char color_table[] = { 0, 4, 2, 6, 1, 5, 3, 7,
 				       8,12,10,14, 9,13,11,15 };
@@ -1076,13 +1075,13 @@ int default_blu[] = {0x00,0x00,0x00,0x00,0xaa,0xaa,0xaa,0xaa,
 /*
  * LINE FEED (LF)
  */
-static void vte_lf(int currcons)
+static void vte_lf(struct vc_data *vc)
 {
     	/* don't scroll if above bottom of scrolling region, or
 	 * if below scrolling region
 	 */
     	if (y+1 == bottom)
-		scrup(currcons,top,bottom,1);
+		scrup(vc, top, bottom, 1);
 	else if (y < video_num_lines-1) {
 	    	y++;
 		pos += video_size_row;
@@ -1093,13 +1092,13 @@ static void vte_lf(int currcons)
 /*
  * REVERSE LINE FEED (RI)
  */
-static void vte_ri(int currcons)
+static void vte_ri(struct vc_data *vc)
 {
 	/* don't scroll if below top of scrolling region, or
 	 * if above scrolling region
 	 */
 	if (y == top)
-		scrdown(currcons,top,bottom,1);
+		scrdown(vc, top, bottom, 1);
 	else if (y > 0) {
 		y--;
 		pos -= video_size_row;
@@ -1110,7 +1109,7 @@ static void vte_ri(int currcons)
 /*
  * CARRIAGE RETURN (CR)
  */
-static inline void vte_cr(int currcons)
+static inline void vte_cr(struct vc_data *vc)
 {
 	pos -= x<<1;
 	need_wrap = x = 0;
@@ -1119,7 +1118,7 @@ static inline void vte_cr(int currcons)
 /*
  * BACK SPACE (BS)
  */
-static inline void vte_bs(int currcons)
+static inline void vte_bs(struct vc_data *vc)
 {
 	if (x) {
 		pos -= 2;
@@ -1136,19 +1135,19 @@ static inline void vte_bs(int currcons)
  * In accordance with our interpretation of VT as LF we will treat CVT as
  * (par[0] * LF).  Not very creative, but at least consequent.
  */
-static void vte_cvt(int currcons, int vpar)
+static void vte_cvt(struct vc_data *vc, int vpar)
 {
 	int i;
 
 	for (i = 0; i < vpar; i++) {
-		vte_lf(currcons);
+		vte_lf(vc);
 	}
 }
 
 /*
  * CURSOR BACKWARD TABULATION (CBT)
  */
-static void vte_cbt(int currcons, int vpar)
+static void vte_cbt(struct vc_data *vc, int vpar)
 {
 	int i;
 
@@ -1166,7 +1165,7 @@ static void vte_cbt(int currcons, int vpar)
 /*
  * CURSOR FORWARD TABULATION (CHT)
  */
-static void vte_cht(int currcons, int vpar)
+static void vte_cht(struct vc_data *vc, int vpar)
 {
 	int i;
 
@@ -1185,7 +1184,7 @@ static void vte_cht(int currcons, int vpar)
 /*
  * ERASE IN PAGE (ED)
  */
-static void vte_ed(int currcons, int vpar)
+static void vte_ed(struct vc_data *vc, int vpar)
 {
 	unsigned int count;
 	unsigned short * start;
@@ -1196,10 +1195,8 @@ static void vte_ed(int currcons, int vpar)
 			start = (unsigned short *) pos;
 			if (DO_UPDATE) {
 				/* do in two stages */
-				sw->con_clear(vc_cons[currcons].d, y, x, 1,
-					      video_num_columns-x);
-				sw->con_clear(vc_cons[currcons].d, y+1, 0,
-					      video_num_lines-y-1,
+				sw->con_clear(vc, y, x, 1, video_num_columns-x);
+				sw->con_clear(vc, y+1, 0, video_num_lines-y-1,
 					      video_num_columns);
 			}
 			break;
@@ -1208,18 +1205,15 @@ static void vte_ed(int currcons, int vpar)
 			start = (unsigned short *) origin;
 			if (DO_UPDATE) {
 				/* do in two stages */
-				sw->con_clear(vc_cons[currcons].d, 0, 0, y,
-					      video_num_columns);
-				sw->con_clear(vc_cons[currcons].d, y, 0, 1,
-					      x + 1);
+				sw->con_clear(vc, 0, 0, y, video_num_columns);
+				sw->con_clear(vc, y, 0, 1, x + 1);
 			}
 			break;
 		case 2: /* erase whole display */
 			count = video_num_columns * video_num_lines;
 			start = (unsigned short *) origin;
 			if (DO_UPDATE)
-				sw->con_clear(vc_cons[currcons].d, 0, 0,
-					      video_num_lines,
+				sw->con_clear(vc, 0, 0, video_num_lines,
 					      video_num_columns);
 			break;
 		default:
@@ -1232,7 +1226,7 @@ static void vte_ed(int currcons, int vpar)
 /*
  * ERASE IN LINE (EL)
  */
-static void vte_el(int currcons, int vpar)
+static void vte_el(struct vc_data *vc, int vpar)
 {
 	unsigned int count;
 	unsigned short * start;
@@ -1242,22 +1236,19 @@ static void vte_el(int currcons, int vpar)
 			count = video_num_columns-x;
 			start = (unsigned short *) pos;
 			if (DO_UPDATE)
-				sw->con_clear(vc_cons[currcons].d, y, x, 1,
-					      video_num_columns-x);
+				sw->con_clear(vc, y, x, 1, video_num_columns-x);
 			break;
 		case 1:	/* erase from start of line to cursor */
 			start = (unsigned short *) (pos - (x<<1));
 			count = x+1;
 			if (DO_UPDATE)
-				sw->con_clear(vc_cons[currcons].d, y, 0, 1,
-					      x + 1);
+				sw->con_clear(vc, y, 0, 1, x + 1);
 			break;
 		case 2: /* erase whole line */
 			start = (unsigned short *) (pos - (x<<1));
 			count = video_num_columns;
 			if (DO_UPDATE)
-				sw->con_clear(vc_cons[currcons].d, y, 0, 1,
-					      video_num_columns);
+				sw->con_clear(vc, y, 0, 1, video_num_columns);
 			break;
 		default:
 			return;
@@ -1271,7 +1262,7 @@ static void vte_el(int currcons, int vpar)
  *
  * NOTE:  This function is not available in DEC VT1xx terminals.
  */
-static void vte_ech(int currcons, int vpar)
+static void vte_ech(struct vc_data *vc, int vpar)
 {
 	int count;
 
@@ -1281,11 +1272,11 @@ static void vte_ech(int currcons, int vpar)
 
 	scr_memsetw((unsigned short *) pos, video_erase_char, 2 * count);
 	if (DO_UPDATE)
-		sw->con_clear(vc_cons[currcons].d, y, x, 1, count);
+		sw->con_clear(vc, y, x, 1, count);
 	need_wrap = 0;
 }
 
-static void default_attr(int currcons)
+static void default_attr(struct vc_data *vc)
 {
 	intensity = 1;
 	underline = 0;
@@ -1299,14 +1290,14 @@ static void default_attr(int currcons)
  *
  * NOTE: The DEC vt1xx series only implements attribute values 0,1,4,5 and 7.
  */
-static void vte_sgr(int currcons)
+static void vte_sgr(struct vc_data *vc)
 {
 	int i;
 
 	for (i=0;i<=npar;i++)
 		switch (par[i]) {
 			case 0:	/* all attributes off */
-				default_attr(currcons);
+				default_attr(vc);
 				break;
 			case 1:	/* bold or increased intensity */
 				intensity = 2;
@@ -1329,17 +1320,17 @@ static void vte_sgr(int currcons)
 			case 10:	/*  primary (default) font */
 				translate = set_translate(charset == 0
 						? G0_charset
-						: G1_charset,currcons);
+						: G1_charset, cons_num);
 				disp_ctrl = 0;
 				toggle_meta = 0;
 				break;
 			case 11:	/* first alternative font */
-				translate = set_translate(IBMPC_MAP,currcons);
+				translate = set_translate(IBMPC_MAP, cons_num);
 				disp_ctrl = 1;
 				toggle_meta = 0;
 				break;
 			case 12:	/* second alternative font */
-				translate = set_translate(IBMPC_MAP,currcons);
+				translate = set_translate(IBMPC_MAP, cons_num);
 				disp_ctrl = 1;
 				toggle_meta = 1;
 				break;
@@ -1378,7 +1369,7 @@ static void vte_sgr(int currcons)
 						| foreground;
 				break;
 		}
-	update_attr(currcons);
+	update_attr(vc);
 }
 
 static void respond_string(const char * p, struct tty_struct * tty)
@@ -1394,7 +1385,8 @@ static void respond_string(const char * p, struct tty_struct * tty)
 /*
  * Fake a DEC DSR for non-implemented features
  */
-static void vte_fake_dec_dsr(int currcons, struct tty_struct *tty, char *reply)
+static void vte_fake_dec_dsr(struct vc_data *vc, struct tty_struct *tty, 
+			     char *reply)
 {
 	char buf[40];
 	sprintf(buf, "%s?%sn", __VTE_CSI, reply);
@@ -1406,7 +1398,7 @@ static void vte_fake_dec_dsr(int currcons, struct tty_struct *tty, char *reply)
  * CURSOR POSITION REPORT (CPR)
  * DEC EXTENDED CURSOR POSITION REPORT (DECXCPR)
  */
-static void vte_cpr(int currcons, struct tty_struct *tty, int ext)
+static void vte_cpr(struct vc_data *vc, struct tty_struct *tty, int ext)
 {
 	char buf[40];
 
@@ -1432,7 +1424,7 @@ static void vte_cpr(int currcons, struct tty_struct *tty, int ext)
 /*
  * DEVICE STATUS REPORT (DSR)
  */
-static inline void vte_dsr(int currcons, struct tty_struct * tty)
+static inline void vte_dsr(struct vc_data *vc, struct tty_struct * tty)
 {
 #ifdef CONFIG_VT_EXTENDED
 	char buf[40];
@@ -1454,7 +1446,7 @@ static inline void vte_answerback(struct tty_struct *tty)
 /*
  * DA - DEVICE ATTRIBUTE
  */
-static inline void vte_da(int currcons, struct tty_struct *tty)
+static inline void vte_da(struct vc_data *vc, struct tty_struct *tty)
 {
 #ifdef CONFIG_VT_EXTENDED
 
@@ -1481,7 +1473,7 @@ static inline void vte_da(int currcons, struct tty_struct *tty)
  * 2 = Firmware version (nn = n.n)
  * 3 = Installed options (0 = none)
  */
-static void vte_dec_da2(int currcons, struct tty_struct *tty)
+static void vte_dec_da2(struct vc_data *vc, struct tty_struct *tty)
 {
 	char buf[40];
 
@@ -1494,7 +1486,7 @@ static void vte_dec_da2(int currcons, struct tty_struct *tty)
  *
  * Reply: unit ID (we report "0")
  */
-static void vte_dec_da3(int currcons, struct tty_struct *tty)
+static void vte_dec_da3(struct vc_data *vc, struct tty_struct *tty)
 {
 	char buf[40];
 
@@ -1505,7 +1497,7 @@ static void vte_dec_da3(int currcons, struct tty_struct *tty)
 /*
  * DECREPTPARM - DEC REPORT TERMINAL PARAMETERS [VT1xx/VT2xx/VT320]
  */
-static void vte_decreptparm(int currcons, struct tty_struct *tty)
+static void vte_decreptparm(struct vc_data *vc, struct tty_struct *tty)
 {
 	char buf[40];
 
@@ -1524,9 +1516,9 @@ void mouse_report(struct tty_struct * tty, int butt, int mrx, int mry)
 }
 
 /* invoked via ioctl(TIOCLINUX) and through set_selection */
-int mouse_reporting(void)
+int mouse_reporting()
 {
-	int currcons = fg_console;
+	struct vc_data *vc = vc_cons[fg_console].d;
 
 	return report_mouse;
 }
@@ -1535,12 +1527,13 @@ int mouse_reporting(void)
  * SM - SET MODE /
  * RM - RESET MODE
  */
-static void set_mode(int currcons, int on_off)
+static void set_mode(struct vc_data *vc, int on_off)
 {
 	int i;
 
 	for (i=0; i<=npar; i++)
-		if (priv4) switch(par[i]) {	/* DEC private modes set/reset */
+		if (priv4) switch(par[i]) {
+			/* DEC private modes set/reset */
 			case 1: /* DECCKM - Cursor keys mode */
 				if (on_off)
 					set_kbd(VC_CKMODE);
@@ -1562,13 +1555,13 @@ static void set_mode(int currcons, int on_off)
 			case 5:	/* DECSCNM - Screen mode */
 				if (decscnm != on_off) {
 					decscnm = on_off;
-					invert_screen(currcons, 0, screenbuf_size, 0);
-					update_attr(currcons);
+					invert_screen(cons_num, 0, screenbuf_size, 0);
+					update_attr(vc);
 				}
 				break;
 			case 6:	/* DECOM - Origin mode */
 				decom = on_off;
-				gotoxay(currcons,0,0);
+				gotoxay(vc, 0, 0);
 				break;
 			case 7:	/* DECAWM - Autowrap mode */
 				decawm = on_off;
@@ -1636,7 +1629,7 @@ static void set_mode(int currcons, int on_off)
 /*
  * DECCIR - Cursor information report
  */
-static void vte_deccir(int currcons, struct tty_struct *tty)
+static void vte_deccir(struct vc_data *vc, struct tty_struct *tty)
 {
 	/* not yet implemented */
 }
@@ -1644,7 +1637,7 @@ static void vte_deccir(int currcons, struct tty_struct *tty)
 /*
  * DECMSR - Macro space report
  */
-static void vte_decmsr(int currcons, struct tty_struct *tty)
+static void vte_decmsr(struct vc_data *vc, struct tty_struct *tty)
 {
 	char buf[40];
 
@@ -1655,7 +1648,8 @@ static void vte_decmsr(int currcons, struct tty_struct *tty)
 /*
  * DECRPM - Report mode
  */
-static void vte_decrpm(int currcons, struct tty_struct *tty, int priv, int mode, int status)
+static void vte_decrpm(struct vc_data *vc, struct tty_struct *tty, int priv, 
+		       int mode, int status)
 {
 	char buf[40];
 
@@ -1684,65 +1678,65 @@ static void vte_decrpm(int currcons, struct tty_struct *tty, int priv, int mode,
  * 3 = premanently set
  * 4 = permanently reset
  */
-static void vte_decrqm(int currcons, struct tty_struct *tty, int priv)
+static void vte_decrqm(struct vc_data *vc, struct tty_struct *tty, int priv)
 {
 	if (priv) {
 		switch (par[0]) {
 			case 1: /* DECCKM - Cursor keys mode */
-				vte_decrpm(currcons, tty, priv, par[0], decckm);
+				vte_decrpm(vc, tty, priv, par[0], decckm);
 				break;
 			case 2: /* DECANM */
 			case 3: /* DECCOLM */
 			case 4: /* DECSCLM */
-				vte_decrpm(currcons, tty, priv, par[0], 4);
+				vte_decrpm(vc, tty, priv, par[0], 4);
 				break;
 			case 5: /* DECSCNM */
-				vte_decrpm(currcons, tty, priv, par[0], decscnm);
+				vte_decrpm(vc, tty, priv, par[0], decscnm);
 				break;
 			case 6: /* DECOM */
-				vte_decrpm(currcons, tty, priv, par[0], decom);
+				vte_decrpm(vc, tty, priv, par[0], decom);
 				break;
 			case 7: /* DECAWM */
-				vte_decrpm(currcons, tty, priv, par[0], decawm);
+				vte_decrpm(vc, tty, priv, par[0], decawm);
 				break;
 			case 8: /* DECARM */
-				vte_decrpm(currcons, tty, priv, par[0], decarm);
+				vte_decrpm(vc, tty, priv, par[0], decarm);
 				break;
 			case 25: /* DECTCEM */
-				vte_decrpm(currcons, tty, priv, par[0], dectcem);
+				vte_decrpm(vc, tty, priv, par[0], dectcem);
 				break;
 			case 42: /* DECNCRM */
 			case 60: /* DECHCCM */
 			case 61: /* DECVCCM */
 			case 64: /* DECPCCM */
-				vte_decrpm(currcons, tty, priv, par[0], 4);
+				vte_decrpm(vc, tty, priv, par[0], 4);
 				break;
 			case 66: /* DECNKM */
-				vte_decrpm(currcons, tty, priv, par[0], decnkm);
+				vte_decrpm(vc, tty, priv, par[0], decnkm);
 				break;
 			case 67: /* DECBKM */
 			case 68: /* DECKBUM */
 			case 69: /* DECVSSM */
 			case 73: /* DECXRLM */
 			case 81: /* DECKPM */
-				vte_decrpm(currcons, tty, priv, par[0], 4);
+				vte_decrpm(vc, tty, priv, par[0], 4);
 				break;
 			default:
-				vte_decrpm(currcons, tty, priv, par[0], 2);
+				vte_decrpm(vc, tty, priv, par[0], 2);
 		}
 	} else {
 		switch (par[0]) {
 			case 1:	/* GATM */
-				vte_decrpm(currcons, tty, priv, par[0], 4);
+				vte_decrpm(vc, tty, priv, par[0], 4);
 				break;
 			case 2: /* KAM */
-				vte_decrpm(currcons, tty, priv, par[0], kam);
+				vte_decrpm(vc, tty, priv, par[0], kam);
 				break;
 			case 3: /* CRM */
-				vte_decrpm(currcons, tty, priv, par[0], 4);
+				vte_decrpm(vc, tty, priv, par[0], 4);
 				break;
 			case 4: /* IRM */
-				vte_decrpm(currcons, tty, priv, par[0], irm);
+				vte_decrpm(vc, tty, priv, par[0], irm);
 				break;
 			case 5: /* SRTM */
 			case 6: /* ERM */
@@ -1759,17 +1753,17 @@ static void vte_decrqm(int currcons, struct tty_struct *tty, int priv)
 			case 17: /* SATM */
 			case 18: /* TSM */
 			case 19: /* EBM */
-				vte_decrpm(currcons, tty, priv, par[0], 4);
+				vte_decrpm(vc, tty, priv, par[0], 4);
 				break;
 			case 20: /* LNM */
-				vte_decrpm(currcons, tty, priv, par[0], lnm);
+				vte_decrpm(vc, tty, priv, par[0], lnm);
 				break;
 			case 21: /* GRCM */
 			case 22: /* ZDM */
-				vte_decrpm(currcons, tty, priv, par[0], 4);
+				vte_decrpm(vc, tty, priv, par[0], 4);
 				break;
 			default:
-				vte_decrpm(currcons, tty, priv, par[0], 2);
+				vte_decrpm(vc, tty, priv, par[0], 2);
 		}
 	}
 }
@@ -1777,7 +1771,7 @@ static void vte_decrqm(int currcons, struct tty_struct *tty, int priv)
 /*
  * DECSCL - Set operating level
  */
-static void vte_decscl(int currcons)
+static void vte_decscl(struct vc_data *vc)
 {
 	switch (par[0]) {
 		case 61:	/* VT100 mode */
@@ -1804,7 +1798,7 @@ static void vte_decscl(int currcons)
 /*
  * DECTABSR - Tabulation stop report
  */
-void vte_dectabsr(int currcons, struct tty_struct *tty)
+void vte_dectabsr(struct vc_data *vc, struct tty_struct *tty)
 {
 	/* not yet implemented */
 }
@@ -1812,36 +1806,36 @@ void vte_dectabsr(int currcons, struct tty_struct *tty)
 /*
  * DECTSR - Terminal state report
  */
-void vte_dectsr(int currcons, struct tty_struct *tty)
+void vte_dectsr(struct vc_data *vc, struct tty_struct *tty)
 {
 	/* not yet implemented */
 }
 #endif /* def CONFIG_VT_EXTENDED */
 					
 
-static void setterm_command(int currcons)
+static void setterm_command(struct vc_data *vc)
 {
 	switch(par[0]) {
 		case 1:	/* set color for underline mode */
 			if (can_do_color && par[1] < 16) {
 				ulcolor = color_table[par[1]];
 				if (underline)
-					update_attr(currcons);
+					update_attr(vc);
 			}
 			break;
 		case 2:	/* set color for half intensity mode */
 			if (can_do_color && par[1] < 16) {
 				halfcolor = color_table[par[1]];
 				if (intensity == 0)
-					update_attr(currcons);
+					update_attr(vc);
 			}
 			break;
 		case 8:	/* store colors as defaults */
 			def_color = attr;
 			if (hi_font_mask == 0x100)
 				def_color >>= 1;
-			default_attr(currcons);
-			update_attr(currcons);
+			default_attr(vc);
+			update_attr(vc);
 			break;
 		case 9:	/* set blanking interval */
 			blankinterval = ((par[1] < 60) ? par[1] : 60) * 60 * HZ;
@@ -1876,49 +1870,49 @@ static void setterm_command(int currcons)
 /*
  * ICH - INSERT CHARACTER [VT220]
  */
-static void vte_ich(int currcons, unsigned int nr)
+static void vte_ich(struct vc_data *vc, unsigned int nr)
 {
 	if (nr > video_num_columns - x)
 		nr = video_num_columns - x;
 	else if (!nr)
 		nr = 1;
-	insert_char(currcons, nr);
+	insert_char(vc, nr);
 }
 
 /*
  * IL - INSERT LINE
  */
-static void vte_il(int currcons, unsigned int nr)
+static void vte_il(struct vc_data *vc, unsigned int nr)
 {
 	if (nr > video_num_lines - y)
 		nr = video_num_lines - y;
 	else if (!nr)
 		nr = 1;
-	insert_line(currcons, nr);
+	insert_line(vc, nr);
 }
 
 /*
  * DCH - DELETE CHARACTER
  */
-static void vte_dch(int currcons, unsigned int nr)
+static void vte_dch(struct vc_data *vc, unsigned int nr)
 {
 	if (nr > video_num_columns - x)
 		nr = video_num_columns - x;
 	else if (!nr)
 		nr = 1;
-	delete_char(currcons, nr);
+	delete_char(vc, nr);
 }
 
 /*
  * DL - DELETE LINE
  */
-static void vte_dl(int currcons, unsigned int nr)
+static void vte_dl(struct vc_data *vc, unsigned int nr)
 {
 	if (nr > video_num_lines - y)
 		nr = video_num_lines - y;
 	else if (!nr)
 		nr=1;
-	delete_line(currcons, nr);
+	delete_line(vc, nr);
 }
 
 /*
@@ -1932,7 +1926,7 @@ static void vte_dl(int currcons, unsigned int nr)
  *  - state of origin mode
  *  - state of selective erase (not implemented)
  */
-static void vte_decsc(int currcons)
+static void vte_decsc(struct vc_data *vc)
 {
 	saved_x		= x;
 	saved_y		= y;
@@ -1953,9 +1947,9 @@ static void vte_decsc(int currcons)
 /*
  * DECRC - RESTORE CURSOR
  */
-static void vte_decrc(int currcons)
+static void vte_decrc(struct vc_data *vc)
 {
-	gotoxy(currcons,saved_x,saved_y);
+	gotoxy(vc, saved_x, saved_y);
 	intensity	= s_intensity;
 	underline	= s_underline;
 	blink		= s_blink;
@@ -1968,8 +1962,8 @@ static void vte_decrc(int currcons)
 	G2_charset	= saved_G2;
 	G3_charset	= saved_G3;
 #endif /* ndef CONFIG_VT_EXTENDED */
-	translate	= set_translate(charset ? G1_charset : G0_charset,currcons);
-	update_attr(currcons);
+	translate	= set_translate(charset ? G1_charset : G0_charset, cons_num);
+	update_attr(vc);
 	need_wrap = 0;
 }
 
@@ -1988,7 +1982,7 @@ static void vte_decrc(int currcons)
  *    (not implemented)
  *  - all character sets are set to default (not implemented)
  */
-static void vte_ris(int currcons, int do_clear)
+static void vte_ris(struct vc_data *vc, int do_clear)
 {
 	top		= 0;
 	bottom		= video_num_lines;
@@ -1997,7 +1991,7 @@ static void vte_ris(int currcons, int do_clear)
 	priv2		= 0;
 	priv3		= 0;
 	priv4		= 0;
-	translate	= set_translate(LAT1_MAP,currcons);
+	translate	= set_translate(LAT1_MAP, cons_num);
 	G0_charset	= LAT1_MAP;
 	G1_charset	= GRAF_MAP;
 	charset		= 0;
@@ -2029,17 +2023,17 @@ static void vte_ris(int currcons, int do_clear)
 	clr_kbd(VC_CKMODE);
 	clr_kbd(VC_APPLIC);
 	clr_kbd(VC_CRLF);
-	kbd_table[currcons].lockstate = 0;
-	kbd_table[currcons].slockstate = 0;
-	kbd_table[currcons].ledmode = LED_SHOW_FLAGS;
-	kbd_table[currcons].ledflagstate = kbd_table[currcons].default_ledflagstate;
+	kbd_table[cons_num].lockstate = 0;
+	kbd_table[cons_num].slockstate = 0;
+	kbd_table[cons_num].ledmode = LED_SHOW_FLAGS;
+	kbd_table[cons_num].ledflagstate = kbd_table[cons_num].default_ledflagstate;
 	set_leds();
 
 	cursor_type = CUR_DEFAULT;
 	complement_mask = s_complement_mask;
 
-	default_attr(currcons);
-	update_attr(currcons);
+	default_attr(vc);
+	update_attr(vc);
 
 	tab_stop[0]	= 0x01010100;
 	tab_stop[1]	=
@@ -2050,10 +2044,10 @@ static void vte_ris(int currcons, int do_clear)
 	bell_pitch = DEFAULT_BELL_PITCH;
 	bell_duration = DEFAULT_BELL_DURATION;
 
-	gotoxy(currcons,0,0);
-	vte_decsc(currcons);
+	gotoxy(vc, 0, 0);
+	vte_decsc(vc);
 	if (do_clear)
-	    vte_ed(currcons,2);
+	    vte_ed(vc, 2);
 }
 
 /*
@@ -2070,7 +2064,7 @@ static void vte_ris(int currcons, int do_clear)
  * Parameter 2 may only be interpreted, when we implement a tabulation stop map
  * per display line.
  */
-static void vte_tbc(int currcons, int vpar)
+static void vte_tbc(struct vc_data *vc, int vpar)
 {
 
 	switch (vpar) {
@@ -2102,7 +2096,7 @@ static void vte_tbc(int currcons, int vpar)
 }
 
 
-static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
+static void do_con_trol(struct tty_struct *tty, struct vc_data *vc, int c)
 {
 	/*
 	 * C0 CONTROL CHARACTERS
@@ -2127,7 +2121,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			kd_mksound(bell_pitch, bell_duration);
 		return;
 	case 0x08:	/* BS - Back space */
-		vte_bs(currcons);
+		vte_bs(vc);
 		return;
 	case 0x09:	/* HT - Character tabulation */
 		pos -= (x << 1);
@@ -2149,20 +2143,20 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 		/*
 		 * DEC VT series processes FF as LF.
 		 */
-		vte_lf(currcons);
+		vte_lf(vc);
 		if (!is_kbd(VC_CRLF))
 			return;
 	case 0x0d:	/* CR - Carriage return */
-		vte_cr(currcons);
+		vte_cr(vc);
 		return;
 	case 0x0e:	/* SO - Shift out / LS1 - Locking shift 1 */
 		charset = 1;
-		translate = set_translate(G1_charset,currcons);
+		translate = set_translate(G1_charset, cons_num);
 		disp_ctrl = 1;
 		return;
 	case 0x0f:	/* SI - Shift in / LS0 - Locking shift 0 */
 		charset = 0;
-		translate = set_translate(G0_charset,currcons);
+		translate = set_translate(G0_charset, cons_num);
 		disp_ctrl = 0;
 		return;
 	case 0x10:	/* DLE - */
@@ -2211,12 +2205,12 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			return;
 		case 0x84:	/* IND - Line feed (DEC only) */
 #ifndef VTE_STRICT_ISO
-			vte_lf(currcons);
+			vte_lf(vc);
 #endif /* ndef VTE_STRICT_ISO */
 			return;
 		case 0x85:	/* NEL - Next line */
-			vte_lf(currcons);
-			vte_cr(currcons);
+			vte_lf(vc);
+			vte_cr(vc);
 			return;
 		case 0x86:	/* SSA - Start of selected area */
 		case 0x87:	/* ESA - End of selected area */
@@ -2230,7 +2224,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 		case 0x8c:	/* PLU - Partial line up */
 			return;
 		case 0x8d:	/* RI - Reverse line feed */
-			vte_ri(currcons);
+			vte_ri(vc);
 			return;
 #if 0
 		case 0x8e:	/* SS2 - Single shift 2 */
@@ -2256,7 +2250,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			return;
 		case 0x9a:	/* SCI - Single character introducer */
 #ifndef VTE_STRICT_ISO
-			vte_da(currcons, tty);
+			vte_da(vc, tty);
 #endif /* ndef VTE_STRICT_ISO */
 			return;
 		case 0x9b:	/* CSI - Control sequence introducer */
@@ -2324,10 +2318,10 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			return;
 #endif /* def CONFIG_VT_EXTENDED */
 		case '7':	/* DECSC - Save cursor */
-			vte_decsc(currcons);
+			vte_decsc(vc);
 			return;
 		case '8':	/* DECRC - Restore cursor */
-			vte_decrc(currcons);
+			vte_decrc(vc);
 			return;
 #ifdef CONFIG_VT_EXTENDED
 		case '9':	/* DECFI - Forward index */
@@ -2350,12 +2344,12 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 		case 'C': /* NBH - No break here */
 		case 'D': /* IND - Line feed (DEC only) */
 #ifndef VTE_STRICT_ISO
-			vte_lf(currcons);
+			vte_lf(vc);
 #endif /* ndef VTE_STRICT_ISO */
 			return;
 		case 'E': /* NEL - Next line */
-			vte_cr(currcons);
-			vte_lf(currcons);
+			vte_cr(vc);
+			vte_lf(vc);
 			return;
 		case 'F': /* SSA - Start of selected area */
 		case 'G': /* ESA - End of selected area */
@@ -2369,7 +2363,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 		case 'L': /* PLU - Partial line up */
 			return;
 		case 'M': /* RI - Reverse line feed */
-			vte_ri(currcons);
+			vte_ri(vc);
 			return;
 #ifdef CONFIG_VT_EXTENDED
 		case 'N': /* SS2 - Single shift 2 */
@@ -2395,7 +2389,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			return;
 		case 'Z': /* SCI - Single character introducer */
 #ifndef VTE_STRICT_ISO
-			vte_da(currcons, tty);
+			vte_da(vc, tty);
 #endif /* ndef VTE_STRICT_ISO */
 			return;
 		case '[':	/* CSI - Control sequence introducer */
@@ -2422,7 +2416,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			return;
 #endif /* def CONFIG_VT_EXTENDED */
 		case 'c':	/* RIS - Reset ti initial state */
-			vte_ris(currcons,1);
+			vte_ris(vc, 1);
 			return;
 #ifdef CONFIG_VT_EXTENDED
 		case 'd':	/* CMD - Coding Method Delimiter */
@@ -2477,7 +2471,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
                         vc_state = ESpalette;
                         return;
                 case 'R':       /* reset palette */
-                        reset_palette(currcons);
+                        reset_palette(vc);
                         vc_state = ESinit;
                         return;
                 }
@@ -2493,7 +2487,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 				palette[i++] += par[j++];
 				palette[i] = 16*par[j++];
 				palette[i] += par[j];
-				set_palette(currcons);
+				set_palette(vc);
 				vc_state = ESinit;
 			}
 		} else
@@ -2528,7 +2522,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			par[npar] *= 10;
 			par[npar] += c-'0';
 			return;
-		} else vc_state=EScsi_gotpars;
+		} else vc_state = EScsi_gotpars;
 	case EScsi_gotpars:
 		vc_state = ESinit;
 		/*
@@ -2556,21 +2550,21 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			break;
 #endif /* def CONFIG_VT_EXTENDED */
 		case 'h':	/* SM - Set Mode */
-			set_mode(currcons,1);
+			set_mode(vc, 1);
 			return;
 		case 'l':	/* RM - Reset Mode */
-			set_mode(currcons,0);
+			set_mode(vc, 0);
 			return;
 		case 'c':
 			if (priv2) {
 				if (!par[0])
-					vte_dec_da3(currcons, tty);
+					vte_dec_da3(vc, tty);
 				priv2 = 0;
 				return;
 			}
 			if (priv3) {
 				if (!par[0])
-					vte_dec_da2(currcons, tty);
+					vte_dec_da2(vc, tty);
 				priv3 = 0;
 				return;
 			}
@@ -2599,38 +2593,38 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			if (priv4) {
                                 switch (par[0]) {
                                 case 6: /* DECXCPR - Extended CPR */
-                                        vte_cpr(currcons, tty, 1);
+                                        vte_cpr(vc, tty, 1);
                                         break;
                                 case 15:        /* DEC printer status */
-                                        vte_fake_dec_dsr(currcons, tty, "13");
+                                        vte_fake_dec_dsr(vc, tty, "13");
                                         break;
                                 case 25:        /* DEC UDK status */
-                                        vte_fake_dec_dsr(currcons, tty, "21");
+                                        vte_fake_dec_dsr(vc, tty, "21");
                                         break;
                                 case 26:        /* DEC keyboard status */
-                                        vte_fake_dec_dsr(currcons, tty, "27;1;0;1");
+                                        vte_fake_dec_dsr(vc, tty, "27;1;0;1");
                                         break;
 				case 53:	/* DEC locator status */
-					vte_fake_dec_dsr(currcons, tty, "53");
+					vte_fake_dec_dsr(vc, tty, "53");
 					break;
 				case 62:	/* DEC macro space */
-					vte_decmsr(currcons, tty);
+					vte_decmsr(vc, tty);
 					break;
                                 case 75:        /* DEC data integrity */
-                                        vte_fake_dec_dsr(currcons, tty, "70");
+                                        vte_fake_dec_dsr(vc, tty, "70");
                                         break;
 				case 85:	/* DEC multiple session status */
-					vte_fake_dec_dsr(currcons, tty, "83");
+					vte_fake_dec_dsr(vc, tty, "83");
 					break;
                                 }
 			} else 
 #endif /* CONFIG_VT_EXTENDED */
 				switch (par[0]) {
 				case 5:	/* DSR - Device status report */
-					vte_dsr(currcons, tty);
+					vte_dsr(vc, tty);
 					break;
 				case 6:	/* CPR - Cursor position report */
-					vte_cpr(currcons,tty,0);
+					vte_cpr(vc, tty, 0);
 					break;
 				}
 			priv4 = 0;
@@ -2677,72 +2671,72 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			/* ===== Control functions w/o intermediate byte ===== */
 
 		case '@':	/* ICH - Insert character */
-			vte_ich(currcons,par[0]);
+			vte_ich(vc, par[0]);
 			return;
 		case 'A':	/* CUU - Cursor up */
 #ifdef CONFIG_VT_EXTENDED
 		case 'k':	/* VPB - Line position backward */
 #endif /* def CONFIG_VT_EXTENDED */
 			if (!par[0]) par[0]++;
-			gotoxy(currcons,x,y-par[0]);
+			gotoxy(vc, x, y-par[0]);
 			return;
 		case 'B':	/* CUD - Cursor down */
 		case 'e':	/* VPR - Line position forward */
 			if (!par[0]) par[0]++;
-			gotoxy(currcons,x,y+par[0]);
+			gotoxy(vc, x, y+par[0]);
 			return;
 		case 'C':	/* CUF - Cursor right */
 		case 'a':	/* HPR - Character position forward */
 			if (!par[0]) par[0]++;
-			gotoxy(currcons,x+par[0],y);
+			gotoxy(vc, x+par[0], y);
 			return;
 		case 'D':	/* CUB - Cursor left */
 #ifdef CONFIG_VT_EXTENDED
 		case 'j':	/* HPB - Character position backward */
 #endif /* def CONFIG_VT_EXTENDED */
 			if (!par[0]) par[0]++;
-			gotoxy(currcons,x-par[0],y);
+			gotoxy(vc, x-par[0], y);
 			return;
 		case 'E':	/* CNL - Cursor next line */
 			if (!par[0]) par[0]++;
-			gotoxy(currcons,0,y+par[0]);
+			gotoxy(vc, 0, y+par[0]);
 			return;
 		case 'F':	/* CPL - Cursor preceeding line */
 			if (!par[0]) par[0]++;
-			gotoxy(currcons,0,y-par[0]);
+			gotoxy(vc, 0, y-par[0]);
 			return;
 		case 'G':	/* CHA - Cursor character absolute */
 		case '`':	/* HPA - Character position absolute */
 			if (par[0]) par[0]--;
-			gotoxy(currcons,par[0],y);
+			gotoxy(vc, par[0], y);
 			return;
 		case 'H':	/* CUP - Cursor position */
 		case 'f':	/* HVP - Horizontal and vertical position */
 			if (par[0]) par[0]--;
 			if (par[1]) par[1]--;
-			gotoxay(currcons,par[1],par[0]);
+			gotoxay(vc, par[1], par[0]);
 			return;
 #ifdef CONFIG_VT_EXTENDED
                 case 'I':       /* CHT - Cursor forward tabulation */
                         if (!par[0])
                                 par[0]++;
-                        vte_cht(currcons, par[0]);
+                        vte_cht(vc, par[0]);
                         return;
 #endif /* def CONFIG_VT_EXTENDED */
 		case 'J':	/* ED - Erase in page */
-			vte_ed(currcons,par[0]);
+			vte_ed(vc, par[0]);
 			return;
 		case 'K':	/* EL - Erase in line */
-			vte_el(currcons,par[0]);
+			vte_el(vc, par[0]);
 			return;
 		case 'L':	/* IL - Insert line */
-			vte_il(currcons,par[0]);
+			vte_il(vc, par[0]);
 			return;
 		case 'M':	/* DL - Delete line */
-			vte_dl(currcons,par[0]);
+			vte_dl(vc, par[0]);
 			return;
 		case 'P':	/* DCH - Delete character */
-			vte_dch(currcons,par[0]);
+			vte_dch(vc, par[0]);
 			return;
 #ifdef CONFIG_VT_EXTENDED
 		case 'U':	/* NP - Next page */
@@ -2754,45 +2748,45 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 				tab_stop[x >> 5] |= (1 << (x & 31));
 				return;
 			case 2:	/* Clear character tab stop at curr. position */
-				vte_tbc(currcons, 0);
+				vte_tbc(vc, 0);
 				return;
 			case 5:	/* All character tab stops are cleared. */
-				vte_tbc(currcons, 5);
+				vte_tbc(vc, 5);
 				return;
 			}
 			return;
 #endif /* def CONFIG_VT_EXTENDED */
 		case 'X':	/* ECH - Erase character */
-			vte_ech(currcons, par[0]);
+			vte_ech(vc, par[0]);
 			return;
 #ifdef CONFIG_VT_EXTENDED
 		case 'Y':	/* CVT - Cursor line tabulation */
 			if (!par[0])
 				par[0]++;
-			vte_cvt(currcons, par[0]);
+			vte_cvt(vc, par[0]);
 			return;
 		case 'Z':	/* CBT - Cursor backward tabulation */
-			vte_cbt(currcons, par[0]);
+			vte_cbt(vc, par[0]);
 			return;
 #endif /* def CONFIG_VT_EXTENDED */
 		case ']':
 #ifndef VT_STRICT_ISO
-			setterm_command(currcons);
+			setterm_command(vc);
 #endif /* def VT_STRICT_ISO */
 			return;
 		case 'c':	/* DA - Device attribute */
 			if (!par[0])
-				vte_da(currcons, tty);
+				vte_da(vc, tty);
 			return;
 		case 'd':	/* VPA - Line position absolute */
 			if (par[0]) par[0]--;
-			gotoxay(currcons,x,par[0]);
+			gotoxay(vc, x, par[0]);
 			return;
 		case 'g':	/* TBC - Tabulation clear */
-			vte_tbc(currcons, par[0]);
+			vte_tbc(vc, par[0]);
 			return;
 		case 'm':	/* SGR - Select graphics rendition */
-			vte_sgr(currcons);
+			vte_sgr(vc);
 			return;
 
 			/* ===== Private control sequences ===== */
@@ -2803,7 +2797,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			case 1: /* LED 1 on */
 			case 2: /* LED 2 on */
 			case 3: /* LED 3 on */
-				setledstate(kbd_table + currcons,
+				setledstate(kbd_table + cons_num,
 					    (par[0] < 3) ? par[0] : 4);
 			case 4: /* LED 4 on */
 			}
@@ -2818,15 +2812,15 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			    par[1] <= video_num_lines) {
 				top=par[0]-1;
 				bottom=par[1];
-				gotoxay(currcons,0,0);
+				gotoxay(vc, 0, 0);
 			}
 			return;
 #ifndef CONFIG_VT_EXTENDED
 		case 's':	/* DECSC - Save cursor */
-			vte_decsc(currcons);
+			vte_decsc(vc);
 			return;
 		case 'u':	/* DECRC - Restore cursor */
-			vte_decrc(currcons);
+			vte_decrc(vc);
 			return;
 #else
 		case 's':	/* DECSLRM - Set left and right margin */
@@ -2834,7 +2828,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 		case 't':	/* DECSLPP - Set lines per page */
 			return;
 		case 'x':	/* DECREQTPARM - Request terminal parameters */
-			vte_decreptparm(currcons, tty);
+			vte_decreptparm(vc, tty);
 			return;
 		case 'y':
 			if (par[0] == 4) {
@@ -2871,7 +2865,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 				 * between RIS and DECSTR. Right now we ignore
 				 * this... -dbk
 				 */
-				vte_ris(currcons,1);
+				vte_ris(vc, 1);
 				return;
 		}
 		return;
@@ -2879,7 +2873,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 		vc_state = ESinit;
 		switch (c) {
 			case 'p':	/* DECSCL - Set operating level */
-				vte_decscl(currcons);
+				vte_decscl(vc);
 				return;
 			case 'q':	/* DECSCA - Select character protection attribute */
 				return;
@@ -2890,7 +2884,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 		vc_state = ESinit;
 		switch (c) {
 			case 'p':	/* DECRQM - Request mode */
-				vte_decrqm(currcons, tty, priv4);
+				vte_decrqm(vc, tty, priv4);
 				return;
 			case 'r':	/* DECCARA - Change attributes in rectangular area */
 				return;
@@ -2898,17 +2892,17 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 				return;
 			case 'u':	/* DECRQTSR - Request terminal state */
 				if (par[0] == 1)
-					vte_dectsr(currcons, tty);
+					vte_dectsr(vc, tty);
 				return;
 			case 'v':	/* DECCRA - Copy rectangular area */
 				return;
 			case 'w':	/* DECRQPSR - Request presentation status */
 				switch (par[0]) {
 					case 1:
-						vte_deccir(currcons, tty);
+						vte_deccir(vc, tty);
 						break;
 					case 2:
-						vte_dectabsr(currcons, tty);
+						vte_dectabsr(vc, tty);
 						break;
 				}
 				return;
@@ -2998,10 +2992,10 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			/* DEC screen alignment test. kludge :-) */
 			video_erase_char =
 				(video_erase_char & 0xff00) | 'E';
-			vte_ed(currcons, 2);
+			vte_ed(vc, 2);
 			video_erase_char =
 				(video_erase_char & 0xff00) | ' ';
-			do_update_region(currcons, origin, screenbuf_size/2);
+			do_update_region(vc, origin, screenbuf_size/2);
 		}
 		return;
 	case ESgzd4:
@@ -3028,7 +3022,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			break;
 		}
 		if (charset == 0)
-			translate = set_translate(G0_charset,currcons);
+			translate = set_translate(G0_charset, cons_num);
 		vc_state = ESinit;
 		return;
 	case ESg1d4:
@@ -3055,7 +3049,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			break;
 		}
 		if (charset == 1)
-			translate = set_translate(G1_charset,currcons);
+			translate = set_translate(G1_charset, cons_num);
 		vc_state = ESinit;
 		return;
 #ifdef CONFIG_VT_EXTENDED
@@ -3083,7 +3077,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			break;
 		}
 		if (charset == 1)
-			translate = set_translate(G2_charset,currcons);
+			translate = set_translate(G2_charset, cons_num);
 		vc_state = ESinit;
 		return;
 	case ESg3d4:
@@ -3110,7 +3104,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			break;
 		}
 		if (charset == 1)
-			translate = set_translate(G3_charset,currcons);
+			translate = set_translate(G3_charset, cons_num);
 		vc_state = ESinit;
 		return;
 #endif /* CONFIG_VT_EXTENDED */
@@ -3139,7 +3133,7 @@ static int do_con_write(struct tty_struct * tty, int from_user,
 #define FLUSH do { } while(0);
 #else
 #define FLUSH if (draw_x >= 0) { \
-	sw->con_putcs(vc_cons[currcons].d, (u16 *)draw_from, (u16 *)draw_to-(u16 *)draw_from, y, draw_x); \
+	sw->con_putcs(vc, (u16 *)draw_from, (u16 *)draw_to-(u16 *)draw_from, y, draw_x); \
 	draw_x = -1; \
 	}
 #endif
@@ -3148,6 +3142,7 @@ static int do_con_write(struct tty_struct * tty, int from_user,
 	unsigned int currcons;
 	unsigned long draw_from = 0, draw_to = 0;
 	struct vt_struct *vt = (struct vt_struct *)tty->driver_data;
+	struct vc_data *vc = vc_cons[vt->vc_num].d;
 	u16 himask, charmask;
 	const unsigned char *orig_buf = NULL;
 	int orig_count;
@@ -3194,7 +3189,7 @@ again:
 
 	/* undraw cursor first */
 	if (IS_FG)
-		hide_cursor(currcons);
+		hide_cursor(vc);
 
 	while (!tty->stopped && count) {
 		c = *buf;
@@ -3258,11 +3253,11 @@ again:
 
 		if (vc_state == ESinit && ok) {
 			/* Now try to find out how to display it */
-			tc = conv_uni_to_pc(vc_cons[currcons].d, tc);
+			tc = conv_uni_to_pc(vc, tc);
 			if ( tc == -4 ) {
                                 /* If we got -4 (not found) then see if we have
                                    defined a replacement character (U+FFFD) */
-                                tc = conv_uni_to_pc(vc_cons[currcons].d, 0xfffd);
+                                tc = conv_uni_to_pc(vc, 0xfffd);
 
 				/* One reason for the -4 can be that we just
 				   did a clear_unimap();
@@ -3279,11 +3274,11 @@ again:
 			if (need_wrap || irm)
 				FLUSH
 			if (need_wrap) {
-				vte_cr(currcons);
-				vte_lf(currcons);
+				vte_cr(vc);
+				vte_lf(vc);
 			}
 			if (irm)
-				insert_char(currcons, 1);
+				insert_char(vc, 1);
 			scr_writew(himask ?
 				     ((attr << 8) & ~himask) + ((tc & 0x100) ? himask : 0) + (tc & 0xff) :
 				     (attr << 8) + tc,
@@ -3302,7 +3297,7 @@ again:
 			continue;
 		}
 		FLUSH
-		do_con_trol(tty, currcons, c);
+		do_con_trol(tty, vc, c);
 	}
 	FLUSH
 	spin_unlock_irq(&console_lock);
@@ -3349,7 +3344,7 @@ static void console_softint(unsigned long ignored)
 
 	if (want_console >= 0) {
 		if (want_console != fg_console && vc_cons_allocated(want_console)) {
-			hide_cursor(fg_console);
+			hide_cursor(vc_cons[fg_console].d);
 			change_console(want_console);
 			/* we only changed when the console had already
 			   been allocated - a new console is not created
@@ -3362,10 +3357,12 @@ static void console_softint(unsigned long ignored)
 		poke_blanked_console();
 	}
 	if (scrollback_delta) {
-		int currcons = fg_console;
+		struct vc_data *vc = vc_cons[fg_console].d;
+		int currcons = fg_console;		
+
 		clear_selection();
 		if (vcmode == KD_TEXT)
-			sw->con_scrolldelta(vc_cons[currcons].d, scrollback_delta);
+			sw->con_scrolldelta(vc, scrollback_delta);
 		scrollback_delta = 0;
 	}
 
@@ -3437,6 +3434,7 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
  */
 static int con_open(struct tty_struct *tty, struct file * filp)
 {
+	struct vc_data *vc;
 	unsigned int	currcons;
 	int i;
 
@@ -3448,6 +3446,7 @@ static int con_open(struct tty_struct *tty, struct file * filp)
 
 	vt_cons[currcons]->vc_num = currcons;
 	tty->driver_data = vt_cons[currcons];
+	vc = vc_cons[currcons].d;	
 
 	if (!tty->winsize.ws_row && !tty->winsize.ws_col) {
 		tty->winsize.ws_row = video_num_lines;
@@ -3495,11 +3494,12 @@ static int con_write_room(struct tty_struct *tty)
 static void con_flush_chars(struct tty_struct *tty)
 {
 	struct vt_struct *vt = (struct vt_struct *)tty->driver_data;
+	struct vc_data *vc = vc_cons[vt->vc_num].d;
 	unsigned long flags;
 
 	pm_access(pm_con);
 	spin_lock_irqsave(&console_lock, flags);
-	set_cursor(vt->vc_num);
+	set_cursor(vc); 
 	spin_unlock_irqrestore(&console_lock, flags);
 }
 
@@ -3565,6 +3565,7 @@ static void con_unthrottle(struct tty_struct *tty)
 void vt_console_print(struct console *co, const char * b, unsigned count)
 {
 	int currcons = fg_console;
+	struct vc_data *vc = NULL;
 	unsigned char c;
 	static unsigned long printing = 0;
 	const ushort *start;
@@ -3579,7 +3580,7 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
 
 	if (kmsg_redirect && vc_cons_allocated(kmsg_redirect - 1))
 		currcons = kmsg_redirect - 1;
-
+	
 	/* read `x' only after setting currecons properly (otherwise
 	   the `x' macro will read the x of the foreground console). */
 	myx = x;
@@ -3589,13 +3590,14 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
 		/* printk("vt_console_print: tty %d not allocated ??\n", currcons+1); */
 		goto quit;
 	}
+	vc = vc_cons[currcons].d;
 
 	if (vcmode != KD_TEXT)
 		goto quit;
 
 	/* undraw cursor first */
 	if (IS_FG)
-		hide_cursor(currcons);
+		hide_cursor(vc);
 
 	start = (ushort *)pos;
 
@@ -3606,21 +3608,21 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
 		if (c == 10 || c == 13 || c == 8 || need_wrap) {
 			if (cnt > 0) {
 				if (IS_VISIBLE)
-					sw->con_putcs(vc_cons[currcons].d, start, cnt, y, x);
+					sw->con_putcs(vc, start, cnt, y, x);
 				x += cnt;
 				if (need_wrap)
 					x--;
 				cnt = 0;
 			}
 			if (c == 8) {		/* backspace */
-				vte_bs(currcons);
+				vte_bs(vc);
 				start = (ushort *)pos;
 				myx = x;
 				continue;
 			}
 			if (c != 13)
-				vte_lf(currcons);
-			vte_cr(currcons);
+				vte_lf(vc);
+			vte_cr(vc);
 			start = (ushort *)pos;
 			myx = x;
 			if (c == 10 || c == 13)
@@ -3637,14 +3639,14 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
 	}
 	if (cnt > 0) {
 		if (IS_VISIBLE)
-			sw->con_putcs(vc_cons[currcons].d, start, cnt, y, x);
+			sw->con_putcs(vc, start, cnt, y, x);
 		x += cnt;
 		if (x == video_num_columns) {
 			x--;
 			need_wrap = 1;
 		}
 	}
-	set_cursor(currcons);
+	set_cursor(vc);
 	poke_blanked_console();
 
 quit:
@@ -3685,6 +3687,7 @@ DECLARE_TASKLET_DISABLED(console_tasklet, console_softint, 0);
 void __init vt_console_init(void)
 {
 	const char *display_desc = NULL;
+	struct vc_data *vc;
 	unsigned int currcons = 0;
 
 	if (conswitchp)
@@ -3741,22 +3744,23 @@ void __init vt_console_init(void)
 	 * kmalloc is not running yet - we use the bootmem allocator.
 	 */
 	for (currcons = 0; currcons < MIN_NR_CONSOLES; currcons++) {
-		vc_cons[currcons].d = (struct vc_data *)
-				alloc_bootmem(sizeof(struct vc_data));
+		vc = vc_cons[currcons].d = (struct vc_data *)
+					alloc_bootmem(sizeof(struct vc_data));
 		vt_cons[currcons] = (struct vt_struct *)
 				alloc_bootmem(sizeof(struct vt_struct));
 		visual_init(currcons, 1);
 		screenbuf = (unsigned short *) alloc_bootmem(screenbuf_size);
 		kmalloced = 0;
-		vc_init(currcons, video_num_lines, video_num_columns, 
+		vc_init(vc, video_num_lines, video_num_columns, 
 			currcons || !sw->con_save_screen);
+		
 	}
 	currcons = fg_console = 0;
 	master_display_fg = vc_cons[currcons].d;
-	set_origin(currcons);
-	save_screen(currcons);
-	gotoxy(currcons,x,y);
-	vte_ed(currcons, 0);
+	set_origin(vc_cons[currcons].d);
+	save_screen(vc_cons[currcons].d);
+	gotoxy(vc_cons[currcons].d, x, y);
+	vte_ed(vc_cons[currcons].d, 0);
 	update_screen(fg_console);
 	printk("Console: %s %s %dx%d",
 		can_do_color ? "colour" : "mono",
@@ -3773,7 +3777,7 @@ void __init vt_console_init(void)
 
 #ifndef VT_SINGLE_DRIVER
 
-static void clear_buffer_attributes(int currcons)
+static void clear_buffer_attributes(struct vc_data *vc)
 {
 	unsigned short *p = (unsigned short *) origin;
 	int count = screenbuf_size/2;
@@ -3801,28 +3805,28 @@ void take_over_console(struct consw *csw, int first, int last, int deflt)
 		conswitchp = csw;
 
 	for (i = first; i <= last; i++) {
+		struct vc_data *vc = vc_cons[i].d;
 		int old_was_color;
-		int currcons = i;
 
 		con_driver_map[i] = csw;
-
-		if (!vc_cons[i].d || !vc_cons[i].d->vc_sw)
+		
+		if (!vc || !sw)
 			continue;
 
 		j = i;
 		if (IS_VISIBLE)
-			save_screen(i);
-		old_was_color = vc_cons[i].d->vc_can_do_color;
-		vc_cons[i].d->vc_sw->con_deinit(vc_cons[i].d);
+			save_screen(vc);
+		old_was_color = can_do_color;
+		sw->con_deinit(vc);
 		visual_init(i, 0);
-		update_attr(i);
+		update_attr(vc);
 
 		/* If the console changed between mono <-> color, then
 		 * the attributes in the screenbuf will be wrong.  The
 		 * following resets all attributes to something sane.
 		 */
-		if (old_was_color != vc_cons[i].d->vc_can_do_color)
-			clear_buffer_attributes(i);
+		if (old_was_color != can_do_color)
+			clear_buffer_attributes(vc);
 
 		if (IS_VISIBLE)
 			update_screen(i);
@@ -3883,6 +3887,7 @@ int con_font_op(int currcons, struct console_font_op *op)
 	int size = max_font_size, set;
 	u8 *temp = NULL;
 	struct console_font_op old_op;
+	struct vc_data *vc = vc_cons[currcons].d;
 
 	if (vt_cons[currcons]->vc_mode != KD_TEXT)
 		goto quit;
@@ -3971,7 +3976,9 @@ quit:	if (temp)
 /* used by selection */
 u16 screen_glyph(int currcons, int offset)
 {
-	u16 w = scr_readw(screenpos(currcons, offset, 1));
+	struct vc_data *vc = vc_cons[currcons].d;
+
+	u16 w = scr_readw(screenpos(vc, offset, 1));
 	u16 c = w & 0xff;
 
 	if (w & hi_font_mask)
@@ -3982,23 +3989,29 @@ u16 screen_glyph(int currcons, int offset)
 /* used by vcs - note the word offset */
 unsigned short *screen_pos(int currcons, int w_offset, int viewed)
 {
-	return screenpos(currcons, 2 * w_offset, viewed);
+	return screenpos(vc_cons[currcons].d, 2 * w_offset, viewed);
 }
 
 void getconsxy(int currcons, char *p)
 {
+	struct vc_data *vc = vc_cons[currcons].d;
+
 	p[0] = x;
 	p[1] = y;
 }
 
 void putconsxy(int currcons, char *p)
 {
-	gotoxy(currcons, p[0], p[1]);
-	set_cursor(currcons);
+	struct vc_data *vc = vc_cons[currcons].d;
+
+	gotoxy(vc, p[0], p[1]);
+	set_cursor(vc);
 }
 
 u16 vcs_scr_readw(int currcons, const u16 *org)
 {
+	struct vc_data *vc = vc_cons[currcons].d;
+
 	if ((unsigned long)org == pos && softcursor_original != -1)
 		return softcursor_original;
 	return scr_readw(org);
@@ -4006,10 +4019,12 @@ u16 vcs_scr_readw(int currcons, const u16 *org)
 
 void vcs_scr_writew(int currcons, u16 val, u16 *org)
 {
+	struct vc_data *vc = vc_cons[currcons].d;
+
 	scr_writew(val, org);
 	if ((unsigned long)org == pos) {
 		softcursor_original = -1;
-		add_softcursor(currcons);
+		add_softcursor(vc);
 	}
 }
 
