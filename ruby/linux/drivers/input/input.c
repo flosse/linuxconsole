@@ -331,11 +331,13 @@ static struct input_device_id *input_match_device(struct input_device_id *id, st
  *
  */
 
-#define SPRINTF_BIT(bit, name, max) \
+#define SPRINTF_BIT_A(bit, name, max) \
 	do { \
 		envp[i++] = scratch; \
 		scratch += sprintf(scratch, name); \
-		for (j = 0; j < NBITS(max); j++) \
+		for (j = NBITS(max) - 1; j >= 0; j--) \
+			if (dev->bit[j]) break; \
+		for (; j >= 0; j--) \
 			scratch += sprintf(scratch, "%lx ", dev->bit[j]); \
 		scratch++; \
 	} while (0)
@@ -387,21 +389,21 @@ static void input_call_hotplug(char *verb, struct input_dev *dev)
 	scratch += sprintf(scratch, "PRODUCT=%x/%x/%x/%x",
 		dev->idbus, dev->idvendor, dev->idproduct, dev->idversion) + 1; 
 
-	SPRINTF_BIT(evbit, "EV=", EV_MAX);
+	SPRINTF_BIT_A(evbit, "EV=", EV_MAX);
 	if (test_bit(EV_KEY, dev->evbit))
-		SPRINTF_BIT(keybit, "KEY=", KEY_MAX);
+		SPRINTF_BIT_A(keybit, "KEY=", KEY_MAX);
 	if (test_bit(EV_REL, dev->evbit))
-		SPRINTF_BIT(relbit, "REL=", REL_MAX);
-	if (test_bit(EV_KEY, dev->absbit))
-		SPRINTF_BIT(absbit, "ABS=", ABS_MAX);
+		SPRINTF_BIT_A(relbit, "REL=", REL_MAX);
+	if (test_bit(EV_ABS, dev->evbit))
+		SPRINTF_BIT_A(absbit, "ABS=", ABS_MAX);
 	if (test_bit(EV_MSC, dev->evbit))
-		SPRINTF_BIT(mscbit, "MSC=", MSC_MAX);
+		SPRINTF_BIT_A(mscbit, "MSC=", MSC_MAX);
 	if (test_bit(EV_LED, dev->evbit))
-		SPRINTF_BIT(ledbit, "LED=", LED_MAX);
+		SPRINTF_BIT_A(ledbit, "LED=", LED_MAX);
 	if (test_bit(EV_SND, dev->evbit))
-		SPRINTF_BIT(sndbit, "SND=", SND_MAX);
+		SPRINTF_BIT_A(sndbit, "SND=", SND_MAX);
 	if (test_bit(EV_FF,  dev->evbit))
-		SPRINTF_BIT(ffbit,  "FF=",  FF_MAX);
+		SPRINTF_BIT_A(ffbit,  "FF=",  FF_MAX);
 
 	envp[i++] = 0;
 
@@ -639,13 +641,23 @@ void input_unregister_minor(devfs_handle_t handle)
  * ProcFS interface for the input drivers.
  */
 
+#define SPRINTF_BIT_B(bit, name, max) \
+	do { \
+		len += sprintf(buf + len, "B: %s", name); \
+		for (i = NBITS(max) - 1; i >= 0; i--) \
+			if (dev->bit[i]) break; \
+		for (; i >= 0; i--) \
+			len += sprintf(buf + len, "%lx ", dev->bit[i]); \
+		len += sprintf(buf + len, "\n"); \
+	} while (0)
+
 static int input_devices_info(char *buf, char **start, off_t pos, int count)
 {
 	struct input_dev *dev = input_dev;
 	struct input_handle *handle;
 
 	off_t at = 0;
-	int len, cnt = 0;
+	int i, len, cnt = 0;
 
 	while (dev) {
 
@@ -655,7 +667,7 @@ static int input_devices_info(char *buf, char **start, off_t pos, int count)
 		len += sprintf(buf + len, "N: Number=%d Name=\"%s\"\n",
 			dev->number, dev->name);
 
-		len += sprintf(buf + len, "D:");
+		len += sprintf(buf + len, "D: Drivers=");
 
 		handle = dev->handle;
 
@@ -665,6 +677,23 @@ static int input_devices_info(char *buf, char **start, off_t pos, int count)
 		}
 
 		len += sprintf(buf + len, "\n");
+
+		SPRINTF_BIT_B(evbit, "EV=", EV_MAX);
+		if (test_bit(EV_KEY, dev->evbit))
+			SPRINTF_BIT_B(keybit, "KEY=", KEY_MAX);
+		if (test_bit(EV_REL, dev->evbit))
+			SPRINTF_BIT_B(relbit, "REL=", REL_MAX);
+		if (test_bit(EV_ABS, dev->evbit))
+			SPRINTF_BIT_B(absbit, "ABS=", ABS_MAX);
+		if (test_bit(EV_MSC, dev->evbit))
+			SPRINTF_BIT_B(mscbit, "MSC=", MSC_MAX);
+		if (test_bit(EV_LED, dev->evbit))
+			SPRINTF_BIT_B(ledbit, "LED=", LED_MAX);
+		if (test_bit(EV_SND, dev->evbit))
+			SPRINTF_BIT_B(sndbit, "SND=", SND_MAX);
+		if (test_bit(EV_FF,  dev->evbit))
+			SPRINTF_BIT_B(ffbit,  "FF=",  FF_MAX);
+
 		len += sprintf(buf + len, "\n");
 
 		at += len;
