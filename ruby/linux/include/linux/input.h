@@ -78,6 +78,7 @@ struct input_event {
 #define EV_KEY			0x01
 #define EV_REL			0x02
 #define EV_ABS			0x03
+#define EV_MSC			0x04	
 #define EV_LED			0x11
 #define EV_SND			0x12
 #define EV_REP			0x14
@@ -407,6 +408,13 @@ struct input_event {
 #define ABS_MAX			0x1f
 
 /*
+ * Misc events
+ */
+
+#define MSC_SERIAL		0x00
+#define MSC_MAX			0x07
+
+/*
  * LEDs
  */
 
@@ -488,6 +496,7 @@ struct input_dev {
 	unsigned long keybit[NBITS(KEY_MAX)];
 	unsigned long relbit[NBITS(REL_MAX)];
 	unsigned long absbit[NBITS(ABS_MAX)];
+	unsigned long mscbit[NBITS(MSC_MAX)];
 	unsigned long ledbit[NBITS(LED_MAX)];
 	unsigned long sndbit[NBITS(SND_MAX)];
 
