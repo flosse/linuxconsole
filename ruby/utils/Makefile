@@ -33,7 +33,7 @@ CC		= gcc
 CFLAGS		= -g -O2 -Wall -I../linux/include
 
 PROGRAMS	= evtest inputattach jstest jscal fftest ffmvforce ffset \
-		  ffcfstress
+		  ffcfstress acceltest
 
 compile: $(PROGRAMS)
 
@@ -55,3 +55,6 @@ jscal: jscal.o
 
 gencodes: gencodes.c scancodes.h
 	$(CC) $(CFLAGS) $(CPPFLAGS) gencodes.c -o gencodes
+
+acceltest: acceltest.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -lm $^ -o $@
