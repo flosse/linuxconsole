@@ -387,7 +387,7 @@ static void unknown_nmi_error(unsigned char reason, struct pt_regs * regs)
 
 #if CONFIG_X86_IO_APIC
 
-int nmi_watchdog = 1;
+int nmi_watchdog = 0;
 
 static int __init setup_nmi_watchdog(char *str)
 {
@@ -411,7 +411,7 @@ inline void nmi_watchdog_tick(struct pt_regs * regs)
 	 *
 	 * since NMIs dont listen to _any_ locks, we have to be extremely
 	 * careful not to rely on unsafe variables. The printk might lock
-	 * up though, so we have to break up and the console locks first ...
+	 * up though, so we have to break up the console locks first ...
 	 * [when there will be more tty-related locks, break them up
 	 *  here too!]
 	 */
