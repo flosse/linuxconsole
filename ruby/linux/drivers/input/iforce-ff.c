@@ -130,11 +130,11 @@ static int make_shape_modifier(struct iforce* iforce,
 
 	data[2] = LO(attack_duration);
 	data[3] = HI(attack_duration);
-	data[4] = HIFIX80(initial_level);
+	data[4] = HI(initial_level);
 
 	data[5] = LO(fade_duration);
 	data[6] = HI(fade_duration);
-	data[7] = HIFIX80(final_level);
+	data[7] = HI(final_level);
 
 	iforce_send_packet(iforce, FF_CMD_SHAPE, data);
 
