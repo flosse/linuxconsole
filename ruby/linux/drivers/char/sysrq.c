@@ -79,8 +79,10 @@ static struct sysrq_key_op sysrq_SAK_op = {
 /* unraw sysrq handler */
 static void sysrq_handle_unraw(int key, struct pt_regs *pt_regs,
 		struct kbd_struct *kbd, struct tty_struct *tty) {
+#if CONFIG_VT
 	if (kbd)
 		kbd->kbdmode = VC_XLATE;
+#endif
 }
 static struct sysrq_key_op sysrq_unraw_op = {
 	handler:	sysrq_handle_unraw,
