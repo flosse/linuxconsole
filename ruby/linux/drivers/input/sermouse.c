@@ -76,7 +76,7 @@ static void sermouse_process_msc(struct sermouse *sermouse, signed char data)
 		case 1: 
 		case 3: 
 			input_report_rel(dev, REL_X, data / 2);
-			input_report_rel(dev, REL_Y, buf[1]);
+			input_report_rel(dev, REL_Y, -buf[1]);
 			buf[0] = data - data / 2;
 			break;
 
