@@ -139,12 +139,12 @@ static struct input_device_id power_ids[] = {
 	{
 		flags: INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT,
 		evbit: { BIT(EV_KEY) },
-		keybit: { BIT(KEY_SUSPEND) }
+		keybit: { [LONG(KEY_SUSPEND)] = BIT(KEY_SUSPEND) }
 	},	
 	{
 		flags: INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT,
 		evbit: { BIT(EV_KEY) },
-		keybit: { BIT(KEY_POWER) }
+		keybit: { [LONG(KEY_POWER)] = BIT(KEY_POWER) }
 	},	
 	{
 		flags: INPUT_DEVICE_ID_MATCH_EVBIT,
