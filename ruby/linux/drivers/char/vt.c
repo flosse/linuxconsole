@@ -160,7 +160,7 @@ void set_cursor(struct vc_data *vc)
         	if (cons_num == sel_cons)
                 	clear_selection();
         	add_softcursor(vc);
-        	if ((cursor_type & 0x0f) != 1) {
+        	if (((cursor_type & 0x0f) != 1) && sw->con_cursor) {
 			/*
 			if (visible_origin != origin)
 				set_origin(vc);
@@ -183,7 +183,7 @@ void update_cursor_attr(struct vc_data *vc)
 	if (dectcem) {
         	if (cons_num == sel_cons)
                 	clear_selection();
-		if ((cursor_type & 0x0f) != 1)
+		if (((cursor_type & 0x0f) != 1) && sw->con_cursor)
 			sw->con_cursor(vc, CM_CHANGE);
         }	
 	spin_unlock_irqrestore(&vc->display_fg->vt_lock, flags);
