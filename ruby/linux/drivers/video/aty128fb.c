@@ -294,8 +294,6 @@ static int aty128fb_get_var(struct fb_var_screeninfo *var, int con,
 		       struct fb_info *info);
 static int aty128fb_set_var(struct fb_var_screeninfo *var, int con,
 		       struct fb_info *info);
-static int aty128fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			struct fb_info *info);
 static int aty128fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                               u_int transp, struct fb_info *info);
 static int aty128fb_blank(int blank, struct fb_info *fb);
@@ -383,8 +381,6 @@ static struct fb_ops aty128fb_ops = {
     fb_get_fix:		aty128fb_get_fix,
     fb_get_var:		aty128fb_get_var, 
     fb_set_var:		aty128fb_set_var, 
-    fb_get_cmap:	aty128fb_get_cmap,
-    fb_set_cmap:	fbgen_set_cmap, 
     fb_setcolreg:	aty128fb_setcolreg,
     fb_blank:		aty128fb_blank,
     fb_pan_display:	aty128fb_pan_display, 
@@ -1385,7 +1381,7 @@ aty128fb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *fb)
 	aty128_set_par(&par, info);
 
     if (oldbpp != var->bits_per_pixel) {
-	if ((err = fb_alloc_cmap(&display->cmap, 0, 0)))
+	if ((err = fb_alloc_cmap(&info->cmap, 0, 0)))
 	    return err;
 	do_install_cmap(con, &info->fb_info);
     } 
@@ -1513,27 +1509,6 @@ aty128fb_pan_display(struct fb_var_screeninfo *var, int con,
     offset = ((yoffset * par->crtc.vxres + xoffset) * par->crtc.bpp) >> 6;
 
     aty_st_le32(CRTC_OFFSET, offset);
-
-    return 0;
-}
-
-
-    /*
-     *  Get the Colormap
-     */
-
-static int
-aty128fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			struct fb_info *info)
-{
-    if (con == currcon) /* current console? */
-	return fb_get_cmap(cmap, kspc, aty128_getcolreg, info);
-    else if (fb_display[con].cmap.len) /* non default colormap? */
-	fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-    else {  
-	int size = (fb_display[con].var.bits_per_pixel <= 8) ? 256 : 32;
-	fb_copy_cmap(fb_default_cmap(size), cmap, kspc ? 0 : 2);
-    }
 
     return 0;
 }

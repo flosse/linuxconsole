@@ -82,11 +82,6 @@ static int offb_set_var(struct fb_var_screeninfo *var, int con,
 static int offb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                          u_int transp, struct fb_info *info);
 static void offb_blank(int blank, struct fb_info *info);
-static int offb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			struct fb_info *info);
-static int offb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			struct fb_info *info);
-
 extern boot_infos_t *boot_infos;
 
 static void offb_init_nodriver(struct device_node *);
@@ -109,14 +104,11 @@ static int offb_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
 			 u_int *transp, struct fb_info *info);
 static void do_install_cmap(int con, struct fb_info *info);
 
-
 static struct fb_ops offb_ops = {
 	owner:		THIS_MODULE,
 	fb_get_fix:	offb_get_fix,
 	fb_get_var:	offb_get_var,
 	fb_set_var:	offb_set_var,
-	fb_get_cmap:	offb_get_cmap,
-	fb_set_cmap:	offb_set_cmap,
 	fb_setcolreg:	offb_setcolreg,
 	fb_blank:	offb_blank,
 };
@@ -181,54 +173,10 @@ static int offb_set_var(struct fb_var_screeninfo *var, int con,
 	display->var = *var;
     }
     if ((oldbpp != var->bits_per_pixel) || (display->cmap.len == 0)) {
-	if ((err = fb_alloc_cmap(&display->cmap, 0, 0)))
+	if ((err = fb_alloc_cmap(&info->cmap, 0, 0)))
 	    return err;
 	do_install_cmap(con, info);
     }
-    return 0;
-}
-
-    /*
-     *  Get the Colormap
-     */
-
-static int offb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			 struct fb_info *info)
-{
-    if (con == currcon) /* current console? */
-	return fb_get_cmap(cmap, kspc, offb_getcolreg, info);
-    else if (fb_display[con].cmap.len) /* non default colormap? */
-	fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-    else
-    {
-	int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
-	fb_copy_cmap(fb_default_cmap(size), cmap, kspc ? 0 : 2);
-    }
-    return 0;
-}
-
-    /*
-     *  Set the Colormap
-     */
-
-static int offb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			 struct fb_info *info)
-{
-    struct fb_info_offb *info2 = (struct fb_info_offb *)info;
-    int err;
-
-    if (!info2->cmap_adr)
-	return -ENOSYS;
-
-    if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
-	int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
-	if ((err = fb_alloc_cmap(&fb_display[con].cmap, size, 0)))
-	    return err;
-    }
-    if (con == currcon)			/* current console? */
-	return fb_set_cmap(cmap, kspc, info);
-    else
-	fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
     return 0;
 }
 

@@ -88,10 +88,6 @@ static int sbusfb_set_var(struct fb_var_screeninfo *var, int con,
 static int sbusfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                             u_int transp, struct fb_info *info);
 static void sbusfb_blank(int blank, struct fb_info *info);
-static int sbusfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			struct fb_info *info);
-static int sbusfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			struct fb_info *info);
 static int sbusfb_ioctl(struct inode *inode, struct file *file, u_int cmd,
 			    u_long arg, int con, struct fb_info *info);
 static void sbusfb_cursor(struct display *p, int mode, int x, int y);
@@ -120,8 +116,6 @@ static struct fb_ops sbusfb_ops = {
 	fb_get_fix:	sbusfb_get_fix,
 	fb_get_var:	sbusfb_get_var,
 	fb_set_var:	sbusfb_set_var,
-	fb_get_cmap:	sbusfb_get_cmap,
-	fb_set_cmap:	sbusfb_set_cmap,
 	fb_setcolreg:	sbusfb_setcolreg,
 	fb_blank:	sbusfb_blank,
 	fb_ioctl:	sbusfb_ioctl,
@@ -526,54 +520,6 @@ static void sbusfb_cursor(struct display *p, int mode, int x, int y)
 		(*fb->setcursor)(fb);
 		break;
 	}
-}
-
-    /*
-     *  Get the Colormap
-     */
-
-static int sbusfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			 struct fb_info *info)
-{
-	if (!info->display_fg || con == info->display_fg->vc_num) /* current console? */
-		return fb_get_cmap(cmap, kspc, sbusfb_getcolreg, info);
-	else if (fb_display[con].cmap.len) /* non default colormap? */
-		fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-	else
-		fb_copy_cmap(fb_default_cmap(1<<fb_display[con].var.bits_per_pixel), cmap, kspc ? 0 : 2);
-	return 0;
-}
-
-    /*
-     *  Set the Colormap
-     */
-
-static int sbusfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			 struct fb_info *info)
-{
-	int err;
-	struct display *disp;
-
-	if (con >= 0)
-		disp = &fb_display[con];
-	else
-		disp = info->disp;
-	if (!disp->cmap.len) {	/* no colormap allocated? */
-		if ((err = fb_alloc_cmap(&disp->cmap, 1<<disp->var.bits_per_pixel, 0)))
-			return err;
-	}
-	if (con == currcon) {			/* current console? */
-		err = fb_set_cmap(cmap, kspc, info);
-		if (!err) {
-			struct fb_info_sbusfb *fb = sbusfbinfo(info);
-			
-			if (fb->loadcmap)
-				(*fb->loadcmap)(fb, &fb_display[con], cmap->start, cmap->len);
-		}
-		return err;
-	} else
-		fb_copy_cmap(cmap, &disp->cmap, kspc ? 0 : 1);
-	return 0;
 }
 
 static int sbusfb_ioctl(struct inode *inode, struct file *file, u_int cmd,

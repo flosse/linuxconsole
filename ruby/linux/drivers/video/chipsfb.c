@@ -122,18 +122,12 @@ static int chips_set_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info);
 static int chipsfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                              u_int transp, struct fb_info *info);
-static int chips_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info);
-static int chips_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info);
 
 static struct fb_ops chipsfb_ops = {
 	owner:		THIS_MODULE,
 	fb_get_fix:	chips_get_fix,
 	fb_get_var:	chips_get_var,
 	fb_set_var:	chips_set_var,
-	fb_get_cmap:	chips_get_cmap,
-	fb_set_cmap:	chips_set_cmap,
 	fb_setcolreg:	chips_setcolreg,
 	fb_blank:	chips_blank,
 };
@@ -179,37 +173,6 @@ static int chips_set_var(struct fb_var_screeninfo *var, int con,
 		chips_set_bitdepth(cp, disp, con, var->bits_per_pixel);
 	}
 
-	return 0;
-}
-
-static int chips_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info)
-{
-	if (con == currcon)		/* current console? */
-		return fb_get_cmap(cmap, kspc, chipsfb_getcolreg, info);
-	if (fb_display[con].cmap.len)	/* non default colormap? */
-		fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-	else {
-		int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
-		fb_copy_cmap(fb_default_cmap(size), cmap, kspc ? 0 : 2);
-	}
-	return 0;
-}
-
-static int chips_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			 struct fb_info *info)
-{
-	int err;
-
-	if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
-		int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
-		if ((err = fb_alloc_cmap(&fb_display[con].cmap, size, 0)))
-			return err;
-	}
-	if (con == currcon)			/* current console? */
-		return fb_set_cmap(cmap, kspc, info);
-	else
-		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
 	return 0;
 }
 
@@ -386,7 +349,7 @@ static void chips_set_bitdepth(struct fb_info_chips *p, struct display* disp, in
 	display_info.depth = bpp;
 	display_info.pitch = fix->line_length;
 #endif
-	if ((err = fb_alloc_cmap(&disp->cmap, 0, 0)))
+	if ((err = fb_alloc_cmap(&info->cmap, 0, 0)))
 		return;
 	do_install_cmap(con, (struct fb_info *)p);
 }

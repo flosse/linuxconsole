@@ -233,10 +233,6 @@ static int rivafb_get_var (struct fb_var_screeninfo *var, int con,
 		    struct fb_info *info);
 static int rivafb_set_var (struct fb_var_screeninfo *var, int con,
 		    struct fb_info *info);
-static int rivafb_get_cmap (struct fb_cmap *cmap, int kspc, int con,
-		     struct fb_info *info);
-static int rivafb_set_cmap (struct fb_cmap *cmap, int kspc, int con,
-		     struct fb_info *info);
 static int rivafb_setcolreg(unsigned regno, unsigned red, unsigned green,
                             unsigned blue, unsigned transp,
                             struct fb_info *info);
@@ -273,8 +269,6 @@ static struct fb_ops riva_fb_ops = {
 	fb_get_fix:	rivafb_get_fix,
 	fb_get_var:	rivafb_get_var,
 	fb_set_var:	rivafb_set_var,
-	fb_get_cmap:	rivafb_get_cmap,
-	fb_set_cmap:	rivafb_set_cmap,
 	fb_setcolreg:	rivafb_setcolreg,
 	fb_blank:	rivafb_blank,
 	fb_pan_display:	rivafb_pan_display,
@@ -962,74 +956,6 @@ static int rivafb_set_var (struct fb_var_screeninfo *var, int con,
 	DPRINTK ("EXIT, returning 0\n");
 	return 0;
 }
-
-
-
-static int rivafb_get_cmap (struct fb_cmap *cmap, int kspc, int con,
-		     struct fb_info *info)
-{
-	struct rivafb_info *rivainfo = (struct rivafb_info *) info;
-	struct display *dsp;
-
-	DPRINTK ("ENTER\n");
-
-	assert (rivainfo != NULL);
-	assert (cmap != NULL);
-
-	dsp = (con < 0) ? rivainfo->info.disp : &fb_display[con];
-
-	if (con == rivainfo->currcon) {	/* current console? */
-		int rc = fb_get_cmap (cmap, kspc, riva_getcolreg, info);
-		DPRINTK ("EXIT - returning %d\n", rc);
-		return rc;
-	} else if (dsp->cmap.len)	/* non default colormap? */
-		fb_copy_cmap (&dsp->cmap, cmap, kspc ? 0 : 2);
-	else
-		fb_copy_cmap (fb_default_cmap
-			      (riva_get_cmap_len (&dsp->var)), cmap,
-			      kspc ? 0 : 2);
-
-	DPRINTK ("EXIT, returning 0\n");
-
-	return 0;
-}
-
-
-static int rivafb_set_cmap (struct fb_cmap *cmap, int kspc, int con,
-		     struct fb_info *info)
-{
-	struct rivafb_info *rivainfo = (struct rivafb_info *) info;
-	struct display *dsp;
-	unsigned int cmap_len;
-
-	DPRINTK ("ENTER\n");
-
-	assert (rivainfo != NULL);
-	assert (cmap != NULL);
-
-	dsp = (con < 0) ? rivainfo->info.disp : &fb_display[con];
-
-	cmap_len = riva_get_cmap_len (&dsp->var);
-	if (dsp->cmap.len != cmap_len) {
-		int err = fb_alloc_cmap (&dsp->cmap, cmap_len, 0);
-		if (err) {
-			DPRINTK ("EXIT - returning %d\n", err);
-			return err;
-		}
-	}
-	if (con == rivainfo->currcon) {	/* current console? */
-		int rc = fb_set_cmap (cmap, kspc, info);
-		DPRINTK ("EXIT - returning %d\n", rc);
-		return rc;
-	} else
-		fb_copy_cmap (cmap, &dsp->cmap, kspc ? 0 : 1);
-
-	DPRINTK ("EXIT, returning 0\n");
-
-	return 0;
-}
-
-
 
 /**
  * rivafb_pan_display

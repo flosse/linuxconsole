@@ -420,11 +420,20 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 	case FBIOPUTCMAP:
 		if (copy_from_user(&cmap, (void *) arg, sizeof(cmap)))
 			return -EFAULT;
-		return (fb->fb_set_cmap(&cmap, 0, info));
+		return (fb_set_cmap(&cmap, 0, info));
+		i = fb_set_cmap(&cmap, 0, info);
+		if (i) return i;
+		if (copy_to_user((void *) arg, &cmap, sizeof(cmap)))
+                        return -EFAULT;
+		return 0;
 	case FBIOGETCMAP:
 		if (copy_from_user(&cmap, (void *) arg, sizeof(cmap)))
 			return -EFAULT;
-		return (fb->fb_get_cmap(&cmap, 0, info));
+		i = fb_get_cmap(&cmap, 0, info);
+                if (i) return i;
+                if (copy_to_user((void *) arg, &cmap, sizeof(cmap)))
+                        return -EFAULT;
+		return 0;
 	case FBIOPAN_DISPLAY:
 		if (copy_from_user(&var, (void *) arg, sizeof(var)))
 			return -EFAULT;

@@ -304,10 +304,6 @@ static int atyfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 static void atyfb_blank(int blank, struct fb_info *fb);
 static int atyfb_pan_display(struct fb_var_screeninfo *var, int con,
 			     struct fb_info *fb);
-static int atyfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info);
-static int atyfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info);
 static int atyfb_ioctl(struct inode *inode, struct file *file, u_int cmd,
 		       u_long arg, int con, struct fb_info *info);
 #ifdef __sparc__
@@ -480,8 +476,6 @@ static struct fb_ops atyfb_ops = {
 	fb_get_fix:	atyfb_get_fix,
 	fb_get_var:	atyfb_get_var,
 	fb_set_var:	atyfb_set_var,
-	fb_get_cmap:	atyfb_get_cmap,
-	fb_set_cmap:	atyfb_set_cmap,
 	fb_setcolreg:	atyfb_setcolreg,
 	fb_blank:	atyfb_blank,
 	fb_pan_display:	atyfb_pan_display,
@@ -2885,7 +2879,7 @@ static int atyfb_set_var(struct fb_var_screeninfo *var, int con,
 	    info->fb_info.display_fg->vc_num == con)
 	    atyfb_set_par(&par, info);
 	if (oldbpp != var->bits_per_pixel) {
-	    if ((err = fb_alloc_cmap(&display->cmap, 0, 0)))
+	    if ((err = fb_alloc_cmap(&info->cmap, 0, 0)))
 		return err;
 	    do_install_cmap(con, &info->fb_info);
 	}
@@ -2919,51 +2913,6 @@ static int atyfb_pan_display(struct fb_var_screeninfo *var, int con,
     set_off_pitch(par, info);
     return 0;
 }
-
-    /*
-     *  Get the Colormap
-     */
-
-static int atyfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info)
-{
-    if (!info->display_fg || con == info->display_fg->vc_num) /* current console? */
-	return fb_get_cmap(cmap, kspc, atyfb_getcolreg, info);
-    else if (fb_display[con].cmap.len) /* non default colormap? */
-	fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-    else {
-	int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
-	fb_copy_cmap(fb_default_cmap(size), cmap, kspc ? 0 : 2);
-    }
-    return 0;
-}
-
-    /*
-     *  Set the Colormap
-     */
-
-static int atyfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info)
-{
-    int err;
-    struct display *disp;
-
-    if (con >= 0)
-    	disp = &fb_display[con];
-    else
-        disp = info->disp;
-    if (!disp->cmap.len) {	/* no colormap allocated? */
-	int size = disp->var.bits_per_pixel == 16 ? 32 : 256;
-	if ((err = fb_alloc_cmap(&disp->cmap, size, 0)))
-	    return err;
-    }
-    if (!info->display_fg || con == info->display_fg->vc_num)			/* current console? */
-	return fb_set_cmap(cmap, kspc, info);
-    else
-	fb_copy_cmap(cmap, &disp->cmap, kspc ? 0 : 1);
-    return 0;
-}
-
 
 #ifdef DEBUG
 #define ATYIO_CLKR		0x41545900	/* ATY\00 */

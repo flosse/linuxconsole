@@ -626,36 +626,6 @@ static void do_install_cmap(int con, struct fb_info *info)
 		fb_set_cmap(fb_default_cmap(16), 1, info); 
 }
 
-static int vga16fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info)
-{
-	if (con == currcon) /* current console? */
-		return fb_get_cmap(cmap, kspc, vga16_getcolreg, info);
-	else if (fb_display[con].cmap.len) /* non default colormap? */
-		fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-	else
-		fb_copy_cmap(fb_default_cmap(16),
-		     cmap, kspc ? 0 : 2);
-	return 0;
-}
-
-static int vga16fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info)
-{
-	int err;
-
-	if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
-		err = fb_alloc_cmap(&fb_display[con].cmap,16,0);
-		if (err)
-			return err;
-	}
-	if (con == currcon)			/* current console? */
-		return fb_set_cmap(cmap, kspc, info);
-	else
-		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
-	return 0;
-}
-
 static int vga16fb_pan_display(struct fb_var_screeninfo *var, int con,
 			       struct fb_info *info) 
 {

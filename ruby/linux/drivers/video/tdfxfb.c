@@ -375,14 +375,6 @@ static void tdfxfb_blank(int blank, struct fb_info* fb);
 static int tdfxfb_pan_display(struct fb_var_screeninfo* var, 
 			      int con,
 			      struct fb_info* fb);
-static int tdfxfb_get_cmap(struct fb_cmap *cmap, 
-			   int kspc, 
-			   int con,
-			   struct fb_info* info);
-static int tdfxfb_set_cmap(struct fb_cmap* cmap, 
-			   int kspc, 
-			   int con,
-			   struct fb_info* info);
 
 /*
  *  Interface to the low level console driver
@@ -455,8 +447,6 @@ static struct fb_ops tdfxfb_ops = {
 	fb_get_fix:	tdfxfb_get_fix,
 	fb_get_var:	tdfxfb_get_var,
 	fb_set_var:	tdfxfb_set_var,
-	fb_get_cmap:	tdfxfb_get_cmap,
-	fb_set_cmap:	tdfxfb_set_cmap,
 	fb_setcolreg:	tdfxfb_setcolreg,
 	fb_blank:	tdfxfb_blank,
 	fb_pan_display:	tdfxfb_pan_display,
@@ -1748,7 +1738,7 @@ static int tdfxfb_set_var(struct fb_var_screeninfo *var,
 	  tdfxfb_createcursor( display );
       info->cursor.redraw=1;
       if(oldbpp != var->bits_per_pixel || con < 0) {
-	 if((err = fb_alloc_cmap(&display->cmap, 0, 0)))
+	 if((err = fb_alloc_cmap(&info->cmap, 0, 0)))
 	   return err;
 	 tdfxfb_install_cmap(display, &(info->fb_info));
       }
@@ -1774,48 +1764,6 @@ static int tdfxfb_pan_display(struct fb_var_screeninfo* var,
   fb_display[con].var.xoffset=var->xoffset;
   fb_display[con].var.yoffset=var->yoffset; 
   return 0;
-}
-
-static int tdfxfb_get_cmap(struct fb_cmap *cmap, 
-			   int kspc, 
-			   int con,
-			   struct fb_info *fb) {
-
-   struct fb_info_tdfx* i = (struct fb_info_tdfx*)fb;
-   struct display *d=(con<0) ? fb->disp : fb_display + con;
-   
-   if(con == currcon) {
-      /* current console? */
-      return fb_get_cmap(cmap, kspc, tdfxfb_getcolreg, fb);
-   } else if(d->cmap.len) {
-      /* non default colormap? */
-      fb_copy_cmap(&d->cmap, cmap, kspc ? 0 : 2);
-   } else {
-      fb_copy_cmap(fb_default_cmap(i->current_par.cmap_len), cmap, kspc ? 0 : 2);
-   }
-   return 0;
-}
-
-static int tdfxfb_set_cmap(struct fb_cmap *cmap, 
-			   int kspc, 
-			   int con,
-			   struct fb_info *fb) {
-   struct display *d=(con<0) ? fb->disp : fb_display + con;
-   struct fb_info_tdfx *i = (struct fb_info_tdfx*)fb;
-
-   int cmap_len= (i->current_par.bpp == 8) ? 256 : 16;
-   if (d->cmap.len!=cmap_len) {
-      int err;
-      if((err = fb_alloc_cmap(&d->cmap, cmap_len, 0)))
-	return err;
-   }
-   if(con == currcon) {
-      /* current console? */
-      return fb_set_cmap(cmap, kspc, fb);
-   } else {
-      fb_copy_cmap(cmap, &d->cmap, kspc ? 0 : 1);
-   }
-   return 0;
 }
 
 int __init tdfxfb_init(void) {

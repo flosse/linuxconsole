@@ -273,10 +273,6 @@ static int retz3fb_get_var(struct fb_var_screeninfo *var, int con,
 			   struct fb_info *info);
 static int retz3fb_set_var(struct fb_var_screeninfo *var, int con,
 			   struct fb_info *info);
-static int retz3fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			    struct fb_info *info);
-static int retz3fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			    struct fb_info *info);
 static int retz3fb_setcolreg(unsigned int regno, unsigned int red,
                              unsigned int green, unsigned int blue,
                              unsigned int transp, struct fb_info *info);
@@ -1275,55 +1271,11 @@ static int retz3fb_set_var(struct fb_var_screeninfo *var, int con,
 		}
 
 		if (oldbpp != var->bits_per_pixel) {
-			if ((err = fb_alloc_cmap(&display->cmap, 0, 0)))
+			if ((err = fb_alloc_cmap(&info->cmap, 0, 0)))
 				return err;
 			do_install_cmap(con, info);
 		}
 	}
-	return 0;
-}
-
-
-/*
- *    Get the Colormap
- */
-
-static int retz3fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			    struct fb_info *info)
-{
-	struct retz3_fb_info *zinfo = retz3info(info);
-
-	if (con == zinfo->currcon) /* current console? */
-		return(fb_get_cmap(cmap, kspc, retz3_getcolreg, info));
-	else if (fb_display[con].cmap.len) /* non default colormap? */
-		fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-	else
-		fb_copy_cmap(fb_default_cmap(1<<fb_display[con].var.bits_per_pixel),
-			     cmap, kspc ? 0 : 2);
-	return 0;
-}
-
-
-/*
- *    Set the Colormap
- */
-
-static int retz3fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			    struct fb_info *info)
-{
-	int err;
-	struct retz3_fb_info *zinfo = retz3info(info);
-
-	if (!fb_display[con].cmap.len) {       /* no colormap allocated? */
-		if ((err = fb_alloc_cmap(&fb_display[con].cmap,
-					 1<<fb_display[con].var.bits_per_pixel,
-					 0)))
-			return err;
-	}
-	if (con == zinfo->currcon)              /* current console? */
-		return(fb_set_cmap(cmap, kspc, info));
-	else
-		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
 	return 0;
 }
 
@@ -1332,8 +1284,6 @@ static struct fb_ops retz3fb_ops = {
 	fb_get_fix:	retz3fb_get_fix,
 	fb_get_var:	retz3fb_get_var,
 	fb_set_var:	retz3fb_set_var,
-	fb_get_cmap:	retz3fb_get_cmap,
-	fb_set_cmap:	retz3fb_set_cmap,
 	fb_setcolreg:	retz3fb_setcolreg,
 };
 

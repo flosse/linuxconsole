@@ -110,10 +110,6 @@ static int platinum_set_var(struct fb_var_screeninfo *var, int con,
 static int platinum_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                               u_int transp, struct fb_info *fb);
 static void platinum_blank(int blank, struct fb_info *fb);
-static int platinum_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			     struct fb_info *info);
-static int platinum_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			     struct fb_info *info);
 
 /*
  * Interface to the low level console driver
@@ -159,8 +155,6 @@ static struct fb_ops platinumfb_ops = {
 	fb_get_fix:	platinum_get_fix,
 	fb_get_var:	platinum_get_var,
 	fb_set_var:	platinum_set_var,
-	fb_get_cmap:	platinum_get_cmap,
-	fb_set_cmap:	platinum_set_cmap,
 	fb_setcolreg:	platinum_setcolreg,
 	fb_blank:	platinum_blank,
 };
@@ -280,50 +274,11 @@ static int platinum_set_var(struct fb_var_screeninfo *var, int con,
 		platinum_set_par(&par, info);
 
 	if (oldbpp != var->bits_per_pixel) {
-	    if ((err = fb_alloc_cmap(&display->cmap, 0, 0)))
+	    if ((err = fb_alloc_cmap(&info->cmap, 0, 0)))
 	      return err;
 	    do_install_cmap(con, &info->fb_info);
 	}
 
-	return 0;
-}
-
-static int platinum_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			     struct fb_info *info)
-{
-	if (!info->display_fg ||
-	    info->display_fg->vc_num == con)	/* current console? */
-		return fb_get_cmap(cmap, kspc, platinum_getcolreg, info);
-	if (fb_display[con].cmap.len)	/* non default colormap? */
-		fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-	else {
-		int size = fb_display[con].var.bits_per_pixel == 16 ? 32 : 256;
-		fb_copy_cmap(fb_default_cmap(size), cmap, kspc ? 0 : 2);
-	}
-	return 0;
-}
-
-static int platinum_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			     struct fb_info *info)
-{
-	int err;
-	struct display *disp;
-
-	if (con >= 0)
-		disp = &fb_display[con];
-	else
-		disp = info->disp;
-	if (!disp->cmap.len) {     /* no colormap allocated? */
-		int size = disp->var.bits_per_pixel == 16 ? 32 : 256;
-		if ((err = fb_alloc_cmap(&disp->cmap, size, 0)))
-			return err;
-	}
-
-	if (!info->display_fg ||
-	    info->display_fg->vc_num == con)	/* current console? */
-		return fb_set_cmap(cmap, kspc, info);
-	else
-		fb_copy_cmap(cmap, &disp->cmap, kspc ? 0 : 1);
 	return 0;
 }
 

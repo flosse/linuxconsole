@@ -406,43 +406,11 @@ static void do_install_cmap(int con, struct fb_info *info)
 		fb_set_cmap(fb_default_cmap(video_cmap_len), 1, info); 
 }
 
-static int vesafb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info)
-{
-	if (con == currcon) /* current console? */
-		return fb_get_cmap(cmap, kspc, vesa_getcolreg, info);
-	else if (fb_display[con].cmap.len) /* non default colormap? */
-		fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-	else
-		fb_copy_cmap(fb_default_cmap(video_cmap_len),
-		     cmap, kspc ? 0 : 2);
-	return 0;
-}
-
-static int vesafb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info)
-{
-	int err;
-
-	if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
-		err = fb_alloc_cmap(&fb_display[con].cmap,video_cmap_len,0);
-		if (err)
-			return err;
-	}
-	if (con == currcon)			/* current console? */
-		return fb_set_cmap(cmap, kspc, info);
-	else
-		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
-	return 0;
-}
-
 static struct fb_ops vesafb_ops = {
 	owner:		THIS_MODULE,
 	fb_get_fix:	vesafb_get_fix,
 	fb_get_var:	vesafb_get_var,
 	fb_set_var:	vesafb_set_var,
-	fb_get_cmap:	vesafb_get_cmap,
-	fb_set_cmap:	vesafb_set_cmap,
 	fb_setcolreg:	vesafb_setcolreg,
 	fb_pan_display:	vesafb_pan_display,
 };

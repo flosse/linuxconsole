@@ -430,10 +430,6 @@ static int sisfb_get_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info);
 static int sisfb_set_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info);
-static int sisfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info);
-static int sisfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info);
 static int sisfb_setcolreg(unsigned regno, unsigned red, unsigned green,
                            unsigned blue, unsigned transp,
                            struct fb_info *fb_info);
@@ -2538,7 +2534,7 @@ static int sisfb_set_var(struct fb_var_screeninfo *var, int con,
 	/* update display of current console */
 	sisfb_set_disp(con, var);
 
-	if ((err = fb_alloc_cmap(&fb_display[con].cmap, 0, 0)))
+	if ((err = fb_alloc_cmap(&info->cmap, 0, 0)))
 		return err;
 
 	do_install_cmap(con, info);
@@ -2546,49 +2542,6 @@ static int sisfb_set_var(struct fb_var_screeninfo *var, int con,
 	/* inform console to update struct display */
 	cols = sisbios_mode[mode_idx].cols;
 	rows = sisbios_mode[mode_idx].rows;
-	vc_resize_con(rows, cols, fb_display[con].conp->vc_num);
-
-	return 0;
-}
-
-
-/*
- *    Get the Colormap
- */
-
-static int sisfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info)
-{
-	DPRINTK("sisfb: sisfb_get_cmap:[%d]\n", con);
-
-	if (con == currcon)
-		return fb_get_cmap(cmap, kspc, sis_getcolreg, info);
-	else if (fb_display[con].cmap.len)	/* non default colormap? */
-		fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-	else
-		fb_copy_cmap(fb_default_cmap(video_cmap_len),
-			     cmap, kspc ? 0 : 2);
-	return 0;
-}
-
-/*
- *    Set the Colormap
- */
-
-static int sisfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info)
-{
-	int err;
-
-	if (!fb_display[con].cmap.len) {	/* no colormap allocated */
-		err = fb_alloc_cmap(&fb_display[con].cmap, video_cmap_len, 0);
-		if (err)
-			return err;
-	}
-	if (con == currcon)	/* current console */
-		return fb_set_cmap(cmap, kspc, info);
-	else
-		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
 	return 0;
 }
 

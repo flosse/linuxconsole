@@ -448,14 +448,6 @@ static int hga_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
 	return 0;
 }
 
-int hga_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-                 struct fb_info *info)
-{
-	CHKINFO(-EINVAL);
-	DPRINTK("hga_get_cmap: con:%d\n", con);
-	return fb_get_cmap(cmap, kspc, hga_getcolreg, info);
-}
-	
 	/*
 	 * Set the Colormap
 	 */
@@ -466,14 +458,6 @@ static int hga_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 	if (regno > 1)
 		return 1;
 	return 0;
-}
-
-int hga_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-                 struct fb_info *info)
-{
-	CHKINFO(-EINVAL);
-	DPRINTK("hga_set_cmap: con:%d\n", con);
-	return fb_set_cmap(cmap, kspc, info);
 }
 
 	/*
@@ -516,8 +500,6 @@ static struct fb_ops hgafb_ops = {
 	fb_get_fix:	hga_get_fix,
 	fb_get_var:	hga_get_var,
 	fb_set_var:	hga_set_var,
-	fb_get_cmap:	hga_get_cmap,
-	fb_set_cmap:	hga_set_cmap,
 	fb_setcolreg:	hga_setcolreg,
 	fb_blank:	hgafb_blank,
 	fb_pan_display:	hga_pan_display,

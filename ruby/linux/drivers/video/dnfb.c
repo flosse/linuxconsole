@@ -120,10 +120,6 @@ static int dn_fb_get_var(struct fb_var_screeninfo *var, int con,
 			 struct fb_info *info);
 static int dn_fb_set_var(struct fb_var_screeninfo *var, int isactive,
 			 struct fb_info *info);
-static int dn_fb_get_cmap(struct fb_cmap *cmap,int kspc,int con,
-			  struct fb_info *info);
-static int dn_fb_set_cmap(struct fb_cmap *cmap,int kspc,int con,
-			  struct fb_info *info);
 static void dn_fb_blank(int blank,struct fb_info *info);
 
 static int dnfbcon_switch(int con,struct fb_info *info);
@@ -138,8 +134,7 @@ static struct fb_ops dn_fb_ops = {
 	fb_get_fix:	dn_fb_get_fix,
 	fb_get_var:	dn_fb_get_var,
 	fb_set_var:	dn_fb_set_var,
-	fb_get_cmap:	dn_fb_get_cmap,
-	fb_set_cmap:	dn_fb_set_cmap,
+	fb_setcolreg:	dn_fb_setcolreg,
 	fb_blank:	dn_fb_blank,
 };
 
@@ -247,20 +242,12 @@ static int dn_fb_set_var(struct fb_var_screeninfo *var, int con,
 
 }
 
-static int dn_fb_get_cmap(struct fb_cmap *cmap,int kspc,int con,
-			  struct fb_info *info) {
+static int dn_fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+                           u_int transp, struct fb_info *fb)
+{
+        printk("setcolreg not supported\n");
 
-	printk("get cmap not supported\n");
-
-	return -EINVAL;
-}
-
-static int dn_fb_set_cmap(struct fb_cmap *cmap,int kspc,int con,
-			  struct fb_info *info) {
-
-	printk("set cmap not supported\n");
-
-	return -EINVAL;
+        return -EINVAL;
 
 }
 

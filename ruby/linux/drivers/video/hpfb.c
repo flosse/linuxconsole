@@ -130,36 +130,6 @@ static int do_fb_set_var(struct fb_var_screeninfo *var, int isactive)
 	return 0;
 }
 
-static int hpfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info)
-{
-	return 0;
-}
-
-/*
- * Set the palette.  This may not work on all boards but only experimentation will tell.
- * XXX Doesn't work at all.
- */
-
-static int hpfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info)
-{
-	unsigned int i;
-	for (i = 0; i < cmap->len; i++)
-	{
-		while (readw(fb_regs + 0x6002) & 0x4) udelay(1);
-		writew(0, fb_regs + 0x60f0);
-		writew(cmap->start + i, fb_regs + 0x60b8);
-		writew(cmap->red[i], fb_regs + 0x60b2);
-		writew(cmap->green[i], fb_regs + 0x60b4);
-		writew(cmap->blue[i], fb_regs + 0x60b6);
-		writew(0xff, fb_regs + 0x60f0);
-		udelay(100);
-	}
-	writew(0xffff, fb_regs + 0x60ba);
-	return 0;
-}
-
 static int hpfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                           u_int transp, struct fb_info *info)
 {
@@ -278,8 +248,6 @@ static struct fb_ops hpfb_ops = {
 	fb_get_fix:	hpfb_get_fix,
 	fb_get_var:	hpfb_get_var,
 	fb_set_var:	hpfb_set_var,
-	fb_get_cmap:	hpfb_get_cmap,
-	fb_set_cmap:	hpfb_set_cmap,
 	fb_setcolreg:	hpfb_setcolreg,
 };
 

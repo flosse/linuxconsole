@@ -72,7 +72,6 @@ static struct { u_char red, green, blue, pad; } palette[256];
 static u32 fbcon_cfb32_cmap[16];
 #endif
 
-
     /*
      *  Hardware presets
      */
@@ -734,33 +733,6 @@ static int tgafb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
     return 0;
 }
 
-#if 1
-    /*
-     *	FIXME: since I don't know how to set a single arbitrary color register
-     *  on 24-plane cards, all color palette registers have to be updated
-     */
-
-static int tgafb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			  struct fb_info *info)
-{
-    int err;
-
-    if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
-	if ((err = fb_alloc_cmap(&fb_display[con].cmap, 256, 0)))
-	    return err;
-    }
-    if (con == currcon) {		/* current console? */
-	err = fb_set_cmap(cmap, kspc, info);
-#if 1
-	if (fb_info.tga_type != TGA_TYPE_8PLANE)
-		tgafb_update_palette();
-#endif
-	return err;
-    } else
-	fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
-    return 0;
-}
-
 static void tgafb_update_palette(void)
 {
     int i;
@@ -874,7 +846,6 @@ static struct fb_ops tgafb_ops = {
 	fb_get_fix:	fbgen_get_fix,
 	fb_get_var:	fbgen_get_var,
 	fb_set_var:	fbgen_set_var,
-	fb_get_cmap:	fbgen_get_cmap,
 	fb_set_cmap:	tgafb_set_cmap,
 	fb_set_colreg:	tgafb_setcolreg,
 	fb_blank:	fbgen_blank,

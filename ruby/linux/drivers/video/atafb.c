@@ -2530,44 +2530,11 @@ atafb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 		    || oldbpp != var->bits_per_pixel
 		    || oldyoffset != var->yoffset) {
 			atafb_set_disp(con, info);
-			fb_alloc_cmap(&fb_display[con].cmap, 0, 0);
+			fb_alloc_cmap(&info->cmap, 0, 0);
 			do_install_cmap(con, info);
 		}
 	}
 	var->activate=0;
-	return 0;
-}
-
-
-
-static int
-atafb_get_cmap(struct fb_cmap *cmap, int kspc, int con, struct fb_info *info)
-{
-	if (con == currcon) /* current console ? */
-		return fb_get_cmap(cmap, kspc, fbhw->getcolreg, info);
-	else
-		if (fb_display[con].cmap.len) /* non default colormap ? */
-			fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-		else
-			fb_copy_cmap(fb_default_cmap(1<<fb_display[con].var.bits_per_pixel),
-				     cmap, kspc ? 0 : 2);
-	return 0;
-}
-
-static int
-atafb_set_cmap(struct fb_cmap *cmap, int kspc, int con, struct fb_info *info)
-{
-	int err;
-	if (! fb_display[con].cmap.len) { /* no colormap allocated ? */
-		if ((err = fb_alloc_cmap(&fb_display[con].cmap,
-					 1 << fb_display[con].var.bits_per_pixel,
-					 0)))
-		return err;
-	}
-	if (con == currcon) /* current console ? */
-		return fb_set_cmap(cmap, kspc, info);
-	else
-		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
 	return 0;
 }
 
@@ -2631,8 +2598,6 @@ static struct fb_ops atafb_ops = {
 	fb_get_fix:	atafb_get_fix,
 	fb_get_var:	atafb_get_var,
 	fb_set_var:	atafb_set_var,
-	fb_get_cmap:	atafb_get_cmap,
-	fb_set_cmap:	atafb_set_cmap,
 	fb_setcolreg:	atafb_setcolreg,
 	fb_blank:	atafb_blank,
 	fb_pan_display:	atafb_pan_display,

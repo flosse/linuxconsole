@@ -79,10 +79,6 @@ static int sun3fb_set_var(struct fb_var_screeninfo *var, int con,
 static int sun3fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                             u_int transp, struct fb_info *info);
 static void sun3fb_blank(int blank, struct fb_info *info);
-static int sun3fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			struct fb_info *info);
-static int sun3fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			struct fb_info *info);
 static void sun3fb_cursor(struct display *p, int mode, int x, int y);
 static void sun3fb_clear_margin(struct display *p, int s);
 			    
@@ -107,8 +103,6 @@ static struct fb_ops sun3fb_ops = {
 	fb_get_fix:	sun3fb_get_fix,
 	fb_get_var:	sun3fb_get_var,
 	fb_set_var:	sun3fb_set_var,
-	fb_get_cmap:	sun3fb_get_cmap,
-	fb_set_cmap:	sun3fb_set_cmap,
 	fb_setcolreg:	sun3fb_setcolreg,
 	fb_blank:	sun3fb_blank,
 };
@@ -286,49 +280,6 @@ static void sun3fb_cursor(struct display *p, int mode, int x, int y)
 		(*fb->setcursor)(fb);
 		break;
 	}
-}
-
-    /*
-     *  Get the Colormap
-     */
-
-static int sun3fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			 struct fb_info *info)
-{
-	if (con == currcon) /* current console? */
-		return fb_get_cmap(cmap, kspc, sun3fb_getcolreg, info);
-	else if (fb_display[con].cmap.len) /* non default colormap? */
-		fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-	else
-		fb_copy_cmap(fb_default_cmap(1<<fb_display[con].var.bits_per_pixel), cmap, kspc ? 0 : 2);
-	return 0;
-}
-
-    /*
-     *  Set the Colormap
-     */
-
-static int sun3fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			 struct fb_info *info)
-{
-	int err;
-
-	if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
-		if ((err = fb_alloc_cmap(&fb_display[con].cmap, 1<<fb_display[con].var.bits_per_pixel, 0)))
-			return err;
-	}
-	if (con == currcon) {			/* current console? */
-		err = fb_set_cmap(cmap, kspc, info);
-		if (!err) {
-			struct fb_info_sbusfb *fb = sbusfbinfo(info);
-			
-			if (fb->loadcmap)
-				(*fb->loadcmap)(fb, &fb_display[con], cmap->start, cmap->len);
-		}
-		return err;
-	} else
-		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
-	return 0;
 }
 
     /*

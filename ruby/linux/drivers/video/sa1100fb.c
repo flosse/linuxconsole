@@ -161,8 +161,6 @@ static struct sa1100fb_lcd_reg lcd_shadow;
 static int  sa1100fb_get_fix(struct fb_fix_screeninfo *fix, int con, struct fb_info *info);
 static int  sa1100fb_get_var(struct fb_var_screeninfo *var, int con, struct fb_info *info);
 static int  sa1100fb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info);
-static int  sa1100fb_get_cmap(struct fb_cmap *cmap, int kspc, int con, struct fb_info *info);
-static int  sa1100fb_set_cmap(struct fb_cmap *cmap, int kspc, int con, struct fb_info *info);
 static void sa1100fb_blank(int blank, struct fb_info *info);
  
 static int  sa1100fb_switch(int con, struct fb_info *info);
@@ -176,8 +174,6 @@ static struct fb_ops sa1100fb_ops = {
 	fb_get_fix:	sa1100fb_get_fix,
 	fb_get_var:	sa1100fb_get_var,
 	fb_set_var:	sa1100fb_set_var,
-	fb_get_cmap:	sa1100fb_get_cmap,
-	fb_set_cmap:	sa1100fb_set_cmap,
 	fb_setcolreg:	sa1100fb_setcolreg,
 	fb_blank:	sa1100fb_blank,
 };
@@ -273,41 +269,6 @@ sa1100fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue, u_int trans,
 	sa1100fb_palette_write(regno, pal);
 
 	return 0;
-}
-
-static int
-sa1100fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-		 struct fb_info *info)
-{
-	int err = 0;
-
-        DPRINTK("current_par.visual=%d\n", current_par.visual);
-	if (con == current_par.currcon)
-		err = fb_get_cmap(cmap, kspc, sa1100fb_getcolreg, info);
-	else if (fb_display[con].cmap.len)
-		fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-	else
-		fb_copy_cmap(fb_default_cmap(current_par.palette_size),
-			     cmap, kspc ? 0 : 2);
-	return err;
-}
-
-static int
-sa1100fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-		  struct fb_info *info)
-{
-	int err = 0;
-
-        DPRINTK("current_par.visual=%d\n", current_par.visual);
-	if (!fb_display[con].cmap.len)
-		err = fb_alloc_cmap(&fb_display[con].cmap,
-				    current_par.palette_size, 0);
-	if (!err) {
-		if (con == current_par.currcon)
-			err = fb_set_cmap(cmap, kspc, info);
-		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
-	}
-	return err;
 }
 
 static void inline
@@ -537,8 +498,8 @@ sa1100fb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 		struct fb_cmap *cmap;
 		
 		current_par = par;
-		if (display->cmap.len)
-			cmap = &display->cmap;
+		if (info->cmap.len)
+			cmap = &nfo->cmap;
 		else
 			cmap = fb_default_cmap(current_par.palette_size);
                 DPRINTK("visual=%d palette_size=%d cmap=%p\n", current_par.visual, current_par.palette_size, cmap);
@@ -1105,8 +1066,7 @@ sa1100fb_blank(int blank, struct fb_info *info)
 	}
 	else {
                 if (current_par.visual != FB_VISUAL_TRUECOLOR)
-		sa1100fb_set_cmap(&fb_display[current_par.currcon].cmap, 1, 
-		                  current_par.currcon, info); 
+		fb_set_cmap(&info->cmap, 1, info);
 		sa1100fb_enable_lcd_controller();
 	}
 }

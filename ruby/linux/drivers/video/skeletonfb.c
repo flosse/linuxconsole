@@ -380,8 +380,6 @@ static struct fb_ops xxxfb_ops = {
 	fb_get_fix:	fbgen_get_fix,
 	fb_get_var:	fbgen_get_var,
 	fb_set_var:	fbgen_set_var,
-	fb_get_cmap:	fbgen_get_cmap,
-	fb_set_cmap:	fbgen_set_cmap,
 	fb_setcolreg:	xxxfb_setcolreg,
 	fb_blank:	fbgen_blank,
 	fb_pan_display:	fbgen_pan_display,

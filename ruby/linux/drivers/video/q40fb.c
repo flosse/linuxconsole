@@ -35,10 +35,6 @@ static int q40fb_get_var(struct fb_var_screeninfo *var, int con,
 			struct fb_info *info);
 static int q40fb_set_var(struct fb_var_screeninfo *var, int con,
 			struct fb_info *info);
-static int q40fb_get_cmap(struct fb_cmap *cmap,int kspc,int con,
-			 struct fb_info *info);
-static int q40fb_set_cmap(struct fb_cmap *cmap,int kspc,int con,
-			 struct fb_info *info);
 
 static int q40con_switch(int con, struct fb_info *info);
 static int q40con_updatevar(int con, struct fb_info *info);
@@ -52,8 +48,6 @@ static struct fb_ops q40fb_ops = {
 	fb_get_fix:	q40fb_get_fix,
 	fb_get_var:	q40fb_get_var,
 	fb_set_var:	q40fb_set_var,
-	fb_get_cmap:	q40fb_get_cmap,
-	fb_set_cmap:	q40fb_set_cmap,
 	fb_setcolreg:	q40fb_setcolreg,
 };
 
@@ -202,49 +196,6 @@ static int q40fb_setcolreg(unsigned regno, unsigned red, unsigned green,
 	                         (blue & 63);
     }
     return 0;
-}
-
-static int q40fb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			 struct fb_info *info)
-{
-#if 1
-	if (con == currcon) /* current console? */
-		return fb_get_cmap(cmap, kspc, q40_getcolreg, info);
-	else if (fb_display[con].cmap.len) /* non default colormap? */
-		fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-	else
-		fb_copy_cmap(fb_default_cmap(1<<fb_display[con].var.bits_per_pixel),
-			     cmap, kspc ? 0 : 2);
-	return 0;
-#else
-	printk(KERN_ERR "get cmap not supported\n");
-
-	return -EINVAL;
-#endif
-}
-
-static int q40fb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			 struct fb_info *info)
-{
-#if 1
-	int err;
-
-	if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
-		if ((err = fb_alloc_cmap(&fb_display[con].cmap,
-					 1<<fb_display[con].var.bits_per_pixel,
-					 0)))
-			return err;
-	}
-	if (con == currcon)			/* current console? */
-		return fb_set_cmap(cmap, kspc, info);
-	else
-		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
-	return 0;
-#else
-	printk(KERN_ERR "set cmap not supported\n");
-
-	return -EINVAL;
-#endif
 }
 
 static void q40fb_set_disp(int con, struct fb_info *info)

@@ -927,59 +927,6 @@ static int matrox_getcolreg(unsigned regno, unsigned *red, unsigned *green,
 #undef minfo
 }
 
-static int matroxfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			     struct fb_info *info)
-{
-#define minfo ((struct matrox_fb_info*)info)
-	struct display* dsp = (con < 0) ? ACCESS_FBINFO(fbcon.disp)
-					: fb_display + con;
-
-	DBG("matroxfb_get_cmap")
-
-	if (ACCESS_FBINFO(dead)) {
-		return -ENXIO;
-	}
-
-	if (con == ACCESS_FBINFO(currcon)) /* current console? */
-		return fb_get_cmap(cmap, kspc, matrox_getcolreg, info);
-	else if (dsp->cmap.len) /* non default colormap? */
-		fb_copy_cmap(&dsp->cmap, cmap, kspc ? 0 : 2);
-	else
-		fb_copy_cmap(fb_default_cmap(matroxfb_get_cmap_len(&dsp->var)),
-			     cmap, kspc ? 0 : 2);
-	return 0;
-#undef minfo
-}
-
-static int matroxfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			     struct fb_info *info)
-{
-	unsigned int cmap_len;
-	struct display* dsp = (con < 0) ? info->disp : (fb_display + con);
-#define minfo ((struct matrox_fb_info*)info)
-
-	DBG("matroxfb_set_cmap")
-
-	if (ACCESS_FBINFO(dead)) {
-		return -ENXIO;
-	}
-
-	cmap_len = matroxfb_get_cmap_len(&dsp->var);
-	if (dsp->cmap.len != cmap_len) {
-		int err;
-
-		err = fb_alloc_cmap(&dsp->cmap, cmap_len, 0);
-		if (err)
-			return err;
-	}
-	if (con == ACCESS_FBINFO(currcon)) {			/* current console? */
-		return fb_set_cmap(cmap, kspc, info);
-	} else
-		fb_copy_cmap(cmap, &dsp->cmap, kspc ? 0 : 1);
-	return 0;
-#undef minfo
-}
-
 /* 0 unblank, 1 blank, 2 no vsync, 3 no hsync, 4 off */
 
 static void matroxfb_blank(int blank, struct fb_info *info)
@@ -1195,8 +1142,6 @@ static struct fb_ops matroxfb_ops = {
 	fb_get_fix:	matroxfb_get_fix,
 	fb_get_var:	matroxfb_get_var,
 	fb_set_var:	matroxfb_set_var,
-	fb_get_cmap:	matroxfb_get_cmap,
-	fb_set_cmap:	matroxfb_set_cmap,
 	fb_setcolreg:	matroxfb_setcolreg,
 	fb_blank:	matroxfb_blank,
 	fb_pan_display:	matroxfb_pan_display,

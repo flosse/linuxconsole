@@ -396,40 +396,6 @@ static void do_install_cmap(int con, struct fb_info *fb_info)
 			    &info->fb_info);
 }
 
-static int igafb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-                           struct fb_info *fb_info)
-{
-	struct fb_info_iga *info = (struct fb_info_iga*) fb_info;
-	
-        if (con == info->currcon) /* current console? */
-                return fb_get_cmap(cmap, kspc, iga_getcolreg, &info->fb_info);
-        else if (fb_display[con].cmap.len) /* non default colormap? */
-                fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-        else
-                fb_copy_cmap(fb_default_cmap(info->video_cmap_len),
-                     cmap, kspc ? 0 : 2);
-        return 0;
-}
-
-static int igafb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-	                  struct fb_info *info)
-{
-        int err;
-	struct fb_info_iga *fb = (struct fb_info_iga*) info;
-
-        if (!fb_display[con].cmap.len) {        /* no colormap allocated? */
-                err = fb_alloc_cmap(&fb_display[con].cmap,
-				    fb->video_cmap_len,0);
-                if (err)
-                        return err;
-        }
-        if (con == fb->currcon)                     /* current console? */
-                return fb_set_cmap(cmap, kspc, info);
-        else
-                fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
-        return 0;
-}
-
 /*
  * Framebuffer option structure
  */
@@ -438,8 +404,6 @@ static struct fb_ops igafb_ops = {
 	fb_get_fix:	igafb_get_fix,
 	fb_get_var:	igafb_get_var,
 	fb_set_var:	igafb_set_var,
-	fb_get_cmap:	igafb_get_cmap,
-	fb_set_cmap:	igafb_set_cmap,
 	fb_setcolreg:	igafb_setcolreg,
 #ifdef __sparc__
 	fb_mmap:	igafb_mmap,

@@ -33,6 +33,9 @@
 *   - 05 Jan 96: Geert: integration into the current source tree
 *   - 01 Aug 98: Alan: Merge in code from cvision.c and cvision_core.c
 * $Log$
+* Revision 1.7  2000/08/19 23:57:03  jsimmons
+* Removed useless get[set]_cmap.
+*
 * Revision 1.6  2000/08/11 00:16:03  jsimmons
 * Synced with test6
 *
@@ -259,10 +262,6 @@ static int cyberfb_get_var(struct fb_var_screeninfo *var, int con,
 			   struct fb_info *info);
 static int cyberfb_set_var(struct fb_var_screeninfo *var, int con,
 			   struct fb_info *info);
-static int cyberfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			    struct fb_info *info);
-static int cyberfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			    struct fb_info *info);
 static int cyber_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                            u_int transp, struct fb_info *info);
 static void cyberfb_blank(int blank, struct fb_info *info);
@@ -951,64 +950,11 @@ static int cyberfb_set_var(struct fb_var_screeninfo *var, int con,
 		    oldbpp != var->bits_per_pixel ||
 		    oldaccel != var->accel_flags) {
 			cyberfb_set_disp(con, info);
-			fb_alloc_cmap(&fb_display[con].cmap, 0, 0);
+			fb_alloc_cmap(&info->cmap, 0, 0);
 			do_install_cmap(con, info);
 		}
 	}
 	var->activate = 0;
-	DPRINTK("EXIT\n");
-	return(0);
-}
-
-
-/*
- *    Get the Colormap
- */
-
-static int cyberfb_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			    struct fb_info *info)
-{
-	DPRINTK("ENTER\n");
-	if (con == currcon) { /* current console? */
-		DPRINTK("EXIT - console is current console\n");
-		return(fb_get_cmap(cmap, kspc, Cyber_getcolreg, info));
-	} else if (fb_display[con].cmap.len) { /* non default colormap? */
-		DPRINTK("Use console cmap\n");
-		fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-	} else {
-		DPRINTK("Use default cmap\n");
-		fb_copy_cmap(fb_default_cmap(1<<fb_display[con].var.bits_per_pixel),
-			     cmap, kspc ? 0 : 2);
-	}
-	DPRINTK("EXIT\n");
-	return(0);
-}
-
-
-/*
- *    Set the Colormap
- */
-
-static int cyberfb_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			    struct fb_info *info)
-{
-	int err;
-
-	DPRINTK("ENTER\n");
-	if (!fb_display[con].cmap.len) {       /* no colormap allocated? */
-		if ((err = fb_alloc_cmap(&fb_display[con].cmap,
-					 1<<fb_display[con].var.bits_per_pixel,
-					 0))) {
-			DPRINTK("EXIT - fb_alloc_cmap failed\n");
-			return(err);
-		}
-	}
-	if (con == currcon) {		 /* current console? */
-		DPRINTK("EXIT - Current console\n");
-		return(fb_set_cmap(cmap, kspc, info));
-	} else {
-		fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
-	}
 	DPRINTK("EXIT\n");
 	return(0);
 }
@@ -1018,8 +964,6 @@ static struct fb_ops cyberfb_ops = {
 	fb_get_fix:	cyberfb_get_fix,
 	fb_get_var:	cyberfb_get_var,
 	fb_set_var:	cyberfb_set_var,
-	fb_get_cmap:	cyberfb_get_cmap,
-	fb_set_cmap:	cyberfb_set_cmap,
 	fb_setcolreg:	cyberfb_setcolreg,
 	fb_blank:	cyberfb_blank,
 };

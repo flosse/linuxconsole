@@ -83,10 +83,6 @@ static int s3trio_get_var(struct fb_var_screeninfo *var, int con,
 			  struct fb_info *info);
 static int s3trio_set_var(struct fb_var_screeninfo *var, int con,
 			  struct fb_info *info);
-static int s3trio_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info);
-static int s3trio_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info);
 static int s3trio_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                          u_int transp, struct fb_info *info);
 static void s3trio_blank(int blank, struct fb_info *info);
@@ -100,9 +96,6 @@ static int s3trio_pan_display(struct fb_var_screeninfo *var, int con,
 int s3triofb_init(void);
 static int s3triofbcon_switch(int con, struct fb_info *info);
 static int s3triofbcon_updatevar(int con, struct fb_info *info);
-#if 0
-static int s3triofbcon_setcmap(struct fb_cmap *cmap, int con);
-#endif
 
     /*
      *  Text console acceleration
@@ -132,16 +125,12 @@ static void Trio_MoveCursor(u_short x, u_short y);
 
 static int s3trio_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
                          u_int *transp, struct fb_info *info);
-static void do_install_cmap(int con, struct fb_info *info);
-
 
 static struct fb_ops s3trio_ops = {
 	owner:		THIS_MODULE,
 	fb_get_fix:	s3trio_get_fix,
 	fb_get_var:	s3trio_get_var,
 	fb_set_var:	s3trio_set_var,
-	fb_get_cmap:	s3trio_get_cmap,
-	fb_set_cmap:	s3trio_set_cmap,
 	fb_setcolreg:	s3trio_setcolreg,
 	fb_blank:	s3trio_blank,
 	fb_pan_display:	s3trio_pan_display,
@@ -190,9 +179,11 @@ static int s3trio_set_var(struct fb_var_screeninfo *var, int con,
     }
     fb_var.yres_virtual = var->yres_virtual;
     memcpy(var, &fb_var, sizeof(fb_var));
+    if ((err = fb_alloc_cmap(&info->cmap, 0, 0)))
+                return err;
+    fb_set_cmap(&info->cmap, 1, info);
     return 0;
 }
-
 
     /*
      *  Pan or Wrap the Display
@@ -218,46 +209,6 @@ static int s3trio_pan_display(struct fb_var_screeninfo *var, int con,
     outw(IO_OUT16VAL((base >> 8) & 0xff, 0x0c),0x03D4);
     outw(IO_OUT16VAL(base  & 0xff, 0x0d),0x03D4);
     outw(IO_OUT16VAL((base >> 16) & 0xf, 0x69),0x03D4);
-    return 0;
-}
-
-
-    /*
-     *  Get the Colormap
-     */
-
-static int s3trio_get_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info)
-{
-    if (con == currcon) /* current console? */
-	return fb_get_cmap(cmap, kspc, s3trio_getcolreg, info);
-    else if (fb_display[con].cmap.len) /* non default colormap? */
-	fb_copy_cmap(&fb_display[con].cmap, cmap, kspc ? 0 : 2);
-    else
-	fb_copy_cmap(fb_default_cmap(1 << fb_display[con].var.bits_per_pixel),
-		     cmap, kspc ? 0 : 2);
-    return 0;
-}
-
-    /*
-     *  Set the Colormap
-     */
-
-static int s3trio_set_cmap(struct fb_cmap *cmap, int kspc, int con,
-			   struct fb_info *info)
-{
-    int err;
-
-
-    if (!fb_display[con].cmap.len) {	/* no colormap allocated? */
-	if ((err = fb_alloc_cmap(&fb_display[con].cmap,
-				 1<<fb_display[con].var.bits_per_pixel, 0)))
-	    return err;
-    }
-    if (con == currcon)			/* current console? */
-	return fb_set_cmap(cmap, kspc, info);
-    else
-	fb_copy_cmap(cmap, &fb_display[con].cmap, kspc ? 0 : 1);
     return 0;
 }
 
@@ -493,15 +444,6 @@ static void __init s3triofb_of_init(struct device_node *dp)
     mem_out8(0x45, s3trio_base+0x1008000 + 0x03D4);
     mem_out8(0, s3trio_base+0x1008000 + 0x03D5);
 
-    /* setup default color table */
-
-	for(i = 0; i < 16; i++) {
-		int j = color_table[i];
-		palette[i].red=default_red[j];
-		palette[i].green=default_grn[j];
-		palette[i].blue=default_blu[j];
-	}
-
     s3trio_setcolreg(255, 56, 100, 160, 0, NULL /* not used */);
     s3trio_setcolreg(254, 0, 0, 0, 0, NULL /* not used */);
     memset((char *)s3trio_base, 0, 640*480);
@@ -531,9 +473,6 @@ static void __init s3triofb_of_init(struct device_node *dp)
     fb_var.vmode = FB_VMODE_NONINTERLACED;
 
     disp.var = fb_var;
-    disp.cmap.start = 0;
-    disp.cmap.len = 0;
-    disp.cmap.red = disp.cmap.green = disp.cmap.blue = disp.cmap.transp = NULL;
     disp.screen_base = s3trio_base;
     disp.visual = fb_fix.visual;
     disp.type = fb_fix.type;
@@ -589,16 +528,8 @@ static void __init s3triofb_of_init(struct device_node *dp)
 	   GET_FB_IDX(fb_info.node), dp->full_name);
 }
 
-
 static int s3triofbcon_switch(int con, struct fb_info *info)
 {
-    /* Do we have to save the colormap? */
-    if (fb_display[currcon].cmap.len)
-	fb_get_cmap(&fb_display[currcon].cmap, 1, s3trio_getcolreg, info);
-
-    currcon = con;
-    /* Install new colormap */
-    do_install_cmap(con,info);
     return 0;
 }
 
@@ -624,18 +555,6 @@ static int s3trio_blank(int blank, struct fb_info *info)
     x = mem_in8(s3trio_base+0x1008000 + 0x03c5);
     mem_out8((x & (~0x20)) | (blank << 5), s3trio_base+0x1008000 + 0x03c5);
 }
-
-    /*
-     *  Set the colormap
-     */
-
-#if 0
-static int s3triofbcon_setcmap(struct fb_cmap *cmap, int con)
-{
-    return(s3trio_set_cmap(cmap, 1, con, &fb_info));
-}
-#endif
-
 
     /*
      *  Read a single color register and split it into
@@ -678,18 +597,6 @@ static int s3trio_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
     mem_out8((blue & 0xff) >> 2,s3trio_base+0x1008000 + 0x3c9);
 
     return 0;
-}
-
-
-static void do_install_cmap(int con, struct fb_info *info)
-{
-    if (con != currcon)
-	return;
-    if (fb_display[con].cmap.len)
-	fb_set_cmap(&fb_display[con].cmap, 1, &fb_info);
-    else
-	fb_set_cmap(fb_default_cmap(fb_display[con].var.bits_per_pixel), 1,
-		    &fb_info);
 }
 
 static void Trio_WaitQueue(u_short fifo) {

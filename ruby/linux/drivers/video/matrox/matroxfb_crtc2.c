@@ -415,49 +415,6 @@ static int matroxfb_dh_set_var(struct fb_var_screeninfo* var, int con,
 #undef m2info
 }
 
-static int matroxfb_dh_get_cmap(struct fb_cmap* cmap, int kspc, int con,
-		struct fb_info* info) {
-#define m2info ((struct matroxfb_dh_fb_info*)info)
-	struct display* dsp;
-
-	if (con < 0)
-		dsp = m2info->fbcon.disp;
-	else
-		dsp = fb_display + con;
-	if (con == m2info->currcon)
-		return fb_get_cmap(cmap, kspc, matroxfb_dh_getcolreg, info);
-	else if (dsp->cmap.len)
-		fb_copy_cmap(&dsp->cmap, cmap, kspc ? 0 : 2);
-	else
-		fb_copy_cmap(fb_default_cmap(16), cmap, kspc ? 0 : 2);
-	return 0;
-#undef m2info
-}
-
-static int matroxfb_dh_set_cmap(struct fb_cmap* cmap, int kspc, int con,
-		struct fb_info* info) {
-#define m2info ((struct matroxfb_dh_fb_info*)info)
-	struct display* dsp;
-
-	if (con < 0)
-		dsp = m2info->fbcon.disp;
-	else
-		dsp = fb_display + con;
-	if (dsp->cmap.len != 16) {
-		int err;
-
-		err = fb_alloc_cmap(&dsp->cmap, 16, 0);
-		if (err)
-			return err;
-	}
-	if (con == m2info->currcon)
-		return fb_set_cmap(cmap, kspc, info);
-	else
-		fb_copy_cmap(cmap, &dsp->cmap, kspc ? 0 : 1);
-	return 0;
-#undef m2info
-}
-
 static int matroxfb_dh_pan_display(struct fb_var_screeninfo* var, int con,
 		struct fb_info* info) {
 #define m2info ((struct matroxfb_dh_fb_info*)info)
@@ -564,8 +521,6 @@ static struct fb_ops matroxfb_dh_ops = {
 	fb_get_fix:	matroxfb_dh_get_fix,
 	fb_get_var:	matroxfb_dh_get_var,
 	fb_set_var:	matroxfb_dh_set_var,
-	fb_get_cmap:	matroxfb_dh_get_cmap,
-	fb_set_cmap:	matroxfb_dh_set_cmap,
 	fb_setcolreg:	matroxfb_dh_setcolreg,
 	fb_blank:	matroxfb_dh_blank,
 	fb_pan_display:	matroxfb_dh_pan_display,
