@@ -19,6 +19,7 @@
 
 #include <linux/config.h>
 #include <linux/types.h>
+#include <linux/vt_kern.h>
 #include <asm/io.h>
 #ifndef CONFIG_AMIGA
 #include <asm/vga.h>
@@ -178,8 +179,6 @@
 #define MODE_8BPP   2
 #define MODE_CFB    4
 #define MODE_TEXT   8
-
-static char vga_fonts[8192*4];
 
 struct vga_hw_state {
 	u16 xres;
@@ -485,7 +484,6 @@ extern int vga_check_mode(int xres, int right, int hslen, int left, int vxres,
 			  int yres, int lower, int vslen, int upper, 
 			  int double_scan);
 extern int vga_set_mode(struct vga_hw_state *state, int xoffset);
-extern int vga_do_font_op(char *arg, int set, int ch512);
 extern void vga_vesa_blank(struct vga_hw_state *state, int mode);
 extern void vga_vesa_unblank(struct vga_hw_state *state);
 extern void vga_pal_blank(void);
