@@ -7,7 +7,16 @@ comment 'Character devices'
 bool 'Virtual terminal' CONFIG_VT
 if [ "$CONFIG_VT" = "y" ]; then
    bool '  Support for console on virtual terminal' CONFIG_VT_CONSOLE
+   if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
+      bool '  Extended terminal emulation (EXPERIMENTAL)' CONFIG_VT_EXTENDED
+#     bool '  DEC ReGIS graphics support (EXPERIMENTAL)' CONFIG_VT_DEC_REGIS
+#     bool '  DEC Sixel graphics support (EXPERIMENTAL)' CONFIG_VT_DEC_SIXEL
+#     bool '  DEC Locator device support (EXPERIMENTAL)' CONFIG_VT_DEC_LOCATOR
+#     bool '  HP terminal emulation (EXPERIMENTAL)' CONFIG_VT_HP
+#     bool '  ISO6429 bidirectional support (EXPERIMENTAL)' CONFIG_VT_BDSM
+   fi
 fi
+
 tristate 'Standard/generic (dumb) serial support' CONFIG_SERIAL
 if [ "$CONFIG_SERIAL" = "y" ]; then
    bool '  Support for console on serial port' CONFIG_SERIAL_CONSOLE
