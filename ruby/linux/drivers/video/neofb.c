@@ -12,11 +12,11 @@
  * archive for more details.
  *
  * 0.3.3
- *  - Porting over to new fbdev api. (jsimmons) 	
- *
+ *  - Porting over to new fbdev api. (jsimmons)
+ *  
  * 0.3.2
- *  - got rid of all floating point (dok)
- *	
+ *  - got rid of all floating point (dok) 
+ *
  * 0.3.1
  *  - added module license (dok)
  *
@@ -67,7 +67,7 @@
 #include <asm/mtrr.h>
 #endif
 
-#include <video/neofb.h>
+#include <video/neomagic.h>
 
 #define NEOFB_VERSION "0.3.3"
 
@@ -180,168 +180,6 @@ static int neoFindMode(int xres, int yres, int depth)
 	return mode[size - 1].mode;
 }
 
-/* -------------------- Hardware specific routines ------------------------- */
-
-/*
- * Hardware Acceleration for Neo2200+
- */
-static inline void neo2200_wait_idle(struct neofb_par *par)
-{
-	int waitcycles;
-
-	while (par->neo2200->bltStat & 1)
-		waitcycles++;
-}
-
-static inline void neo2200_wait_fifo(struct neofb_par *par,
-				     int requested_fifo_space)
-{
-	//  ndev->neo.waitfifo_calls++;
-	//  ndev->neo.waitfifo_sum += requested_fifo_space;
-
-	/* FIXME: does not work
-	   if (neo_fifo_space < requested_fifo_space)
-	   {
-	   neo_fifo_waitcycles++;
-
-	   while (1)
-	   {
-	   neo_fifo_space = (neo2200->bltStat >> 8);
-	   if (neo_fifo_space >= requested_fifo_space)
-	   break;
-	   }
-	   }
-	   else
-	   {
-	   neo_fifo_cache_hits++;
-	   }
-
-	   neo_fifo_space -= requested_fifo_space;
-	 */
-
-	neo2200_wait_idle(par);
-}
-
-static inline void neo2200_accel_init(struct fb_info *info,
-				      struct fb_var_screeninfo *var)
-{
-	struct neofb_par *par = (struct neofb_par *) info->par;
-	u32 bltMod, pitch;
-
-	neo2200_wait_idle(par);
-
-	switch (var->bits_per_pixel) {
-	case 8:
-		bltMod = NEO_MODE1_DEPTH8;
-		pitch = var->xres_virtual;
-		break;
-	case 16:
-		bltMod = NEO_MODE1_DEPTH16;
-		pitch = var->xres_virtual * 2;
-		break;
-	default:
-		printk(KERN_ERR
-		       "neofb: neo2200_accel_init: unexpected bits per pixel!\n");
-		return;
-	}
-
-	par->neo2200->bltStat = bltMod << 16;
-	par->neo2200->pitch = (pitch << 16) | pitch;
-}
-
-/* --------------------------------------------------------------------- */
-
-static void vgaHWLock(void)
-{
-	/* Protect CRTC[0-7] */
-	VGAwCR(0x11, VGArCR(0x11) | 0x80);
-}
-
-static void vgaHWUnlock(void)
-{
-	/* Unprotect CRTC[0-7] */
-	VGAwCR(0x11, VGArCR(0x11) & ~0x80);
-}
-
-static void neoLock(void)
-{
-	VGAwGR(0x09, 0x00);
-	vgaHWLock();
-}
-
-static void neoUnlock(void)
-{
-	vgaHWUnlock();
-	VGAwGR(0x09, 0x26);
-}
-
-/*
- * vgaHWSeqReset
- *      perform a sequencer reset.
- */
-void vgaHWSeqReset(int start)
-{
-	if (start)
-		VGAwSEQ(0x00, 0x01);	/* Synchronous Reset */
-	else
-		VGAwSEQ(0x00, 0x03);	/* End Reset */
-}
-
-void vgaHWProtect(int on)
-{
-	unsigned char tmp;
-
-	if (on) {
-		/*
-		 * Turn off screen and disable sequencer.
-		 */
-		tmp = VGArSEQ(0x01);
-
-		vgaHWSeqReset(1);	/* start synchronous reset */
-		VGAwSEQ(0x01, tmp | 0x20);	/* disable the display */
-
-		VGAenablePalette();
-	} else {
-		/*
-		 * Reenable sequencer, then turn on screen.
-		 */
-
-		tmp = VGArSEQ(0x01);
-
-		VGAwSEQ(0x01, tmp & ~0x20);	/* reenable display */
-		vgaHWSeqReset(0);	/* clear synchronousreset */
-
-		VGAdisablePalette();
-	}
-}
-
-static void vgaHWRestore(const struct fb_info *info,
-			 const struct neofb_par *par)
-{
-	int i;
-
-	VGAwMISC(par->MiscOutReg);
-
-	for (i = 1; i < 5; i++)
-		VGAwSEQ(i, par->Sequencer[i]);
-
-	/* Ensure CRTC registers 0-7 are unlocked by clearing bit 7 or CRTC[17] */
-	VGAwCR(17, par->CRTC[17] & ~0x80);
-
-	for (i = 0; i < 25; i++)
-		VGAwCR(i, par->CRTC[i]);
-
-	for (i = 0; i < 9; i++)
-		VGAwGR(i, par->Graphics[i]);
-
-	VGAenablePalette();
-
-	for (i = 0; i < 21; i++)
-		VGAwATTR(i, par->Attribute[i]);
-
-	VGAdisablePalette();
-}
-
 /*
  * neoCalcVCLK --
  *
@@ -352,18 +190,19 @@ static void vgaHWRestore(const struct fb_info *info,
 #define MAX_D 31
 #define MAX_F 1
 
-static void neoCalcVCLK(const struct fb_info *info, struct neofb_par *par,
-			long freq)
+static void neoCalcVCLK(const struct fb_info *info,
+			struct neofb_par *par, long freq)
 {
+	int n, d, f;
+	int n_best = 0, d_best = 0, f_best = 0;
 	long f_best_diff = (0x7ffff << 12);	/* 20.12 */
 	long f_target = (freq << 12) / 1000;	/* 20.12 */
-	int n_best = 0, d_best = 0, f_best = 0;
-	int n, d, f;
 
-	for (f = 0; f <= MAX_F; f++) {
-		for (n = 0; n <= MAX_N; n++) {
+	for (f = 0; f <= MAX_F; f++)
+		for (n = 0; n <= MAX_N; n++)
 			for (d = 0; d <= MAX_D; d++) {
-				long f_out, f_diff;	/* 20.12 */
+				long f_out;	/* 20.12 */
+				long f_diff;	/* 20.12 */
 
 				f_out =
 				    ((((n + 1) << 12) / ((d +
@@ -378,8 +217,6 @@ static void neoCalcVCLK(const struct fb_info *info, struct neofb_par *par,
 					f_best = f;
 				}
 			}
-		}
-	}
 
 	if (info->fix.accel == FB_ACCEL_NEOMAGIC_NM2200 ||
 	    info->fix.accel == FB_ACCEL_NEOMAGIC_NM2230 ||
@@ -395,7 +232,7 @@ static void neoCalcVCLK(const struct fb_info *info, struct neofb_par *par,
 	par->VCLK3Denominator = d_best;
 
 #ifdef NEOFB_DEBUG
-	printk("neoVCLK: f:%d NumLow=%d NumHi=%d Den=%d Df=%f\n",
+	printk("neoVCLK: f:%d NumLow=%d NumHi=%d Den=%d Df=%d\n",
 	       f_target >> 12,
 	       par->VCLK3NumeratorLow,
 	       par->VCLK3NumeratorHigh,
@@ -410,6 +247,7 @@ static void neoCalcVCLK(const struct fb_info *info, struct neofb_par *par,
  */
 
 static int vgaHWInit(const struct fb_var_screeninfo *var,
+		     const struct fb_info *info,
 		     struct neofb_par *par, struct xtimings *timings)
 {
 	par->MiscOutReg = 0x23;
@@ -514,41 +352,173 @@ static int vgaHWInit(const struct fb_var_screeninfo *var,
 	return 0;
 }
 
-static void neofb_update_start(struct fb_info *info,
-			       struct fb_var_screeninfo *var)
+static void vgaHWLock(void)
 {
-	int oldExtCRTDispAddr;
-	int Base;
-
-	DBG("neofb_update_start");
-
-	Base = (var->yoffset * var->xres_virtual + var->xoffset) >> 2;
-	Base *= (var->bits_per_pixel + 7) / 8;
-
-	neoUnlock();
-
-	/*
-	 * These are the generic starting address registers.
-	 */
-	VGAwCR(0x0C, (Base & 0x00FF00) >> 8);
-	VGAwCR(0x0D, (Base & 0x00FF));
-
-	/*
-	 * Make sure we don't clobber some other bits that might already
-	 * have been set. NOTE: NM2200 has a writable bit 3, but it shouldn't
-	 * be needed.
-	 */
-	oldExtCRTDispAddr = VGArGR(0x0E);
-	VGAwGR(0x0E, (((Base >> 16) & 0x0f) | (oldExtCRTDispAddr & 0xf0)));
-
-	neoLock();
+	/* Protect CRTC[0-7] */
+	VGAwCR(0x11, VGArCR(0x11) | 0x80);
 }
 
-/* -------------------------------------------------------------------------*/
+static void vgaHWUnlock(void)
+{
+	/* Unprotect CRTC[0-7] */
+	VGAwCR(0x11, VGArCR(0x11) & ~0x80);
+}
+
+static void neoLock(void)
+{
+	VGAwGR(0x09, 0x00);
+	vgaHWLock();
+}
+
+static void neoUnlock(void)
+{
+	vgaHWUnlock();
+	VGAwGR(0x09, 0x26);
+}
+
+/*
+ * vgaHWSeqReset
+ *      perform a sequencer reset.
+ */
+void vgaHWSeqReset(int start)
+{
+	if (start)
+		VGAwSEQ(0x00, 0x01);	/* Synchronous Reset */
+	else
+		VGAwSEQ(0x00, 0x03);	/* End Reset */
+}
+
+void vgaHWProtect(int on)
+{
+	unsigned char tmp;
+
+	if (on) {
+		/*
+		 * Turn off screen and disable sequencer.
+		 */
+		tmp = VGArSEQ(0x01);
+
+		vgaHWSeqReset(1);	/* start synchronous reset */
+		VGAwSEQ(0x01, tmp | 0x20);	/* disable the display */
+
+		VGAenablePalette();
+	} else {
+		/*
+		 * Reenable sequencer, then turn on screen.
+		 */
+
+		tmp = VGArSEQ(0x01);
+
+		VGAwSEQ(0x01, tmp & ~0x20);	/* reenable display */
+		vgaHWSeqReset(0);	/* clear synchronousreset */
+
+		VGAdisablePalette();
+	}
+}
+
+static void vgaHWRestore(const struct fb_info *info,
+			 const struct neofb_par *par)
+{
+	int i;
+
+	VGAwMISC(par->MiscOutReg);
+
+	for (i = 1; i < 5; i++)
+		VGAwSEQ(i, par->Sequencer[i]);
+
+	/* Ensure CRTC registers 0-7 are unlocked by clearing bit 7 or CRTC[17] */
+	VGAwCR(17, par->CRTC[17] & ~0x80);
+
+	for (i = 0; i < 25; i++)
+		VGAwCR(i, par->CRTC[i]);
+
+	for (i = 0; i < 9; i++)
+		VGAwGR(i, par->Graphics[i]);
+
+	VGAenablePalette();
+
+	for (i = 0; i < 21; i++)
+		VGAwATTR(i, par->Attribute[i]);
+
+	VGAdisablePalette();
+}
 
 
-static int neofb_check_var(struct fb_var_screeninfo *var,
-			   struct fb_info *info)
+/* -------------------- Hardware specific routines ------------------------- */
+
+/*
+ * Hardware Acceleration for Neo2200+
+ */
+static inline void neo2200_wait_idle(struct neofb_par *par)
+{
+	int waitcycles;
+
+	while (par->neo2200->bltStat & 1)
+		waitcycles++;
+}
+
+static inline void neo2200_wait_fifo(struct neofb_par *par,
+				     int requested_fifo_space)
+{
+	//  ndev->neo.waitfifo_calls++;
+	//  ndev->neo.waitfifo_sum += requested_fifo_space;
+
+	/* FIXME: does not work
+	   if (neo_fifo_space < requested_fifo_space)
+	   {
+	   neo_fifo_waitcycles++;
+
+	   while (1)
+	   {
+	   neo_fifo_space = (neo2200->bltStat >> 8);
+	   if (neo_fifo_space >= requested_fifo_space)
+	   break;
+	   }
+	   }
+	   else
+	   {
+	   neo_fifo_cache_hits++;
+	   }
+
+	   neo_fifo_space -= requested_fifo_space;
+	 */
+
+	neo2200_wait_idle(par);
+}
+
+static inline void neo2200_accel_init(struct fb_info *fb,
+				      struct fb_var_screeninfo *var)
+{
+	struct neofb_par *par = (struct neofb_par *) fb->par;
+	Neo2200 *neo2200 = par->neo2200;
+	u32 bltMod, pitch;
+
+	neo2200_wait_idle(par);
+
+	switch (var->bits_per_pixel) {
+	case 8:
+		bltMod = NEO_MODE1_DEPTH8;
+		pitch = var->xres_virtual;
+		break;
+	case 15:
+	case 16:
+		bltMod = NEO_MODE1_DEPTH16;
+		pitch = var->xres_virtual * 2;
+		break;
+	default:
+		printk(KERN_ERR
+		       "neofb: neo2200_accel_init: unexpected bits per pixel!\n");
+		return;
+	}
+
+	neo2200->bltStat = bltMod << 16;
+	neo2200->pitch = (pitch << 16) | pitch;
+}
+
+/* --------------------------------------------------------------------- */
+
+static int
+neofb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 {
 	struct neofb_par *par = (struct neofb_par *) info->par;
 	unsigned int pixclock = var->pixclock;
@@ -566,6 +536,18 @@ static int neofb_check_var(struct fb_var_screeninfo *var,
 
 	if (timings.pixclock > par->maxClock)
 		return -EINVAL;
+
+	timings.dblscan = var->vmode & FB_VMODE_DOUBLE;
+	timings.interlaced = var->vmode & FB_VMODE_INTERLACED;
+	timings.HDisplay = var->xres;
+	timings.HSyncStart = timings.HDisplay + var->right_margin;
+	timings.HSyncEnd = timings.HSyncStart + var->hsync_len;
+	timings.HTotal = timings.HSyncEnd + var->left_margin;
+	timings.VDisplay = var->yres;
+	timings.VSyncStart = timings.VDisplay + var->lower_margin;
+	timings.VSyncEnd = timings.VSyncStart + var->vsync_len;
+	timings.VTotal = timings.VSyncEnd + var->upper_margin;
+	timings.sync = var->sync;
 
 	/* Is the mode larger than the LCD panel? */
 	if ((var->xres > par->NeoPanelWidth) ||
@@ -604,17 +586,12 @@ static int neofb_check_var(struct fb_var_screeninfo *var,
 		return -EINVAL;
 	}
 
-
-	if (!par->neo2200)
-		var->accel_flags &= ~FB_ACCELF_TEXT;
-
 	var->red.msb_right = 0;
 	var->green.msb_right = 0;
 	var->blue.msb_right = 0;
 
 	switch (var->bits_per_pixel) {
-#ifdef FBCON_HAS_CFB8
-	case 8:
+	case 8:		/* PSEUDOCOLOUR, 256 */
 		var->transp.offset = 0;
 		var->transp.length = 0;
 		var->red.offset = 0;
@@ -624,10 +601,8 @@ static int neofb_check_var(struct fb_var_screeninfo *var,
 		var->blue.offset = 0;
 		var->blue.length = 8;
 		break;
-#endif
 
-#ifdef FBCON_HAS_CFB16
-	case 16:
+	case 16:		/* DIRECTCOLOUR, 64k */
 		var->transp.offset = 0;
 		var->transp.length = 0;
 		var->red.offset = 11;
@@ -637,10 +612,8 @@ static int neofb_check_var(struct fb_var_screeninfo *var,
 		var->blue.offset = 0;
 		var->blue.length = 5;
 		break;
-#endif
 
-#ifdef FBCON_HAS_CFB24
-	case 24:
+	case 24:		/* TRUECOLOUR, 16m */
 		var->transp.offset = 0;
 		var->transp.length = 0;
 		var->red.offset = 16;
@@ -648,14 +621,10 @@ static int neofb_check_var(struct fb_var_screeninfo *var,
 		var->green.offset = 8;
 		var->green.length = 8;
 		var->blue.offset = 0;
-		var->blue.length = 8;
-		var->accel_flags &= ~FB_ACCELF_TEXT;
 		break;
-#endif
 
 #ifdef NO_32BIT_SUPPORT_YET
-# ifdef FBCON_HAS_CFB32
-	case 32:
+	case 32:		/* TRUECOLOUR, 16m */
 		var->transp.offset = 24;
 		var->transp.length = 8;
 		var->red.offset = 16;
@@ -664,11 +633,11 @@ static int neofb_check_var(struct fb_var_screeninfo *var,
 		var->green.length = 8;
 		var->blue.offset = 0;
 		var->blue.length = 8;
-		var->accel_flags &= ~FB_ACCELF_TEXT;
 		break;
-# endif
 #endif
 	default:
+		printk(KERN_WARNING "neofb: no support for %dbpp\n",
+		       var->bits_per_pixel);
 		return -EINVAL;
 	}
 
@@ -704,33 +673,26 @@ static int neofb_check_var(struct fb_var_screeninfo *var,
 	if (var->yoffset + var->yres > var->yres_virtual)
 		var->yoffset = var->yres_virtual - var->yres;
 
-	if (var->bits_per_pixel >= 24)
+	if (var->bits_per_pixel >= 24 || !par->neo2200)
 		var->accel_flags &= ~FB_ACCELF_TEXT;
 	return 0;
 }
 
 static int neofb_set_par(struct fb_info *info)
 {
-	unsigned int pixclock = info->var.pixclock;
 	struct neofb_par *par = (struct neofb_par *) info->par;
 	struct xtimings timings;
-	int hoffset, voffset;
 	unsigned char temp;
 	int i, clock_hi = 0;
 	int lcd_stretch;
+	int hoffset, voffset;
 
 	DBG("neofb_set_par");
 
-	if (!pixclock)
-		pixclock = 10000;	/* 10ns = 100MHz */
-	timings.pixclock = 1000000000 / pixclock;
-	if (timings.pixclock < 1)
-		timings.pixclock = 1;
+	neoUnlock();
 
-	/*
-	 * This will allocate the datastructure and initialize all of the
-	 * generic VGA registers.
-	 */
+	vgaHWProtect(1);	/* Blank the screen */
+
 	timings.dblscan = info->var.vmode & FB_VMODE_DOUBLE;
 	timings.interlaced = info->var.vmode & FB_VMODE_INTERLACED;
 	timings.HDisplay = info->var.xres;
@@ -742,8 +704,17 @@ static int neofb_set_par(struct fb_info *info)
 	timings.VSyncEnd = timings.VSyncStart + info->var.vsync_len;
 	timings.VTotal = timings.VSyncEnd + info->var.upper_margin;
 	timings.sync = info->var.sync;
+	timings.pixclock = PICOS2KHZ(info->var.pixclock);
 
-	if (vgaHWInit(&info->var, par, &timings))
+	if (timings.pixclock < 1)
+		timings.pixclock = 1;
+
+	/*
+	 * This will allocate the datastructure and initialize all of the
+	 * generic VGA registers.
+	 */
+
+	if (vgaHWInit(&info->var, info, par, &timings))
 		return -EINVAL;
 
 	/*
@@ -948,18 +919,14 @@ static int neofb_set_par(struct fb_info *info)
 	/* Since we program the clocks ourselves, always use VCLK3. */
 	par->MiscOutReg |= 0x0C;
 
-	neoUnlock();
-
-	vgaHWProtect(1);	/* Blank the screen */
-
 	/* linear colormap for non palettized modes */
 	switch (info->var.bits_per_pixel) {
 	case 8:
-		/* PSEUDOCOLOUR, 256 */
+		/* PseudoColor, 256 */
 		info->fix.visual = FB_VISUAL_PSEUDOCOLOR;
 		break;
 	case 16:
-		/* DIRECTCOLOUR, 64k */
+		/* DirectColor, 64k */
 		info->fix.visual = FB_VISUAL_DIRECTCOLOR;
 
 		for (i = 0; i < 64; i++) {
@@ -974,7 +941,7 @@ static int neofb_set_par(struct fb_info *info)
 #ifdef NO_32BIT_SUPPORT_YET
 	case 32:
 #endif
-		/* TRUECOLOUR, 16m */
+		/* TrueColor, 16m */
 		info->fix.visual = FB_VISUAL_TRUECOLOR;
 
 		for (i = 0; i < 256; i++) {
@@ -1164,12 +1131,43 @@ static int neofb_set_par(struct fb_info *info)
 	return 0;
 }
 
+static void neofb_update_start(struct fb_info *info,
+			       struct fb_var_screeninfo *var)
+{
+	int oldExtCRTDispAddr;
+	int Base;
+
+	DBG("neofb_update_start");
+
+	Base = (var->yoffset * var->xres_virtual + var->xoffset) >> 2;
+	Base *= (var->bits_per_pixel + 7) / 8;
+
+	neoUnlock();
+
+	/*
+	 * These are the generic starting address registers.
+	 */
+	VGAwCR(0x0C, (Base & 0x00FF00) >> 8);
+	VGAwCR(0x0D, (Base & 0x00FF));
+
+	/*
+	 * Make sure we don't clobber some other bits that might already
+	 * have been set. NOTE: NM2200 has a writable bit 3, but it shouldn't
+	 * be needed.
+	 */
+	oldExtCRTDispAddr = VGArGR(0x0E);
+	VGAwGR(0x0E, (((Base >> 16) & 0x0f) | (oldExtCRTDispAddr & 0xf0)));
+
+	neoLock();
+}
+
 /*
  *    Pan or Wrap the Display
  */
-static int neofb_pan_display(struct fb_var_screeninfo *var,
-			     struct fb_info *info)
+static int neofb_pan_display(struct fb_var_screeninfo *var, int con,
+			     struct fb_info *fb)
 {
+	struct fb_info *info = (struct fb_info *) fb;
 	u_int y_bottom;
 
 	y_bottom = var->yoffset;
@@ -1179,26 +1177,71 @@ static int neofb_pan_display(struct fb_var_screeninfo *var,
 
 	if (var->xoffset > (var->xres_virtual - var->xres))
 		return -EINVAL;
-	if (y_bottom > info->var.yres_virtual)
+	if (y_bottom > fb->var.yres_virtual)
 		return -EINVAL;
 
 	neofb_update_start(info, var);
 
-	info->var.xoffset = var->xoffset;
-	info->var.yoffset = var->yoffset;
+	fb->var.xoffset = var->xoffset;
+	fb->var.yoffset = var->yoffset;
 
 	if (var->vmode & FB_VMODE_YWRAP)
-		info->var.vmode |= FB_VMODE_YWRAP;
+		fb->var.vmode |= FB_VMODE_YWRAP;
 	else
-		info->var.vmode &= ~FB_VMODE_YWRAP;
+		fb->var.vmode &= ~FB_VMODE_YWRAP;
+
+	return 0;
+}
+
+static int neofb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+			   u_int transp, struct fb_info *fb)
+{
+	if (regno >= NR_PALETTE)
+		return -EINVAL;
+
+	switch (fb->var.bits_per_pixel) {
+	case 8:
+		outb(regno, 0x3c8);
+
+		outb(red >> 10, 0x3c9);
+		outb(green >> 10, 0x3c9);
+		outb(blue >> 10, 0x3c9);
+		break;
+	case 16:
+		if (regno < 16)
+			((u16 *) fb->pseudo_palette)[regno] =
+			    ((red & 0xf800)) | ((green & 0xfc00) >> 5) |
+			    ((blue & 0xf800) >> 11);
+		break;
+	case 24:
+		if (regno < 16)
+			((u32 *) fb->pseudo_palette)[regno] =
+			    ((red & 0xff00) << 8) | ((green & 0xff00)) |
+			    ((blue & 0xff00) >> 8);
+		break;
+#ifdef NO_32BIT_SUPPORT_YET
+	case 32:
+		if (regno < 16)
+			((u32 *) fb->pseudo_palette)[regno] =
+			    ((transp & 0xff00) << 16) | ((red & 0xff00) <<
+							 8) | ((green &
+								0xff00)) |
+			    ((blue & 0xff00) >> 8);
+		break;
+#endif
+	default:
+		return 1;
+	}
 	return 0;
 }
 
 /*
  *    (Un)Blank the display.
  */
-static int neofb_blank(int blank, struct fb_info *info)
+static int neofb_blank(int blank, struct fb_info *fb)
 {
+	//  struct fb_info *info = (struct fb_info *)fb;
+
 	/*
 	 *  Blank the screen if blank_mode != 0, else unblank. If
 	 *  blank == NULL then the caller blanks by setting the CLUT
@@ -1227,64 +1270,6 @@ static int neofb_blank(int blank, struct fb_info *info)
 	default:		/* case 0, or anything else: unblank */
 		break;
 	}
-	return 0;
-}
-
-/*
- *    Set a single color register. Return != 0 for invalid regno.
- */
-static int neofb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-			   u_int transp, struct fb_info *info)
-{
-	if (regno >= NR_PALETTE)
-		return -EINVAL;
-
-	switch (info->var.bits_per_pixel) {
-#ifdef FBCON_HAS_CFB8
-	case 8:
-		outb(regno, 0x3c8);
-
-		outb(red >> 10, 0x3c9);
-		outb(green >> 10, 0x3c9);
-		outb(blue >> 10, 0x3c9);
-		break;
-#endif
-
-#ifdef FBCON_HAS_CFB16
-	case 16:
-		if (regno < 16)
-			((u16 *) info->pseudo_palette)[regno] =
-			    ((red & 0xf800)) | ((green & 0xfc00) >> 5) |
-			    ((blue & 0xf800) >> 11);
-		break;
-#endif
-
-#ifdef FBCON_HAS_CFB24
-	case 24:
-		if (regno < 16)
-			((u32 *) info->pseudo_palette)[regno] =
-			    ((red & 0xff00) << 8) | ((green & 0xff00)) |
-			    ((blue & 0xff00) >> 8);
-		break;
-#endif
-
-#ifdef NO_32BIT_SUPPORT_YET
-#ifdef FBCON_HAS_CFB32
-	case 32:
-		if (regno < 16)
-			((u32 *) info->pseudo_palette)[regno] =
-			    ((transp & 0xff00) << 16) | ((red & 0xff00) <<
-							 8) | ((green &
-								0xff00)) |
-			    ((blue & 0xff00) >> 8);
-		break;
-#endif
-#endif
-
-	default:
-		return 1;
-	}
-
 	return 0;
 }
 
@@ -1400,95 +1385,89 @@ neo2200fb_imageblit(struct fb_info *info, struct fb_image *image)
 }
 
 static struct fb_ops neofb_ops = {
-	owner:THIS_MODULE,
-	fb_set_var:neofb_set_var,
-	fb_set_cmap:gen_set_cmap,
-	fb_pan_display:neofb_pan_display,
-	fb_get_fix:gen_get_fix,
-	fb_get_var:gen_get_var,
-	fb_get_cmap:gen_get_cmap,
-	fb_check_var:neofb_check_var,
-	fb_set_par:neofb_set_par,
-	fb_blank:neofb_blank,
-	fb_setcolreg:neofb_setcolreg,
-	fb_fillrect:neo2200fb_fillrect,
-	fb_copyarea:neo2200fb_copyarea,
-	fb_imageblit:neo2200fb_imageblit,
+	owner:		THIS_MODULE,
+	fb_check_var:	neofb_check_var,
+	fb_set_par:	neofb_set_par,
+	fb_setcolreg:	neofb_setcolreg,
+	fb_pan_display:	neofb_pan_display,
+	fb_blank:	neofb_blank,
+	fb_fillrect:	cfb_fillrect,
+	fb_copyarea:	cfb_copyarea,
+	fb_imageblit:	cfb_imageblit,
 };
 
 /* --------------------------------------------------------------------- */
 
 static struct fb_var_screeninfo __devinitdata neofb_var640x480x8 = {
-	accel_flags:FB_ACCELF_TEXT,
-	xres:640,
-	yres:480,
-	xres_virtual:640,
-	yres_virtual:30000,
-	bits_per_pixel:8,
-	pixclock:39722,
-	left_margin:48,
-	right_margin:16,
-	upper_margin:33,
-	lower_margin:10,
-	hsync_len:96,
-	vsync_len:2,
-	sync:0,
-	vmode:FB_VMODE_NONINTERLACED
+	accel_flags:	FB_ACCELF_TEXT,
+	xres:		640,
+	yres:		480,
+	xres_virtual:	640,
+	yres_virtual:	30000,
+	bits_per_pixel:	8,
+	pixclock:	39722,
+	left_margin:	48,
+	right_margin:	16,
+	upper_margin:	33,
+	lower_margin:	10,
+	hsync_len:	96,
+	vsync_len:	2,
+	vmode:		FB_VMODE_NONINTERLACED
 };
 
 static struct fb_var_screeninfo __devinitdata neofb_var800x600x8 = {
-	accel_flags:FB_ACCELF_TEXT,
-	xres:800,
-	yres:600,
-	xres_virtual:800,
-	yres_virtual:30000,
-	bits_per_pixel:8,
-	pixclock:25000,
-	left_margin:88,
-	right_margin:40,
-	upper_margin:23,
-	lower_margin:1,
-	hsync_len:128,
-	vsync_len:4,
-	sync:FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
-	vmode:FB_VMODE_NONINTERLACED
+	accel_flags:	FB_ACCELF_TEXT,
+	xres:		800,
+	yres:		600,
+	xres_virtual:	800,
+	yres_virtual:	30000,
+	bits_per_pixel:	8,
+	pixclock:	25000,
+	left_margin:	88,
+	right_margin:	40,
+	upper_margin:	23,
+	lower_margin:	1,
+	hsync_len:	128,
+	vsync_len:	4,
+	sync:		FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
+	vmode:		FB_VMODE_NONINTERLACED
 };
 
 static struct fb_var_screeninfo __devinitdata neofb_var1024x768x8 = {
-	accel_flags:FB_ACCELF_TEXT,
-	xres:1024,
-	yres:768,
-	xres_virtual:1024,
-	yres_virtual:30000,
-	bits_per_pixel:8,
-	pixclock:15385,
-	left_margin:160,
-	right_margin:24,
-	upper_margin:29,
-	lower_margin:3,
-	hsync_len:136,
-	vsync_len:6,
-	sync:FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
-	vmode:FB_VMODE_NONINTERLACED
+	accel_flags:	FB_ACCELF_TEXT,
+	xres:		1024,
+	yres:		768,
+	xres_virtual:	1024,
+	yres_virtual:	30000,
+	bits_per_pixel:	8,
+	pixclock:	15385,
+	left_margin:	160,
+	right_margin:	24,
+	upper_margin:	29,
+	lower_margin:	3,
+	hsync_len:	136,
+	vsync_len:	6,
+	sync:		FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
+	vmode:		FB_VMODE_NONINTERLACED
 };
 
 #ifdef NOT_DONE
 static struct fb_var_screeninfo __devinitdata neofb_var1280x1024x8 = {
-	accel_flags:FB_ACCELF_TEXT,
-	xres:1280,
-	yres:1024,
-	xres_virtual:1280,
-	yres_virtual:30000,
-	bits_per_pixel:8,
-	pixclock:9260,
-	left_margin:248,
-	right_margin:48,
-	upper_margin:38,
-	lower_margin:1,
-	hsync_len:112,
-	vsync_len:3,
-	sync:FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
-	vmode:FB_VMODE_NONINTERLACED
+	accel_flags:	FB_ACCELF_TEXT,
+	xres:		1280,
+	yres:		1024,
+	xres_virtual:	1280,
+	yres_virtual:	30000,
+	bits_per_pixel:	8,
+	pixclock:	9260,
+	left_margin:	248,
+	right_margin:	48,
+	upper_margin:	38,
+	lower_margin:	1,
+	hsync_len:	112,
+	vsync_len:	3,
+	sync:		FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
+	vmode:		FB_VMODE_NONINTERLACED
 };
 #endif
 
@@ -1564,7 +1543,6 @@ static int __devinit neo_map_video(struct fb_info *info,
 		printk(KERN_INFO "neofb: mapped framebuffer at %p\n",
 		       info->screen_base);
 
-
 #ifdef CONFIG_MTRR
 	par->mtrr =
 	    mtrr_add(info->fix.smem_start, pci_resource_len(dev, 0),
@@ -1573,7 +1551,6 @@ static int __devinit neo_map_video(struct fb_info *info,
 
 	/* Clear framebuffer, it's all white in memory after boot */
 	memset(info->screen_base, 0, info->fix.smem_len);
-
 	return 0;
 }
 
@@ -1763,22 +1740,24 @@ static int __devinit neo_init_hw(struct fb_info *info)
 }
 
 
-static struct fb_info *__devinit neo_alloc_fb_info(const struct
+static struct fb_info *__devinit neo_alloc_fb_info(struct pci_dev *dev, const struct
 						   pci_device_id *id)
 {
-	struct neofb_par *par;
 	struct fb_info *info;
+	struct neofb_par *par;
 
-	info =
-	    kmalloc(sizeof(struct fb_info) + sizeof(u32) * 16, GFP_KERNEL);
+	info = kmalloc(sizeof(struct fb_info) + sizeof(u32) * 16, GFP_KERNEL); 
 
 	if (!info)
 		return NULL;
 
-	memset(info, 0, sizeof(struct fb_info));
+	memset(info, 0, sizeof(struct fb_info) + sizeof(u32)*16);
 
 	par = &default_par;
 	memset(par, 0, sizeof(struct neofb_par));
+
+	info->currcon = -1;
+	info->fix.accel = id->driver_data;
 
 	par->pci_burst = !nopciburst;
 	par->lcd_stretch = !nostretch;
@@ -1791,7 +1770,7 @@ static struct fb_info *__devinit neo_alloc_fb_info(const struct
 		par->external_display = external;
 	}
 
-	switch (id->driver_data) {
+	switch (info->fix.accel) {
 	case FB_ACCEL_NEOMAGIC_NM2070:
 		sprintf(info->fix.id, "MagicGraph 128");
 		break;
@@ -1834,15 +1813,10 @@ static struct fb_info *__devinit neo_alloc_fb_info(const struct
 	info->var.width = -1;
 	info->var.accel_flags = 0;
 
-	strcpy(info->modename, info->fix.id);
-
 	info->fbops = &neofb_ops;
 	info->flags = FBINFO_FLAG_DEFAULT;
 	info->par = par;
 	info->pseudo_palette = (void *) (info + 1);
-
-	fb_alloc_cmap(&info->cmap, NR_PALETTE, 0);
-
 	return info;
 }
 
@@ -1875,7 +1849,7 @@ static int __devinit neofb_probe(struct pci_dev *dev,
 		return err;
 
 	err = -ENOMEM;
-	info = neo_alloc_fb_info(id);
+	info = neo_alloc_fb_info(dev, id);
 	if (!info)
 		goto failed;
 
@@ -1893,7 +1867,7 @@ static int __devinit neofb_probe(struct pci_dev *dev,
 	if (err)
 		goto failed;
 
-	neofb_set_var(neofb_var, -1, info);
+	gen_set_var(neofb_var, -1, info);
 
 	/*
 	 * Calculate the hsync and vsync frequencies.  Note that
@@ -1902,17 +1876,17 @@ static int __devinit neofb_probe(struct pci_dev *dev,
 	 *  (1953125000 * 512 = 1e12)
 	 */
 	h_sync = 1953125000 / info->var.pixclock;
-	h_sync = h_sync * 512 / (info->var.xres + info->var.left_margin +
-				 info->var.right_margin +
-				 info->var.hsync_len);
+	h_sync =
+	    h_sync * 512 / (info->var.xres + info->var.left_margin +
+			    info->var.right_margin + info->var.hsync_len);
 	v_sync =
 	    h_sync / (info->var.yres + info->var.upper_margin +
 		      info->var.lower_margin + info->var.vsync_len);
 
 	printk(KERN_INFO "neofb v" NEOFB_VERSION
 	       ": %dkB VRAM, using %dx%d, %d.%03dkHz, %dHz\n",
-	       info->fix.smem_len >> 10, info->var.xres, info->var.yres,
-	       h_sync / 1000, h_sync % 1000, v_sync);
+	       info->fix.smem_len >> 10, info->var.xres,
+	       info->var.yres, h_sync / 1000, h_sync % 1000, v_sync);
 
 
 	err = register_framebuffer(info);
@@ -1999,10 +1973,10 @@ static struct pci_device_id neofb_devices[] __devinitdata = {
 MODULE_DEVICE_TABLE(pci, neofb_devices);
 
 static struct pci_driver neofb_driver = {
-	name:"neofb",
-	id_table:neofb_devices,
-	probe:neofb_probe,
-	remove:__devexit_p(neofb_remove)
+	name:		"neofb",
+	id_table:	neofb_devices,
+	probe:		neofb_probe,
+	remove:		__devexit_p(neofb_remove)
 };
 
 /* **************************** init-time only **************************** */
@@ -2054,7 +2028,7 @@ int __init neofb_setup(char *options)
 	return 0;
 }
 
-static int __init initialized = 0;
+static int __initdata initialized = 0;
 
 int __init neofb_init(void)
 {

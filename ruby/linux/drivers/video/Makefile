@@ -9,9 +9,7 @@ obj-y	:=
 # All of the (potential) objects that export symbols.
 # This list comes from 'grep -l EXPORT_SYMBOL *.[hc]'.
 
-export-objs    := fbmem.o fbcmap.o fbmon.o modedb.o vga.o cyber2000fb.o sa1100fb.o
-
-mod-subdirs	:= aty fonts matrox riva sis tdfx
+export-objs    := fbmem.o fbgen.o fbcmap.o fbmon.o modedb.o vga.o cyber2000fb.o sa1100fb.o
 
 # Each configuration option enables a list of files.
 
@@ -45,6 +43,7 @@ obj-$(CONFIG_FB_Q40)              += q40fb.o cfbfillrect.o cfbcopyarea.o cfbimgb
 obj-$(CONFIG_FB_ATARI)            += atafb.o
 obj-$(CONFIG_FB_ATY128)           += aty128fb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 obj-$(CONFIG_FB_RADEON)           += radeonfb.o
+obj-$(CONFIG_FB_NEOMAGIC)	  += neofb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 obj-$(CONFIG_FB_IGA)              += igafb.o
 obj-$(CONFIG_FB_CONTROL)          += controlfb.o
 obj-$(CONFIG_FB_PLATINUM)         += platinumfb.o
@@ -80,7 +79,7 @@ obj-$(CONFIG_FB_STI)             += stifb.o sticore.o
 obj-$(CONFIG_FB_PMAG_BA)          += pmag-ba-fb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 obj-$(CONFIG_FB_PMAGB_B)          += pmagb-b-fb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 obj-$(CONFIG_FB_MAXINE)           += maxinefb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
-obj-$(CONFIG_FB_TX3912)           += tx3912fb.o
+obj-$(CONFIG_FB_TX3912)           += tx3912fb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 
 obj-$(CONFIG_FB_MATROX)		  += matrox/
 obj-$(CONFIG_FB_RIVA)		  += riva/
@@ -93,7 +92,7 @@ obj-$(CONFIG_FB_BWTWO)            += bwtwofb.o
 obj-$(CONFIG_FB_HGA)              += hgafb.o  
 obj-$(CONFIG_FB_SA1100)           += sa1100fb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 obj-$(CONFIG_FB_VIRTUAL)          += vfb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o 
-obj-$(CONFIG_FB_HIT)              += hitfb.o
+obj-$(CONFIG_FB_HIT)              += hitfb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o
 obj-$(CONFIG_FB_E1355)            += epson1355fb.o
 obj-$(CONFIG_FB_PVR2)             += pvr2fb.o
 obj-$(CONFIG_FB_VOODOO1)          += sstfb.o
@@ -109,8 +108,7 @@ include $(TOPDIR)/Rules.make
 clean:
 	rm -f core *.o *.a *.s
 
-../conmakehash: ../conmakehash.c
-	$(HOSTCC) $(HOSTCFLAGS) -o ../conmakehash ../conmakehash.c
+host-progs := ../conmakehash
 
 promcon_tbl.c: prom.uni ../char/conmakehash
 	../char/conmakehash prom.uni | \

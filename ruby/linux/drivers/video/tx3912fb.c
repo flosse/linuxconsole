@@ -1,16 +1,16 @@
 /*
- * linux/drivers/video/tx3912fb.c
+ *  drivers/video/tx3912fb.c
  *
- * Copyright (C) 1999 Harald Koerfgen
- * Copyright (C) 2001 Steven Hill (sjhill@realitydiluted.com)
- * Copyright (C) 2001 Dean Scott (dean@thestuff.net)
+ *  Copyright (C) 1999 Harald Koerfgen
+ *  Copyright (C) 2001 Steven Hill (sjhill@realitydiluted.com)
  *
  * This file is subject to the terms and conditions of the GNU General Public
  * License. See the file COPYING in the main directory of this archive for
  * more details.
  *
- * Framebuffer for LCD controller in TMPR3912/05 and PR31700 processors
+ *  Framebuffer for LCD controller in TMPR3912/05 and PR31700 processors
  */
+#include <linux/config.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/errno.h>
@@ -21,48 +21,73 @@
 #include <linux/init.h>
 #include <linux/pm.h>
 #include <linux/fb.h>
+#include <asm/io.h>
 #include <asm/bootinfo.h>
 #include <asm/uaccess.h>
-#include <linux/config.h>
-#include "tx3912fb.h"
+#include <asm/tx3912.h>
+#include <video/tx3912.h>
 
 /*
  * Frame buffer, palette and console structures
  */
 static struct fb_info fb_info;
-static u32 pseudo_palette[17];
+static u32 cfb8[16];
 
 static struct fb_fix_screeninfo tx3912fb_fix __initdata = {
-	TX3912FB_NAME, (unsigned long) NULL, 0, FB_TYPE_PACKED_PIXELS, 0,
-	FB_VISUAL_TRUECOLOR, 0, 1, 1, 1, (unsigned long) NULL, 0, FB_ACCEL_NONE
+	id:		"tx3912fb",
+#ifdef CONFIG_NINO_16MB
+	smem_len:	(240 * 320),
+#else
+	smem_len:	((240 * 320)/2),
+#endif
+	type:		FB_TYPE_PACKED_PIXELS,
+	visual:		FB_VISUAL_TRUECOLOR, 
+	xpanstep:	1,
+	ypanstep:	1,
+	ywrapstep:	1,
+	accel:		FB_ACCEL_NONE,
 };
+
+static struct fb_var_screeninfo tx3912fb_var = {
+	xres:		240,
+	yres:		320,
+	xres_virtual:	240,
+	yres_virtual:	320,
+#ifdef CONFIG_NINO_16MB
+	bits_per_pixel:	8,
+	red:		{ 5, 3, 0 },	/* RGB 332 */
+	green:		{ 2, 3, 0 },
+	blue:		{ 0, 2, 0 },
+#else
+	bits_per_pixel:	4,
+#endif
+	activate:	FB_ACTIVATE_NOW,
+	width:		-1,
+	height:		-1,
+	pixclock:	20000,
+	left_margin:	64,
+	right_margin:	64,
+	upper_margin:	32,
+	lower_margin:	32,
+	hsync_len:	64,
+	vsync_len:	2,
+	vmode:		FB_VMODE_NONINTERLACED,
+};
+
+/*
+ * Interface used by the world
+ */
+int tx3912fb_init(void);
 
 static int tx3912fb_setcolreg(u_int regno, u_int red, u_int green,
 			      u_int blue, u_int transp,
-			      struct fb_info *info)
-{
-	if (regno > 255)
-		return 1;
+			      struct fb_info *info);
 
-	red >>= 8;
-	green >>= 8;
-	blue >>= 8;
-
-	switch (info->var.bits_per_pixel) {
-	    case 8:
-		red   &= 0xe000;
-		green &= 0xe000;
-		blue  &= 0xc000;
-
-		((u8 *)(info->pseudo_palette))[regno] =
-		       (red   >>  8) |
-		       (green >> 11) |
-		       (blue  >> 14);
-		break;
-	}
-
-	return 0;
-}
+/*
+ * Macros
+ */
+#define get_line_length(xres_virtual, bpp) \
+                (u_long) (((int) xres_virtual * (int) bpp + 7) >> 3)
 
 /*
  * Frame buffer operations structure used by console driver
@@ -76,91 +101,138 @@ static struct fb_ops tx3912fb_ops = {
 };
 
 /*
+ * Set a single color register
+ */
+static int tx3912fb_setcolreg(u_int regno, u_int red, u_int green,
+			      u_int blue, u_int transp,
+			      struct fb_info *info)
+{
+	if (regno > 255)
+		return 1;
+
+	if (regno < 16)
+		((u32 *)(info->pseudo_palette))[regno] = ((red & 0xe000) >> 8)
+		    | ((green & 0xe000) >> 11)
+		    | ((blue & 0xc000) >> 14);
+	return 0;
+}
+
+/*
  * Initialization of the framebuffer
  */
 int __init tx3912fb_init(void)
 {
-	/* Stop the video logic when frame completes */
-	VidCtrl1 |= ENFREEZEFRAME;
-	IntClear1 |= INT1_LCDINT;
-	while (!(IntStatus1 & INT1_LCDINT));
+	u_long tx3912fb_paddr = 0;
 
 	/* Disable the video logic */
-	VidCtrl1 &= ~(ENVID | DISPON);
+	outl(inl(TX3912_VIDEO_CTRL1) &
+	     ~(TX3912_VIDEO_CTRL1_ENVID | TX3912_VIDEO_CTRL1_DISPON),
+	     TX3912_VIDEO_CTRL1);
 	udelay(200);
 
 	/* Set start address for DMA transfer */
-	VidCtrl3 = tx3912fb_paddr &
-	    (TX3912_VIDCTRL3_VIDBANK_MASK |
-	     TX3912_VIDCTRL3_VIDBASEHI_MASK);
+	outl(tx3912fb_paddr, TX3912_VIDEO_CTRL3);
 
 	/* Set end address for DMA transfer */
-	VidCtrl4 = (tx3912fb_paddr + tx3912fb_size + 1) &
-	    TX3912_VIDCTRL4_VIDBASELO_MASK;
+	outl((tx3912fb_paddr + tx3912fb_fix.smem_len + 1), TX3912_VIDEO_CTRL4);
 
 	/* Set the pixel depth */
-	switch (tx3912fb_info.bits_per_pixel) {
-	    case 1:
+	switch (tx3912fb_var.bits_per_pixel) {
+	case 1:
 		/* Monochrome */
-		VidCtrl1 &= ~TX3912_VIDCTRL1_BITSEL_MASK;
+		outl(inl(TX3912_VIDEO_CTRL1) &
+		     ~TX3912_VIDEO_CTRL1_BITSEL_MASK, TX3912_VIDEO_CTRL1);
 		tx3912fb_fix.visual = FB_VISUAL_MONO10;
 		break;
-	    case 4:
+	case 4:
 		/* 4-bit gray */
-		VidCtrl1 &= ~TX3912_VIDCTRL1_BITSEL_MASK;
-		VidCtrl1 |= TX3912_VIDCTRL1_4BIT_GRAY;
+		outl(inl(TX3912_VIDEO_CTRL1) &
+		     ~TX3912_VIDEO_CTRL1_BITSEL_MASK, TX3912_VIDEO_CTRL1);
+		outl(inl(TX3912_VIDEO_CTRL1) |
+		     TX3912_VIDEO_CTRL1_BITSEL_4BIT_GRAY,
+		     TX3912_VIDEO_CTRL1);
 		tx3912fb_fix.visual = FB_VISUAL_TRUECOLOR;
+		tx3912fb_fix.grayscale = 1;
 		break;
-	    case 8:
+	case 8:
 		/* 8-bit color */
-		VidCtrl1 &= ~TX3912_VIDCTRL1_BITSEL_MASK;
-		VidCtrl1 |= TX3912_VIDCTRL1_8BIT_COLOR;
+		outl(inl(TX3912_VIDEO_CTRL1) &
+		     ~TX3912_VIDEO_CTRL1_BITSEL_MASK, TX3912_VIDEO_CTRL1);
+		outl(inl(TX3912_VIDEO_CTRL1) |
+		     TX3912_VIDEO_CTRL1_BITSEL_8BIT_COLOR,
+		     TX3912_VIDEO_CTRL1);
 		tx3912fb_fix.visual = FB_VISUAL_TRUECOLOR;
 		break;
-	    case 2:
-	    default:
+	case 2:
+	default:
 		/* 2-bit gray */
-		VidCtrl1 &= ~TX3912_VIDCTRL1_BITSEL_MASK;
-		VidCtrl1 |= TX3912_VIDCTRL1_2BIT_GRAY;
+		outl(inl(TX3912_VIDEO_CTRL1) &
+		     ~TX3912_VIDEO_CTRL1_BITSEL_MASK, TX3912_VIDEO_CTRL1);
+		outl(inl(TX3912_VIDEO_CTRL1) |
+		     TX3912_VIDEO_CTRL1_BITSEL_2BIT_GRAY,
+		     TX3912_VIDEO_CTRL1);
 		tx3912fb_fix.visual = FB_VISUAL_PSEUDOCOLOR;
+		tx3912fb_fix.grayscale = 1;
 		break;
 	}
 
+	/* Enable the video clock */
+	outl(inl(TX3912_CLK_CTRL) | TX3912_CLK_CTRL_ENVIDCLK,
+		TX3912_CLK_CTRL);
+
 	/* Unfreeze video logic and enable DF toggle */
-	VidCtrl1 &= ~(ENFREEZEFRAME | DFMODE);
+	outl(inl(TX3912_VIDEO_CTRL1) &
+		~(TX3912_VIDEO_CTRL1_ENFREEZEFRAME | TX3912_VIDEO_CTRL1_DFMODE),
+		TX3912_VIDEO_CTRL1);
 	udelay(200);
 
 	/* Clear the framebuffer */
-	memset((void *) tx3912fb_vaddr, 0xff, tx3912fb_size);
+	memset((void *) tx3912fb_fix.smem_start, 0xff, tx3912fb_fix.smem_len);
 	udelay(200);
 
 	/* Enable the video logic */
-	VidCtrl1 |= (DISPON | ENVID);
-	
-	tx3912fb_fix.smem_start = tx3912fb_vaddr;
-	tx3912fb_fix.smem_len   = tx3912fb_size;
+	outl(inl(TX3912_VIDEO_CTRL1) |
+		(TX3912_VIDEO_CTRL1_ENVID | TX3912_VIDEO_CTRL1_DISPON),
+		TX3912_VIDEO_CTRL1);
 
-	fb_info.node = -1;
+	/*
+	 * Memory limit
+	 */
+	tx3912fb_fix.line_length =
+	    get_line_length(tx3912fb_var.xres_virtual, tx3912fb_var.bits_per_pixel);
+	if ((tx3912fb_fix.line_length * tx3912fb_var.yres_virtual) > tx3912fb_fix.smem_len)
+		return -ENOMEM;
+
+	fb_info.node = NODEV;
 	fb_info.fbops = &tx3912fb_ops;
-	fb_info.flags = FBINFO_FLAG_DEFAULT;
-	fb_info.var = tx3912fb_info;
+	fb_info.var = tx3912fb_var;
 	fb_info.fix = tx3912fb_fix;
 	fb_info.pseudo_palette = pseudo_palette;
+	fb_info.flags = FBINFO_FLAG_DEFAULT;
+
+	/* Clear the framebuffer */
+	memset((void *) fb_info.fix.smem_start, 0xff, fb_info.fix.smem_len);
+	udelay(200);
 
 	if (register_framebuffer(&fb_info) < 0)
-		return -EINVAL;
+		return -1;
 
+	printk(KERN_INFO "fb%d: TX3912 frame buffer using %uKB.\n",
+	       GET_FB_IDX(fb_info.node), (u_int) (fb_info.fix.smem_len >> 10));
 	return 0;
 }
 
-static void __exit tx3912fb_exit(void)
+int __init tx3912fb_setup(char *options)
 {
-	unregister_framebuffer(&fb_info);
+	char *this_opt;
+
+	if (!options || !*options)
+		return 0;
+
+	while ((this_opt = strsep(&options, ","))) {
+		if (!strncmp(options, "bpp:", 4))	
+			tx3912fb_var.bits_per_pixel = simple_strtoul(options+4, NULL, 0);
+	}	
 }
 
-#ifdef MODULE
-module_init(tx3912fb_init);
-module_exit(tx3912fb_exit);
-
 MODULE_LICENSE("GPL");
-#endif
