@@ -31,29 +31,7 @@ obj-$(CONFIG_JOYSTICK_TURBOGRAFX)	+= turbografx.o
 obj-$(CONFIG_JOYSTICK_TWIDJOY)		+= twidjoy.o
 obj-$(CONFIG_JOYSTICK_WARRIOR)		+= warrior.o
 
-# I-Force may need both USB and RS-232
-
-CONFIG_JOYSTICK_IFORCE := n
-
-ifeq ($(CONFIG_JOYSTICK_IFORCE_232),y)
-	ifeq ($(CONFIG_JOYSTICK_IFORCE_USB),y)
-		CONFIG_JOYSTICK_IFORCE := y
-	endif
-endif
-
-ifeq ($(CONFIG_JOYSTICK_IFORCE_232),m)
-	CONFIG_JOYSTICK_IFORCE := m
-endif
-
-ifeq ($(CONFIG_JOYSTICK_IFORCE_USB),m)
-	CONFIG_JOYSTICK_IFORCE := m
-endif
-
 subdir-$(CONFIG_JOYSTICK_IFORCE)	+= iforce
-
-ifeq ($(CONFIG_JOYSTICK_IFORCE),y)
-	obj-y += iforce/iforce-drv.o
-endif
 
 # The global Rules.make.
 
