@@ -98,8 +98,6 @@ static void emumousebtn_input_register(void)
 	emumousebtn.idversion = 0x0100;
 
 	input_register_device(&emumousebtn);
-
-	printk(KERN_INFO "input%d: Macintosh mouse button emulation\n", emumousebtn.number);
 }
 
 static void __init mac_hid_init(void)
