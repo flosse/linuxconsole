@@ -20,48 +20,54 @@ comment 'Processor type and features'
 choice 'Processor family' \
 	"386			CONFIG_M386	\
 	 486/Cx486		CONFIG_M486	\
-	 586/K5/5x86/6x86	CONFIG_M586	\
+	 586/K5/5x86/6x86/6x86MX	CONFIG_M586	\
 	 Pentium/TSC		CONFIG_M586TSC	\
-	 PPro/6x86MX		CONFIG_M686 \
+	 PPro			CONFIG_M686 \
 	 K6/II/III		CONFIG_MK6 \
 	 Athlon                 CONFIG_MK7" PPro
 #
 # Define implied options from the CPU selection here
 #
-if [ "$CONFIG_M386" != "y" ]; then
+if [ "$CONFIG_M386" = "y" ]; then
+   define_int  CONFIG_X86_L1_CACHE_BYTES 16
+else
    define_bool CONFIG_X86_WP_WORKS_OK y
    define_bool CONFIG_X86_INVLPG y
    define_bool CONFIG_X86_CMPXCHG y
    define_bool CONFIG_X86_BSWAP y
    define_bool CONFIG_X86_POPAD_OK y
 fi
-if [ "$CONFIG_M386" = "y" -o "$CONFIG_M486" = "y" ]; then
-   define_int CONFIG_X86_L1_CACHE_BYTES 16
-else
-   define_int CONFIG_X86_L1_CACHE_BYTES 32
+if [ "$CONFIG_M486" = "y" ]; then
+   define_int  CONFIG_X86_L1_CACHE_BYTES 16
+   define_bool CONFIG_X86_USE_STRING_486 y
+   define_bool CONFIG_X86_ALIGNMENT_16 y
 fi
-if [ "$CONFIG_M486" = "y" -o "$CONFIG_M586" = "y" ]; then
+if [ "$CONFIG_M586" = "y" ]; then
+   define_int  CONFIG_X86_L1_CACHE_BYTES 32
    define_bool CONFIG_X86_USE_STRING_486 y
    define_bool CONFIG_X86_ALIGNMENT_16 y
 fi
 if [ "$CONFIG_M586TSC" = "y" ]; then
+   define_int  CONFIG_X86_L1_CACHE_BYTES 32
    define_bool CONFIG_X86_USE_STRING_486 y
    define_bool CONFIG_X86_ALIGNMENT_16 y
    define_bool CONFIG_X86_TSC y
 fi
-if [ "$CONFIG_MK6" = "y" ]; then
-   define_bool CONFIG_X86_ALIGNMENT_16 y
-   define_bool CONFIG_X86_TSC y
-   define_bool CONFIG_X86_USE_3DNOW y
-   define_bool CONFIG_X86_USE_PPRO_CHECKSUM y
-fi
 if [ "$CONFIG_M686" = "y" ]; then
+   define_int  CONFIG_X86_L1_CACHE_BYTES 32
    define_bool CONFIG_X86_TSC y
    define_bool CONFIG_X86_GOOD_APIC y
    define_bool CONFIG_X86_PGE y
    define_bool CONFIG_X86_USE_PPRO_CHECKSUM y
 fi
+if [ "$CONFIG_MK6" = "y" ]; then
+   define_int  CONFIG_X86_L1_CACHE_BYTES 32
+   define_bool CONFIG_X86_ALIGNMENT_16 y
+   define_bool CONFIG_X86_TSC y
+   define_bool CONFIG_X86_USE_PPRO_CHECKSUM y
+fi
 if [ "$CONFIG_MK7" = "y" ]; then
+   define_int  CONFIG_X86_L1_CACHE_BYTES 64
    define_bool CONFIG_X86_TSC y
    define_bool CONFIG_X86_GOOD_APIC y
    define_bool CONFIG_X86_USE_3DNOW y

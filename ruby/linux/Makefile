@@ -1,7 +1,7 @@
 VERSION = 2
 PATCHLEVEL = 3
 SUBLEVEL = 99
-EXTRAVERSION = -pre5
+EXTRAVERSION = -pre6
 
 KERNELRELEASE=$(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
 
@@ -33,7 +33,6 @@ NM		= $(CROSS_COMPILE)nm
 STRIP		= $(CROSS_COMPILE)strip
 OBJCOPY		= $(CROSS_COMPILE)objcopy
 OBJDUMP		= $(CROSS_COMPILE)objdump
-MAKE		= make
 MAKEFILES	= $(TOPDIR)/.config
 GENKSYMS	= /sbin/genksyms
 MODFLAGS	= -DMODULE
@@ -344,6 +343,10 @@ modules_install:
 	if [ -f PCMCIA_SCSI_MODULES ]; then inst_mod PCMCIA_SCSI_MODULES pcmcia; fi; \
 	\
 	ls -1 -U *.o | sort > $$MODLIB/.allmods; \
+	if [ -f $$MODLIB/net/3c59x.o ]; then \
+		mkdir -p $$MODLIB/pcmcia; \
+		ln -nfs ../net/3c59x.o $$MODLIB/pcmcia/3c575_cb.o; \
+		MODULES="$$MODULES 3c575_cb.o"; fi; \
 	echo $$MODULES | tr ' ' '\n' | sort | comm -23 $$MODLIB/.allmods - > $$MODLIB/.misc; \
 	if [ -s $$MODLIB/.misc ]; then inst_mod $$MODLIB/.misc misc; fi; \
 	rm -f $$MODLIB/.misc $$MODLIB/.allmods; \
@@ -372,6 +375,7 @@ clean:	archclean
 	rm -f drivers/char/conmakehash
 	rm -f drivers/pci/devlist.h drivers/pci/classlist.h drivers/pci/gen-devlist
 	rm -f drivers/sound/bin2hex drivers/sound/hex2hex
+	rm -f drivers/atm/fore200e_mkfirm drivers/atm/{pca,sba}*{.bin,.bin1,.bin2}
 	rm -f net/khttpd/make_times_h
 	rm -f net/khttpd/times.h
 	rm -f submenu*
@@ -390,6 +394,7 @@ mrproper: clean archmrproper
 	rm -f drivers/sound/msndperm.c
 	rm -f drivers/sound/pndsperm.c
 	rm -f drivers/sound/pndspini.c
+	rm -f drivers/atm/fore200e_*_fw.c drivers/atm/.fore200e_*.fw
 	rm -f .version .config* config.in config.old
 	rm -f scripts/tkparse scripts/kconfig.tk scripts/kconfig.tmp
 	rm -f scripts/lxdialog/*.o scripts/lxdialog/lxdialog
@@ -412,14 +417,15 @@ backup: mrproper
 	sync
 
 sgmldocs: 
+	chmod 755 $(TOPDIR)/scripts/docgen
+	chmod 755 $(TOPDIR)/scripts/gen-all-syms
+	chmod 755 $(TOPDIR)/scripts/kernel-doc
 	$(MAKE) -C $(TOPDIR)/Documentation/DocBook books
 
 psdocs: sgmldocs
-	$(MAKE) -C scripts docproc
 	$(MAKE) -C Documentation/DocBook ps
 
 pdfdocs: sgmldocs
-	$(MAKE) -C scripts docproc
 	$(MAKE) -C Documentation/DocBook pdf
  
 sums:
