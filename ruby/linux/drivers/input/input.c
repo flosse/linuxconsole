@@ -36,6 +36,8 @@
 #include <linux/random.h>
 #include <linux/pm.h>
 #include <linux/proc_fs.h>
+#include <linux/kmod.h>
+#include <linux/interrupt.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 MODULE_DESCRIPTION("Input layer module");
@@ -268,6 +270,115 @@ static void input_unlink_handle(struct input_handle *handle)
         input_find_and_remove(struct input_handle, handle->handler->handle, handle, hnext);
 }
 
+
+/*
+ * Input hotplugging interface - loading event handlers based on
+ * device bitfields.
+ */
+
+#ifdef	CONFIG_HOTPLUG
+
+/*
+ * Input hotplugging invokes what /proc/sys/kernel/hotplug says
+ * (normally /sbin/hotplug) when input devices get added or removed.
+ *
+ * This invokes a user mode policy agent, typically helping to load driver
+ * or other modules, configure the device, and more.  Drivers can provide
+ * a MODULE_DEVICE_TABLE to help with module loading subtasks.
+ *
+ */
+
+#define SPRINTF_BIT(bit, name, max) \
+	do { \
+		envp[i++] = scratch; \
+		scratch += sprintf(scratch, name); \
+		for (j = 0; j < NBITS(max); j++) \
+			scratch += sprintf(scratch, "%ld", dev->bit[j]); \
+		scratch++; \
+	} while (0);
+
+static void input_call_hotplug(char *verb, struct input_dev *dev)
+{
+	char *argv[3], **envp, *buf, *scratch;
+	int i = 0, j, value;
+
+	if (!hotplug_path[0]) {
+		printk(KERN_ERR "input.c: calling hotplug a hotplug agent defined\n");
+		return;
+	}
+
+	if (in_interrupt()) {
+		printk(KERN_ERR "input.c: calling hotplug from interrupt\n");
+		return; 
+	}
+
+	if (!current->fs->root) {
+		printk(KERN_WARNING "input.c: calling hotplug without valid filesystem\n");
+		return; 
+	}
+
+	if (!(envp = (char **) kmalloc(20 * sizeof(char *), GFP_KERNEL))) {
+		printk(KERN_ERR "input.c: not enough memory allocating hotplug environment\n");
+		return;
+	}
+
+	if (!(buf = kmalloc(1024, GFP_KERNEL))) {
+		kfree (envp);
+		printk(KERN_ERR "input.c: not enough memory allocating hotplug environment\n");
+		return;
+	}
+
+	argv[0] = hotplug_path;
+	argv[1] = "input";
+	argv[2] = 0;
+
+	envp[i++] = "HOME=/";
+	envp[i++] = "PATH=/sbin:/bin:/usr/sbin:/usr/bin";
+
+	scratch = buf;
+
+	envp[i++] = scratch;
+	scratch += sprintf(scratch, "ACTION=%s", verb) + 1;
+
+	envp[i++] = scratch;
+	scratch += sprintf(scratch, "PRODUCT=%x/%x/%x/%x",
+		dev->idbus, dev->idvendor, dev->idproduct, dev->idversion) + 1; 
+
+	SPRINTF_BIT(evbit, "EV=", EV_MAX);
+	if (test_bit(EV_KEY, dev->evbit))
+		SPRINTF_BIT(keybit, "KEY=", KEY_MAX);
+	if (test_bit(EV_REL, dev->evbit))
+		SPRINTF_BIT(relbit, "REL=", REL_MAX);
+	if (test_bit(EV_KEY, dev->absbit))
+		SPRINTF_BIT(absbit, "ABS=", ABS_MAX);
+	if (test_bit(EV_MSC, dev->evbit))
+		SPRINTF_BIT(mscbit, "MSC=", MSC_MAX);
+	if (test_bit(EV_LED, dev->evbit))
+		SPRINTF_BIT(ledbit, "LED=", LED_MAX);
+	if (test_bit(EV_SND, dev->evbit))
+		SPRINTF_BIT(sndbit, "SND=", SND_MAX);
+	if (test_bit(EV_FF,  dev->evbit))
+		SPRINTF_BIT(ffbit,  "FF=",  FF_MAX);
+
+	envp[i++] = 0;
+
+	value = call_usermodehelper(argv [0], argv, envp);
+
+	kfree(buf);
+	kfree(envp);
+
+	if (value != 0)
+		printk(KERN_WARNING "hotplug returned 0x%x", value);
+}
+
+#else
+
+static inline void
+input_call_hotplug(char *verb, struct input_dev *dev)
+{ } 
+
+#endif	/* CONFIG_HOTPLUG */
+
 void input_register_device(struct input_dev *dev)
 {
 	struct input_handler *handler = input_handler;
@@ -308,6 +419,12 @@ void input_register_device(struct input_dev *dev)
 			input_link_handle(handle);
 		handler = handler->next;
 	}
+
+/*
+ * Notify the hotplug agent.
+ */
+
+	input_call_hotplug("add", dev);
 }
 
 void input_unregister_device(struct input_dev *dev)
@@ -339,6 +456,12 @@ void input_unregister_device(struct input_dev *dev)
 		handle->handler->disconnect(handle);
 		handle = dnext;
 	}
+
+/*
+ * Notify the hotplug agent.
+ */
+
+	input_call_hotplug("remove", dev);
 
 /*
  * Remove the device.
@@ -462,14 +585,6 @@ void input_unregister_minor(devfs_handle_t handle)
 {
 	devfs_unregister(handle);
 }
-
-/*
- * Input hotplugging interface - loading event handlers based on
- * device bitfields.
- */
-
-
-
 
 /*
  * ProcFS interface for the input drivers.
