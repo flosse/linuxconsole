@@ -173,6 +173,10 @@ static ssize_t evdev_read(struct file * file, char * buffer, size_t count, loff_
 
 		while (list->head == list->tail) {
 
+			if (!list->evdev->exist) {
+				retval = -ENODEV;
+				break;
+			}
 			if (file->f_flags & O_NONBLOCK) {
 				retval = -EAGAIN;
 				break;
@@ -348,6 +352,7 @@ static void evdev_disconnect(struct input_handle *handle)
 
 	if (evdev->open) {
 		input_close_device(handle);
+		wake_up_interruptible(&evdev->wait);
 	} else {
 		input_unregister_minor(evdev->devfs);
 		evdev_table[evdev->minor] = NULL;
