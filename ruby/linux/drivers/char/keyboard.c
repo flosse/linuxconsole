@@ -131,8 +131,6 @@ int keyboard_wait_for_keypress(struct console *console)
  */
 
 static struct input_handler kbd_handler;
-static struct tty_struct **ttytab;
-
 static unsigned long key_down[256/BITS_PER_LONG];
 static unsigned char shift_down[NR_SHIFT];	/* shift state counters.. */
 static int dead_key_next;
@@ -983,7 +981,7 @@ void kbd_keycode(void  *private, unsigned int keycode, int down)
 	if (down != 2)
 		add_keyboard_randomness((keycode << 1) ^ down);
 
-	tty = ttytab ? ttytab[vc->vc_num] : NULL;
+	tty = vc->vc_tty;
 
 	if (tty && (!tty->driver_data)) {
 		/*
@@ -1140,10 +1138,6 @@ static struct input_handler kbd_handler = {
 
 int __init kbd_init(void)
 {
-        extern struct tty_driver console_driver;
-
-        ttytab = console_driver.table;
-
 	tasklet_enable(&keyboard_tasklet);
 	tasklet_schedule(&keyboard_tasklet);
 
