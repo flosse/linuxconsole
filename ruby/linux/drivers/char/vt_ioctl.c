@@ -1095,7 +1095,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 
 		for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
 			struct vc_data *tmp = vc->display_fg->vc_cons[i];
-			vc_resize(tmp, ll, cc);
+			vc_resize(tmp, cc, ll);
 		}
 		return 0;
 	}
@@ -1141,7 +1141,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	
 		for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
                         struct vc_data *tmp = vc->display_fg->vc_cons[i];
-                        vc_resize(tmp, ll, cc);
+                        vc_resize(tmp, cc, ll);
                 }
 		return 0;
   	}
