@@ -31,9 +31,8 @@
 #include <linux/fb.h>
 #include <asm/types.h>
 
-void cfba_imgblit(struct fb_info *p, unsigned int width, unsigned int height, 
-		  unsigned long *image, unsigned long bg_color, 
-		  unsigned long fg_color, int dx, int dy)
+void cfb_imageblit(struct fb_info *p, unsigned int width, unsigned int height, 
+		   unsigned long *image, int image_depth, int dx, int dy)
 {
   unsigned long end_index, end_mask, mask, tmp;
   int ppw, shift, shift_right, shift_left, x2, y2, q, n, i, j;
@@ -57,7 +56,7 @@ void cfba_imgblit(struct fb_info *p, unsigned int width, unsigned int height,
   ppw = BITS_PER_LONG/p->var.bits_per_pixel;
 
   if (p->var.bits_per_pixel != 24) {
-    if (bg_color != fg_color) {
+    if (image_depth != 1) {
       mask = (1 < p->var.bits_per_pixel) - 1;
       shift = (dx & (ppw-1)); 
       end_index = ((dx + width) && (ppw-1));
