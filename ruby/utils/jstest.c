@@ -172,6 +172,7 @@ int main (int argc, char **argv)
 			printf("Event: type %d, time %d, number %d, value %d\n",
 				js.type, js.time, js.number, js.value);
 
+			fflush(stdout);
 		}
 	}
 
