@@ -118,6 +118,7 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	iforce->cr.wIndex = 0;
 	iforce->cr.wLength = 16;
 
+	/* FIXME: use lower-case versions instead with 2.5 */
 	FILL_INT_URB(&iforce->irq, dev, usb_rcvintpipe(dev, epirq->bEndpointAddress),
 			iforce->data, 16, iforce_usb_irq, iforce, epirq->bInterval);
 
@@ -168,6 +169,7 @@ static struct usb_device_id iforce_usb_ids [] = {
 MODULE_DEVICE_TABLE (usb, iforce_usb_ids);
 
 struct usb_driver iforce_usb_driver = {
+	owner:		THIS_MODULE,
 	name:		"iforce",
 	probe:		iforce_usb_probe,
 	disconnect:	iforce_usb_disconnect,

@@ -1,8 +1,8 @@
 /*
  * $Id$
  *
- *  Copyright (c) 2000-2001 Vojtech Pavlik <vojtech@ucw.cz>
- *  Copyright (c) 2001 Johann Deneux <deneux@ifrance.com>
+ *  Copyright (c) 2000-2002 Vojtech Pavlik <vojtech@ucw.cz>
+ *  Copyright (c) 2001-2002 Johann Deneux <deneux@ifrance.com>
  *
  *  USB/RS232 I-Force joysticks and wheels.
  */
@@ -101,10 +101,10 @@ static int make_period_modifier(struct iforce* iforce,
 }
 
 /*
- * Uploads the part of an effect setting the shape of the force
+ * Uploads the part of an effect setting the envelope of the force
  */
 
-static int make_shape_modifier(struct iforce* iforce,
+static int make_envelope_modifier(struct iforce* iforce,
 	struct resource* mod_chunk, int no_alloc,
 	u16 attack_duration, __s16 initial_level,
 	u16 fade_duration, __s16 final_level)
@@ -136,7 +136,7 @@ static int make_shape_modifier(struct iforce* iforce,
 	data[6] = HI(fade_duration);
 	data[7] = HI(final_level);
 
-	iforce_send_packet(iforce, FF_CMD_SHAPE, data);
+	iforce_send_packet(iforce, FF_CMD_ENVELOPE, data);
 
 	return 0;
 }
@@ -145,7 +145,7 @@ static int make_shape_modifier(struct iforce* iforce,
  * Component of spring, friction, inertia... effects
  */
 
-static int make_interactive_modifier(struct iforce* iforce,
+static int make_condition_modifier(struct iforce* iforce,
 	struct resource* mod_chunk, int no_alloc,
 	__u16 rsat, __u16 lsat, __s16 rk, __s16 lk, u16 db, __s16 center)
 {
@@ -179,8 +179,8 @@ static int make_interactive_modifier(struct iforce* iforce,
 	data[8] = (100*rsat)>>16;
 	data[9] = (100*lsat)>>16;
 
-	iforce_send_packet(iforce, FF_CMD_INTERACT, data);
-	iforce_dump_packet("interactive", FF_CMD_INTERACT, data);
+	iforce_send_packet(iforce, FF_CMD_CONDITION, data);
+	iforce_dump_packet("condition", FF_CMD_CONDITION, data);
 
 	return 0;
 }
@@ -195,25 +195,30 @@ static unsigned char find_button(struct iforce *iforce, signed short button)
 }
 
 /*
- * Analyse the changes in an effect, and tell if we need to send an interactive 
+ * Analyse the changes in an effect, and tell if we need to send an condition 
  * parameter packet
  */
-static int need_interactive_modifier(struct iforce* iforce, struct ff_effect* new)
+static int need_condition_modifier(struct iforce* iforce, struct ff_effect* new)
 {
 	int id = new->id;
 	struct ff_effect* old = &iforce->core_effects[id].effect;
+	int ret=0;
+	int i;
 
 	if (new->type != FF_SPRING && new->type != FF_FRICTION) {
-		printk(KERN_WARNING "iforce.c: bad effect type in need_interactive_modifier\n");
+		printk(KERN_WARNING "iforce.c: bad effect type in need_condition_modifier\n");
 		return FALSE;
 	}
 
-	return (old->u.interactive.right_saturation != new->u.interactive.right_saturation
-		|| old->u.interactive.left_saturation != new->u.interactive.left_saturation
-		|| old->u.interactive.right_coeff != new->u.interactive.right_coeff
-		|| old->u.interactive.left_coeff != new->u.interactive.left_coeff
-		|| old->u.interactive.deadband != new->u.interactive.deadband
-		|| old->u.interactive.center != new->u.interactive.center);
+	for(i=0; i<2; i++) {
+		ret |= old->u.condition[i].right_saturation != new->u.condition[i].right_saturation
+			|| old->u.condition[i].left_saturation != new->u.condition[i].left_saturation
+			|| old->u.condition[i].right_coeff != new->u.condition[i].right_coeff
+			|| old->u.condition[i].left_coeff != new->u.condition[i].left_coeff
+			|| old->u.condition[i].deadband != new->u.condition[i].deadband
+			|| old->u.condition[i].center != new->u.condition[i].center;
+	}
+	return ret;
 }
 
 /*
@@ -226,7 +231,7 @@ static int need_magnitude_modifier(struct iforce* iforce, struct ff_effect* effe
 	struct ff_effect* old = &iforce->core_effects[id].effect;
 
 	if (effect->type != FF_CONSTANT) {
-		printk(KERN_WARNING "iforce.c: bad effect type in need_shape_modifier\n");
+		printk(KERN_WARNING "iforce.c: bad effect type in need_envelope_modifier\n");
 		return FALSE;
 	}
 
@@ -234,33 +239,33 @@ static int need_magnitude_modifier(struct iforce* iforce, struct ff_effect* effe
 }
 
 /*
- * Analyse the changes in an effect, and tell if we need to send a shape
+ * Analyse the changes in an effect, and tell if we need to send an envelope
  * parameter packet
  */
-static int need_shape_modifier(struct iforce* iforce, struct ff_effect* effect)
+static int need_envelope_modifier(struct iforce* iforce, struct ff_effect* effect)
 {
 	int id = effect->id;
 	struct ff_effect* old = &iforce->core_effects[id].effect;
 
 	switch (effect->type) {
 	case FF_CONSTANT:
-		if (old->u.constant.shape.attack_length != effect->u.constant.shape.attack_length
-		|| old->u.constant.shape.attack_level != effect->u.constant.shape.attack_level
-		|| old->u.constant.shape.fade_length != effect->u.constant.shape.fade_length
-		|| old->u.constant.shape.fade_level != effect->u.constant.shape.fade_level)
+		if (old->u.constant.envelope.attack_length != effect->u.constant.envelope.attack_length
+		|| old->u.constant.envelope.attack_level != effect->u.constant.envelope.attack_level
+		|| old->u.constant.envelope.fade_length != effect->u.constant.envelope.fade_length
+		|| old->u.constant.envelope.fade_level != effect->u.constant.envelope.fade_level)
 			return TRUE;
 		break;
 
 	case FF_PERIODIC:
-		if (old->u.periodic.shape.attack_length != effect->u.periodic.shape.attack_length
-		|| old->u.periodic.shape.attack_level != effect->u.periodic.shape.attack_level
-		|| old->u.periodic.shape.fade_length != effect->u.periodic.shape.fade_length
-		|| old->u.periodic.shape.fade_level != effect->u.periodic.shape.fade_level)
+		if (old->u.periodic.envelope.attack_length != effect->u.periodic.envelope.attack_length
+		|| old->u.periodic.envelope.attack_level != effect->u.periodic.envelope.attack_level
+		|| old->u.periodic.envelope.fade_length != effect->u.periodic.envelope.fade_length
+		|| old->u.periodic.envelope.fade_level != effect->u.periodic.envelope.fade_level)
 			return TRUE;
 		break;
 
 	default:
-		printk(KERN_WARNING "iforce.c: bad effect type in need_shape_modifier\n");
+		printk(KERN_WARNING "iforce.c: bad effect type in need_envelope_modifier\n");
 	}
 
 	return FALSE;
@@ -375,13 +380,13 @@ int iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effect, int 
 		set_bit(FF_MOD1_IS_USED, core_effect->flags);
 	}
 
-	if (!is_update || need_shape_modifier(iforce, effect)) {
-		param2_err = make_shape_modifier(iforce, mod2_chunk,
+	if (!is_update || need_envelope_modifier(iforce, effect)) {
+		param2_err = make_envelope_modifier(iforce, mod2_chunk,
 			is_update,
-			effect->u.periodic.shape.attack_length,
-			effect->u.periodic.shape.attack_level,
-			effect->u.periodic.shape.fade_length,
-			effect->u.periodic.shape.fade_level);
+			effect->u.periodic.envelope.attack_length,
+			effect->u.periodic.envelope.attack_level,
+			effect->u.periodic.envelope.fade_length,
+			effect->u.periodic.envelope.fade_level);
 		if (param2_err) return param2_err;
 		set_bit(FF_MOD2_IS_USED, core_effect->flags);
 	}
@@ -442,13 +447,13 @@ int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effect, int 
 		set_bit(FF_MOD1_IS_USED, core_effect->flags);
 	}
 
-	if (!is_update || need_shape_modifier(iforce, effect)) {
-		param2_err = make_shape_modifier(iforce, mod2_chunk,
+	if (!is_update || need_envelope_modifier(iforce, effect)) {
+		param2_err = make_envelope_modifier(iforce, mod2_chunk,
 			is_update,
-			effect->u.constant.shape.attack_length,
-			effect->u.constant.shape.attack_level,
-			effect->u.constant.shape.fade_length,
-			effect->u.constant.shape.fade_level);
+			effect->u.constant.envelope.attack_length,
+			effect->u.constant.envelope.attack_level,
+			effect->u.constant.envelope.fade_length,
+			effect->u.constant.envelope.fade_level);
 		if (param2_err) return param2_err;
 		set_bit(FF_MOD2_IS_USED, core_effect->flags);
 	}
@@ -476,81 +481,56 @@ int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effect, int 
 }
 
 /*
- * Upload an interactive effect. Those are for example friction, inertia, springs...
+ * Upload an condition effect. Those are for example friction, inertia, springs...
  */
-int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* effect, int is_update)
+int iforce_upload_condition(struct iforce* iforce, struct ff_effect* effect, int is_update)
 {
 	int core_id = effect->id;
 	struct iforce_core_effect* core_effect = iforce->core_effects + core_id;
-	struct resource* mod_chunk = &(core_effect->mod1_chunk);
-	u8 type, axes;
-	u16 mod1, mod2, direction;
+	struct resource* mod1_chunk = &(core_effect->mod1_chunk);
+	struct resource* mod2_chunk = &(core_effect->mod2_chunk);
+	u8 type;
 	int param_err = 1;
 	int core_err = 0;
 
 	switch (effect->type) {
 		case FF_SPRING:		type = 0x40; break;
-		case FF_FRICTION:	type = 0x41; break;
+		case FF_DAMPER:		type = 0x41; break;
 		default: return -1;
 	}
 
-	if (!is_update || need_interactive_modifier(iforce, effect)) {
-		param_err = make_interactive_modifier(iforce, mod_chunk,
+	if (!is_update || need_condition_modifier(iforce, effect)) {
+		param_err = make_condition_modifier(iforce, mod1_chunk,
 			is_update,
-			effect->u.interactive.right_saturation,
-			effect->u.interactive.left_saturation,
-			effect->u.interactive.right_coeff,
-			effect->u.interactive.left_coeff,
-			effect->u.interactive.deadband,
-			effect->u.interactive.center);
+			effect->u.condition[0].right_saturation,
+			effect->u.condition[0].left_saturation,
+			effect->u.condition[0].right_coeff,
+			effect->u.condition[0].left_coeff,
+			effect->u.condition[0].deadband,
+			effect->u.condition[0].center);
 		if (param_err) return param_err;
 		set_bit(FF_MOD1_IS_USED, core_effect->flags);
-	}
 
-	switch ((test_bit(ABS_X, &effect->u.interactive.axis) ||
-		test_bit(ABS_WHEEL, &effect->u.interactive.axis)) |
-		(!!test_bit(ABS_Y, &effect->u.interactive.axis) << 1)) {
+		param_err = make_condition_modifier(iforce, mod2_chunk,
+			is_update,
+			effect->u.condition[1].right_saturation,
+			effect->u.condition[1].left_saturation,
+			effect->u.condition[1].right_coeff,
+			effect->u.condition[1].left_coeff,
+			effect->u.condition[1].deadband,
+			effect->u.condition[1].center);
+		if (param_err) return param_err;
+		set_bit(FF_MOD2_IS_USED, core_effect->flags);
 
-		case 0: /* Only one axis, choose orientation */
-			mod1 = mod_chunk->start;
-			mod2 = 0xffff;
-			direction = effect->direction;
-			axes = 0x20;
-			break;
-
-		case 1:	/* Only X axis */
-			mod1 = mod_chunk->start;
-			mod2 = 0xffff;
-			direction = 0x5a00;
-			axes = 0x40;
-			break;
-
-		case 2: /* Only Y axis */
-			mod1 = 0xffff;
-			mod2 = mod_chunk->start;
-			direction = 0xb400;
-			axes = 0x80;
-			break;
-
-		case 3:	/* Both X and Y axes */
-			/* TODO: same setting for both axes is not mandatory */
-			mod1 = mod_chunk->start;
-			mod2 = mod_chunk->start;
-			direction = 0x6000;
-			axes = 0xc0;
-			break;
-
-		default:
-			return -1;
 	}
 
 	if (!is_update || need_core(iforce, effect)) {
 		core_err = make_core(iforce, effect->id,
-			mod1, mod2,
-			type, axes,
+			mod1_chunk->start, mod2_chunk->start,
+			type, 0xc0,
 			effect->replay.length, effect->replay.delay,
 			effect->trigger.button, effect->trigger.interval,
-			direction);
+			effect->direction);
 	}
 
 	/* If the parameter creation failed, we already returned an

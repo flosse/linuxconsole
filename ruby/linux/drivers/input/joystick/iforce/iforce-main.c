@@ -1,8 +1,8 @@
 /*
  * $Id$
  *
- *  Copyright (c) 2000-2001 Vojtech Pavlik <vojtech@ucw.cz>
- *  Copyright (c) 2001 Johann Deneux <deneux@ifrance.com>
+ *  Copyright (c) 2000-2002 Vojtech Pavlik <vojtech@ucw.cz>
+ *  Copyright (c) 2001-2002 Johann Deneux <deneux@ifrance.com>
  *
  *  USB/RS232 I-Force joysticks and wheels.
  */
@@ -168,7 +168,7 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 
 		case FF_SPRING:
 		case FF_FRICTION:
-			ret = iforce_upload_interactive(iforce, effect, is_update);
+			ret = iforce_upload_condition(iforce, effect, is_update);
 			break;
 
 		default:
@@ -224,17 +224,20 @@ static int iforce_open(struct input_dev *dev)
 	switch (iforce->bus) {
 #ifdef IFORCE_USB
 		case IFORCE_USB:
-			if (iforce->open++)
-				break;
-			iforce->irq.dev = iforce->usbdev;
-			if (usb_submit_urb(&iforce->irq))
+			if (!iforce->open) {
+				iforce->irq.dev = iforce->usbdev;
+				if (usb_submit_urb(&iforce->irq))
 					return -EIO;
+			}
 			break;
 #endif
 	}
 
 	/* Enable force feedback */
-	iforce_send_packet(iforce, FF_CMD_ENABLE, "\004");
+	if (!iforce->open)
+		iforce_send_packet(iforce, FF_CMD_ENABLE, "\004");
+
+	iforce->open++;
 
 	return 0;
 }
@@ -263,11 +266,11 @@ static int iforce_flush(struct input_dev *dev, struct file *file)
 	return 0;
 }
 
-static void iforce_close(struct input_dev *dev)
+static void iforce_release(struct input_dev *dev)
 {
 	struct iforce *iforce = dev->private;
 
-	printk(KERN_DEBUG "iforce.c: in iforce_close\n");
+	printk(KERN_DEBUG "iforce.c: in iforce_release\n");
 
 	/* Disable force feedback playback */
 	iforce_send_packet(iforce, FF_CMD_ENABLE, "\001");
@@ -320,7 +323,7 @@ int iforce_init_device(struct iforce *iforce)
 	iforce->dev.private = iforce;
 	iforce->dev.name = "Unknown I-Force device";
 	iforce->dev.open = iforce_open;
-	iforce->dev.close = iforce_close;
+	iforce->dev.close = iforce_release;
 	iforce->dev.flush = iforce_flush;
 	iforce->dev.event = iforce_input_event;
 	iforce->dev.upload_effect = iforce_upload_effect;
@@ -348,7 +351,7 @@ int iforce_init_device(struct iforce *iforce)
 
 	if (i == 20) { /* 5 seconds */
 		printk(KERN_ERR "iforce.c: Timeout waiting for response from device.\n");
-		iforce_close(&iforce->dev);
+		iforce_delete(iforce);
 		return -1;
 	}
 
@@ -409,8 +412,6 @@ int iforce_init_device(struct iforce *iforce)
 	for (i = 0; iforce->type->btn[i] >= 0; i++) {
 		signed short t = iforce->type->btn[i];
 		set_bit(t, iforce->dev.keybit);
-		if (t != BTN_DEAD)
-			set_bit(FF_BTN(t), iforce->dev.ffbit);
 	}
 
 	for (i = 0; iforce->type->abs[i] >= 0; i++) {
@@ -429,7 +430,7 @@ int iforce_init_device(struct iforce *iforce)
 				iforce->dev.absflat[t] = 128;
 				iforce->dev.absfuzz[t] = 16;
 
-				set_bit(FF_ABS(t), iforce->dev.ffbit);
+				set_bit(t, iforce->dev.ffbit);
 				break;
 
 			case ABS_THROTTLE:
