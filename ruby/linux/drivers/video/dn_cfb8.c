@@ -107,9 +107,6 @@
 
 #define SWAP(A) ((A>>8) | ((A&0xff) <<8))
 
-
-void dn_video_setup(char *options, int *ints);
-
 /* frame buffer operations */
 
 static int dn_fb_get_fix(struct fb_fix_screeninfo *fix, int con, 
@@ -348,12 +345,6 @@ static void dnfbcon_blank(int blank,  struct fb_info *info) {
 	}
 
 	return ;
-
-}
-
-void dn_video_setup(char *options, int *ints) {
-	
-	return;
 
 }
 

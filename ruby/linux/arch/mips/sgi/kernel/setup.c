@@ -129,9 +129,9 @@ static void __init sgi_irq_setup(void)
 
 int __init page_is_ram(unsigned long pagenr)
 {
-	if (pagenr < MAP_NR(PAGE_OFFSET + 0x2000UL))
+	if ((pagenr<<PAGE_SHIFT) < 0x2000UL)
 		return 1;
-	if (pagenr > MAP_NR(PAGE_OFFSET + 0x08002000))
+	if ((pagenr<<PAGE_SHIFT) > 0x08002000)
 		return 1;
 	return 0;
 }
@@ -179,7 +179,7 @@ void sgi_time_init (struct irqaction *irq) {
 	 */
         struct sgi_ioc_timers *p;
         volatile unsigned char *tcwp, *tc2p;
-	unsigned long r4k_ticks[3];
+	unsigned long r4k_ticks[3] = { 0, 0, 0 };
 	unsigned long r4k_next;
 
         /* Figure out the r4k offset, the algorithm is very simple
@@ -197,15 +197,16 @@ void sgi_time_init (struct irqaction *irq) {
         tc2p = &p->tcnt2;
 
         printk("Calibrating system timer... ");
-        dosample(tcwp, tc2p);                   /* First sample. */
-        dosample(tcwp, tc2p);                   /* Eat one.     */
-        r4k_ticks[0] = dosample(tcwp, tc2p);      /* Second sample. */
-	dosample(tcwp, tc2p);			/* Eat another. */
-	r4k_ticks[1] += dosample (tcwp, tc2p);	/* Third sample. */
+        dosample(tcwp, tc2p);                   /* Prime cache. */
+        dosample(tcwp, tc2p);                   /* Prime cache. */
+	/* Zero is NOT an option. */
+	while (!r4k_ticks[0])
+		r4k_ticks[0] = dosample (tcwp, tc2p);
+	while (!r4k_ticks[1])
+		r4k_ticks[1] = dosample (tcwp, tc2p);
 
 	if (r4k_ticks[0] != r4k_ticks[1]) {
 		printk ("warning: timer counts differ, retrying...");
-		dosample (tcwp, tc2p);
 		r4k_ticks[2] = dosample (tcwp, tc2p);
 		if (r4k_ticks[2] == r4k_ticks[0] 
 		    || r4k_ticks[2] == r4k_ticks[1])

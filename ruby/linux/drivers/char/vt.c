@@ -546,10 +546,14 @@ void complement_pos(struct vc_data *vc, int offset)
 /*      Redrawing of screen */
 void update_screen(struct vc_data *vc)
 {
+	int update;
+
         hide_cursor(vc);
 	set_origin(vc);
-        if (vcmode != KD_GRAPHICS) {
-		sw->con_set_palette(vc, color_table);
+	update = sw->con_switch(vc);
+        set_palette(vc);
+
+        if (update && vcmode != KD_GRAPHICS) {
         	/* Update the screen contents */
         	do_update_region(vc, origin, screenbuf_size/2);
         }
@@ -610,10 +614,8 @@ static void blank_screen(unsigned long private)
         if (i)
                 set_origin(vt->fg_console);
 
-	/*
         if (console_blank_hook && console_blank_hook(1))
                 return;
-	*/
         if (vt->blank_mode)
 		vt->vt_sw->con_blank(vt->fg_console, vt->blank_mode + 1);
 }
@@ -635,6 +637,7 @@ void unblank_screen(struct vt_struct *vt)
         vt->vt_blanked = 0;
         if (console_blank_hook)
                 console_blank_hook(0);
+	set_palette(vt->fg_console);
         if (vt->vt_sw->con_blank(vt->fg_console, 0))
                 /* Low-level driver cannot restore -> do it ourselves */
                 update_screen(vt->fg_console);
@@ -665,7 +668,7 @@ static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
                         	unblank_screen(vt);
                         	break;
   			case PM_SUSPEND:
-                        	blank_screen(vt);
+                        	blank_screen((unsigned long) vt);
                         	break;
   		}
 	}
@@ -1505,7 +1508,7 @@ struct console vt_console_driver = {
         unblank:	vt_console_unblank, 
         flags:		CON_PRINTBUFFER,
         index:		-1,
-        cflage:		0,
+        cflag:		0,
 };
 #endif
 

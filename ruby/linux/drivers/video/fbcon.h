@@ -680,32 +680,36 @@ static __inline__ void *fb_memmove(void *d, const void *s, size_t count)
 	while (count--)
 	    fb_writeb(fb_readb(src++), dst++);
     } else {
-	dst = (unsigned long) d + count - 1;
-	src = (unsigned long) s + count - 1;
+	dst = (unsigned long) d + count;
+	src = (unsigned long) s + count;
 
 	if ((count < 8) || ((dst ^ src) & 3))
 	    goto restdown;
 
 	if (dst & 1) {
-	    fb_writeb(fb_readb(src--), dst--);
-	    count--;
+	    src--;
+	    dst--;
+	    count--;	
+	    fb_writeb(fb_readb(src), dst);
 	}
 	if (dst & 2) {
-	    fb_writew(fb_readw(src), dst);
 	    src -= 2;
 	    dst -= 2;
 	    count -= 2;
+	    fb_writew(fb_readw(src), dst);
 	}
 	while (count > 3) {
-	    fb_writel(fb_readl(src), dst);
 	    src -= 4;
 	    dst -= 4;
 	    count -= 4;
+	    fb_writel(fb_readl(src), dst);	
 	}
 
     restdown:
-	while (count--)
-	    fb_writeb(fb_readb(src--), dst--);
+	while (count--) {
+	    src--;
+	    dst--;
+	    fb_writeb(fb_readb(src), dst);
     }
 
     return d;
@@ -743,21 +747,23 @@ static __inline__ void fast_memmove(char *d, const char *s, size_t count)
 	while (count--)
 	    fb_writeb(fb_readb(src++), dst++);
     } else {
-	dst = (unsigned long) d + count - 1;
-	src = (unsigned long) s + count - 1;
+	dst = (unsigned long) d + count;
+	src = (unsigned long) s + count;
 
 	if ((count < 8) || ((dst ^ src) & 3))
 	    goto restdown;
 
 	if (dst & 1) {
-	    fb_writeb(fb_readb(src--), dst--);
-	    count--;
+	    src--;
+	    dst--;
+	    count--;	
+	    fb_writeb(fb_readb(src), dst);
 	}
 	if (dst & 2) {
-	    fb_writew(fb_readw(src), dst);
 	    src -= 2;
 	    dst -= 2;
 	    count -= 2;
+	    fb_writew(fb_readw(src), dst);	
 	}
 	while (count > 3) {
 	    fb_writel(fb_readl(src), dst);
@@ -767,8 +773,10 @@ static __inline__ void fast_memmove(char *d, const char *s, size_t count)
 	}
 
     restdown:
-	while (count--)
-	    fb_writeb(fb_readb(src--), dst--);
+	while (count--) {
+	    src--;
+	    dst--;	
+	    fb_writeb(fb_readb(src), dst);
     }
 }
 

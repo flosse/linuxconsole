@@ -30,12 +30,13 @@ extern void wakeup_bdflush(int);
 extern int console_loglevel;
 extern struct list_head super_blocks;
 
+/* Whether we react on sysrq keys or just ignore them */
+int sysrq_enabled = 1;
+
 /* Machine specific power off function */
 void (*sysrq_power_off)(void) = NULL;
 
 EXPORT_SYMBOL(sysrq_power_off);
-
-int sysrq_enabled = 1;
 
 /* Send a signal to all user processes */
 
@@ -62,7 +63,7 @@ void handle_sysrq(int key, struct pt_regs *pt_regs,
 {
 	int orig_log_level = console_loglevel;
 
-	if (!key)
+	if (!key || !sysrq_enabled)
 		return;
 
 	console_loglevel = 7;
