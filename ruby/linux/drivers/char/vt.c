@@ -129,7 +129,7 @@ void hide_cursor(struct vc_data *vc)
 {
 	unsigned long flags;	
 
-	spin_lock_irqsave(&console_lock, flags);
+	spin_lock_irqsave(&vc->display_fg->vt_lock, flags);
 /*
 	if (visible_origin != origin) {
 		set_origin(vc);
@@ -145,7 +145,7 @@ void hide_cursor(struct vc_data *vc)
                 softcursor_original = -1;
         }
 	sw->con_cursor(vc, CM_ERASE);
-	spin_unlock_irqrestore(&console_lock, flags);
+	spin_unlock_irqrestore(&vc->display_fg->vt_lock, flags);
 }
 
 void set_cursor(struct vc_data *vc)
@@ -154,7 +154,7 @@ void set_cursor(struct vc_data *vc)
 
     	if (!IS_VISIBLE || vc->display_fg->vt_blanked || vcmode == KD_GRAPHICS)
         	return;
-    	spin_lock_irqsave(&console_lock, flags);
+    	spin_lock_irqsave(&vc->display_fg->vt_lock, flags);
 	if (dectcem) {
         	if (cons_num == sel_cons)
                 	clear_selection();
@@ -168,7 +168,7 @@ void set_cursor(struct vc_data *vc)
 		}
     	} else
         	hide_cursor(vc);
-	spin_unlock_irqrestore(&console_lock, flags);
+	spin_unlock_irqrestore(&vc->display_fg->vt_lock, flags);
 }
 
 /*
@@ -694,7 +694,7 @@ static void console_softint(unsigned long private)
         struct vt_struct *vt = (struct vt_struct *) private;
         if  (!vt->want_vc) return;
 
-        spin_lock_irq(&console_lock);
+        spin_lock_irq(&vt->vt_lock);
 
         if (vt->want_vc->vc_num != vt->fg_console->vc_num &&
             !vt->vt_dont_switch) {
@@ -715,7 +715,7 @@ static void console_softint(unsigned long private)
                       sw->con_scroll(vt->fg_console, vt->scrollback_delta);
                 vt->scrollback_delta = 0;
         }
-        spin_unlock_irq(&console_lock);
+        spin_unlock_irq(&vt->vt_lock);
 }
 
 /*
@@ -753,6 +753,7 @@ const char *create_vt(struct vt_struct *vt, int init)
 	vt->vt_tasklet = console_tasklet;
 	vt->next = vt_cons;
 	vt_cons = vt;
+	spin_lock_init(vt->lock);
 	vt->vt_dont_switch = 0;
         vt->scrollback_delta = 0;
         vt->vt_blanked = 0;
@@ -1046,7 +1047,7 @@ again:
          * the console spinlock during the entire write.
          */
 
-        spin_lock_irq(&console_lock);
+        spin_lock_irq(&vc->display_fg->vt_lock);
 
         himask = hi_font_mask;
         charmask = himask ? 0x1ff : 0xff;
@@ -1179,7 +1180,7 @@ again:
 			      (u16 *)draw_to-(u16 *)draw_from, y, draw_x);
         	draw_x = -1;
         }
-        spin_unlock_irq(&console_lock);
+        spin_unlock_irq(&vc->display_fg_lock);
 out:
         if (from_user) {
                 /* If the user requested something larger than
@@ -1574,7 +1575,8 @@ void __init vt_console_init(void)
         printk("\n");
 
 #ifdef CONFIG_VT_CONSOLE
-        register_console(&vt_console_driver);
+        vt_console_driver.lock = vt->vt_lock;
+	register_console(&vt_console_driver);
 #endif
         tasklet_enable(&vt->vt_tasklet);
         tasklet_schedule(&vt->vt_tasklet);

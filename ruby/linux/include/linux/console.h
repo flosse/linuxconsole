@@ -39,8 +39,6 @@ extern struct console_cmdline console_list[MAX_CMDLINECONSOLES];
 #define CON_CONSDEV	(2) /* Last on the command line */
 #define CON_ENABLED	(4)
 
-extern spinlock_t console_lock;
-
 struct console
 {
 	char	name[8];
@@ -49,6 +47,7 @@ struct console
 	kdev_t	(*device)(struct console *);
 	int	(*wait_key)(struct console *);
 	int	(*setup)(struct console *, char *);
+	spinlock_t lock;
 	short	flags;
 	short	index;
 	int	cflag;

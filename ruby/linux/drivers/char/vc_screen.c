@@ -131,7 +131,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 	/* Select the proper current console and verify
 	 * sanity of the situation under the console lock.
 	 */
-	spin_lock_irq(&console_lock);
+	spin_lock_irq(&vc->display_fg->vt_lock);
 
 	attr = (currcons & 128);
 	currcons = (currcons & 127);
@@ -262,9 +262,9 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 		 * all the data to userspace from our temporary buffer.
 		 */
 
-		spin_unlock_irq(&console_lock);
+		spin_unlock_irq(&vc->display_fg->vt_lock);
 		ret = copy_to_user(buf, con_buf_start, orig_count);
-		spin_lock_irq(&console_lock);
+		spin_lock_irq(&vc->display_fg->vt_lock);
 
 		if (ret) {
 			read += (orig_count - ret);
@@ -280,7 +280,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 	if (read)
 		ret = read;
 unlock_out:
-	spin_unlock_irq(&console_lock);
+	spin_unlock_irq(&vc->display_fg->vt_lock);
 	up(&vc->display_fg->lock);
 	return ret;
 }
@@ -303,7 +303,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	/* Select the proper current console and verify
 	 * sanity of the situation under the console lock.
 	 */
-	spin_lock_irq(&console_lock);
+	spin_lock_irq(&vc->display_fg->vt_lock);
 
 	attr = (currcons & 128);
 	currcons = (currcons & 127);
@@ -341,9 +341,9 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 		/* Temporarily drop the console lock so that we can read
 		 * in the write data from userspace safely.
 		 */
-		spin_unlock_irq(&console_lock);
+		spin_unlock_irq(&vc->display_fg->vt_lock);
 		ret = copy_from_user(&vc->display_fg->con_buf, buf, this_round);
-		spin_lock_irq(&console_lock);
+		spin_lock_irq(&vc->display_fg->vt_lock);
 
 		if (ret) {
 			this_round -= ret;
@@ -468,7 +468,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	ret = written;
 
 unlock_out:
-	spin_unlock_irq(&console_lock);
+	spin_unlock_irq(&vc->display_fg->vt_lock);
 
 	up(&vc->display_fg->lock);
 

@@ -44,8 +44,6 @@ int console_loglevel = DEFAULT_CONSOLE_LOGLEVEL;
 int default_message_loglevel = DEFAULT_MESSAGE_LOGLEVEL;
 int minimum_console_loglevel = MINIMUM_CONSOLE_LOGLEVEL;
 int default_console_loglevel = DEFAULT_CONSOLE_LOGLEVEL;
-
-spinlock_t console_lock = SPIN_LOCK_UNLOCKED;
 int oops_in_progress;
 
 struct console *console_drivers;
@@ -285,11 +283,19 @@ asmlinkage long sys_syslog(int type, char * buf, int len)
 static void __call_console_drivers(unsigned long start, unsigned long end)
 {
 	struct console *con;
+	unsigned long flags;
 
        	for (con = console_drivers; con; con = con->next) {
-               	if ((con->flags & CON_ENABLED) && con->write)
+               	if ((con->flags & CON_ENABLED) && con->write) {
+			/* Make sure that we print immediately */
+			if (oops_in_progress)
+				spin_lock_init(&con->lock);
+
+			spin_lock_irqsave(&con->lock, flags);
                        	con->write(con, &LOG_BUF(start), end - start);
-       	}
+			spin_unlock_irqrestore(&con->lock, flags);
+		}
+	}
 }
 
 /*
@@ -413,18 +419,13 @@ asmlinkage int printk(const char *fmt, ...)
 	}
 	spin_unlock_irqrestore(&logbuf_lock, flags);
 
-	if (oops_in_progress)
-		spin_lock_init(&console_lock);
-
 	if (con_start != log_end) {
 		unsigned long _con_start, _log_end;		
 
 		_con_start = con_start;
                 _log_end = log_end;
                 con_start = log_end;            /* Flush */
-		spin_lock_irqsave(&console_lock, flags);
 		call_console_drivers(_con_start, _log_end);
-		spin_unlock_irqrestore(&console_lock, flags);
 	}
 	if (!oops_in_progress)
 		wake_up_interruptible(&log_wait);
@@ -437,6 +438,30 @@ void console_print(const char *s)
 	printk(KERN_EMERG "%s", s);
 }
 EXPORT_SYMBOL(console_print);
+
+void lock_all_consoles(void)
+{
+	struct console *con;
+
+	if (console_drivers) {
+       		for (con = console_drivers; con; con = con->next) {
+               		if (con->flags & CON_ENABLED)
+				spin_lock_irq(&con->lock);
+		}
+	}
+}
+
+void unlock_all_consoles(void)
+{
+	struct console *con;
+
+	if (console_drivers) {
+       		for (con = console_drivers; con; con = con->next) {
+               		if (con->flags & CON_ENABLED)
+				spin_unlock_irq(&con->lock);
+		}
+	}
+}
 
 /*
  * The console driver calls this routine during kernel initialization
@@ -493,7 +518,7 @@ void register_console(struct console * console)
 	 *	Put this console in the list - keep the
 	 *	preferred driver at the head of the list.
 	 */
-	spin_lock_irqsave(&console_lock, flags);
+	lock_all_consoles();
 	if ((console->flags & CON_CONSDEV) || console_drivers == NULL) {
 		console->next = console_drivers;
 		console_drivers = console;
@@ -501,6 +526,8 @@ void register_console(struct console * console)
 		console->next = console_drivers->next;
 		console_drivers->next = console;
 	}
+	spin_lock_init(&console->lock);
+	unlock_all_consoles();
 	if (console->flags & CON_PRINTBUFFER) { 
 		/*
 	 	 *	Print out buffered log messages.
@@ -517,7 +544,6 @@ void register_console(struct console * console)
         	}
 		spin_unlock_irqrestore(&logbuf_lock, flags);
 	}
-	spin_unlock_irqrestore(&console_lock, flags);
 }
 EXPORT_SYMBOL(register_console);
 
@@ -527,7 +553,7 @@ int unregister_console(struct console * console)
 	unsigned long flags;
 	int res = 1;
 
-	spin_lock_irqsave(&console_lock, flags);
+	lock_all_consoles();
 	if (console_drivers == console) {
 		console_drivers=console->next;
 		res = 0;
@@ -548,8 +574,7 @@ int unregister_console(struct console * console)
 	 */
 	if (console_drivers == NULL)
 		preferred_console = -1;
-
-	spin_unlock_irqrestore(&console_lock, flags);
+	unlock_all_consoles();
 	return res;
 }
 EXPORT_SYMBOL(unregister_console);

@@ -438,9 +438,9 @@ int con_font_op(struct vc_data *vc, struct console_font_op *op)
 			return -EFAULT;
 		}
 		op->data = temp;
-		spin_lock_irq(&console_lock);
+		spin_lock_irq(&vc->display_fg->vt_lock);
 		err = vc->display_fg->vt_sw->con_font_op(vc, op);
-		spin_unlock_irq(&console_lock);
+		spin_unlock_irq(&vc->display_fg->vt_lock);
 		if (!err)
 			vc->vc_font = *op;
 		break;
@@ -1040,9 +1040,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 				 * make sure we are atomic with respect to
 				 * other console switches..
 				 */
-				spin_lock_irq(&console_lock);
+				spin_lock_irq(&vc->display_fg->vt_lock);
 				complete_change_console(tmp, vc->display_fg->fg_console);
-				spin_unlock_irq(&console_lock);
+				spin_unlock_irq(&vc->display_fg->vc_lock);
 			}
 		} else {
 			/*

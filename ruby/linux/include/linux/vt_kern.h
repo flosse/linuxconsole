@@ -204,6 +204,7 @@ struct vt_struct {
 	struct vc_data  *fg_console;		/* VC being displayed */
         struct vc_data 	*last_console;     	/* VC we last switched from */
 	struct vc_data  *want_vc;		/* VC we want to switch to */
+	spinlock_t vt_lock;			/* VT spinlock */
 	int scrollback_delta;			
 	int cursor_original;
 	char kmalloced;
