@@ -418,7 +418,7 @@ static int offb_blank(int blank, struct fb_info *info)
     int i, j;
 
     if (!par->cmap_adr)
-	return;
+	return(0);
 
     if (blank)
 	for (i = 0; i < 256; i++) {
@@ -451,7 +451,7 @@ static int offb_blank(int blank, struct fb_info *info)
 	    }
 	}
     else
-	fb_set_cmap(info->cmap, 1, info); 
+	fb_set_cmap(&info->cmap, 1, info); 
     return 0;	
 }
 
@@ -508,14 +508,14 @@ static int offb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
     if (regno < 16)
 	switch (info->var.bits_per_pixel) {
 	    case 16:
-		info->pseudo_palette[regno] = (regno << 10) | (regno << 5) | regno;
+		((u16*)(info->pseudo_palette))[regno] = (regno << 10) | (regno << 5) | regno;
 		break;
 	    case 32:
-	    {
-		int i = (regno << 8) | regno;
-		info->pseudo_palette[regno] = (i << 16) | i;
+	      {
+	        int i = (regno << 8) | regno;
+		((u32 *)(info->pseudo_palette))[regno] = (i << 16) | i;
 		break;
-	    }
-       }
+	      }
+	}
     return 0;
 }
