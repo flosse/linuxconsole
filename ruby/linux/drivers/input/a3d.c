@@ -113,7 +113,7 @@ static int a3d_csum(char *data, int count)
 }
 
 /*
- * a3d_read() reads and analyzes A3D joystick data.
+ * a3d_timer() reads and analyzes A3D joystick data.
  */
 
 static void a3d_timer(unsigned long private)
@@ -323,14 +323,11 @@ fail1:  kfree(a3d);
 
 static void a3d_disconnect(struct gameport *gameport)
 {
-	int i;
 
 	struct a3d *a3d = gameport->private;
-	for (i = 0; i < 2; i++) {
-		input_unregister_device(&a3d->dev);
-		if (a3d->mode < A3D_MODE_PXL)
-			gameport_unregister_port(&a3d->adc);
-	}
+	input_unregister_device(&a3d->dev);
+	if (a3d->mode < A3D_MODE_PXL)
+		gameport_unregister_port(&a3d->adc);
 	gameport_close(gameport);
 	kfree(a3d);
 }

@@ -42,173 +42,179 @@
 #include <linux/gameport.h>
 #include <linux/input.h>
 
+#define INTERACT_MAX_START	400	/* 400 us */
+#define INTERACT_MAX_STROBE	40	/* 40 us */
+#define INTERACT_MAX_LENGTH	32	/* 32 bits */
+#define INTERACT_REFRESH_TIME	HZ/50	/* 20 ms */
 
-#define NUM_CLOCKS 32
+#define INTERACT_HHFX		1	/* HammerHead/FX */
 
-typedef struct
-{
-   unsigned char unk1:8;
-   unsigned char b7  :1;
-   unsigned char b6  :1;
-   unsigned char b5  :1;
-   unsigned char b4  :1;
-   unsigned char b3  :1;
-   unsigned char b2  :1;
-   unsigned char b1  :1;
-   unsigned char b8  :1;
-   unsigned char x;
-   unsigned char x2;
-} _data1;
-
-typedef union
-{
-  _data1 bits;
-  unsigned long value;
-} data1;
-
-typedef struct
-{
-  unsigned char unk1    :8; //7
-  unsigned char profile :1; //8
-  unsigned char rumble  :1; //9
-  unsigned char b10     :1; //A
-  unsigned char b9      :1; //B
-  unsigned char dright  :1; //C
-  unsigned char dleft   :1; //D
-  unsigned char ddown   :1; //E
-  unsigned char dup     :1; //F
-  unsigned char y;
-  unsigned char y2;
-} _data2;
-
-typedef union
-{
-  _data2 bits;
-  unsigned long value; // unsigned long should be 4 bytes
-} data2;
-
-struct
-{
-  unsigned char id1, id2;
-  unsigned char button[10];
-  unsigned char pad_up, pad_down, pad_left, pad_right;
-  unsigned char rumble, profile;
-  unsigned char x,  y;
-  unsigned char x2, y2;
-} js_status;
+struct interact {
+	struct gameport *gameport;
+	struct input_dev dev;
+	struct timer_list timer;
+	int mode;
+	int used;
+	int bads;
+	int reads;
+}
 
 /*
- * interact_read() reads and Hammerhead/FX joystick data.
+ * interact_read_packet() reads and Hammerhead/FX joystick data.
  */
 
-static int interact_read(void *info, int **axes, int **buttons)
+static int interact_read_packet(struct gameport *gameport, int length, u32 *data)
 {
-  unsigned long flags;
-  unsigned char c;         // used for clock tick counting, and gen purpose
-  unsigned char u;
-  unsigned char data[32];
-  data1 d1;
-  data2 d2;
+	unsigned long flags;
+	unsigned char u, v;
+	unsigned int t, s;
+	int i;
 
-  d1.value = d2.value = 0;
-  c = 0;                   // reset clock tick count
+	i = 0;
+	data[0] = data[1] = 0;
+	t = gameport_time(gameport, INTERACT_MAX_START);
+	s = gameport_time(gameport, INTERACT_MAX_STROBE);
 
-  // read data stream
-  __save_flags(flags);
-  __cli();                 // clear interrupts
+	__save_flags(flags);
+	__cli();
+	gameport_trigger(gameport);
+	v = gameport_read(gameport);
 
-  outb(0xFF,JS_PORT);      // strobe port
+	while (t > 0 && i < length) {
+		t--;
+		u = v; v = gameport_read(gameport);
+		if (v & ~u & 0x40) {
+			data[0] |= ((v >> 4) & 1) << i;
+			data[1] |= ((v >> 5) & 1) << i;
+			i++;
+			t = s;
+		}
+	}
 
-  while(c < NUM_CLOCKS)    // hammerhead sends two 32 bit streams on bits 4 and 5
-    {
-      do { u = inb(JS_PORT);} while(!(u & (1<<6))); // wait for 0 -> 1
-      data[c] = u;                                  // clock == 1, grab bits
-      do { u = inb(JS_PORT);} while(u & (1<<6));    // wait for 1 -> 0
-      c++;                                          // next!
-    }
+	__restore_flags(flags);
 
-  __restore_flags(flags);
-
-
-  // decode data stream
-  for (c = 0; c < 32; c++)
-     {
-       d1.value |= data[c] & (1<<4)? (1<<c): 0;
-       d2.value |= data[c] & (1<<5)? (1<<c): 0;
-     }
-
-  // break it down
-  //js_status.id1  = d1.bits.unk1;
-  //js_status.id2  = d2.bits.unk1;
-
-  // Digital pad
-  axes[0][0] = (d2.bits.dright ? 1 : 0) - (d2.bits.dleft ? 1 : 0);
-  axes[0][1] = (d2.bits.ddown  ? 1 : 0) - (d2.bits.dup   ? 1 : 0);
-
-  // Stick 1
-  axes[0][2] = revbits(d1.bits.x);;
-  axes[0][3] = revbits(d2.bits.y);
-
-  // Stick 2
-  axes[0][4] = revbits(d1.bits.x2);
-  axes[0][5] = revbits(d2.bits.y2);
-
-  buttons[0][0] = (d1.bits.b1 ? 0x001 : 0)|
-                  (d1.bits.b2 ? 0x002 : 0)|
-                  (d1.bits.b3 ? 0x004 : 0)|
-                  (d1.bits.b4 ? 0x008 : 0)|
-                  (d1.bits.b5 ? 0x010 : 0)|
-                  (d1.bits.b6 ? 0x020 : 0)|
-                  (d1.bits.b7 ? 0x040 : 0)|
-                  (d1.bits.b8 ? 0x080 : 0)|
-                  (d2.bits.b9 ? 0x100 : 0)|
-                  (d2.bits.b10? 0x200 : 0)|
-                  (d2.bits.rumble  ? 0x400 : 0)|
-                  (d2.bits.profile ? 0x800 : 0);
-
-  return 0;
+	return i;
 }
-
 
 /*
- * interact_init_corr() initializes correction values of
- * Hammerhead/FX joysticks.
+ * interact_timer() reads and analyzes InterAct joystick data.
  */
 
-static void __init interact_init_corr(struct js_corr **corr)
+static void interact_timer(unsigned long private)
 {
-  int i;
+	struct interact *interact = (struct interact *) private;
+	struct input_dev *dev = interact->dev;
+	u32 data[2];
 
-  for (i = 0; i < 2; i++)
-     {
-       corr[0][i].type = JS_CORR_BROKEN;
-       corr[0][i].prec = 0;
-       corr[0][i].coef[0] = 0;
-       corr[0][i].coef[1] = 0;
-       corr[0][i].coef[2] = (1 << 29);
-       corr[0][i].coef[3] = (1 << 29);
-     }
+	interact->reads++;
 
-  for (i = 2; i < 6; i++)
-     {
-       corr[0][i].type = JS_CORR_BROKEN;
-       corr[0][i].prec = 4;
-       corr[0][i].coef[0] = 255 - 16;
-       corr[0][i].coef[1] = 256 + 16;
-       corr[0][i].coef[2] = (1 << 29) / (255 - 16);
-       corr[0][i].coef[3] = (1 << 29) / (255 - 16);
-     }
+	if (interact_read_packet(gameport, interact->length, data) < interact->length) {
+		interact->bads++;
+	} else
+
+	switch (interact->type) {
+
+		case INTERACT_TYPE_HHFX:
+
+			printk("data0: %08x, data1: %08x\n", data[0], data[1]);
+			break;
+
+	}
+
+	mod_timer(&interact->timer, jiffies + INTERACT_REFRESH_TIME);
+
 }
 
-  interact_port = js_register_port(interact_port, &i, 1, sizeof(int), interact_read);
+/*
+ * interact_open() is a callback from the input open routine.
+ */
 
-  if (check_region(JS_PORT, 1)) return -ENODEV;
-  request_region(JS_PORT, 1, "joystick (Hammerhead/FX)");
-
-  printk(KERN_INFO "js%d: Hammerhead/FX gamepad driver loaded\n",
-                   js_register_device(interact_port, 0, 6, 12, "Hammerhead/FX" interact_open, interact_close));
-  interact_init_corr(interact_port->corr);
-  if (interact_port) return 0;
-
-  return -ENODEV;
+static int interact_open(struct input_dev *dev)
+{
+	struct interact *interact = dev->private;
+	if (!interact->used++)
+		mod_timer(&interact->timer, jiffies + A3D_REFRESH_TIME);	
+	return 0;
 }
+
+/*
+ * interact_close() is a callback from the input close routine.
+ */
+
+static void interact_close(struct input_dev *dev)
+{
+	struct interact *interact = dev->private;
+	if (!--interact->used)
+		del_timer(&interact->timer);
+}
+
+/*
+ * interact_connect() probes for InterAct joysticks.
+ */
+
+static void interact_connect(struct gameport *gameport, struct gameport_dev *dev)
+{
+	struct interact *interact;
+	char data[A3D_MAX_LENGTH];
+	int i;
+
+	if (!(interact = kmalloc(sizeof(struct interact), GFP_KERNEL)))
+		return;
+	memset(interact, 0, sizeof(struct interact));
+
+	gameport->private = interact;
+
+	interact->gameport = gameport;
+	init_timer(&interact->timer);
+	interact->timer.data = (long) interact;
+	interact->timer.function = interact_timer;
+
+	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW))
+		goto fail1;
+
+	i = interact_read_packet(gameport, A3D_MAX_LENGTH, data);
+
+	if (i != 32) {
+		printk("Initial packet read failed: %d\n", i);
+		goto fail2;
+	}
+
+	interact->type = INTERACT_TYPE_HHFX;
+
+	input_register_device(&interact->dev);
+	printk(KERN_INFO "input%d: %s on gameport%d\n",
+		interact->dev.number, interact_names[interact->type], gameport->number);
+
+	return;
+fail2:	gameport_close(gameport);
+fail1:  kfree(interact);
+}
+
+static void interact_disconnect(struct gameport *gameport)
+{
+	int i;
+
+	struct interact *interact = gameport->private;
+	input_unregister_device(&interact->dev);
+	gameport_close(gameport);
+	kfree(interact);
+}
+
+static struct gameport_dev interact_dev = {
+	connect:	interact_connect,
+	disconnect:	interact_disconnect,
+};
+
+int __init interact_init(void)
+{
+	gameport_register_device(&interact_dev);
+	return 0;
+}
+
+void __exit interact_exit(void)
+{
+	gameport_unregister_device(&interact_dev);
+}
+
+module_init(interact_init);
+module_exit(interact_exit);
