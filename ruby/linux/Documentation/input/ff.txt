@@ -1,7 +1,12 @@
 Force feedback for Linux.
-By Johann Deneux <deneux@ifrance.com> on 2001/04/22.
-When redistributing this file, please also include shape.fig and
+Copyright (C) 2001-2002 Johann Deneux <deneux@ifrance.com>
+
+Copying and distributing this file, shape.fig and interactive.fig is allowed.
+You can also make modifications, provided you include notices stating you
+changed the file.
+When redistributing this file, please also try to include shape.fig and
 interactive.fig.
+
 ----------------------------------------------------------------------------
 
 0. Introduction
