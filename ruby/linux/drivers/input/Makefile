@@ -88,7 +88,7 @@ obj-$(CONFIG_INPUT_EVBUG)	+= evbug.o
 
 obj-$(CONFIG_INPUT_INPORT)	+= inport.o
 obj-$(CONFIG_INPUT_LOGIBM)	+= logibm.o
-#obj-$(CONFIG_INPUT_PC110PAD)	+= pc110pad.o
+obj-$(CONFIG_INPUT_PC110PAD)	+= pc110pad.o
 obj-$(CONFIG_INPUT_AMIKEYB)	+= amikeyb.o
 obj-$(CONFIG_INPUT_AMIMOUSE)	+= amimouse.o
 obj-$(CONFIG_INPUT_AMIJOY)	+= amijoy.o
@@ -97,8 +97,6 @@ obj-$(CONFIG_INPUT_AMIJOY)	+= amijoy.o
 #obj-$(CONFIG_INPUT_ATARIJOY)	+= atarijoy.o
 obj-$(CONFIG_INPUT_RPCMOUSE)	+= rpcmouse.o
 #obj-$(CONFIG_INPUT_ARCKBD)	+= arckbd.o
-
-
 
 # Files that are both resident and modular: remove from modular.
 

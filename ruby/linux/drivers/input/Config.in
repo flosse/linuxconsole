@@ -73,7 +73,7 @@ if [ "$CONFIG_INPUT" != "n" ]; then
          bool '  ATI XL variant' CONFIG_INPUT_ATIXL
       fi
       tristate '  Logitech busmouse' CONFIG_INPUT_LOGIBM
-      tristate ' *IBM PC110 touchpad' CONFIG_INPUT_PC100PAD
+      tristate '  IBM PC110 touchpad' CONFIG_INPUT_PC100PAD
       tristate '  Amiga keyboard' CONFIG_INPUT_AMIKBD
       tristate '  Amiga mouse' CONFIG_INPUT_AMIMOUSE
       tristate '  Amiga joystick' CONFIG_INPUT_AMIJOY

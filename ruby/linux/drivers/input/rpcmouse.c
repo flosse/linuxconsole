@@ -1,5 +1,5 @@
 /*
- *  amimouse.c  Version 0.1
+ *  rpcmouse.c  Version 0.1
  *
  *  Copyright (c) 2000 Vojtech Pavlik
  *
@@ -10,7 +10,7 @@
  */
 
 /*
- * Amiga mouse driver for Linux/m68k
+ * Acorn RiscPC mouse driver for Linux/ARM
  */
 
 /*
