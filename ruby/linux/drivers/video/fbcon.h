@@ -52,7 +52,6 @@ struct display {
     /* Filled in by the frame buffer device */
     struct fb_var_screeninfo var;   /* variable infos. yoffset and vmode */
                                     /* are updated by fbcon.c */
-    struct fb_cmap cmap;            /* colormap */
     char *screen_base;              /* pointer to top of virtual screen */    
                                     /* (virtual address) */
     int visual;

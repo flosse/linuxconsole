@@ -362,26 +362,20 @@ static const char *fbcon_startup(struct vt_struct *vt)
 
 static void fbcon_init(struct vc_data *vc, int init)
 {
-    int unit = vc->vc_num;
-    struct fb_info *info;
+    struct fbvt_data *par = vc->display_fg->data_hook;	
+    struct module *owner = par->fb_info->fbops->owner;		
 
-    /* on which frame buffer will we open this console? */
-    info = registered_fb[(int)con2fb_map[unit]];
-
-    fb_display[unit] = *(info->disp);	/* copy from default */
+    if (owner)
+    	__MOD_INC_USE_COUNT(owner);
+    if (info->fbops->fb_open && info->fbops->fb_open(info,0) && owner)
+         __MOD_DEC_USE_COUNT(owner);
+	
+    par->fb_display[vc->vc_num] = *(info->disp); /* copy from default */
     DPRINTK("mode:   %s\n",info->modename);
     DPRINTK("visual: %d\n", fb_display[unit].visual);
     DPRINTK("res:    %dx%d-%d\n",fb_display[unit].var.xres,
 	                     fb_display[unit].var.yres,
 	                     fb_display[unit].var.bits_per_pixel);
-    fb_display[unit].conp = vc;
-    fb_display[unit].fb_info = info;
-    /* clear out the cmap so we don't have dangling pointers */
-    fb_display[unit].cmap.len = 0;
-    fb_display[unit].cmap.red = 0;
-    fb_display[unit].cmap.green = 0;
-    fb_display[unit].cmap.blue = 0;
-    fb_display[unit].cmap.transp = 0;
     fbcon_set_disp(vc, init, !init);
 }
 
@@ -1792,11 +1786,7 @@ static int fbcon_resize(struct vc_data *vc,unsigned int rows,unsigned int cols)
     return 0;
 }
 
-static u16 palette_red[16];
-static u16 palette_green[16];
-static u16 palette_blue[16];
-
-static struct fb_cmap palette_cmap  = {
+struct fb_cmap palette_cmap  = {
     0, 16, palette_red, palette_green, palette_blue, NULL
 };
 
@@ -1804,14 +1794,29 @@ static int fbcon_set_palette(struct vc_data *vc, unsigned char *table)
 {
     struct fbvt_data *par = vc->display_fg->data_hook; 	
     struct display *p = par->fb_display[vc->vc_num];
-    int i, j, k;
+    struct fb_cmap palette_cmap;	
+    int size, i, j, k;
     u8 val;
 
     if ((!p->can_soft_blank && vc->display_fg->vt_blanked) ||
 	!vc->vc_can_do_color)
 	return -EINVAL;
-    for (i = j = 0; i < 16; i++) {
-	k = table[i];
+    if (p->var.bits_per_pixel <= 4)
+    	palette_cmap.len = 1<<p->var.bits_per_pixel;
+    else
+        palette_cmap.len = 16;
+    size = palette_cmap.len * sizeof(u16);
+    palette_cmap.start = 0;
+    if (!(palette_cmap->red = kmalloc(size, GFP_ATOMIC)))
+    	return -1;
+    if (!(palette_cmap->green = kmalloc(size, GFP_ATOMIC)))
+        return -1;
+    if (!(palette_cmap->blue = kmalloc(size, GFP_ATOMIC)))
+        return -1;
+    palette_cmap.transp = NULL;
+	
+    for (i = j = 0; i < palette_cmap.len; i++) {
+    	k = table[i];
 	val = vc->vc_palette[j++];
 	palette_red[k] = (val<<8)|val;
 	val = vc->vc_palette[j++];
@@ -1819,12 +1824,7 @@ static int fbcon_set_palette(struct vc_data *vc, unsigned char *table)
 	val = vc->vc_palette[j++];
 	palette_blue[k] = (val<<8)|val;
     }
-    if (p->var.bits_per_pixel <= 4)
-	palette_cmap.len = 1<<p->var.bits_per_pixel;
-    else
-	palette_cmap.len = 16;
-    palette_cmap.start = 0;
-    return par->fb_info->fbops->fb_set_cmap(&palette_cmap, 1, par->fb_info);
+    return fb_set_cmap(&palette_cmap, 1, par->fb_info);
 }
 
 static u16 *fbcon_screen_pos(struct vc_data *vc, int offset)
