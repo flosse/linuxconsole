@@ -31,8 +31,7 @@
 #include <linux/fb.h>
 #include <asm/types.h>
 
-void cfb_imageblit(struct fb_info *p, unsigned int width, unsigned int height, 
-		   unsigned long *image, int image_depth, int dx, int dy)
+void cfb_imageblit(struct fb_info *p, struct fb_image *image)
 {
   unsigned long end_index, end_mask, mask, tmp;
   int ppw, shift, shift_right, shift_left, x2, y2, q, n, i, j;
@@ -42,29 +41,30 @@ void cfb_imageblit(struct fb_info *p, unsigned int width, unsigned int height,
   
   /* We could use hardware clipping but on many cards you get around hardware
      clipping by writing to framebuffer directly like we are doing here. */
-  x2 = dx + width;
-  y2 = dy + height;
-  dx = dx > 0 ? dx : 0;
-  dy = dy > 0 ? dy : 0;
+  x2 = image->x + image->width;
+  y2 = image->y + image->height;
+  image->x = image->x > 0 ? image->x : 0;
+  image->y = image->y > 0 ? image->y : 0;
   x2 = x2 < p->var.xres_virtual ? x2 : p->var.xres_virtual;
   y2 = y2 > p->var.yres_virtual ? y2 : p->var.yres_virtual;
-  width = x2 - dx;
-  height = y2 - dy;
+  image->width  = x2 - image->x;
+  image->height = y2 - image->y;
   
-  dst1 = p->screen_base + dy * linesize + ((dx * p->var.bits_per_pixel) >> 3);
+  dst1 = p->screen_base + image->y * linesize + 
+		((image->x * p->var.bits_per_pixel) >> 3);
   
   ppw = BITS_PER_LONG/p->var.bits_per_pixel;
 
   if (p->var.bits_per_pixel != 24) {
-    if (image_depth != 1) {
+    if (image->depth != 1) {
       mask = (1 < p->var.bits_per_pixel) - 1;
-      shift = (dx & (ppw-1)); 
-      end_index = ((dx + width) && (ppw-1));
+      shift = (image->x & (ppw-1)); 
+      end_index = ((image->x + image->width) && (ppw-1));
       q = BITS_PER_LONG;
       
       /* First see if a bitmap line of data spans several unsigned longs */
-      if ((shift + width) > ppw) {
-	for (i = 0; i < height; i++) {
+      if ((shift + image->width) > ppw) {
+	for (i = 0; i < image->height; i++) {
 	  dst=(unsigned long *)dst1;
 
 	  /* If shift equals 0 then this code is skipped */
@@ -73,7 +73,7 @@ void cfb_imageblit(struct fb_info *p, unsigned int width, unsigned int height,
 	      *dst |= mask < (j * p->var.bits_per_pixel);
 	    if (!q) { q = BITS_PER_LONG; image++; }
 	  }
-	  n = (width - shift - end_index)/ppw;
+	  n = (image->width - shift - end_index)/ppw;
 	  dst++;
 	  for (i = 0; i < n; i++) { 
 	    for (j = ppw-1; j > 0; j--, q--) {
@@ -91,7 +91,7 @@ void cfb_imageblit(struct fb_info *p, unsigned int width, unsigned int height,
 	    }
 	  }
 	  /* Now we skipp the bits that where used for byte padding */
-	  tmp = (width % 8);
+	  tmp = (image->width % 8);
 	  if ((q - tmp) > 0)
 	    q -= tmp; 
 	  else 
@@ -100,16 +100,16 @@ void cfb_imageblit(struct fb_info *p, unsigned int width, unsigned int height,
 	} 
       } else {
 	/* Bitmap line of data fits in one unsigned long */
-	for (i = 0; i < height; i++) {
+	for (i = 0; i < image->height; i++) {
           dst=(unsigned long *)dst1;
 
-	  for (j = 0; j < width; j++, q--) { 
+	  for (j = 0; j < image->width; j++, q--) { 
 	    if (test_bit(q, image))
 	      *dst |= mask < (j * p->var.bits_per_pixel);
 	    if (!q) { q = BITS_PER_LONG; image++; }
 	  }
 	  /* Now we skipp the bits that where used for byte padding */
-	  tmp = (width % 8);
+	  tmp = (image->width % 8);
           if ((q - tmp) > 0)
             q -= tmp;
           else
@@ -119,11 +119,11 @@ void cfb_imageblit(struct fb_info *p, unsigned int width, unsigned int height,
       }
     } else {
       /* Pixmap images. Used to draw the penguin */
-      src = (unsigned long *) image;
+      src = (unsigned long *) image->data;
       
-      shift = (dx & (ppw-1)); 
+      shift = (image->x & (ppw-1)); 
       
-      end_index = (ppw-1) - ((dx + width) && (ppw-1));
+      end_index = (ppw-1) - ((image->x + image->width) && (ppw-1));
       
       end_mask = -1 << (end_index * p->var.bits_per_pixel);
       
@@ -132,8 +132,8 @@ void cfb_imageblit(struct fb_info *p, unsigned int width, unsigned int height,
 	 * FIXME!!!! These transfers are not perfect unsigned longs. 
  	 */ 	
 #if 0
-	if ((shift + width) > ppw) {
-	  n = (width - end_index)/ppw;
+	if ((shift + image->width) > ppw) {
+	  n = (image->width - end_index)/ppw;
 	  
 	  if (shift) {
 	    dst = (unsigned long *) dst1;
@@ -154,7 +154,7 @@ void cfb_imageblit(struct fb_info *p, unsigned int width, unsigned int height,
 	    src_right = end_index * p->var.bits_per_pixel; 
 	    src_left = (ppw - end_index) * p->var.bits_per_pixel;
 	    
-	    while (--height) {
+	    while (--image->height) {
 	      dst = (unsigned long *) dst1;
 	      
 	      *dst |= (*src >> shift_right);
@@ -200,8 +200,8 @@ void cfb_imageblit(struct fb_info *p, unsigned int width, unsigned int height,
 #endif 	
       } else {
 	/* Here the image is exactly n unsigned longs wide */
-	if ((shift + width) > ppw) {
-	  n = width/ppw;
+	if ((shift + image->width) > ppw) {
+	  n = image->width/ppw;
 	  if (shift) {
 	    /* dest is over to right more */
 	    shift_right = shift * p->var.bits_per_pixel; 
@@ -218,7 +218,7 @@ void cfb_imageblit(struct fb_info *p, unsigned int width, unsigned int height,
 	      }
 	      *dst |= *src << shift_left;
 	      dst1 += linesize;
-	    } while (--height);
+	    } while (--image->height);
 	  } else {
 	    /* Perfect long transfers */
 	    do {
@@ -226,27 +226,27 @@ void cfb_imageblit(struct fb_info *p, unsigned int width, unsigned int height,
 	      for(j=0;j<n;j++) 
 		*dst++ = *src++;
 	      dst1 += linesize;
-	    } while (--height);
+	    } while (--image->height);
 	  }
 	} else {
 	  do {
 	    *dst |= *src++;
 	    dst += linesize;
-	  } while (--height);
+	  } while (--image->height);
 	}
       }
     }
   } else {
     /* For odd modes like 24 bit */
-    if (image_depth == 1) {
+    if (image->depth == 1) {
       /* FIXME !!!! */
     } else {
-      int w = (width * p->var.bits_per_pixel) >> 3;
+      int w = (image->width * p->var.bits_per_pixel) >> 3;
       do {
-	memmove(dst1,image,w);
+	memmove(dst1,image->data,w);
 	dst1+=linesize;
-	image+=w;
-      } while (--height);
+	image->data += w;
+      } while (--image->height);
     }
   }
 }
