@@ -501,19 +501,19 @@ struct input_event {
  */
 
 struct ff_replay {
-	__u16 length;		/* Duration of an effect */
+	__u16 length;		/* Duration of an effect in ms. All other times are also expressed in ms */
 	__u16 delay;		/* Time to wait before to start playing an effect */
 };
 
 struct ff_trigger {
 	__u16 button;		/* Number of button triggering an effect */
-	__u16 interval;		/* Time to wait before an effect can be re-triggered */
+	__u16 interval;		/* Time to wait before an effect can be re-triggered (ms) */
 };
 
 struct ff_shape {
-	__u16 attack_length;	/* Duration of attack */
+	__u16 attack_length;	/* Duration of attack (ms) */
 	__s16 attack_level;	/* Level at beginning of attack */
-	__u16 fade_length;	/* Duration of fade */
+	__u16 fade_length;	/* Duration of fade (ms) */
 	__s16 fade_level;	/* Level at end of fade */
 };
 
@@ -548,7 +548,7 @@ struct ff_interactive_effect {
 /* FF_PERIODIC */
 struct ff_periodic_effect {
 	__u16 waveform;		/* Kind of wave (sine, square...) */
-	__u16 period;
+	__u16 period;		/* in ms */
 	__s16 magnitude;	/* Peak value */
 	__s16 offset;		/* Mean value of wave (roughly) */
 	__u16 phase;		/* 'Horizontal' shift */
