@@ -106,9 +106,6 @@ extern void prom_con_init(void);
 #ifdef CONFIG_MDA_CONSOLE
 extern void mda_console_init(void);
 #endif
-#ifdef CONFIG_FB
-extern void fb_console_init(void);
-#endif
 #endif
 extern int rio_init(void);
 
