@@ -631,7 +631,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	 * to be the owner of the tty, or super-user.
 	 */
 	perm = 0;
-	if (current->tty == tty || suser())
+	if (current->tty == tty || capable(CAP_SYS_TTY_CONFIG))
 		perm = 1;
  
 	kbd = &vc->kbd_table;
@@ -803,7 +803,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 
 	case KDGETKEYCODE:
 	case KDSETKEYCODE:
-		if(!capable(CAP_SYS_ADMIN))
+		if(!capable(CAP_SYS_TTY_CONFIG))
 			perm=0;
 		return do_kbkeycode_ioctl(vc, cmd,(struct kbkeycode *)arg,perm);
 
@@ -1246,12 +1246,12 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		return do_unimap_ioctl(vc, cmd, (struct unimapdesc *)arg, perm);
 
 	case VT_LOCKSWITCH:
-		if (!suser())
+		if (!capable(CAP_SYS_TTY_CONFIG))
 		   return -EPERM;
 		vc->display_fg->vt_dont_switch = 1;
 		return 0;
 	case VT_UNLOCKSWITCH:
-		if (!suser())
+		if (!capable(CAP_SYS_TTY_CONFIG))
 		   return -EPERM;
 		vc->display_fg->vt_dont_switch = 0;
 		return 0;

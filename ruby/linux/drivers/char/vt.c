@@ -1440,7 +1440,7 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
 
         if (tty->driver.type != TTY_DRIVER_TYPE_CONSOLE)
                 return -EINVAL;
-        if (current->tty != tty && !suser())
+        if (current->tty != tty && !capable(CAP_SYS_ADMIN))
                 return -EPERM;
         if (get_user(type, (char *)arg))
                 return -EFAULT;
@@ -1475,7 +1475,7 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
 			return 0;
                 case 11:        /* set kmsg redirect */
 #ifdef CONFIG_VT_CONSOLE
-                        if (!suser())
+                        if (!capable(CAP_SYS_ADMIN))
                                 return -EPERM;
                         if (get_user(data, (char *)arg+1))
                                         return -EFAULT;

@@ -56,7 +56,6 @@
 /* Tell string.h we don't want memcpy etc. as cpp defines */
 #define EXPORT_SYMTAB_STROPS
 
-extern void ppc_generic_ide_fix_driveid(struct hd_driveid *id);
 extern void transfer_to_handler(void);
 extern void do_syscall_trace(void);
 extern void do_IRQ(struct pt_regs *regs);
@@ -75,7 +74,6 @@ int abs(int);
 
 extern unsigned char __res[];
 
-extern unsigned long ret_to_user_hook;
 extern unsigned long mm_ptov (unsigned long paddr);
 
 extern void *consistent_alloc(int gfp, size_t size, dma_addr_t *dma_handle);
@@ -172,7 +170,6 @@ EXPORT_SYMBOL(iounmap);
 
 #if defined(CONFIG_BLK_DEV_IDE) || defined(CONFIG_BLK_DEV_IDE_MODULE)
 EXPORT_SYMBOL(ppc_ide_md);
-EXPORT_SYMBOL(ppc_generic_ide_fix_driveid);
 #endif
 
 #ifdef CONFIG_PCI
@@ -311,9 +308,7 @@ EXPORT_SYMBOL(__save_flags_ptr_end);
 EXPORT_SYMBOL(__restore_flags);
 EXPORT_SYMBOL(__restore_flags_end);
 #endif
-EXPORT_SYMBOL(timer_interrupt_intercept);
 EXPORT_SYMBOL(timer_interrupt);
-EXPORT_SYMBOL(do_IRQ_intercept);
 EXPORT_SYMBOL(irq_desc);
 void ppc_irq_dispatch_handler(struct pt_regs *, int);
 EXPORT_SYMBOL(ppc_irq_dispatch_handler);
@@ -354,7 +349,6 @@ EXPORT_SYMBOL(cpm_free_handler);
 EXPORT_SYMBOL(request_8xxirq);
 #endif
 
-EXPORT_SYMBOL(ret_to_user_hook);
 EXPORT_SYMBOL(next_mmu_context);
 EXPORT_SYMBOL(set_context);
 EXPORT_SYMBOL(handle_mm_fault); /* For MOL */
@@ -364,8 +358,6 @@ EXPORT_SYMBOL(flush_hash_pages); /* For MOL */
 extern long *intercept_table;
 EXPORT_SYMBOL(intercept_table);
 #endif
-extern long *ret_from_intercept;
-EXPORT_SYMBOL(ret_from_intercept);
 EXPORT_SYMBOL(cur_cpu_spec);
 #if defined(CONFIG_ALL_PPC)
 extern unsigned long agp_special_page;
