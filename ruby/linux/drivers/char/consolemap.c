@@ -381,15 +381,22 @@ int con_get_trans_new(struct vc_data *vc, ushort * arg)
 /*
  * Unicode -> current font conversion 
  *
- * A font has at most 512 chars, usually 256.
- * But one font position may represent several Unicode chars.
- * A hashtable is somewhat of a pain to deal with, so use a
- * "paged table" instead.  Simulation has shown the memory cost of
- * this 3-level paged table scheme to be comparable to a hash table.
+ * We can now support as many fonts as we need but note one font position  
+ * may represent several Unicode chars. A hashtable is somewhat of a
+ * pain to deal with, so use a "paged table" instead.  Simulation has
+ * shown the memory cost of this 3-level paged table scheme to be
+ * comparable to a hash table.
+ *
+ * Some fonts are created from the value of several Unicode values. 
+ * dfont_unicount stores how many unicode values are needed for to
+ * generate one font image. If you add up all the numbers in dfont_unicount
+ * this will equal how many entries are in dfont_unitable. All the values
+ * in dfont_unitable are all unicode values. 	
  */
 
 extern u8 dfont_unicount[];	/* Defined in consolemap_deftbl.c */
 extern u16 dfont_unitable[];
+extern u16 dfont_num;
 
 static void clear_inverse_map(struct uni_pagedir *p)
 {
@@ -525,7 +532,7 @@ static int con_unify_unimap(struct vc_data *vc, struct uni_pagedir *p)
 }
 
 static int
-con_insert_unipair(struct uni_pagedir *p, u_short unicode, u_short fontpos)
+con_insert_unipair(struct uni_pagedir *p, u_short unicode, u_long fontpos)
 {
 	u16 **p1, *p2;
 	int i, n;
@@ -629,14 +636,16 @@ int con_set_unimap(struct vc_data *vc, ushort ct, struct unipair *list)
 	return err;
 }
 
-/* Loads the unimap for the hardware font, as defined in uni_hash.tbl.
-   The representation used was the most compact I could come up
-   with.  This routine is executed at sys_setup time, and when the
-   PIO_FONTRESET ioctl is called. */
+/* 
+ * Loads the unimap for the hardware font, as defined in uni_hash.tbl.
+ * The representation used was the most compact I could come up
+ * with.  This routine is executed at sys_setup time, and when the
+ * PIO_FONTRESET ioctl is called. 
+ */
 int con_set_default_unimap(struct vc_data *vc)
 {
-	struct uni_pagedir *p;
 	int i, j, err = 0, err1;
+	struct uni_pagedir *p;
 	u16 *q;
 	
 	if (dflt) {
@@ -651,16 +660,13 @@ int con_set_default_unimap(struct vc_data *vc)
 		}
 		return 0;
 	}
-	
-	/* The default font is always 256 characters */
-
 	err = con_clear_unimap(vc, NULL);
 	if (err) return err;
     
 	p = (struct uni_pagedir *)*vc->vc_uni_pagedir_loc;
 	q = dfont_unitable;
 	
-	for (i = 0; i < 256; i++)
+	for (i = 0; i < dfont_num; i++)
 		for (j = dfont_unicount[i]; j; j--) {
 			err1 = con_insert_unipair(p, *(q++), i);
 			if (err1)
