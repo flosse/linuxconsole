@@ -38,6 +38,7 @@
 #include <linux/init.h>
 #include <linux/input.h>
 #include <linux/config.h>
+#include <linux/smp_lock.h>
 
 #ifndef CONFIG_INPUT_MOUSEDEV_SCREEN_X
 #define CONFIG_INPUT_MOUSEDEV_SCREEN_X	1024
@@ -162,8 +163,10 @@ static int mousedev_fasync(int fd, struct file *file, int on)
 static int mousedev_release(struct inode * inode, struct file * file)
 {
 	struct mousedev_list *list = file->private_data;
-	struct mousedev_list **listptr = &list->mousedev->list;
+	struct mousedev_list **listptr;
 
+	lock_kernel();
+	listptr = &list->mousedev->list;
 	mousedev_fasync(-1, file, 0);
 
 	while (*listptr && (*listptr != list))
@@ -200,6 +203,7 @@ static int mousedev_release(struct inode * inode, struct file * file)
 	}
 	
 	kfree(list);
+	unlock_kernel();
 
 	return 0;
 }
@@ -480,3 +484,6 @@ static void __exit mousedev_exit(void)
 
 module_init(mousedev_init);
 module_exit(mousedev_exit);
+
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
+MODULE_DESCRIPTION("Input driver to PS/2 or ImPS/2 device driver");

@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- *  Copyright (c) 1999-2000 Vojtech Pavlik                                       
+ *  Copyright (c) 1999-2000 Vojtech Pavlik 
  *  Copyright (c) 1999 Colin Van Dyke 
  *
  *  Joystick device driver for the input driver suite.
@@ -44,6 +44,7 @@
 #include <linux/module.h>
 #include <linux/poll.h>
 #include <linux/init.h>
+#include <linux/smp_lock.h>
 
 #define JOYDEV_MINOR_BASE	0
 #define JOYDEV_MINORS		32
@@ -82,6 +83,7 @@ struct joydev_list {
 static struct joydev *joydev_table[JOYDEV_MINORS];
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
+MODULE_DESCRIPTION("Joystick device driver");
 MODULE_SUPPORTED_DEVICE("input/js");
 
 static int joydev_correct(int value, struct js_corr *corr)
@@ -160,8 +162,10 @@ static int joydev_fasync(int fd, struct file *file, int on)
 static int joydev_release(struct inode * inode, struct file * file)
 {
 	struct joydev_list *list = file->private_data;
-	struct joydev_list **listptr = &list->joydev->list;
+	struct joydev_list **listptr;
 
+	lock_kernel();
+	listptr = &list->joydev->list;
 	joydev_fasync(-1, file, 0);
 
 	while (*listptr && (*listptr != list))
@@ -179,6 +183,7 @@ static int joydev_release(struct inode * inode, struct file * file)
 	}
 
 	kfree(list);
+	unlock_kernel();
 
 	return 0;
 }

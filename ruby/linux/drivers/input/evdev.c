@@ -37,6 +37,7 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/input.h>
+#include <linux/smp_lock.h>
 
 struct evdev {
 	int exist;
@@ -91,8 +92,10 @@ static int evdev_fasync(int fd, struct file *file, int on)
 static int evdev_release(struct inode * inode, struct file * file)
 {
 	struct evdev_list *list = file->private_data;
-	struct evdev_list **listptr = &list->evdev->list;
+	struct evdev_list **listptr;
 
+	lock_kernel();
+	listptr = &list->evdev->list;
 	evdev_fasync(-1, file, 0);
 
 	while (*listptr && (*listptr != list))
@@ -110,6 +113,7 @@ static int evdev_release(struct inode * inode, struct file * file)
 	}
 
 	kfree(list);
+	unlock_kernel();
 
 	return 0;
 }
@@ -347,3 +351,6 @@ static void __exit evdev_exit(void)
 
 module_init(evdev_init);
 module_exit(evdev_exit);
+
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
+MODULE_DESCRIPTION("Event character device driver");

@@ -34,6 +34,7 @@
 #include <linux/random.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
+MODULE_DESCRIPTION("Input layer module");
 
 EXPORT_SYMBOL(input_register_device);
 EXPORT_SYMBOL(input_unregister_device);
@@ -360,15 +361,24 @@ void input_unregister_handler(struct input_handler *handler)
 static int input_open_file(struct inode *inode, struct file *file)
 {
 	struct input_handler *handler = input_table[MINOR(inode->i_rdev) >> 5];
-	struct file_operations *old_fops;
+	struct file_operations *old_fops, *new_fops = NULL;
 	int err;
 
-	if (!handler || !handler->fops || !handler->fops->open)
+	/* No load-on-demand here? */
+	if (!handler || !(new_fops = fops_get(handler->fops)))
 		return -ENODEV;
 
+	/*
+	 * That's _really_ odd. Usually NULL ->open means "nothing special",
+	 * not "no device". Oh, well...
+	 */
+	if (!new_fops->open) {
+		fops_put(new_fops);
+		return -ENODEV;
+	}
 	old_fops = file->f_op;
-	file->f_op = fops_get(handler->fops);
-	err = handler->fops->open(inode, file);
+	file->f_op = new_fops;
+	err = new_fops->open(inode, file);
 	if (err) {
 		fops_put(file->f_op);
 		file->f_op = fops_get(old_fops);
@@ -386,9 +396,8 @@ devfs_handle_t input_register_minor(char *name, int minor, int minor_base)
 {
 	char devfs_name[16];
 	sprintf(devfs_name, name, minor);
-	return devfs_register(input_devfs_handle, devfs_name, DEVFS_FL_DEFAULT,
-			      INPUT_MAJOR, minor + minor_base,
-			      S_IFCHR | S_IRUGO | S_IWUSR, &input_fops, NULL);
+	return devfs_register(input_devfs_handle, devfs_name, DEVFS_FL_DEFAULT, INPUT_MAJOR, minor + minor_base,
+		S_IFCHR | S_IRUGO | S_IWUSR, &input_fops, NULL);
 }
 
 void input_unregister_minor(devfs_handle_t handle)
