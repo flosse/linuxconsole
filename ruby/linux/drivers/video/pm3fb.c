@@ -165,6 +165,7 @@ void pm3fb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,
                     unsigned int height, unsigned long color, int rop);
 void pm3fb_copyarea(struct fb_info *p, int sx, int sy, unsigned int width,
 		    unsigned int height, int dx, int dy);
+void pm3fb_imageblit(struct fb_info *info, struct fb_image *image);
 #endif /* PM3FB_USE_ACCEL */
 /* fb API */
 static int pm3fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info);
