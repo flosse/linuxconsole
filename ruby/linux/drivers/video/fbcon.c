@@ -54,7 +54,7 @@
  *  more details.
  */
 
-#define FBCONDEBUG
+#undef FBCONDEBUG
 
 #include <linux/config.h>
 #include <linux/module.h>
@@ -168,7 +168,6 @@ static void fbcon_invert_region(struct vc_data *vc, u16 *p, int cnt);
 /*
  *  Internal routines
  */
-
 static int __init fbcon_setup(char *options);
 
 static int __init fbcon_setup(char *options)
@@ -647,11 +646,34 @@ static int fbcon_set_palette(struct vc_data *vc, unsigned char *table)
 
 static int fbcon_scroll(struct vc_data *vc, int lines)
 {
+    struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
+    /*
+     * ++Geert: Only use ywrap/ypan if the console is in text mode
+     * ++Andrew: Only use ypan on hardware text mode when scrolling the
+     *           whole screen (prevents flicker).
+     */
+    if (lines < 0) {
+               /* Scroll up */
+               info->var.xoffset = 0;
+               info->var.yoffset += lines * vc->vc_font.height;
+               info->var.vmode &= ~FB_VMODE_YWRAP;
+               fb_pan_display(&info->var, info);
+   } else {
+               info->var.xoffset = 0;
+               info->var.yoffset += lines * vc->vc_font.height;
+               info->var.vmode &= ~FB_VMODE_YWRAP;
+               fb_pan_display(&info->var, info);
+   }
    return 0;
 }
 
 static int fbcon_set_origin(struct vc_data *vc)
 {
+   struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
+
+   info->var.xoffset = info->var.yoffset = 0;
+   info->var.vmode &= ~FB_VMODE_YWRAP;
+   fb_pan_display(&info->var, info);
    return 0;
 }
 
@@ -679,8 +701,8 @@ const struct consw fb_con = {
     con_font_op:	fbcon_font_op,
     con_resize:		fbcon_resize,
     con_set_palette: 	fbcon_set_palette,
-    con_scroll: 	fbcon_scroll,
- //   con_set_origin: 	fbcon_set_origin,
+    //con_scroll: 	fbcon_scroll,
+    con_set_origin: 	fbcon_set_origin,
  //   con_invert_region:	fbcon_invert_region,
 };
 
