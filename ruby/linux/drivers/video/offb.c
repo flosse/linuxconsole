@@ -64,7 +64,7 @@ int offb_init(void);
 static int offb_check_var(struct fb_var_screeninfo *var, struct fb_info *info); 
 static int offb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                           u_int transp, struct fb_info *info);
-static void offb_blank(int blank, struct fb_info *info);
+static int offb_blank(int blank, struct fb_info *info);
 
     /*
      *  Interface to the low level console driver
@@ -231,13 +231,12 @@ static void __init offb_init_fb(const char *name, const char *full_name,
 				    int pitch, unsigned long address,
 				    struct device_node *dp)
 {
-    unsigned long res_start = address;
     unsigned long res_size = pitch*height*depth/8;
+    unsigned long res_start = address;
     struct fb_fix_screeninfo *fix;
     struct fb_var_screeninfo *var;
     struct fb_info *info;
     struct offb_par *par;	
-    int i;	
 
     if (!request_mem_region(res_start, res_size, "offb"))
 	return;
@@ -300,7 +299,7 @@ static void __init offb_init_fb(const char *name, const char *full_name,
 	} else if (!strncmp(name, "ATY,", 4)) {
 		unsigned long base = address & 0xff000000UL;
 		par->cmap_adr = ioremap(base + 0x7ff000, 0x1000) + 0xcc0;
-		par->cmap_data = info->cmap_adr + 1;
+		par->cmap_data = par->cmap_adr + 1;
 		par->cmap_type = cmap_m64;
 	}
         fix->visual = par->cmap_adr ? FB_VISUAL_PSEUDOCOLOR
@@ -370,11 +369,12 @@ static void __init offb_init_fb(const char *name, const char *full_name,
     fix->ypanstep = 0;
     fix->ywrapstep = 0;
 
-    info->node = -1;
+    info->node 	= -1;
     info->fbops = &offb_ops;
     info->flags = FBINFO_FLAG_DEFAULT;
+    info->par 	= par; 	
 
-    if (register_framebuffer(&info) < 0) {
+    if (register_framebuffer(info) < 0) {
 	kfree(info);
 	kfree(par);
 	release_mem_region(res_start, res_size);
@@ -412,8 +412,9 @@ static void __init offb_init_fb(const char *name, const char *full_name,
      *  Blank the display.
      */
 
-static void offb_blank(int blank, struct fb_info *info)
+static int offb_blank(int blank, struct fb_info *info)
 {
+    struct offb_par *par = (struct offb_par *) info->par; 	
     int i, j;
 
     if (!par->cmap_adr)
@@ -451,6 +452,7 @@ static void offb_blank(int blank, struct fb_info *info)
 	}
     else
 	fb_set_cmap(info->cmap, 1, info); 
+    return 0;	
 }
 
     /*
