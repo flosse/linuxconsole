@@ -76,7 +76,6 @@ if [ "$CONFIG_FB" = "y" ]; then
       fi
    fi
    if [ "$CONFIG_PPC" = "y" ]; then
-      bool 'Backward compatibility mode for Xpmac' CONFIG_FB_COMPAT_XPMAC
       bool '  Open Firmware frame buffer device support' CONFIG_FB_OF
       bool '    Apple "control" display support' CONFIG_FB_CONTROL
       bool '    Apple "platinum" display support' CONFIG_FB_PLATINUM

@@ -62,10 +62,6 @@
 #include <asm/backlight.h>
 #endif
 
-#ifdef CONFIG_FB_COMPAT_XPMAC
-#include <asm/vc_ioctl.h>
-#endif
-
 #ifdef CONFIG_MTRR
 #include <asm/mtrr.h>
 #endif
@@ -141,7 +137,7 @@ enum {
 };
 
 /* supported Rage128 chipsets */
-static const struct aty128_chip_info aty128_pci_probe_list[] __initdata =
+static struct aty128_chip_info aty128_pci_probe_list[] __initdata =
 {
     {"Rage128 RE (PCI)", PCI_DEVICE_ID_ATI_RAGE128_RE, rage_128},
     {"Rage128 RF (AGP)", PCI_DEVICE_ID_ATI_RAGE128_RF, rage_128},
@@ -1062,26 +1058,6 @@ static int aty128fb_set_par(struct fb_info *info)
     info->fix.line_length = (info->var.xres_virtual * par->crtc.bpp) >> 3;
     info->fix.visual = par->crtc.bpp <= 8 ? FB_VISUAL_PSEUDOCOLOR : FB_VISUAL_DIRECTCOLOR;
 
-#ifdef CONFIG_FB_COMPAT_XPMAC
-    if (!console_fb_info || console_fb_info == &info) {
-        struct fb_var_screeninfo var;
-        int cmode, vmode;
-
-	display_info.height = ((par->crtc.v_total >> 16) & 0x7ff) + 1;
-	display_info.width = (((par->crtc.h_total >> 16) & 0xff) + 1) << 3;
-	display_info.depth = par->crtc.bpp;
-	display_info.pitch = (info->var.xres_virtual * par->crtc.bpp) >> 3;
-	if (mac_var_to_vmode(&var, &vmode, &cmode))
-	    display_info.mode = 0;
-	else
-	    display_info.mode = vmode;
-	strcpy(display_info.name, info->fix.id);
-	display_info.fb_address = info->fix.smem_start;
-	display_info.cmap_adr_address = 0;
-	display_info.cmap_data_address = 0;
-	display_info.disp_reg_address = info->mmio_start;
-    }
-#endif /* CONFIG_FB_COMPAT_XPMAC */
     return 0;	
 }
 
@@ -1412,11 +1388,6 @@ aty128_pci_register(struct pci_dev *pdev,
 		printk(KERN_INFO "aty128fb: Rage128 MTRR set to ON\n");
 	}
 #endif /* CONFIG_MTRR */
-
-#ifdef CONFIG_FB_COMPAT_XPMAC
-    if (!console_fb_info)
-	console_fb_info = info;
-#endif
 
 	return 0;
 
