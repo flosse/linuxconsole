@@ -86,11 +86,17 @@ rm -fv include/linux/logibusmouse.h
 rm -fv include/linux/pc_keyb.h
 rm -fv include/linux/console_struct.h
 rm -fv include/video/fbcon-afb.h
+rm -fv include/video/fbcon-cfb2.h
+rm -fv include/video/fbcon-cfb24.h
+rm -fv include/video/fbcon-cfb32.h
+rm -fv include/video/fbcon-cfb4.h
+rm -fv include/video/fbcon-cfb8.h
 rm -fv include/video/fbcon-hga.h
 rm -fv include/video/fbcon-ilbm.h
 rm -fv include/video/fbcon-iplan2p2.h
 rm -fv include/video/fbcon-iplan2p4.h
 rm -fv include/video/fbcon-iplan2p8.h
+rm -fv include/video/fbcon-mfb.h
 rm -fv include/video/fbcon-mac.h
 rm -fv include/video/fbcon-vga-planes.h
 rm -fv include/video/fbcon-vga.h
