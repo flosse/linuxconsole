@@ -28,7 +28,8 @@
 #include <linux/smp_lock.h>
 #include <linux/module.h>
 #include <linux/suspend.h>
-#include <linux/buffer_head.h>		/* for fsync_bdev()/wakeup_bdflush() */
+#include <linux/writeback.h>
+#include <linux/buffer_head.h>		/* for fsync_bdev() */
 
 #include <linux/spinlock.h>
 
@@ -58,7 +59,6 @@ static struct sysrq_key_op sysrq_loglevel_op = {
 	action_msg:	"Changing Loglevel",
 };
 
-
 /* SAK sysrq handler */
 #ifdef CONFIG_VT
 static void sysrq_handle_SAK(int key, struct pt_regs *pt_regs,
@@ -69,22 +69,20 @@ static void sysrq_handle_SAK(int key, struct pt_regs *pt_regs,
 	if (tty)
 		do_SAK(tty);
 	if ((tty->driver.type == TTY_DRIVER_TYPE_CONSOLE) && vc)
-		reset_vc(vc->display_fg->fg_console);
+		reset_vc(vc);
 }
 static struct sysrq_key_op sysrq_SAK_op = {
 	handler:	sysrq_handle_SAK,
 	help_msg:	"saK",
 	action_msg:	"SAK",
 };
-#endif
-
 
 /* unraw sysrq handler */
 static void sysrq_handle_unraw(int key, struct pt_regs *pt_regs,
-				struct tty_struct *tty) 
+			       struct tty_struct *tty) 
 {
 	struct vc_data *vc = (struct vc_data *) tty->driver_data;
-	
+
 	if ((tty->driver.type == TTY_DRIVER_TYPE_CONSOLE) && vc)
 		vc->kbd_table.kbdmode = VC_XLATE;
 }
@@ -93,7 +91,7 @@ static struct sysrq_key_op sysrq_unraw_op = {
 	help_msg:	"unRaw",
 	action_msg:	"Keyboard mode set to XLATE",
 };
-
+#endif /* CONFIG_VT */
 
 /* reboot sysrq handler */
 static void sysrq_handle_reboot(int key, struct pt_regs *pt_regs,
@@ -106,6 +104,8 @@ static struct sysrq_key_op sysrq_reboot_op = {
 	help_msg:	"reBoot",
 	action_msg:	"Resetting",
 };
+
+
 
 /* SYNC SYSRQ HANDLERS BLOCK */
 
@@ -227,7 +227,7 @@ static void sysrq_handle_sync(int key, struct pt_regs *pt_regs,
 			      struct tty_struct *tty) 
 {
 	emergency_sync_scheduled = EMERG_SYNC;
-	wakeup_bdflush();
+	wakeup_bdflush(0);
 }
 static struct sysrq_key_op sysrq_sync_op = {
 	handler:	sysrq_handle_sync,
@@ -239,7 +239,7 @@ static void sysrq_handle_mountro(int key, struct pt_regs *pt_regs,
 				 struct tty_struct *tty) 
 {
 	emergency_sync_scheduled = EMERG_REMOUNT;
-	wakeup_bdflush();
+	wakeup_bdflush(0);
 }
 static struct sysrq_key_op sysrq_mountro_op = {
 	handler:	sysrq_handle_mountro,
@@ -276,6 +276,7 @@ static struct sysrq_key_op sysrq_showstate_op = {
 	action_msg:	"Show State",
 };
 
+
 static void sysrq_handle_showmem(int key, struct pt_regs *pt_regs,
 				 struct tty_struct *tty) 
 {
@@ -298,7 +299,7 @@ static void send_sig_all(int sig)
 {
 	struct task_struct *p;
 
-	for_each_task(p) {
+	for_each_process(p) {
 		if (p->mm && p->pid != 1)
 			/* Not swapper, init nor kernel thread */
 			force_sig(sig, p);
@@ -347,8 +348,8 @@ static struct sysrq_key_op *sysrq_key_table[SYSRQ_KEY_TABLE_LENGTH] = {
 /* 8 */	&sysrq_loglevel_op,
 /* 9 */	&sysrq_loglevel_op,
 /* a */	NULL, /* Don't use for system provided sysrqs,
-		 it is handled specially on the spark
-		 and will never arive */
+		 it is handled specially on the sparc
+		 and will never arrive */
 /* b */	&sysrq_reboot_op,
 /* c */	NULL,
 /* d */	NULL,
@@ -370,7 +371,11 @@ static struct sysrq_key_op *sysrq_key_table[SYSRQ_KEY_TABLE_LENGTH] = {
 		 as 'Off' at init time */
 /* p */	&sysrq_showregs_op,
 /* q */	NULL,
+#ifdef CONFIG_VT
 /* r */	&sysrq_unraw_op,
+#else
+/* r */ NULL,
+#endif
 /* s */	&sysrq_sync_op,
 /* t */	&sysrq_showstate_op,
 /* u */	&sysrq_mountro_op,
