@@ -760,9 +760,6 @@ static struct file_operations fb_fops = {
 };
 
 #ifdef CONFIG_MTRR
-/* Enable MTRR support by default */
-static int enable_mtrr = 1;
-
 /**
  * 	fb_disable_mtrrs - disable MTRR usage for frame buffer device
  * 	@fb_info: frame buffer info structure
@@ -774,9 +771,9 @@ static int enable_mtrr = 1;
  *
  */
 void
-fb_disable_mtrrs(void)
+fb_disable_mtrrs(struct fb_info *info)
 {
-	enable_mtrr = 0;
+	info->enable_mtrr = 0;
 }
 #endif
 
@@ -883,7 +880,7 @@ register_framebuffer(struct fb_info *fb_info)
 	/*
 	 * Enable MTRR support if desired.
 	 */
-	if (enable_mtrr) {
+	if (fb_info->enable_mtrr) {
 		fb_info->mtrr_handle = mtrr_add(fb_info->fix.smem_start,
 						fb_info->fix.smem_len,
 						MTRR_TYPE_WRCOMB, 1);
@@ -919,7 +916,7 @@ unregister_framebuffer(struct fb_info *fb_info)
 	/*
 	 * Disable MTRR support if it's enabled.
 	 */
-	if (enable_mtrr) {
+	if (fb_info->enable_mtrr) {
 		mtrr_del(fb_info->mtrr_handle, fb_info->fix.smem_start, 
 			 fb_info->fix.smem_len);
 		printk("%s: MTRR turned off\n", fb_info->fix.id);

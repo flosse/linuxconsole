@@ -376,6 +376,7 @@ struct fb_info {
 					   the cursor's color for non
                                            palette mode */
 #ifdef CONFIG_MTRR
+   int enable_mtrr;			/* Turn MTRR on */	
    int mtrr_handle;			/* MTRR handle */
 #endif
    /* From here on everything is device dependent */
