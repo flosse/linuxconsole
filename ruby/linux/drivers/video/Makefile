@@ -10,12 +10,7 @@ mod-subdirs	:= matrox
 # This list comes from 'grep -l EXPORT_SYMBOL *.[hc]'.
 
 export-objs    := fbmem.o fbcmap.o fbcon.o fbmon.o modedb.o \
-		  fbcon-afb.o fbcon-ilbm.o fbcon-vga8-planes.o\
-		  fbcon-vga.o fbcon-iplan2p2.o fbcon-iplan2p4.o \
-		  fbcon-iplan2p8.o fbcon-vga-planes.o fbcon-cfb16.o \
-		  fbcon-cfb2.o fbcon-cfb24.o fbcon-cfb32.o fbcon-cfb4.o \
-		  fbcon-cfb8.o fbcon-mac.o fbcon-mfb.o vga.o vgacon.o\
-		  cyber2000fb.o fbcon-hga.o
+		  vga.o vgacon.o cyber2000fb.o
 
 # Each configuration option enables a list of files.
 
@@ -102,27 +97,6 @@ obj-$(CONFIG_FB_HGA)              += hgafb.o
 obj-$(CONFIG_FB_SA1100)           += sa1100fb.o
 obj-$(CONFIG_FB_VIRTUAL)          += vfb.o  
 obj-$(CONFIG_FB_HIT)              += hitfb.o fbgen.o
-
-# Generic Low Level Drivers
-
-obj-$(CONFIG_FBCON_AFB)           += fbcon-afb.o
-obj-$(CONFIG_FBCON_CFB2)          += fbcon-cfb2.o
-obj-$(CONFIG_FBCON_CFB4)          += fbcon-cfb4.o
-obj-$(CONFIG_FBCON_CFB8)          += fbcon-cfb8.o
-obj-$(CONFIG_FBCON_CFB16)         += fbcon-cfb16.o
-obj-$(CONFIG_FBCON_CFB24)         += fbcon-cfb24.o
-obj-$(CONFIG_FBCON_CFB32)         += fbcon-cfb32.o
-obj-$(CONFIG_FBCON_ILBM)          += fbcon-ilbm.o
-obj-$(CONFIG_FBCON_IPLAN2P2)      += fbcon-iplan2p2.o
-obj-$(CONFIG_FBCON_IPLAN2P4)      += fbcon-iplan2p4.o
-obj-$(CONFIG_FBCON_IPLAN2P8)      += fbcon-iplan2p8.o
-obj-$(CONFIG_FBCON_IPLAN2P16)     += fbcon-iplan2p16.o
-obj-$(CONFIG_FBCON_MAC)           += fbcon-mac.o
-obj-$(CONFIG_FBCON_MFB)           += fbcon-mfb.o
-obj-$(CONFIG_FBCON_VGA)           += fbcon-vga.o
-obj-$(CONFIG_FBCON_VGA_PLANES)	  += fbcon-vga-planes.o fbcon-vga8-planes.o
-obj-$(CONFIG_FBCON_HGA)           += fbcon-hga.o
-obj-$(CONFIG_FBCON_ACCEL)	  += fbcon-accel.o
 
 include $(TOPDIR)/Rules.make
 
