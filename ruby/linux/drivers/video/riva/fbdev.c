@@ -1431,7 +1431,7 @@ module_exit(rivafb_exit);
 
 MODULE_AUTHOR("Ani Joshi, maintainer");
 MODULE_DESCRIPTION("Framebuffer driver for nVidia Riva 128, TNT, TNT2");
-
+MODULE_LICENSE("GPL");
 
 /* from GGI */
 static void riva_save_state (struct rivafb_info *rinfo, struct riva_regs *regs)

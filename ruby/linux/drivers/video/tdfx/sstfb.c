@@ -1436,6 +1436,8 @@ static void __exit sstfb_cleanup(void)
 }
 module_init(sstfb_init);
 module_exit(sstfb_cleanup);
+
+MODULE_LICENSE("GPL");
 #endif  /* MODULE */
 
 /*

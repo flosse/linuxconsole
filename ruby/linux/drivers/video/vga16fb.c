@@ -564,6 +564,8 @@ static void __exit vga16fb_exit(void)
 #ifdef MODULE
 module_init(vga16fb_init);
 module_exit(vga16fb_exit);
+
+MODULE_LICENSE("GPL");
 #endif
 
 /*

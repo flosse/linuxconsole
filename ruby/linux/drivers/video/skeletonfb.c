@@ -474,4 +474,6 @@ static struct fb_ops xxxfb_ops = {
 #ifdef MODULE
 module_init(xxxfb_init);
 module_exit(xxxfb_cleanup);
+
+MODULE_LICENSE("GPL");
 #endif /* MODULE */

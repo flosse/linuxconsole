@@ -166,27 +166,13 @@ int __init hitfb_init(void)
     return 0;
 }
 
-
-void hitfb_cleanup(struct fb_info *info)
+static void __exit hitfb_exit(void)
 {
-    unregister_framebuffer(info);
+    unregister_framebuffer(&fb_info);
 }
 
+module_init(hitfb_init);
+module_exit(hitfb_exit);
 
-#ifdef MODULE
-int init_module(void)
-{
-    return hitfb_init();
-}
+MODULE_LICENSE("GPL");
 
-void cleanup_module(void)
-{
-  hitfb_cleanup(void);
-}
-#endif
-
-/*
- * Local variables:
- * c-basic-offset: 4
- * End:
- */

@@ -994,4 +994,6 @@ void __exit vga_module_exit(void)
 
 module_init(vga_console_init);
 module_exit(vga_module_exit);
+
+MODULE_LICENSE("GPL");
 #endif

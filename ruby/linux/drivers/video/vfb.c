@@ -424,4 +424,6 @@ static void __exit vfb_cleanup(void)
 
 module_init(vfb_init);
 module_exit(vfb_cleanup);
+
+MODULE_LICENSE("GPL");
 #endif /* MODULE */

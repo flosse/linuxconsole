@@ -668,13 +668,7 @@ int __init sgivwfb_init(void)
   return -ENXIO;
 }
 
-#ifdef MODULE
-int init_module(void)
-{
-  return sgivwfb_init();
-}
-
-void cleanup_module(void)
+static void __exit sgivwfb_exit(void)
 {
   struct sgivw_par *par = fb_info.par;
 
@@ -684,4 +678,8 @@ void cleanup_module(void)
   iounmap(fb_info.screenbase);
 }
 
-#endif /* MODULE */
+module_init(sgivwfb_init);
+module_exit(sgivwfb_exit);
+
+MODULE_LICENSE("GPL");
+

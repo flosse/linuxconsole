@@ -175,5 +175,7 @@ static void __exit sed1345_exit(void)
 #ifdef MODULE
 module_init(sed1345_init);
 module_exit(sed1345_exit);
+
+MODULE_LICENSE("GPL");
 #endif
 

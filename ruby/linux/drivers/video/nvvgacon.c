@@ -870,3 +870,5 @@ void __exit nvvgacon_module_exit()
 module_init(nvvgacon_module_init);
 module_exit(nvvgacon_module_exit);
 
+MODULE_LICENSE("GPL");
+

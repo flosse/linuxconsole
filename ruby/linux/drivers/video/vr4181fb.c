@@ -444,5 +444,7 @@ static void __exit vr4181fb_exit(void)
 #ifdef MODULE
 module_init(vr4181fb_init);
 module_exit(vr4181fb_exit);
+
+MODULE_LICENSE("GPL");
 #endif
 

@@ -718,10 +718,7 @@ const struct consw newport_con = {
     con_save_screen:	DUMMY
 };
 
-#ifdef MODULE
-MODULE_LICENSE("GPL");
-
-int init_module(void)
+int __init newport_module_init(void)
 {
 	if (!newport_startup())
 		printk("Error loading SGI Newport Console driver\n");
@@ -732,7 +729,7 @@ int init_module(void)
 	return 0;
 }
 
-int cleanup_module(void)
+static void __exit newport_module_exit(void);
 {
 	int i;
 
@@ -740,7 +737,10 @@ int cleanup_module(void)
 	/* free memory used by user font */
 	for (i = 0; i < MAX_NR_CONSOLES; i++)
 		newport_set_def_font(i, NULL);
-
-	return 0;
 }
-#endif
+
+module_init(newport_module_init);
+module_exit(newport_module_exit);
+
+MODULE_LICENSE("GPL");
+

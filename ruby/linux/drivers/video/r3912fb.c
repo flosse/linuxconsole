@@ -369,5 +369,7 @@ static void __exit r3912fb_exit(void)
 #ifdef MODULE
 module_init(r3912fb_init);
 module_exit(r3912fb_exit);
+
+MODULE_LICENSE("GPL");
 #endif
 

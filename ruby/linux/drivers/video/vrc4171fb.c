@@ -250,5 +250,7 @@ static void __exit vrc4171fb_exit(void)
 #ifdef MODULE
 module_init(vrc4171fb_init);
 module_exit(vrc4171fb_exit);
+
+MODULE_LICENSE("GPL");
 #endif
 

@@ -231,5 +231,6 @@ static void __exit sfb_exit(void)
 #ifdef MODULE
 module_init(sfb_init);
 module_exit(sfb_exit);
-#endif
 
+MODULE_LICENSE("GPL");
+#endif 

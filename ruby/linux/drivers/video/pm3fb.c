@@ -2449,4 +2449,7 @@ void pm3fb_cleanup_module(void)
 }
 module_init(pm3fb_init_module);
 module_exit(pm3fb_cleanup_module);
+
+MODULE_LICENSE("GPL");
+
 #endif /* MODULE */

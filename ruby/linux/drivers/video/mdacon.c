@@ -619,4 +619,6 @@ void __exit mda_module_exit(void)
 
 module_init(mda_console_init);
 module_exit(mda_module_exit);
+
+MODULE_LICENSE("GPL");
 #endif
