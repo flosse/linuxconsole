@@ -257,7 +257,8 @@ char *absolutes[ABS_MAX + 1] = {
 char *misc[MSC_MAX + 1] = {
 	[ 0 ... MSC_MAX] = NULL,
 	[MSC_SERIAL] = "Serial",	[MSC_PULSELED] = "Pulseled",
-	[MSC_GESTURE] = "Gesture",	[MSC_RAW] = "RawData"
+	[MSC_GESTURE] = "Gesture",	[MSC_RAW] = "RawData",
+	[MSC_SCAN] = "ScanCode",
 };
 
 char *leds[LED_MAX + 1] = {
