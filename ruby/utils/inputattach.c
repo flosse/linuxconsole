@@ -350,6 +350,8 @@ struct input_types {
 struct input_types input_types[] = {
 
 { "--sunkbd",		"-skb",		B1200, CS8,			SERIO_SUNKBD,	0x00,	1,	NULL },
+{ "--lkkbd",		"-lk",		B4800, CS8|CSTOPB,		SERIO_LKKBD,	0x00,	1,	NULL },
+{ "--vsxxx-aa",		"-vs",		B4800, CS8|CSTOPB|PARENB|PARODD,SERIO_VSXXXAA,	0x00,	1,	NULL },
 { "--spaceorb",		"-orb",		B9600, CS8,			SERIO_SPACEORB,	0x00,	1,	NULL },
 { "--spaceball",	"-sbl",		B9600, CS8,			SERIO_SPACEBALL,0x00,	0,	spaceball_init },
 { "--magellan",		"-mag",		B9600, CS8 | CSTOPB | CRTSCTS,	SERIO_MAGELLAN,	0x00,	1,	magellan_init },
@@ -389,6 +391,8 @@ int main(int argc, char **argv)
                 puts("");
                 puts("Modes:");
                 puts("  --sunkbd        -skb   Sun Type 4 and Type 5 keyboards");
+		puts("  --lkkbd         -lk    DEC LK201 / LK401 keyboards");
+		puts("  --vsxxx-aa      -vs    DEC VSXXX-AA / VSXXX-GA mouse and VSXXX-AB tablet");
                 puts("  --spaceorb      -orb   SpaceOrb 360 / SpaceBall Avenger");
 		puts("  --spaceball     -sbl   SpaceBall 2003 / 3003 / 4000 FLX");
                 puts("  --magellan      -mag   Magellan / SpaceMouse");
