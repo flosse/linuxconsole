@@ -28,6 +28,8 @@
  *	v1.12 (de) - Add support for two more inking pen IDs
  *	v1.14 (vp) - Use new USB device id probing scheme.
  *		     Fix Wacom Graphire mouse wheel
+ *	v1.18 (vp) - Fix mouse wheel direction
+ *		     Make mouse relative
  */
 
 /*
