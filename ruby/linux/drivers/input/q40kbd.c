@@ -1,48 +1,99 @@
 /*
- * linux/drivers/input/q40kbd.c
+ *  q40kbd.c  Version 0.1
+ *
+ *  Copyright (c) 2000 Vojtech Pavlik
+ *
+ *  Based on the work of:
+ *	unknown author
+ *
+ *  Sponsored by SuSE
  */
 
-static void keyboard_interrupt(int irq, void *dev_id, struct pt_regs *regs)
+/*
+ * Q40 PS/2 keyboard controller driver for Linux/m68k
+ */
+
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ *
+ * Should you need to contact me, the author, you can do so either by
+ * e-mail - mail your message to <vojtech@suse.cz>, or by paper mail:
+ * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
+ */
+
+#include <linux/module.h>
+#include <linux/init.h>
+#include <linux/serio.h>
+
+#include <asm/keyboard.h>
+#include <asm/bitops.h>
+#include <asm/io.h>
+#include <asm/uaccess.h>
+#include <asm/q40_master.h>
+#include <asm/irq.h>
+#include <asm/q40ints.h>
+
+static inline void q40kbd_write(unsigned char val)
+{
+	/* FIXME! We need a way how to write to the keyboard! */
+}
+
+static struct serio q40kbd_port =
+{
+	type:   SERIO_8042,
+	write:  q40kbd_write,
+};
+
+static void q40kbd_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 {
 	unsigned long flags;
-	unsigned char status;
 
-	spin_lock_irqsave(&kbd_controller_lock, flags);
-	kbd_pt_regs = regs;
 	if (IRQ_KEYB_MASK & master_inb(INTERRUPT_REG))
-		output_char(master_inb(KEYCODE_REG));
-	}
-	spin_unlock_irqrestore(&kbd_controller_lock, flags);
+		if (q40kbd_port.dev)
+                         q40kbd_port.dev->interrupt(&q40kbd_port, master_inb(KEYCODE_REG), 0);
 
 	master_outb(-1, KEYBOARD_UNLOCK_REG);
 }
 
-static void __init kbd_clear_input(void)
-{
-	int maxread = 100;	/* Random number */
-	while (maxread && (IRQ_KEYB_MASK & master_inb(INTERRUPT_REG))) {
-		maxread--;
-		master_inb(KEYCODE_REG);
-	}
-	master_outb(-1,KEYBOARD_UNLOCK_REG);
-}
-
 void __init q40kbd_init(void)
 {
+	int maxread = 100;
+
 	/* Get the keyboard controller registers (incomplete decode) */
-	request_region(0x60, 16, "keyboard");
+	request_region(0x60, 16, "q40kbd");
 
-	/* Flush any pending input. */
-	kbd_clear_input();
+	/* allocate the IRQ */
+	request_irq(Q40_IRQ_KEYBOARD, keyboard_interrupt, 0, "q40kbd", NULL);
 
-	/* Ok, finally allocate the IRQ, and off we go.. */
-	request_irq(Q40_IRQ_KEYBOARD, keyboard_interrupt, 0, "keyboard", NULL);
+	/* flush any pending input. */
+	while (maxread-- && (IRQ_KEYB_MASK & master_inb(INTERRUPT_REG)))
+		master_inb(KEYCODE_REG);
+	
+	/* off we go */
 	master_outb(-1,KEYBOARD_UNLOCK_REG);
 	master_outb(1,KEY_IRQ_ENABLE_REG);
+
+	register_serio_port(&q40kbd_port);
+	printk(KERN_INFO "serio%d: Q40 PS/2 kbd port irq %d\n", q40kbd_port.number, Q40_IRQ_KEYBOARD);
 }
 
 void __exit q40kbd_exit(void)
 {
+	unregister_serio_port(&q40kbd_port);
+	free_irq(Q40_IRQ_KEYBOARD, NULL);
+	release_region(0x60, 16);	
 }
 
 module_init(q40kbd_init);

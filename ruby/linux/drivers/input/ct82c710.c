@@ -137,10 +137,10 @@ static int ct82c710_write(struct serio *port, unsigned char c)
 
 static struct serio ct82c710_port =
 {
-	type:		SERIO_8042,
-	write:		ct82c710_write,
-	open:		ct82c710_open,
-	close:		ct82c710_close
+	type:	SERIO_8042,
+	write:	ct82c710_write,
+	open:	ct82c710_open,
+	close:	ct82c710_close
 };
 
 /*
@@ -189,10 +189,8 @@ int __init ct82c710_init(void)
 	if (ct82c710_probe())
 		return -ENODEV;
 
-	if (check_region(ct82c710_data, 2))
+	if (request_region(ct82c710_data, 2, "ct82c710"))
 		return -EBUSY;
-
-	request_region(ct82c710_data, 2, "ct82c710");
 
 	serio_register_port(&ct82c710_port);
 

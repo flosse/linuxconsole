@@ -33,9 +33,10 @@ obj-$(CONFIG_INPUT)		+= input.o
 
 obj-$(CONFIG_INPUT_I8042)	+= i8042.o serio.o
 obj-$(CONFIG_INPUT_CT82C710)	+= ct82c710.o serio.o
-#obj-$(CONFIG_INPUT_Q40KBD)	+= q40kbd.o serio.o
+obj-$(CONFIG_INPUT_Q40KBD)	+= q40kbd.o serio.o
 #obj-$(CONFIG_INPUT_SUN8042)	+= sun8042.o serio.o
-#obj-$(CONFIG_INPUT_RPCKBD)	+= rpckbd.o
+obj-$(CONFIG_INPUT_RPCKBD)	+= rpckbd.o serio.o
+#obj-$(CONFIG_INPUT_MIPSKBD)	+= mipskbd.o serio.o
 obj-$(CONFIG_INPUT_PARKBD)	+= parkbd.o serio.o
 
 obj-$(CONFIG_INPUT_SERPORT)	+= serport.o serio.o
@@ -94,7 +95,7 @@ obj-$(CONFIG_INPUT_AMIJOY)	+= amijoy.o
 #obj-$(CONFIG_INPUT_ATARIKBD)	+= atarikbd.o
 #obj-$(CONFIG_INPUT_ATARIMOUSE) += atarimouse.o
 #obj-$(CONFIG_INPUT_ATARIJOY)	+= atarijoy.o
-#obj-$(CONFIG_INPUT_RPCMOUSE)	+= rpcmouse.o
+obj-$(CONFIG_INPUT_RPCMOUSE)	+= rpcmouse.o
 #obj-$(CONFIG_INPUT_ARCKBD)	+= arckbd.o
 
 
