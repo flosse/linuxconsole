@@ -36,6 +36,7 @@ obj-$(CONFIG_INPUT_CT82C710)	+= ct82c710.o serio.o
 obj-$(CONFIG_INPUT_Q40KBD)	+= q40kbd.o serio.o
 #obj-$(CONFIG_INPUT_SUN8042)	+= sun8042.o serio.o
 obj-$(CONFIG_INPUT_RPCKBD)	+= rpckbd.o serio.o
+#obj-$(CONFIG_INPUT_JAZZKBD)	+= jazzkbd.o serio.o
 #obj-$(CONFIG_INPUT_MIPSKBD)	+= mipskbd.o serio.o
 obj-$(CONFIG_INPUT_PARKBD)	+= parkbd.o serio.o
 
@@ -91,6 +92,7 @@ obj-$(CONFIG_INPUT_EVBUG)	+= evbug.o
 obj-$(CONFIG_INPUT_INPORT)	+= inport.o
 obj-$(CONFIG_INPUT_LOGIBM)	+= logibm.o
 obj-$(CONFIG_INPUT_PC110PAD)	+= pc110pad.o
+#obj-$(CONIG_INPUT_BTTV)	+= bttv.o
 obj-$(CONFIG_INPUT_AMIKEYB)	+= amikeyb.o
 obj-$(CONFIG_INPUT_AMIMOUSE)	+= amimouse.o
 obj-$(CONFIG_INPUT_AMIJOY)	+= amijoy.o
@@ -99,6 +101,8 @@ obj-$(CONFIG_INPUT_AMIJOY)	+= amijoy.o
 #obj-$(CONFIG_INPUT_ATARIJOY)	+= atarijoy.o
 obj-$(CONFIG_INPUT_RPCMOUSE)	+= rpcmouse.o
 #obj-$(CONFIG_INPUT_ARCKBD)	+= arckbd.o
+#obj-$(CONFIG_INPUT_APOLLOKBD)	+= apollokbd.o
+#obj-$(CONFIG_INPUT_HPHIL)	+= hphil.o
 
 # Files that are both resident and modular: remove from modular.
 

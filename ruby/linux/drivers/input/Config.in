@@ -13,6 +13,8 @@ if [ "$CONFIG_INPUT" != "n" ]; then
       tristate '  Q40 kbd controller' CONFIG_INPUT_Q40KBD
       tristate ' #Sun Ultra/AX, JavaStation 8042 kbd controller' CONFIG_INPUT_SUN8042
       tristate '  Acorn RiscPC kbd controller' CONFIG_INPUT_RPCKBD
+      tristate ' #MIPS Normal kbd controller' CONFIG_INPUT_MIPSKBD
+      tristate ' #MIPS Jazz kbd controller' CONFIG_INPUT_JAZZKBD
       tristate '  Parallel port kbd converter' CONFIG_INPUT_PARKBD
    
    comment 'Serial port support'
@@ -76,6 +78,7 @@ if [ "$CONFIG_INPUT" != "n" ]; then
       fi
       tristate '  Logitech busmouse' CONFIG_INPUT_LOGIBM
       tristate '  IBM PC110 touchpad' CONFIG_INPUT_PC110PAD
+      tristate ' #BTTV Infrared remote' CONFIG_INPUT_BTTV
       tristate '  Amiga keyboard' CONFIG_INPUT_AMIKBD
       tristate '  Amiga mouse' CONFIG_INPUT_AMIMOUSE
       tristate '  Amiga joystick' CONFIG_INPUT_AMIJOY
@@ -84,6 +87,8 @@ if [ "$CONFIG_INPUT" != "n" ]; then
       tristate ' #Atari joystick' CONFIG_INPUT_ATAJOY
       tristate '  Acorn RiscPC mouse' CONFIG_INPUT_RPCMOUSE
       tristate ' #Acorn A5000 keyboard' CONFIG_INPUT_ARCKBD
+      tristate ' #HP Apollo keyboard' CONFIG_INPUT_APOLLOKBD
+      tristate ' #HP HIL keyboard and mouse' CONFIG_INPUT_HPHIL
       
    comment 'Userland interfaces'
       tristate '  Mouse interface' CONFIG_INPUT_MOUSEDEV
