@@ -216,6 +216,9 @@ static struct {
 #ifdef CONFIG_FB_G364
 	{ "g364", g364fb_init, NULL },
 #endif
+#ifdef CONFIG_FB_SA1100
+        { "sa1100", sa1100fb_init, sa1100fb_setup },
+#endif
 #ifdef CONFIG_FB_FM2
 	{ "fm2fb", fm2fb_init, fm2fb_setup },
 #endif 
