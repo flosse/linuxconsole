@@ -963,7 +963,7 @@ static void pm3fb_common_init(struct pm3fb_info *l_fb_info)
 	l_fb_info->current_par->f_fb_info->fbops = &pm3fb_ops;
 	l_fb_info->current_par->f_fb_info->pseudo_palette = l_fb_info->pseudo_palette;
 	l_fb_info->current_par->f_fb_info->flags = FBINFO_FLAG_DEFAULT;
-	l_fb_info->current_par->f_fb_info->par = &(l_fb_info->current_par);
+	l_fb_info->current_par->f_fb_info->par = l_fb_info->current_par;
 
 	pm3fb_mapIO(l_fb_info);
 	l_fb_info->current_par->f_fb_info->screen_base = l_fb_info->v_fb;
