@@ -124,10 +124,6 @@ static void action_button_handler(int irq, void *dev_id, struct pt_regs *regs)
 	input_report_key(dev, KEY_ENTER, down);
 }
 
-/* ??? Why place it in a task queue */
-static int suspend_button_pushed = 0;
-static int suspend_button_mode = 1;
-
 static void npower_button_handler(int irq, void *dev_id, struct pt_regs *regs)
 {
         int down = (GPLR & GPIO_BITSY_NPOWER_BUTTON) ? 0 : 1;
@@ -139,21 +135,6 @@ static void npower_button_handler(int irq, void *dev_id, struct pt_regs *regs)
 	 */ 	
 	input_report_key(dev, KEY_SUSPEND, 1);
 	input_report_key(dev, KEY_SUSPEND, down); 	
-/*
-        if (suspend_button_mode) {
-               	input_report_key(dev, KEY_SUSPEND, down); 	
-        } else {
-                if (!suspend_button_pushed) {
-                        extern void pm_do_suspend(void);
-
-			suspend_button_pushed = 1;
-        
-			udelay(200);  debounce 
-        		pm_do_suspend();
-        		suspend_button_pushed = 0;
-                }
-        }
-*/
 }
 
 #ifdef CONFIG_PM
@@ -278,6 +259,23 @@ static void h3600ts_process_packet(struct h3600_dev *ts)
 }
 
 /*
+ * Power management can't be done in a interrupt context. So we have to
+ * use a keventd.
+ */
+static int suspend_button_pushed = 0;
+static void suspend_button_task_handler(void *data)
+{
+        extern void pm_do_suspend(void);
+        udelay(200); /* debounce */
+        pm_do_suspend();
+        suspend_button_pushed = 0;
+}
+
+static struct tq_struct suspend_button_task = {
+        routine: suspend_button_task_handler
+};
+
+/*
  * h3600ts_event() handles events from the input module.
  */
 static int h3600ts_event(struct input_dev *dev, unsigned int type, 
@@ -286,9 +284,10 @@ static int h3600ts_event(struct input_dev *dev, unsigned int type,
 	struct h3600_dev *ts = dev->private;
 
 	switch (type) {
-		case EV_LED:
+		case EV_LED: {
 			//ts->serio->write(ts->serio, SOME_CMD);
 			return 0;
+		}
 		/* 
 		 * We actually provide power management when you press the
 		 * power management button= 
@@ -296,13 +295,21 @@ static int h3600ts_event(struct input_dev *dev, unsigned int type,
 		case EV_KEY:
 			if (code == KEY_SUSPEND) {
 				printk("Handling power key\n");
+				
+				if (!suspend_button_pushed) {
+                        		suspend_button_pushed = 1;
+                        		schedule_task(&suspend_button_task);
+                		}
+
+/*
 				if (value == 0) {
-					/* Turn off the power */
-					//h3600_flite_power(FLITE_PWR_OFF);
+					Turn off the power 
+					h3600_flite_power(FLITE_PWR_OFF);
 				} else {
-					/* Lite this little light of mine */
-					//h3600_flite_power(FLITE_PWR_ON);
-				}  		  
+					Lite this little light of mine 
+					h3600_flite_power(FLITE_PWR_ON);
+				}  		 
+*/ 
 			}  	
 			return 0;	
 	}					
