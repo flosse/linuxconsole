@@ -99,6 +99,7 @@ static __inline__ void serio_dev_write_wakeup(struct serio *serio)
 #define SERIO_XT	0x00000000UL
 #define SERIO_8042	0x01000000UL
 #define SERIO_RS232	0x02000000UL
+#define SERIO_HIL_MLC	0x03000000UL
 
 #define SERIO_PROTO	0xFFUL
 #define SERIO_MSC	0x01
@@ -122,6 +123,7 @@ static __inline__ void serio_dev_write_wakeup(struct serio *serio)
 #define SERIO_PS2SER	0x22
 #define SERIO_TWIDKBD	0x23
 #define SERIO_TWIDJOY   0x24
+#define SERIO_HIL	0x25
 
 #define SERIO_ID	0xff00UL
 #define SERIO_EXTRA	0xff0000UL

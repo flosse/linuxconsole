@@ -482,6 +482,7 @@ struct input_event {
 #define BUS_PCI			0x01
 #define BUS_ISAPNP		0x02
 #define BUS_USB			0x03
+#define BUS_HIL			0x04
 
 #define BUS_ISA			0x10
 #define BUS_I8042		0x11
