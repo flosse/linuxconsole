@@ -114,7 +114,9 @@ int vfb_setup(char*);
 
 static int vfb_open(struct fb_info *info, int user);
 static int vfb_release(struct fb_info *info, int user);
-static int vfb_set_var(struct fb_var_screeninfo *var, struct fb_info *info); 
+static int vfb_check_var(struct fb_var_screeninfo *var, void *par,
+                         struct fb_info *info);
+static int vfb_set_par(void *par, struct fb_info *info);
 static int vfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                          u_int transp, struct fb_info *info);
 static int vfb_pan_display(struct fb_var_screeninfo *var,struct fb_info *info); 
@@ -135,10 +137,9 @@ static int vfbcon_updatevar(int con, struct fb_info *info);
 static u_long get_line_length(int xres_virtual, int bpp);
 
 static struct fb_ops vfb_ops = {
-    vfb_open, vfb_release, vfb_set_var, vfb_setcolreg, NULL /* vfb_blank */, 
-    vfb_pan_display, NULL /* vfb_ioctl */, vfb_mmap
+    vfb_open, vfb_release, vfb_check_var, vfb_set_par, vfb_setcolreg, 
+    NULL /* vfb_blank */, vfb_pan_display, NULL /* vfb_ioctl */, vfb_mmap
 };
-
 
     /*
      *  Open/Release the frame buffer device
@@ -176,7 +177,8 @@ static int vfb_release(struct fb_info *info, int user)
      *        dummycon instead of that.
      */
 
-static int vfb_set_var(struct fb_var_screeninfo *var, struct fb_info *info) 
+static int vfb_check_var(struct fb_var_screeninfo *var, void *vfb_par,
+                         struct fb_info *info)
 {
     int err, activate = var->activate;
     u_long line_length;
@@ -216,10 +218,10 @@ static int vfb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
     else
 	return -EINVAL;
 
-    if (var->xres_virtual < var->xoffset+var->xres)
-        var->xres_virtual = var->xoffset+var->xres;
-    if (var->yres_virtual < var->yoffset+var->yres)
-       var->yres_virtual = var->yoffset+var->yres;
+    if (var->xres_virtual < var->xoffset + var->xres)
+        var->xres_virtual = var->xoffset + var->xres;
+    if (var->yres_virtual < var->yoffset + var->yres)
+       var->yres_virtual = var->yoffset + var->yres;
 
     /*
      *  Memory limit
@@ -228,6 +230,11 @@ static int vfb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
     if (line_length*var->yres_virtual > videomemorysize)
 	return -ENOMEM;
 
+    /*
+     * Now that we checked it we alter var. The reason being is that the video
+     * mode passed in might not work but slight changes to it might make it 
+     * work. This way we let the user know what is acceptable.
+     */
     switch (var->bits_per_pixel) {
        case 1:
        case 8:
@@ -287,65 +294,15 @@ static int vfb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
     var->blue.msb_right = 0;
     var->transp.msb_right = 0;
 
-    if ((activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
-	if (info->var.xres != var->xres || info->var.yres != var->yres ||
-           info->var.xres_virtual != var->xres_virtual || 
-           info->var.yres_virtual != var->yres_virtual ||
-           info->var.bits_per_pixel != var->bits_per_pixel) {
-	    /* Set the video mode. For a real video card we would fill in
-             * fb_info->par which is the hardware dependent structure.
-             */
-	    switch (var->bits_per_pixel) {
-#ifdef FBCON_HAS_MFB
-		case 1:
-		    info->fix.visual = FB_VISUAL_MONO01; 
-		    break;
-#endif
-#ifdef FBCON_HAS_CFB2
-		case 2:
-		    info->fix.visual = FB_VISUAL_STATIC_PSEUDOCOLOR;
-		    break;
-#endif
-#ifdef FBCON_HAS_CFB4
-		case 4:
-		    info->fix.visual = FB_VISUAL_STATIC_PSEUDOCOLOR;	
-		    break;
-#endif
-#ifdef FBCON_HAS_CFB8
-		case 8:
- 		    info->fix.visual = FB_VISUAL_PSEUDOCOLOR;
-		    break;
-#endif
-#ifdef FBCON_HAS_CFB16
-		case 16:
-		    info->fix.visual = FB_VISUAL_TRUECOLOR;
-		    break;
-#endif
-#ifdef FBCON_HAS_CFB24
-		case 24:
-		    info->fix.visual = FB_VISUAL_DIRECTCOLOR;	
-		    break;
-#endif
-#ifdef FBCON_HAS_CFB32
-		case 32:
-		    info->fix.visual = FB_VISUAL_DIRECTCOLOR;
-		    break;
-#endif
-		default:
-		    break;	
-	    }
-	    info->fix.line_length = get_line_length(var->xres_virtual,
-                                        		var->bits_per_pixel);
-	}
-	if (info->var.bits_per_pixel != var->bits_per_pixel) {
-	    if ((err = fb_set_cmap(&info->cmap, 1, info)))
-		return err;
-	}
-	info->var = *var;
-	if (fb_info.changevar)
-                (*fb_info.changevar)(fg_console);
-    }
+    info->fix.line_length = get_line_length(var->xres_virtual,
+                                     		var->bits_per_pixel);
     return 0;
+}
+
+static int tdfxfb_set_par(void *vfb_par, struct fb_info *info)
+{
+	/* We don't do much for this driver */
+	return 0;
 }
 	
     /*
@@ -528,8 +485,6 @@ int __init vfb_init(void)
        vfb_set_var will do this for us */
     fb_info.cmap.len = 1<<fb_info.var.bits_per_pixel;
     fb_alloc_cmap(&fb_info.cmap, fb_info.cmap.len, 0);	 
-
-    vfb_set_var(&vfb_default, &fb_info);	
 
     if (register_framebuffer(&fb_info) < 0) {
 	vfree(videomemory);
