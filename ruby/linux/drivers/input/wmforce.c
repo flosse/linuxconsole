@@ -34,17 +34,21 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/usb.h>
+#include <linux/serio.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 
 #define USB_VENDOR_ID_LOGITECH		0x046d
 #define USB_DEVICE_ID_LOGITECH_WMFORCE	0xc281
 
+#define WMFORCE_MAX_LENGTH	16
+
 struct wmforce {
-	signed char data[8];
+	signed char data[WMFORCE_MAX_LENGTH];
 	struct input_dev dev;
 	struct urb irq;
 	int open;
+	int idx, pkt, len;
 };
 
 static struct {
@@ -54,13 +58,10 @@ static struct {
 
 static char *wmforce_name = "Logitech WingMan Force";
 
-static void wmforce_irq(struct urb *urb)
+static void wmforce_process_packet(struct wmforce *wmforce)
 {
-	struct wmforce *wmforce = urb->context;
-	unsigned char *data = wmforce->data;
 	struct input_dev *dev = &wmforce->dev;
-
-	if (urb->status) return;
+	unsigned char *data = wmforce->data;
 
 	if (data[0] != 1) {
 		if (data[0] != 2)
@@ -83,17 +84,54 @@ static void wmforce_irq(struct urb *urb)
 	input_report_key(dev, BTN_BASE3,   data[6] & 0x40);
 	input_report_key(dev, BTN_BASE4,   data[6] & 0x80);
 	input_report_key(dev, BTN_BASE5,   data[7] & 0x01);
+
+}
+
+static void wmforce_usb_irq(struct urb *urb)
+{
+	struct wmforce *wmforce = urb->context;
+	if (urb->status) return;
+	wmforce_process_packet(wmforce);
+
+}
+
+static void wmforce_serio_irq(struct serio *serio, unsigned char data, unsigned int flags)
+{
+        struct wmforce* wmforce = serio->private;
+
+	if (!wmforce->pkt) {
+		if (data == 0x28)
+			wmforce->pkt = 1;
+		return;
+	}
+
+        if (!wmforce->len) {
+		if (data != 1 && data != 2) {
+			wmforce->pkt = 0;
+			return;
+		}
+                wmforce->idx = 0;
+                wmforce->len = data * 4 + 2;
+        }
+
+        if (wmforce->idx < wmforce->len)
+                wmforce->data[wmforce->idx++] = data;
+
+        if (wmforce->idx == wmforce->len) {
+		wmforce_process_packet(wmforce);
+		wmforce->pkt = 0;
+                wmforce->idx = 0;
+                wmforce->len = 0;
+        }
 }
 
 static int wmforce_open(struct input_dev *dev)
 {
 	struct wmforce *wmforce = dev->private;
 
-	if (wmforce->open++)
-		return 0;
-
-	if (usb_submit_urb(&wmforce->irq))
-		return -EIO;
+	if (dev->idbus == BUS_USB && !wmforce->open++)
+		if (usb_submit_urb(&wmforce->irq))
+			return -EIO;
 
 	return 0;
 }
@@ -102,24 +140,13 @@ static void wmforce_close(struct input_dev *dev)
 {
 	struct wmforce *wmforce = dev->private;
 
-	if (!--wmforce->open)
+	if (dev->idbus == BUS_USB && !--wmforce->open)
 		usb_unlink_urb(&wmforce->irq);
 }
 
-static void *wmforce_probe(struct usb_device *dev, unsigned int ifnum)
+static void wmforce_input_setup(struct wmforce *wmforce)
 {
-	struct usb_endpoint_descriptor *endpoint;
-	struct wmforce *wmforce;
 	int i;
-
-	if (dev->descriptor.idVendor != USB_VENDOR_ID_LOGITECH ||
-	    dev->descriptor.idProduct != USB_DEVICE_ID_LOGITECH_WMFORCE)
-		return NULL;
-
-	endpoint = dev->config[0].interface[ifnum].altsetting[0].endpoint + 0;
-
-	if (!(wmforce = kmalloc(sizeof(struct wmforce), GFP_KERNEL))) return NULL;
-	memset(wmforce, 0, sizeof(struct wmforce));
 
 	wmforce->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 	wmforce->dev.keybit[LONG(BTN_JOYSTICK)] = BIT(BTN_TRIGGER) | BIT(BTN_TOP) | BIT(BTN_THUMB) | BIT(BTN_TOP2) |
@@ -144,6 +171,23 @@ static void *wmforce_probe(struct usb_device *dev, unsigned int ifnum)
 	wmforce->dev.open = wmforce_open;
 	wmforce->dev.close = wmforce_close;
 
+	input_register_device(&wmforce->dev);
+}
+
+static void *wmforce_usb_probe(struct usb_device *dev, unsigned int ifnum)
+{
+	struct usb_endpoint_descriptor *endpoint;
+	struct wmforce *wmforce;
+
+	if (dev->descriptor.idVendor != USB_VENDOR_ID_LOGITECH ||
+	    dev->descriptor.idProduct != USB_DEVICE_ID_LOGITECH_WMFORCE)
+		return NULL;
+
+	endpoint = dev->config[0].interface[ifnum].altsetting[0].endpoint + 0;
+
+	if (!(wmforce = kmalloc(sizeof(struct wmforce), GFP_KERNEL))) return NULL;
+	memset(wmforce, 0, sizeof(struct wmforce));
+
 	wmforce->dev.name = wmforce_name;
 	wmforce->dev.idbus = BUS_USB;
 	wmforce->dev.idvendor = dev->descriptor.idVendor;
@@ -151,9 +195,9 @@ static void *wmforce_probe(struct usb_device *dev, unsigned int ifnum)
 	wmforce->dev.idversion = dev->descriptor.bcdDevice;
 
 	FILL_INT_URB(&wmforce->irq, dev, usb_rcvintpipe(dev, endpoint->bEndpointAddress),
-			wmforce->data, 8, wmforce_irq, wmforce, endpoint->bInterval);
+			wmforce->data, 8, wmforce_usb_irq, wmforce, endpoint->bInterval);
 
-	input_register_device(&wmforce->dev);
+	wmforce_input_setup(wmforce);
 
 	printk(KERN_INFO "input%d: %s on usb%d:%d.%d\n",
 		 wmforce->dev.number, wmforce_name, dev->bus->busnum, dev->devnum, ifnum);
@@ -161,7 +205,7 @@ static void *wmforce_probe(struct usb_device *dev, unsigned int ifnum)
 	return wmforce;
 }
 
-static void wmforce_disconnect(struct usb_device *dev, void *ptr)
+static void wmforce_usb_disconnect(struct usb_device *dev, void *ptr)
 {
 	struct wmforce *wmforce = ptr;
 	usb_unlink_urb(&wmforce->irq);
@@ -169,21 +213,66 @@ static void wmforce_disconnect(struct usb_device *dev, void *ptr)
 	kfree(wmforce);
 }
 
-static struct usb_driver wmforce_driver = {
+static struct usb_driver wmforce_usb_driver = {
 	name:		"wmforce",
-	probe:		wmforce_probe,
-	disconnect:	wmforce_disconnect,
+	probe:		wmforce_usb_probe,
+	disconnect:	wmforce_usb_disconnect,
+};
+
+static void wmforce_serio_connect(struct serio *serio, struct serio_dev *dev)
+{
+	struct wmforce *wmforce;
+
+	if (serio->type != (SERIO_RS232 | SERIO_WMFORCE))
+		return;
+
+	if (!(wmforce = kmalloc(sizeof(struct wmforce), GFP_KERNEL))) return;
+	memset(wmforce, 0, sizeof(struct wmforce));
+
+	wmforce->dev.name = wmforce_name;
+	wmforce->dev.idbus = BUS_RS232;
+	wmforce->dev.idvendor = SERIO_WMFORCE;
+	wmforce->dev.idproduct = 0x0001;
+	wmforce->dev.idversion = 0x0100;
+
+	serio->private = wmforce;
+
+	if (serio_open(serio, dev)) {
+		kfree(wmforce);
+		return;
+	}
+
+	wmforce_input_setup(wmforce);
+
+	printk(KERN_INFO "input%d: %s on serio%d\n",
+		 wmforce->dev.number, wmforce_name, serio->number);
+}
+
+static void wmforce_serio_disconnect(struct serio *serio)
+{
+	struct wmforce* wmforce = serio->private;
+	input_unregister_device(&wmforce->dev);
+	serio_close(serio);
+	kfree(wmforce);
+}
+
+static struct serio_dev wmforce_serio_dev = {
+	interrupt:	wmforce_serio_irq,
+	connect:	wmforce_serio_connect,
+	disconnect:	wmforce_serio_disconnect,
 };
 
 static int __init wmforce_init(void)
 {
-	usb_register(&wmforce_driver);
+	usb_register(&wmforce_usb_driver);
+	serio_register_device(&wmforce_serio_dev);
 	return 0;
 }
 
 static void __exit wmforce_exit(void)
 {
-	usb_deregister(&wmforce_driver);
+	usb_deregister(&wmforce_usb_driver);
+	serio_unregister_device(&wmforce_serio_dev);
 }
 
 module_init(wmforce_init);

@@ -53,7 +53,6 @@ static char *magellan_name = "LogiCad3D Magellan";
 
 struct magellan {
 	struct input_dev dev;
-	struct serio *serio;
 	int idx;
 	unsigned char data[MAGELLAN_MAX_LENGTH];
 };
@@ -163,9 +162,7 @@ static void magellan_connect(struct serio *serio, struct serio_dev *dev)
 		magellan->dev.absmax[t] =  360;
 	}
 
-	magellan->serio = serio;
 	magellan->dev.private = magellan;
-
 	magellan->dev.name = magellan_name;
 	magellan->dev.idbus = BUS_RS232;
 	magellan->dev.idvendor = SERIO_MAGELLAN;

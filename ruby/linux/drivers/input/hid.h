@@ -275,6 +275,14 @@ struct hid_report_enum {
 
 #define HID_REPORT_TYPES 3
 
+#define HID_BUFFER_SIZE		32
+#define HID_CONTROL_FIFO_SIZE	8
+
+struct hid_control_fifo {
+	devrequest dr;
+	char buffer[HID_BUFFER_SIZE];
+}
+
 struct hid_device {							/* device report descriptor */
 	 __u8 *rdesc;
 	unsigned rsize;
@@ -286,11 +294,13 @@ struct hid_device {							/* device report descriptor */
 	struct usb_device *dev;						/* USB device */
 	int ifnum;							/* USB interface number */
 
-	char buffer[32];						/* Receive buffer */
-	char bufout[32];						/* Transmit buffer */
-	devrequest dr;							/* Startup packet */
 	struct urb urb;							/* USB URB structure */
+	char buffer[HID_BUFFER_SIZE];					/* Rx buffer */
+
 	struct urb urbout;						/* Output URB */
+	struct hid_control_fifo out[HID_CONTROL_FIFO_SIZE];		/* Transmit buffer */
+	unsigned char outhead, outtail;					/* Tx buffer head & tail */
+
 	struct input_dev input;						/* input device structure */
 	int open;							/* is the device open by input? */
 	int quirks;							/* Various nasty tricks the device can pull on us */

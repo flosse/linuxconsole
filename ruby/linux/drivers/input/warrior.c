@@ -51,9 +51,7 @@ static char *warrior_name = "Logitech WingMan Warrior";
 
 struct warrior {
 	struct input_dev dev;
-	struct serio *serio;
-	int idx;
-	int len;
+	int idx, len;
 	unsigned char data[WARRIOR_MAX_LENGTH];
 };
 
@@ -105,7 +103,7 @@ static void warrior_interrupt(struct serio *serio, unsigned char data, unsigned 
 		warrior->len = warrior_lengths[(data >> 4) & 7];
 	}
 
-	if (warrior->idx < WARRIOR_MAX_LENGTH)
+	if (warrior->idx < warrior->len)
 		warrior->data[warrior->idx++] = data;
 
 	if (warrior->idx == warrior->len) {
@@ -171,7 +169,6 @@ static void warrior_connect(struct serio *serio, struct serio_dev *dev)
 		warrior->dev.absmin[ABS_HAT0X+i] =  1;	
 	}
 
-	warrior->serio = serio;
 	warrior->dev.private = warrior;
 	
 	serio->private = warrior;
@@ -187,7 +184,7 @@ static void warrior_connect(struct serio *serio, struct serio_dev *dev)
 }
 
 /*
- * The input device structure.
+ * The serio device structure.
  */
 
 static struct serio_dev warrior_dev = {
