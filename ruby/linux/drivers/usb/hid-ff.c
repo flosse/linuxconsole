@@ -37,12 +37,14 @@
 #include "hid.h"
 
 /* Effect status */
-#define EFFECT_STARTED 0     /* Effect is going to play after some time (ff_replay.delay) */
+#define EFFECT_STARTED 0     /* Effect is going to play after some time
+				(ff_replay.delay) */
 #define EFFECT_PLAYING 1     /* Effect is being played */
 #define EFFECT_USED    2
 
 /* Check that the current process can access an effect */
-#define CHECK_OWNERSHIP(effect) (current->pid == 0 || effect.owner == current->pid)
+#define CHECK_OWNERSHIP(effect) (current->pid == 0 \
+        || effect.owner == current->pid)
 
 
 /* Drivers' initializing functions */
@@ -61,12 +63,14 @@ static struct hid_ff_initializer inits[] = {
 	{0, 0, NULL} /* Terminating entry */
 };
 
-static struct hid_ff_initializer *hid_get_ff_init(__u16 idVendor, __u16 idProduct)
+static struct hid_ff_initializer *hid_get_ff_init(__u16 idVendor,
+						  __u16 idProduct)
 {
 	struct hid_ff_initializer *init;
 	for (init = inits;
-	     init->idVendor && 
-		     !(init->idVendor == idVendor && init->idProduct == idProduct);
+	     init->idVendor
+		     && !(init->idVendor == idVendor
+			  && init->idProduct == idProduct);
 	     init++);
 
 	return init->idVendor? init : NULL;
@@ -76,7 +80,8 @@ int hid_ff_init(struct hid_device* hid)
 {
 	struct hid_ff_initializer *init;
 
-	init = hid_get_ff_init(hid->dev->descriptor.idVendor, hid->dev->descriptor.idProduct);
+	init = hid_get_ff_init(hid->dev->descriptor.idVendor,
+			       hid->dev->descriptor.idProduct);
 
 	return init? init->init(hid) : -ENOSYS;
 }
@@ -111,20 +116,25 @@ struct hid_ff_logitech {
 	struct usb_ctrlrequest ffcr; /* ff commands use control URBs */
 	char buf[LGFF_BUFFER_SIZE];
 	struct lgff_effect effects[LGFF_EFFECTS];
+	spinlock_t lock;             /* device-level lock. Having locks on
+					a per-effect basis could be nice, but
+					isn't really necessary */
+	wait_queue_head_t wait;
 };
 
 
 static void hid_lgff_ctrl_out(struct urb *urb);
 static void hid_lgff_exit(struct hid_device* hid);
-static int hid_lgff_event(struct hid_device *hid, struct input_dev* input,
+static int hid_lgff_event(struct hid_device *hid, struct input_dev *input,
 			  unsigned int type, unsigned int code, int value);
 static void hid_lgff_make_rumble(struct hid_device* hid);
 
 static int hid_lgff_flush(struct input_dev *input, struct file *file);
-static int hid_lgff_upload_effect(struct input_dev* input,
-				  struct ff_effect* effect);
+static int hid_lgff_upload_effect(struct input_dev *input,
+				  struct ff_effect *effect);
 static int hid_lgff_erase(struct input_dev *input, int id);
-
+static void hid_lgff_ctrl_playback(struct hid_device* hid, struct lgff_effect*,
+				   int play);
 
 static int hid_lgff_init(struct hid_device* hid)
 {
@@ -138,6 +148,9 @@ static int hid_lgff_init(struct hid_device* hid)
 	memset(private, 0, sizeof(struct hid_ff_logitech));
 
 	hid->ff_private = private;
+
+	spin_lock_init(&private->lock);
+	init_waitqueue_head(&private->wait);
 
 	/* Event and exit callbacks */
 	hid->ff_exit = hid_lgff_exit;
@@ -169,9 +182,24 @@ static int hid_lgff_init(struct hid_device* hid)
 static void hid_lgff_exit(struct hid_device* hid)
 {
 	struct hid_ff_logitech *lgff = hid->ff_private;
+	DECLARE_WAITQUEUE(wait, current);
+	int timeout = 5*HZ; /* 5 seconds */
 
 	if (lgff->urbffout) {
 		usb_unlink_urb(lgff->urbffout);
+		
+		set_current_state(TASK_INTERRUPTIBLE);
+		add_wait_queue(&lgff->wait, &wait);
+
+		if (lgff->urbffout->status == -EINPROGRESS)
+			timeout = schedule_timeout(timeout);
+
+		if (!timeout)
+			warn("ff control urb still in use. Unlinking anyway\n");
+
+		set_current_state(TASK_RUNNING);
+		remove_wait_queue(&lgff->wait, &wait);
+
 		usb_free_urb(lgff->urbffout);
 	}
 }
@@ -181,6 +209,7 @@ static int hid_lgff_event(struct hid_device *hid, struct input_dev* input,
 {
 	struct hid_ff_logitech *lgff = hid->ff_private;
 	struct lgff_effect *effect = lgff->effects + code;
+	unsigned long flags;
 
 	if (type != EV_FF) return -EINVAL;
 	
@@ -188,13 +217,9 @@ static int hid_lgff_event(struct hid_device *hid, struct input_dev* input,
 
 	if (value < 0) return -EINVAL;
 
-	if (value > 0) {
-		set_bit(EFFECT_PLAYING, effect->flags);
-		hid_lgff_make_rumble(hid);
-	} else /* value == 0*/ {
-		clear_bit(EFFECT_PLAYING, effect->flags);
-		hid_lgff_make_rumble(hid);		
-	}
+	spin_lock_irqsave(&lgff->lock, flags);
+	hid_lgff_ctrl_playback(hid, effect, value);
+	spin_unlock_irqrestore(&lgff->lock, flags);
 
 	return 0;
 
@@ -240,22 +265,23 @@ static void hid_lgff_make_rumble(struct hid_device* hid)
 	dbg("rumble urb submited");
 }
 
+
+/* Erase all effects this process owns */
 static int hid_lgff_flush(struct input_dev *dev, struct file *file)
 {
 	struct hid_device *hid = dev->private;
 	struct hid_ff_logitech *lgff = hid->ff_private;
 	int i;
 
-	/* Erase all effects this process owns */
 	for (i=0; i<dev->ff_effects_max; ++i) {
 
-		if (test_bit(EFFECT_USED, lgff->effects[i].flags) &&
-			current->pid == lgff->effects[i].owner) {
+		/*NOTE: no need to lock here. The only times EFFECT_USED is
+		  modified is when effects are uploaded or when an effect is
+		  erased. But a process cannot close its dev/input/eventX fd
+		  and perform ioctls on the same fd all at the same time */
+		if ( current->pid == lgff->effects[i].owner
+		     && test_bit(EFFECT_USED, lgff->effects[i].flags)) {
 			
-			/* Stop effect */
-			input_report_ff(dev, i, 0);
-
-			/* Free ressources assigned to effect */
 			if (hid_lgff_erase(dev, i))
 				warn("erase effect %d failed\n", i);
 		}
@@ -269,11 +295,14 @@ static int hid_lgff_erase(struct input_dev *dev, int id)
 {
 	struct hid_device *hid = dev->private;
 	struct hid_ff_logitech *lgff = hid->ff_private;
+	unsigned long flags;
 
 	if (!LGFF_CHECK_OWNERSHIP(id, lgff)) return -EACCES;
 
-	input_report_ff(dev, id, 0);   /* Stop effect */
+	spin_lock_irqsave(&lgff->lock, flags);
+	hid_lgff_ctrl_playback(hid, lgff->effects + id, 0);
 	lgff->effects[id].flags[0] = 0;
+	spin_unlock_irqrestore(&lgff->lock, flags);
 
 	return 0;
 }
@@ -284,14 +313,18 @@ static void hid_lgff_ctrl_out(struct urb *urb)
 
 	if (urb->status)
 		warn("hid_irq_ffout status %d received", urb->status);
+
+	wake_up(&((struct hid_ff_logitech *)(hid->ff_private))->wait);
 }
 
-static int hid_lgff_upload_effect(struct input_dev* input, struct ff_effect* effect)
+static int hid_lgff_upload_effect(struct input_dev* input,
+				  struct ff_effect* effect)
 {
 	struct hid_device *hid = input->private;
 	struct hid_ff_logitech *lgff = hid->ff_private;
 	struct lgff_effect new;
 	int id;
+	unsigned long flags;
 	
 	dbg("ioctl rumble");
 
@@ -299,17 +332,26 @@ static int hid_lgff_upload_effect(struct input_dev* input, struct ff_effect* eff
 
 	if (effect->type != FF_RUMBLE) return -EINVAL;
 
+	spin_lock_irqsave(&lgff->lock, flags);
+
 	if (effect->id == -1) {
 		int i;
 
 		for (i=0; i<LGFF_EFFECTS && test_bit(EFFECT_USED, lgff->effects[i].flags); ++i);
-		if (i >= LGFF_EFFECTS) return -ENOSPC;
+		if (i >= LGFF_EFFECTS) {
+			spin_unlock_irqrestore(&lgff->lock, flags);
+			return -ENOSPC;
+		}
 
 		effect->id = i;
 		lgff->effects[i].owner = current->pid;
+		lgff->effects[i].flags[0] = 0;
 		set_bit(EFFECT_USED, lgff->effects[i].flags);
 	}
-	else if (!LGFF_CHECK_OWNERSHIP(effect->id, lgff)) return -EACCES;
+	else if (!LGFF_CHECK_OWNERSHIP(effect->id, lgff)) {
+		spin_unlock_irqrestore(&lgff->lock, flags);
+		return -EACCES;
+	}
 
 	id = effect->id;
 	new = lgff->effects[id];
@@ -326,8 +368,10 @@ static int hid_lgff_upload_effect(struct input_dev* input, struct ff_effect* eff
 		/* Changing replay parameters is not allowed (for the time
 		   being) */
 		if (new.replay.delay != lgff->effects[id].replay.delay
-		    || new.replay.length != lgff->effects[id].replay.length)
+		    || new.replay.length != lgff->effects[id].replay.length) {
+			spin_unlock_irqrestore(&lgff->lock, flags);
 			return -ENOSYS;
+		}
 
 		lgff->effects[id] = new;
 		hid_lgff_make_rumble(hid);
@@ -336,7 +380,22 @@ static int hid_lgff_upload_effect(struct input_dev* input, struct ff_effect* eff
 		lgff->effects[id] = new;
 	}
 
+	spin_unlock_irqrestore(&lgff->lock, flags);
 	return 0;
+}
+
+/* Lock must be held by caller */
+static void hid_lgff_ctrl_playback(struct hid_device *hid,
+				   struct lgff_effect *effect, int play)
+{
+	if (play) {
+		set_bit(EFFECT_PLAYING, effect->flags);
+		hid_lgff_make_rumble(hid);
+
+	} else {
+		clear_bit(EFFECT_PLAYING, effect->flags);
+		hid_lgff_make_rumble(hid);
+	}
 }
 
 #endif /* CONFIG_LOGITECH_RUMBLE */
