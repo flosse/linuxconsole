@@ -96,7 +96,6 @@
 #include <asm/bitops.h>
 
 #include <linux/vt_kern.h>
-#include <linux/selection.h>
 #include <linux/devfs_fs_kernel.h>
 
 #include <linux/kmod.h>
