@@ -921,14 +921,14 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	/* the ioctls below only set the lights, not the functions */
 	/* for those, see KDGKBLED and KDSKBLED above */
 	case KDGETLED:
-		ucval = getledstate();
+		ucval = getledstate(vc);
 	setchar:
 		return put_user(ucval, (char*)arg);
 
 	case KDSETLED:
 		if (!perm)
 		  return -EPERM;
-		setledstate(&vc->kbd_table, arg);
+		setledstate(vc, arg);
 		return 0;
 
 	/*

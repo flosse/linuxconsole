@@ -1757,8 +1757,7 @@ void terminal_emulation(struct tty_struct *tty, int c)
 			case 1:	/* LED 1 on */
 			case 2:	/* LED 2 on */
 			case 3:	/* LED 3 on */
-				setledstate(&vc->kbd_table,
-					    (par[0] < 3) ? par[0] : 4);
+				setledstate(vc, (par[0] < 3) ? par[0] : 4);
 			case 4:	/* LED 4 on */
 				;
 			}
