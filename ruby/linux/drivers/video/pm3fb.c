@@ -1928,6 +1928,9 @@ static int pm3fb_set_par(struct fb_info *info)
 	pm3fb_encode_fix(&(info->fix), &par, l_fb_info);
 	
 	*(l_fb_info->current_par) = par;
+	l_fb_info->current_par->l_fb_info = l_fb_info;
+	l_fb_info->current_par->f_fb_info = info;
+
 	current_par_valid[l_fb_info->board_num] = 1;
 	
 	pm3fb_write_mode(l_fb_info);
