@@ -94,7 +94,7 @@ int fb_alloc_cmap(struct fb_cmap *cmap, int len, int transp)
     int size = len*sizeof(u16);
 
     if (cmap->len != len) {
-	fb_dealloc_cmap();
+	fb_dealloc_cmap(cmap);
 	if (!len)
 	    return 0;
 	if (!(cmap->red = kmalloc(size, GFP_ATOMIC)))
