@@ -1,7 +1,8 @@
 /*
- * linux/drivers/video/sttfb.c -- voodoo graphics frame buffer
+ * linux/drivers/video/sstfb.c -- voodoo graphics frame buffer
  *
  * 01/2000 ghozlane Toumi  <gtoumi@messel.emse.fr>
+ * 03/2001 James Simmons   <jsimmons@linux-fbdev.org>
  *
  * $Id$
  */
@@ -59,7 +60,7 @@ ate.
 #include <linux/fb.h>
 #include <linux/pci.h>
 #include <linux/delay.h>
-
+#include <linux/init.h>
 #include <linux/version.h>
 
 #include <asm/io.h>
@@ -88,68 +89,14 @@ ate.
 
 #undef SST_DEBUG
 //#define SST_DEBUG
-#define SST_DEBUG_REG   0
-#define SST_DEBUG_FUNC  2       
-#define SST_DEBUG_VAR   1
-#define SST_DEBUG_IOCTL 1
 
 #ifdef SST_DEBUG
 #  define dprintk(X...)         printk(KERN_DEBUG "sstfb: " X)
 #else
 #  define dprintk(X...)
-#  undef SST_DEBUG_REG
-#  undef SST_DEBUG_FUNC
-#  undef SST_DEBUG_VAR
-#  undef SST_DEBUG_IOCTL
 #endif
-
-#if (SST_DEBUG_REG > 0)
-#  define r_dprintk(X...)       dprintk(X)
-#else
-#  define r_dprintk(X...)
-#endif
-#if (SST_DEBUG_REG > 1)
-#  define r_ddprintk(X...)      dprintk(" " X)
-#else
-#  define r_ddprintk(X...)
-#endif
-
-#if (SST_DEBUG_FUNC > 0)
-#  define f_dprintk(X...)       dprintk(X)
-#else
-#  define f_dprintk(X...)
-#endif
-#if (SST_DEBUG_FUNC > 1)
-#  define f_ddprintk(X...)      dprintk(" " X)
-#else
-#  define f_ddprintk(X...)
-#endif
-#if (SST_DEBUG_FUNC > 2)
-#  define f_dddprintk(X...)     dprintk(" " X)
-#else
-#  define f_dddprintk(X...)
-#endif
-
-#if (SST_DEBUG_VAR > 0)
-#  define v_dprintk(X...)       dprintk(X)
-#  define print_var(V, X...)    \
-   {                            \
-     dprintk(X);                \
-     printk(" : {\n");          \
-     __print_var(V);            \
-   }
-#else
-#  define v_dprintk(X...)
-#  define print_var(X,Y...)
-#endif
-
-
-#define eprintk(X...)   printk(KERN_ERR "sstfb: " X)
-#define iprintk(X...)   printk(KERN_INFO "sstfb: " X)
-#define wprintk(X...)   printk(KERN_WARNING "sstfb: " X)
 
 #define BIT(x)          (1ul << (x))
-#define PICOS2KHZ(a)    (1000000000UL/(a))
 
 /* pci stuff */
 #define PCI_INIT_ENABLE         0x40
@@ -335,22 +282,18 @@ struct pll_timing {
 };
 
 /* XXX */
-static void sstfb_test(void);
+static void sstfb_test(struct fb_info *info);
 
 static int configured = 0;
-int currcon = 0;
-static char sstfb_name[16] = "Voodoo Graphics";
 
 static u_long membase_phys; /* begining of physical adress space */
 static u_long regbase_virt; /* mem mapped registers (4Mb)*/  
-static u_long fbbase_virt;  /* mem mapped frame buffer (4Mb)*/
-static u_long lfb_size;  /* usable size of the frame buffer */
 static int dactype;
 static struct pci_dev * sst_dev;
 static u8 revision;
 
-static struct { u_int red, green, blue, transp; } palette[16];
 static struct fb_info fb_info;
+static u32 sstfb_palette[17];
 
 static struct fb_var_screeninfo sstfb_default = {
 #if 0
@@ -371,50 +314,49 @@ static struct fb_var_screeninfo sstfb_default = {
 };
 #endif 
 
-/* Interface to ze oueurld  */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,3,1)
-void sstfb_init(void);
-void sstfb_setup(char *options, int *ints);
-#else
+static struct fb_fix_screeninfo sstfb_fix __initdata = {
+    "Voodoo Graphics", (unsigned long) NULL, 0, FB_TYPE_PACKED_PIXELS, 0,
+    FB_VISUAL_TRUECOLOR, 1, 0, 0, 0, (unsigned long) NULL, 0, FB_ACCEL_NONE
+};
+
+/* 
+ * Framebuffer API 
+ */
 int  sstfb_init(void);
-void sstfb_setup(char *options);
-#endif
+void sstfb_setup(char *options, int *ints);
 
-
-/* Framebuffer API */
-static int sstfb_open(struct fb_info *info, int user);
-static int sstfb_release(struct fb_info *info, int user);
-static int sstfb_get_fix(struct fb_fix_screeninfo *fix,
-                         int con, struct fb_info *info);
-static int sstfb_get_var(struct fb_var_screeninfo *var,
-                         int con, struct fb_info *info);
-static int sstfb_set_var(struct fb_var_screeninfo *var,
-                         int con, struct fb_info *info);
-static int sstfb_get_cmap(struct fb_cmap *cmap, int kspc,
-                          int con, struct fb_info *info);
-static int sstfb_set_cmap(struct fb_cmap *cmap, int kspc,
-                          int con, struct fb_info *info);
-static int sstfb_pan_display(struct fb_var_screeninfo *var,
-                             int con, struct fb_info *info);
-static int sstfb_ioctl(struct inode *inode, struct file *file,
-                       u_int cmd, u_long arg, int con,
-                       struct fb_info *info);
-
-/* Interface to the low level console driver */
-static int sstfbcon_switch(int con, struct fb_info *info);
-static int sstfbcon_updatevar(int con, struct fb_info *info);
-static void sstfbcon_blank(int blank, struct fb_info *info);
-
-/* Internal routines */
-static u_long sstfb_get_linelength(int bpp);
-static void sstfb_install_cmap(int con, struct fb_info *info);
-static int sstfb_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
-                           u_int *transp, struct fb_info *info);
+static int sstfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info);
+static int sstfb_set_par(struct fb_info *info);
 static int sstfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                            u_int transp, struct fb_info *info);
+static int sstfb_blank(int blank, struct fb_info *info);
+static int sstfb_pan_display(struct fb_var_screeninfo *var,
+                             struct fb_info *info);
+static void sstfb_fillrect(struct fb_info *info, int x, int y, 
+			   unsigned int width, unsigned int height, 
+			   unsigned long color, int rop);
+static void sstfb_copyarea(struct fb_info *info, int sx, int sy, 
+			   unsigned int width, unsigned int height, 
+			   int dx, int dy);
+static void sstfb_imageblit(struct fb_info *info, struct fb_image *image);
+static int sstfb_ioctl(struct inode *inode, struct file *file, u_int cmd,
+                       u_long arg, struct fb_info *info); 
 
-/* Low level routines */
-static int sst_get_memsize(u_long *memsize);
+static struct fb_ops sstfb_ops = {
+	owner:		THIS_MODULE,
+        fb_check_var:	sstfb_check_var,
+        fb_set_par:	sstfb_set_par, 
+        fb_setcolreg:	sstfb_setcolreg,
+	fb_blank:	sstfb_blank,
+	fb_pan_display:	sstfb_pan_display, 
+	fb_fillrect:	sstfb_fillrect,
+	fb_copyarea:	sstfb_copyarea,
+	fb_imageblit:	sstfb_imageblit,
+        fb_ioctl:	sstfb_ioctl,
+};
+
+/* Internal low level routines */
+static int sst_get_memsize(struct fb_info *info, u_long memsize);
 //static int sst_is_idle(void);
 static int sst_wait_idle(void);
 static int sst_detect_dactype(void);
@@ -432,96 +374,58 @@ static int sst_init(void);
 static void sst_shutdown(void);
 #endif
 
-static struct fb_ops sstfb_ops = {
-        sstfb_open,             /* open        */
-        sstfb_release,          /* release     */
-        sstfb_get_fix,          /* get fix     */
-        sstfb_get_var,          /* get var     */
-        sstfb_set_var,          /* set var     */
-        sstfb_get_cmap,         /* get cmap    */
-        sstfb_set_cmap,         /* set cmap    */
-        sstfb_pan_display,      /* pan display */
-        sstfb_ioctl,            /* ioctl       */
-        NULL,                   /* mmap        */
-        NULL                    /* rasterimg   */
-};
-
-
-#if (SST_DEBUG_VAR > 0)
-/* debug info / dump a fb_var_screeninfo */
-static void __print_var(struct fb_var_screeninfo *var) {
-        dprintk(" %d, %d, %d, %d, %d, %d, %d, %d,\n",
-                var->xres, var->yres, var->xres_virtual, var->yres_virtual,
-                var->xoffset, var->yoffset,
-                var->bits_per_pixel, var->grayscale);
-        dprintk(" {%d, %d, %d}, {%d, %d, %d}, {%d, %d, %d}, {%d, %d, %d},\n",
-                var->red.offset, var->red.length, var->red.msb_right,
-                var->green.offset, var->green.length, var->green.msb_right,
-                var->blue.offset, var->blue.length, var->blue.msb_right,
-                var->transp.offset, var->transp.length,
-                var->transp.msb_right);
-        dprintk(" %d, %d, %d, %d, %d,\n",
-                var->nonstd, var->activate,
-                var->height, var->width, var->accel_flags);
-        dprintk(" %d, %d, %d, %d, %d, %d, %d,\n",
-                var->pixclock, var->left_margin, var->right_margin,
-                var->upper_margin, var->lower_margin,
-                var->hsync_len, var->vsync_len);
-        dprintk(" %#x, %#x}\n",var->sync, var->vmode);
-}
-#endif
-
 /* register acces */
 static inline u32 sst_read(u32 reg)
 {
         u32 ret;
 
         ret = readl(regbase_virt + reg);
-#if (SST_DEBUG_REG > 0) /* i need the init registers :) */
+
+#ifdef SST_DEBUG /* I need the init registers :) */
         switch (reg) {
         case FBIINIT0:
         case FBIINIT1:
         case FBIINIT2:
         case FBIINIT3:
         case FBIINIT4:
-                r_dprintk(" sst_read(%#x): %#x\n", reg, ret);
+                printk(" sst_read(%#x): %#x\n", reg, ret);
                 break ;
         default:
-                r_ddprintk("sst_read(%#x): %#x\n", reg, ret);
+                printk("sst_read(%#x): %#x\n", reg, ret);
                 break;
         }
-#endif /*  (SST_DEBUG_REG > 0) */
+#endif /* SST_DEBUG */
         return ret;
 }
 
 static inline void sst_write(u32 reg, u32 val)
 {
-#if (SST_DEBUG_REG > 0)
+#ifdef SST_DEBUG
         switch (reg) {
         case FBIINIT0:
         case FBIINIT1:
         case FBIINIT2:
         case FBIINIT3:
         case FBIINIT4:
-                r_dprintk(" sst_write(%#x, %#x)\n", reg, val);
+                printk(" sst_write(%#x, %#x)\n", reg, val);
                 break ;
         default:
-                r_ddprintk("sst_write(%#x, %#x)\n", reg, val);
+                printk("sst_write(%#x, %#x)\n", reg, val);
                 break;
         }
-#endif /*  (SST_DEBUG > 0) */
+#endif /* SST_DEBUG */
         writel(val, regbase_virt + reg);
 }
 
 static inline void sst_set_bits(u32 reg, u32 val)
 {
-        r_dprintk("sst_set_bits(%#x, %#x)\n", reg, val);
+        printk("sst_set_bits(%#x, %#x)\n", reg, val);
         sst_write(reg, sst_read(reg) | val);
 }
 
 static inline void sst_unset_bits(u32 reg, u32 val)
 {
-        r_dprintk("sst_unset_bits(%#x, %#x)\n", reg, val);
+        printk("sst_unset_bits(%#x, %#x)\n", reg, val);
         sst_write(reg, sst_read(reg) & ~val);
 }
 
@@ -533,22 +437,22 @@ static u8 sst_dac_read(u8 reg)
 
 #ifdef SST_DEBUG
         if ((reg & 0x07) != reg)
-                dprintk("beeep: register adress is to high\n");
+                printk("beeep: register adress is to high\n");
         reg &= 0x07;
 #endif
         sst_write(DAC_DATA, ((u32)reg << 8) | DAC_READ_CMD );
         sst_wait_idle();
         ret=(sst_read(DAC_READ) & 0xff);
-        r_dprintk("sst_dac_read(%#x): %#x\n", reg, ret);
+        printk("sst_dac_read(%#x): %#x\n", reg, ret);
         return (u8)ret;
 }
 
 static void sst_dac_write(u8 reg, u8 val)
 {
-        r_dprintk("sst_dac_write(%#x, %#x)\n", reg, val);
+        dprintk("sst_dac_write(%#x, %#x)\n", reg, val);
 #ifdef SST_DEBUG
         if ((reg & 0x07) != reg)
-                dprintk("beeep: register adress is to high\n");
+                printk("beeep: register adress is to high\n");
         reg &= 0x07;
 #endif
         sst_write(DAC_DATA,(((u32)reg << 8)) | (u32)val);
@@ -561,13 +465,13 @@ static u32 dac_i_read(u8 reg)
 
         sst_dac_write(DACREG_ADDR_I, reg);
         ret = sst_dac_read(DACREG_DATA_I);
-        r_dprintk("sst_dac_read_i(%#x): %#x\n", reg, ret);
+        printk("sst_dac_read_i(%#x): %#x\n", reg, ret);
         return ret;
 }
 
 static void dac_i_write(u8 reg,u8 val)
 {
-        r_dprintk("sst_dac_write_i(%#x, %#x)\n", reg, val);
+        printk("sst_dac_write_i(%#x, %#x)\n", reg, val);
         sst_dac_write(DACREG_ADDR_I, reg);
         sst_dac_write(DACREG_DATA_I, val);
 }
@@ -577,144 +481,16 @@ static void dac_i_write(u8 reg,u8 val)
 */
 
 /*
- * Internal routines 
- */
-
-static u_long sstfb_get_linelength(int bpp)
-{       
-        /*
-         *   According to the specs, the linelength must be of 1024 *pixels*.
-         * and the 24bpp mode is in fact a 32 bpp mode.
-         */
-        f_dprintk("sstfb_get_linelength(bpp: %d)\n",bpp);
-        return ((bpp == 16) ? 2048 : 4096);
-}
-
-
-static void sstfb_install_cmap(int con, struct fb_info *info)
-{
-        f_dprintk("sstfb_install_cmap(con: %d)\n",con);
-        f_ddprintk("currcon: %d\n", currcon);
-        if (con != currcon)
-                return;
-        if (fb_display[con].cmap.len)
-                fb_set_cmap(&fb_display[con].cmap, 1, sstfb_setcolreg, info);
-        else
-                fb_set_cmap(
-                        fb_default_cmap(1<<fb_display[con].var.bits_per_pixel),
-                        1, sstfb_setcolreg, info);
-}
-
-static int sstfb_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
-                           u_int *transp, struct fb_info *info)
-{
-        f_ddprintk("sstfb_getcolreg\n");
-        if (regno >= 16) return 1;
-
-        *red    = palette[regno].red;
-        *green  = palette[regno].green;
-        *blue   = palette[regno].blue;
-        *transp = palette[regno].transp;
-        f_dddprintk("%-2d rvba: %#x, %#x, %#x, %#x\n",
-                 regno,*red, *green, *blue, *transp);
-        return 0;
-}
-
-static int sstfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-                           u_int transp, struct fb_info *info)
-{
-        u32 col;
-
-        f_ddprintk("sstfb_setcolreg\n");
-        f_dddprintk("%-2d rvba: %#x, %#x, %#x, %#x\n",
-                 regno, red, green, blue, transp);
-        if (regno >= 16) return 1;
-        palette[regno].red   = red;
-        palette[regno].green = green;
-        palette[regno].blue  = blue;
-
-        red    >>= (16 - disp.var.red.length);
-        green  >>= (16 - disp.var.green.length);
-        blue   >>= (16 - disp.var.blue.length);
-        transp >>= (16 - disp.var.transp.length);
-        col = (red << disp.var.red.offset)
-                | (green << disp.var.green.offset)
-                | (blue  << disp.var.blue.offset)
-                | (transp << disp.var.transp.offset);
-
-        switch(disp.var.bits_per_pixel) {
-#ifdef FBCON_HAS_CFB16
-        case 16:
-                fbcon_cmap.cfb16[regno]=(u16)col;
-                break;
-#endif
-//XXX
-#if 0
-#ifdef FBCON_HAS_CFB24
-        case 24:
-                fbcon_cmap.cfb24[regno]=col;
-                break;
-#endif
-#ifdef FBCON_HAS_CFB32
-        case 32:
-                fbcon_cmap.cfb32[regno]=col;
-                break;
-#endif
-#endif
-        default:
-                dprintk("bug line %d: bad depth %u\n",__LINE__,
-                        disp.var.bits_per_pixel);
-                break;
-        }
-        f_dddprintk("bpp: %d . encoded color: %#x\n",
-                  disp.var.bits_per_pixel, col);
-        return 0;
-}
-
-
-/*
  * Frame buffer API
  */
-static int sstfb_get_fix(struct fb_fix_screeninfo *fix,
-                         int con, struct fb_info *info)
+
+static int sstfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 {
-        struct fb_var_screeninfo *var;
-
-        f_dprintk("sstfb_get_fix(con: %d)\n",con);
-        if (con == -1)
-                var = &sstfb_default;
-        else
-                var = &fb_display[con].var;
-        
-/* TODO use an encode fix like the other drivers do. is it worthless ? */
-
-        memset(fix, 0, sizeof(struct fb_fix_screeninfo));
-        strcpy(fix->id, sstfb_name);
-        /* lfb phys address = membase + 4Mb */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,3,1)
-        fix->smem_start  = (char *) (membase_phys+0x400000);
-#else
-        fix->smem_start  = (membase_phys+0x400000);
-#endif
-        fix->smem_len    = lfb_size;
-
-        fix->type        = FB_TYPE_PACKED_PIXELS;
-        fix->visual      = FB_VISUAL_TRUECOLOR;
-        fix->line_length = sstfb_get_linelength(var->bits_per_pixel);
-        return 0;
-}
-
-static int sstfb_set_var(struct fb_var_screeninfo *var,
-                         struct fb_info *info)
-{
-        struct display *display;
-        int err;
         int real_length;
-        int old_bpp,old_xres,old_yres;
 
-        f_dprintk("sstfb_set_var(con: %d)\n",con);
-        f_ddprintk("xres yres vxres vyres bpp activate\n");
-        f_ddprintk("%-4d %-4d %-5d %-5d %-3d %#-8x\n",
+        printk("sstfb_check_var:xres yres vxres vyres bpp\n");
+        printk("xres yres vxres vyres bpp activate\n");
+        printk("%-4d %-4d %-5d %-5d %-3d %#-8x\n",
                  var->xres,var->yres,var->xres_virtual,var->yres_virtual,
                  var->bits_per_pixel,var->activate);
         /*
@@ -733,7 +509,7 @@ static int sstfb_set_var(struct fb_var_screeninfo *var,
                 return -EINVAL;
 
         if ((var->vmode & FB_VMODE_MASK) !=  FB_VMODE_NONINTERLACED) {
-                eprintk("video mode non supported %#x\n",
+                printk("video mode non supported %#x\n",
                         (var->vmode & FB_VMODE_MASK));
                 return -EINVAL;
         }
@@ -756,7 +532,7 @@ static int sstfb_set_var(struct fb_var_screeninfo *var,
         /* FIXME: i don't like this... looks wrong*/
         real_length = ((var->xres + 63) / 64 ) * 64
                 * ((var->bits_per_pixel == 16) ? 2 : 4);
-        if ((real_length * var->yres_virtual) > lfb_size)
+        if ((real_length * var->yres_virtual) > info->fix.smem_len)
                 return -ENOMEM;
         /*
          * correct the color bit fields
@@ -800,94 +576,121 @@ static int sstfb_set_var(struct fb_var_screeninfo *var,
                 break;
 #endif
         }
-
-        switch (var->activate & FB_ACTIVATE_MASK) {
-                case FB_ACTIVATE_TEST:
-                        return 0;
-                case FB_ACTIVATE_NXTOPEN:
-                case FB_ACTIVATE_NOW:
-                        break;
-                default:
-                        return -EINVAL;
-        }
-        old_xres = display->var.xres;
-        old_yres = display->var.yres;
-        old_bpp  = display->var.bits_per_pixel;
-        display->var = *var;
-
-        if ((old_xres != var->xres) || (old_yres != var->yres)
-            || (old_bpp != var->bits_per_pixel)) {
-                /* 2-3  lignes redondantes avec get_fix */
-                display->screen_base = (char *) fbbase_virt;
-                display->visual = FB_VISUAL_TRUECOLOR;
-                display->type = FB_TYPE_PACKED_PIXELS;
-                display->type_aux = 0;
-                display->ypanstep = 0;
-                display->ywrapstep = 0;
-                display->line_length = sstfb_get_linelength(var->bits_per_pixel
-);
-                display->can_soft_blank = 0;
-                display->inverse = 0;
-        }
-
-        print_var(var, "var");
-        print_var(&display->var, "&display->var");
-
-        if (old_bpp != var->bits_per_pixel) {
-            if ((err = fb_alloc_cmap(&display->cmap, 0, 0)))
-                return err;
-            sstfb_install_cmap(con, info);
-        }
-
-        /* mmmh... */
-        if ((currcon == con ) || (con <0))
-                sst_set_vidmod(var);
-
         return 0;
+}
+
+static int sstfb_set_par(struct fb_info *info)
+{
+        /*
+         *   According to the specs, the linelength must be of 1024 *pixels*.
+         * and the 24bpp mode is in fact a 32 bpp mode.
+         */
+        info->fix.line_length = ((info->var.bits_per_pixel == 16) ? 2048:4096);
+        /* mmmh... */
+        sst_set_vidmod(&info->var);
+	return 0;
+}
+
+static int sstfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+                           u_int transp, struct fb_info *info)
+{
+        u32 col;
+
+        printk("sstfb_setcolreg\n");
+        printk("%-2d rvba: %#x, %#x, %#x, %#x\n",
+                 regno, red, green, blue, transp);
+        if (regno >= 16) return 1;
+
+        red    >>= (16 - info->var.red.length);
+        green  >>= (16 - info->var.green.length);
+        blue   >>= (16 - info->var.blue.length);
+        transp >>= (16 - info->var.transp.length);
+        col = (red << info->var.red.offset)
+                | (green <<  info->var.green.offset)
+                | (blue  <<  info->var.blue.offset)
+                | (transp << info->var.transp.offset);
+
+        switch(info->var.bits_per_pixel) {
+        case 16:
+                ((u16*)(info->pseudo_palette))[regno] = col;
+                break;
+//XXX
+#if 0
+#ifdef FBCON_HAS_CFB24
+        case 24:
+                fbcon_cmap.cfb24[regno]=col;
+                break;
+#endif
+#ifdef FBCON_HAS_CFB32
+        case 32:
+                fbcon_cmap.cfb32[regno]=col;
+                break;
+#endif
+#endif
+        default:
+                printk("bug line %d: bad depth %u\n",__LINE__,
+                        info->var.bits_per_pixel);
+                break;
+        }
+        printk("bpp: %d . encoded color: %#x\n",
+                    info->var.bits_per_pixel, col);
+        return 0;
+}
+
+static int sstfb_blank(int blank, struct fb_info *info)
+{
+        printk("sstfb_blank\n");
+        printk("blank level: %d\n", blank);
+	return 0;
 }
 
 /* TODO */
 static int sstfb_pan_display(struct fb_var_screeninfo *var,
-                             int con, struct fb_info *info)
+                             struct fb_info *info)
 {
-        f_dprintk("sstfb_pan_display\n");
         return -EINVAL;
 }
 
-static int sstfb_ioctl(struct inode *inode, struct file *file,
-                      u_int cmd, u_long arg, int con,
-                      struct fb_info *info)
+static void sstfb_fillrect(struct fb_info *info, int x, int y, 
+			   unsigned int width, unsigned int height, 
+			   unsigned long color, int rop)
 {
-#if (SST_DEBUG_IOCTL >0)
+}
+
+static void sstfb_copyarea(struct fb_info *info, int sx, int sy, 
+			   unsigned int width, unsigned int height, 
+			   int dx, int dy)
+{
+}
+
+static void sstfb_imageblit(struct fb_info *info, struct fb_image *image)
+{
+}
+
+static int sstfb_ioctl(struct inode *inode, struct file *file,
+                      u_int cmd, u_long arg, struct fb_info *info) 
+{
+#ifdef SST_DEBUG
         int i;
         u_long p;
-        u32 tmp;
 #endif
+        u32 tmp;
+        
+	printk("sstfb_ioctl\n");
 
-        f_dprintk("sstfb_ioctl\n");
-
-#if (SST_DEBUG_IOCTL >0)
         switch (cmd) {
-#  if (SST_DEBUG_VAR >0)
-/* tmp ioctl : dumps fb_display[0-5] */
-        case _IO('F', 0xdb):            /* 0x46db */
-                v_dprintk("fb_display[0-5].var\n");
-                for (i = 0 ; i< 6 ; i++) {
-                        print_var(&fb_display[i].var, "var(%d)", i);;
-                }
-                return 0;
-                break;
-#  endif /* (SST_DEBUG_VAR >0) */
-/* fills the lfb up to *(u32*)arg */
+#ifdef SST_DEBUG
+	/* fills the lfb up to *(u32*)arg */
         case _IOW('F', 0xdc, u32):      /* 0x46dc */
                 if (*(u32*)arg > 0x400000 )
                         *(u32*) arg = 0x400000; 
                 dprintk("fills %#x \n", *(u32*)arg);
-                for (p = fbbase_virt; p < fbbase_virt + *(u32*)arg; p+=2)
+                for (p = info->screen_base;p<info->screen_base+*(u32*)arg;p+=2)
                         writew( (p & 0x3fffc0) >> 6 , p);
                 return 0;
                 break; 
-/* change VGA pass_through */
+#endif /* SST_DEBUG */
+	/* change VGA pass_through */
         case _IO('F', 0xdd):            /* 0x46dd */
                 dprintk("switch VGA pass-through\n");
                 pci_read_config_dword(sst_dev, PCI_INIT_ENABLE, &tmp);
@@ -898,47 +701,43 @@ static int sstfb_ioctl(struct inode *inode, struct file *file,
                 return 0;
                 break;
         }
-#endif /* (SST_DEBUG_IOCTL >0) */
         return -EINVAL;
 }
 
-
 /*
- * Low level routines
+ * Internal low level routines 
  */
-
 /* get lfb size */
-
-static int sst_get_memsize(u_long *memsize)
+static int sst_get_memsize(struct fb_info *info, u_long memsize)
 {
-        f_dprintk("sst_get_memsize\n");
+        printk("sst_get_memsize\n");
         
-        writel (0xdeadbeef, fbbase_virt);
-        writel (0xdeadbeef, fbbase_virt+0x100000);
-        writel (0xdeadbeef, fbbase_virt+0x200000);
-        f_ddprintk("0Mb: %#x, 1Mb: %#x, 2Mb: %#x\n", 
-                   readl(fbbase_virt), readl(fbbase_virt + 0x100000),
-                   readl(fbbase_virt + 0x200000));
+        writel (0xdeadbeef, info->screen_base);
+        writel (0xdeadbeef, info->screen_base+0x100000);
+        writel (0xdeadbeef, info->screen_base+0x200000);
+        printk("0Mb: %#x, 1Mb: %#x, 2Mb: %#x\n", 
+                   readl(info->screen_base), readl(info->screen_base+0x100000),
+                   readl(info->screen_base + 0x200000));
 
-        writel (0xabcdef01, fbbase_virt);
+        writel (0xabcdef01, info->screen_base);
 
-        f_ddprintk("0Mb: %#x, 1Mb: %#x, 2Mb: %#x\n", 
-                   readl(fbbase_virt), readl(fbbase_virt + 0x100000),
-                   readl(fbbase_virt + 0x200000));
+        printk("0Mb: %#x, 1Mb: %#x, 2Mb: %#x\n", 
+                   readl(info->screen_base), readl(info->screen_base+0x100000),
+                   readl(info->screen_base + 0x200000));
         /* checks for 4mb lfb */
-        if (readl(fbbase_virt + 0x200000) == 0xdeadbeef) {
-                *memsize = 0x400000;
-                f_ddprintk("memsize: %#lx\n", *memsize);
+        if (readl(info->screen_base + 0x200000) == 0xdeadbeef) {
+                memsize = 0x400000;
+                printk("memsize: %#lx\n", memsize);
                 return 1;
         }
         /* checks for 2mb lfb */
-        if (readl(fbbase_virt + 0x100000) == 0xdeadbeef) {
-                *memsize = 0x200000;
-                f_ddprintk("memsize: %#lx\n", *memsize);
+        if (readl(info->screen_base + 0x100000) == 0xdeadbeef) {
+                memsize = 0x200000;
+                printk("memsize: %#lx\n", memsize);
                 return 1;
         }
-        *memsize = 0x100000;
-        f_ddprintk("memsize: %#lx\n", *memsize);
+        memsize = 0x100000;
+        printk("memsize: %#lx\n", memsize);
         return 1;
 }
 
@@ -947,14 +746,14 @@ static int sst_wait_idle(void)
 {
         int count = 0;
 
-        f_ddprintk("sst_wait_idle\n");
+        printk("sst_wait_idle\n");
         while(1) {
                 if (sst_read(STATUS) & STATUS_FBI_BUSY) {
-                        f_dddprintk("status: busy\n");
+                        printk("status: busy\n");
                         count = 0;
                 } else {
                         count++;
-                        f_dddprintk("status: idle(%d)\n", count);
+                        printk("status: idle(%d)\n", count);
                 }
                 if (count >= 5) return 1; 
         }
@@ -970,7 +769,7 @@ static int sst_detect_dactype(void)
 {
         int ret;
 
-        f_dprintk("sst_detect_dactype\n");
+        printk("sst_detect_dactype\n");
         ret = sst_detect_ics();
         if (!ret)
                 ret = sst_detect_att_ti();
@@ -983,7 +782,7 @@ static int sst_detect_att_ti(void)
 {
         int i, mir, dir;
 
-        f_dprintk("sst_detect_att_ti\n");
+        printk("sst_detect_att_ti\n");
         for (i = 0; i<10; i++) {
                 sst_dac_write(DACREG_WMA, 0);   /* backdoor */
                 sst_dac_read(DACREG_RMR);       /* read 4 times RMR */
@@ -996,7 +795,7 @@ static int sst_detect_att_ti(void)
                 mir = sst_dac_read(DACREG_RMR); 
                 /*the 7th, device ID register */
                 dir = sst_dac_read(DACREG_RMR);
-                f_ddprintk("mir: %#x, dir: %#x\n", mir, dir);
+                printk("mir: %#x, dir: %#x\n", mir, dir);
                 if ((mir == DACREG_MIR_TI ) && (dir == DACREG_DIR_TI)) {
                         dactype = DAC_TYPE_TI;
                         return 1;
@@ -1025,7 +824,7 @@ static int sst_detect_ics(void)
         int i;
         int m_clk0_1, m_clk0_7, m_clk1_b;
         
-        f_dprintk("sst_detect_ics\n");
+        printk("sst_detect_ics\n");
         for (i = 0; i<10; i++ ) {
                 sst_dac_write(DACREG_ICS_PLLRMA, 0x1);  /* f1 */
                 m_clk0_1 = sst_dac_read(DACREG_ICS_PLLDATA);
@@ -1033,7 +832,7 @@ static int sst_detect_ics(void)
                 m_clk0_7 = sst_dac_read(DACREG_ICS_PLLDATA);
                 sst_dac_write(DACREG_ICS_PLLRMA, 0xb);  /* fB */
                 m_clk1_b= sst_dac_read(DACREG_ICS_PLLDATA);
-                f_ddprintk("m_clk0_1: %#x, m_clk0_7: %#x, m_clk1_b: %#x\n",
+                printk("m_clk0_1: %#x, m_clk0_7: %#x, m_clk1_b: %#x\n",
                         m_clk0_1, m_clk0_7, m_clk1_b); 
                 if ((   m_clk0_1 == DACREG_ICS_PLL_CLK0_1_INI)
                     && (m_clk0_7 == DACREG_ICS_PLL_CLK0_7_INI)
@@ -1063,7 +862,7 @@ static int sst_calc_pll(int freq, int *freq_out, struct pll_timing *t)
         int best_n=-1;
         int best_m=-1;
 
-        f_dprintk("sst_calc_pll(%dKhz)\n", freq);
+        printk("sst_calc_pll(%dKhz)\n", freq);
         best_err = freq;
         p=3;
         /* f * 2^P = vco should be less than VCOmax ~ 250 MHz for ics*/
@@ -1086,7 +885,7 @@ static int sst_calc_pll(int freq, int *freq_out, struct pll_timing *t)
         t->n=best_n;
         t->m=best_m;
         *freq_out=(DAC_FREF * (t->m + 2)) / ((1 << t->p) * (t->n + 2));
-        f_ddprintk ("m: %d, n: %d, p: %d, F: %d\n",
+        printk("m: %d, n: %d, p: %d, F: %d\n",
                   t->m, t->n, t->p, *freq_out);
         return 1;
 }
@@ -1099,8 +898,8 @@ static int sst_set_pll(struct pll_timing *t, int clock)
 {
         int ret;
 
-        f_dprintk("sst_set_pll\n");
-        f_ddprintk("m: %d, n: %d, p: %d, clk: %d\n",
+        printk("sst_set_pll\n");
+        printk("m: %d, n: %d, p: %d, clk: %d\n",
                  t->m, t->n, t->p, clock);
 
         switch (dactype) {
@@ -1112,7 +911,7 @@ static int sst_set_pll(struct pll_timing *t, int clock)
                 ret = sst_set_pll_ics(t, clock);
                 break;
         default:
-                f_dprintk("bug line %d: unknown dactype\n", __LINE__);
+                printk("bug line %d: unknown dactype\n", __LINE__);
                 ret = 0;
                 break;
         }
@@ -1122,7 +921,7 @@ static int sst_set_pll(struct pll_timing *t, int clock)
 static int sst_set_pll_att_ti(struct pll_timing *t, int clock)
 {
         u8 cr0, cc;
-        f_dprintk("sst_set_pll_att_ti\n");
+        printk("sst_set_pll_att_ti\n");
 
         /* enable indexed mode */
 
@@ -1176,7 +975,7 @@ static int sst_set_pll_ics(struct pll_timing *t, int clock)
 {
         u8 pll_ctrl;
 
-        f_dprintk("sst_set_pll_ics\n");
+        printk("sst_set_pll_ics\n");
         sst_dac_write(DACREG_ICS_PLLRMA, DACREG_ICS_PLL_CTRL);
         pll_ctrl = sst_dac_read(DACREG_ICS_PLLDATA);
         switch(clock) {
@@ -1201,7 +1000,7 @@ static int sst_set_pll_ics(struct pll_timing *t, int clock)
                               (pll_ctrl & 0xef) | DACREG_ICS_CLK1_A);
                 break;
         default:
-                dprintk("bug line %d: wrong clock code\n", __LINE__);
+                printk("bug line %d: wrong clock code\n", __LINE__);
                 return 0;
                 }
         udelay(300);
@@ -1213,15 +1012,15 @@ static int sst_set_vidmod(struct fb_var_screeninfo *var)
         struct pll_timing vid_timings;
         int Fout;
 
-        f_dprintk("sst_set_vidmod(%dx%d)\n", var->xres, var->yres);
-        f_ddprintk("hSyncOn hSyncOff vSyncOn vSyncOff\n");
-        f_ddprintk("%-7d %-8d %-7d %-8d\n",
+        printk("sst_set_vidmod(%dx%d)\n", var->xres, var->yres);
+        printk("hSyncOn hSyncOff vSyncOn vSyncOff\n");
+        printk("%-7d %-8d %-7d %-8d\n",
                 var->hsync_len,
                 (var->right_margin + var->left_margin + var->xres),
                 var->vsync_len,
                 (var->upper_margin + var->lower_margin + var->yres));
-        f_ddprintk("hBackPorch vBackPorch xDim yDim pixClock\n");
-        f_ddprintk("%-10d %-10d %-4d %-4d %-8d\n",
+        printk("hBackPorch vBackPorch xDim yDim pixClock\n");
+        printk("%-10d %-10d %-4d %-4d %-8d\n",
                 var->left_margin, var->upper_margin,
                 var->xres, var->yres, var->pixclock);
         sst_write(NOPCMD, 0);
@@ -1251,7 +1050,7 @@ static int sst_set_vidmod(struct fb_var_screeninfo *var)
                 sst_set_vidmod_ics(var->bits_per_pixel);
                 break;
         default:
-                dprintk("bug line %d: unknown dactype\n", __LINE__);
+                printk("bug line %d: unknown dactype\n", __LINE__);
                 return 0;
                 break;
         }
@@ -1293,7 +1092,7 @@ static int sst_set_vidmod(struct fb_var_screeninfo *var)
                 break;
 #endif
         default:
-                dprintk("bug line %d: bad depth %u\n", __LINE__,
+                printk("bug line %d: bad depth %u\n", __LINE__,
                         var->bits_per_pixel );
                 return 0;
                 break;
@@ -1319,7 +1118,7 @@ static int sst_set_vidmod(struct fb_var_screeninfo *var)
                 break;
 #endif
         default:
-                dprintk("bug line %d: bad depth %u\n", __LINE__,
+                printk("bug line %d: bad depth %u\n", __LINE__,
                         var->bits_per_pixel );
                 return 0;
                 break;
@@ -1331,7 +1130,7 @@ static void  sst_set_vidmod_att_ti(int bpp)
 {
         u8 cr0;
 
-        f_dprintk("sst_set_vidmod_att_ti(bpp: %d)\n", bpp);
+        printk("sst_set_vidmod_att_ti(bpp: %d)\n", bpp);
         
         sst_dac_write(DACREG_WMA, 0);   /* backdoor */
         sst_dac_read(DACREG_RMR);       /* read 4 times RMR */
@@ -1366,7 +1165,7 @@ static void  sst_set_vidmod_att_ti(int bpp)
 
 static void sst_set_vidmod_ics(int bpp)
 {
-        f_dprintk("sst_set_vidmod_ics(bpp: %d)\n", bpp);
+        dprintk("sst_set_vidmod_ics(bpp: %d)\n", bpp);
 
         switch(bpp) {
         case 16:
@@ -1391,14 +1190,13 @@ static int sst_init(void)
         int Fout;
         int dac_ok;
 
-        f_dprintk("sst_init\n");
-        f_ddprintk("fbiinit0   fbiinit1   fbiinit2   fbiinit3   fbiinit4\n");
-        f_ddprintk("%#10x %#10x %#10x %#10x %#10x\n",
+        dprintk("sst_init\n");
+        dprintk("fbiinit0   fbiinit1   fbiinit2   fbiinit3   fbiinit4\n");
+        dprintk("%#10x %#10x %#10x %#10x %#10x\n",
                  sst_read(FBIINIT0), sst_read(FBIINIT1), sst_read(FBIINIT2),
                  sst_read(FBIINIT3), sst_read(FBIINIT4));
         /* disable video clock */
         pci_write_config_dword(sst_dev, PCI_VCLK_DISABLE,0);
-        
         /* enable writing to init registers ,disable pci fifo*/
         pci_write_config_dword(sst_dev, PCI_INIT_ENABLE, PCI_EN_INIT_WR);
         /* reset video */
@@ -1414,20 +1212,20 @@ static int sst_init(void)
         /* detect dac type */
         dac_ok = sst_detect_dactype();
         if (!dac_ok) {
-                eprintk("Unknown dac type\n");
+                printk("Unknown dac type\n");
         } else {
                 switch (dactype) {
                 case DAC_TYPE_TI:
-                        iprintk("Voodoo Graphics with TI TVP3409 dac\n");
+                        printk("Voodoo Graphics with TI TVP3409 dac\n");
                         break;
                 case DAC_TYPE_ATT:
-                        iprintk("Voodoo Graphics with AT&T ATT20C409 dac\n");
+                        printk("Voodoo Graphics with AT&T ATT20C409 dac\n");
                         break;
                 case DAC_TYPE_ICS:
-                        iprintk("Voodoo Graphics with ICS ICS5342 dac\n");
+                        printk("Voodoo Graphics with ICS ICS5342 dac\n");
                         break;
                 default:
-                        dprintk("bug line %d: unknown dactype\n", __LINE__);
+                        printk("bug line %d: unknown dactype\n", __LINE__);
                         dac_ok = 0;
                         break;
                 }
@@ -1467,7 +1265,7 @@ static void  sst_shutdown(void)
         struct pll_timing gfx_timings;
         int Fout;
                 
-        f_dprintk("sst_shutdown\n");
+        printk("sst_shutdown\n");
         /* reset video, gfx, fifo, disable dram + remap fbiinit2/3 */
         pci_write_config_dword(sst_dev, PCI_INIT_ENABLE, PCI_EN_INIT_WR);
         sst_set_bits(FBIINIT1, VIDEO_RESET | EN_BLANKING);
@@ -1492,104 +1290,94 @@ static void  sst_shutdown(void)
  */
 
 /* TODO */
-void sstfb_setup(char *options)
+void sstfb_setup(char *options, int *ints)
 {
-        f_dprintk("sstfb_setup\n");
-        return ;
+	printk("sstfb_setup\n");
+        return;
 }
 
 int sstfb_init(void)
 {
         struct pci_dev *pdev = NULL;
-        struct fb_var_screeninfo var;
 
-        f_dprintk("sstfb_init\n");
-        dprintk("Compile date: "__DATE__" "__TIME__"\n");
+        printk("sstfb_init\n");
+        printk("Compile date: "__DATE__" "__TIME__"\n");
 
         while ((pdev = pci_find_device(PCI_VENDOR_ID_3DFX, 
                                       PCI_DEVICE_ID_3DFX_VOODOO, pdev))) {
                 sst_dev = pdev;
                 membase_phys = pdev->resource[0].start;
-                f_ddprintk("membase_phys: %#lx\n", membase_phys);
+                printk("membase_phys: %#lx\n", membase_phys);
                 pci_read_config_byte(sst_dev,
                                      PCI_REVISION_ID, &revision);
-                f_ddprintk("revision: %d\n", revision);
+                printk("revision: %d\n", revision);
 
                 regbase_virt = (u32) ioremap(membase_phys, 0x400000);
-                f_ddprintk("regbase_virt: %#lx\n", regbase_virt);
+                printk("regbase_virt: %#lx\n", regbase_virt);
                 if (!regbase_virt) {
-                        eprintk("cannot remap register area %#lx\n",
+                        printk("cannot remap register area %#lx\n",
                                 membase_phys);
                         return -ENXIO;
                 }
-                fbbase_virt = (u32) ioremap(membase_phys+0x400000,
-                                            0x400000);
-                f_ddprintk("fbbase_virt: %#lx\n", fbbase_virt);
-                if (!fbbase_virt) {
-                        eprintk("cannot remap framebuffer %#lx\n",
+		/* mem mapped frame buffer (4Mb)*/
+        	/* lfb phys address = membase + 4Mb */
+        	sstfb_fix.smem_start  = (membase_phys+0x400000);
+	        fb_info.screen_base = ioremap_nocache(sstfb_fix.smem_start,
+                                            	  	0x400000);
+                if (!fb_info.screen_base) {
+                        printk("cannot remap framebuffer %#lx\n",
                                 membase_phys+0x400000);
                         iounmap((void*) regbase_virt);
                         return -ENXIO;
                 }
                 if(!sst_init()) {
-                        eprintk("Init failed\n");
+                        printk("Init failed\n");
                         iounmap((void*)regbase_virt);
-                        iounmap((void*)fbbase_virt);
+                        iounmap((void*)fb_info.screen_base);
                         return -ENXIO;
                 }
-                sst_get_memsize(&lfb_size);
+		/* usable size of the frame buffer */
+         	sst_get_memsize(&fb_info, sstfb_fix.smem_len);
                 configured = 1;
 
-                iprintk("framebuffer at %#lx, mapped to %#lx,"
-                        " size %ldMb\n",
-                        membase_phys, fbbase_virt, lfb_size >> 20);
-
-                strcpy(fb_info.modename, sstfb_name);
+		/*
+                printk("framebuffer at %ld, mapped to %ld,"
+                        " size %ldMb\n", sstfb_fix.smem_start, 
+			fb_info.screen_base, sstfb_fix.smem_len >> 20);
+		*/
                 fb_info.node       = -1 ;
                 fb_info.flags      = FBINFO_FLAG_DEFAULT;
                 fb_info.fbops      = &sstfb_ops;
-                fb_info.disp       = &disp;
-                fb_info.changevar  = NULL;
-                fb_info.switch_con = &sstfbcon_switch;
-                fb_info.updatevar  = &sstfbcon_updatevar;
-                fb_info.blank      = &sstfbcon_blank;
-                var = sstfb_default;
-                if (sstfb_set_var(&var, -1, &fb_info)) {
-                        eprintk("can't set default video mode.\n");
-                        return -ENXIO;
-                }
-                /*clear fb */
-                memset_io(fbbase_virt, 0, lfb_size);
+                fb_info.var 	   = sstfb_default;
+		fb_info.fix 	   = sstfb_fix;
+		fb_info.pseudo_palette = &sstfb_palette;               
+ 
+		/*clear fb */
+                memset_io(fb_info.screen_base, 0, fb_info.fix.smem_len);
                 /* print some squares ... */
-                sstfb_test();
+                sstfb_test(&fb_info);
 
                 /* register fb */
                 if (register_framebuffer(&fb_info) < 0) {
-                        eprintk("can't register framebuffer.\n");
+                        printk("can't register framebuffer.\n");
                         return -ENXIO;
                 }
                 printk(KERN_INFO "fb%d: %s frame buffer device\n",
-                       GET_FB_IDX(fb_info.node),fb_info.modename);
+                       GET_FB_IDX(fb_info.node),fb_info.fix.id);
                 return 0;
         }
         return -ENXIO;
 }
 
-static void sstfb_blank(int blank, struct fb_info *info)
-{
-        f_dprintk("sstfbcon_blank\n");
-        f_ddprintk("blank level: %d\n", blank);
-}
-
 /* print some squares on the fb (16bpp)  */
-static void sstfb_test(void)
+static void sstfb_test(struct fb_info *info)
 {
-        int i,j;
         u_long p;
+	int i, j;
 
         /* rect blanc 20x100 */
         for (i=0 ; i< 100; i++) {
-          p = fbbase_virt + 2048 *i+400; 
+          p = (unsigned long) (info->screen_base + 2048 *i+400); 
           for (j=0 ; j < 10 ; j++) {
             writel( 0xffffffff, p);
             p+=4;
@@ -1597,7 +1385,7 @@ static void sstfb_test(void)
         }
         /* rect bleu 180x200 */
         for (i=0 ; i< 200; i++) {
-          p = fbbase_virt + 2048 *i;
+          p = (unsigned long) (info->screen_base + 2048 *i);
           for (j=0 ; j < 90 ; j++) {
             writel(0x001f001f,p);
             p+=4;
@@ -1605,7 +1393,7 @@ static void sstfb_test(void)
         }
         /* carre vert 40x40 */
         for (i=0 ; i< 40 ; i++) {
-          p = fbbase_virt + 2048 *i;
+          p = (unsigned long) (info->screen_base + 2048 *i);
           for (j=0; j <20;j++) {
             writel(0x07e007e0, p);
             p+=4;
@@ -1613,27 +1401,18 @@ static void sstfb_test(void)
         }
         /*carre rouge 40x40 */
         for (i=0; i<40; i++) {
-          p = fbbase_virt + 2048 * (i+40);
+          p = (unsigned long) (info->screen_base + 2048 * (i+40));
           for (j=0; j <20;j++) {
             writel( 0xf800f800, p);
             p+=4;
           }
         }
-
-        f_dprintk("write ok\n");
+        printk("write ok\n");
 }
 
 
 #ifdef MODULE
-
-int init_module(void)
-{
-        f_dprintk("init_module\n");
-        sstfb_init();
-        return 0;
-}
-
-void cleanup_module(void)
+static void __exit sstfb_cleanup(void)
 {
         f_dprintk("cleanup_module\n");
         f_ddprintk("conf %d\n",configured);
@@ -1641,11 +1420,12 @@ void cleanup_module(void)
         if (configured) {
                 sst_shutdown();
                 iounmap((void*)regbase_virt);
-                iounmap((void*)fbbase_virt);
+                iounmap((void*)info->screen_base);
                 unregister_framebuffer(&fb_info);
         }
 }
-
+module_init(sstfb_init);
+module_exit(sstfb_cleanup);
 #endif  /* MODULE */
 
 /*
