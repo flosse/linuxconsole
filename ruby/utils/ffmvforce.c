@@ -69,11 +69,8 @@ printf("level: %04x direction: %04x\n", (unsigned int)effect.u.constant.level, (
         effect.replay.length = 0xffff;
         effect.replay.delay = 0;
 
-	if (!first) {
-		if (ioctl(ff_fd, EVIOCRMFF, effect.id) < 0) {
-			perror("Erase effect");
-			exit(1);
-		}
+	if (first) {
+		effect.id = -1;
 	}
 
         if (ioctl(ff_fd, EVIOCSFF, &effect) < 0) {
@@ -84,7 +81,6 @@ printf("level: %04x direction: %04x\n", (unsigned int)effect.u.constant.level, (
 	/* If first time, start to play the effect */
 	if (first) {
 		struct input_event play;
-		first = 0;
 		play.type = EV_FF;
 		play.code = effect.id;
 		play.value = 1;
@@ -94,6 +90,8 @@ printf("level: %04x direction: %04x\n", (unsigned int)effect.u.constant.level, (
 			exit(1);
 		}
 	}
+
+	first = 0;
 }
 
 static void stop_effect()
@@ -113,14 +111,22 @@ int main(int argc, char** argv)
 	SDL_Surface* screen;
 	char dev_name[STR_LEN];
 	int i;
+	Uint32 ticks, period = 200;
 
 	/* Parse parameters */
 	strcpy(dev_name, "/dev/input/event0");
 	for (i=1; i<argc; ++i) {
-		if (strncmp(argv[i], "--help", STR_LEN) == 0) {
-			printf("Usage: %s /dev/input/eventXX\n", argv[0]);
+		if (strcmp(argv[i], "--help") == 0) {
+			printf("Usage: %s /dev/input/eventXX [-p period in ms]\n", argv[0]);
 			printf("Generates constant force effects depending on the position of the mouse\n");
 			exit(1);
+		}
+		else if (strcmp(argv[i], "-p") == 0) {
+			if (++i >= argc) {
+				fprintf(stderr, "Missing period\n");
+				exit(1);
+			}
+			period = atoi(argv[i]);
 		}
 		else {
 			strncpy(dev_name, argv[i], STR_LEN);
@@ -147,6 +153,7 @@ int main(int argc, char** argv)
 	}
 	on_exit(stop_effect, NULL);
 
+	ticks = SDL_GetTicks();
 	/* Main loop */
 	for (;;) {
 		SDL_Event event;
@@ -158,8 +165,10 @@ int main(int argc, char** argv)
 			break;
 
 		case SDL_MOUSEMOTION:
-			if (event.motion.state)
+			if (event.motion.state && SDL_GetTicks()-ticks > period) {
+				ticks = SDL_GetTicks();
 				generate_force(event.motion.x, event.motion.y);
+			}
 			break;
 		}
 	}
