@@ -67,6 +67,8 @@ static int	mda_cursor_size_to=-1;
 static enum { TYPE_MDA, TYPE_HERC, TYPE_HERCPLUS, TYPE_HERCCOLOR } mda_type;
 static char *mda_type_name;
 
+static struct vc_data mda_default;
+
 /* MDA register values
  */
 
@@ -289,6 +291,8 @@ static void __init mda_initialize(void)
 
 static const char __init *mdacon_startup(struct vt_struct *vt, int init)
 {
+	vt->default_mode = &mda_default;
+
 	mda_num_columns = 80;
 	mda_num_lines   = 25;
 
@@ -571,14 +575,9 @@ int __init mda_module_init(void)
         vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
         if (!vt) return;
 	memset(vt, 0, sizeof(struct vt_struct));
-	vt->default_mode = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
-	if (!vt->default_mode) {
-		kfree(vt);
-		return;
-	}
+	
 	vc = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
 	if (!vc) {
-		kfree(vt->default_mode);
 		kfree(vt);
 		return;
 	}
@@ -589,7 +588,6 @@ int __init mda_module_init(void)
 	q = (long) kmalloc(vc->vc_screenbuf_size, GFP_KERNEL);
         if (!display_desc || !q) {
 		kfree(vt->vc_cons[0]);
-		kfree(vt->default_mode);
                 kfree(vt);
 		if (q)
 			kfree((char *) q);	
@@ -597,8 +595,6 @@ int __init mda_module_init(void)
         }
 	vc->vc_screenbuf = (unsigned short *) q;
 	vc_init(vc, 1);			
-      	tasklet_enable(&vt->vt_tasklet); 
-	tasklet_schedule(&vt->vt_tasklet);
 	printk("Console: mono %s %dx%d\n",display_desc,vc->vc_cols,vc->vc_rows);
         return;
 }

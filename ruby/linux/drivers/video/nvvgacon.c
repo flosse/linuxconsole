@@ -97,6 +97,8 @@ static char *dac_reg, *dac_val;
 
 static int	vram     =  0;
 
+static struct vc_data nvvga_default;
+
 #ifdef MODULE_PARM
 MODULE_PARM(vram, "i");
 #endif
@@ -178,13 +180,15 @@ static const char *nvvgacon_startup(struct vt_struct *vt, int init)
 static const char __init *nvvgacon_startup(struct vt_struct *vt, int init)
 #endif
 {
-	struct vc_data *vc = vt->default_mode;
+	struct vc_data *vc = &nvvga_default;
         int i;
        
 	if (!nvvgacon_detect()) {
 		printk("nvvgacon: NVIDIA card not detected\n");
 		return NULL;
 	}
+
+	vt->default_mode = vc;
  
 	for (i=0; i<16; i++) {
             	readb(nvvga_mmio_base1+0x3da);
@@ -855,8 +859,6 @@ int __init nvvgacon_module_init(void)
         }
 	vc->vc_screenbuf = (unsigned short *) q;
 	vc_init(vc, 1);
-	tasklet_enable(&vt->vt_tasklet);
-	tasklet_schedule(&vt->vt_tasklet);	
         printk("Console: color %s %dx%d\n", display_desc, vc->vc_cols, vc->vc_rows);
 }
 

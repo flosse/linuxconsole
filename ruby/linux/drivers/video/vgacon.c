@@ -61,6 +61,8 @@
  */
 #undef TRIDENT_GLITCH
 
+static struct vc_data vga_default;
+
 /*
  *  Interface used by the world
  */
@@ -346,7 +348,7 @@ static int vgacon_font_op(struct vc_data *vc, struct console_font_op *op)
 
 static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 {
-	struct vc_data *vc = vt->default_mode;
+	struct vc_data *vc = &vga_default;
 	const char *display_desc = NULL;
 	u16 saved1, saved2;
 	volatile u16 *p;
@@ -360,6 +362,7 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 		return NULL;
 #endif
 	}
+	vt->default_mode = vc;
 
 	/* VGA16 modes are not handled by VGACON */
         if ((ORIG_VIDEO_MODE == 0x0D) || /* 320x200/4 */

@@ -15,8 +15,6 @@
 #include <linux/slab.h>
 #include <linux/delay.h>
 #include <linux/vt_kern.h>
-#include <linux/selection.h>
-#include <linux/fb.h>
 #include <linux/init.h>
 #include <linux/kd.h>
 
@@ -104,10 +102,12 @@ promcon_end(struct vc_data *vc, char *b)
 
 const char __init *promcon_startup(struct vt_struct *vt, int init)
 {
-	struct vc_data *vc = vt->default_mode;
 	const char *display_desc = "PROM";
+	struct vc_data *vc;
 	char buf[40];
 	int node;
+
+	vt->default_mode = vc = &prom_default;
 	
 	node = prom_getchild(prom_root_node);
 	node = prom_searchsiblings(node, "options");
@@ -594,11 +594,6 @@ void __init prom_con_init(void)
         /* Alloc the mem we need */
 	vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
         if (!vt) return;
-	vt->default_mode = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
-	if (!vt->default_mode) {
-		kfree(vt);
-		return;
-	}
 	vc = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
 	vt->kmalloced = 1;
 	vt->vt_sw = &prom_con;
@@ -607,7 +602,6 @@ void __init prom_con_init(void)
 	q = (long) kmalloc(vc->vc_screenbuf_size, GFP_KERNEL);       
 	if (!display_desc || !q) {
 		kfree(vt->vcs.vc_cons[0]);
-		kfree(vt->default_mode);
                 kfree(vt);
 		if (q)
 			kfree((char *) q);		
@@ -615,7 +609,5 @@ void __init prom_con_init(void)
         }
 	vc->vc_screenbuf = (unsigned short *) q;
 	vc_init(vc, 1);
-	tasklet_enable(&vt->vt_tasklet);
-	tasklet_schedule(&vt->vt_tasklet);
 	promcon_init_unimap(vt->fg_console);
 }
