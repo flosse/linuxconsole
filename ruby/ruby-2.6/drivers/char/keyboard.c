@@ -1005,7 +1005,7 @@ void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down)
 		return;
 	}
 	if (sysrq_down && down && !rep) {
-		handle_sysrq(kbd_sysrq_xlate[keycode], handle->dev->regs, tty);
+		handle_sysrq(kbd_sysrq_xlate[keycode], vt->keyboard->dev->regs, tty);
 		return;
 	}
 #endif
