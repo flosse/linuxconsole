@@ -135,7 +135,7 @@ static void iforce_input_setup(struct iforce *iforce)
 					BIT(BTN_BASE) | BIT(BTN_BASE2) | BIT(BTN_BASE3) | BIT(BTN_BASE4) | BIT(BTN_BASE5);
 	iforce->dev.keybit[LONG(BTN_GAMEPAD)] |= BIT(BTN_A) | BIT(BTN_B) | BIT(BTN_C);
 	iforce->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y) | BIT(ABS_THROTTLE) | BIT(ABS_HAT0X) | BIT(ABS_HAT0Y)
-				BIT(ABS_WHEEL) | BIT(ABS_GAS) | BIT(ABS_BRAKE);
+				| BIT(ABS_WHEEL) | BIT(ABS_GAS) | BIT(ABS_BRAKE);
 
 	for (i = ABS_X; i <= ABS_Y; i++) {
 		iforce->dev.absmax[i] =  1920;
