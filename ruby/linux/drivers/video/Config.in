@@ -32,11 +32,19 @@ if [ "$CONFIG_FB" = "y" ]; then
          fi
       fi
    fi
-   dep_bool '  Acorn VIDC support' CONFIG_FB_ACORN $CONFIG_ARCH_ACORN
-   dep_bool '  CLPS711X LCD support' CONFIG_FB_CLPS711X $CONFIG_ARCH_CLPS711X	
    dep_tristate '  Cyber2000 support' CONFIG_FB_CYBER2000 $CONFIG_PCI
-   dep_bool '  SA-1100 LCD support' CONFIG_FB_SA1100 $CONFIG_ARCH_SA1100
-   dep_bool '  Anakin LCD support' CONFIG_FB_ANAKIN $CONFIG_ARCH_ANAKIN
+   if [ "$CONFIG_ARM" = "y" ]; then
+      dep_bool '  Acorn VIDC support' CONFIG_FB_ACORN $CONFIG_ARCH_ACORN
+      dep_bool '  Anakin LCD support' CONFIG_FB_ANAKIN $CONFIG_ARCH_ANAKIN
+      dep_bool '  SA-1100 LCD support' CONFIG_FB_SA1100 $CONFIG_ARCH_SA1100
+      dep_bool '  Anakin LCD support' CONFIG_FB_ANAKIN $CONFIG_ARCH_ANAKIN
+      if [ "$CONFIG_FB_SA1100" = "y" -a "$CONFIG_SA1100_CERF" = "y" ]; then
+         choice 'CerfBoard LCD Display Size' \
+                "3.8            CONFIG_CERF_LCD_38_A \
+                 5.7            CONFIG_CERF_LCD_57_A \
+                 7.2            CONFIG_CERF_LCD_72_A" 5.7
+      fi
+   fi	
    if [ "$CONFIG_APOLLO" = "y" ]; then
       define_bool CONFIG_FB_APOLLO y
    fi
@@ -115,14 +123,13 @@ if [ "$CONFIG_FB" = "y" ]; then
          bool '  CGsix (GX,TurboGX) support' CONFIG_FB_CGSIX
       fi
    fi
+   tristate '  NEC PowerVR 2 display support' CONFIG_FB_PVR2
+   dep_bool '    Debug pvr2fb' CONFIG_FB_PVR2_DEBUG $CONFIG_FB_PVR2
    bool '  Epson 1355 framebuffer support' CONFIG_FB_E1355
    if [ "$CONFIG_FB_E1355" = "y" ]; then
       hex '    Register Base Address' CONFIG_E1355_REG_BASE a8000000
       hex '    Framebuffer Base Address' CONFIG_E1355_FB_BASE a8200000
    fi
-   if [ "$CONFIG_SH_DREAMCAST" = "y" ]; then
-      tristate '  Dreamcast Frame Buffer support' CONFIG_FB_DC
-   fi              	
    if [ "$CONFIG_PCI" != "n" ]; then
       tristate '  Matrox acceleration (EXPERIMENTAL)' CONFIG_FB_MATROX
       if [ "$CONFIG_FB_MATROX" != "n" ]; then

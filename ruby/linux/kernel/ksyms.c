@@ -23,8 +23,6 @@
 #include <linux/serial.h>
 #include <linux/locks.h>
 #include <linux/delay.h>
-#include <linux/minix_fs.h>
-#include <linux/ext2_fs.h>
 #include <linux/random.h>
 #include <linux/reboot.h>
 #include <linux/pagemap.h>
@@ -47,6 +45,7 @@
 #include <linux/fs.h>
 #include <linux/tty.h>
 #include <linux/in6.h>
+#include <linux/completion.h>
 #include <asm/checksum.h>
 
 #if defined(CONFIG_PROC_FS)
@@ -194,6 +193,7 @@ EXPORT_SYMBOL(__brelse);
 EXPORT_SYMBOL(__bforget);
 EXPORT_SYMBOL(ll_rw_block);
 EXPORT_SYMBOL(submit_bh);
+EXPORT_SYMBOL(unlock_buffer);
 EXPORT_SYMBOL(__wait_on_buffer);
 EXPORT_SYMBOL(___wait_on_page);
 EXPORT_SYMBOL(block_write_full_page);
@@ -360,6 +360,10 @@ EXPORT_SYMBOL(irq_stat);	/* No separate irq_stat for s390, it is part of PSA */
 EXPORT_SYMBOL(add_wait_queue);
 EXPORT_SYMBOL(add_wait_queue_exclusive);
 EXPORT_SYMBOL(remove_wait_queue);
+
+/* completion handling */
+EXPORT_SYMBOL(wait_for_completion);
+EXPORT_SYMBOL(complete);
 
 /* The notion of irq probe/assignment is foreign to S/390 */
 
@@ -530,6 +534,8 @@ EXPORT_SYMBOL(tasklet_init);
 EXPORT_SYMBOL(tasklet_kill);
 EXPORT_SYMBOL(__run_task_queue);
 EXPORT_SYMBOL(do_softirq);
+EXPORT_SYMBOL(raise_softirq);
+EXPORT_SYMBOL(cpu_raise_softirq);
 EXPORT_SYMBOL(tasklet_schedule);
 EXPORT_SYMBOL(tasklet_hi_schedule);
 

@@ -21,23 +21,16 @@ obj-y	 += mem.o tty_io.o n_tty.o tty_ioctl.o raw.o pty.o misc.o random.o
 # All of the (potential) objects that export symbols.
 # This list comes from 'grep -l EXPORT_SYMBOL *.[hc]'.
 
-export-objs     :=	vt.o keyboard.o sysrq.o misc.o pty.o random.o\
-			selection.o serial.o tty_io.o 
+export-objs     :=	vt.o keyboard.o sysrq.o misc.o pty.o random.o \
+			selection.o serial.o sonypi.o tty_io.o tty_ioctl.o
 
 mod-subdirs	:=	ftape drm pcmcia
 
 list-multi	:=	
 
-KEYMAP   =defkeymap.o
 SERIAL   =serial.o
 
-ifeq ($(ARCH),sh)
-  ifeq ($(CONFIG_SH_HP600),y)
-  KEYBD    = scan_keyb.o hp600_keyb.o
-  endif
-endif
-
-obj-$(CONFIG_VT) += vt.o vt_ioctl.o decvte.o vc_screen.o consolemap.o consolemap_deftbl.o selection.o keyboard.o $(KEYMAP)
+obj-$(CONFIG_VT) += vt.o vt_ioctl.o decvte.o vc_screen.o consolemap.o consolemap_deftbl.o selection.o keyboard.o defkeymap.o
 obj-$(CONFIG_SERIAL) += $(SERIAL)
 obj-$(CONFIG_SERIAL_21285) += serial_21285.o
 
@@ -59,6 +52,7 @@ obj-$(CONFIG_SYNCLINK) += synclink.o
 obj-$(CONFIG_N_HDLC) += n_hdlc.o
 obj-$(CONFIG_SPECIALIX) += specialix.o
 obj-$(CONFIG_AMIGA_BUILTIN_SERIAL) += amiserial.o
+obj-$(CONFIG_A2232) += ser_a2232.o generic_serial.o
 obj-$(CONFIG_SX) += sx.o generic_serial.o
 obj-$(CONFIG_RIO) += rio/rio.o generic_serial.o
 obj-$(CONFIG_SH_SCI) += sh-sci.o generic_serial.o
@@ -70,9 +64,11 @@ obj-$(CONFIG_BVME6000_SCC) += generic_serial.o vme_scc.o
 subdir-$(CONFIG_RIO) += rio
 
 obj-$(CONFIG_PRINTER) += lp.o
+
 obj-$(CONFIG_DTLK) += dtlk.o
 obj-$(CONFIG_R3964) += n_r3964.o
 obj-$(CONFIG_APPLICOM) += applicom.o
+obj-$(CONFIG_SONYPI) += sonypi.o
 obj-$(CONFIG_RTC) += rtc.o
 obj-$(CONFIG_EFI_RTC) += efirtc.o
 obj-$(CONFIG_SA1100_RTC) += sa1100-rtc.o

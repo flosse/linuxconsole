@@ -21,12 +21,14 @@ extern int blk_dev_init(void);
 #ifdef CONFIG_BLK_DEV_DAC960
 extern void DAC960_Initialize(void);
 #endif
+#ifdef CONFIG_FUSION_BOOT
+extern int fusion_init(void);
+#endif
 extern int net_dev_init(void);
 extern int soc_probe(void);
 extern int atmdev_init(void);
 extern int i2o_init(void);
 extern int cpqarray_init(void);
-extern void ieee1394_init(void);
 
 int __init device_init(void)
 {
@@ -38,12 +40,12 @@ int __init device_init(void)
 #ifdef CONFIG_BLK_DEV_DAC960
 	DAC960_Initialize();
 #endif
+#ifdef CONFIG_FUSION_BOOT
+	fusion_init();
+#endif
 #ifdef CONFIG_FC4_SOC
 	/* This has to be done before scsi_dev_init */
 	soc_probe();
-#endif
-#ifdef CONFIG_IEEE1394
-        ieee1394_init();
 #endif
 #ifdef CONFIG_BLK_CPQ_DA
 	cpqarray_init();

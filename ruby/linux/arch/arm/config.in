@@ -42,7 +42,7 @@ choice 'ARM system type' \
 	 Integrator		CONFIG_ARCH_INTEGRATOR \
 	 LinkUp-L7200		CONFIG_ARCH_L7200 \
 	 RiscPC			CONFIG_ARCH_RPC \
- 	 SA1100-based		CONFIG_ARCH_SA1100
+ 	 SA1100-based		CONFIG_ARCH_SA1100 \
 	 Shark			CONFIG_ARCH_SHARK" RiscPC
 
 mainmenu_option next_comment
@@ -91,6 +91,7 @@ dep_bool '  OmniMeter' CONFIG_SA1100_OMNIMETER $CONFIG_ARCH_SA1100
 dep_bool '  Pangolin' CONFIG_SA1100_PANGOLIN $CONFIG_ARCH_SA1100
 dep_bool '  PLEB' CONFIG_SA1100_PLEB $CONFIG_ARCH_SA1100
 dep_bool '  Sherman' CONFIG_SA1100_SHERMAN $CONFIG_ARCH_SA1100
+dep_bool '  Simpad' CONFIG_SA1100_SIMPAD $CONFIG_ARCH_SA1100
 dep_bool '  Tulsa' CONFIG_SA1100_PFS168 $CONFIG_ARCH_SA1100
 dep_bool '  Victor' CONFIG_SA1100_VICTOR $CONFIG_ARCH_SA1100
 dep_bool '  XP860' CONFIG_SA1100_XP860 $CONFIG_ARCH_SA1100
@@ -450,6 +451,7 @@ if [ "$CONFIG_ARCH_ACORN" = "y" -o \
      "$CONFIG_ARCH_CLPS7500" = "y" -o \
      "$CONFIG_ARCH_TBOX" = "y" -o \
      "$CONFIG_ARCH_SHARK" = "y" -o \
+     "$CONFIG_ARCH_SA1100" = "y" -o \
      "$CONFIG_PCI" = "y" ]; then
    mainmenu_option next_comment
    comment 'Sound'

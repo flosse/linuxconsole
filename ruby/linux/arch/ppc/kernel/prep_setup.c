@@ -89,7 +89,6 @@ int _prep_type;
 kdev_t boot_dev;
 /* used in nasty hack for sound - see prep_setup_arch() -- Cort */
 long ppc_cs4232_dma, ppc_cs4232_dma2;
-unsigned long empty_zero_page[1024];
 
 extern PTE *Hash, *Hash_end;
 extern unsigned long Hash_size, Hash_mask;

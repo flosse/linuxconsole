@@ -376,7 +376,8 @@ static void sa1100_change_speed(struct uart_port *port, u_int cflag, u_int iflag
 			utcr0 |= UTCR0_OES;
 	}
 
-	port->read_status_mask = UTSR1_TO_SM(UTSR1_ROR);
+	port->read_status_mask &= UTSR1_TO_SM(UTSR0_TFS);
+	port->read_status_mask |= UTSR1_TO_SM(UTSR1_ROR);
 	if (iflag & INPCK)
 		port->read_status_mask |= UTSR1_TO_SM(UTSR1_FRE | UTSR1_PRE);
 	if (iflag & (BRKINT | PARMRK))

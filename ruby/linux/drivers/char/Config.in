@@ -14,21 +14,23 @@ if [ "$CONFIG_INPUT" = "y" ]; then
    fi
 fi
 
-tristate 'Standard/generic (8250/16550 and compatible UARTs) serial support' CONFIG_SERIAL
-if [ "$CONFIG_SERIAL" = "y" ]; then
-   bool '  Support for console on serial port' CONFIG_SERIAL_CONSOLE
-   if [ "$CONFIG_ARCH_ACORN" = "y" ]; then
-      tristate '   Atomwide serial port support' CONFIG_ATOMWIDE_SERIAL
-      tristate '   Dual serial port support' CONFIG_DUALSP_SERIAL
+if [ "$CONFIG_UART" = "n" ]; then
+   tristate 'Standard/generic (8250/16550 and compatible UARTs) serial support' CONFIG_SERIAL
+   if [ "$CONFIG_SERIAL" = "y" ]; then
+      bool '  Support for console on serial port' CONFIG_SERIAL_CONSOLE
+      if [ "$CONFIG_ARCH_ACORN" = "y" ]; then
+         tristate '   Atomwide serial port support' CONFIG_ATOMWIDE_SERIAL
+         tristate '   Dual serial port support' CONFIG_DUALSP_SERIAL
+      fi
    fi
-fi
-dep_mbool 'Extended dumb serial driver options' CONFIG_SERIAL_EXTENDED $CONFIG_SERIAL
-if [ "$CONFIG_SERIAL_EXTENDED" = "y" ]; then
-   bool '  Support more than 4 serial ports' CONFIG_SERIAL_MANY_PORTS
-   bool '  Support for sharing serial interrupts' CONFIG_SERIAL_SHARE_IRQ
-   bool '  Autodetect IRQ on standard ports (unsafe)' CONFIG_SERIAL_DETECT_IRQ
-   bool '  Support special multiport boards' CONFIG_SERIAL_MULTIPORT
-   bool '  Support the Bell Technologies HUB6 card' CONFIG_HUB6
+   dep_mbool 'Extended dumb serial driver options' CONFIG_SERIAL_EXTENDED $CONFIG_SERIAL
+   if [ "$CONFIG_SERIAL_EXTENDED" = "y" ]; then
+      bool '  Support more than 4 serial ports' CONFIG_SERIAL_MANY_PORTS
+      bool '  Support for sharing serial interrupts' CONFIG_SERIAL_SHARE_IRQ
+      bool '  Autodetect IRQ on standard ports (unsafe)' CONFIG_SERIAL_DETECT_IRQ
+      bool '  Support special multiport boards' CONFIG_SERIAL_MULTIPORT
+      bool '  Support the Bell Technologies HUB6 card' CONFIG_HUB6
+   fi
 fi
 bool 'Non-standard serial port support' CONFIG_SERIAL_NONSTANDARD
 if [ "$CONFIG_SERIAL_NONSTANDARD" = "y" ]; then
@@ -113,16 +115,12 @@ if [ "$CONFIG_WATCHDOG" != "n" ]; then
    tristate '  SBC-60XX Watchdog Timer' CONFIG_60XX_WDT
    tristate '  Mixcom Watchdog' CONFIG_MIXCOMWD 
    tristate '  Intel i810 TCO timer / Watchdog' CONFIG_I810_TCO
-   if [ "$CONFIG_FOOTBRIDGE" = "y" ]; then
-      tristate '  DC21285 watchdog' CONFIG_21285_WATCHDOG
-      if [ "$CONFIG_ARCH_NETWINDER" = "y" ]; then
-         tristate '  NetWinder WB83C977 watchdog' CONFIG_977_WATCHDOG
-      fi
-   fi
+   if [ "$CONFIG_ARM" = "y" ]; then
+      dep_tristate '  DC21285 watchdog' CONFIG_21285_WATCHDOG $CONFIG_FOOTBRIDGE
+      dep_tristate '  NetWinder WB83C977 watchdog' CONFIG_977_WATCHDOG $CONFIG_ARCH_NETWINDER
+      dep_tristate '  SA1100 watchdog' CONFIG_SA1100_WATCHDOG $CONFIG_ARCH_SA1100
+   fi		 	
    tristate '  ZF MachZ Watchdog' CONFIG_MACHZ_WDT
-   if [ "$CONFIG_ARCH_SA1100" = "y" ]; then
-      tristate '  SA1100 watchdog' CONFIG_SA1100_WATCHDOG
-   fi		
 fi
 endmenu
 

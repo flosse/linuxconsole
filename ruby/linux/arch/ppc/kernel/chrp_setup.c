@@ -80,8 +80,6 @@ extern unsigned long loops_per_jiffy;
 extern int bootx_text_mapped;
 static int max_width;
 
-unsigned long empty_zero_page[1024];
-
 static const char *gg2_memtypes[4] = {
 	"FPM", "SDRAM", "EDO", "BEDO"
 };

@@ -362,6 +362,7 @@ extern int stli_init(void);
 extern int specialix_init(void);
 extern int espserial_init(void);
 extern int macserial_init(void);
+extern int a2232board_init(void);
 extern void vt_console_init(void);
 
 extern int tty_paranoia_check(struct tty_struct *tty, kdev_t device,

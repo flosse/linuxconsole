@@ -1114,7 +1114,6 @@ __asm__(".align 4\nvide: ret");
 static int __init init_amd(struct cpuinfo_x86 *c)
 {
 	u32 l, h;
-	unsigned long flags;
 	int mbytes = max_mapnr >> (20-PAGE_SHIFT);
 	int r;
 
@@ -1178,14 +1177,13 @@ static int __init init_amd(struct cpuinfo_x86 *c)
 					mbytes=508;
 					
 				rdmsr(0xC0000082, l, h);
-				if((l&0x0000FFFF)==0)
-				{		
+				if ((l&0x0000FFFF)==0) {
+					unsigned long flags;
 					l=(1<<0)|((mbytes/4)<<1);
-					save_flags(flags);
-					__cli();
+					local_irq_save(flags);
 					__asm__ __volatile__ ("wbinvd": : :"memory");
 					wrmsr(0xC0000082, l, h);
-					restore_flags(flags);
+					local_irq_restore(flags);
 					printk(KERN_INFO "Enabling old style K6 write allocation for %d Mb\n",
 						mbytes);
 					
@@ -1200,14 +1198,13 @@ static int __init init_amd(struct cpuinfo_x86 *c)
 					mbytes=4092;
 
 				rdmsr(0xC0000082, l, h);
-				if((l&0xFFFF0000)==0)
-				{
+				if ((l&0xFFFF0000)==0) {
+					unsigned long flags;
 					l=((mbytes>>2)<<22)|(1<<16);
-					save_flags(flags);
-					__cli();
+					local_irq_save(flags);
 					__asm__ __volatile__ ("wbinvd": : :"memory");
 					wrmsr(0xC0000082, l, h);
-					restore_flags(flags);
+					local_irq_restore(flags);
 					printk(KERN_INFO "Enabling new style K6 write allocation for %d Mb\n",
 						mbytes);
 				}
@@ -1234,12 +1231,13 @@ static int __init init_amd(struct cpuinfo_x86 *c)
 /*
  * Read Cyrix DEVID registers (DIR) to get more detailed info. about the CPU
  */
-static inline void do_cyrix_devid(unsigned char *dir0, unsigned char *dir1)
+static void do_cyrix_devid(unsigned char *dir0, unsigned char *dir1)
 {
 	unsigned char ccr2, ccr3;
+	unsigned long flags;
 
 	/* we test for DEVID by checking whether CCR3 is writable */
-	cli();
+	local_irq_save(flags);
 	ccr3 = getCx86(CX86_CCR3);
 	setCx86(CX86_CCR3, ccr3 ^ 0x80);
 	getCx86(0xc0);   /* dummy to change bus */
@@ -1263,7 +1261,7 @@ static inline void do_cyrix_devid(unsigned char *dir0, unsigned char *dir1)
 		*dir0 = getCx86(CX86_DIR0);
 		*dir1 = getCx86(CX86_DIR1);
 	}
-	sti();
+	local_irq_restore(flags);
 }
 
 /*
@@ -1307,15 +1305,16 @@ static void __init check_cx686_slop(struct cpuinfo_x86 *c)
 {
 	if (Cx86_dir0_msb == 3) {
 		unsigned char ccr3, ccr5;
+		unsigned long flags;
 
-		cli();
+		local_irq_save(flags);
 		ccr3 = getCx86(CX86_CCR3);
 		setCx86(CX86_CCR3, (ccr3 & 0x0f) | 0x10); /* enable MAPEN  */
 		ccr5 = getCx86(CX86_CCR5);
 		if (ccr5 & 2)
 			setCx86(CX86_CCR5, ccr5 & 0xfd);  /* reset SLOP */
 		setCx86(CX86_CCR3, ccr3);                 /* disable MAPEN */
-		sti();
+		local_irq_restore(flags);
 
 		if (ccr5 & 2) { /* possible wrong calibration done */
 			printk(KERN_INFO "Recalibrating delay loop with SLOP bit reset\n");
@@ -1429,8 +1428,16 @@ static void __init init_cyrix(struct cpuinfo_x86 *c)
 		break;
 
         case 5: /* 6x86MX/M II */
-		if (dir1 > 7) dir0_msn++;  /* M II */
-		else c->coma_bug = 1;      /* 6x86MX, it has the bug. */
+		if (dir1 > 7)
+		{
+			dir0_msn++;  /* M II */
+			/* Enable MMX extensions (App note 108) */
+			setCx86(CX86_CCR7, getCx86(CX86_CCR7)|1);
+		}
+		else
+		{
+			c->coma_bug = 1;      /* 6x86MX, it has the bug. */
+		}
 		tmp = (!(dir0_lsn & 7) || dir0_lsn & 1) ? 2 : 0;
 		Cx86_cb[tmp] = cyrix_model_mult2[dir0_lsn & 7];
 		p = Cx86_cb+tmp;
@@ -1978,6 +1985,9 @@ static void __init squash_the_stupid_serial_number(struct cpuinfo_x86 *c)
 		wrmsr(0x119,lo,hi);
 		printk(KERN_NOTICE "CPU serial number disabled.\n");
 		clear_bit(X86_FEATURE_PN, &c->x86_capability);
+
+		/* Disabling the serial number may affect the cpuid level */
+		c->cpuid_level = cpuid_eax(0);
 	}
 }
 
@@ -2083,15 +2093,16 @@ static int __init id_and_try_enable_cpuid(struct cpuinfo_x86 *c)
    	        if (dir0 == 5 || dir0 == 3)
    	        {
 			unsigned char ccr3, ccr4;
+			unsigned long flags;
 
 			printk(KERN_INFO "Enabling CPUID on Cyrix processor.\n");
-			cli();
+			local_irq_save(flags);
 			ccr3 = getCx86(CX86_CCR3);
 			setCx86(CX86_CCR3, (ccr3 & 0x0f) | 0x10); /* enable MAPEN  */
 			ccr4 = getCx86(CX86_CCR4);
 			setCx86(CX86_CCR4, ccr4 | 0x80);          /* enable cpuid  */
 			setCx86(CX86_CCR3, ccr3);                 /* disable MAPEN */
-			sti();
+			local_irq_restore(flags);
 		}
 	} else
 
