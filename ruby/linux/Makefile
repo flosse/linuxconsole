@@ -132,6 +132,7 @@ DRIVERS-  :=
 DRIVERS-$(CONFIG_ACPI) += drivers/acpi/acpi.o
 DRIVERS-$(CONFIG_PARPORT) += drivers/parport/driver.o
 DRIVERS-y += drivers/base/base.o \
+	drivers/serial/serial.o \
 	drivers/char/char.o \
 	drivers/block/block.o \
 	drivers/misc/misc.o \
@@ -157,7 +158,6 @@ ifneq ($(CONFIG_CD_NO_IDESCSI)$(CONFIG_BLK_DEV_IDECD)$(CONFIG_BLK_DEV_SR)$(CONFI
 DRIVERS-y += drivers/cdrom/driver.o
 endif
 
-DRIVERS-$(CONFIG_UART) += drivers/serial/uart.o
 DRIVERS-$(CONFIG_SOUND) += sound/sound.o
 DRIVERS-$(CONFIG_PCI) += drivers/pci/driver.o
 DRIVERS-$(CONFIG_MTD) += drivers/mtd/mtdlink.o

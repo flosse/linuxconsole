@@ -11,7 +11,7 @@
 #  $Id$
 #
 
-O_TARGET := uart.o
+O_TARGET := serial.o
 
 export-objs	:= serial_core.o serial_8250.o
 obj-y		:=
