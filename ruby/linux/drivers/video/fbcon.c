@@ -99,7 +99,7 @@
 
 #include "fbcon-mac.h"	/* for 6x11 font on mac */
 #include "fbcon.h"
-#include <video/font.h>
+#include "font.h"
 
 #ifdef FBCONDEBUG
 #  define DPRINTK(fmt, args...) printk(KERN_DEBUG "%s: " fmt, __FUNCTION__ , ## args)

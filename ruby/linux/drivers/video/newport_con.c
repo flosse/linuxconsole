@@ -13,9 +13,6 @@
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/tty.h>
-#include <linux/kd.h>
-#include <linux/selection.h>
-#include <linux/console.h>
 #include <linux/vt_kern.h>
 #include <linux/mm.h>
 #include <linux/module.h>
@@ -28,7 +25,7 @@
 #define INCLUDE_LINUX_LOGO_DATA
 #include <asm/linux_logo.h>
 
-#include <video/font.h>
+#include "font.h"
 
 #define LOGO_W		80
 #define LOGO_H		80
