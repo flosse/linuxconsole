@@ -1,5 +1,5 @@
 /*
- *  usbusbkbd.c  Version 0.1
+ *  usbkbd.c  Version 0.1
  *
  *  Copyright (c) 1999 Vojtech Pavlik
  *
