@@ -135,11 +135,11 @@ static unsigned long pm3fb_size_memory(struct pm3fb_info *l_fb_info);
 static void pm3fb_detect(void);
 static void pm3fb_common_init(struct pm3fb_info *l_fb_info);
 static void pm3fb_decode_var(const struct fb_var_screeninfo *var,
-			     struct pm3fb_par *p, struct fb_info *info);
+			     struct pm3fb_par *p, struct pm3fb_info *l_fb_info);
 static void pm3fb_encode_var(struct fb_var_screeninfo *var,
 			    struct pm3fb_par *p, struct pm3fb_info *l_fb_info);
 static void pm3fb_encode_fix(struct fb_fix_screeninfo *fix,
-			     struct pm3fb_par *p, struct pm3_fb_info *l_fb_info);
+			     struct pm3fb_par *p, struct pm3fb_info *l_fb_info);
 static void pm3fb_set_color(struct pm3fb_info *l_fb_info,
 			    unsigned char regno, unsigned char r,
 			    unsigned char g, unsigned char b);
@@ -1018,9 +1018,8 @@ static void pm3fb_common_init(struct pm3fb_info *l_fb_info)
 
 /* helper for pm3fb_set_par */
 static void pm3fb_decode_var(const struct fb_var_screeninfo *var,
-			     struct pm3fb_par *p, struct fb_info *info)
+			     struct pm3fb_par *p, struct pm3fb_info *l_fb_info)
 {
-	struct pm3fb_info *l_fb_info = ((struct pm3fb_par*)info->par)->l_fb_info;
 	struct pm3fb_par temp_p;
 	u32 xres;
 
@@ -1719,7 +1718,7 @@ void fb_imageblit(struct fb_info *info, struct fb_image *image)
 	/* should be improved someday... */
 	if ((image->depth != 1) || (image->width > 32) || (image->height > 32))
 	{
-		cfb_imageblit(p, image);
+		cfb_imageblit(info, image);
 		return;
 	}
 	
