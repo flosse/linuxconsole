@@ -57,9 +57,7 @@
 #define DO_UPDATE IS_VISIBLE
 #endif
 
-int softcursor_original;
 struct console_font_op; 
-extern int kmsg_redirect;
 
 extern unsigned char color_table[];
 extern int default_red[];
@@ -73,12 +71,6 @@ extern inline void set_console(struct vc_data *vc)
 	want_vc = vc;
         tasklet_schedule(&console_tasklet);
 }
- 
-/*
- * this is what the terminal answers to a ESC-Z or csi0c query.
- */
-#define VT100ID "\033[?1;2c"
-#define VT102ID "\033[?6c"
 
 /*
  * Data structure describing single virtual console except for data
@@ -238,8 +230,8 @@ void take_over_console(struct consw *sw, int first, int last, int deflt);
 void give_up_console(struct consw *sw);
 
 struct vc_pool {
-	unsigned int first_vc;		/* First VC attached to VT */
-	unsigned int last_vc;		/* Last VC attached to VT */
+	/* First VC attached to VT. Their are always 16 VC per pool */
+	unsigned int first_vc;		
 	struct vc_data *vc_cons[MAX_NR_USER_CONSOLES];	/* VT's VC pool */
 };
 
@@ -248,19 +240,29 @@ extern struct vt_struct {
 	struct vc_data  *fg_console;		/* VC being displayed */
         struct vc_data 	*last_console;     	/* VC we last switched from */
 	int scrollback_delta;			
+	int cursor_original;
 	char		vt_dont_switch;		/* VC switching flag */
 	char            vt_blanked;             /* Is this display blanked */
 	int blank_mode;	       /* 0:none 1:suspendV 2:suspendH 3:powerdown */
 	int blank_interval;			/* How long before blanking */
 	int off_interval;			
-	struct consw	*sw;			/* Display driver for VT */
+	struct timer_list timer;		/* Timer for VT blanking */
+	struct consw	*vt_sw;			/* Display driver for VT */
 	struct vc_pool  vcs;			 
 } *vt_cons; 
 
 void (*kd_mksound)(unsigned int hz, unsigned int ticks);
 
-/* vt.c */
+/* universal VT emulation functions */
+void vte_ris(struct vc_data *vc, int do_clear);
+inline void vte_cr(struct vc_data *vc);
+void vte_lf(struct vc_data *vc);
+inline void vte_bs(struct vc_data *vc);
+void vte_ed(struct vc_data *vc, int vpar);
+void vte_decsc(struct vc_data *vc);
+void terminal_emulation(struct tty_struct *tty, int c);
 
+/* vt.c */
 struct console_font_op;
 
 int vc_allocate(unsigned int console);
@@ -270,23 +272,35 @@ int vc_resize(unsigned int lines, unsigned int cols,
 #define vc_resize_all(l, c) vc_resize(l, c, 0, MAX_NR_CONSOLES-1)
 #define vc_resize_con(l, c, x) vc_resize(l, c, x, x)
 void vc_disallocate(unsigned int console);
+void add_softcursor(struct vc_data *vc);
 void set_cursor(struct vc_data *vc);
 void hide_cursor(struct vc_data *vc);
-void add_softcursor(struct vc_data *vc);
+void gotoxy(struct vc_data *vc, int new_x, int new_y);
+inline void gotoxay(struct vc_data *vc, int new_x, int new_y);
 void reset_palette(struct vc_data *vc);
 void set_palette(struct vc_data *vc);
-inline void save_screen(struct vc_data *vc);
-void set_origin(struct vc_data *vc);
-void unblank_screen(void);
-void poke_blanked_console(struct vt_struct *vt);
-inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed);
 void scrollback(struct vc_data *vc, int);
 void scrollfront(struct vc_data *vc, int);
-void gotoxy(struct vc_data *vc, int new_x, int new_y);
+void scrup(struct vc_data *vc, unsigned int t, unsigned int b, int nr);
+void scrdown(struct vc_data *vc, unsigned int t, unsigned int b, int nr);
+void default_attr(struct vc_data *vc);
+void update_attr(struct vc_data *vc);
+void insert_char(struct vc_data *vc, unsigned int nr);
+void delete_char(struct vc_data *vc, unsigned int nr);
+void insert_line(struct vc_data *vc, unsigned int nr);
+void delete_line(struct vc_data *vc, unsigned int nr);
+void set_origin(struct vc_data *vc);
+inline void save_screen(struct vc_data *vc);
+inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed);
+void invert_screen(struct vc_data *vc, int offset, int count, int viewed);
 void do_update_region(struct vc_data *vc, unsigned long start, int count);
 void update_region(struct vc_data *vc, unsigned long start, int count);
+void unblank_screen(struct vt_struct *vt);
+void poke_blanked_console(struct vt_struct *vt);
 
 struct tty_struct;
+inline void con_schedule_flip(struct tty_struct *t);
+void respond_string(const char * p, struct tty_struct * tty);	
 int tioclinux(struct tty_struct *tty, unsigned long arg);
 
 /* consolemap.c */
