@@ -172,7 +172,7 @@ static void atkbd_interrupt(struct serio *serio, unsigned char data, unsigned in
 		case ATKBD_KEY_RELEASE:
 			atkbd->release = 1;
 			return;
-		}
+	}
 
 	if (atkbd->emul) {
 		if (--atkbd->emul) return;
