@@ -1,0 +1,1050 @@
+  Linux Framebuffer Driver writing HOWTO
+  James Simmons, jsimmons@edgeglobal.com
+  v1.00, 9 October 1999
+
+  This document describes how to support a framebuffer video card for Linux. 
+  It lists the supported video hardware, describes how to program the kernel 
+  drivers, and answers frequently asked questions. The goal is to bring 
+  current framebuffer driver writers as well as new ones up to speed on the 
+  new developments accuring in the graphics system for linux.  
+
+  ______________________________________________________________________
+
+  Table of Contents
+
+  1. Introduction
+
+     1.1 Acknowledgments
+     1.2 Revision History
+     1.3 New versions of this document
+     1.4 Feedback
+     1.5 Distribution Policy
+
+  2. Framebuffer Video Card Technology
+
+     2.1 Monitor
+     2.2 Video Card
+
+  3. Setting a video mode
+     
+     3.1 Fixed Frequency Monitors
+     3.2 Multi Frequency Monitors
+     3.3 Receipe for multisync monitors
+     3.4 Receipe for Monosync
+     3.5 Clocks 
+         3.5.1 DCLK
+         3.5.2 MCLK
+         3.5.3 PLL 
+     3.6 CRTC registers      	  
+     3.7 Colors
+
+  4. Framebuffer internal API 
+     
+     4.1  Data Structures
+     4.2  Driver layout
+     
+  5. Answers To Frequently Asked Questions
+
+     5.1 Does fbdev support accels?
+       
+  6. References
+
+  ______________________________________________________________________
+
+  1.  Introduction
+
+
+  This is the Linux Framebuffer driver HOWTO. It is intended as a quick 
+  reference covering everything you need to know to write a framebuffer 
+  video driver under Linux. Frequently asked questions about video mode 
+  setting under Linux are answered, and references are given to some other 
+  sources of information on a variety of topics related to computer 
+  graphics. Also read this document not once, not twice but three times if 
+  you are not familiar with video hardware.
+
+  The scope is limited to the aspects of writing a mode setting video card 
+  framebuffer driver pertaining to Linux. See the other documents listed in 
+  the References section for more general information on how to setup 
+  framebuffer cards and setting up the XFB_Dev X server.
+
+  1.1.  Acknowledgments
+
+  Much of this information came from the new framebuffer internal API being 
+  developed by me for the upcoming next series of kernels. Originally this 
+  was based on a patch by Fabrice Bellard. I learned of this patch and 
+  was impressed by it. Later I toke over it development and improved even 
+  more. Much thanks goes to Fabrice for getting the ball rolling. This API is 
+  a natural extension of the original API developed by Martin Schaller and 
+  now maintained by Geert Uytterhoeven (geert@linux-m68k.org). Thanks goes 
+  to you and the many others who developed the Linux framebuffer system, 
+  drivers and utilities. A great amount of thanks goes to Andreas Beck of 
+  the GGI project for helping me write this document and teaching me about 
+  mode setting. Thanks also goes out to those who have supported my work. 
+
+  Thanks to the SGML Tools package, this HOWTO is available in several
+  formats, all generated from a common source file.
+
+  1.2.  Revision History
+
+     Version 1.0
+        first version; posted to fbdev mailing list only
+
+  1.3.  New versions of this document
+
+  New versions of this document will be periodically posted to the
+  comp.os.linux.answers newsgroup. They will also be uploaded to various
+  anonymous ftp sites that archive such information including
+  <ftp://metalabs.unc.edu/pub/Linux/docs/HOWTO/>.
+
+  Hypertext versions of this and other Linux HOWTOs are available on
+  many World-Wide-Web sites, including  <http://metalab.unc.edu/LDP/>.
+  Most Linux CD-ROM distributions include the HOWTOs, often under the
+  /usr/doc directory, and you can also buy printed copies from several
+  vendors. Sometimes the HOWTOs available from CD-ROM vendors, ftp
+  sites, and printed format are out of date. If the date on this HOWTO
+  is more than six months in the past, then a newer copy is probably
+  available on the Internet.
+
+  Most translations of this and other Linux HOWTOs can also be found at
+  <http://sunsite.unc.edu/pub/Linux/docs/HOWTO/translations/> and
+  <ftp://sunsite.unc.edu/pub/Linux/docs/HOWTO/translations/>.
+
+  If you make a translation of this document into another language, let
+  me know and I'll include a reference to it here. As of yet there are no 
+  translations.
+
+  1.4.  Feedback
+
+  I rely on you, the reader, to make this HOWTO useful. If you have any
+  suggestions, corrections, or comments, please send them to me,
+  jsimmons@edgeglobal.com, and I will try to incorporate them in the next
+  revision.
+
+  I am also willing to answer general questions on video cards and fbcon 
+  under Linux, as best I can. Before doing so, please read all of the
+  information in this HOWTO, and send me detailed information about the
+  problem. Please do not ask me about using framebuffer cards under 
+  operating systems other than Linux.
+
+  If you publish this document on a CD-ROM or in hardcopy form, a
+  complimentary copy would be appreciated. Mail me for my postal
+  address. Also consider making a donation to the Linux Documentation
+  Project to help support free documentation for Linux. Contact the
+  Linux HOWTO coordinator, Tim Bynum  <mailto:linux-howto@sunsite.unc.edu>, 
+  for more information.
+
+  1.5.  Distribution Policy
+
+  Copyright (c) 1999 by James Simmons.  This document may be
+  distributed under the terms set forth in the LDP license at
+  <http://sunsite.unc.edu/LDP/COPYRIGHT.html>.
+
+  2.  Framebuffer Card Technology
+
+  This section gives a very cursory overview of graphics cards that have
+  accessable framebuffer technology, in order to help you understand the 
+  concepts used later in the document. If you are considering writing a
+  driver for a video card please contact the manufacturer for documentation 
+  on the card. Also please consider reading some books on video hardware in 
+  order to learn more.   
+  
+  The way framebuffer devices behave under linux is something very similar   
+  to /dev/mem. /dev/fb is in fact viewed as a memory device except in this case
+  the memory is video ram. Fbdev mmaps this memory to userspace for direct 
+  access. This model is of course simplified for purpose of making programing 
+  the frame buffer much easier as well as making it device and platform 
+  independent. Since we are interested in building a driver we need to 
+  userstand how exactly the video card itself works. 
+  
+  2.1 Monitor
+
+  First lets discribe one of the biggest but often overlooked components, 
+  the monitor. Today there exist many types of monitors. Flat screen to LED 
+  and so on. For all the many types the basic principle behind the monitor is 
+  the same. Basically a monitor builds an image sequentially from the data it 
+  gets on its input lines. To achieve this a beam scans over the screen in a
+  kind of "zig-zag" pattern that covers the whole visible part of the screen
+  once per frame. It happens so fast the eye can't see this happening. Well we 
+  hope. So which way does this beam go? All monitors have chosen to always 
+  go left to right with a quick jump back to the far left when we hit the 
+  right boundary of the monitor. Same for the top to bottom approach but at a 
+  much slower pace since most of our time is used to move left to right for 
+  every single line. Obviously, the displayed data needs to be synchronized 
+  with the current position of the beam to be able to build a steady picture. 
+  This is what those HSYNC and VSYNC you see in your monitor manual are for. 
+  These two lines that say "hey move the beam to the left now" and "move the 
+  ray to the top now". Now some systems encode this information for example in
+  the green channel, which is called sync on green, but that doesn't change 
+  the principle. All a monitor knows about a mode is what it gets that's 
+  contained in the frequencies with which those signals return. These 
+  frequencies are called the horizontal and vertical frequency (aka refresh 
+  rate), as it determines how often per second a whole image is drawn. So a 
+  monitor knows nothing about depth, clocks, borders. If two modes have the 
+  same frequencies they will be the same to the monitor. This is why different 
+  centering data for e.g. 640x480x16 and 640x480x32 are not stored in the 
+  monitor. The monitor can't distinguish between those modes. Between two 
+  HSYNC we get the RGB signals.
+
+  HSYNC __/~~~\______________________________________________/~~~\___
+  RGB   ___________datadatadatadatadatadatadatadatadatad_____________
+  time    1   2   3                                     4    5
+  
+  At 1, the HSYNC pulse gets raised. The beam will now quickly move to the
+  left. During that time, the rgb lines should be black (ray off), as 
+  otherwise it would leave a noticeable trace while moving, which would look 
+  ugly. 
+
+  At 2, the HSYNC pulse ends. This point isn't of much interest, as you can
+  not tell, if the ray is already at the left edge. The only thing important
+  about point 2 is, that the time between point 1 and 2 must be sufficiently
+  high for the monitor to detect the HSYNC signal. Usually the HSYNC pulse can
+  be made very small.
+
+  At some point after 1, the ray will start flying to the right again. When
+  point 3 comes, it will actually start to display data. Point 3 can thus be
+  adjusted to change the left border location. If you wait longer until you
+  start sending data, the left border will move to the right.
+ 
+  When you have sent all data you reach point 4. As a HSYNC pulse should then
+  be sent, to start a new line, we set the RGB lines to black again.
+  At point 5 we have completed a cycle and start the next line.
+ 
+  2.2  Video card 
+  
+  Next we look at the video card point of view. The video card could send out 
+  a steady stream of data to the monitor except for one thing. The monitor 
+  needs time for retracing so the video card will be put into some "delay"
+  at specific times. To be precise between point 4 and point on the NEXT line)
+  on the previous diagram. For the video card the "natural" coordinate system 
+  starts at point 3, when it starts emitting data. This point usually causes 
+  some confusion with modeline-calculation:
+
+  HSYNC __/~~~\______________________________________________/~~~\___
+  RGB   ___________datadatadatadatadatadatadatadatadatad_____________
+  time    1   2    3                                    4    5   6
+  grc     SS  SE   0                                    W    SS  SE
+
+  From the graphics card point of view (grc) a line starts at "0". From that
+  point onward, it will output the data in its video ram. There is a counter
+  that will limit the number of pixels that are put on one line. This is what
+  we call the width of the mode. On a 640x480 standard VESA mode, this is 640
+  pixels. 
+  
+  Now we will usually want a small right border to allow the monitor to
+  prepare for the following SYNC pulse we will generate. The aforementioned
+  counter will run on (but data output from video RAM will be suppressed)
+  until we reach the point SS (SyncStart). On a 640x480 standard VGA mode,
+  this happens at 664 pixels. That is, we left a border of 24 pixels.
+  
+  Now we raise the HSYNC to tell the monitor to go left. This signal remains
+  asserted until we reach the point SE (SyncEnd). (760 pixels on VGA -
+  i.e. 96 pixels of sync pulse. This is pretty long, but VGA monitors weren't
+  very quick.)
+ 
+  We will also want some left border, so we wait until we reach the next "0"
+  point before starting to generate a signal again. On standard VGA this
+  happens at 800 pixels (40 pixels left border). At that point, we reset the
+  counter to 0 and start over. This point is usually called the "total"
+  for this reason.
+
+  Now let us look at how we can change the picture's appearance by changing
+  values in such a modeline.
+
+  Moving SE should not cause any difference at all, except if you make the
+  sync pulse too small for the monitor to recognize.
+
+  Moving SS and SE together will move the location of the sync pulse within
+  the picture. Let us assume we move them both to the "left", i.e. we
+  decrease their startpoints. What happens is, that we decrease the distance
+  W-SS (which determines the right border) and increase 0-SE (the left
+  border). As a result, the picture moves to the right.
+
+  Now what happens, if you change W ? You get extra pixels at the right 
+  border. As usually borders are pretty large for standard VGA modes,
+  you can usually display something like 648x486 without a problem on a
+  standard VGA monitor. You will not be able to see the difference.
+
+  Of course there are limits to this: If you go too far, you will produce
+  pixels beyond the visiable area of the monitor which is useless, or
+  interfere with the retrace, what gives ugly stripes from the retracing
+  CRT ray.
+
+  Now let's shed some light on a few remaining terms:
+
+  Blankstart BS and blankend BE. Between SE and 0, you can put a BE point on
+  many graphics cards. At that point, the RGB lines are no longer clamped to
+  black (to avoid interfering with the retrace), but can be programmed to a
+  border color. The same goes for BS, which can be placed between W and SS.
+  Usually one doesn't use that feature nowadays, as we have tuneable monitors
+  that allow to stretch the mode to the physical limits of the monitor.
+
+  On old monitors, one used large borders to ensure the data was always
+  visible. There the border color made some sense as kind of eye candy.
+
+  Pixelclock. That is the rate at which pixels are output to the RGB lines.
+  It is usually the basic unit for all timing values in a graphics card.
+
+  3. Actually calculating a mode
+  
+  If you look at the fbdev driver you think yikes. Yes it's complex but not as
+  much as you think. A side note about standard modes. It's a common 
+  misconception, that graphics cards cannot do anything but the VGA/VESA 
+  induced "standard" modes like 640x480, 800x600, 1024x768, 1280x960, ...
+  With most cards, about any resolution can be programmed, though many
+  accelerators have been optimized for the abovementioned modes, so that it 
+  is usually NOT wise to use other widths, as one might need to turn OFF
+  accelerator support. So if you write a driver, don't cling to these modes. 
+  If the card can handle it, allow any mode. 
+
+  Here the type of monitor has a big impact on what kind of modes we can have. 
+  There are two basic types of monitors, fixed frequency (they usually can do 
+  multiple vertical frequencies, though, which are much less critical, as they 
+  are much lower) and multifrequency. 
+
+  3.1 Fixed frequency monitors  
+
+  The monitor manual says the horizontal frequency (hfreq) is 31.5 kHz. 
+
+  And we want to display a given mode, say 640x480. 
+ 
+  We can now already determine the absolute minimum dotclock we need, as
+
+  dotclock = horiz_total * hfreq 
+
+  and
+
+  horiz_total = width + right_border + sync + left_border > width
+  
+  The minimum dotclock computes to 20.16 MHz. We will probably need
+  something around 20% "slack" for borders and sync, so let's say we need
+  about a 24MHz clock. Now we look at the next higher clock our card can
+  handle, which is 25.175 MHz, as we assume we have a VGA compatible card.
+    
+  Now we can compute the horizontal total:
+
+  horiz_total = dotclock / hfreq = 799.2
+
+  We can only program this as multiples of 8, so we round to 800.
+  Now we still need to determine the length and placement of the sync pulse,
+  which will give all remaining parameters.
+
+  There is no clean mathematical requirement for those. Technically, the sync
+  must be long enough to be detected, and placed in a way that the mode is
+  centered. The centering issue is not very pressing anymore, as digitally
+  controlled monitors are common, which allow to control that externally.
+  Generally you should place the sync pulse early (i.e. keep right_border
+  small), as this will usually not cause artifacts that would arise from
+  turning on the output again too early, when the sync pulse is placed too
+  late.
+
+  So if we as a "rule-of-thumb" use a half of the blanking period for the sync
+  and divide the rest as 1/3 right-border, 2/3 left border, we get a modeline
+  of
+
+  "640x480" 25.175   640 664 744 800  ??? ??? ??? ???
+
+  While this is not perfectly the same as a standard VGA timing, it should run
+  as well on VGA monitors. The sync is a bit shorter, but that shouldn't be a
+  real problem.
+
+  Now for the vertical timing. At 480 lines, a VGA monitor uses 60Hz.
+
+  hfreq = vfreq * vert_total
+ 
+  which yields vert_total=525. The vertical timings usually use much less 
+  overhead than the horizontal ones, as here we count whole _lines_, which 
+  means much longer delays than just pixels. 10% overhead suffice here, and 
+  we again split the borders 1/3 : 2/3, with only a few lines (say 2) for 
+  the sync pulse, as this is already much longer than a HSYNC and thus easily
+  detectable.
+
+  "640x480" 25.175   640 664 744 800   480 495 497 525
+
+  let us compare that to an XF86 Modeline that claims to be standard VGA:
+
+  Modeline "640x480"     25.175 640  664  760  800   480  491  493  525
+
+  Not much difference - right ? They should both work well, just a little
+  shifted against each other vertically.
+
+  3.2 multiscan monitor
+
+  Here we will consider a theorical monitor that can do hfreq 31-95kHz and
+  vfreq 50-130Hz. Now let's look at a 640x480 mode. Our heuristics say, 
+  that we will need about 768x528 (20% and 10% more) for borders and sync.
+  We as well want maximum refresh rate, so let's look what limits the mode:
+
+  hfreq = vfreq * vtotal = 130 * 528 = 68.6 kHz
+
+  Oh - we cannot use the full hfreq of our monitor ... well no problem. What
+  counts is the vfreq, as it determines how much flicker we see.
+
+  O.K. - what pixelclock will we need ? 
+
+  pixclock = hfreq * htotal. 
+
+  The calculation yields 52.7MHz.  
+
+  Now we look what the card can do. Say we have a fixed set of clocks. We look
+  what clocks we have close by. Assume the card can do 50 and 60 MHz.
+
+  Now we have the choice: We can either use a lower clock, thus scaling down
+  the refresh rate a bit (by 5% ... so what ...): This is what one usually
+  does.
+
+  Or we can use a higher clock, but this would exceed the monitor
+  specifications. That can be countered by adding more border, but this is
+  usually not done, as it is a waste of space on the screen
+  However keep it in mind as a trick for displaying 320x200, when you do not
+  have doubling features. It will display in a tiny window in the middle of
+  the screen, but it will display.
+
+  O.K. - what will our calculation yield ?
+
+  "640x480"    50   640 664 728 768   480 496 498 528 # 65kHz 123Hz
+
+  I just mentioned doubling features. This is how VGA does 320x200. It
+  displays each pixel twice in both directions. Thus it effectively is a
+  640x400 mode. If this would not be done, you would need a pixelclock of
+  12.59MHz and you would still have the problem of needing a 140Hz refresh, if
+  hsync should stay at 31.5kHz.
+
+  A horizontal doubling feature allows to use the 25.175MHz clock intended
+  for 640, and a line doubling feature keeps the vsync the same as 400 lines.
+  Actually the line-doubler is programmable, so you can as well use modes as
+  sick as 640x50.
+
+  O.K. - another example. Same monitor, 1280x1024.
+
+  Now we need about 1536x1126 total (same rule of thumb).
+  That yields 130Hz*1126lines = 146 kHz. We would exceed the hfreq with that,
+  so now the hfreq is the limit and we can only reach a refresh rate of about
+  (95kHz/1126) 84 Hz anymore.
+
+  The required clock is now 146MHz. That would yield:
+
+  "1280x1024"   146   1280 1320 1448 1536   1024 1058 1060 1126 # 95kHz 84Hz
+
+  Now the clock might be programmable, but keep in mind, that there may be
+  limits to the clock. DO NOT OVERCLOCK a graphics card. This will result in
+  the RAMDAC producing blurry images (as it cannot cope with the high speed),
+  and more importantly, the RAMDAC will OVERHEAT and might be destroyed.
+
+  Another issue is memory bandwidth. The video memory can only give a certain
+  amount of data per time unit. This often limits the maximum clock at modes
+  with high color depth (i.e. much data per pixel). In the case of my card it 
+  limits the clock to 130MHz at 16 bit depth, what would produce:
+
+  "1280x1024"   130   1280 1320 1448 1536   1024 1058 1060 1126 # 85kHz 75Hz
+
+  which is pretty much, what my monitor shows now, if I ask it.
+
+  3.3 Recipe for multisync monitors
+
+  a) determine the totals by calculating htotal = width*1.2 and 
+     vtotal = height*1.1 .
+  b) check, what limits the refresh by calculating vfreq2 = hfreqmax/vtotal.
+     If that exceeds vfreqmax, the limit is on the vfreq side, and we use
+     vfre = vfreqmax and hfreq = vfreqmax*vtotal. If it doesn't, the mode is 
+     limited by hfreq and we have to use vfreq = vfreq2.
+     Note, that if this is smaller than vfreqmin, the mode cannot be displayed.
+     In the vfreq-limited case, you might exceed hfreqmin, which can be
+     countered by using linedoubling facilities, if available. You can also
+     add extra blank lines (increase vtotal) as a last-resort alternative.
+  c) Now that you have hfreq and vfreq, calculate the pixel clock using
+     pixclock=hfreq*htotal. Use the next lower pixel clock. If you are below
+     the lowest clock, you might want to try horizontal doubling features or
+     you will have to pad the mode by increasing htotal.
+  d) Again check the monitor limits. You might be violating lower bounds now
+     ... In that case you might need to resort to choosing a higher clock
+     and padding as well.
+  e) You now have pixclock, width, height, htotal and vtotal. Calculate the
+     sync start positions: hss=width+(htotal-width)/2/3 ;
+     vss=height+(vtotal-height)/3; Make sure to properly align them as
+     required by the video card hardware hss usually has to be a multiple of
+     8.
+  f) SyncEnd is calculated similarly: hse=hss+(htotal-width)/2 and vse=vss+2.
+ 
+  3.4 Receipe for Monosync:
+  a) Calculate the number of lines. As hfreq and vfreq are given, vtotal is
+     fixed: vtotal=hfreq/vfreq. If there are multiple vfreqs allowed, choose
+     them according to your desired vtotal (i.e. one that gives the lowest
+     vtotal above what you really need).
+  b) Calculate the pixelclock. pixclock=hfreq*htotal. htotal starts at the
+     same estimate (width*1.2) we used above.
+  c) Adjust the pixelclock to hardware-limits. Adjust _UP_. Now recalculate
+     the htotal=pixclock/hfreq.
+  d) Go to 3.3. e)
+
+  A important final word. Most video card documentations gives you the exact 
+  equations needed to set a mode. Here we give approached values. Use the 
+  exact values given in the documents.
+
+  3.5 Clocks
+
+  Clocks on a video card ensure that different parts of the video hardware
+  happen at the correct time and in the correct order. For those not familiar 
+  with computer clocks they work by generating a pulse at regular intervals 
+  like what is shown below. You will something similar in your video 
+  documentation. 
+      ___     ___      -	
+     |   |   |   |     V  The period (T) represents the time between two
+  ___|   |___|   |___  _  "ticks" of thee clock, and the frequency of the 
+                          clock is how many clock ticks happen per second.
+         | T |           
+
+  The height of the pulse (V) is the difference in the voltage. This means 
+  for T/2 units of time the voltage is at V1 then for the next T/2 it goes 
+  to another voltage. Normally you don't have to worry about the amplitude
+  (height) of the pulse except for some cards that allow you to set the 
+  height for powersaving mode. Normally you just want to change the frequency.
+  The hardware uses a clock for every part of the hardware except the bus 
+  clock which is apart of the motherboard. No need to worry about that one.
+  Their exist many types of clocks.  For video cards you can come across two
+  types of clocks. The first type you might come across are fixed clock 
+  generators which are used in older video cards. The second type of clock 
+  used in modern vidoe cards are called PLL (Phase Lock Loop). 
+
+  In the documentation you might see terms about edge triggered devices. The
+  different types of edge triggers can be:
+
+  3.5.1 PLL 
+	
+  A PLL is composed of a multipler and a divider. They multiple a reference
+  frequency by a integer mulitplier, and then divide it by a integer divider.
+  Of course a PLL has a low 
+    
+   
+  3.5.2 DCLK
+  
+  3.5.3 MCLK
+  
+  
+   
+  3.6 CRTC registers        	  
+ 
+  3.7 Colors
+
+  There exist an endless number of colors but colors have a special property. 
+  If you take two colors and mix them together you get a different color. 
+  Their exist many models to represent colors but fbdev is based on what is 
+  know as the RGB color model. Out of all the colors their exist three colors 
+  in this model which when mixed in different amounts can produce any color. 
+  These colors are know as primary colors. There does exist a physical limit 
+  to mixing colors. If you take and mix red, green, and blue in equal amounts 
+  you get gray. Now if you make each color component equally brighter the final
+  color will become white. Now their reachs a point where making each component
+  brighter and brighter you will still end up with white. You can increase the
+  intensity of a color component by any amount from some inital value up to 
+  this physical limit. This is where the image depth comes in. As you know on 
+  most cards you can have a image depth from one bit to 32 bits. Image depth 
+  is independent of the mapping from the pixel to the color components. It 
+  also is independent of the memory layout to pixel mapping. Note some cards 
+  have a complex mapping from the pixel values to the color components (red, 
+  blue, green) as well as video memory to pixel mapping. If this is the case 
+  you will have to consult your documentation on your video card to see what 
+  the mapping exactly is. Here are the mappings defined from top to bottom in 
+  fbdev starting with the value of the color components.
+
+                         {red,blue,green} 
+                               | 
+                      FB_VISUAL_MONO01
+                      FB_VISUAL_MONO10              
+                      FB_VISUAL_TRUECOLOR    
+                      FB_VISUAL_PSEUDOCOLOR          
+                      FB_VISUAL_DIRECTCOLOR         
+                      FB_VISUAL_STATIC_PSEUDOCOLOR   
+                               |
+                          pixel value 
+                      FB_TYPE_PACKED_PIXELS  
+                      FB_TYPE_PLANES                
+                      FB_TYPE_INTERLEAVED_PLANES    
+                      FB_TYPE_TEXT                  
+                      FB_TYPE_VGA_PLANES           
+                               |
+                       value in video memory  
+                              
+  The way fbdev tells what this video memory to pixel mapping is, is with 
+  the type field in fb_fix_screeninfo. Here I'm going to describe the 
+  FB_TYPE_PACKED_PIXELS layout since it is the most common. Here their exist 
+  a direct mapping from video memory to pixel value. If you place a 5 in video 
+  memory then the pixel value at that position will be 5. This is important 
+  when you have memory mapped the video memory to userland. Next we consider 
+  the mapping from a pixel value to the colors. This is represented in the 
+  fbdev API by the visual field in fb_fix_screeninfo. As you can see from the
+  above diagram this mapping is independent from the mapping from video memory 
+  to pixel value. This means a FB_TYPE_PLANES could have FB_VISUAL_MONO01 just 
+  like FB_TYPE_PACKED_PIXELS can. To understand visuals we have to go back to
+  the first types of video hardware. In the begining their was just monochrome
+  monitors. Here we could only display 2 colors. The foreground and background
+  color. Traditionally these colors are black and white but if you are old 
+  enough you would remember the old green monitors. In fbdev API we define two
+  types of monochrome modes. The difference between the two is that the 
+  foreground and background colors are swapped. Then computers began to 
+  support color. The only problem was they could only display a small number of
+  colors at one time. What if you wanted to have an application display a
+  certain set of colors. Well the way that was developed to get around this 
+  was the idea of a color map. A color map translated a pixel value to the
+  colors needed. If your application needs a specific set of colors it would 
+  switch the color maps and you would get the needed colors. Of course this 
+  also switches the other colors in the applications. That was the trade off.
+  This became what was known as pseudocolor mode. In fbdev API their exist two
+  types of pseudocolor mappings. A static one and a dynamic one. 
+  FB_VISUAL_STATIC_PSEUDOCOLOR defines a video card that has a non programmable
+  color map. What colors you get are what you are stuck with. The other type
+  of color map can be changed. Video cards in time started to support more 
+  colors but this required having a larger color map. Also video memory prices
+  started to drop and video cards begain to sell with more of it. To properly 
+  support 256 color intensity levels for each color component you would need a 
+  color map of 16 million colors. So new mappings where developed in which
+  specific fields of a pixel where directly proportional to the intensity of a 
+  color component. Two types of mappings where developed. One being truecolor 
+  and the other directcolor. In truecolor you can not change the mappings from
+  the pixel value to color intensities. Setting a value of 64 to the red 
+  component of the pixel will result in a red intensity of 64. How bright of a 
+  red this is depends on the image depth. For directcolor you can control this.
+  You could make a pixel value in the red field of 64 equal 128 for the 
+  intensity. Also some cards support a alpha value which is used in higher 
+  graphics which for fbdev is of little importance than it should always be 
+  set to the highest value it can have. For most cards alpha shows up for 15 
+  bit modes where each color compenent can have up to 32 intensity levels (2^5)
+  and one bit represents the alpha component. It also shows up for 32 bit 
+  modes where each component red, blue, green, and alpha are given 256 
+  intensity levels (2^8). 24 bit mode is like 32 bit mode except it lacks the 
+  alpha component. A important note is that some cards only support 24 bit 
+  mode on certain architectures.
+
+  4.  Framebuffer internal API
+
+  Now that we understand the basic ideas behind video card technology and mode
+  setting we can now look at how the framebuffer devices abstract them. Also 
+  we will see that fbdev actually handles most of the mode setting issues for 
+  you to make life much easier. In the older API the console code was heavily 
+  linked to the framebuffer devices. The newer API has now moved nearly all 
+  console handling code into fbcon itself. Now fbcon is a true wrapper around 
+  the video cards abilities. This allowed for massive code reduction and 
+  easier driver developement. A good example of a framebuffer driver is vfb.
+  The vfb driver is not a true framebuffer driver. All it does is map a chunk
+  of memory to userspace. It's used for demonstration purposes and testing.
+
+  4.1  Data Structures
+  
+  The framebuffer drivers depend heavily on four data structures. These 
+  structures are declared in fb.h. They are fb_var_screeninfo, 
+  fb_fix_screeninfo, fb_monospecs, and fb_info. The first three can be made 
+  available to and from userland. First let me describe what each means and
+  how they are used. Fb_var_screeninfo is used to describe the features of
+  a video card you normally can set. Its with fb_var_screeninfo you can define
+  such things as depth and the resolution you want. The next structure is 
+  fb_fix_screeninfo. This defines the properties of a card that are created 
+  when you set a mode and can't be changed otherwise. A good example is the
+  start of the framebuffer memory. This can depend on what mode is set. Now 
+  while using that mode you don't want to have the memory position change on 
+  you. In this case the video hardware tells you the memory location and you 
+  have no say about it. The third structure is fb_monospecs. In the old API 
+  the importance of fb_monospecs was very little. This allowed for forbidden
+  things such as setting a mode of 800x600 on a fix frequency monitor. With
+  the new API fb_monospecs prevents such things and if used correctly can
+  prevent a monitor from being cooked. The final data structure is fb_info. 
+  This defines the current state of the video card. Fb_info is only visible
+  from the kernel. Inside of fb_info their exist a fb_ops which is a collection
+  of needed functions to make fbdev and fbcon work. 
+
+  4.2 Driver layout
+   
+  Here I discribe a clean way to code your drivers. A good example of the 
+  basic layout is in vfb.c. In the example driver we first present our data
+  structures in the begining of the file. Note there is no fb_monospecs since
+  this is handled by code in fbmon.c. This can be done since monitors are 
+  independent in behavior from video cards. First we define our three basic 
+  data structures. For all the data structures I defined them static and 
+  declare the default values. The reason I do this is that it's less memory 
+  intensive then allocate a piece of memory and filling in the default 
+  values. Note for drivers that support multihead of the same card then
+  the fb_info should be dynamically allocated for each card present. For
+  fb_var_screeninfo and fb_fix_screeninfo they still are declared static 
+  since all the cards can be set to the same mode. 
+
+  4.3 Initialization and boot time parameter handling
+
+  Their are two functions that handle the video card at boot time. 
+   
+  int xxfb_init(void);
+  int xxfb_setup(char*);
+
+  In the example driver as with most drivers these functions are placed at 
+  the end of the driver. Both are very card specific. In oorder to link 
+  your driver directly into the kernel both of these functions you must add 
+  the above defination with extern in front to fbmem.c. Then add these 
+  functions to the following in fbmem.c 
+  
+  static struct {
+        const char *name;
+        int (*init)(void);
+        int (*setup)(char*);
+  } fb_drivers[] __initdata = { 
+  #ifdef CONFIG_FB_YOURCARD
+        { "driver_name", xxxfb_init, xxxfb_setup },
+  #endif
+  ...
+     
+  Setup is used to pass card specific options from the boot prompt of your 
+  favorite boot loader. A good example is boot:video=matrox:vesa:443. The 
+  basic setup function is 
+
+  int __init xxxfb_setup(char *options)
+  {
+        char *this_opt;
+
+        if (!options || !*options)
+                return 0;
+
+        for (this_opt = strtok(options, ","); this_opt; 
+             this_opt = strtok(NULL, ","))
+            if (!strcmp(this_opt, "my_option")) {
+               /* Do your stuff. Usually set some static flags that
+                  the driver later uses */
+            } else if (!strncmp(this_opt, "Other_option:", 5))
+                strcpy(some_flag_driver_uese, this_opt+5);
+            } else ....
+  }
+  
+  The xxxfb_init function sets the inital state of the video card. This 
+  function has to consider bus and platform handling since today most cards 
+  can exist on many platforms. For bus types we have to deal with their are
+  PCI, ISA, zorro. Also some platforms offer firmware that returns information
+  about the video card. In these case we often don't need to deal with the 
+  bus unless we need more control over the card. Lets look at Open Firmware
+  thats avaliable on PowerPCs. If you are going to use Open Firmware to 
+  initalize your card you need to add the following to offb.c.
+
+  #ifdef CONFIG_FB_YOUR_CARD
+  extern void xxxfb_of_init(struct device_node *dp);
+  #endif /* CONFIG_FB_YOUR_CARD */
+  
+  Then in the function offb_init_driver you add something similar to the 
+  following.
+
+  #ifdef CONFIG_FB_YOUR_CARD
+    if (!strncmp(dp->name,"Open Firmware number of your card ",size_of_name)) {
+        xxxfb_of_init(dp);
+        return 1;
+    }
+  #endif /* CONFIG_FB_YOUR_CARD */
+ 
+  If Open Firmware doesn't detect your card then Open Firmware sets up a 
+  generic video mode for you. Now in your driver you really need two 
+  initalization functions. 
+  
+  The next major part of the driver is declaring the functions of fb_ops 
+  declared in fb_info for the driver. 
+  
+  The first two functions xxfb_open and xxfb_release can be called from both
+  fbcon and fbdev. In fact that's the use of the user flag. If user equals zero
+  then fbcon wants to access this device else it's a explicit open of the 
+  framebuffer device. This way you can handle the framebuffer device for the 
+  console in a special way for a particular video card. For most drivers this 
+  function just does a MOD_INC_USE_COUNT or MOD_DEC_USE_COUNT.
+
+
+  
+  These are the function thats at the heart of mode setting. Their do exist a 
+  few cards that don't support mode changing. For these we have this function 
+  return a -EINVAL to let the user know he/she can't set the mode. Actually 
+  set_var does more than just set modes. It can check them as well. In 
+  fb_var_screeninfo their exist a flag called activate. This flag can take on 
+  the the following values. FB_ACTIVATE_NOW,FB_ACTIVATE_NXTOPEN, and 
+  FB_ACTIVATE_TEST. FB_ACTIVATE_TEST tells us if the hardware can handle what
+  the user requested. FB_ACTIVATE_NXTOPEN sets the values wanted on the next 
+  explicit open of fbdev. The final one FB_ACTIVATE_NOW checks the mode to see
+  if it can be done and then sets the mode. You MUST check the mode before all
+  things. Note this function is very card specific but I attempt to give you 
+  the most general layout.. The basic layout then for xxxfb_set_var is 
+
+  static int vfb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
+  {
+    int line_length;
+
+    /* Basic setup test. Here we look at what the user passed in that he/she 
+       wants. For example to test the fb_var_screeninfo field vmode like its 
+       done in vfb.c. Here we see if the user has FB_VMODE_YWARP. Also we 
+       should look to see if the user tried to pass in invalid values like 17 
+       bpp (bits per pixel)  */
+
+    /* Remember the above discussion on how monitors see a mode. They don't 
+       care about bit depth. So you can divide the checking into two parts. 
+       One is to see if the user changed a mode from say 640x480 at 8 bpp to 
+       640x480 at 32 bpp. Remember the var in fb_info represents the current 
+       video mode. Before we actually change any resolutions we have to make 
+       sure the card has enough memory for the new mode. Discovering how much 
+       memory a video card has varies from card to card. Also finding out how 
+       much memory we have is done in xxxfb_init since this never changes 
+       unless you add more memory to your card which requires a reboot of the 
+       machine anyway. You might have to do other tests depending on make of 
+       your card. Note the par filed in fb_info. This is used to store card 
+       specific data. This data can effect set_var. Also it is present to 
+       allow other possible drivers that could effect the framebuffer device 
+       such as a special driver for a accel engine or memory mapping the z 
+       buffer on a card */
+      
+    /* Summary. First look at any var fields to see if they are valid. Next 
+       test hardware with these fields without setting the hardware. A 
+       example of one is find what the line_lenght would be for the new 
+       mode. Then test the following */
+           
+       if ((line_length * var->yres_virtual) > info->fix.smem_len)          
+            return -ENOMEM;     
+  
+       if (info->var.xres != var->xres || info->var.yres != var->yres || 
+           info->var.xres_virtual != var->xres_virtual || 
+           info->var.yres_vitual != var->yres_virtual) {
+           /* Resolution changed !!! */   
+        
+           /* Next you must check to see if the monitor can handle this mode. 
+              Don't want to fry your monitor or mess up the display really 
+              badly */
+           if (fbmon_valid_timings(u_int pixclock, u_int htotal, u_int vtotal,
+     	                 	    const struct fb_info *fb_info))
+               /* Can't handle these timings. */
+               return -EINVAL;
+        
+           /* Timings are okay. Next we see if we really want to change 
+              this mode */
+           if ((activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {    
+              /* Now lets program the clocks on this card. Here the code is 
+                 very card specific. Remember to change any fields for fix in 
+                 info that might be effected by the changing of the resolution.
+                 */
+              ...
+              info->fix.line_length = line_length;
+              ...
+       
+           /* Now that we have dealt with the possible changing resolutions 
+              lets handle a possible change of bit depth. */
+           if (info->var.bits_per_pixel != var->bits_per_pixel) {
+               if ((err = fb_alloc_cmap(&info->cmap, 0, 0)))
+                  return err;               
+            }
+       } 
+       
+    /* We have shown that the monitor and video card can handle this mode or
+       have actually set the mode. Next the fb_bitfield structure in 
+       fb_var_screeninfo is filled in. Even if you don't set the mode you get 
+       a feel of the mode before you really set it. These are typical values 
+       but may be different for your card. For truecolor modes all the fields 
+       matter. For pseudocolor modes only the length matters. Thus all the 
+       lengths should be the same (=bpp). */
+
+       switch (var->bits_per_pixel) {
+          case 1:
+          case 8:
+              /* Pseudocolor mode example */
+              var->red.offset = 0;
+              var->red.length = 8;
+              var->green.offset = 0;
+              var->green.length = 8;
+              var->blue.offset = 0;
+              var->blue.length = 8;
+              var->transp.offset = 0;
+              var->transp.length = 0;
+              break;
+          case 16:        /* RGB 565 */
+              var->red.offset = 0;
+              var->red.length = 5;
+              var->green.offset = 5;
+              var->green.length = 6;
+              var->blue.offset = 11;
+              var->blue.length = 5;
+              var->transp.offset = 0;
+              var->transp.length = 0;
+              break;
+          case 24:        /* RGB 888 */
+              var->red.offset = 0;
+              var->red.length = 8;
+              var->green.offset = 8;
+              var->green.length = 8;
+              var->blue.offset = 16;
+              var->blue.length = 8;
+              var->transp.offset = 0;
+              var->transp.length = 0;
+              break;
+          case 32:        /* RGBA 8888 */
+              var->red.offset = 0;
+              var->red.length = 8;
+              var->green.offset = 8;
+              var->green.length = 8;
+              var->blue.offset = 16;
+              var->blue.length = 8;
+              var->transp.offset = 24;
+              var->transp.length = 8;
+              break;
+       }  
+       /* Yeah. We are done !!! */ 
+  }
+        
+ 
+  The function xxxfb_setcolreg is used to set a single color register for a 
+  video card. To use this properly you must understand colors which is 
+  discribed above. This routine sets a color map entry. The regno passed into
+  the routine represents the color map index which is equal to the color thats
+  composed of the amount of red, green, blue, and even alpha that are also 
+  passed into the function. For psuedocolor modes this color map index (regno)
+  represents the pixel value. So if you place a pixel value of regno in video 
+  memory you get the color thats made of the red, green, blue that you passed 
+  into xxxfb_setcolreg. Now for truecolor and directcolor mode its a little 
+  different. In this case we simulate a psuedo color map. The reason for this
+  is the console system always has a color map which has 16 entries. In fb_info
+  their exist the pseudo_palette which gives a mapping from a non color map
+  mode to a color map based system. The pseudo_palette always has 17 entries. 
+  The first 16 for the console colors and the last one for the cursor. So if 
+  we wanted to display the 4 entry in the color map of the console we would
+  placed the value of info->psuedo_palette[4] directly into the video memory.
+  This is of course taken care of by fbcon. You just need to code the 
+  "formula" that does this translation. A example follows for 32 bit mode.
+
+  red   >>= 8;
+  green >>= 8;
+  blue  >>= 8;
+  info->pseudo_palette[regno] =
+          (red   << info->var.red.offset)   |
+          (green << info->var.green.offset) |
+          (blue  << info->var.blue.offset);
+  
+  Here we first scale down the color components. Each color passed to 
+  set_colreg are 16 bits in size. For 32 bit mode each color is 8 bits in size.
+  Then we or the colors together after we offseted them. The offset is used 
+  because the pixel layout in 32 bits could be RBGA, ARGBA etc. In setcol_reg 
+  of vfb.c is the standard way to deal with packed pixel format of various 
+  image depths. Regno is the index to get this particular color.  
+                
+  That does it for required functions besides the set of needed accel 
+  functions which has not been discussed yet. If the video card doesn't
+  support the function then we just place a NULL in fb_ops. The next fuction 
+  in fb_ops is xxxfb_blank. This function provides support for hardware 
+  blanking. For xxxfb_blank the first parameter represents the blanking modes 
+  available. They are VESA_NO_BLANKING, VESA_VSYNC_SUSPEND, VESA_HSYNC_SUSPEND,
+  and VESA_POWERDOWN. VESA_NO_BLANKING powers up the display again. 
+  VESA_POWERDOWN turns off the display. This is great power saving feature on
+  a laptop. 
+
+  The next optional function is xxxfb_pan_display. This function enables 
+  panning. Panning is often used for scrolling. 
+
+  The ioctl function gives you the power to take advantage of special features
+  other cards don't have. If your card is nothing special then just give this 
+  fb_ops function a NULL pointer. The sky is the limit for defining your ioctl
+  calls.
+
+  Their exist a default memory map function for fbdev but sometimes it just 
+  doesn't have the power you truly need. A good example of this is video
+  cards that work in sparc workstations need their own mmap functions because 
+  of the way sparcs handle memory is different from other platforms. This is
+  true even for sparcs with PCI buses. 
+
+  Now here is the next class of functions which are optional. The 
+  xxxfb_accel_init and xxfb_accel_done. xxxfb_accel_init really depends on 
+  the card. It is intended to initial the engine or set the accel engine into 
+  a state which you can use the acceleration engine. It also ensures that the 
+  framebuffer is not accessed at the same time as the accel engine. This
+  can lock a system. Uusally their exist a bit to test to see if a accel 
+  engine is idle or the card generates a interrupt. For cards that used the 
+  old fb_rasterimg this function replaces it. Some cards have a seperate state 
+  for 3D and 2D. This function insures that the card goes into a 2D state.
+  Just in case a previous application set the accel engine into a 3D state 
+  or made the accel engine very unhappy. The next function that encomposses 
+  this set is xxxfb_accel_done. This function sets the video card in a state
+  such that you can write to the framebuffer again. You should provide both 
+  functions if your driver uses even one hardware accelerated function. The
+  reason being is to ensure that the framebuffer is not accessed at the same
+  tome as the framebuffer.
+  
+  Final the third class of fb_op functions. Like the first they are required.
+  If your card does not support any of these acclerated functions their exist
+  default functions for packed pixel framebuffer formats. They are 
+  cfba_fillrect, cfba_copyarea, cfba_imgblit. If your supports some but not
+  all of the accels available you can still use some of these software emulated
+  accels. Each software emulated accel in store in a seperate file. Now lets
+  discribe each accel function. Before we discuss these functions we need to 
+  note not to draw in areas pass the video boundries. If it does you need to 
+  adjust the with and height of the ares to avoid this problem. The first 
+  function just  fills in rectangle starting at x1 and y1 of some width and 
+  height with a pixel value of packed pixel format. If the video memory mapping
+  is not a direct mapping from the pixel value (not FB_TYPE_PACKED_PIXEL) you 
+  will have to do some translating. Their are two ways to fill in the 
+  rectangle, FBA_ROP_COPY and FBA_ROP_XOR. FBA_ROP_XOR exclusive ors the pixel 
+  value with the current pixel value. This allows things like quickly erasing
+  a rectangular area. The other function just directly copies the data. The 
+  next function is xxxfb_copyarea. It just copies one area of the framebuffer 
+  at source x and source y of some width and height to some destination x and
+  y. The final function is xxxfb_imageblt. This function copies a image from
+  system memory to video memory. You can get really fancy here but this is
+  fbdev which has the purpose of mode setting only. All the image blit 
+  function does is draw bitmaps, image made of a foregound and background 
+  color, and a color image of the same color depth as the framebuffer. The 
+  second part is used to draw the little penguins. The drawing of bitmaps is
+  used to draw our fonts. That does it for the functions. Now you should be
+  set for writing your driver.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
