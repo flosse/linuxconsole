@@ -171,7 +171,7 @@ static void cobra_connect(struct gameport *gameport, struct gameport_dev *dev)
 	cobra->timer.data = (long) cobra;
 	cobra->timer.function = cobra_timer;
 
-	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW));
+	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW))
 		goto fail1;
 
 	cobra->exists = cobra_read_packet(gameport, data);
