@@ -254,9 +254,9 @@ static int atkbd_event(struct input_dev *dev, unsigned int type, unsigned int co
 	switch (type) {
 
 		case EV_LED:
-			param = ((dev->led[0] & LED_SCROLLL) ? 0 : 1)
-			      | ((dev->led[0] & LED_NUML   ) ? 0 : 2)
-			      | ((dev->led[0] & LED_CAPSL  ) ? 0 : 4);
+			param = (test_bit(LED_SCROLLL, dev->led) ? 1 : 0)
+			      | (test_bit(LED_NUML,    dev->led) ? 2 : 0)
+			      | (test_bit(LED_CAPSL,   dev->led) ? 4 : 0);
 		        atkbd_command(atkbd, &param, ATKBD_CMD_SETLEDS);
 			return 0;
 	}
