@@ -110,6 +110,7 @@ char fontn[PM3_MAX_BOARD][PM3_FONTNAME_SIZE];
 short depth[PM3_MAX_BOARD];
 static char g_options[PM3_OPTIONS_SIZE] __initdata = "pm3fb:dummy";
 short printtimings;
+static char *mode[PM3_MAX_BOARD];
 
 /* ********************* */
 /* ***** prototype ***** */
@@ -290,6 +291,8 @@ static void pm3fb_write_memory_timings(struct pm3fb_info *l_fb_info)
 {
 	unsigned char m, n, p;
 	unsigned long clockused;
+
+	DTRACE;
 	
 	PM3_SLOW_WRITE_REG(PM3LocalMemCaps, l_fb_info->memt.caps);
 	PM3_SLOW_WRITE_REG(PM3LocalMemTimings, l_fb_info->memt.timings);
@@ -321,6 +324,8 @@ static void pm3fb_write_memory_timings(struct pm3fb_info *l_fb_info)
 static void pm3fb_show_cur_timing(struct pm3fb_info *l_fb_info)
 {
 	u16 subvendor, subdevice;
+
+	DTRACE;
 
 	if ((!pci_read_config_word
 	     (l_fb_info->dev, PCI_SUBSYSTEM_VENDOR_ID, &subvendor))
@@ -1040,10 +1045,13 @@ static void pm3fb_common_init(struct pm3fb_info *l_fb_info)
 		       fontn[l_fb_info->board_num]);
 */
 
-	if (!current_par_valid[l_fb_info->board_num])
-	{
-		if (!l_fb_info->use_current)
-			pm3fb_mode_setup("640x480@60", l_fb_info->board_num);
+	if (!current_par_valid[l_fb_info->board_num]) {
+		if (!l_fb_info->use_current) {
+			if (mode[l_fb_info->board_num]) {
+				pm3fb_mode_setup(mode[l_fb_info->board_num], l_fb_info->board_num);
+			} else
+				pm3fb_mode_setup("640x480@60", l_fb_info->board_num);
+		}
 		else
 		{
 			pm3fb_read_mode(l_fb_info, l_fb_info->current_par);
@@ -2075,6 +2083,9 @@ static int pm3fb_blank(int blank_mode, struct fb_info *info)
 static void pm3fb_mode_setup(char *mode, unsigned long board_num)
 {
 	struct pm3fb_info *l_fb_info = &(pm3fb_fb_info[board_num]);
+
+	DTRACE;
+
 /*
 	struct pm3fb_par *l_fb_par = &(current_par[board_num]);
 	unsigned long i = 0;
@@ -2238,7 +2249,8 @@ static void pm3fb_real_setup(char *options)
 		if (!strncmp(options, "mode:", 5)) {
 			options = pm3fb_boardnum_setup(options + 5, &bn);
 			DPRINTK(2, "Setting mode for board #%ld\n", bn);
-			pm3fb_mode_setup(options, bn);
+			mode[bn] = kmalloc(1 + strlen(options), GFP_KERNEL);
+			memcpy(mode[bn], options);
 		} else if (!strncmp(options, "off:", 4)) {
 			options = pm3fb_boardnum_setup(options + 4, &bn);
 			DPRINTK(2, "Disabling board #%ld\n", bn);
@@ -2329,7 +2341,6 @@ static int pm3fb_release(struct fb_info *info, int user)
 #ifdef MODULE
 MODULE_AUTHOR("Romain Dolbeau");
 MODULE_DESCRIPTION("Permedia3 framebuffer device driver");
-static char *mode[PM3_MAX_BOARD];
 MODULE_PARM(mode,PM3_MAX_BOARD_MODULE_ARRAY_STRING);
 MODULE_PARM_DESC(mode,"video mode");
 MODULE_PARM(disable,PM3_MAX_BOARD_MODULE_ARRAY_SHORT);
@@ -2363,11 +2374,6 @@ void pm3fb_build_options(void)
 	strcpy(g_options, "pm3fb");
 	for (i = 0; i < PM3_MAX_BOARD ; i++)
 	{
-		if (mode[i])
-		{
-			sprintf(ts, ",mode:%d:%s", i, mode[i]);
-			strncat(g_options, ts, PM3_OPTIONS_SIZE - strlen(g_options));
-		}
 		if (disable[i] || off[i])
 		{
 			sprintf(ts, ",disable:%d:", i);
