@@ -246,8 +246,8 @@ void set_origin(struct vc_data *vc);
 void unblank_screen(void);
 void poke_blanked_console(void);
 inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed);
-void scrollback(int);
-void scrollfront(int);
+void scrollback(struct vc_data *vc, int);
+void scrollfront(struct vc_data *vc, int);
 void gotoxy(struct vc_data *vc, int new_x, int new_y);
 void update_region(struct vc_data *vc, unsigned long start, int count);
 void redraw_screen(int new_console, int is_switch);
@@ -284,7 +284,7 @@ extern unsigned int video_scan_lines;
 void change_console(unsigned int);
 void complete_change_console(unsigned int);
 int vt_waitactive(int vt);
-void reset_vc(unsigned int new_console);
+void reset_vc(struct vc_data *vc);
 int con_font_op(int currcons, struct console_font_op *op);
 
 #endif /* _VT_KERN_H */
