@@ -244,10 +244,11 @@ static void hidinput_configure_usage(struct hid_device *device, struct hid_field
 				default:    usage->code = KEY_UNKNOWN;		break;
 			}
 
-			if (is_abs)
+			if (is_abs) {
 			        usage->type = EV_ABS; bit = input->absbit; max = ABS_MAX;
-			else 
+			} else  {
 				usage->type = EV_KEY; bit = input->keybit; max = KEY_MAX;
+			}
 			break;
 
 		case HID_UP_HPVENDOR:	/* Reported on a Dutch layout HP5308 */
