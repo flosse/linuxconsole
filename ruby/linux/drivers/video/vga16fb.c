@@ -587,28 +587,6 @@ int __init vga16fb_setup(char *options)
 	return 0;
 }
 
-static int vga16fb_switch(int con, struct fb_info *info)
-{
-	/* Do we have to save the colormap and mode ? */
-	fb_copy_cmap(&info->cmap, &fb_display[currcon].cmap, 0);
-	memcpy(&fb_display[currcon].var, &info->var, sizeof(info->var));	
-		
-	currcon = con;
-	memcpy(&info->var, &fb_display[con].var, sizeof(info->var));
-
-	vga16fb_check_var(&info->var, info, fb_display + con); 
-	vga16fb_set_par(info, fb_display + con);
-	vga16fb_set_disp(con, info);
-
-	/* Install new colormap */
-	if (fb_display[con].cmap.len)
-		fb_copy_cmap(&fb_display[con].cmap, &info->cmap, 0);
-	else
-		fb_alloc_cmap(&info->cmap, 16, 0);	
-/*	vga16fb_update_var(con, info); */
-	return 1;
-}
-
 /* 0 unblank, 1 blank, 2 no vsync, 3 no hsync, 4 off */
 static void vga16fb_blank(int blank, struct fb_info *info)
 {
@@ -667,13 +645,9 @@ int __init vga16fb_init(void)
 
 	/* name should not depend on EGA/VGA */
 	strcpy(vga16fb.modename, "VGA16 VGA");
-	vga16fb.changevar = NULL;
 	vga16fb.node = -1;
 	vga16fb.fix = vga16fb_fix;
 	vga16fb.fbops = &vga16fb_ops;
-	vga16fb.disp=&disp;
-	vga16fb.switch_con=&vga16fb_switch;
-	vga16fb.updatevar=&vga16fb_update_var;
 	vga16fb.blank=&vga16fb_blank;
 	vga16fb.flags=FBINFO_FLAG_DEFAULT;
 	err = fb_alloc_cmap(&vga16fb.cmap, 16, 0);
@@ -692,11 +666,11 @@ int __init vga16fb_init(void)
 
 static void __exit vga16fb_exit(void)
 {
-    /* XXX unshare VGA regions */
-    give_up_console(&fb_con);
+    /* XXX unshare VGA regions 
+    release_vt(&fb_con); */
     unregister_framebuffer(&vga16fb);	
     iounmap(vga16fb.screen_base);
-    take_over_console(&vga_con, 0, MAX_NR_CONSOLES-1, 0);
+    /* take_over_console(&some_vt, &vga_con); */
 }
 
 #ifdef MODULE
