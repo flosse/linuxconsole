@@ -294,14 +294,18 @@ static int vfb_check_var(struct fb_var_screeninfo *var, void *vfb_par,
     var->blue.msb_right = 0;
     var->transp.msb_right = 0;
 
-    info->fix.line_length = get_line_length(var->xres_virtual,
-                                     		var->bits_per_pixel);
     return 0;
 }
 
 static int tdfxfb_set_par(void *vfb_par, struct fb_info *info)
 {
-	/* We don't do much for this driver */
+	/* It's in here where alter info->fix. For this driver it
+	 * doesn't do much besides this. 
+	 */ 
+	u_long line_length;
+
+	info->fix.line_length = get_line_length(var->xres_virtual,
+                                                var->bits_per_pixel);
 	return 0;
 }
 	
