@@ -25,6 +25,7 @@
 #include <linux/major.h>
 #include <linux/fs.h>
 #include <linux/console.h>
+#include <linux/spinlock.h>
 
 #include <asm/io.h>
 #include <asm/uaccess.h>
@@ -89,6 +90,8 @@ asmlinkage long sys_ioperm(unsigned long from, unsigned long num, int on);
     || (defined(__mips__) && !defined(CONFIG_SGI_IP22)) \
     || (defined(__arm__) && defined(CONFIG_HOST_FOOTBRIDGE))
 
+static spinlock_t beep_lock = SPIN_LOCK_UNLOCKED;
+
 static void
 kd_nosound(unsigned long ignored)
 {
@@ -106,9 +109,8 @@ _kd_mksound(unsigned int hz, unsigned int ticks)
 
 	if (hz > 20 && hz < 32767)
 		count = 1193180 / hz;
-	
-	save_flags(flags);
-	cli();
+
+	spin_lock_irqsave(&beep_lock, flags);	
 	del_timer(&sound_timer);
 	if (count) {
 		/* enable counter 2 */
@@ -125,7 +127,7 @@ _kd_mksound(unsigned int hz, unsigned int ticks)
 		}
 	} else
 		kd_nosound(0);
-	restore_flags(flags);
+	spin_unlock_irqrestore(&beep_lock, flags);
 	return;
 }
 
@@ -921,7 +923,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	case VT_GETSTATE:
 	{
 		struct vt_stat *vtstat = (struct vt_stat *)arg;
-		unsigned short state, mask;
+		unsigned short state = 0, mask;
 		struct vc_data *tmp;
 
 		i = verify_area(VERIFY_WRITE,(void *)vtstat, sizeof(struct vt_stat));
@@ -1058,26 +1060,25 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	  */
 	 case VT_DISALLOCATE:
 	 {	
-		int displayed_vc = vc->display_fg->fg_console->vc_num;
-		struct vc_data *tmp;
-	
+		struct vt_struct *vt = vc->display_fg;
+		struct vc_data *tmp;	
+
 		if (arg > MAX_NR_CONSOLES)
 			return -ENXIO;
-		if (arg == displayed_vc) {
-		    /* disallocate all unused consoles for a VT, 
-		       but leave the foreground VC */
-		    for (i=0; i < MAX_NR_USER_CONSOLES; i++) {
-		      tmp = find_vc(i + vc->display_fg->vcs.first_vc); 	
-		      if ((displayed_vc != tmp->vc_num) || !VT_BUSY(tmp))
-			vc_disallocate(tmp->vc_num);
-		    }	
+		if (arg == vt->fg_console->vc_num) {
+		    	/* disallocate all unused consoles for a VT, 
+		       	   but leave the foreground VC */
+		    	for (i=0; i < MAX_NR_USER_CONSOLES; i++) {
+		      		tmp = find_vc(i + vt->vcs.first_vc);
+		      		if (tmp && (vt->fg_console->vc_num != tmp->vc_num) && !VT_BUSY(tmp)) 
+					vc_disallocate(tmp->vc_num);
+		    	}	
 		} else {
 		    /* disallocate a single console, if possible */
 		    tmp = find_vc(arg);
 		    if (!tmp || VT_BUSY(tmp))
 		      return -EBUSY;
-		    if (arg)			  /* leave displayed VC */
-		      vc_disallocate(arg);
+		    vc_disallocate(arg);
 		}
 		return 0;
 	}
@@ -1361,13 +1362,15 @@ inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
 		
 		set_origin(new_vc);	
 		update = vt->vt_sw->con_switch(new_vc);
-	
+
+/*	
 		if (new_vc->vc_font.height != old_vc->vc_font.height ||
 		    new_vc->vc_font.width != old_vc->vc_font.width || 
 		    new_vc->vc_font.charcount != old_vc->vc_font.charcount ||
 		    !strcmp(&new_vc->vc_font.data, &old_vc->vc_font.data)) {
 			vt->vt_sw->con_font_op(new_vc, &new_vc->vc_font);
 		}	
+*/	
 		set_palette(new_vc);
                 if (update && vt->vc_mode != KD_GRAPHICS) { 
                         /* Update the screen contents */
