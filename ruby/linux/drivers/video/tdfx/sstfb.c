@@ -66,10 +66,6 @@ ate.
 #include <asm/io.h>
 #include <asm/ioctl.h>
 
-#ifdef CONFIG_MTRR
-  #include <asm/mtrr.h>
-#endif
-
 /*
  * debug info 
  * SST_DEBUG : enable debugging
@@ -323,11 +319,6 @@ static struct fb_fix_screeninfo sstfb_fix __initdata = {
     "Voodoo Graphics", (unsigned long) NULL, 0, FB_TYPE_PACKED_PIXELS, 0,
     FB_VISUAL_TRUECOLOR, 1, 0, 0, 0, (unsigned long) NULL, 0, FB_ACCEL_NONE
 };
-
-#ifdef CONFIG_MTRR
-static int enable_mtrr = 1;
-static int mtrr_handle;
-#endif
 
 static const char *mode_option __initdata = NULL;
 
@@ -1339,7 +1330,7 @@ int __init sstfb_setup(char *options)
 			fb_invert_cmaps();
 #ifdef CONFIG_MTRR
 		} else if (!strcmp(this_opt, "nomtrr")) {
-			enable_mtrr = 0;
+			fb_disable_mtrrs();
 #endif
 		} else {
 			mode_option = this_opt;
@@ -1408,15 +1399,6 @@ int __init sstfb_init(void)
                 /* print some squares ... */
                 sstfb_test(&fb_info);
 
-#ifdef CONFIG_MTRR
-		/* enable MTRR */
-		if (enable_mtrr) {
-			mtrr_handle = mtrr_add(fb_info.fix.smem_start,
-					       fb_info.fix.smem_len,
-					       MTRR_TYPE_WRCOMB, 1);
-			printk("sstfb: MTRR turned on\n");
-		}
-#endif
                 /* register fb */
                 if (register_framebuffer(&fb_info) < 0) {
                         printk("can't register framebuffer.\n");
@@ -1481,14 +1463,6 @@ static void __exit sstfb_cleanup(void)
                 sst_shutdown();
                 iounmap((void*)regbase_virt);
                 iounmap((void*)info->screen_base);
-#ifdef CONFIG_MTRR
-		/* disable MTRR */
-		if (enable_mtrr) {
-			mtrr_del(mtrr_handle, fb_info.fix.smem_start,
-				 fb_info.fix.smem_len);
-			printk("sstfb: MTRR turned off\n");
-		}
-#endif
                 unregister_framebuffer(&fb_info);
         }
 }
