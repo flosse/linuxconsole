@@ -9,8 +9,6 @@
  *     'int sel_loadlut(const unsigned long arg)'
  *
  * Now that /dev/vcs exists, most of this can disappear again.
- *
- * Adapted for selection in Unicode by <edmund@rano.demon.co.uk>, January 1999
  */
 
 #include <linux/module.h>
@@ -35,45 +33,49 @@
 
 /* Variables for selection control. */
 /* Use a dynamic buffer, instead of static (Dec 1994) */
-int sel_cons;				/* must not be disallocated */
+       int sel_cons;		/* must not be disallocated */
 static volatile int sel_start = -1; 	/* cleared by clear_selection */
 static int sel_end;
 static int sel_buffer_lth;
-static u16 *sel_buffer;
+static char *sel_buffer;
 
 /* clear_selection, highlight and highlight_pointer can be called
    from interrupt (via scrollback/front) */
 
 /* set reverse video on characters s-e of console with selection. */
-inline static void highlight(const int s, const int e) {
-	invert_screen(find_vc(sel_cons), s, e-s+2, 1);
+inline static void
+highlight(const int s, const int e) {
+	invert_screen(vt_cons->vc_cons[sel_cons], s, e-s+2, 1);
 }
 
-/* use complementary color to show the pointer */
-inline static void highlight_pointer(const int where) {
-	complement_pos(find_vc(sel_cons), where);
-}
-
-/* used by selection */
 u16 screen_glyph(struct vc_data *vc, int offset)
 {
-        u16 w = scr_readw(screenpos(vc, offset, 1));                                    u16 c = w & 0xff;
+	u16 w = scr_readw(screenpos(vc, offset, 1));
+	u16 c = w & 0xff;
 
-        if (w & vc->vc_hi_font_mask)
-                c |= 0x100;
-        return c;
-}             
+	if (w & vc->vc_hi_font_mask)
+		c |= 0x100;
+	return c;
+}
 
-static u16 sel_pos(int n)
+
+/* use complementary color to show the pointer */
+inline static void
+highlight_pointer(const int where) {
+	complement_pos(vt_cons->vc_cons[sel_cons], where);
+}
+
+static unsigned char sel_pos(int n)
 {
-	return inverse_convert(find_vc(sel_cons), screen_glyph(find_vc(sel_cons), n));
+	return inverse_translate(vt_cons->vc_cons[sel_cons], screen_glyph(vt_cons->vc_cons[sel_cons], n));
 }
 
 /* 
  * remove the current selection highlight, if any,
  * from the console holding the selection. 
  */
-void clear_selection(void) {
+void clear_selection(void) 
+{
 	highlight_pointer(-1); /* hide the pointer */
 	if (sel_start != -1) {
 		highlight(sel_start, sel_end);
@@ -96,9 +98,8 @@ static u32 inwordLut[8]={
   0xFF7FFFFF  /* latin-1 accented letters, not division sign */
 };
 
-static inline int inword(const u16 c) {
-	/* Everything over 0xff is considered alphabetic! */
-	return c >= 0x100 || ( inwordLut[c>>5] >> (c & 0x1F) ) & 1;
+static inline int inword(const unsigned char c) {
+	return ( inwordLut[c>>5] >> (c & 0x1F) ) & 1;
 }
 
 /* set inwordLut contents. Invoked by ioctl(). */
@@ -124,10 +125,10 @@ int set_selection(const unsigned long arg, struct tty_struct *tty, int user)
 {
 	struct vc_data *vc = (struct vc_data *) tty->driver_data;
 	int sel_mode, new_sel_start, new_sel_end, spc;
-	u16 *bp, *obp;
+	char *bp, *obp;
 	int i, ps, pe;
-	u16 ucs;
 
+	unblank_screen();
 	poke_blanked_console(vc->display_fg);
 
 	{ unsigned short *args, xs, ys, xe, ye;
@@ -162,8 +163,8 @@ int set_selection(const unsigned long arg, struct tty_struct *tty, int user)
 	      return 0;
 	  }
 
-	  if (mouse_reporting(tty) && (sel_mode & 16)) {
-	      mouse_report(tty, sel_mode & 15, xs, ys);
+	  if (mouse_reporting(vc) && (sel_mode & 16)) {
+	      mouse_report(vc, sel_mode & 15, xs, ys);
 	      return 0;
 	  }
         }
@@ -261,7 +262,7 @@ int set_selection(const unsigned long arg, struct tty_struct *tty, int user)
 	sel_end = new_sel_end;
 
 	/* Allocate a new buffer before freeing the old one ... */
-	bp = kmalloc(((sel_end-sel_start)/2+1) * sizeof(u16), GFP_KERNEL);
+	bp = kmalloc((sel_end-sel_start)/2+1, GFP_KERNEL);
 	if (!bp) {
 		printk(KERN_WARNING "selection: kmalloc() failed\n");
 		clear_selection();
@@ -273,9 +274,8 @@ int set_selection(const unsigned long arg, struct tty_struct *tty, int user)
 
 	obp = bp;
 	for (i = sel_start; i <= sel_end; i += 2) {
-		ucs = sel_pos(i);
-		*bp++ = ucs;
-		if (!isspace(ucs))
+		*bp = sel_pos(i);
+		if (!isspace(*bp++))
 			obp = bp;
 		if (! ((i + 2) % vc->vc_size_row)) {
 			/* strip trailing blanks from line and add newline,
@@ -298,75 +298,24 @@ int set_selection(const unsigned long arg, struct tty_struct *tty, int user)
 int paste_selection(struct tty_struct *tty)
 {
 	struct vc_data *vc = (struct vc_data *) tty->driver_data;
-	unsigned char *paste_buffer, *bp, *p;
+	int	pasted = 0, count;
 	DECLARE_WAITQUEUE(wait, current);
-	int utf, count;
-
-      	if (!sel_buffer || !sel_buffer_lth) return 0;
-
-        /* Paste UTF-8 iff the keyboard is in UTF-8 mode */
-        utf = (vc->display_fg->fg_console->kbd_table.kbdmode == VC_UNICODE);
-
-        /* Make a paste buffer containing an appropriate translation
-           of the selection buffer */
-        paste_buffer = kmalloc(utf ? sel_buffer_lth*3 : sel_buffer_lth, GFP_KERNEL);
-        if (!paste_buffer) {
-        	printk(KERN_WARNING "selection: kmalloc() failed\n");
-               	return -ENOMEM;
-       	}
-
-       	bp = paste_buffer;
-       	if (utf) {
-        	/* convert to UTF-8 */
-               	int i, ucs;
-
-               	for (i = 0; i < sel_buffer_lth; i++) {
-                	ucs = sel_buffer[i];
-                       	/* The following code should at some point
-                           be merged with to_utf8() in keyboard.c */
-                       	if (!(ucs & ~0x7f)) /* 0?????? */
-                        	*bp++ = ucs;
-                       	else if (!(ucs & ~0x7ff)) { /* 110????? 10?????? */
-                        	*bp++ = 0xc0 | (ucs >> 6);
-                                *bp++ = 0x80 | (ucs & 0x3f);
-                        }
-                        else { /*  1110???? 10?????? 10?????? */
-                                *bp++ = 0xe0 | (ucs >> 12);
-                                *bp++ = 0x80 | ((ucs >> 6) & 0x3f);
-                                *bp++ = 0x80 | (ucs & 0x3f);
-                        }
-                        /* UTF-8 is defined for words of up to 31 bits,
-                           but we need only 16 bits here */
-		}
-	} else {
-		/* convert to 8-bit */
-                int inv_translate = vc->display_fg->fg_console->vc_translate;
-                int i;
-                unsigned char c;
-
-                for (i = 0; i < sel_buffer_lth; i++) {
-                	c = inverse_translate(inv_translate, sel_buffer[i]);
-                       	if (c) *bp++ = c;
-               	}
-	}
 
 	poke_blanked_console(vc->display_fg);
 	add_wait_queue(&vc->paste_wait, &wait);
-	p = paste_buffer;
-	while (bp > p) {
+	while (sel_buffer && sel_buffer_lth > pasted) {
 		set_current_state(TASK_INTERRUPTIBLE);
 		if (test_bit(TTY_THROTTLED, &tty->flags)) {
 			schedule();
 			continue;
 		}
-		count = bp - p;
+		count = sel_buffer_lth - pasted;
 		count = MIN(count, tty->ldisc.receive_room(tty));
-		tty->ldisc.receive_buf(tty, p, 0, count);
-		p += count;
+		tty->ldisc.receive_buf(tty, sel_buffer + pasted, 0, count);
+		pasted += count;
 	}
 	remove_wait_queue(&vc->paste_wait, &wait);
 	set_current_state(TASK_RUNNING);
-	kfree(paste_buffer);
 	return 0;
 }
 

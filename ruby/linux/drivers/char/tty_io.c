@@ -2079,15 +2079,7 @@ int tty_register_driver(struct tty_driver *driver)
 		driver->put_char = tty_default_put_char;
 	
 	list_add(&driver->tty_drivers, &tty_drivers);
-
-	//if (!(driver->flags & TTY_DRIVER_CONSOLE))
-
-	if (!driver->console) {
-		driver->tty_lock = kmalloc(sizeof(struct semaphore),GFP_KERNEL);
-		init_MUTEX(driver->tty_lock);
-	} else
-		driver->tty_lock = &driver->console->lock;
-
+	
 	if ( !(driver->flags & TTY_DRIVER_NO_DEVFS) ) {
 		for(i = 0; i < driver->num; i++)
 		    tty_register_devfs(driver, 0, driver->minor_start + i);

@@ -96,10 +96,7 @@ void vte_lf(struct vc_data *vc)
 	 * if below scrolling region
 	 */
 	if (y + 1 == bottom)
-		if (top == 0 && bottom == video_num_lines)
-			scroll_up(vc, 1);
-		else
-			scroll_region_up(vc, top, bottom, 1);
+		scroll_region_up(vc, top, bottom, 1);
 	else if (y < video_num_lines - 1) {
 		y++;
 		pos += video_size_row;
@@ -116,10 +113,7 @@ static void vte_ri(struct vc_data *vc)
 	 * if above scrolling region
 	 */
 	if (y == top)
-		if (top == 0 && bottom == video_num_lines)
-			scroll_down(vc, 1);
-		else
-			scroll_region_down(vc, top, bottom, 1);
+		scroll_region_down(vc, top, bottom, 1);
 	else if (y > 0) {
 		y--;
 		pos -= video_size_row;
@@ -225,7 +219,7 @@ void vte_ed(struct vc_data *vc, int vpar)
 		clear_region(vc, 0, y, x + 1, 1);
 		break;
 	case 2:		/* erase whole display */
-		count = screensize;
+		count = video_num_columns * video_num_lines;
 		start = (unsigned short *) origin;
 		clear_region(vc, 0, 0, video_num_columns, video_num_lines);
 		break;
@@ -1029,7 +1023,6 @@ void vte_ris(struct vc_data *vc, int do_clear)
 	cursor_type = CUR_DEFAULT;
 	complement_mask = s_complement_mask;
 
-	update_cursor_attr(vc);
 	default_attr(vc);
 	update_attr(vc);
 
@@ -1549,7 +1542,6 @@ void terminal_emulation(struct tty_struct *tty, int c)
 				else
 					cursor_type = CUR_DEFAULT;
 				priv4 = 0;
-				update_cursor_attr(vc);
 				return;
 			}
 			break;
@@ -1956,7 +1948,7 @@ void terminal_emulation(struct tty_struct *tty, int c)
 			vte_ed(vc, 2);
 			video_erase_char =
 			    (video_erase_char & 0xff00) | ' ';
-			do_update_region(vc, origin, screensize);
+			do_update_region(vc, origin, screenbuf_size / 2);
 		}
 		return;
 	case ESgzd4:

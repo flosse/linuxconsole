@@ -31,10 +31,10 @@
 #include <linux/interrupt.h>
 #include <linux/mm.h>
 #include <linux/init.h>
-#include <linux/console.h>
 #include <linux/vt_kern.h>
 #include <linux/selection.h>
-#include <linux/kbd_kern.h>
+#include <linux/console.h>
+#include <linux/smp_lock.h>
 #include <asm/uaccess.h>
 #include <asm/byteorder.h>
 #include <asm/unaligned.h>
@@ -43,9 +43,7 @@
 #undef org
 #undef addr
 #define HEADER_SIZE	4
-#define CON_BUF_SIZE	PAGE_SIZE
 
-/* note the word offset */
 unsigned short *screen_pos(struct vc_data *vc, int w_offset, int viewed)
 {
 	return screenpos(vc, 2 * w_offset, viewed);
@@ -76,29 +74,44 @@ void vcs_scr_writew(struct vc_data *vc, u16 val, u16 *org)
 	if ((unsigned long)org == vc->vc_pos) {
 		vc->display_fg->cursor_original = -1;
 		add_softcursor(vc);
-	}	
+	}
+}
+
+
+static int
+vcs_size(struct inode *inode)
+{
+	int minor = minor(inode->i_rdev);
+	int currcons = minor & 127;
+	struct vc_data *vc;
+	int size;
+
+	if (currcons == 0)
+		currcons = vt_cons->fg_console->vc_num;
+	else
+		currcons--;
+	
+	vc = vt_cons->vc_cons[currcons];
+		
+	if (!vc)
+		return -ENXIO;
+
+	size = vc->vc_rows * vc->vc_cols; 
+
+	if (minor & 128)
+		size = 2*size + HEADER_SIZE;
+	return size;
 }
 
 static loff_t vcs_lseek(struct file *file, loff_t offset, int orig)
 {
-	struct vc_data *vc = (struct vc_data *) file->private_data;
-	struct inode *inode = file->f_dentry->d_inode;
 	int size;
 
-	if (!vc) {
-		/* Impossible ? */
-		if (!vt_cons->fg_console)
-			return -ENXIO;
-		vc = vt_cons->fg_console;
-	}
-
-	size = vc->vc_rows * vc->vc_cols;
-
-	if (minor(inode->i_rdev) & 128)
-		size = 2*size + HEADER_SIZE;		
-
+	lock_kernel();
+	size = vcs_size(file->f_dentry->d_inode);
 	switch (orig) {
 		default:
+			unlock_kernel();
 			return -EINVAL;
 		case 2:
 			offset += size;
@@ -108,41 +121,55 @@ static loff_t vcs_lseek(struct file *file, loff_t offset, int orig)
 		case 0:
 			break;
 	}
-	if (offset < 0 || offset > size)
+	if (offset < 0 || offset > size) {
+		unlock_kernel();
 		return -EINVAL;
+	}
 	file->f_pos = offset;
+	unlock_kernel();
 	return file->f_pos;
 }
+
+/* We share this temporary buffer with the console write code
+ * so that we can easily avoid touching user space while holding the
+ * console spinlock.
+ */
+extern char con_buf[PAGE_SIZE];
+#define CON_BUF_SIZE	PAGE_SIZE
+extern struct semaphore con_buf_sem;
 
 static ssize_t
 vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 {
-	struct vc_data *vc = (struct vc_data *) file->private_data;
 	struct inode *inode = file->f_dentry->d_inode;
 	unsigned int currcons = minor(inode->i_rdev);
+	struct vc_data *vc;
 	long pos = *ppos;
 	long viewed, attr, read;
 	int col, maxcol;
 	unsigned short *org = NULL;
 	ssize_t ret;
 
-	down(&vc->display_fg->lock);
+	down(&con_buf_sem);
 
 	/* Select the proper current console and verify
 	 * sanity of the situation under the console lock.
 	 */
-	acquire_console_sem(vc->vc_tty->device);
+	acquire_console_sem();
 
 	attr = (currcons & 128);
 	currcons = (currcons & 127);
 	if (currcons == 0) {
-		vc = vt_cons->fg_console;
+		currcons = vt_cons->fg_console->vc_num;
 		viewed = 1;
 	} else {
-		vc = (struct vc_data *) file->private_data;
+		currcons--;
 		viewed = 0;
 	}
 	ret = -ENXIO;
+
+	vc = vt_cons->vc_cons[currcons];
+
 	if (!vc)
 		goto unlock_out;
 
@@ -161,10 +188,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 		 * as copy_to_user at the end of this loop
 		 * could sleep.
 		 */
-		size = vc->vc_rows * vc->vc_cols;
-		if (minor(inode->i_rdev) & 128)		
-			size = 2*size + HEADER_SIZE;
-
+		size = vcs_size(inode);
 		if (pos >= size)
 			break;
 		if (count > size - pos)
@@ -174,12 +198,12 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 		if (this_round > CON_BUF_SIZE)
 			this_round = CON_BUF_SIZE;
 
-		/* Perform the whole read into the current VC's con_buf.
+		/* Perform the whole read into the local con_buf.
 		 * Then we can drop the console spinlock and safely
 		 * attempt to move it to userspace.
 		 */
 
-		con_buf_start = con_buf0 = vc->display_fg->con_buf;
+		con_buf_start = con_buf0 = con_buf;
 		orig_count = this_round;
 		maxcol = vc->vc_cols;
 		if (!attr) {
@@ -216,7 +240,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 				/* Advance state pointers and move on. */
 				this_round -= tmp_count;
 				p = HEADER_SIZE;
-				con_buf0 = vc->display_fg->con_buf + HEADER_SIZE;
+				con_buf0 = con_buf + HEADER_SIZE;
 				/* If this_round >= 0, then p is even... */
 			} else if (p & 1) {
 				/* Skip first byte for output if start address is odd
@@ -264,9 +288,9 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 		 * the pagefault handling code may want to call printk().
 		 */
 
-		release_console_sem(vc->vc_tty->device);
+		release_console_sem();
 		ret = copy_to_user(buf, con_buf_start, orig_count);
-		acquire_console_sem(vc->vc_tty->device);
+		acquire_console_sem();
 
 		if (ret) {
 			read += (orig_count - ret);
@@ -282,17 +306,17 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 	if (read)
 		ret = read;
 unlock_out:
-	release_console_sem(vc->vc_tty->device);
-	up(&vc->display_fg->lock);
+	release_console_sem();
+	up(&con_buf_sem);
 	return ret;
 }
 
 static ssize_t
 vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 {
-	struct vc_data *vc = (struct vc_data *) file->private_data;
 	struct inode *inode = file->f_dentry->d_inode;
 	unsigned int currcons = minor(inode->i_rdev);
+	struct vc_data *vc;
 	long pos = *ppos;
 	long viewed, attr, size, written;
 	char *con_buf0;
@@ -300,31 +324,31 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	u16 *org0 = NULL, *org = NULL;
 	size_t ret;
 
-	down(&vc->display_fg->lock);
+	down(&con_buf_sem);
 
 	/* Select the proper current console and verify
 	 * sanity of the situation under the console lock.
 	 */
-	acquire_console_sem(vc->vc_tty->device);
+	acquire_console_sem();
 
 	attr = (currcons & 128);
 	currcons = (currcons & 127);
 
 	if (currcons == 0) {
-		vc = vt_cons->fg_console;
+		currcons = vt_cons->fg_console->vc_num;
 		viewed = 1;
 	} else {
-		vc = (struct vc_data *) file->private_data;
+		currcons--;
 		viewed = 0;
 	}
 	ret = -ENXIO;
+
+	vc = vt_cons->vc_cons[currcons];
+
 	if (!vc)
 		goto unlock_out;
 
-	size = vc->vc_rows * vc->vc_cols;
-	if (minor(inode->i_rdev) & 128)
-		size = 2*size + HEADER_SIZE;
-
+	size = vcs_size(inode);
 	ret = -EINVAL;
 	if (pos < 0 || pos > size)
 		goto unlock_out;
@@ -342,9 +366,9 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 		/* Temporarily drop the console lock so that we can read
 		 * in the write data from userspace safely.
 		 */
-		release_console_sem(vc->vc_tty->device);
-		ret = copy_from_user(&vc->display_fg->con_buf, buf, this_round);
-		acquire_console_sem(vc->vc_tty->device);
+		release_console_sem();
+		ret = copy_from_user(con_buf, buf, this_round);
+		acquire_console_sem();
 
 		if (ret) {
 			this_round -= ret;
@@ -363,10 +387,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 		 * the user buffer, so recheck.
 		 * Return data written up to now on failure.
 		 */
-		size = vc->vc_rows * vc->vc_cols;
-		if (minor(inode->i_rdev) & 128)
-			size = 2*size + HEADER_SIZE;
-
+		size = vcs_size(inode);
 		if (pos >= size)
 			break;
 		if (this_round > size - pos)
@@ -376,7 +397,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 		 * under the lock using the local kernel buffer.
 		 */
 
-		con_buf0 = vc->display_fg->con_buf;
+		con_buf0 = con_buf;
 		orig_count = this_round;
 		maxcol = vc->vc_cols;
 		p = pos;
@@ -389,7 +410,8 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 				unsigned char c = *con_buf0++;
 
 				this_round--;
-				vcs_scr_writew(vc, (vcs_scr_readw(vc, org) & 0xff00) | c, org); 
+				vcs_scr_writew(vc,
+					       (vcs_scr_readw(vc, org) & 0xff00) | c, org);
 				org++;
 				if (++col == maxcol) {
 					org = screen_pos(vc, p, viewed);
@@ -470,24 +492,20 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	ret = written;
 
 unlock_out:
-	release_console_sem(vc->vc_tty->device);
-	up(&vc->display_fg->lock);
+	release_console_sem();
+
+	up(&con_buf_sem);
+
 	return ret;
 }
 
 static int
 vcs_open(struct inode *inode, struct file *filp)
 {
-	unsigned int currcons = (minor(inode->i_rdev) & 127);
-	struct vc_data *vc;
+	unsigned int currcons = minor(inode->i_rdev) & 127;
 
-	if (currcons) {
-		vc = find_vc(currcons-1);
-		if (vc)
-			filp->private_data = vc;
-		else
-			return -ENXIO;
-	}
+	if (currcons && !vt_cons->vc_cons[currcons-1])
+		return -ENXIO;
 	return 0;
 }
 
@@ -508,10 +526,10 @@ void vcs_make_devfs (unsigned int index, int unregister)
     sprintf (name, "a%u", index + 1);
     if (unregister)
     {
-	devfs_unregister ( devfs_find_handle (devfs_handle, name + 1, 0, 0,
-					      DEVFS_SPECIAL_CHR, 0) );
-	devfs_unregister ( devfs_find_handle (devfs_handle, name, 0, 0,
-					      DEVFS_SPECIAL_CHR, 0) );
+	devfs_find_and_unregister(devfs_handle, name + 1, 0, 0,
+				  DEVFS_SPECIAL_CHR, 0);
+	devfs_find_and_unregister(devfs_handle, name, 0, 0,
+				  DEVFS_SPECIAL_CHR, 0);
     }
     else
     {
@@ -529,7 +547,7 @@ int __init vcs_init(void)
 {
 	int error;
 
-	error = devfs_register_chrdev(VCS_MAJOR, "vcs", &vcs_fops);
+	error = register_chrdev(VCS_MAJOR, "vcs", &vcs_fops);
 
 	if (error)
 		printk("unable to get major %d for vcs device", VCS_MAJOR);

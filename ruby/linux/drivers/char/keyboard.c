@@ -271,37 +271,6 @@ static void applkey(struct vc_data *vc, int key, char mode)
 }
 
 /*
- * A note on character conversion:
- *
- * A keymap maps keycodes to keysyms, which, at present, are 16-bit
- * values. If a keysym is < 0xf000 then it specifies a 16-bit Unicode
- * character to be queued. If a keysym is >= 0xf000, then 0xf000 is
- * subtracted to give a pair of octets, extracted by KTYP and KVAL.
- * The KTYP is used as an index into key_handler[] to give a function
- * which handles the KVAL. The "normal" key_handler is k_self, which
- * treats the KVAL as an 8-bit character to be queued.
- *
- * When a 16-bit Unicode character is queued it is converted to UTF-8
- * if the keyboard is in Unicode mode; otherwise it is converted to an
- * 8-bit character using the current ACM (see consolemap.c). An 8-bit
- * character is assumed to be in the character set defined by the
- * current ACM, so it is queued unchanged if the keyboard is in 8-bit
- * mode; otherwise it is converted using the inverse ACM.
- *
- * The handling of diacritics uses 8-bit characters, which are
- * converted using the inverse ACM, when in Unicode mode. The strings
- * bound to function keys are not converted, so they may already
- * contain UTF-8. Codes entered using do_ascii() treated as 16-bit and
- * converted to UTF-8 in Unicode mode; otherwise they are treated as
- * 8-bit and queued unchanged.
- *
- * Since KTYP is not used in the case of Unicode keysyms, it is not
- * possible to use KT_LETTER to implement CapsLock. Either use 8-bit
- * keysyms with an appropriate ACM or use the work-around proposed in
- * k_lock().
- */
-
-/*
  * Many other routines do put_queue, but I think either
  * they produce ASCII, or they produce some user-assigned
  * string, and in both cases we might assume that it is
@@ -323,29 +292,6 @@ void to_utf8(struct vc_data *vc, ushort c)
 		put_queue(vc, 0x80 | ((c >> 6) & 0x3f));
 		put_queue(vc, 0x80 | (c & 0x3f));
     	}
-}
-
-void put_unicode(struct vc_data *vc, u16 uc)
-{
-	if (vc->kbd_table.kbdmode == VC_UNICODE)
-		to_utf8(vc, uc);
-	else if ((uc & ~0x9f) == 0 || uc == 127)
-		/* Don't translate control chars */
-		put_queue(vc, uc);
-	else {
-		unsigned char c;
-		c = inverse_translate(vc->display_fg->fg_console->vc_translate, uc);
-		if (c) put_queue(vc, c);
-	}
-}
-
-static void put_8bit(struct vc_data *vc, u8 c)
-{
-	/* Don't translate control chars */
-	if (vc->kbd_table.kbdmode != VC_UNICODE || c < 32 || c == 127)
-		put_queue(vc, c);
-	else
-		to_utf8(vc, get_acm(vc->display_fg->fg_console->vc_translate)[c]);
 }
 
 /* 
@@ -408,7 +354,7 @@ unsigned char handle_diacr(struct vc_data *vc, unsigned char ch)
 	if (ch == ' ' || ch == d)
 		return d;
 
-	put_8bit(vc, d);
+	put_queue(vc, d);
 	return ch;
 }
 
@@ -418,7 +364,7 @@ unsigned char handle_diacr(struct vc_data *vc, unsigned char ch)
 static void fn_enter(struct vc_data *vc)
 {
 	if (diacr) {
-		put_8bit(vc, diacr);
+		put_queue(vc, diacr);
 		diacr = 0;
 	}
 	put_queue(vc, 13);
@@ -486,6 +432,7 @@ static void fn_bare_num(struct vc_data *vc)
 
 static void fn_lastcons(struct vc_data *vc)
 {
+	/* switch to the last used console, ChN */
 	set_console(vc->display_fg->last_console);
 }
 
@@ -533,25 +480,12 @@ static void fn_send_intr(struct vc_data *vc)
 
 static void fn_scroll_forw(struct vc_data *vc)
 {
-	//scroll_down(vc, 0);
-	if (vc->vc_visible_origin < vc->vc_origin) {
-		vc->vc_visible_origin =+ vc->vc_screensize;
-		do_update_region(vc, vc->vc_visible_origin, vc->vc_screensize);
-//             	scroll_down(vc, vc->vc_rows/2);
-	}
+	scroll_down(vc, 0);
 }
 
 static void fn_scroll_back(struct vc_data *vc)
 {
-	//scroll_up(vc, 0);
-	unsigned short *p = (unsigned short *) vc->vc_visible_origin - vc->vc_screensize;
-	unsigned long q = (unsigned long) p;
-
-	if (q >= ((unsigned long) vc->vc_screenbuf)) {
-		vc->vc_visible_origin = q;
-		do_update_region(vc, vc->vc_visible_origin, vc->vc_screensize);
-//		scroll_up(vc, vc->vc_rows/2);
-	}
+	scroll_up(vc, 0);
 }
 
 static void fn_show_mem(struct vc_data *vc)
@@ -637,7 +571,7 @@ static void k_self(struct vc_data *vc, unsigned char value, char up_flag)
 		diacr = value;
 		return;
 	}
-	put_8bit(vc, value);
+	put_queue(vc, value);
 }
 
 /*
@@ -743,7 +677,7 @@ static void k_pad(struct vc_data *vc, unsigned char value, char up_flag)
 				return;
 		}
 
-	put_8bit(vc, pad_chars[value]);
+	put_queue(vc, pad_chars[value]);
 	if (value == KVAL(K_PENTER) && get_kbd_mode(vc->kbd_table, VC_CRLF))
 		put_queue(vc, 10);
 }
@@ -782,7 +716,7 @@ static void k_shift(struct vc_data *vc, unsigned char value, char up_flag)
 	/* kludge */
 	if (up_flag && shift_state != old_state && npadch != -1) {
 		if (vc->kbd_table.kbdmode == VC_UNICODE)
-			put_unicode(vc, npadch & 0xffff);
+			to_utf8(vc, npadch & 0xffff);
 		else
 			put_queue(vc, npadch & 0xff);
 		npadch = -1;
@@ -827,21 +761,6 @@ static void k_lock(struct vc_data *vc, unsigned char value, char up_flag)
 {
 	if (up_flag || rep)
 		return;
-/*
-	if (value >= NR_LOCK) {
-		 *
-		 * Change the lock state and
-		 * set the CapsLock LED to the new state
-		 *
-		unsigned char mask;
-
-		mask = 1 << (value -= NR_LOCK);
-		if ((vc->kbd_table.lockstate ^= mask) & mask)
-			set_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
-		else
-			clr_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
-	} else {
-		 * Just change the lock state */
 	chg_kbd_lock(vc->kbd_table, value);
 }
 
@@ -1152,17 +1071,17 @@ void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down)
 static void kbd_event(struct input_handle *handle, unsigned int event_type, 
 		      unsigned int keycode, int down)
 {
-	struct vt_struct *vt = (struct vt_struct *) handle->private;
+	struct vt_struct *vt = vt_cons;
 
-	if ((event_type != EV_KEY) || !vt || !vt->fg_console->vc_kam)
+	if ((event_type != EV_KEY) || !vt)
 		return;
 	kbd_keycode(vt, keycode, down);
 	tasklet_schedule(&keyboard_tasklet);
+	do_poke_blanked_console = 1;
 	schedule_work(&vt->vt_work);
 }
 
 static char kbd_name[] = "kbd";
-static int first_time;
 
 /*
  * When a keyboard (or other input device) is found, the kbd_connect
@@ -1196,25 +1115,10 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 	handle->dev = dev;
 	handle->handler = handler;
 	handle->name = kbd_name;
-
-	if (!first_time) {
-		first_time = 1;
-		vt = admin_vt;
-	}
-
-	while (vt) {
-		if (!vt->keyboard) {
-			vt->keyboard = handle;
-			handle->private = vt;
-			vt_map_input(vt);
-			/* enable receieving key events for each VC */
-			for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
-				vc = find_vc(vt->first_vc + i);
-				if (vc) vc->vc_kam = 1;
-			}
-			break;
-		} else
-			vt = vt->next;
+	if (!vt->keyboard) {
+		vt->keyboard = handle;
+		handle->private = vt;
+		vt_map_input(vt);
 	}
 	input_open_device(handle);
 	return handle;
@@ -1223,15 +1127,8 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 static void kbd_disconnect(struct input_handle *handle)
 {
 	struct vt_struct *vt = handle->private;
-	struct vc_data *vc;
-	int i;
 
 	if (vt && vt->keyboard == handle) {
-		/* disable receieving key events for each VC */
-		for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
-			vc = find_vc(vt->first_vc + i);
-			if (vc) vc->vc_kam = 1;
-		}
 		vt->keyboard = NULL;
 		handle->private = NULL;
 	}		
