@@ -31,6 +31,19 @@
 #define CM_ERASE    (2)
 #define CM_MOVE     (3)
 
+/*
+ *      Low-Level Functions
+ */
+
+#define IS_FG (cons_num == fg_console)
+#define IS_VISIBLE CON_IS_VISIBLE(vc_cons[currcons])
+
+#ifdef VT_BUF_VRAM_ONLY
+#define DO_UPDATE 0
+#else
+#define DO_UPDATE IS_VISIBLE
+#endif
+
 int softcursor_original;
 struct console_font_op; 
 
@@ -220,6 +233,7 @@ void give_up_console(struct consw *sw);
 
 extern struct vt_struct {
 	unsigned char	vc_mode;		/* KD_TEXT, ... */
+	char            vt_blanked;             /* Is this display blanked */
 	struct consw	*sw;			/* Display driver for VT */
 } *vt_cons;
 
@@ -249,10 +263,8 @@ inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed);
 void scrollback(struct vc_data *vc, int);
 void scrollfront(struct vc_data *vc, int);
 void gotoxy(struct vc_data *vc, int new_x, int new_y);
+void do_update_region(struct vc_data *vc, unsigned long start, int count);
 void update_region(struct vc_data *vc, unsigned long start, int count);
-void redraw_screen(int new_console, int is_switch);
-#define update_screen(x) redraw_screen(x, 0)
-#define switch_screen(x) redraw_screen(x, 1)
 
 struct tty_struct;
 int tioclinux(struct tty_struct *tty, unsigned long arg);
@@ -281,10 +293,9 @@ extern unsigned int video_font_height;
 extern unsigned int default_font_height;
 extern unsigned int video_scan_lines;
 
-void change_console(unsigned int);
-void complete_change_console(unsigned int);
+void change_console(struct vc_data *new_vc, struct vc_data *old_vc);
+void complete_change_console(struct vc_data *new_vc, struct vc_data *old_vc);
 int vt_waitactive(int vt);
 void reset_vc(struct vc_data *vc);
-int con_font_op(int currcons, struct console_font_op *op);
 
 #endif /* _VT_KERN_H */
