@@ -184,6 +184,18 @@ comment 'Console drivers'
          define_bool CONFIG_FONT_8x16 y
       fi
    fi
+   if [ "$CONFIG_PARISC" = "y" ]; then
+      #bool 'IODC console' CONFIG_IODC_CONSOLE
+      bool 'STI console' CONFIG_STI_CONSOLE
+      if [ "$CONFIG_IODC_CONSOLE" = "n" ]; then
+	 if [ "$CONFIG_GSC_PS2" = "y" ]; then
+	    define_bool DUMMY_CONSOLE
+	 fi
+      fi
+      if [ "$CONFIG_STI_CONSOLE" = "y" ]; then
+	 define_bool DUMMY_CONSOLE
+      fi				 	
+   fi
    if [ "$CONFIG_ARCH_ACORN" != "y" -a "$CONFIG_ARCH_EBSA110" != "y" ]; then
       bool 'VGA text console' CONFIG_VGA_CONSOLE
    fi

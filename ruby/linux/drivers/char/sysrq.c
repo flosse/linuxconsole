@@ -27,7 +27,6 @@
 #include <asm/ptrace.h>
 
 extern void wakeup_bdflush(int);
-extern int console_loglevel;
 extern struct list_head super_blocks;
 
 /* Whether we react on sysrq keys or just ignore them */

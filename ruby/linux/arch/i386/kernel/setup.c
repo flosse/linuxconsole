@@ -125,7 +125,7 @@ unsigned int mca_pentium_flag;
  */
 struct drive_info_struct { char dummy[32]; } drive_info;
 struct screen_info screen_info;
-struct apm_bios_info apm_bios_info;
+struct apm_info apm_info;
 struct sys_desc_table_struct {
 	unsigned short length;
 	unsigned char table[0];
@@ -606,7 +606,7 @@ void __init setup_arch(char **cmdline_p)
  	ROOT_DEV = to_kdev_t(ORIG_ROOT_DEV);
  	drive_info = DRIVE_INFO;
  	screen_info = SCREEN_INFO;
-	apm_bios_info = APM_BIOS_INFO;
+	apm_info.bios = APM_BIOS_INFO;
 	if( SYS_DESC_TABLE.length != 0 ) {
 		MCA_bus = SYS_DESC_TABLE.table[3] &0x2;
 		machine_id = SYS_DESC_TABLE.table[0];
@@ -1521,8 +1521,32 @@ static void __init init_intel(struct cpuinfo_x86 *c)
 				dh = des >> 4;
 				dl = des & 0x0F;
 
+				/* Black magic... */
+
 				switch ( dh )
 				{
+				case 0:
+					switch ( dl ) {
+					case 6:
+						/* L1 I cache */
+						l1i += 8;
+						break;
+					case 8:
+						/* L1 I cache */
+						l1i += 16;
+						break;
+					case 10:
+						/* L1 D cache */
+						l1d += 8;
+						break;
+					case 12:
+						/* L1 D cache */
+						l1d += 16;
+						break;
+					default:
+						/* TLB, or unknown */
+					}
+					break;
 				case 2:
 					if ( dl ) {
 						/* L3 cache */
@@ -1531,6 +1555,16 @@ static void __init init_intel(struct cpuinfo_x86 *c)
 					}
 					break;
 				case 4:
+					if ( c->x86 > 6 && dl ) {
+						/* P4 family */
+						if ( dl ) {
+							/* L3 cache */
+							cs = 128 << (dl-1);
+							l3 += cs;
+							break;
+						}
+					}
+					/* else same as 8 - fall through */
 				case 8:
 					if ( dl ) {
 						/* L2 cache */
@@ -1546,9 +1580,16 @@ static void __init init_intel(struct cpuinfo_x86 *c)
 					}
 					break;
 				case 7:
-					/* L1 I cache */
-					cs = dl ? (16 << (dl-1)) : 12;
-					l1i += cs;
+					if ( dl >= 8 ) 
+					{
+						/* L2 cache */
+						cs = 64<<(dl-8);
+						l2 += cs;
+					} else {
+						/* L0 I cache, count as L1 */
+						cs = dl ? (16 << (dl-1)) : 12;
+						l1i += cs;
+					}
 					break;
 				default:
 					/* TLB, or something else we don't know about */
@@ -2056,8 +2097,8 @@ int get_cpuinfo(char * buffer)
 		/* Intel-defined */
 	        "fpu", "vme", "de", "pse", "tsc", "msr", "pae", "mce",
 	        "cx8", "apic", NULL, "sep", "mtrr", "pge", "mca", "cmov",
-	        "pat", "pse36", "pn", "clflsh", NULL, "dtes", "acpi", "mmx",
-	        "fxsr", "sse", "sse2", "selfsnoop", NULL, "acc", "ia64", NULL,
+	        "pat", "pse36", "pn", "clflush", NULL, "dts", "acpi", "mmx",
+	        "fxsr", "sse", "sse2", "ss", NULL, "tm", "ia64", NULL,
 
 		/* AMD-defined */
 		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
@@ -2103,7 +2144,7 @@ int get_cpuinfo(char * buffer)
 			p += sprintf(p, "stepping\t: unknown\n");
 
 		if ( test_bit(X86_FEATURE_TSC, &c->x86_capability) ) {
-			p += sprintf(p, "cpu MHz\t\t: %lu.%06lu\n",
+			p += sprintf(p, "cpu MHz\t\t: %lu.%03lu\n",
 				cpu_khz / 1000, (cpu_khz % 1000));
 		}
 
@@ -2121,7 +2162,7 @@ int get_cpuinfo(char * buffer)
 			        "fpu_exception\t: %s\n"
 			        "cpuid level\t: %d\n"
 			        "wp\t\t: %s\n"
-			        "features\t:",
+			        "flags\t\t:",
 			     c->fdiv_bug ? "yes" : "no",
 			     c->hlt_works_ok ? "no" : "yes",
 			     c->f00f_bug ? "yes" : "no",

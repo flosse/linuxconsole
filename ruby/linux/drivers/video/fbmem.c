@@ -111,6 +111,8 @@ extern int tdfxfb_init(void);
 extern int tdfxfb_setup(char*);
 extern int sisfb_init(void);
 extern int sisfb_setup(char*);
+extern int stifb_init(void);
+extern int stifb_setup(char*);
 
 static struct {
 	const char *name;
@@ -187,6 +189,9 @@ static struct {
 #endif
 #ifdef CONFIG_FB_SIS
         { "sisfb", sisfb_init, sisfb_setup },
+#endif
+#ifdef CONFIG_FB_STI
+	{ "stifb", stifb_init, stifb_setup }, 
 #endif
        /*
         * Generic drivers that are used as fallbacks

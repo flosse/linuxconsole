@@ -5,7 +5,7 @@
 SUB_DIRS        :=
 MOD_SUB_DIRS    := $(SUB_DIRS)
 MOD_IN_SUB_DIRS :=
-ALL_SUB_DIRS    := $(SUB_DIRS) matrox riva
+ALL_SUB_DIRS    := $(SUB_DIRS) matrox riva tdfx
 
 O_TARGET := video.o
 O_OBJS   :=
@@ -48,9 +48,9 @@ obj-$(CONFIG_FONT_ACORN_8x8)      += font_acorn_8x8.o
 
 obj-$(CONFIG_FB)		  += fbmem.o fbcmap.o fbgen.o modedb.o fbmon.o
 # Only include macmodes.o if we have FB support and are PPC
-#ifeq ($(CONFIG_FB),y)
+ifeq ($(CONFIG_FB),y)
 obj-$(CONFIG_PPC)                 += macmodes.o
-#endif
+endif
 
 obj-$(CONFIG_FB_ACORN)            += acornfb.o
 obj-$(CONFIG_FB_AMIGA)            += amifb.o
@@ -68,8 +68,7 @@ obj-$(CONFIG_FB_CT65550)          += chipsfb.o
 obj-$(CONFIG_FB_CYBER)            += cyberfb.o
 obj-$(CONFIG_FB_CYBER2000)        += cyber2000fb.o
 obj-$(CONFIG_FB_SGIVW)            += sgivwfb.o
-obj-$(CONFIG_FB_3DFX)             += tdfxfb.o
-obj-$(CONFIG_FB_MAC)              += macfb.o
+obj-$(CONFIG_FB_MAC)              += macfb.o macmodes.o
 obj-$(CONFIG_FB_HP300)            += hpfb.o
 obj-$(CONFIG_FB_OF)               += offb.o
 obj-$(CONFIG_FB_IMSTT)            += imsttfb.o
@@ -90,7 +89,6 @@ obj-$(CONFIG_FB_TCX)              += tcxfb.o sbusfb.o
 obj-$(CONFIG_FB_CGFOURTEEN)       += cgfourteenfb.o sbusfb.o
 obj-$(CONFIG_FB_P9100)            += p9100fb.o sbusfb.o
 obj-$(CONFIG_FB_LEO)              += leofb.o sbusfb.o
-obj-$(CONFIG_FB_SIS)              += sisfb.o
 
 ifeq ($(CONFIG_FB_MATROX),y)
 SUB_DIRS			  += matrox
@@ -102,12 +100,31 @@ else
   endif
 endif
 
+ifeq ($(CONFIG_FB_TDFX),y)
+SUB_DIRS			  += tdfx 
+obj-y				  += tdfx/tdfxfb.o
+MOD_SUB_DIRS			  += tdfx 
+else
+  ifeq ($(CONFIG_FB_TDFX),m)
+  MOD_SUB_DIRS			  += tdfx
+  endif
+endif
+
 ifeq ($(CONFIG_FB_RIVA),y)
 SUB_DIRS			  += riva
 obj-y				  += riva/rivafb.o
 else
   ifeq ($(CONFIG_FB_RIVA),m)
   MOD_SUB_DIRS			  += riva
+  endif
+endif
+
+ifeq ($(CONFIG_FB_SIS),y)
+SUB_DIRS			  += sis 
+obj-y				  += sis/sisfb.o
+else
+  ifeq ($(CONFIG_FB_SIS),m)
+  MOD_SUB_DIRS			  += sis 
   endif
 endif
 

@@ -1,7 +1,7 @@
 VERSION = 2
 PATCHLEVEL = 4
 SUBLEVEL = 0
-EXTRAVERSION = -test11-ruby
+EXTRAVERSION = -test12-ruby
 
 KERNELRELEASE=$(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
 
@@ -206,7 +206,6 @@ MRPROPER_FILES = \
 	drivers/net/hamradio/soundmodem/sm_tbl_{hapn4800,psk4800}.h \
 	drivers/net/hamradio/soundmodem/sm_tbl_{afsk2400_7,afsk2400_8}.h \
 	drivers/net/hamradio/soundmodem/gentbl \
-	drivers/char/hfmodem/gentbl drivers/char/hfmodem/tables.h \
 	drivers/sound/*_boot.h drivers/sound/.*.boot \
 	drivers/sound/msndinit.c \
 	drivers/sound/msndperm.c \
