@@ -410,7 +410,7 @@ static void analog_name(struct analog *analog)
 
 static void analog_init_device(struct analog_port *port, struct analog *analog, int index)
 {
-	int i, j, t, v, x, y, z;
+	int i, j, t, x, y, z;
 
 	analog_name(analog);
 
@@ -431,23 +431,20 @@ static void analog_init_device(struct analog_port *port, struct analog *analog, 
 		if (analog->mask & (1 << i)) {
 			
 			t = analog_axes[j];
-			v = (port->axes[0] + port->axes[1]) >> 1;
 			x = port->axes[i];
-			y = (x >> 3);
-			z = v - port->axes[i];
+			y = (port->axes[0] + port->axes[1]) >> 1;
+			z = y - port->axes[i];
 			z = z > 0 ? z : -z;
 
 			set_bit(t, analog->dev.absbit);
 
-			if ((i == 2 || i == 3) && (j == 2 || j == 3) && (z > (v >> 3))) {
-				x = v;
-				y = 0;
-			}
+			if ((i == 2 || i == 3) && (j == 2 || j == 3) && (z > (y >> 3)))
+				x = y;
 
 			analog->dev.absmax[t] = (x << 1) - (x >> 3);
 			analog->dev.absmin[t] = (x >> 3);
 			analog->dev.absfuzz[t] = port->fuzz;
-			analog->dev.absflat[t] = y;
+			analog->dev.absflat[t] = (x >> 3);
 
 			j++;
 		}
