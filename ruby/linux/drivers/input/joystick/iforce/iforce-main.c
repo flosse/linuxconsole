@@ -74,9 +74,10 @@ static struct iforce_device iforce_device[] = {
 	{ 0x046d, 0xc291, "Logitech WingMan Formula Force",		btn_wheel, abs_wheel, ff_iforce },
 	{ 0x05ef, 0x020a, "AVB Top Shot Pegasus",			btn_avb_pegasus, abs_avb_pegasus, ff_iforce },
 	{ 0x05ef, 0x8884, "AVB Mag Turbo Force",			btn_avb_wheel, abs_wheel, ff_iforce },
-	{ 0x05ef, 0x8888, "AVB Top Shot Force Feedback Racing Wheel",	btn_avb_tw, abs_wheel, ff_iforce },
-	{ 0x06f8, 0x0001, "Guillemot Race Leader Force Feedback",	btn_wheel, abs_wheel, ff_iforce },
-	{ 0x06f8, 0x0004, "Guillemot Force Feedback Racing Wheel",	btn_wheel, abs_wheel, ff_iforce },
+	{ 0x05ef, 0x8888, "AVB Top Shot Force Feedback Racing Wheel",	btn_avb_tw, abs_wheel, ff_iforce }, //?
+	{ 0x061c, 0xc0a4, "ACT LABS Force RS",                          btn_wheel, abs_wheel, ff_iforce }, //?
+	{ 0x06f8, 0x0001, "Guillemot Race Leader Force Feedback",	btn_wheel, abs_wheel, ff_iforce }, //?
+	{ 0x06f8, 0x0004, "Guillemot Force Feedback Racing Wheel",	btn_wheel, abs_wheel, ff_iforce }, //?
 	{ 0x0000, 0x0000, "Unknown I-Force Device [%04x:%04x]",		btn_joystick, abs_joystick, ff_iforce }
 };
 
@@ -213,8 +214,6 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
  * Erases an effect: it frees the effect id and mark as unused the memory
  * allocated for the parameters
  */
-/*FIXME: stop effect before erasing */
-/*TODO: use CHECK_OWNERSHIP */
 static int iforce_erase_effect(struct input_dev *dev, int effect_id)
 {
 	struct iforce* iforce = (struct iforce*)(dev->private);
@@ -223,7 +222,7 @@ static int iforce_erase_effect(struct input_dev *dev, int effect_id)
 
 	/* Check who is trying to erase this effect */
 	if (iforce->core_effects[effect_id].owner != current->pid) {
-		printk(KERN_WARNING "iforce.c: %d tried to erase an effect belonging to %d\n", current->pid, iforce->core_effects[effect_id].owner);
+		printk(KERN_WARNING "iforce-main.c: %d tried to erase an effect belonging to %d\n", current->pid, iforce->core_effects[effect_id].owner);
 		return -EACCES;
 	}
 
@@ -314,6 +313,7 @@ static void iforce_release(struct input_dev *dev)
 			 * was released */
 			if (iforce->usbdev == NULL) {
 				iforce_delete_device(iforce);
+				kfree(iforce);
 			}
 		break;
 #endif
@@ -322,11 +322,18 @@ static void iforce_release(struct input_dev *dev)
 
 void iforce_delete_device(struct iforce *iforce)
 {
+	switch (iforce->bus) {
 #ifdef IFORCE_USB
-	iforce_usb_delete(iforce);
+	case IFORCE_USB:
+		iforce_usb_delete(iforce);
+		break;
 #endif
-
-	kfree(iforce);
+#ifdef IFORCE_232
+	case IFORCE_232:
+		//TODO: Wait for the last packets to be sent
+		break;
+#endif
+	}
 }
 
 int iforce_init_device(struct iforce *iforce)
@@ -376,8 +383,7 @@ int iforce_init_device(struct iforce *iforce)
 			break;
 
 	if (i == 20) { /* 5 seconds */
-		printk(KERN_ERR "iforce.c: Timeout waiting for response from device.\n");
-		iforce_delete_device(iforce);
+		printk(KERN_ERR "iforce-main.c: Timeout waiting for response from device.\n");
 		return -1;
 	}
 
@@ -387,16 +393,27 @@ int iforce_init_device(struct iforce *iforce)
 
 	if (!iforce_get_id_packet(iforce, "M"))
 		iforce->dev.idvendor = (iforce->edata[2] << 8) | iforce->edata[1];
+	else
+		printk(KERN_WARNING "iforce-main.c: Device does not respond to id packet M\n");
+
 	if (!iforce_get_id_packet(iforce, "P"))
 		iforce->dev.idproduct = (iforce->edata[2] << 8) | iforce->edata[1];
+	else
+		printk(KERN_WARNING "iforce-main.c: Device does not respond to id packet P\n");
+
 	if (!iforce_get_id_packet(iforce, "B"))
 		iforce->device_memory.end = (iforce->edata[2] << 8) | iforce->edata[1];
+	else
+		printk(KERN_WARNING "iforce-main.c: Device does not respond to id packet B\n");
+
 	if (!iforce_get_id_packet(iforce, "N"))
 		iforce->dev.ff_effects_max = iforce->edata[1];
+	else
+		printk(KERN_WARNING "iforce-main.c: Device does not respond to id packet N\n");
 
 	/* Check if the device can store more effects than the driver can really handle */
 	if (iforce->dev.ff_effects_max > FF_EFFECTS_MAX) {
-		printk(KERN_WARNING "input??: Device can handle %d effects, but N_EFFECTS_MAX is set to %d in iforce.c\n",
+		printk(KERN_WARNING "input??: Device can handle %d effects, but N_EFFECTS_MAX is set to %d in iforce.h\n",
 			iforce->dev.ff_effects_max, FF_EFFECTS_MAX);
 		iforce->dev.ff_effects_max = FF_EFFECTS_MAX;
 	}
@@ -437,9 +454,8 @@ int iforce_init_device(struct iforce *iforce)
 	for (i = 0; iforce->type->btn[i] >= 0; i++) {
 		signed short t = iforce->type->btn[i];
 		set_bit(t, iforce->dev.keybit);
-		if (t != BTN_DEAD)
-			set_bit(t, iforce->dev.ffbit);
 	}
+	set_bit(BTN_DEAD, iforce->dev.keybit);
 
 	for (i = 0; iforce->type->abs[i] >= 0; i++) {
 
@@ -469,6 +485,7 @@ int iforce_init_device(struct iforce *iforce)
 				break;
 
 			case ABS_RUDDER:
+
 				iforce->dev.absmax[t] = 127;
 				iforce->dev.absmin[t] = -128;
 				break;
