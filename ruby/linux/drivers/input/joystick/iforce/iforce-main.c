@@ -381,7 +381,7 @@ int iforce_init_device(struct iforce *iforce)
 
 	iforce->type = iforce_device + i;
 
-	iforce->name = iforce->type->name;
+	strncpy(iforce->name, iforce->type->name, 64);
 
 /*
  * Set input device bitfields and ranges.
@@ -445,9 +445,9 @@ int iforce_init_device(struct iforce *iforce)
 
 	input_register_device(&iforce->dev);
 
-	printk(KERN_INFO "input: %s [%d effects, %ld bytes memory] on %s\n",
+	printk(KERN_INFO "input: %s [%d effects, %ld bytes memory]\n",
 		iforce->dev.name, iforce->dev.ff_effects_max,
-		iforce->device_memory.end, path);
+		iforce->device_memory.end);
 
 	return 0;
 }
