@@ -95,14 +95,9 @@ static char *video_misc_wr, *video_misc_rd;
 static char *attrib_port;
 static char *dac_reg, *dac_val;
 
-static int	first_vc = 17;
-static int	last_vc  = 20;
 static int	vram     =  0;
-static struct vc_data	*nvvga_display_fg = NULL;
 
 #ifdef MODULE_PARM
-MODULE_PARM(first_vc, "1-255i");
-MODULE_PARM(last_vc,  "1-255i");
 MODULE_PARM(vram, "i");
 #endif
 
@@ -187,7 +182,6 @@ static void nvvgacon_init(struct vc_data *c, int init)
 	
 	c->vc_can_do_color = 1;
 	c->vc_complement_mask = 0x7700;
-	c->vc_display_fg = &nvvga_display_fg;
 
 	if (init) {
 		c->vc_cols = nvvga_video_num_columns;
@@ -196,11 +190,7 @@ static void nvvgacon_init(struct vc_data *c, int init)
 		vc_resize_con(nvvga_video_num_lines, nvvga_video_num_columns, c->vc_num);
         }
 	
-	if (nvvga_display_fg == NULL)
-		nvvga_display_fg = c;
-
 	MOD_INC_USE_COUNT;
-
 }
 
 static inline void nvvga_set_mem_top(struct vc_data *c)
@@ -210,11 +200,7 @@ static inline void nvvga_set_mem_top(struct vc_data *c)
 
 static void nvvgacon_deinit(struct vc_data *c)
 {
-	if (nvvga_display_fg == c)
-		nvvga_display_fg = NULL;
-
 	MOD_DEC_USE_COUNT;
-
 }
 
 static u8 nvvgacon_build_attr(struct vc_data *c, u8 color, u8 intensity, u8 blink, u8 underline, u8 reverse)
@@ -808,13 +794,6 @@ __initfunc(void nvvgacon_setup(char *str, int *ints))
 
 	if (ints[0] < 2)
 		return;
-
-	if (ints[1] < 1 || ints[1] > MAX_NR_CONSOLES || 
-	    ints[2] < 1 || ints[2] > MAX_NR_CONSOLES)
-		return;
-
-	first_vc = ints[1]-1;
-	last_vc  = ints[2]-1;
 }
 #endif
 
@@ -824,12 +803,24 @@ void nvvga_console_init(void)
 __initfunc(void nvvga_console_init(void))
 #endif
 {
-	if (first_vc > last_vc)
-		return;
+	const char *display_desc = NULL;
+        struct vt_struct *vt;
+        int i;
 
-	take_over_console(&nvvga_con, first_vc-1, last_vc-1, 0);
+        vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
+        if (!vt) return;
+        display_desc = create_vt(vt, &nvvga_con);
+        if (!display_desc) {
+                kfree(vt);
+                return;
+        }
+        i = vc_allocate(vt->vcs.first_vc);
+        if (i)  {
+                kfree(vt);
+                return;
+        }
+        printk("Console: color %s %dx%d",display_desc,vc->vc_cols,vc->vc_rows);
 }
-
 
 #ifdef MODULE
 
