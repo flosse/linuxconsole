@@ -170,6 +170,7 @@ if [ "$CONFIG_NET" = "y" ]; then
   endmenu
 fi
 
+source drivers/input/Config.in
 source drivers/char/Config.in
 
 source fs/Config.in
