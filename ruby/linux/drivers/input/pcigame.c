@@ -1,5 +1,5 @@
 /*
- *  joy-pci.c  Version 0.4.0
+ *  pcigame.c  Version 0.4.0
  *
  *  Copyright (c) 1999 Raymond Ingles
  *  Copyright (c) 1999 Vojtech Pavlik
@@ -8,9 +8,8 @@
  */
 
 /*
- * This is a module for the Linux joystick driver, supporting the
- * gameports on Trident 4DWave and Aureal Vortex soundcards, and
- * analog joysticks connected to them.
+ * This is a module for the Linux input driver, supporting the
+ * gameports on Trident 4DWave and Aureal Vortex soundcards.
  */
 
 /*
@@ -37,29 +36,16 @@
 #include <linux/delay.h>
 #include <linux/errno.h>
 #include <linux/ioport.h>
-#include <linux/joystick.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/string.h>
 #include <linux/pci.h>
 #include <linux/pci_ids.h>
 #include <linux/init.h>
+#include <linux/gameport.h>
 
-MODULE_AUTHOR("Raymond Ingles <sorceror@tir.com>");
-MODULE_PARM(js_pci, "3-32i");
+struct pcigame;
 
-#define NUM_CARDS              8
-static int js_pci[NUM_CARDS * 4] __initdata = { -1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0,
-						-1,0,0,0,-1,0,0,0,-1,0,0,0,-1,0,0,0 };
-
-static struct js_port * js_pci_port __initdata = NULL;
-
-#include "joy-analog.h"
-
-struct js_pci_info;
-typedef void (*js_pci_func)(struct js_pci_info *);
-
-struct js_pci_data {
+struct pcigame_data {
 	int vendor;	/* PCI Vendor ID */
 	int model;	/* PCI Model ID */
 	int size;	/* Memory / IO region size */
@@ -69,205 +55,136 @@ struct js_pci_data {
 	int axes;	/* Axes start */
 	int axsize;	/* Axis field size */
 	int axmax;	/* Axis field max value */
-	js_pci_func init;	
-	js_pci_func cleanup;	
+	void (*init)(struct pcigame *);	
+	void (*cleanup)(struct pcigame *);	
 	char *name;
 };
 
-struct js_pci_info {
-        unsigned char *base;
+struct pcigame {
+	struct gameport gameport;
+	struct pcigame_data *data;
 	struct pci_dev *pci_p;
+        unsigned char *base;
 	__u32 lcr;
-	struct js_pci_data *data;
-        struct js_an_info an;
 };
 
 /*
- * js_pci_*_init() sets the info->base field, disables legacy gameports,
+ * pcigame_*_init() sets the pcigame->base field, disables legacy gameports,
  * and enables the enhanced ones.
  */
 
-static void js_pci_4dwave_init(struct js_pci_info *info)
+static void pcigame_4dwave_init(struct pcigame *pcigame)
 {
-	info->base = ioremap(BASE_ADDRESS(info->pci_p, 1), info->data->size);
-	pci_read_config_word(info->pci_p, info->data->lcr, (unsigned short *)&info->lcr);
-	pci_write_config_word(info->pci_p, info->data->lcr, info->lcr & ~0x20);
-	writeb(0x80, info->base + info->data->gcr);
+	pcigame->base = ioremap(BASE_ADDRESS(pcigame->pci_p, 1), pcigame->data->size);
+	pci_read_config_word(pcigame->pci_p, pcigame->data->lcr, (unsigned short *)&pcigame->lcr);
+	pci_write_config_word(pcigame->pci_p, pcigame->data->lcr, pcigame->lcr & ~0x20);
+	writeb(0x80, pcigame->base + pcigame->data->gcr);
 }
 
-static void js_pci_vortex_init(struct js_pci_info *info)
+static void pcigame_vortex_init(struct pcigame *pcigame)
 {
-	info->base = ioremap(BASE_ADDRESS(info->pci_p, 0), info->data->size);
-	info->lcr = readl(info->base + info->data->lcr);
-	writel(info->lcr & ~0x8, info->base + info->data->lcr);
-	writel(0x40, info->base + info->data->gcr);
+	pcigame->base = ioremap(BASE_ADDRESS(pcigame->pci_p, 0), pcigame->data->size);
+	pcigame->lcr = readl(pcigame->base + pcigame->data->lcr);
+	writel(pcigame->lcr & ~0x8, pcigame->base + pcigame->data->lcr);
+	writel(0x40, pcigame->base + pcigame->data->gcr);
 }
 
 /*
- * js_pci_*_cleanup does the opposite of the above functions.
+ * pcigame_*_cleanup does the opposite of the above functions.
  */
 
-static void js_pci_4dwave_cleanup(struct js_pci_info *info)
+static void pcigame_4dwave_cleanup(struct pcigame *pcigame)
 {
-	pci_write_config_word(info->pci_p, info->data->lcr, info->lcr);
-	writeb(0x00, info->base + info->data->gcr);
-	iounmap(info->base);
+	pci_write_config_word(pcigame->pci_p, pcigame->data->lcr, pcigame->lcr);
+	writeb(0x00, pcigame->base + pcigame->data->gcr);
+	iounmap(pcigame->base);
 }
 
-static void js_pci_vortex_cleanup(struct js_pci_info *info)
+static void pcigame_vortex_cleanup(struct pcigame *pcigame)
 {
-	writel(info->lcr, info->base + info->data->lcr);
-	writel(0x00, info->base + info->data->gcr);
-	iounmap(info->base);
+	writel(pcigame->lcr, pcigame->base + pcigame->data->lcr);
+	writel(0x00, pcigame->base + pcigame->data->gcr);
+	iounmap(pcigame->base);
 }
 
-static struct js_pci_data js_pci_data[] =
+static struct pcigame_data pcigame_data[] =
 {{ PCI_VENDOR_ID_TRIDENT, 0x2000, 0x10000, 0x00044 ,0x00030, 0x00031, 0x00034, 2, 0xffff,
-	js_pci_4dwave_init, js_pci_4dwave_cleanup, "Trident 4DWave DX" },
+	pcigame_4dwave_init, pcigame_4dwave_cleanup, "Trident 4DWave DX" },
  { PCI_VENDOR_ID_TRIDENT, 0x2001, 0x10000, 0x00044, 0x00030, 0x00031, 0x00034, 2, 0xffff,
-	js_pci_4dwave_init, js_pci_4dwave_cleanup, "Trident 4DWave NX" },
+	pcigame_4dwave_init, pcigame_4dwave_cleanup, "Trident 4DWave NX" },
  { PCI_VENDOR_ID_AUREAL,  0x0001, 0x40000, 0x1280c, 0x1100c, 0x11008, 0x11010, 4, 0x1fff,
-	js_pci_vortex_init, js_pci_vortex_cleanup, "Aureal Vortex1" },
+	pcigame_vortex_init, pcigame_vortex_cleanup, "Aureal Vortex1" },
  { PCI_VENDOR_ID_AUREAL,  0x0002, 0x40000, 0x2a00c, 0x2880c, 0x28808, 0x28810, 4, 0x1fff,
-	js_pci_vortex_init, js_pci_vortex_cleanup, "Aureal Vortex2" },
+	pcigame_vortex_init, pcigame_vortex_cleanup, "Aureal Vortex2" },
  { 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL }};
 
 /*
- * js_pci_read() reads data from a PCI gameport.
+ * pcigame_read() reads data from a PCI gameport.
  */
 
-static int js_pci_read(void *xinfo, int **axes, int **buttons)
+static int pcigame_read(void *xpcigame, int **axes, int **buttons)
 {
-        struct js_pci_info *info = xinfo;
+        struct pcigame *pcigame = xpcigame;
 	int i;
 
-	info->an.buttons = ~readb(info->base + info->data->buttons) >> 4;
-
+	*buttons = ~readb(pcigame->base + pcigame->data->buttons) >> 4;
 	for (i = 0; i < 4; i++)
-		info->an.axes[i] = readw(info->base + info->data->axes + i * info->data->axsize);
-
-        js_an_decode(&info->an, axes, buttons);
+		axes[i] = readw(pcigame->base + pcigame->data->axes + i * pcigame->data->axsize);
         
         return 0;
 }
 	
-/*
- * js_pci_open() is a callback from the file open routine.
- */
 
-static int js_pci_open(struct js_dev *jd)
+static int pcigame_init(struct pci_dev *pci_p, struct pcigame *data)
 {
-        MOD_INC_USE_COUNT;
-        return 0;
-}
 
-/*
- * js_pci_close() is a callback from the file release routine.
- */
+	if (!(pcigame = kmalloc(sizeof(struct pcigame), GFP_KERNEL)))
+		return -1;
+        memset(pcigame, 0, sizeof(struct pcigame));
 
-static int js_pci_close(struct js_dev *jd)
-{
-        MOD_DEC_USE_COUNT;
-        return 0;
-}
-
-static struct js_port * __init js_pci_probe(struct js_port *port, int type, int number,
-					struct pci_dev *pci_p, struct js_pci_data *data)
-{
-	int i;
-	unsigned char u;
-	int mask0, mask1, numdev;
-        struct js_pci_info iniinfo;
-        struct js_pci_info *info = &iniinfo;
-
-	mask0 = mask1 = 0;
+	pcigame->data = data;
+	pcigame->pci_p = pci_p;
+	data->init(pcigame);
+	sleep_ms(10);
+	register_gameport(&pcigame.gameport);
 	
-	for (i = 0; i < NUM_CARDS; i++)
-		if (js_pci[i * 4] == type && js_pci[i * 4 + 1] == number) {
-			mask0 = js_pci[i * 4 + 2];
-			mask1 = js_pci[i * 4 + 3];
-			if (!mask0 && !mask1) return port;
-			break;
-		}
+	printk(KERN_INFO "gameport%d: %s at pci%02x.%x\n",
+		gameport.number, data->name, PCI_SLOT(pci_p->devfn), PCI_FUNC(pci_p->devfn));
 
-	memset(info, 0,  sizeof(struct js_pci_info));
-
-	info->data = data;
-	info->pci_p = pci_p;
-	data->init(info);
-
-	mdelay(10);
-	js_pci_read(info, NULL, NULL);
-
-	for (i = u = 0; i < 4; i++)
-		if (info->an.axes[i] < info->data->axmax) u |= 1 << i;
-
-	if ((numdev = js_an_probe_devs(&info->an, u, mask0, mask1, port)) <= 0)
-		return port;
-
-	port = js_register_port(port, info, numdev, sizeof(struct js_pci_info), js_pci_read);
-
-	info = port->info;
-
-	for (i = 0; i < numdev; i++)
-		printk(KERN_WARNING "js%d: %s on %s #%d\n",
-			js_register_device(port, i, js_an_axes(i, &info->an), js_an_buttons(i, &info->an),
-			js_an_name(i, &info->an), js_pci_open, js_pci_close), js_an_name(i, &info->an), data->name, number);
-
-	js_pci_read(info, port->axes, port->buttons);
-	js_an_init_corr(&info->an, port->axes, port->corr, 32);
-
-	return port;
 }
 
-#ifndef MODULE
-int __init js_pci_setup(SETUP_PARAM)
-{
-        int i;
-	SETUP_PARSE(NUM_CARDS*4);
-        for (i = 0; i <= ints[0] && i < NUM_CARDS*4; i++)
-		js_pci[i] = ints[i+1];
-	return 1;
-}
-__setup("js_pci=", js_pci_setup);
-#endif
-
-#ifdef MODULE
-int init_module(void)
-#else
-int __init js_pci_init(void)
-#endif
+int __init pcigame_init(void)
 {
         struct pci_dev *pci_p = NULL;
-        int i, j;
+	int ports = 0;
+        int i;
 
-	for (i = 0; js_pci_data[i].vendor; i++)
-		for (j = 0; (pci_p = pci_find_device(js_pci_data[i].vendor, js_pci_data[i].model, pci_p)); j++)
-			js_pci_port = js_pci_probe(js_pci_port, i, j, pci_p, js_pci_data + i);
+	for (i = 0; pcigame_data[i].vendor; i++)
+		for (; (pci_p = pci_find_device(pcigame_data[i].vendor, pcigame_data[i].model, pci_p));)
+			ports += !pcigame_init(pci_p, pcigame_data + i);
 
-        if (!js_pci_port) {
-#ifdef MODULE
-                printk(KERN_WARNING "joy-pci: no joysticks found\n");
-#endif
+        if (!ports) {
+                printk(KERN_WARNING "pcigame: no gameports found\n");
                 return -ENODEV;
         }
 
         return 0;
 }
 
-#ifdef MODULE
-void cleanup_module(void)
+void __exit pcigame_exit(void)
 {
         int i;
-        struct js_pci_info *info;
+        struct pcigame *pcigame;
 
-        while (js_pci_port) {
-                for (i = 0; i < js_pci_port->ndevs; i++)
-                        if (js_pci_port->devs[i])
-                                js_unregister_device(js_pci_port->devs[i]);
-                info = js_pci_port->info;
-		info->data->cleanup(info);
-                js_pci_port = js_unregister_port(js_pci_port);
+        while (pcigame_port) {
+                for (i = 0; i < pcigame_port->ndevs; i++)
+                        if (pcigame_port->devs[i])
+                                js_unregister_device(pcigame_port->devs[i]);
+                pcigame = pcigame_port->pcigame;
+		pcigame->data->cleanup(pcigame);
+                pcigame_port = js_unregister_port(pcigame_port);
         }
 }
-#endif
+
+module_init(pcigame_init);
+module_exit(pcigame_exit);
