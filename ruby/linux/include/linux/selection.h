@@ -19,17 +19,12 @@ extern int sel_loadlut(const unsigned long arg);
 extern int mouse_reporting(void);
 extern void mouse_report(struct tty_struct * tty, int butt, int mrx, int mry);
 
-#define video_num_columns	(vc_cons[currcons].d->vc_cols)
-#define video_num_lines		(vc_cons[currcons].d->vc_rows)
-#define video_size_row		(vc_cons[currcons].d->vc_size_row)
-#define can_do_color		(vc_cons[currcons].d->vc_can_do_color)
+#define video_num_columns	(vc_cons[currcons]->vc_cols)
+#define video_num_lines		(vc_cons[currcons]->vc_rows)
+#define video_size_row		(vc_cons[currcons]->vc_size_row)
+#define can_do_color		(vc_cons[currcons]->vc_can_do_color)
 
 extern int console_blanked;
-
-extern unsigned char color_table[];
-extern int default_red[];
-extern int default_grn[];
-extern int default_blu[];
 
 extern unsigned short *screen_pos(struct vc_data *vc, int w_offset, int viewed);
 extern u16 screen_glyph(struct vc_data *vc, int offset);
