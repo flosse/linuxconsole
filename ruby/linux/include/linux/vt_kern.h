@@ -268,6 +268,7 @@ void gotoxy(struct vc_data *vc, int new_x, int new_y);
 inline void gotoxay(struct vc_data *vc, int new_x, int new_y);
 void reset_palette(struct vc_data *vc);
 void set_palette(struct vc_data *vc);
+inline int resize_screen(struct vc_data *vc, int cols, int rows);
 void scroll_up(struct vc_data *vc, int);
 void scroll_down(struct vc_data *vc, int);
 void scroll_region_up(struct vc_data *vc,unsigned int t,unsigned int b,int nr);
