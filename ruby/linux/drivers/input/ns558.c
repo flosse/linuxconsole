@@ -331,7 +331,7 @@ int __init ns558_init(void)
 	}
 #endif
 
-	return -!ns558;
+	return 0;
 }
 
 void __exit ns558_exit(void)
