@@ -93,7 +93,6 @@ extern int vesafb_setup(char*);
 extern int vga16fb_init(void);
 extern int vga16fb_setup(char*);
 extern int hgafb_init(void);
-extern int hgafb_setup(char*);
 extern int matroxfb_init(void);
 extern int matroxfb_setup(char*);
 extern int hpfb_init(void);
@@ -126,7 +125,6 @@ extern int stifb_setup(char*);
 extern int radeonfb_init(void);
 extern int radeonfb_setup(char*);
 extern int sstfb_init(void);
-extern int sstfb_setup(char*);
 extern int e1355fb_init(void);
 extern int e1355fb_setup(char*);
 extern int dcfb_init(void);
@@ -210,7 +208,7 @@ static struct {
 	{ "sisfb", sisfb_init, sisfb_setup },
 #endif
 #ifdef CONFIG_FB_SST
-	{ "sstfb", sstfb_init, sstfb_setup },
+	{ "sstfb", sstfb_init, NULL },
 #endif
 
 	/*
@@ -248,7 +246,7 @@ static struct {
 	{ "macfb", macfb_init, macfb_setup },
 #endif
 #ifdef CONFIG_FB_HGA
-	{ "hga", hgafb_init, hgafb_setup },
+	{ "hga", hgafb_init, NULL },
 #endif 
 #ifdef CONFIG_FB_IGA
 	{ "igafb", igafb_init, igafb_setup },

@@ -326,7 +326,6 @@ static const char *mode_option __initdata = NULL;
  * Framebuffer API 
  */
 int sstfb_init(void);
-int sstfb_setup(char *options);
 
 static int sstfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info);
 static int sstfb_set_par(struct fb_info *info);
@@ -1308,37 +1307,6 @@ static void  sst_shutdown(void)
         pci_write_config_dword(sst_dev, PCI_VCLK_DISABLE,0);
 }
 #endif
-
-/*
- * Interface to the world
- */
-int __init sstfb_setup(char *options)
-{
-	char *this_opt;
-
-	printk("sstfb_setup\n");
-
-	if (!options || !*options)
-		return 0;
-
-	while (this_opt = strsep(&options, ",")) {
-		if (!*this_opt)
-			continue;
-
-		if (!strcmp(this_opt, "inverse")) {
-			inverse = 1;
-			fb_invert_cmaps();
-#ifdef CONFIG_MTRR
-		} else if (!strcmp(this_opt, "nomtrr")) {
-			fb_disable_mtrrs();
-#endif
-		} else {
-			mode_option = this_opt;
-		}
-	}
-
-        return 0;
-}
 
 int __init sstfb_init(void)
 {

@@ -731,33 +731,6 @@ int __init hgafb_init(void)
 }
 
 	/*
-	 *  Setup
-	 */
-
-int __init hgafb_setup(char *options)
-{
-	char *this_opt;
-
-	if (!options || !*options)
-		return 0;
-
-	while (this_opt = strsep(&options, ",")) {
-		if (!*this_opt)
-			continue;
-		if (!strcmp(this_opt, "inverse")) {
-			inverse = 1;
-			fb_invert_cmaps();
-#ifdef CONFIG_MTRR
-		} else if (!strcmp(this_opt, "nomtrr")) {
-			fb_disable_mtrrs();
-#endif
-		}
-	}
-	return 0;
-}
-
-
-	/*
 	 * Cleanup
 	 */
 
