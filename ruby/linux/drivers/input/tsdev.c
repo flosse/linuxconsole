@@ -302,7 +302,7 @@ static void tsdev_event(struct input_handle *handle, unsigned int type, unsigned
 	wake_up_interruptible(&tsdev->wait);
 }
 
-static struct input_handle *tsdev_connect(struct input_handler *handler, struct input_dev *dev)
+static struct input_handle *tsdev_connect(struct input_handler *handler, struct input_dev *dev, struct input_device_id *id)
 {
 	struct tsdev *tsdev;
 	int minor;

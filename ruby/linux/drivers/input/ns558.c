@@ -145,9 +145,6 @@ static struct ns558* ns558_isa_probe(int io, struct ns558 *next)
 	port->gameport.phys = port->phys;
 	port->gameport.name = port->name;
 	port->gameport.idbus = BUS_ISA;
-	port->gameport.idvendor = 0x0000;
-	port->gameport.idproduct = 0x0000;
-	port->gameport.idversion = 0x0000;
 
 	sprintf(port->phys, "isa%04x/gameport0", io & (-1 << i));
 	sprintf(port->name, "NS558 ISA");
