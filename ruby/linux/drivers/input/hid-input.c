@@ -58,7 +58,7 @@ static unsigned char hid_keyboard[256] = {
 static struct {
 	__s32 x;
 	__s32 y;
-}  hid_hat_to_axis[] = {{ 0,-1}, { 1,-1}, { 1, 0}, { 1, 1}, { 0, 1}, {-1, 1}, {-1, 0}, {-1,-1}};
+}  hid_hat_to_axis[] = {{ 0, 0}, { 0,-1}, { 1,-1}, { 1, 0}, { 1, 1}, { 0, 1}, {-1, 1}, {-1, 0}, {-1,-1}};
 
 static void hidinput_configure_usage(struct hid_device *device, struct hid_field *field, struct hid_usage *usage)
 {
@@ -337,8 +337,8 @@ void hidinput_hid_event(struct hid_device *hid, struct hid_field *field, struct 
 	int *quirks = &hid->quirks;
 
 	if (usage->hat_min != usage->hat_max) {
-		value = (value - usage->hat_min) * 8 / (usage->hat_max - usage->hat_min + 1);
-		if (value > 8) value = 8;
+		value = (value - usage->hat_min) * 8 / (usage->hat_max - usage->hat_min + 1) + 1;
+		if (value < 0 || value > 8) value = 0;
 		input_event(input, usage->type, usage->code    , hid_hat_to_axis[value].x);
 		input_event(input, usage->type, usage->code + 1, hid_hat_to_axis[value].y);
 		return;
