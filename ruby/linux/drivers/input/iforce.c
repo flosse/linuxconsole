@@ -166,7 +166,9 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 					serio_write(iforce->serio, data[i]);
 					csum = csum ^ data[i];
 				}
+
 				serio_write(iforce->serio, csum);
+
 				return;
 			}
 
@@ -215,7 +217,6 @@ static struct ff_init_data {
 	u8 data[4];
 } ff_init_data[] =  {
 
-#if 0
 	{ FF_CMD_INIT_F,   { 0x4F } },
 	{ FF_CMD_INIT_F,   { 0x56 } },
 	{ FF_CMD_INIT_F,   { 0x4E } },
@@ -254,17 +255,26 @@ static struct ff_init_data {
 	{ FF_CMD_INIT_2,   { 0x05 } },
 	{ FF_CMD_INIT_0_A, { 0x04, 0x00 } },
 	{ FF_CMD_INIT_3,   { 0x80 } },
-#endif
-	/* Disable auto-centering */
-	{ FF_CMD_INIT_2,   { 0x04 } },
 	{ 0, }
  };
 
 static void iforce_init_ff(struct iforce *iforce)
 {
 	int i;
-	for (i = 0; ff_init_data[i].cmd; i++)
+	static const struct timespec pause = {0, 1000000}; /* 1 ms */
+
+	for (i = 0; ff_init_data[i].cmd; i++) {
 		send_packet(iforce, ff_init_data[i].cmd, ff_init_data[i].data);
+
+		/* When transmitting over a rs232 serial line, we have to
+		 * avoid sending packets too fast
+		 */
+		if (iforce->dev.idbus == BUS_RS232) {
+			set_current_state(TASK_UNINTERRUPTIBLE);
+			schedule_timeout(timespec_to_jiffies(&pause));
+		}
+
+	}
 }
 
 /*
