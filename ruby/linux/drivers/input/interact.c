@@ -57,6 +57,9 @@ struct interact {
 	int reads;
 };
 
+static unsigned char interact_abs[] = { ABS_RX, ABS_RY, ABS_X, ABS_Y };
+static short interact_btn[] = { BTN_TR, BTN_X, BTN_Y, BTN_Z, BTN_A, BTN_B, BTN_C, BTN_TL, BTN_TL2, BTN_TR2, BTN_MODE, BTN_SELECT };
+
 /*
  * interact_read_packet() reads and Hammerhead/FX joystick data.
  */
@@ -69,7 +72,7 @@ static int interact_read_packet(struct gameport *gameport, int length, u32 *data
 	int i;
 
 	i = 0;
-	data[0] = data[1] = 0;
+	data[0] = data[1] = data[2] = 0;
 	t = gameport_time(gameport, INTERACT_MAX_START);
 	s = gameport_time(gameport, INTERACT_MAX_STROBE);
 
@@ -84,6 +87,7 @@ static int interact_read_packet(struct gameport *gameport, int length, u32 *data
 		if (v & ~u & 0x40) {
 			data[0] = (data[0] << 1) | ((v >> 4) & 1);
 			data[1] = (data[1] << 1) | ((v >> 5) & 1);
+			data[2] = (data[1] << 1) | ((v >> 7) & 1);
 			i++;
 			t = s;
 		}
@@ -102,7 +106,8 @@ static void interact_timer(unsigned long private)
 {
 	struct interact *interact = (struct interact *) private;
 	struct input_dev *dev = &interact->dev;
-	u32 data[2];
+	u32 data[3];
+	int i;
 
 	interact->reads++;
 
@@ -114,7 +119,23 @@ static void interact_timer(unsigned long private)
 
 		case INTERACT_TYPE_HHFX:
 
-			printk("data0: %08x, data1: %08x\n", data[0], data[1]);
+#if 0
+			printk("data0: %08x, data1: %08x data2: %08x\n", data[0], data[1], data[2]); 
+#endif
+
+			for (i = 0; i < 4; i++)
+				input_report_abs(dev, interact_abs[i], (data[i & 1] >> ((i >> 1) << 3)) & 0xff);
+
+			for (i = 0; i < 2; i++)
+				input_report_abs(dev, ABS_HAT0Y - i,
+					((data[1] >> ((i << 1) + 17)) & 1)  - ((data[1] >> ((i << 1) + 16)) & 1));
+
+			for (i = 0; i < 8; i++)
+				input_report_key(dev, interact_btn[i], (data[0] >> (i + 16)) & 1);
+
+			for (i = 0; i < 4; i++)
+				input_report_key(dev, interact_btn[i + 8], (data[1] >> (i + 20)) & 1);
+
 			break;
 
 	}
@@ -153,8 +174,8 @@ static void interact_close(struct input_dev *dev)
 static void interact_connect(struct gameport *gameport, struct gameport_dev *dev)
 {
 	struct interact *interact;
-	__u32 *data[INTERACT_MAX_LENGTH];
-	int i;
+	__u32 data[3];
+	int i, t;
 
 	if (!(interact = kmalloc(sizeof(struct interact), GFP_KERNEL)))
 		return;
@@ -172,10 +193,8 @@ static void interact_connect(struct gameport *gameport, struct gameport_dev *dev
 
 	i = interact_read_packet(gameport, INTERACT_MAX_LENGTH, data);
 
-	if (i != 32) {
-		printk("Initial packet read failed: %d\n", i);
+	if (i != 32 || (data[0] >> 24) != 0x0c || (data[1] >> 24) != 0x02)
 		goto fail2;
-	}
 
 	interact->type = INTERACT_TYPE_HHFX;
 
@@ -183,6 +202,23 @@ static void interact_connect(struct gameport *gameport, struct gameport_dev *dev
 	interact->dev.open = interact_open;
 	interact->dev.close = interact_close;
 	interact->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
+
+	for (i = 0; i < 4; i++) {
+		t = interact_abs[i];
+		set_bit(t, interact->dev.absbit);
+		interact->dev.absmin[t] = 0;
+		interact->dev.absmax[t] = 255;
+	}
+
+	for (i = 0; i < 2; i++) {
+		t = ABS_HAT0X + i;
+		set_bit(t, interact->dev.absbit);
+		interact->dev.absmin[t] = -1;
+		interact->dev.absmax[t] = 1;
+	}
+
+	for (i = 0; i < 12; i++)
+		set_bit(interact_btn[i], interact->dev.keybit);
 
 	input_register_device(&interact->dev);
 	printk(KERN_INFO "input%d: HammerHead/FX on gameport%d.0\n",
@@ -195,8 +231,6 @@ fail1:  kfree(interact);
 
 static void interact_disconnect(struct gameport *gameport)
 {
-	int i;
-
 	struct interact *interact = gameport->private;
 	input_unregister_device(&interact->dev);
 	gameport_close(gameport);
