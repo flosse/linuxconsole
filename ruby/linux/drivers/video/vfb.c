@@ -106,6 +106,9 @@ static struct fb_ops vfb_ops = {
     fb_set_par:		vfb_set_par, 
     fb_setcolreg:	vfb_setcolreg,
     fb_pan_display:	vfb_pan_display, 
+    fb_fillrect:	cfb_fillrect,
+    fb_copyarea:	cfb_copyarea,
+    fb_imageblit:	cfb_imageblit,	
     fb_mmap:		vfb_mmap,
 };
 
@@ -407,9 +410,9 @@ int __init vfb_init(void)
     /*
      * For real video cards we use ioremap.
      */
-    if (!(videomemory = vmalloc(videomemorysize)))
+    if (!(videomemory = vmalloc(videomemorysize))) 
 	return -ENOMEM;
-
+ 
     /*
      * VFB must clear memory to prevent kernel info
      * leakage into userspace
@@ -431,10 +434,6 @@ int __init vfb_init(void)
     fb_info.pseudo_palette = &vfb_pseudo_palette;	
     fb_info.flags = FBINFO_FLAG_DEFAULT;
   
-    /* Alloc but do not set the default color map. */
-    fb_info.cmap.len = 1<<fb_info.var.bits_per_pixel;
-    fb_alloc_cmap(&fb_info.cmap, fb_info.cmap.len, 0);	 
-
     if (register_framebuffer(&fb_info) < 0) {
 	vfree(videomemory);
 	return -EINVAL;
