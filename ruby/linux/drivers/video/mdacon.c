@@ -422,7 +422,7 @@ static void mdacon_clear(struct vc_data *vc, int y, int x,
 	}
 }
                         
-static void mdacon_bmove(struct vc_data *c, int sy, int sx, 
+static void mdacon_bmove(struct vc_data *vc, int sy, int sx, 
 			 int dy, int dx, int height, int width)
 {
 	u16 *src, *dest;
@@ -575,7 +575,7 @@ void __init mda_console_init(void)
         const char *display_desc = NULL;
         struct vt_struct *vt;
 	struct vc_data *vc;
-        int i;
+	long q;
 
 	/* Allocate the memory we need for this VT */
         vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
@@ -591,7 +591,7 @@ void __init mda_console_init(void)
 		kfree(vt);
 		return;
 	}
-	vt->kmalloc = 1;
+	vt->kmalloced = 1;
 	vt->vt_sw = &mda_con;
 	vt->vcs.vc_cons[0] = vc;
 #ifdef MODULE
@@ -599,15 +599,20 @@ void __init mda_console_init(void)
 #else
 	display_desc = create_vt(vt, 0);
 #endif
-	vc->vc_screenbuf = (long)kmalloc(vc->vc_screenbuf_size, GFP_KERNEL);
-        if (!display_desc || !vc->vc_screenbuf) {
+	q = (long) kmalloc(vc->vc_screenbuf_size, GFP_KERNEL);
+        if (!display_desc || !q) {
 		kfree(vt->vcs.vc_cons[0]);
 		kfree(vt->default_mode);
                 kfree(vt);
+		if (q)
+			kfree((char *) q);	
 		return;
         }
+	vc->vc_screenbuf = (unsigned short *) q;
 	vc_init(vc, !vt->vt_sw->con_save_screen);			
-        printk("Console: mono %s %dx%d",display_desc, vc->vc_cols, vc->vc_rows);
+      	tasklet_enable(&vt->vt_tasklet); 
+	tasklet_schedule(&vt->vt_tasklet);
+	printk("Console: mono %s %dx%d",display_desc, vc->vc_cols, vc->vc_rows);
         return;
 }
 
