@@ -954,11 +954,11 @@ static int hid_submit_ctrl(struct hid_device *hid)
 	if (!dir)
 		hid_output_report(report, hid->ctrlbuf);
 
-	hid->urb.transfer_buffer_length = ((report->size - 1) >> 3) + 1 + ((report->id > 0) && dir);
-	hid->urb.pipe = dir ? usb_rcvctrlpipe(hid->dev, 0) : usb_sndctrlpipe(hid->dev, 0);
-	hid->urb.dev = hid->dev;
+	hid->urbctrl.transfer_buffer_length = ((report->size - 1) >> 3) + 1 + ((report->id > 0) && dir);
+	hid->urbctrl.pipe = dir ? usb_rcvctrlpipe(hid->dev, 0) : usb_sndctrlpipe(hid->dev, 0);
+	hid->urbctrl.dev = hid->dev;
 	
-	hid->dr.length = cpu_to_le16(hid->urb.transfer_buffer_length);
+	hid->dr.length = cpu_to_le16(hid->urbctrl.transfer_buffer_length);
 	hid->dr.requesttype = USB_TYPE_CLASS | USB_RECIP_INTERFACE | dir;
 	hid->dr.request = dir ? USB_REQ_GET_REPORT : USB_REQ_SET_REPORT;
 	hid->dr.index = cpu_to_le16(hid->ifnum);
