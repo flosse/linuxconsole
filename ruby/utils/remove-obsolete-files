@@ -76,8 +76,11 @@ rm -fv drivers/video/tdfxfb.c
 rm -fv include/asm-m68k/adb_mouse.h
 rm -fv include/asm-m68k/atari_joystick.h
 rm -fv include/asm-m68k/mac_mouse.h
+rm -fv include/asm-m68k/atarikb.h
+rm -fv include/asm-m68k/keyboard.h
+rm -fv include/asm-m68k/q40_keyboard.h
 rm -fv include/asm-ppc/keyboard.h
-rm -fv include/asm/keyboard.h
+rm -fv include/asm-i386/keyboard.h
 rm -fv include/linux/adb_mouse.h
 rm -fv include/linux/kbd_ll.h
 rm -fv include/linux/logibusmouse.h
