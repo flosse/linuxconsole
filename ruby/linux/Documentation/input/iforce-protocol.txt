@@ -86,12 +86,16 @@ OP=  05
 LEN= 0a
 00-01 Address
 02 Positive Coeff
-03 Negative Coeff (Val 14 = 2000 (decimal))
-04 Offset (Val 64 = 2000 (decimal)) | center ?
-05 ??? Val = 00                     |
+03 Negative Coeff
+04+05 Offset (center)
 06+07 Dead band (Val 01F4 = 5000 (decimal))
 08 Positive saturation (Val 0a = 1000 (decimal) Val 64 = 10000 (decimal))
 09 Negative saturation
+
+The encoding is a bit funny here: For coeffs, these are signed values. The
+maximum value is 64 (100 decimal), the min is 9c.
+For the offset, the minimum value is FE0C, the maximum value is 01F4.
+For the deadband, the minimum value is 0, the max is 03E8.
 
 ** Controls **
 OP=  41
