@@ -521,8 +521,6 @@ static void __exit mousedev_exit(void)
 module_init(mousedev_init);
 module_exit(mousedev_exit);
 
-MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
-MODULE_DESCRIPTION("Input driver to PS/2 or ImPS/2 device driver");
 MODULE_PARM(xres, "i");
 MODULE_PARM_DESC(xres, "Horizontal screen resolution");
 MODULE_PARM(yres, "i");

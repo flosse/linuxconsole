@@ -45,8 +45,6 @@ static char *sermouse_protocols[] = { "None", "Mouse Systems Mouse", "Sun Mouse"
 					"Logitech M+ Mouse", "Microsoft MZ Mouse", "Logitech MZ+ Mouse",
 					"Logitech MZ++ Mouse"};
 
-MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
-
 struct sermouse {
 	struct input_dev dev;
 	signed char buf[8];
