@@ -817,6 +817,7 @@ static unsigned long pm3fb_size_memory(struct pm3fb_info *l_fb_info)
            memory timing for future reference */
 	if (pm3fb_preserve_memory_timings(l_fb_info)) { /* memory timings were wrong ! oops.... */
 		return(0);
+	}
 	
 	tempBypass = PM3_READ_REG(PM3MemBypassWriteMask);
 
