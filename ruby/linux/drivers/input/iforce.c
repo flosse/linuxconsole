@@ -836,7 +836,7 @@ static void iforce_init_device(struct iforce *iforce)
  */
 
 	send_packet(iforce, FF_CMD_INIT_0_A, "\004\000");
-	send_packet(iforce, FF_CMD_INIT_2, "\004\000");
+	send_packet(iforce, FF_CMD_INIT_2, "\004");
 
 /*
  * Close again.
