@@ -34,6 +34,7 @@
 #include <linux/init.h>
 #include <linux/tty.h>
 #include <linux/delay.h>
+#include <linux/pm.h>
 
 static struct input_handler power_handler;
 
@@ -57,7 +58,9 @@ static struct tq_struct suspend_button_task = {
 static int power_event(struct input_handle *handle, unsigned int type, 
 		       unsigned int code, int down)
 {
-	if (type != EV_KEY || type != EV_PWR) return;
+	struct input_dev *dev = handle->dev;
+
+	if (type != EV_KEY || type != EV_PWR) return -1;
 
 	if (type == EV_PWR) {
 		switch (code) {
@@ -93,10 +96,13 @@ static int power_event(struct input_handle *handle, unsigned int type,
 				break;
 			default:
 				return -1;
+		}
+	}
 	return 0;
 }
 
-static struct input_handle *power_connect(struct input_handler *handler, struct input_dev *dev)
+static struct input_handle *power_connect(struct input_handler *handler, 
+					  struct input_dev *dev)
 {
 	struct input_handle *handle;
 	int i;
