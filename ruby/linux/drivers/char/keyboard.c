@@ -783,13 +783,15 @@ static void kbd_bh(unsigned long dummy)
 
 #ifdef CONFIG_INPUT
 	for (handle = kbd_handler.handle; handle; handle = handle->hnext) {
-		leds = getleds(handle->private);
-		if (leds != ledstate) {
-                	ledstate = leds;
-			input_event(handle->dev, EV_LED, LED_SCROLLL, !!(leds & 0x01));
-			input_event(handle->dev, EV_LED, LED_NUML,    !!(leds & 0x02));
-			input_event(handle->dev, EV_LED, LED_CAPSL,   !!(leds & 0x04));
-		}
+		if (handle->private) {
+			leds = getleds(handle->private);
+			if (leds != ledstate) {
+                		ledstate = leds;
+				input_event(handle->dev, EV_LED, LED_SCROLLL, !!(leds & 0x01));
+				input_event(handle->dev, EV_LED, LED_NUML,    !!(leds & 0x02));
+				input_event(handle->dev, EV_LED, LED_CAPSL,   !!(leds & 0x04));
+			}
+		}	
 	}
 #endif
 }
