@@ -65,9 +65,11 @@ static devfs_handle_t input_devfs_handle;
 static int input_number;
 static long input_devices[NBITS(INPUT_DEVICES)];
 
+#ifdef CONFIG_PROC_FS
 static struct proc_dir_entry *proc_bus_input_dir;
 static wait_queue_head_t input_devices_poll_wait;
 static int input_devices_state;
+#endif
 
 void input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {
@@ -322,7 +324,7 @@ static struct input_device_id *input_match_device(struct input_device_id *id, st
  * device bitfields.
  */
 
-#ifdef	CONFIG_HOTPLUG
+#ifdef CONFIG_HOTPLUG
 
 /*
  * Input hotplugging invokes what /proc/sys/kernel/hotplug says
@@ -422,13 +424,7 @@ static void input_call_hotplug(char *verb, struct input_dev *dev)
 		printk(KERN_WARNING "input.c: hotplug returned %d\n", value);
 }
 
-#else
-
-static inline void
-input_call_hotplug(char *verb, struct input_dev *dev)
-{ } 
-
-#endif	/* CONFIG_HOTPLUG */
+#endif
 
 void input_register_device(struct input_dev *dev)
 {
@@ -477,14 +473,18 @@ void input_register_device(struct input_dev *dev)
  * Notify the hotplug agent.
  */
 
+#ifdef CONFIG_HOTPLUG
 	input_call_hotplug("add", dev);
+#endif
 
 /*
  * Notify /proc.
  */
 
+#ifdef CONFIG_PROC_FS
 	input_devices_state++;
 	wake_up_interruptible(&input_devices_poll_wait);
+#endif
 }
 
 void input_unregister_device(struct input_dev *dev)
@@ -521,7 +521,9 @@ void input_unregister_device(struct input_dev *dev)
  * Notify the hotplug agent.
  */
 
+#ifdef CONFIG_HOTPLUG
 	input_call_hotplug("remove", dev);
+#endif
 
 /*
  * Remove the device.
@@ -536,8 +538,10 @@ void input_unregister_device(struct input_dev *dev)
  * Notify /proc.
  */
 
+#ifdef CONFIG_PROC_FS
 	input_devices_state++;
 	wake_up_interruptible(&input_devices_poll_wait);
+#endif
 }
 
 void input_register_handler(struct input_handler *handler)
@@ -576,8 +580,10 @@ void input_register_handler(struct input_handler *handler)
  * Notify /proc.
  */
 
+#ifdef CONFIG_PROC_FS
 	input_devices_state++;
 	wake_up_interruptible(&input_devices_poll_wait);
+#endif
 }
 
 void input_unregister_handler(struct input_handler *handler)
@@ -612,8 +618,10 @@ void input_unregister_handler(struct input_handler *handler)
  * Notify /proc.
  */
 
+#ifdef CONFIG_PROC_FS
 	input_devices_state++;
 	wake_up_interruptible(&input_devices_poll_wait);
+#endif
 }
 
 static int input_open_file(struct inode *inode, struct file *file)
@@ -670,6 +678,8 @@ void input_unregister_minor(devfs_handle_t handle)
 /*
  * ProcFS interface for the input drivers.
  */
+
+#ifdef CONFIG_PROC_FS
 
 #define SPRINTF_BIT_B(bit, name, max) \
 	do { \
@@ -803,13 +813,14 @@ static int input_handlers_read(char *buf, char **start, off_t pos, int count, in
 	return (count > cnt) ? cnt : count;
 }
 
+#endif
+
 static int __init input_init(void)
 {
 	struct proc_dir_entry *entry;
 
-	init_waitqueue_head(&input_devices_poll_wait);
-
 #ifdef CONFIG_PROC_FS
+	init_waitqueue_head(&input_devices_poll_wait);
 	proc_bus_input_dir = proc_mkdir("input", proc_bus);
 	proc_bus_input_dir->owner = THIS_MODULE;
 	entry = create_proc_read_entry("devices", 0, proc_bus_input_dir, input_devices_read, NULL);
