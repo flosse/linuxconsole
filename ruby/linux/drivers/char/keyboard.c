@@ -151,8 +151,10 @@ static struct ledptr {
 /*
  * Helper functions
  */
-static void put_queue(struct tty_struct *tty, int ch)
+static void put_queue(struct vc_data *vc, int ch)
 {
+	struct tty_struct *tty = vc->vc_tty;
+
 	wake_up(&keypress_wait);
 	if (tty) {
 		tty_insert_flip_char(tty, ch, 0);
@@ -160,8 +162,10 @@ static void put_queue(struct tty_struct *tty, int ch)
 	}
 }
 
-static void puts_queue(struct tty_struct *tty, char *cp)
+static void puts_queue(struct vc_data *vc, char *cp)
 {
+	struct tty_struct *tty = vc->vc_tty;
+
 	wake_up(&keypress_wait);
 	if (!tty)
 		return;
@@ -170,13 +174,13 @@ static void puts_queue(struct tty_struct *tty, char *cp)
 	tty_schedule_flip(tty);
 }
 
-static void applkey(struct tty_struct *tty, int key, char mode)
+static void applkey(struct vc_data *vc, int key, char mode)
 {
 	static char buf[] = { 0x1b, 'O', 0x00, 0x00 };
 
 	buf[1] = (mode ? 'O' : '[');
 	buf[2] = key;
-	puts_queue(tty, buf);
+	puts_queue(vc, buf);
 }
 
 /*
@@ -217,47 +221,43 @@ static void applkey(struct tty_struct *tty, int key, char mode)
  * in utf-8 already. UTF-8 is defined for words of up to 31 bits,
  * but we need only 16 bits here
  */
-void to_utf8(struct tty_struct *tty, ushort c)
+void to_utf8(struct vc_data *vc, ushort c)
 {
 	if (c < 0x80)
-		put_queue(tty, c);
+		put_queue(vc, c);
 	else if (c < 0x800) {
 		/* 110***** 10****** */
-		put_queue(tty, 0xc0 | (c >> 6));	
-		put_queue(tty, 0x80 | (c & 0x3f));
+		put_queue(vc, 0xc0 | (c >> 6));	
+		put_queue(vc, 0x80 | (c & 0x3f));
 	} else {
 		/* 1110**** 10****** 10****** */
-		put_queue(tty, 0xe0 | (c >> 12));
-		put_queue(tty, 0x80 | ((c >> 6) & 0x3f));
-		put_queue(tty, 0x80 | (c & 0x3f));
+		put_queue(vc, 0xe0 | (c >> 12));
+		put_queue(vc, 0x80 | ((c >> 6) & 0x3f));
+		put_queue(vc, 0x80 | (c & 0x3f));
 	}
 }
 
-void put_unicode(struct tty_struct *tty, u16 uc)
+void put_unicode(struct vc_data *vc, u16 uc)
 {
-  struct vc_data *vc = (struct vc_data *) tty->driver_data;	
-	
   if (vc->kbd_table.kbdmode == VC_UNICODE)
-    to_utf8(tty, uc);
+    to_utf8(vc, uc);
   else if ((uc & ~0x9f) == 0 || uc == 127)
     /* Don't translate control chars */
-    put_queue(tty, uc);
+    put_queue(vc, uc);
   else {
     unsigned char c;
     c = inverse_translate(vc->display_fg->fg_console->vc_translate, uc);
-    if (c) put_queue(tty, c);
+    if (c) put_queue(vc, c);
   }
 }
 
-static void put_8bit(struct tty_struct *tty, u8 c)
+static void put_8bit(struct vc_data *vc, u8 c)
 {
-  struct vc_data *vc = (struct vc_data *) tty->driver_data;	
-
   if (vc->kbd_table.kbdmode != VC_UNICODE ||
       c < 32 || c == 127) /* Don't translate control chars */
-    put_queue(tty, c);
+    put_queue(vc, c);
   else
-      to_utf8(tty, get_acm(vc->display_fg->fg_console->vc_translate)[c]);
+      to_utf8(vc, get_acm(vc->display_fg->fg_console->vc_translate)[c]);
 }
 
 /*
@@ -303,7 +303,7 @@ void compute_shiftstate(void)
  * Otherwise, conclude that DIACR was not combining after all,
  * queue it and return CH.
  */
-unsigned char handle_diacr(struct tty_struct *tty, unsigned char ch)
+unsigned char handle_diacr(struct vc_data *vc, unsigned char ch)
 {
 	int d = diacr;
 	int i;
@@ -318,7 +318,7 @@ unsigned char handle_diacr(struct tty_struct *tty, unsigned char ch)
 	if (ch == ' ' || ch == d)
 		return d;
 
-	put_8bit(tty, d);
+	put_8bit(vc, d);
 	return ch;
 }
 
@@ -327,17 +327,13 @@ unsigned char handle_diacr(struct tty_struct *tty, unsigned char ch)
  */
 static void fn_enter(struct vc_data *vc)
 {
-	struct tty_struct *tty = vc->vc_tty;
-	
-	if (!tty) return;
-
 	if (diacr) {
-		put_8bit(tty, diacr);
+		put_8bit(vc, diacr);
 		diacr = 0;
 	}
-	put_queue(tty, 13);
+	put_queue(vc, 13);
 	if (vc_kbd_mode(&vc->kbd_table, VC_CRLF))
-		put_queue(tty, 10);
+		put_queue(vc, 10);
 }
 
 static void fn_caps_toggle(struct vc_data *vc)
@@ -380,12 +376,10 @@ static void fn_hold(struct vc_data *vc)
 
 static void fn_num(struct vc_data *vc)
 {
-	struct tty_struct *tty = vc->vc_tty;
-
 	if (vc_kbd_mode(&vc->kbd_table, VC_APPLIC))
-		applkey(tty, 'P', 1);
+		applkey(vc, 'P', 1);
 	else
-		fn_bare_num(tty);
+		fn_bare_num(vc);
 }
 
 /*
@@ -529,20 +523,18 @@ static void k_lowercase(struct vc_data *vc, unsigned char value,
 
 static void k_self(struct vc_data *vc, unsigned char value, char up_flag)
 {
-	struct tty_struct *tty = vc->vc_tty;
-
-	if (up_flag || !tty)
+	if (up_flag)
 		return;		/* no action, if this is a key release */
 
 	if (diacr)
-		value = handle_diacr(tty, value);
+		value = handle_diacr(vc, value);
 
 	if (dead_key_next) {
 		dead_key_next = 0;
 		diacr = value;
 		return;
 	}
-	put_8bit(tty, value);
+	put_8bit(vc, value);
 }
 
 /*
@@ -552,12 +544,9 @@ static void k_self(struct vc_data *vc, unsigned char value, char up_flag)
  */
 static void k_dead2(struct vc_data *vc, unsigned char value, char up_flag)
 {
-	struct tty_struct *tty = vc->vc_tty;
-
 	if (up_flag)
 		return;
-
-	diacr = (diacr ? handle_diacr(tty, value) : value);
+	diacr = (diacr ? handle_diacr(vc, value) : value);
 }
 
 /*
@@ -581,39 +570,35 @@ static void k_cons(struct vc_data *vc, unsigned char value, char up_flag)
 
 static void k_fn(struct vc_data *vc, unsigned char value, char up_flag)
 {
-	struct tty_struct *tty = vc->vc_tty;
-
-	if (up_flag || !tty)
+	if (up_flag)
 		return;
 	if (value < SIZE(func_table)) {
 		if (func_table[value])
-			puts_queue(tty, func_table[value]);
+			puts_queue(vc, func_table[value]);
 	} else
 		printk(KERN_ERR "k_fn called with value=%d\n", value);
 }
 
 static void k_cur(struct vc_data *vc, unsigned char value, char up_flag)
 {
-	struct tty_struct *tty = vc->vc_tty;
 	static const char *cur_chars = "BDCA";
 
 	if (up_flag)
 		return;
-	applkey(tty, cur_chars[value], vc_kbd_mode(&vc->kbd_table, VC_CKMODE));
+	applkey(vc, cur_chars[value], vc_kbd_mode(&vc->kbd_table, VC_CKMODE));
 }
 
 static void k_pad(struct vc_data *vc, unsigned char value, char up_flag)
 {
 	static const char *pad_chars = "0123456789+-*/\015,.?()";
 	static const char *app_map = "pqrstuvwxylSRQMnnmPQ";
-	struct tty_struct *tty = vc->vc_tty; 
 
-	if (up_flag || !tty)
+	if (up_flag)
 		return;		/* no action, if this is a key release */
 
 	/* kludge... shift forces cursor/number keys */
 	if (vc_kbd_mode(&vc->kbd_table, VC_APPLIC) && !shift_down[KG_SHIFT]) {
-		applkey(tty, app_map[value], 1);
+		applkey(vc, app_map[value], 1);
 		return;
 	}
 
@@ -621,48 +606,48 @@ static void k_pad(struct vc_data *vc, unsigned char value, char up_flag)
 		switch (value) {
 			case KVAL(K_PCOMMA):
 			case KVAL(K_PDOT):
-				k_fn(tty, KVAL(K_REMOVE), 0);
+				k_fn(vc, KVAL(K_REMOVE), 0);
 				return;
 			case KVAL(K_P0):
-				k_fn(tty, KVAL(K_INSERT), 0);
+				k_fn(vc, KVAL(K_INSERT), 0);
 				return;
 			case KVAL(K_P1):
-				k_fn(tty, KVAL(K_SELECT), 0);
+				k_fn(vc, KVAL(K_SELECT), 0);
 				return;
 			case KVAL(K_P2):
-				k_cur(tty, KVAL(K_DOWN), 0);
+				k_cur(vc, KVAL(K_DOWN), 0);
 				return;
 			case KVAL(K_P3):
-				k_fn(tty, KVAL(K_PGDN), 0);
+				k_fn(vc, KVAL(K_PGDN), 0);
 				return;
 			case KVAL(K_P4):
-				k_cur(tty, KVAL(K_LEFT), 0);
+				k_cur(vc, KVAL(K_LEFT), 0);
 				return;
 			case KVAL(K_P6):
-				k_cur(tty, KVAL(K_RIGHT), 0);
+				k_cur(vc, KVAL(K_RIGHT), 0);
 				return;
 			case KVAL(K_P7):
-				k_fn(tty, KVAL(K_FIND), 0);
+				k_fn(vc, KVAL(K_FIND), 0);
 				return;
 			case KVAL(K_P8):
-				k_cur(tty, KVAL(K_UP), 0);
+				k_cur(vc, KVAL(K_UP), 0);
 				return;
 			case KVAL(K_P9):
-				k_fn(tty, KVAL(K_PGUP), 0);
+				k_fn(vc, KVAL(K_PGUP), 0);
 				return;
 			case KVAL(K_P5):
-				applkey(tty,'G', vc_kbd_mode(&vc->kbd_table, VC_APPLIC));
+				applkey(vc,'G', vc_kbd_mode(&vc->kbd_table, 
+					VC_APPLIC));
 				return;
 		}
 
-	put_8bit(tty, pad_chars[value]);
+	put_8bit(vc, pad_chars[value]);
 	if (value == KVAL(K_PENTER) && vc_kbd_mode(&vc->kbd_table, VC_CRLF))
-		put_queue(tty, 10);
+		put_queue(vc, 10);
 }
 
 static void k_shift(struct vc_data *vc, unsigned char value, char up_flag)
 {
-	struct tty_struct *tty = vc->vc_tty;
 	int old_state = shift_state;
 
 	if (rep)
@@ -694,34 +679,31 @@ static void k_shift(struct vc_data *vc, unsigned char value, char up_flag)
 		shift_state &= ~(1 << value);
 
 	/* kludge */
-	if (up_flag && tty && shift_state != old_state && npadch != -1) {
+	if (up_flag && shift_state != old_state && npadch != -1) {
 		if (vc->kbd_table.kbdmode == VC_UNICODE)
-			put_unicode(tty, npadch & 0xffff);
+			put_unicode(vc, npadch & 0xffff);
 		else
-			put_queue(tty, npadch & 0xff);
+			put_queue(vc, npadch & 0xff);
 		npadch = -1;
 	}
 }
 
 static void k_meta(struct vc_data *vc, unsigned char value, char up_flag)
 {
-	struct tty_struct *tty = vc->vc_tty;
-
-	if (up_flag || !tty)
+	if (up_flag)
 		return;
 	if (vc_kbd_mode(&vc->kbd_table, VC_META)) {
-		put_queue(tty, '\033');
-		put_queue(tty, value);
+		put_queue(vc, '\033');
+		put_queue(vc, value);
 	} else
-		put_queue(tty, value | 0x80);
+		put_queue(vc, value | 0x80);
 }
 
 static void k_ascii(struct vc_data *vc, unsigned char value, char up_flag)
 {
-	struct tty_struct *tty = vc->vc_tty;
 	int base;
 
-	if (up_flag || !tty)
+	if (up_flag)
 		return;
 
 	if (value < 10) {		
@@ -900,7 +882,7 @@ static unsigned char mac_keycodes[256] =
 	  0,  0,  0,  0,  0, 94,  0, 93,  0,  0,  0,  0,  0,  0,104,102 };
 #endif
 
-static int emulate_raw(struct tty_struct *tty, unsigned int keycode, 
+static int emulate_raw(struct vc_data *vc, unsigned int keycode, 
 		       unsigned char up_flag)
 {
 #ifdef CONFIG_MAC_ADBKEYCODES
@@ -917,25 +899,25 @@ static int emulate_raw(struct tty_struct *tty, unsigned int keycode,
 		return -1; 
 
 	if (keycode == KEY_PAUSE) {
-		put_queue(tty, 0xe1);
-		put_queue(tty, 0x1d | up_flag);
-		put_queue(tty, 0x45 | up_flag);
+		put_queue(vc, 0xe1);
+		put_queue(vc, 0x1d | up_flag);
+		put_queue(vc, 0x45 | up_flag);
 		return 0;
 	} 
 
 	if (keycode == KEY_SYSRQ && x86_sysrq_alt) {
-		put_queue(tty, 0x54 | up_flag);
+		put_queue(vc, 0x54 | up_flag);
 		return 0;
 	}
 
 	if (x86_keycodes[keycode] & 0x100)
-		put_queue(tty, 0xe0);
+		put_queue(vc, 0xe0);
 
-	put_queue(tty, (x86_keycodes[keycode] & 0x7f) | up_flag);
+	put_queue(vc, (x86_keycodes[keycode] & 0x7f) | up_flag);
 
 	if (keycode == KEY_SYSRQ) {
-		put_queue(tty, 0xe0);
-		put_queue(tty, 0x37 | up_flag);
+		put_queue(vc, 0xe0);
+		put_queue(vc, 0x37 | up_flag);
 	}
 
 	if (keycode == KEY_LEFTALT || keycode == KEY_RIGHTALT)
@@ -948,12 +930,12 @@ static int emulate_raw(struct tty_struct *tty, unsigned int keycode,
 
 #warning "Cannot generate rawmode keyboard for your architecture yet."
 
-static int emulate_raw(struct tty_struct *tty, unsigned int keycode, unsigned char up_flag)
+static int emulate_raw(struct vc_data *vc, unsigned int keycode, unsigned char up_flag)
 {
 	if (keycode > 127)
 		return -1;
 
-	put_queue(tty, keycode | up_flag);
+	put_queue(vc, keycode | up_flag);
 	return 0;
 }
 #endif
@@ -975,12 +957,8 @@ void kbd_keycode(void  *private, unsigned int keycode, int down)
 	tty = vc->vc_tty;
 
 	if (tty && (!tty->driver_data)) {
-		/*
-		 * We currently rely on the fact that con_open sets 
-		 * tty->driver_data when it opens it, and clears it 
-		 * when it closes it.
-		 */
-		tty = NULL;
+		/* No driver data? Strange. Okay we fix it then. */
+		tty->driver_data = vc;
 	}
 
 	/* If the console is blanked unblank it */
@@ -988,10 +966,10 @@ void kbd_keycode(void  *private, unsigned int keycode, int down)
         tasklet_schedule(&vt->vt_tasklet);
 
 	if ((raw_mode = (vc->kbd_table.kbdmode == VC_RAW)))
-		if (!tty || emulate_raw(tty, keycode, !down << 7))
+		if (emulate_raw(vc, keycode, !down << 7))
 			printk(KERN_WARNING "keyboard.c: can't emulate rawmode for keycode %d\n", keycode);
 
-	if (tty && vc->kbd_table.kbdmode == VC_MEDIUMRAW) {
+	if (vc->kbd_table.kbdmode == VC_MEDIUMRAW) {
 		/*
 		 * This is extended medium raw mode, with keys above 127
 		 * encoded as 0, high 7 bits, low 7 bits, with the 0 bearing
@@ -1002,23 +980,23 @@ void kbd_keycode(void  *private, unsigned int keycode, int down)
 		 * which should be enough.
 		 */
 		if (keycode < 128) {
-			put_queue(tty, keycode | (!down << 7));
+			put_queue(vc, keycode | (!down << 7));
 		} else {
-			put_queue(tty, !down << 7);
-			put_queue(tty, (keycode >> 7) | 0x80);
-			put_queue(tty, keycode | 0x80);
+			put_queue(vc, !down << 7);
+			put_queue(vc, (keycode >> 7) | 0x80);
+			put_queue(vc, keycode | 0x80);
 		}
 		raw_mode = 1;
 	}
 
 	rep = (down == 2);
 
-	if (rep && (!vc_kbd_mode(&vc->kbd_table, VC_REPEAT) || !tty || 
-		(!L_ECHO(tty) && tty->driver.chars_in_buffer(tty)))) {
+	if (rep && (!vc_kbd_mode(&vc->kbd_table, VC_REPEAT) || (tty && 
+		(!L_ECHO(tty) && tty->driver.chars_in_buffer(tty))))) {
 		/*
 		 * Don't repeat a key if the input buffers are not empty and the
-		 * characters get aren't echoed locally. This makes key repeat usable
-		 * with slow applications and under heavy loads.
+		 * characters get aren't echoed locally. This makes key repeat 
+		 * usable with slow applications and under heavy loads.
 		 */
 		return;
 	}
@@ -1035,8 +1013,8 @@ void kbd_keycode(void  *private, unsigned int keycode, int down)
 	keysym = key_map[keycode];
 	type = KTYP(keysym);
 
-	if (type < 0xf0 || !tty) {
-		if (down && !raw_mode) to_utf8(tty, keysym);
+	if (type < 0xf0) {
+		if (down && !raw_mode) to_utf8(vc, keysym);
 		return;
 	}
 
@@ -1053,7 +1031,6 @@ void kbd_keycode(void  *private, unsigned int keycode, int down)
 				keysym = key_map[keycode];
 		}
 	}
-
 	(*k_handler[type])(vc, keysym & 0xff, !(down << 7));
 	if (type != KT_SLOCK)
 		vc->kbd_table.slockstate = 0;
