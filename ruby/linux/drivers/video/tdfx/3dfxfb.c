@@ -72,9 +72,9 @@
 #include <linux/nvram.h>
 #include <asm/io.h>
 #include <linux/timer.h>
+#include <linux/spinlock.h>
 
 #include <video/tdfx.h>
-#include <linux/spinlock.h>
 
 #ifndef PCI_DEVICE_ID_3DFX_VOODOO5
 #define PCI_DEVICE_ID_3DFX_VOODOO5      0x0009
@@ -147,12 +147,8 @@ static int  tdfxfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 			     u_int transp, struct fb_info *info); 
 static int tdfxfb_blank(int blank, struct fb_info *info); 
 static int tdfxfb_pan_display(struct fb_var_screeninfo *var,struct fb_info *fb);
-static void tdfxfb_fillrect(struct fb_info *info, int x, int y,
-			    unsigned int width, unsigned int height, 
-	  	            unsigned long color, int rop);
-static void tdfxfb_copyarea(struct fb_info *info, int sx, int sy,  
-			    unsigned int width, unsigned int height,
-		            int dx, int dy); 
+static void tdfxfb_fillrect(struct fb_info *info, struct fb_fillrect *rect);
+static void tdfxfb_copyarea(struct fb_info *info, struct fb_copyarea *area);  
 static void tdfxfb_imageblit(struct fb_info *info, struct fb_image *image); 
 
 static struct fb_ops tdfxfb_ops = {
@@ -566,11 +562,11 @@ static int tdfxfb_check_var(struct fb_var_screeninfo *var,struct fb_info *info)
 static int tdfxfb_set_par(struct fb_info *info)
 {
   struct tdfx_par *par = (struct tdfx_par *) info->par;	
-  struct banshee_reg reg;
-  u32 cpp;
+  u32 hdispend, hsyncsta, hsyncend, htotal;
   u32 hd, hs, he, ht, hbs, hbe;
   u32 vd, vs, ve, vt, vbs, vbe;
-  u32 wd;
+  struct banshee_reg reg;
+  u32 wd, cpp;
   int fout;
   int freq;
   
@@ -590,30 +586,32 @@ static int tdfxfb_set_par(struct fb_info *info)
   reg.dacmode = 0;
   reg.vidcfg  &= ~VIDCFG_2X;
 
+  hdispend = info->var.xres;
+  hsyncsta = hdispend + info->var.right_margin;
+  hsyncend = hsyncsta + info->var.hsync_len;
+  htotal   = hsyncend + info->var.left_margin;
+
   if (freq > par->max_pixclock/2) {
  	freq = freq > par->max_pixclock ? par->max_pixclock : freq;
 	reg.dacmode |= DACMODE_2X;
 	reg.vidcfg  |= VIDCFG_2X;
-	par->hdispend >>= 1;
-	par->hsyncsta >>= 1;
-	par->hsyncend >>= 1;
-	par->htotal   >>= 1;
+	hdispend >>= 1;
+	hsyncsta >>= 1;
+	hsyncend >>= 1;
+	htotal   >>= 1;
   }
-  wd = (info->var.xres >> 3) - 1;
 
-  hd  = (info->var.xres >> 3) - 1;
-  hs  = ((info->var.xres + info->var.right_margin) >> 3) - 1;
-  he  = ((info->var.xres + info->var.right_margin + info->var.hsync_len) >> 3) - 1;
-  ht  = ((info->var.xres + info->var.right_margin + info->var.hsync_len + info->var.left_margin) >> 3) - 1;
+  hd  = wd = (hdispend >> 3) - 1;
+  hs  = (hsynsta >> 3) - 1;
+  he  = (hsyncend >> 3) - 1;
+  ht  = (htotal >> 3) - 1;
   hbs = hd;
   hbe = ht;
 
-  vd  = info->var.yres - 1;
-  vs  = info->var.yres + info->var.lower_margin - 1;
-  ve  = info->var.yres + info->var.lower_margin + info->var.vsync_len - 1;
-  vt  = info->var.yres + info->var.lower_margin + info->var.vsync_len + info->var.upper_margin - 2;
-  vbs = vd;
-  vbe = vt;
+  vbs = vd = info->var.yres - 1;
+  vs  = vd + info->var.lower_margin;
+  ve  = vs + info->var.vsync_len;
+  vbe = vt  = ve + info->var.upper_margin - 1;
   
   /* this is all pretty standard VGA register stuffing */
   reg.misc[0x00] = 
@@ -768,14 +766,6 @@ static int tdfxfb_set_par(struct fb_info *info)
   }
 #endif             
   do_write_regs(&reg);
-
-  if (reg.vidcfg & VIDCFG_2X) {
-	par->hdispend <<= 1;
-	par->hsyncsta <<= 1;
-	par->hsyncend <<= 1;
-	par->htotal   <<= 1;
-  }
-  memcpy(info->par, par, sizeof(struct tdfx_par));
 
   /* Now change fb_fix_screeninfo according to changes in par */
   info->fix.line_length = info->var.xres * ((info->var.bits_per_pixel + 7)>>3);
@@ -1015,52 +1005,48 @@ static int tdfxfb_pan_display(struct fb_var_screeninfo *var,
 /*
  * FillRect 2D command (solidfill or invert (via ROP_XOR))   
  */
-static void tdfxfb_fillrect(struct fb_info *info, int x, int y,
-			    unsigned int width, unsigned int height, 
-	  	            unsigned long color, int rop)
+static void tdfxfb_fillrect(struct fb_info *info, struct fb_fillrect *rect) 
 {
    u32 bpp = info->var.bits_per_pixel;
    u32 stride = info->fix.line_length;
    u32 fmt= stride | ((bpp+((bpp==8) ? 0 : 8)) << 13); 
    int tdfx_rop;
    	
-   if (rop == ROP_COPY) 
+   if (rect->rop == ROP_COPY) 
 	tdfx_rop = TDFX_ROP_COPY;
    else 			 
 	tdfx_rop = TDFX_ROP_XOR;
 
    banshee_make_room(5);
    tdfx_outl(DSTFORMAT, fmt);
-   tdfx_outl(COLORFORE, color);
+   tdfx_outl(COLORFORE, rect->color);
    tdfx_outl(COMMAND_2D, COMMAND_2D_FILLRECT | (tdfx_rop << 24));
-   tdfx_outl(DSTSIZE,    width | (height << 16));
-   tdfx_outl(LAUNCH_2D,  x | (y << 16));
+   tdfx_outl(DSTSIZE,    rect->width | (rect->height << 16));
+   tdfx_outl(LAUNCH_2D,  rect->dx | (rect->dy << 16));
    banshee_wait_idle();
 }
 
 /*
  * Screen-to-Screen BitBlt 2D command (for the bmove fb op.) 
  */
-static void tdfxfb_copyarea(struct fb_info *info, int sx, int sy,  
-	 	            unsigned int width, unsigned int height,
-		            int dx, int dy) 
+static void tdfxfb_copyarea(struct fb_info *info, struct fb_copyarea *area)  
 {
    u32 bpp = info->var.bits_per_pixel;
    u32 stride = info->fix.line_length;
    u32 blitcmd = COMMAND_2D_S2S_BITBLT | (TDFX_ROP_COPY << 24);
    u32 fmt= stride | ((bpp+((bpp==8) ? 0 : 8)) << 13); 
    
-   if (sx <= dx) {
+   if (area->sx <= area->dx) {
      //-X 
      blitcmd |= BIT(14);
-     sx += width-1;
-     dx += width-1;
+     area->sx += area->width - 1;
+     area->dx += area->width - 1;
    }
-   if (sy <= dy) {
+   if (area->sy <= area->dy) {
      //-Y  
      blitcmd |= BIT(15);
-     sy += height-1;
-     dy += height-1;
+     area->sy += area->height - 1;
+     area->dy += area->height - 1;
    }
    
    banshee_make_room(6);
@@ -1068,9 +1054,9 @@ static void tdfxfb_copyarea(struct fb_info *info, int sx, int sy,
    tdfx_outl(SRCFORMAT, fmt);
    tdfx_outl(DSTFORMAT, fmt);
    tdfx_outl(COMMAND_2D, blitcmd); 
-   tdfx_outl(DSTSIZE,   width | (height << 16));
-   tdfx_outl(DSTXY,     dx | (dy << 16));
-   tdfx_outl(LAUNCH_2D, sx | (sy << 16)); 
+   tdfx_outl(DSTSIZE,   area->width | (area->height << 16));
+   tdfx_outl(DSTXY,     area->dx | (area->dy << 16));
+   tdfx_outl(LAUNCH_2D, area->sx | (area->sy << 16)); 
    banshee_wait_idle();
 }
 
@@ -1094,7 +1080,7 @@ static void tdfxfb_imageblit(struct fb_info *info, struct fb_image *pixmap)
    }	
 
    tdfx_outl(SRCXY,     0);
-   tdfx_outl(DSTXY,     pixmap->x | (pixmap->y << 16));
+   tdfx_outl(DSTXY,     pixmap->dx | (pixmap->dy << 16));
    tdfx_outl(COMMAND_2D, COMMAND_2D_H2S_BITBLT | (TDFX_ROP_COPY << 24));
    tdfx_outl(SRCFORMAT, srcfmt);
    tdfx_outl(DSTFORMAT, dstfmt);
@@ -1149,7 +1135,7 @@ static int __devinit tdfxfb_probe(struct pci_dev *pdev,
 
       /* Configure the default fb_fix_screeninfo first */
       memset(&fb_info, 0, sizeof(fb_info));
-      fb_info.par = &default_par;
+
       switch (pdev->device) {
 	case PCI_DEVICE_ID_3DFX_BANSHEE:	
          	strcat(tdfx_fix.id, " Banshee");
@@ -1168,7 +1154,7 @@ static int __devinit tdfxfb_probe(struct pci_dev *pdev,
       tdfx_fix.mmio_start = pci_resource_start(pdev, 0);
       tdfx_fix.mmio_len = 1 << 24;
       default_par.regbase_virt = ioremap_nocache(tdfx_fix.mmio_start, 1 << 24);
-      if(!default_par.regbase_virt) {
+      if (!default_par.regbase_virt) {
 	printk("fb: Can't remap %s register area.\n", tdfx_fix.id);
 	return -ENXIO;
       }
@@ -1182,7 +1168,7 @@ static int __devinit tdfxfb_probe(struct pci_dev *pdev,
       } 
 
       tdfx_fix.smem_start = pci_resource_start(pdev, 1);
-      if(!(tdfx_fix.smem_len = do_lfb_size(pdev->device))) {
+      if (!(tdfx_fix.smem_len = do_lfb_size(pdev->device))) {
 	iounmap(default_par.regbase_virt);
 	printk("fb: Can't count %s memory.\n", tdfx_fix.id);
 	return -ENXIO;
@@ -1200,7 +1186,7 @@ static int __devinit tdfxfb_probe(struct pci_dev *pdev,
 
       fb_info.screen_base = ioremap_nocache(tdfx_fix.smem_start, 
 						    tdfx_fix.smem_len);
-      if(!fb_info.screen_base) {
+      if (!fb_info.screen_base) {
 	printk("fb: Can't remap %s framebuffer.\n", tdfx_fix.id);
 	iounmap(default_par.regbase_virt);
 	return -ENXIO;
@@ -1229,9 +1215,10 @@ static int __devinit tdfxfb_probe(struct pci_dev *pdev,
       tdfx_fix.ypanstep    = nopan ? 0 : 1;
       tdfx_fix.ywrapstep   = nowrap ? 0 : 1;
    
-      fb_info.node       = -1;
+      fb_info.node       = NODEV;
       fb_info.fbops      = &tdfxfb_ops;
-      fb_info.fix 	 = tdfx_fix; 	
+      fb_info.fix 	 = tdfx_fix;
+      fb_info.par	 = &default_par;	
       fb_info.pseudo_palette = psuedo_palette;
       fb_info.flags      = FBINFO_FLAG_DEFAULT;
  
@@ -1253,7 +1240,6 @@ static int __devinit tdfxfb_probe(struct pci_dev *pdev,
 	printk("tdfxfb: can't register framebuffer\n");
 	return -ENXIO;
       }
-
       return 0; 
 }
 
