@@ -38,6 +38,8 @@
 #include <linux/usb.h>
 #include <linux/serio.h>
 #include <linux/config.h>
+#include <linux/circ_buf.h>
+#include <asm/semaphore.h>
 
 /* FF: This module provides arbitrary resource management routines.
  * I use it to manage the device's memory.
@@ -89,6 +91,13 @@ struct iforce_core_effect {
 
 #define FF_CMD_QUERY		0xff01
 
+/* Buffer for async write */
+#define XMIT_SIZE		256
+#define XMIT_INC(var, n)	(var)+=n; (var)&= XMIT_SIZE -1
+/* iforce::xmit_flags */
+#define IFORCE_XMIT_RUNNING	0
+#define IFORCE_XMIT_AGAIN	1
+
 static signed short btn_joystick[] = { BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_TOP2, BTN_BASE,
 	BTN_BASE2, BTN_BASE3, BTN_BASE4, BTN_BASE5, BTN_A, BTN_B, BTN_C, BTN_DEAD, -1 };
 static signed short btn_wheel[] =    { BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_TOP2, BTN_BASE,
@@ -126,7 +135,6 @@ struct iforce {
 	char name[64];
 	int open;
 	int bus;
-	pid_t writer_pid;
 
 	unsigned char data[IFORCE_MAX_LENGTH];
 	unsigned char edata[IFORCE_MAX_LENGTH];
@@ -143,10 +151,17 @@ struct iforce {
 	struct urb irq, out, ctrl;
 	devrequest dr;
 #endif
+	spinlock_t xmit_lock;
+	/* Buffer used for asynchronous sending of bytes to the device */
+	struct circ_buf xmit;
+	unsigned char xmit_data[XMIT_SIZE];
+	long xmit_flags[1];
+	
 					/* Force Feedback */
 	wait_queue_head_t wait;
 	struct resource device_memory;
 	struct iforce_core_effect core_effects[FF_EFFECTS_MAX];
+	struct semaphore mem_mutex;
 };
 
 static struct {
@@ -161,8 +176,9 @@ static struct {
 /* Encode a time value */
 #define TIME_SCALE(a)	((a) == 0xffff ? 0xffff : (a) * 1000 / 256)
 
-/* Forward declaration */
+/* Forward declarations */
 static int iforce_erase_effect(struct input_dev *dev, int effect_id);
+static int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value);
 
 static void dump_packet(char *msg, u16 cmd, unsigned char *data)
 {
@@ -174,63 +190,146 @@ static void dump_packet(char *msg, u16 cmd, unsigned char *data)
 	printk(")\n");
 }
 
+#ifdef IFORCE_USB
+static void iforce_usb_xmit(struct iforce *iforce)
+{
+	int n, c;
+
+printk(KERN_DEBUG "iforce.c: in iforce_usb_xmit\n");
+
+	spin_lock(&iforce->xmit_lock);
+
+	if (iforce->xmit.head == iforce->xmit.tail) {
+printk(KERN_DEBUG "iforce.c: leaving iforce_usb_xmit: nothing to send\n");
+		spin_unlock(&iforce->xmit_lock);
+		return;
+	}
+
+	((char *)iforce->out.transfer_buffer)[0] = iforce->xmit.buf[iforce->xmit.tail];
+	XMIT_INC(iforce->xmit.tail, 1);
+	n = iforce->xmit.buf[iforce->xmit.tail];
+	XMIT_INC(iforce->xmit.tail, 1);
+
+	iforce->out.transfer_buffer_length = n + 2;
+	iforce->out.dev = iforce->usbdev;
+
+	/* Copy rest of data then */
+	c = CIRC_CNT_TO_END(iforce->xmit.head, iforce->xmit.tail, XMIT_SIZE);
+	if (n < c) c=n;
+
+	memcpy(iforce->out.transfer_buffer + 1,
+	       &iforce->xmit.buf[iforce->xmit.tail],
+	       c);
+	if (n != c) {
+		memcpy(iforce->out.transfer_buffer + 1 + c,
+		       &iforce->xmit.buf[0],
+		       n-c);
+	}
+	XMIT_INC(iforce->xmit.tail, n);
+
+	dump_packet("usb_xmit",  (((char *)iforce->out.transfer_buffer)[0] << 8) |
+		n,
+		iforce->out.transfer_buffer + 1);
+
+	spin_unlock(&iforce->xmit_lock);
+
+	if (n=usb_submit_urb(&iforce->out)) {
+		printk(KERN_WARNING "iforce.c: iforce_usb_xmit: usb_submit_urb failed %d\n", n);
+	}
+}
+#endif
+
+#ifdef IFORCE_232
+static void iforce_serial_xmit(struct iforce *iforce)
+{
+	unsigned char cs = 0x2b;
+	int i;
+
+	if (test_and_set_bit(IFORCE_XMIT_RUNNING, iforce->xmit_flags)) {
+		set_bit(IFORCE_XMIT_AGAIN, iforce->xmit_flags);
+		return;
+	}
+
+	spin_lock(&iforce->xmit_lock);
+
+again:
+	if (iforce->xmit.head == iforce->xmit.tail) {
+		spin_unlock(&iforce->xmit_lock);
+		return;
+	}
+
+	serio_write(iforce->serio, iforce->xmit.buf[iforce->xmit.tail]);
+	XMIT_INC(iforce->xmit.tail, 1);
+
+	for (i=iforce->xmit.buf[iforce->xmit.tail]; i > 0; ++i) {
+		serio_write(iforce->serio, iforce->xmit.buf[iforce->xmit.tail]);
+		cs ^= iforce->xmit.buf[iforce->xmit.tail];
+		XMIT_INC(iforce->xmit.tail, 1);
+	}
+	
+	if (test_and_clear_bit(IFORCE_XMIT_AGAIN, iforce->xmit_flags))
+		goto again;
+
+	spin_unlock(&iforce->xmit_lock);
+}
+
+static void iforce_serio_write_wakeup(struct serio *serio)
+{
+	iforce_serial_xmit((struct iforce *)serio->private);
+}
+
+#endif
+
 /*
  * Send a packet of bytes to the device
  */
 static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 {
+	/* Copy data to buffer */
+	int n = LO(cmd);
+	int c;
+	int empty;
+			
+	spin_lock(&iforce->xmit_lock);
+
+	empty = iforce->xmit.head == iforce->xmit.tail;
+	/* Store head of paquet first */
+	iforce->xmit.buf[iforce->xmit.head] = HI(cmd);
+	iforce->xmit.head++; iforce->xmit.head &= XMIT_SIZE -1;
+	iforce->xmit.buf[iforce->xmit.head] = LO(cmd);
+	iforce->xmit.head++; iforce->xmit.head &= XMIT_SIZE -1;
+
+	/* Copy rest of data then */
+	c = CIRC_SPACE_TO_END(iforce->xmit.head, iforce->xmit.tail, XMIT_SIZE);
+	if (n < c) c=n;
+
+	memcpy(&iforce->xmit.buf[iforce->xmit.head],
+	       data,
+	       c);
+	if (n != c) {
+		memcpy(&iforce->xmit.buf[0],
+		       data,
+		       n - c);
+	}
+	XMIT_INC(iforce->xmit.head, n);
+
+	spin_unlock(&iforce->xmit_lock);
+
+	/* Start the sending of data in background if necessary */
 	switch (iforce->bus) {
 
 #ifdef IFORCE_232
 		case IFORCE_232: {
-
-			int i;
-			unsigned char csum = 0x2b ^ HI(cmd) ^ LO(cmd);
-			unsigned char header[3];
-
-			header[0] = 0x2b;
-			header[1] = HI(cmd);
-			header[2] = LO(cmd);
-
-			for (i=0; i<LO(cmd); ++i) {
-				csum = csum ^ data[i];
-			}
-			serio_async_write(iforce->serio, header, 3);
-			serio_async_write(iforce->serio, data, LO(cmd));
-			serio_async_write(iforce->serio, &csum, 1);
-			return;
+			serio_write(iforce->serio, 0x2b);
 		}
 #endif
 #ifdef IFORCE_USB
 		case IFORCE_USB: {
 
-			DECLARE_WAITQUEUE(wait, current);
-			int timeout = HZ; /* 1 second */
-
-			memcpy(iforce->out.transfer_buffer + 1, data, LO(cmd));
-			((char*)iforce->out.transfer_buffer)[0] = HI(cmd);
-			iforce->out.transfer_buffer_length = LO(cmd) + 2;
-			iforce->out.dev = iforce->usbdev;
-
-			set_current_state(TASK_INTERRUPTIBLE);
-			add_wait_queue(&iforce->wait, &wait);
-
-			if (usb_submit_urb(&iforce->out)) {
-				set_current_state(TASK_RUNNING);
-				remove_wait_queue(&iforce->wait, &wait);
-				return;
+			if (empty & !iforce->out.status) {
+printk(KERN_DEBUG "iforce.c: send_packet: call iforce_usb_xmit needed\n");
+				iforce_usb_xmit(iforce);
 			}
-
-			while (timeout && iforce->out.status == -EINPROGRESS)
-				timeout = schedule_timeout(timeout);
-
-			set_current_state(TASK_RUNNING);
-			remove_wait_queue(&iforce->wait, &wait);
-
-			if (!timeout)
-				usb_unlink_urb(&iforce->out);
-
-			return;
 		}
 #endif
 	}
@@ -380,7 +479,7 @@ static int iforce_flush(struct input_dev *dev, struct file *file)
 			current->pid == iforce->core_effects[i].owner) {
 			
 			/* Stop effect */
-			input_event(dev, EV_FF, i, 0);
+			iforce_input_event(dev, EV_FF, i, 0);
 
 			/* Free ressources assigned to effect */
 			if (iforce_erase_effect(dev, i)) {
@@ -396,6 +495,8 @@ static int iforce_flush(struct input_dev *dev, struct file *file)
 static void iforce_close(struct input_dev *dev)
 {
 	struct iforce *iforce = dev->private;
+
+	printk(KERN_DEBUG "iforce.c: in iforce_close\n");
 
 	/* Disable force feedback playback */
 	send_packet(iforce, FF_CMD_ENABLE, "\001");
@@ -442,7 +543,7 @@ static int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned
 
 			return 0;
 
-		default: /* Play an effect */
+		default: /* Play or stop an effect */
 
 			if (code >= iforce->dev.ff_effects_max)
 				return -1;
@@ -474,11 +575,14 @@ static int make_magnitude_modifier(struct iforce* iforce,
 {
 	unsigned char data[3];
 
+	down(&iforce->mem_mutex);
 	if (allocate_resource(&(iforce->device_memory), mod_chunk, 2,
 		iforce->device_memory.start, iforce->device_memory.end, 2L,
 		NULL, NULL)) {
+		up(&iforce->mem_mutex);
 		return -ENOMEM;
 	}
+	up(&iforce->mem_mutex);
 
 	data[0] = LO(mod_chunk->start);
 	data[1] = HI(mod_chunk->start);
@@ -500,11 +604,14 @@ static int make_period_modifier(struct iforce* iforce, struct resource* mod_chun
 
 	period = TIME_SCALE(period);
 
+	down(&iforce->mem_mutex);
 	if (allocate_resource(&(iforce->device_memory), mod_chunk, 0x0c,
 		iforce->device_memory.start, iforce->device_memory.end, 2L,
 		NULL, NULL)) {
+		up(&iforce->mem_mutex);
 		return -ENOMEM;
 	}
+	up(&iforce->mem_mutex);
 
 	data[0] = LO(mod_chunk->start);
 	data[1] = HI(mod_chunk->start);
@@ -534,11 +641,14 @@ static int make_shape_modifier(struct iforce* iforce, struct resource* mod_chunk
 	attack_duration = TIME_SCALE(attack_duration);
 	fade_duration = TIME_SCALE(fade_duration);
 
+	down(&iforce->mem_mutex);
 	if (allocate_resource(&(iforce->device_memory), mod_chunk, 0x0e,
 		iforce->device_memory.start, iforce->device_memory.end, 2L,
 		NULL, NULL)) {
+		up(&iforce->mem_mutex);
 		return -ENOMEM;
 	}
+	up(&iforce->mem_mutex);
 
 	data[0] = LO(mod_chunk->start);
 	data[1] = HI(mod_chunk->start);
@@ -566,11 +676,14 @@ static int make_interactive_modifier(struct iforce* iforce,
 {
 	unsigned char data[10];
 
+	down(&iforce->mem_mutex);
 	if (allocate_resource(&(iforce->device_memory), mod_chunk, 8,
 		iforce->device_memory.start, iforce->device_memory.end, 2L,
 		NULL, NULL)) {
+		up(&iforce->mem_mutex);
 		return -ENOMEM;
 	}
+	up(&iforce->mem_mutex);
 
 	data[0] = LO(mod_chunk->start);
 	data[1] = HI(mod_chunk->start);
@@ -822,13 +935,12 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
  */
 
 	for (id=0; id < FF_EFFECTS_MAX; ++id)
-		if (!test_bit(FF_CORE_IS_USED, iforce->core_effects[id].flags)) break;
+		if (!test_and_set_bit(FF_CORE_IS_USED, iforce->core_effects[id].flags)) break;
 
 	if ( id == FF_EFFECTS_MAX || id >= iforce->dev.ff_effects_max)
 		return -ENOMEM;
 
 	effect->id = id;
-	set_bit(FF_CORE_IS_USED, iforce->core_effects[id].flags);
 	iforce->core_effects[id].owner = current->pid;
 
 /*
@@ -892,6 +1004,10 @@ static int iforce_init_device(struct iforce *iforce)
 	int i;
 
 	init_waitqueue_head(&iforce->wait);
+	spin_lock_init(&iforce->xmit_lock);
+	init_MUTEX(&iforce->mem_mutex);
+	iforce->xmit.buf = iforce->xmit_data;
+
 	iforce->dev.ff_effects_max = 10;
 
 /*
@@ -1056,7 +1172,11 @@ static void iforce_usb_irq(struct urb *urb)
 static void iforce_usb_out(struct urb *urb)
 {
 	struct iforce *iforce = urb->context;
+
 	if (urb->status) return;
+
+	iforce_usb_xmit(iforce);
+
 	if (waitqueue_active(&iforce->wait))
 		wake_up(&iforce->wait);
 }
@@ -1229,6 +1349,9 @@ static void iforce_serio_disconnect(struct serio *serio)
 }
 
 static struct serio_dev iforce_serio_dev = {
+#ifdef IFORCE_232
+	write_wakeup:	iforce_serio_write_wakeup,
+#endif
 	interrupt:	iforce_serio_irq,
 	connect:	iforce_serio_connect,
 	disconnect:	iforce_serio_disconnect,
