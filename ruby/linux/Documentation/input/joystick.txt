@@ -111,7 +111,7 @@ your needs:
 	alias tty-ldisc-2 serport
 	alias char-major-13 input
 	above input joydev ns558 analog
-	options analog js=gameport
+	options analog js=gamepad
 
 2.5 Verifying that it works
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
