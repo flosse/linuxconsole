@@ -24,14 +24,18 @@
  * Johann Deneux <deneux@ifrance.com>
  */
 
+// Quick fix for #define mess
+#define uint16_t unsigned short
+#define uint32_t unsigned short
+
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <linux/input.h>
 #include <unistd.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <linux/input.h>
 
 #define BITS_PER_LONG (sizeof(long) * 8)
 #define OFF(x)  ((x)%BITS_PER_LONG)
