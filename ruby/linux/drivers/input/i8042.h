@@ -44,7 +44,7 @@
  * On most PC based systems the keyboard IRQ is 1.
  */
 
-#define I8042_KBD_IRQ 1
+#define I8042_KBD_IRQ CONFIG_I8042_KBD_IRQ 
 
 /*
  * On most PC based systems the aux port IRQ is 12. There are exceptions,
@@ -52,11 +52,7 @@
  * the device attached to the port.
  */
 
-#if defined(__alpha__) && !defined(CONFIG_PCI)
-#define I8042_AUX_IRQ 9		/* This is for Jensen Alpha */
-#else
-#define I8042_AUX_IRQ 12	/* This is for everyone else */
-#endif
+#define I8042_AUX_IRQ CONFIG_I8042_AUX_IRQ
 
 /*
  * The speed of the i8042's varies. This timeout equals 100 ms on a system
@@ -70,9 +66,9 @@
  * Register numbers.
  */
 
-#define I8042_COMMAND_REG	0x64
-#define I8042_STATUS_REG	0x64
-#define I8042_DATA_REG		0x60
+#define I8042_COMMAND_REG	CONFIG_I8042_REG_BASE + 4
+#define I8042_STATUS_REG	CONFIG_I8042_REG_BASE + 4
+#define I8042_DATA_REG		CONFIG_I8042_REG_BASE	
 
 /*
  * Status register bits.
