@@ -150,14 +150,8 @@ static struct serio ct82c710_port =
 
 static void ct82c710_interrupt(int cpl, void *dev_id, struct pt_regs * regs)
 {
-#ifdef CONFIG_VT
-	kbd_pt_regs = regs;
-#endif
 	if (ct82c710_port.dev)
 		ct82c710_port.dev->interrupt(&ct82c710_port, inb(ct82c710_data), 0);
-#ifdef CONFIG_VT
-	kbd_pt_regs = NULL;
-#endif
 }
 
 /*
