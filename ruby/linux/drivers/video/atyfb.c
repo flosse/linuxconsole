@@ -2958,7 +2958,8 @@ static int atyfb_ioctl(struct inode *inode, struct file *file, u_int cmd,
 	fbtyp.fb_depth = info->current_par.crtc.bpp;
 	fbtyp.fb_cmsize = disp->cmap.len;
 	fbtyp.fb_size = info->total_vram;
-	copy_to_user_ret((struct fbtype *)arg, &fbtyp, sizeof(fbtyp), -EFAULT);
+	if (copy_to_user((struct fbtype *)arg, &fbtyp, sizeof(fbtyp)))
+		return -EFAULT;
 	break;
 #endif /* __sparc__ */
 #ifdef DEBUG
@@ -2979,8 +2980,8 @@ static int atyfb_ioctl(struct inode *inode, struct file *file, u_int cmd,
 	    clk.dsp_precision = (dsp_config>>20) & 7;
 	    clk.dsp_on = dsp_on_off & 0x7ff;
 	    clk.dsp_off = (dsp_on_off>>16) & 0x7ff;
-	    copy_to_user_ret((struct atyclk *)arg, &clk, sizeof(clk),
-			     -EFAULT);
+	    if (copy_to_user_ret((struct atyclk *)arg, &clk, sizeof(clk)))
+	    	    return -EFAULT;
 	} else
 	    return -EINVAL;
 	break;
@@ -2988,8 +2989,8 @@ static int atyfb_ioctl(struct inode *inode, struct file *file, u_int cmd,
 	if ((Gx != GX_CHIP_ID) && (Gx != CX_CHIP_ID)) {
 	    struct atyclk clk;
 	    struct pll_ct *pll = &info->current_par.pll.ct;
-	    copy_from_user_ret(&clk, (struct atyclk *)arg, sizeof(clk),
-			       -EFAULT);
+	    if (copy_from_user_ret(&clk, (struct atyclk *)arg, sizeof(clk)))
+	    	    return -EFAULT;
 	    info->ref_clk_per = clk.ref_clk_per;
 	    pll->pll_ref_div = clk.pll_ref_div;
 	    pll->mclk_fb_div = clk.mclk_fb_div;

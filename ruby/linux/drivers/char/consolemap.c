@@ -251,11 +251,11 @@ static void clear_inverse_translations(int m)
 
 static void set_inverse_translations(int m)
 {
-	int i, c, n;
         unsigned char ***q, **p1, *p2;
         u16 *t = translations[m];
-        u16 unicode;
-
+	u16 unicode;
+	int i, c, n;
+	
         clear_inverse_translations(m);
         q = inverse_translations[m] = (unsigned char ***)
                 kmalloc(32*sizeof(unsigned char **), GFP_KERNEL);
@@ -311,8 +311,8 @@ static void set_inverse_translations(int m)
  */
 int con_set_trans_old(struct vc_data *vc, unsigned char * arg)
 {
-	int i;
 	unsigned short *p = translations[USER_MAP];
+	int i;
 
 	i = verify_area(VERIFY_READ, (void *)arg, E_TABSZ);
 	if (i)
@@ -345,8 +345,8 @@ int con_get_trans_old(struct vc_data *vc, unsigned char * arg)
 
 int con_set_trans_new(struct vc_data *vc, ushort * arg)
 {
-	int i;
 	unsigned short *p = translations[USER_MAP];
+	int i;
 
 	i = verify_area(VERIFY_READ, (void *)arg,
 			E_TABSZ*sizeof(unsigned short));
@@ -364,8 +364,8 @@ int con_set_trans_new(struct vc_data *vc, ushort * arg)
 
 int con_get_trans_new(struct vc_data *vc, ushort * arg)
 {
-	int i;
 	unsigned short *p = translations[USER_MAP];
+	int i;
 
 	i = verify_area(VERIFY_WRITE, (void *)arg,
 			E_TABSZ*sizeof(unsigned short));
@@ -401,10 +401,8 @@ static void clear_inverse_map(struct uni_pagedir *p)
 
 static void set_inverse_map(struct uni_pagedir *p)
 {
-	int i, j, k;
-       	u16 *q;
-       	u16 **p1, *p2;
-       	int ucs;
+       	u16 **p1, *p2, *q;
+       	int i, j, k, ucs;
 
        	q = p->inverse_map;
        	if (!q) {
@@ -529,8 +527,8 @@ static int con_unify_unimap(struct vc_data *vc, struct uni_pagedir *p)
 static int
 con_insert_unipair(struct uni_pagedir *p, u_short unicode, u_short fontpos)
 {
-	int i, n;
 	u16 **p1, *p2;
+	int i, n;
 
 	if (!(p1 = p->uni_pgdir[n = unicode >> 11])) {
 		p1 = p->uni_pgdir[n] = kmalloc(32*sizeof(u16 *), GFP_KERNEL);
@@ -580,8 +578,8 @@ int con_clear_unimap(struct vc_data *vc, struct unimapinit *ui)
 
 int con_set_unimap(struct vc_data *vc, ushort ct, struct unipair *list)
 {
-	int err = 0, err1, i;
 	struct uni_pagedir *p, *q;
+	int err = 0, err1, i;
 
 	p = (struct uni_pagedir *)*vc->vc_uni_pagedir_loc;
 	if (p->readonly) return -EIO;
@@ -637,9 +635,9 @@ int con_set_unimap(struct vc_data *vc, ushort ct, struct unipair *list)
    PIO_FONTRESET ioctl is called. */
 int con_set_default_unimap(struct vc_data *vc)
 {
+	struct uni_pagedir *p;
 	int i, j, err = 0, err1;
 	u16 *q;
-	struct uni_pagedir *p;
 	
 	if (dflt) {
 		p = (struct uni_pagedir *)*vc->vc_uni_pagedir_loc;
@@ -697,9 +695,9 @@ int con_copy_unimap(struct vc_data *dconp, struct vc_data *sconp)
 int con_get_unimap(struct vc_data *vc, ushort ct, ushort *uct, 
 		   struct unipair *list)
 {
+	struct uni_pagedir *p;
 	int i, j, k, ect;
 	u16 **p1, *p2;
-	struct uni_pagedir *p;
 
 	ect = 0;
 	if (*vc->vc_uni_pagedir_loc) {

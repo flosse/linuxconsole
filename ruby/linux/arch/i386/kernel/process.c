@@ -535,6 +535,7 @@ void copy_segments(struct task_struct *p, struct mm_struct *new_mm)
 	asm volatile("movl %%" #seg ",%0":"=m" (*(int *)&(value)))
 
 int copy_thread(int nr, unsigned long clone_flags, unsigned long esp,
+	unsigned long unused,
 	struct task_struct * p, struct pt_regs * regs)
 {
 	struct pt_regs * childregs;
@@ -696,7 +697,7 @@ void __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 
 asmlinkage int sys_fork(struct pt_regs regs)
 {
-	return do_fork(SIGCHLD, regs.esp, &regs);
+	return do_fork(SIGCHLD, regs.esp, &regs, 0);
 }
 
 asmlinkage int sys_clone(struct pt_regs regs)
@@ -708,7 +709,7 @@ asmlinkage int sys_clone(struct pt_regs regs)
 	newsp = regs.ecx;
 	if (!newsp)
 		newsp = regs.esp;
-	return do_fork(clone_flags, newsp, &regs);
+	return do_fork(clone_flags, newsp, &regs, 0);
 }
 
 /*
@@ -723,7 +724,7 @@ asmlinkage int sys_clone(struct pt_regs regs)
  */
 asmlinkage int sys_vfork(struct pt_regs regs)
 {
-	return do_fork(CLONE_VFORK | CLONE_VM | SIGCHLD, regs.esp, &regs);
+	return do_fork(CLONE_VFORK | CLONE_VM | SIGCHLD, regs.esp, &regs, 0);
 }
 
 /*

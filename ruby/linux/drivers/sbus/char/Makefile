@@ -12,14 +12,14 @@
 # easily. and you can even choose what sort of support you want.
 
 O_TARGET := sunchar.o
-O_OBJS   := ${O_OBJ} sunserial.o zs.o
+O_OBJS   := ${O_OBJ} sunkbdmap.o sunserial.o zs.o
 M_OBJS   :=
 
 ifeq ($(ARCH),sparc64)
 
 ifeq ($(CONFIG_PCI),y)
 
-O_OBJS += su.o
+OX_OBJS += su.o
 
 ifeq ($(CONFIG_SAB82532),y)
 O_OBJS += sab82532.o
@@ -37,6 +37,14 @@ else
   endif
 endif
 
+ifeq ($(CONFIG_DISPLAY7SEG),y)
+O_OBJS += display7seg.o
+else
+  ifeq ($(CONFIG_DISPLAY7SEG),m)
+  M_OBJS += display7seg.o
+  endif
+endif
+
 endif # eq($(CONFIG_PCI,y)
 
 ifeq ($(CONFIG_OBP_FLASH),y)
@@ -50,7 +58,7 @@ endif
 else # !eq($(ARCH),sparc64)
 
 ifeq ($(CONFIG_PCI),y)
-O_OBJS += su.o
+OX_OBJS += su.o
 endif
 
 endif # !eq($(ARCH),sparc64)
@@ -111,6 +119,8 @@ M_OBJS += jsflash.o
 endif
 
 include $(TOPDIR)/Rules.make
+
+sunkbdmap.o: sunkeymap.c
 
 vfc.o: vfc_dev.o vfc_i2c.o
 	$(LD) -r -o vfc.o vfc_dev.o vfc_i2c.o
