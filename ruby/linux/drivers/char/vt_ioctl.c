@@ -1483,20 +1483,22 @@ void complete_change_console(struct vc_data *new_vc, struct vc_data *old_vc)
 		 * is awry
 		 */
 		if (kill_proc(new_vc->vt_pid,new_vc->vt_mode.acqsig, 1) != 0) { 
-		/*
-		 * The controlling process has died, so we revert back to
-		 * normal operation. In this case, we'll also change back
-		 * to KD_TEXT mode. I'm not sure if this is strictly correct
-		 * but it saves the agony when the X server dies and the screen
-		 * remains blanked due to KD_GRAPHICS! It would be nice to do
-		 * this outside of VT_PROCESS but there is no single process
-		 * to account for and tracking tty count may be undesirable.
-		 */
-		if (old_vc_mode != new_vc->vc_mode) {
-			if (new_vc->vc_mode == KD_TEXT) 
-				unblank_screen(new_vc->display_fg);
-			else
-				do_blank_screen(new_vc);
+			/*
+		 	 * The controlling process has died, so we revert back 
+		 	 * to normal operation. In this case, we'll also change
+			 * back to KD_TEXT mode. I'm not sure if this is 
+		 	 * strictly correct but it saves the agony when the X 
+                   	 * server dies and the screen remains blanked due to
+		 	 * KD_GRAPHICS! It would be nice to do this outside of
+		         * VT_PROCESS but there is no single process to account
+		         * and tracking tty count may be undesirable.
+		 	 */
+			if (old_vc_mode != new_vc->vc_mode) {
+				if (new_vc->vc_mode == KD_TEXT) 
+					unblank_screen(new_vc->display_fg);
+				else
+					do_blank_screen(new_vc);
+			}
 		}
 	}
 
