@@ -1285,8 +1285,7 @@ retry_open:
 	}
 #ifdef CONFIG_VT
 	if (device == CONSOLE_DEV) {
-		extern int fg_console;
-		device = MKDEV(TTY_MAJOR, fg_console + 1);
+		device = MKDEV(TTY_MAJOR, vt_cons->fg_console->vc_num + 1);
 		noctty = 1;
 	}
 #endif
@@ -2245,7 +2244,7 @@ void __init tty_init(void)
 		panic("Couldn't register /dev/tty0 driver\n");
 
 	kbd_init();
-	console_map_init();
+	console_map_init(vt_cons);
 	vcs_init();
 #endif
 #ifdef CONFIG_ESPSERIAL  /* init ESP before rs, so rs doesn't see the port */
