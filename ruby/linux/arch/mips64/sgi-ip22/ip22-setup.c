@@ -19,10 +19,10 @@
 #include <linux/console.h>
 #include <linux/sched.h>
 #include <linux/mc146818rtc.h>
-#include <linux/pc_keyb.h>
 #include <linux/tty.h>
 
 #include <asm/addrspace.h>
+#include <asm/mmu_context.h>
 #include <asm/bcache.h>
 #include <asm/keyboard.h>
 #include <asm/irq.h>
@@ -125,6 +125,7 @@ void __init ip22_setup(void)
 #ifdef CONFIG_SERIAL_CONSOLE
 	char *ctype;
 #endif
+	TLBMISS_HANDLER_SETUP();
 
 	/* Init the INDY HPC I/O controller.  Need to call this before
 	 * fucking with the memory controller because it needs to know the

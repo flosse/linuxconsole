@@ -43,6 +43,11 @@
  *  Pentium III FXSR, SSE support
  *  General FPU state handling cleanups
  *	Gareth Hughes <gareth@valinux.com>, May 2000
+ *
+ *  Added proper Cascades CPU and L2 cache detection for Cascades
+ *  and 8-way type cache happy bunch from Intel:^)
+ *  Dragan Stancevic <visitor@valinux.com>, May 2000 
+ *
  */
 
 /*
@@ -1629,7 +1634,8 @@ int get_cpuinfo(char * buffer)
 					x86_cap_flags[10] = "sep";
 				if (c->x86 < 6)
 					x86_cap_flags[16] = "fcmov";
-				x86_cap_flags[16] = "pat";
+				else
+					x86_cap_flags[16] = "pat";
 				x86_cap_flags[22] = "mmxext";
 				x86_cap_flags[24] = "fxsr";
 				x86_cap_flags[30] = "3dnowext";

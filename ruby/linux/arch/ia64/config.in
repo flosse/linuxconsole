@@ -85,6 +85,7 @@ source drivers/parport/Config.in
 
 endmenu
 
+source drivers/mtd/Config.in
 source drivers/pnp/Config.in
 source drivers/block/Config.in
 source drivers/i2o/Config.in
@@ -155,8 +156,6 @@ source fs/Config.in
 
 source fs/nls/Config.in
 
-source drivers/video/Config.in
-
 mainmenu_option next_comment
 comment 'Sound'
 
@@ -168,6 +167,7 @@ endmenu
 
 source drivers/usb/Config.in
 source drivers/input/Config.in
+source drivers/video/Config.in
 
 mainmenu_option next_comment
 comment 'Kernel hacking'

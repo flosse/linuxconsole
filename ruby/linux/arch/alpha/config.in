@@ -228,6 +228,8 @@ tristate 'Kernel support for Linux/Intel ELF binaries' CONFIG_BINFMT_EM86
 source drivers/parport/Config.in
 endmenu
 
+source drivers/mtd/Config.in
+
 source drivers/pnp/Config.in
 
 source drivers/block/Config.in
@@ -300,8 +302,6 @@ source drivers/char/Config.in
 
 source fs/Config.in
 
-source drivers/video/Config.in
-
 mainmenu_option next_comment
 comment 'Sound'
 
@@ -313,11 +313,11 @@ endmenu
 
 source drivers/usb/Config.in
 source drivers/input/Config.in
+source drivers/video/Config.in
 
 mainmenu_option next_comment
 comment 'Kernel hacking'
 
-#bool 'Debug kmalloc/kfree' CONFIG_DEBUG_MALLOC
 if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
   tristate 'Kernel FP software completion' CONFIG_MATHEMU
 else
@@ -325,4 +325,7 @@ else
 fi
 
 bool 'Magic SysRq key' CONFIG_MAGIC_SYSRQ
+
+bool 'Legacy kernel start address' CONFIG_ALPHA_LEGACY_START_ADDRESS
+
 endmenu

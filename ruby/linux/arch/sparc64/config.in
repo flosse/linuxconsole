@@ -27,6 +27,7 @@ define_bool CONFIG_VT_CONSOLE y
 bool 'Symmetric multi-processing support' CONFIG_SMP
 
 # Global things across all Sun machines.
+define_bool CONFIG_HAVE_DEC_LOCK y
 define_bool CONFIG_ISA n
 define_bool CONFIG_PCMCIA n
 define_bool CONFIG_SBUS y
@@ -69,11 +70,11 @@ if [ "$CONFIG_PCI" = "y" ]; then
 fi
 endmenu
 
-source drivers/video/Config.in
-
 source drivers/sbus/char/Config.in
 source drivers/sbus/audio/Config.in
 source drivers/input/Config.in
+source drivers/video/Config.in
+source drivers/mtd/Config.in
 
 mainmenu_option next_comment
 comment 'Block devices'

@@ -18,15 +18,17 @@ MX_OBJS		:=
 
 # Object file lists.
 
-obj-y   	:= i2c.o pcf8583.o
+obj-y   	:= 
 obj-m		:=
 obj-n		:=
 obj-		:=
 
 obj-$(CONFIG_ATOMWIDE_SERIAL)	+= serial-atomwide.o
 obj-$(CONFIG_DUALSP_SERIAL)	+= serial-dualsp.o
+obj-$(CONFIG_ARCH_ACORN)	+= defkeymap-acorn.o
 
-obj-y		+= $(obj-$(MACHINE))
+# Do the i2c and rtc last
+obj-y		+= $(obj-$(MACHINE)) i2c.o pcf8583.o
 
 O_OBJS		:= $(filter-out $(export-objs), $(obj-y))
 OX_OBJS		:= $(filter     $(export-objs), $(obj-y))

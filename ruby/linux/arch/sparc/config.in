@@ -1,6 +1,6 @@
 # $Id$
 # For a description of the syntax of this configuration file,
-# see the Configure script.
+# see Documentation/kbuild/config-language.txt.
 #
 mainmenu_name "Linux/SPARC Kernel Configuration"
 
@@ -45,6 +45,7 @@ define_bool CONFIG_SUN_IO y
 
 bool 'Support for SUN4 machines (disables SUN4[CDM] support)' CONFIG_SUN4
 if [ "$CONFIG_SUN4" != "y" ]; then
+   bool 'Support for PCI and PS/2 keyboard/mouse' CONFIG_PCI
    source drivers/pci/Config.in
 else
    define_bool CONFIG_PCI n
@@ -66,12 +67,14 @@ source drivers/parport/Config.in
 dep_tristate '  Parallel printer support' CONFIG_PRINTER $CONFIG_PARPORT
 endmenu
 
-source drivers/video/Config.in
+source drivers/mtd/Config.in
 
 if [ "$CONFIG_SUN4" != "y" ]; then
    source drivers/sbus/char/Config.in
    source drivers/sbus/audio/Config.in
 fi
+
+source drivers/video/Config.in
 
 mainmenu_option next_comment
 comment 'Block devices'
@@ -237,7 +240,6 @@ fi
 endmenu
 
 source fs/Config.in
-source drivers/input/Config.in
 
 mainmenu_option next_comment
 comment 'Watchdog'

@@ -131,7 +131,7 @@ _MAVEN $CONFIG_FB_MATROX_I2C
          tristate '  ATI Mach64 display support (EXPERIMENTAL)' CONFIG_FB_ATY
          tristate '  ATI Rage 128 display support (EXPERIMENTAL)' CONFIG_FB_ATY1
 28
-         bool '  3Dfx Banshee/Voodoo3 display support (EXPERIMENTAL)' CONFIG_FB_
+         tristate '  3Dfx Banshee/Voodoo3 display support (EXPERIMENTAL)' CONFIG_FB_
 3DFX
 	 tristate '  SIS 630/540 display support (EXPERIMENTAL)' CONFIG_FB_SIS
       fi
@@ -240,10 +240,9 @@ ON_IPLAN2P16
            "$CONFIG_FB_IGA" = "y" -o "$CONFIG_FB_MATROX" = "y" -o \
            "$CONFIG_FB_CT65550" = "y" -o "$CONFIG_FB_PM2" = "y" -o \
            "$CONFIG_FB_P9100" = "y" -o "$CONFIG_FB_ATY128" = "y" -o \
-           "$CONFIG_FB_RIVA" = "y" -o \                                        
+           "$CONFIG_FB_RIVA" = "y" -o "$CONFIG_FB_3DFX" = "y" -o \ 
            "$CONFIG_FB_SGIVW" = "y" -o "$CONFIG_FB_CYBER2000" = "y" -o \
-           "$CONFIG_FB_SA1100" = "y" -o "$CONFIG_FB_3DFX" = "y" -o \
-           "$CONFIG_FB_SIS" = "y" ]; then
+           "$CONFIG_FB_SA1100" = "y" -o "$CONFIG_FB_SIS" = "y" ]; then 
          define_tristate CONFIG_FBCON_CFB8 y
       else
          if [ "$CONFIG_FB_ACORN" = "m" -o "$CONFIG_FB_ATARI" = "m" -o \
@@ -258,7 +257,7 @@ ON_IPLAN2P16
               "$CONFIG_FB_IGA" = "m" -o "$CONFIG_FB_MATROX" = "m" -o \
               "$CONFIG_FB_CT65550" = "m" -o "$CONFIG_FB_PM2" = "m" -o \
               "$CONFIG_FB_P9100" = "m" -o "$CONFIG_FB_ATY128" = "m" -o \
-              "$CONFIG_FB_RIVA" = "m" -o \	
+              "$CONFIG_FB_RIVA" = "m" -o -o "$CONFIG_FB_3DFX" = "m" -o \	
 	      "$CONFIG_FB_SGIVW" = "m" -o "$CONFIG_FB_CYBER2000" = "m" -o \
               "$CONFIG_FB_SA1100" = "m" -o "$CONFIG_FB_SIS" = "m" ]; then
             define_tristate CONFIG_FBCON_CFB8 m
@@ -267,7 +266,7 @@ ON_IPLAN2P16
       if [ "$CONFIG_FB_ATARI" = "y" -o "$CONFIG_FB_ATY" = "y" -o \
            "$CONFIG_FB_MAC" = "y" -o "$CONFIG_FB_VESA" = "y" -o \
            "$CONFIG_FB_VIRTUAL" = "y" -o "$CONFIG_FB_TBOX" = "y" -o \
-           "$CONFIG_FB_Q40" = "y" -o \
+           "$CONFIG_FB_Q40" = "y" -o "$CONFIG_FB_3DFX" = "m" -o \
            "$CONFIG_FB_CONTROL" = "y" -o "$CONFIG_FB_CLGEN" = "y" -o \
            "$CONFIG_FB_VIRGE" = "y" -o "$CONFIG_FB_CYBER" = "y" -o \
            "$CONFIG_FB_VALKYRIE" = "y" -o "$CONFIG_FB_PLATINUM" = "y" -o \
@@ -323,6 +322,7 @@ ON_IPLAN2P16
               "$CONFIG_FB_TGA" = "m" -o "$CONFIG_FB_PLATINUM" = "m" -o \
               "$CONFIG_FB_MATROX" = "m" -o "$CONFIG_FB_PM2" = "m" -o \
               "$CONFIG_FB_RIVA" = "m" -o "$CONFIG_FB_ATY128" = "m" -o \
+	      "$CONFIG_FB_3DFX" = "m" -o \	
               "$CONFIG_FB_SGIVW" = "m" -o "$CONFIG_FB_SIS" = "m" ]; then
             define_tristate CONFIG_FBCON_CFB32 m
          fi

@@ -88,16 +88,42 @@ static void default_idle(void)
 }
 
 /*
+ * On SMP it's slightly faster (but much more power-consuming!)
+ * to poll the ->need_resched flag instead of waiting for the
+ * cross-CPU IPI to arrive. Use this option with caution.
+ */
+static void poll_idle (void)
+{
+	int oldval;
+
+	__sti();
+
+	/*
+	 * Deal with another CPU just having chosen a thread to
+	 * run here:
+	 */
+	oldval = xchg(&current->need_resched, -1);
+
+	if (!oldval)
+		asm volatile(
+			"2:"
+			"cmpl $-1, %0;"
+			"rep; nop;"
+			"je 2b;"
+				: :"m" (current->need_resched));
+}
+
+/*
  * The idle thread. There's no useful work to be
  * done, so just try to conserve power and have a
  * low exit latency (ie sit in a loop waiting for
  * somebody to say that they'd like to reschedule)
  */
-void cpu_idle(void)
+void cpu_idle (void)
 {
 	/* endless idle loop with no priority at all */
 	init_idle();
-	current->priority = 0;
+	current->nice = 20;
 	current->counter = -100;
 
 	while (1) {
@@ -110,6 +136,18 @@ void cpu_idle(void)
 		check_pgt_cache();
 	}
 }
+
+static int __init idle_setup (char *str)
+{
+	if (!strncmp(str, "poll", 4)) {
+		printk("using polling idle threads.\n");
+		pm_idle = poll_idle;
+	}
+
+	return 1;
+}
+
+__setup("idle=", idle_setup);
 
 static long no_idt[2] = {0, 0};
 static int reboot_mode = 0;
@@ -319,7 +357,7 @@ void machine_restart(char * __unused)
                 extern void i8042_controller_cleanup(void);
                 i8042_controller_cleanup();
         }
-#endif
+#endif           
 
 	if(!reboot_thru_bios) {
 		/* rebooting needs to touch the page at absolute addr 0 */
@@ -354,7 +392,7 @@ void machine_power_off(void)
 
 void show_regs(struct pt_regs * regs)
 {
-	long cr0 = 0L, cr2 = 0L, cr3 = 0L;
+	unsigned long cr0 = 0L, cr2 = 0L, cr3 = 0L, cr4 = 0L;
 
 	printk("\n");
 	printk("EIP: %04x:[<%08lx>]",0xffff & regs->xcs,regs->eip);
@@ -371,7 +409,14 @@ void show_regs(struct pt_regs * regs)
 	__asm__("movl %%cr0, %0": "=r" (cr0));
 	__asm__("movl %%cr2, %0": "=r" (cr2));
 	__asm__("movl %%cr3, %0": "=r" (cr3));
-	printk("CR0: %08lx CR2: %08lx CR3: %08lx\n", cr0, cr2, cr3);
+	/* This could fault if %cr4 does not exist */
+	__asm__("1: movl %%cr4, %0		\n"
+		"2:				\n"
+		".section __ex_table,\"a\"	\n"
+		".long 1b,2b			\n"
+		".previous			\n"
+		: "=r" (cr4): "0" (0));
+	printk("CR0: %08lx CR2: %08lx CR3: %08lx CR4: %08lx\n", cr0, cr2, cr3, cr4);
 }
 
 /*

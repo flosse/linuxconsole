@@ -113,6 +113,8 @@ source drivers/parport/Config.in
 
 endmenu
 
+source drivers/mtd/Config.in
+
 source drivers/block/Config.in
 
 if [ "$CONFIG_NET" = "y" ]; then
@@ -189,9 +191,6 @@ if [ "$CONFIG_HOTPLUG" = "y" -a "$CONFIG_PCMCIA" != "n" ]; then
 fi
 
 source fs/Config.in
-source drivers/input/Config.in
-
-source drivers/video/Config.in
 
 mainmenu_option next_comment
 comment 'Sound'
@@ -201,6 +200,9 @@ if [ "$CONFIG_SOUND" != "n" ]; then
    source drivers/sound/Config.in
 fi
 endmenu
+
+source drivers/input/Config.in
+source drivers/video/Config.in
 
 mainmenu_option next_comment
 comment 'Kernel hacking'

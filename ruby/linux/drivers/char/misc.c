@@ -71,6 +71,7 @@ extern void pcwatchdog_init(void);
 extern int rtc_sun_init(void);		/* Combines MK48T02 and MK48T08 */
 extern int rtc_DP8570A_init(void);
 extern int rtc_MK48T08_init(void);
+extern int ds1286_init(void);
 extern int dsp56k_init(void);
 extern int radio_init(void);
 extern int pmu_device_init(void);
@@ -128,8 +129,11 @@ static int misc_open(struct inode * inode, struct file * file)
 
 	old_fops = file->f_op;
 	file->f_op = fops_get(c->fops);
-	if (file->f_op && file->f_op->open)
-		err=file->f_op->open(inode,file);
+	if (file->f_op) {
+		err = 0;
+		if (file->f_op->open)
+			err=file->f_op->open(inode,file);
+	}
 	if (err) {
 		fops_put(file->f_op);
 		file->f_op = fops_get(old_fops);
@@ -184,7 +188,7 @@ int misc_register(struct miscdevice * misc)
 	if (misc->minor < DYNAMIC_MINORS)
 		misc_minors[misc->minor >> 3] |= 1 << (misc->minor & 7);
 	if (!devfs_handle)
-		devfs_handle = devfs_mk_dir (NULL, "misc", 4, NULL);
+		devfs_handle = devfs_mk_dir (NULL, "misc", NULL);
 	misc->devfs_handle =
 	    devfs_register (devfs_handle, misc->name, DEVFS_FL_NONE,
 			    MISC_MAJOR, misc->minor,

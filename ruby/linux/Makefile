@@ -1,7 +1,7 @@
 VERSION = 2
 PATCHLEVEL = 4
 SUBLEVEL = 0
-EXTRAVERSION = -test2-ruby
+EXTRAVERSION = -test3-ruby
 
 KERNELRELEASE=$(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
 
@@ -85,11 +85,6 @@ CPPFLAGS := -D__KERNEL__ -I$(HPATH)
 CFLAGS := $(CPPFLAGS) -Wall -Wstrict-prototypes -O2 -fomit-frame-pointer
 AFLAGS := -D__ASSEMBLY__ $(CPPFLAGS)
 
-# use '-fno-strict-aliasing', but only if the compiler can take it
-CFLAGS += $(shell if $(CC) -fno-strict-aliasing -S -o /dev/null -xc /dev/null >/dev/null 2>&1; then echo "-fno-strict-aliasing"; fi)
-
-export	CPPFLAGS CFLAGS AFLAGS
-
 #
 # ROOT_DEV specifies the default root-device when making the image.
 # This can be either FLOPPY, CURRENT, /dev/xxxx or empty, in which case
@@ -152,6 +147,7 @@ endif
 
 DRIVERS-$(CONFIG_SOUND) += drivers/sound/sounddrivers.o
 DRIVERS-$(CONFIG_PCI) += drivers/pci/pci.a
+DRIVERS-$(CONFIG_MTD) += drivers/mtd/mtdlink.o
 DRIVERS-$(CONFIG_PCMCIA) += drivers/pcmcia/pcmcia.o
 DRIVERS-$(CONFIG_PCMCIA_NETCARD) += drivers/net/pcmcia/pcmcia_net.o
 DRIVERS-$(CONFIG_PCMCIA_CHRDEV) += drivers/char/pcmcia/pcmcia_char.o
@@ -173,10 +169,16 @@ DRIVERS-$(CONFIG_I2O) += drivers/i2o/i2o.o
 DRIVERS-$(CONFIG_IRDA) += drivers/net/irda/irda_drivers.a
 DRIVERS-$(CONFIG_I2C) += drivers/i2c/i2c.o
 DRIVERS-$(CONFIG_PHONE) += drivers/telephony/telephony.a
+DRIVERS-$(CONFIG_ACPI_INTERPRETER) += drivers/acpi/acpi.o
 
 DRIVERS += $(DRIVERS-y)
 
 include arch/$(ARCH)/Makefile
+
+# use '-fno-strict-aliasing', but only if the compiler can take it
+CFLAGS += $(shell if $(CC) -fno-strict-aliasing -S -o /dev/null -xc /dev/null >/dev/null 2>&1; then echo "-fno-strict-aliasing"; fi)
+
+export	CPPFLAGS CFLAGS AFLAGS
 
 export	NETWORKS DRIVERS LIBS HEAD LDFLAGS LINKFLAGS MAKEBOOT ASFLAGS
 
@@ -330,9 +332,11 @@ modules_install:
 	if [ -f SK98LIN_MODULES ]; then inst_mod SK98LIN_MODULES  net;   fi; \
 	if [ -f SKFP_MODULES ]; then inst_mod SKFP_MODULES   net;   fi; \
 	if [ -f USB_MODULES   ]; then inst_mod USB_MODULES   usb;   fi; \
+	if [ -f USB_STORAGE_MODULES ]; then inst_mod USB_STORAGE_MODULES   usb;   fi; \
 	if [ -f USB_SERIAL_MODULES   ]; then inst_mod USB_SERIAL_MODULES   usb;   fi; \
 	if [ -f INPUT_MODULES   ]; then inst_mod INPUT_MODULES   input;   fi; \
 	if [ -f IEEE1394_MODULES ]; then inst_mod IEEE1394_MODULES ieee1394; fi; \
+	if [ -f MTD_MODULES ]; then inst_mod MTD_MODULES     mtd;   fi; \
 	if [ -f PCMCIA_MODULES ]; then inst_mod PCMCIA_MODULES pcmcia; fi; \
 	if [ -f PCMCIA_NET_MODULES ]; then inst_mod PCMCIA_NET_MODULES pcmcia; fi; \
 	if [ -f PCMCIA_CHAR_MODULES ]; then inst_mod PCMCIA_CHAR_MODULES pcmcia; fi; \
@@ -432,7 +436,7 @@ sums:
 
 dep-files: scripts/mkdep archdep include/linux/version.h
 	scripts/mkdep init/*.c > .depend
-	scripts/mkdep `find $(FINDHPATH) -name SCCS -prune -or -follow -name \*.h ! -name modversions.h -print` > .hdepend
+	scripts/mkdep `find $(FINDHPATH) -name SCCS -prune -o -follow -name \*.h ! -name modversions.h -print` > .hdepend
 	$(MAKE) $(patsubst %,_sfdep_%,$(SUBDIRS)) _FASTDEP_ALL_SUB_DIRS="$(SUBDIRS)"
 
 ifdef CONFIG_MODVERSIONS
