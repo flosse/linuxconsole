@@ -67,11 +67,11 @@ int main (int argc, char **argv)
 		puts("  --nonblock         Same as --event, in nonblocking mode");
 		puts("  --select           Same as --event, using select() call");
 		puts("");
-		exit(1);
+		return 1;
 	}
 	if ((fd = open(argv[argc - 1], O_RDONLY)) < 0) {
 		perror("jstest");
-		exit(1);
+		return 1;
 	}
 
 	ioctl(fd, JSIOCGVERSION, &version);
@@ -95,7 +95,7 @@ int main (int argc, char **argv)
 
 			if (read(fd, &js, JS_RETURN) != JS_RETURN) {
 				perror("\njstest: error reading");
-				exit(1);
+				return 1;
 			}
 
 			printf("Axes: X:%3d Y:%3d Buttons: A:%s B:%s\r",
@@ -124,7 +124,7 @@ int main (int argc, char **argv)
 		while (1) {
 			if (read(fd, &js, sizeof(struct js_event)) != sizeof(struct js_event)) {
 				perror("\njstest: error reading");
-				exit (1);
+				return 1;
 			}
 
 			switch(js.type & ~JS_EVENT_INIT) {
@@ -166,7 +166,7 @@ int main (int argc, char **argv)
 		while (1) {
 			if (read(fd, &js, sizeof(struct js_event)) != sizeof(struct js_event)) {
 				perror("\njstest: error reading");
-				exit (1);
+				return 1;
 			}
 
 			printf("Event: type %d, time %d, number %d, value %d\n",
@@ -195,7 +195,7 @@ int main (int argc, char **argv)
 
 			if (errno != EAGAIN) {
 				perror("\njstest: error reading");
-				exit (1);
+				return 1;
 			}
 
 			usleep(10000);
@@ -224,7 +224,7 @@ int main (int argc, char **argv)
 
 				if (read(fd, &js, sizeof(struct js_event)) != sizeof(struct js_event)) {
 					perror("\njstest: error reading");
-					exit (1);
+					return 1;
 				}
 
 				printf("Event: type %d, time %d, number %d, value %d\n",
