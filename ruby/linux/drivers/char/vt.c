@@ -1563,14 +1563,10 @@ void __init vt_console_init(void)
 #endif
 }
 
-static struct tty_struct *vty_table[MAX_NR_USER_CONSOLES];
-static struct termios *vty_termios[MAX_NR_USER_CONSOLES];
-static struct termios *vty_termios_locked[MAX_NR_USER_CONSOLES];
-struct tty_driver vty_driver;
-static int vty_refcount;
-
 int __init vty_init(void)
 {
+	struct tty_driver *vty_driver;
+
 #if defined (CONFIG_PROM_CONSOLE)
 	prom_con_init();
 #endif
@@ -1580,35 +1576,39 @@ int __init vty_init(void)
 	kbd_init();
 	console_map_init();
 	
-	memset(&vty_driver, 0, sizeof(struct tty_driver));
+	vty_driver = kmalloc(sizeof(struct tty_driver), GFP_KERNEL);
+	memset(vty_driver, 0, sizeof(struct tty_driver));
+
+        vty_driver->refcount = kmalloc(sizeof(int), GFP_KERNEL);
+        vty_driver->table = kmalloc(sizeof(struct tty_struct) * MAX_NR_USER_CONSOLES, GFP_KERNEL);
+        vty_driver->termios = kmalloc(sizeof(struct termios) * MAX_NR_USER_CONSOLES, GFP_KERNEL);
+        vty_driver->termios_locked = kmalloc(sizeof(struct termios) * MAX_NR_USER_CONSOLES, GFP_KERNEL);
 	
-        vty_driver.refcount = &vty_refcount;
-        vty_driver.table = vty_table;
-        vty_driver.termios = vty_termios;
-        vty_driver.termios_locked = vty_termios_locked;
-	
-	vty_driver.magic = TTY_DRIVER_MAGIC;
-        vty_driver.name = "vc/%d";
-        vty_driver.name_base = 0; //current_vc;
-        vty_driver.major = TTY_MAJOR;
-        vty_driver.minor_start = 0; //current_vc;
-        vty_driver.num = MAX_NR_USER_CONSOLES;
-        vty_driver.type = TTY_DRIVER_TYPE_CONSOLE;
-        vty_driver.init_termios = tty_std_termios;
-        vty_driver.flags = TTY_DRIVER_REAL_RAW | TTY_DRIVER_RESET_TERMIOS;
-        vty_driver.open = vt_open;
-        vty_driver.close = vt_close;
-        vty_driver.write = vt_write;
-        vty_driver.write_room = vt_write_room;
-        vty_driver.put_char = vt_put_char;
-        vty_driver.flush_chars = vt_flush_chars;
-        vty_driver.chars_in_buffer = vt_chars_in_buffer;
-        vty_driver.ioctl = vt_ioctl;
-        vty_driver.stop = vt_stop;
-        vty_driver.start = vt_start;
-        vty_driver.throttle = vt_throttle;
-        vty_driver.unthrottle = vt_unthrottle;
-       	if (tty_register_driver(&vty_driver))
+	vty_driver->magic = TTY_DRIVER_MAGIC;
+        vty_driver->name = "vc/%d";
+        vty_driver->name_base = 0; //current_vc;
+        vty_driver->major = TTY_MAJOR;
+        vty_driver->minor_start = 0; //current_vc;
+        vty_driver->num = MAX_NR_USER_CONSOLES;
+        vty_driver->type = TTY_DRIVER_TYPE_CONSOLE;
+        vty_driver->init_termios = tty_std_termios;
+        vty_driver->flags = TTY_DRIVER_REAL_RAW | TTY_DRIVER_RESET_TERMIOS;
+#ifdef CONFIG_VT_CONSOLE
+	vty_driver->console = &vt_console_driver;
+#endif
+        vty_driver->open = vt_open;
+        vty_driver->close = vt_close;
+        vty_driver->write = vt_write;
+        vty_driver->write_room = vt_write_room;
+        vty_driver->put_char = vt_put_char;
+        vty_driver->flush_chars = vt_flush_chars;
+        vty_driver->chars_in_buffer = vt_chars_in_buffer;
+        vty_driver->ioctl = vt_ioctl;
+        vty_driver->stop = vt_stop;
+        vty_driver->start = vt_start;
+        vty_driver->throttle = vt_throttle;
+        vty_driver->unthrottle = vt_unthrottle;
+       	if (tty_register_driver(vty_driver))
                 printk("Couldn't register console driver\n");
 	vcs_init();
 	return 0;
