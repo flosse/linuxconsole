@@ -84,7 +84,7 @@ static int analog_options[ANALOG_PORTS];
 #define ANALOG_LOOP_TIME	2000	/* 2 * loop */
 #define ANALOG_REFRESH_TIME	HZ/100	/* 10 ms */
 #define ANALOG_SAITEK_DELAY	200	/* 200 us */
-#define ANALOG_SAITEK_TIME	200	/* 200 us */
+#define ANALOG_SAITEK_TIME	2000	/* 2000 us */
 #define ANALOG_AXIS_TIME	2	/* 2 * refresh */
 #define ANALOG_INIT_RETRIES	8	/* 8 times */
 #define ANALOG_FUZZ_BITS	2	/* 2 bit more */
@@ -568,7 +568,7 @@ static int analog_init_masks(struct analog_port *port)
 
 static int analog_init_port(struct gameport *gameport, struct gameport_dev *dev, struct analog_port *port)
 {
-	int i, t;
+	int i, t, u, v;
 
 	gameport->private = port;
 	port->gameport = gameport;
@@ -591,14 +591,20 @@ static int analog_init_port(struct gameport *gameport, struct gameport_dev *dev,
 			wait_ms(ANALOG_MAX_TIME);
 		}
 
+		u = v = 0;
+
 		wait_ms(ANALOG_MAX_TIME);
 		t = gameport_time(gameport, ANALOG_MAX_TIME * 1000);
 		gameport_trigger(gameport);
-		while ((gameport_read(port->gameport) & port->mask) && t) t--;
+		while ((gameport_read(port->gameport) & port->mask) && t) { t--; u++; }
 		udelay(ANALOG_SAITEK_DELAY);
 		t = gameport_time(gameport, ANALOG_SAITEK_TIME);
 		gameport_trigger(gameport);
-		while ((gameport_read(port->gameport) & port->mask) && t) t--;
+		while ((gameport_read(port->gameport) & port->mask) && t) { t--; v++; }
+
+		printk(KERN_DEBUG "analog.c: Saitek detection: u:%d v:%d\n", u, v);
+		
+		t = (v < u / 2);
 
 		if (t && port->gameport->number < ANALOG_PORTS) {
 			analog_options[port->gameport->number] |= ANALOG_SAITEK;
