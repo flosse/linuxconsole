@@ -36,6 +36,10 @@
 #include <linux/input.h>
 #include <linux/gameport.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Genius Flight 2000 joystick driver");
+MODULE_LICENSE("GPL");
+
 #define GF2K_START		400	/* The time we wait for the first bit [400 us] */
 #define GF2K_STROBE		40	/* The time we wait for the first bit [40 us] */
 #define GF2K_TIMEOUT		4	/* Wait for everything to settle [4 ms] */

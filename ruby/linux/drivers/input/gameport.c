@@ -39,6 +39,8 @@
 #include <linux/delay.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Generic gameport layer");
+MODULE_LICENSE("GPL");
 
 EXPORT_SYMBOL(gameport_register_port);
 EXPORT_SYMBOL(gameport_unregister_port);

@@ -3,7 +3,7 @@
  *
  *  Copyright (c) 1999-2001 Vojtech Pavlik
  *
- *  Input driver to ImExPS/2 device driver module.
+ *  Input driver to ExplorerPS/2 device driver module.
  */
 
 /*
@@ -38,6 +38,10 @@
 #include <linux/config.h>
 #include <linux/smp_lock.h>
 #include <linux/random.h>
+
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Mouse (ExplorerPS/2) device interfaces");
+MODULE_LICENSE("GPL");
 
 #ifndef CONFIG_INPUT_MOUSEDEV_SCREEN_X
 #define CONFIG_INPUT_MOUSEDEV_SCREEN_X	1024

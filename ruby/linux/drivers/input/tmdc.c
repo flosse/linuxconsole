@@ -39,6 +39,10 @@
 #include <linux/gameport.h>
 #include <linux/input.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("ThrustMaster DirectConnect joystick driver");
+MODULE_LICENSE("GPL");
+
 #define TMDC_MAX_START		400	/* 400 us */
 #define TMDC_MAX_STROBE		45	/* 45 us */
 #define TMDC_MAX_LENGTH		13

@@ -50,6 +50,8 @@
 #define L4_TIMEOUT		80	/* 80 us */
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("PDPI Lightning 4 gamecard driver");
+MODULE_LICENSE("GPL");
 
 struct l4 {
 	struct gameport gameport;

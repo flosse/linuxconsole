@@ -3,7 +3,7 @@
  *
  *  Copyright (c) 2000-2001 Vojtech Pavlik
  *
- *  USB HID to Linux Input mapping module
+ *  USB HID to Linux Input mapping
  */
 
 /*

@@ -42,6 +42,10 @@
 #include <linux/slab.h>
 #include <linux/gameport.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Trident 4DWave and Aureal Vortex gameport driver");
+MODULE_LICENSE("GPL");
+
 #define PCI_VENDOR_ID_AUREAL	0x12eb
 
 #define PCIGAME_DATA_WAIT	20	/* 20 ms */

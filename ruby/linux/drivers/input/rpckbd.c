@@ -41,6 +41,10 @@
 #include <asm/iomd.h>
 #include <asm/system.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Acorn RiscPC PS/2 keyboard controller driver");
+MODULE_LICENSE("GPL");
+
 static inline void rpckbd_write(unsigned char val)
 {
 	while(!(inb(IOMD_KCTRL) & (1 << 7)));

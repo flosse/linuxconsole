@@ -43,6 +43,10 @@
 #include <asm/io.h>
 #include <asm/iomd.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Acorn RiscPC mouse driver");
+MODULE_LICENSE("GPL");
+
 #define IOMD_MOUSEBTN	0x800C4000
 
 static short rpcmouse_lastx, rpcmouse_lasty;

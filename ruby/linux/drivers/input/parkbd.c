@@ -34,6 +34,9 @@
 #include <linux/serio.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Parallel port to Keyboard port adapter driver");
+MODULE_LICENSE("GPL");
+
 MODULE_PARM(parkbd, "1i");
 MODULE_PARM(parkbd_mode, "1i");
 

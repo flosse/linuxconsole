@@ -43,6 +43,10 @@
 #include <asm/irq.h>
 #include <asm/q40ints.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Q40 PS/2 keyboard controller driver");
+MODULE_LICENSE("GPL");
+
 static inline void q40kbd_write(unsigned char val)
 {
 	/* FIXME! We need a way how to write to the keyboard! */

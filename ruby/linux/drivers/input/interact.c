@@ -39,6 +39,10 @@
 #include <linux/gameport.h>
 #include <linux/input.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("InterAct digital joystick driver");
+MODULE_LICENSE("GPL");
+
 #define INTERACT_MAX_START	400	/* 400 us */
 #define INTERACT_MAX_STROBE	40	/* 40 us */
 #define INTERACT_MAX_LENGTH	32	/* 32 bits */

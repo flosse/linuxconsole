@@ -39,6 +39,8 @@
 #include <linux/pci.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("EMU10k1 gameport driver");
+MODULE_LICENSE("GPL");
 
 struct emu {
 	struct pci_dev *dev;

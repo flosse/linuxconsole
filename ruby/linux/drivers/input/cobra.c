@@ -5,7 +5,7 @@
  */
 
 /*
- * Creative Labd Blaster GamePad Cobra driver for Linux
+ * Creative Labs Blaster GamePad Cobra driver for Linux
  */
 
 /*
@@ -34,6 +34,10 @@
 #include <linux/init.h>
 #include <linux/gameport.h>
 #include <linux/input.h>
+
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Creative Labs Blaster GamePad Cobra driver");
+MODULE_LICENSE("GPL");
 
 #define COBRA_MAX_STROBE	45	/* 45 us max wait for first strobe */
 #define COBRA_REFRESH_TIME	HZ/50	/* 20 ms between reads */

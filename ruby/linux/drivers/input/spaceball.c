@@ -39,6 +39,10 @@
 #include <linux/input.h>
 #include <linux/serio.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("SpaceTec SpaceBall 2003/3003/4000 FLX driver");
+MODULE_LICENSE("GPL");
+
 /*
  * Constants.
  */

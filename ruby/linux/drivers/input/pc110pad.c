@@ -41,6 +41,10 @@
 #include <asm/io.h>
 #include <asm/irq.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("IBM PC110 touchpad driver");
+MODULE_LICENSE("GPL");
+
 #define PC110PAD_OFF	0x30
 #define PC110PAD_ON	0x38
 

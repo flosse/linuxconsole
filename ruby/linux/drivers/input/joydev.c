@@ -44,6 +44,10 @@
 #include <linux/init.h>
 #include <linux/smp_lock.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Joystick device interfaces");
+MODULE_LICENSE("GPL");
+
 #define JOYDEV_MINOR_BASE	0
 #define JOYDEV_MINORS		32
 #define JOYDEV_BUFFER_SIZE	64

@@ -73,9 +73,11 @@
 #define DRIVER_VERSION "v1.21"
 #define DRIVER_AUTHOR "Vojtech Pavlik <vojtech@ucw.cz>"
 #define DRIVER_DESC "USB Wacom Graphire and Wacom Intuos tablet driver"
+#define DRIVER_LICENSE "GPL"
 
-MODULE_AUTHOR( DRIVER_AUTHOR );
-MODULE_DESCRIPTION( DRIVER_DESC );
+MODULE_AUTHOR(DRIVER_AUTHOR);
+MODULE_DESCRIPTION(DRIVER_DESC);
+MODULE_LICENSE(DRIVER_LICENSE);
 
 #define USB_VENDOR_ID_WACOM	0x056a
 
@@ -429,8 +431,7 @@ static struct usb_driver wacom_driver = {
 static int __init wacom_init(void)
 {
 	usb_register(&wacom_driver);
-	info(DRIVER_VERSION " " DRIVER_AUTHOR);
-	info(DRIVER_DESC);
+	info(DRIVER_VERSION ":" DRIVER_DESC);
 	return 0;
 }
 

@@ -40,9 +40,11 @@
 #define DRIVER_VERSION "v1.6"
 #define DRIVER_AUTHOR "Vojtech Pavlik <vojtech@ucw.cz>"
 #define DRIVER_DESC "USB HID Boot Protocol mouse driver"
+#define DRIVER_LICENSE "GPL"
 
-MODULE_AUTHOR( DRIVER_AUTHOR );
-MODULE_DESCRIPTION( DRIVER_DESC );
+MODULE_AUTHOR(DRIVER_AUTHOR);
+MODULE_DESCRIPTION(DRIVER_DESC);
+MODULE_LICENSE(DRIVER_LICENSE);
 
 struct usb_mouse {
 	signed char data[8];
@@ -198,8 +200,7 @@ static struct usb_driver usb_mouse_driver = {
 static int __init usb_mouse_init(void)
 {
 	usb_register(&usb_mouse_driver);
-	info(DRIVER_VERSION " " DRIVER_AUTHOR);
-	info(DRIVER_DESC);
+	info(DRIVER_VERSION ":" DRIVER_DESC);
 	return 0;
 }
 

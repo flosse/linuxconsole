@@ -33,6 +33,10 @@
 #include <linux/input.h>
 #include <linux/init.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Input driver event debug module"); 
+MODULE_LICENSE("GPL");
+
 static void evbug_event(struct input_handle *handle, unsigned int type, unsigned int code, int value)
 {
 	printk(KERN_DEBUG "evbug.c: Event. Dev: %s, Type: %d, Code: %d, Value: %d\n", handle->dev->phys, type, code, value);

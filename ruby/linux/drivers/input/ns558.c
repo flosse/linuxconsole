@@ -40,6 +40,8 @@
 #include <linux/isapnp.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Classic gameport (ISA/PnP) driver");
+MODULE_LICENSE("GPL");
 
 #define NS558_ISA	1
 #define NS558_PNP	2

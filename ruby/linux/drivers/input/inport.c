@@ -43,6 +43,10 @@
 #include <linux/init.h>
 #include <linux/input.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Inport (ATI XL and Microsoft) busmouse driver");
+MODULE_LICENSE("GPL");
+
 #define INPORT_BASE		0x23c
 #define INPORT_EXTENT		4
 

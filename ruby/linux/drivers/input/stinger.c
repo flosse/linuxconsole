@@ -36,6 +36,10 @@
 #include <linux/serio.h>
 #include <linux/init.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Gravis Stinger gamepad driver");
+MODULE_LICENSE("GPL");
+
 /*
  * Constants.
  */

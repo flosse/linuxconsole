@@ -35,6 +35,10 @@
 #include <linux/gameport.h>
 #include <linux/input.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Gravis GrIP protocol joystick driver");
+MODULE_LICENSE("GPL");
+
 #define GRIP_MODE_GPP		1
 #define GRIP_MODE_BD		2
 #define GRIP_MODE_XT		3

@@ -37,11 +37,9 @@
 #include <linux/init.h>
 #include <linux/serio.h>
 
-#ifndef CONFIG_INPUT
-#undef CONFIG_VT
-#endif
-
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("82C710 C&T mouse port chip driver");
+MODULE_LICENSE("GPL");
 
 static char ct82c710_name[] = "C&T 82c710 mouse port";
 static char ct82c710_phys[16];

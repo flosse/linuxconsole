@@ -5,7 +5,7 @@
  */
 
 /*
- *  8042 keyboard and mouse controller driver for Linux
+ *  i8042 keyboard and mouse controller driver for Linux
  */
 
 /*
@@ -41,6 +41,8 @@
 #include "i8042.h"
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("i8042 keyboard and mouse controller driver");
+MODULE_LICENSE("GPL");
 
 MODULE_PARM(i8042_noaux, "1i");
 MODULE_PARM(i8042_unlock, "1i");

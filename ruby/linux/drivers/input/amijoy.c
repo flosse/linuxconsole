@@ -39,7 +39,9 @@
 #include <asm/amigahw.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Driver for Amiga joysticks");
 MODULE_PARM(amijoy, "1-2i");
+MODULE_LICENSE("GPL");
 
 static int amijoy[2] = { 0, 1 };
 static int amijoy_used[2] = { 0, 0 };

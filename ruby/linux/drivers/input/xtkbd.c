@@ -35,6 +35,8 @@
 #include <linux/serio.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("XT keyboard driver");
+MODULE_LICENSE("GPL");
 
 #define XTKBD_EMUL0	0xe0
 #define XTKBD_EMUL1	0xe1

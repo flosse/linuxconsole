@@ -36,6 +36,10 @@
 #include <linux/gameport.h>
 #include <linux/input.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Guillemot Digital joystick driver");
+MODULE_LICENSE("GPL");
+
 #define GUILLEMOT_MAX_START	400	/* 400 us */
 #define GUILLEMOT_MAX_STROBE	40	/* 40 us */
 #define GUILLEMOT_MAX_LENGTH	17	/* 17 bytes */

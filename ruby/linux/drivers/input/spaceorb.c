@@ -38,6 +38,10 @@
 #include <linux/input.h>
 #include <linux/serio.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("SpaceTec SpaceOrb 360 and Avenger 6dof controller driver");
+MODULE_LICENSE("GPL");
+
 /*
  * Constants.
  */

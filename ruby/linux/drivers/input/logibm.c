@@ -44,6 +44,10 @@
 #include <linux/init.h>
 #include <linux/input.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Logitech busmouse driver");
+MODULE_LICENSE("GPL");
+
 #define	LOGIBM_BASE		0x23c
 #define	LOGIBM_EXTENT		4
 

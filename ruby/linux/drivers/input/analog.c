@@ -40,7 +40,8 @@
 #include <asm/timex.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
-MODULE_DESCRIPTION("Analog joystick and gamepad driver for Linux");
+MODULE_DESCRIPTION("Analog joystick and gamepad driver");
+MODULE_LICENSE("GPL");
 
 /*
  * Option parsing.

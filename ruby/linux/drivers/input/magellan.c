@@ -35,6 +35,10 @@
 #include <linux/serio.h>
 #include <linux/init.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Magellan and SpaceMouse 6dof controller driver");
+MODULE_LICENSE("GPL");
+
 /*
  * Definitions & global arrays.
  */

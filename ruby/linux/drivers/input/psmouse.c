@@ -33,6 +33,8 @@
 #include <linux/init.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("PS/2 mouse driver");
+MODULE_LICENSE("GPL");
 
 #define PSMOUSE_CMD_SETSCALE11	0x00e6
 #define PSMOUSE_CMD_SETRES	0x10e8

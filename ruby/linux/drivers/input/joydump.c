@@ -36,6 +36,8 @@
 #include <linux/init.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Gameport data dumper module");
+MODULE_LICENSE("GPL");
 
 #define BUF_SIZE 256
 

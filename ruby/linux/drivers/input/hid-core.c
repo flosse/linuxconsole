@@ -54,9 +54,10 @@
  * Version Information
  */
 
-#define DRIVER_VERSION "v1.27"
+#define DRIVER_VERSION "v1.31"
 #define DRIVER_AUTHOR "Andreas Gal, Vojtech Pavlik <vojtech@ucw.cz>"
-#define DRIVER_DESC "USB HID support drivers"
+#define DRIVER_DESC "USB HID core driver"
+#define DRIVER_LICENSE "GPL"
 
 static char *hid_types[] = {"Device", "Pointer", "Mouse", "Device", "Joystick",
 				"Gamepad", "Keyboard", "Keypad", "Multi-Axis Controller"};
@@ -1279,8 +1280,7 @@ static int __init hid_init(void)
 	hiddev_init();
 #endif
 	usb_register(&hid_driver);
-	info(DRIVER_VERSION " " DRIVER_AUTHOR);
-	info(DRIVER_DESC);
+	info(DRIVER_VERSION ":" DRIVER_DESC);
 
 	return 0;
 }
@@ -1296,5 +1296,6 @@ static void __exit hid_exit(void)
 module_init(hid_init);
 module_exit(hid_exit);
 
-MODULE_AUTHOR( DRIVER_AUTHOR );
-MODULE_DESCRIPTION( DRIVER_DESC );
+MODULE_AUTHOR(DRIVER_AUTHOR);
+MODULE_DESCRIPTION(DRIVER_DESC);
+MODULE_LICENSE(DRIVER_LICENSE);

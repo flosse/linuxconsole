@@ -36,6 +36,10 @@
 #include <linux/input.h>
 #include <linux/gameport.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Microsoft SideWinder joystick family driver");
+MODULE_LICENSE("GPL");
+
 /*
  * These are really magic values. Changing them can make a problem go away,
  * as well as break everything.

@@ -37,6 +37,10 @@
 #include <linux/serio.h>
 #include <linux/tty.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Input device TTY line discipline");
+MODULE_LICENSE("GPL");
+
 struct serport {
 	struct tty_struct *tty;
 	wait_queue_head_t wait;

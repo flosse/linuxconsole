@@ -36,6 +36,10 @@
 #include <linux/input.h>
 #include <linux/serio.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Sun keyboard driver");
+MODULE_LICENSE("GPL");
+
 static unsigned char sunkbd_keycode[128] = {
 	  0,128,114,129,115, 59, 60, 68, 61, 87, 62, 88, 63,100, 64,  0,
 	 65, 66, 67, 56,103,119, 99, 70,105,130,131,108,106,  1,  2,  3,

@@ -49,6 +49,7 @@
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>, Johann Deneux <deneux@ifrance.com>");
 MODULE_DESCRIPTION("USB/RS232 I-Force joysticks and wheels driver");
+MODULE_LICENSE("GPL");
 
 #define IFORCE_MAX_LENGTH	16
 

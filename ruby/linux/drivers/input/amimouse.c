@@ -46,6 +46,10 @@
 #include <asm/amigahw.h>
 #include <asm/amigaints.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Amiga mouse driver");
+MODULE_LICENSE("GPL");
+
 static int amimouse_used = 0;
 static int amimouse_lastx, amimouse_lasty;
 static struct input_dev amimouse_dev;

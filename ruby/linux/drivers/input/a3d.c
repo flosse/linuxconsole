@@ -36,6 +36,7 @@
 #include <linux/input.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("FP-Gaming Assasin 3D joystick driver");
 MODULE_LICENSE("GPL");
 
 #define A3D_MAX_START		400	/* 400 us */ 

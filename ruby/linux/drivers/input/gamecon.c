@@ -9,7 +9,7 @@
  */
 
 /*
- * NES, SNES, N64, Multi1, Multi2, PSX gamepad driver for Linux
+ * NES, SNES, N64, MultiSystem, PSX gamepad driver for Linux
  */
 
 /*
@@ -40,6 +40,9 @@
 #include <linux/input.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("NES, SNES, N64, MultiSystem, PSX gamepad driver");
+MODULE_LICENSE("GPL");
+
 MODULE_PARM(gc, "2-6i");
 MODULE_PARM(gc_2,"2-6i");
 MODULE_PARM(gc_3,"2-6i");

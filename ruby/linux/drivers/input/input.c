@@ -3,7 +3,7 @@
  *
  *  Copyright (c) 1999-2001 Vojtech Pavlik
  *
- *  The input layer module itself
+ *  The input core
  */
 
 /*
@@ -39,7 +39,8 @@
 #include <linux/poll.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
-MODULE_DESCRIPTION("Input layer module");
+MODULE_DESCRIPTION("Input core");
+MODULE_LICENSE("GPL");
 
 EXPORT_SYMBOL(input_register_device);
 EXPORT_SYMBOL(input_unregister_device);

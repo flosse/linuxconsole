@@ -39,6 +39,10 @@
 #include <asm/amigahw.h>
 #include <asm/irq.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Amiga keyboard driver");
+MODULE_LICENSE("GPL");
+
 static unsigned char amikbd_keycode[0x78] = {
 	  0,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 43,  0, 82,
 	 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,  0, 79, 80, 81,

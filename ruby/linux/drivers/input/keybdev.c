@@ -3,7 +3,7 @@
  *
  *  Copyright (c) 1999-2001 Vojtech Pavlik
  *
- *  Input driver to keyboard driver binding.
+ *  Input core to console keyboard binding.
  */
 
 /*
@@ -34,6 +34,10 @@
 #include <linux/tty.h>
 #include <linux/module.h>
 #include <linux/kbd_kern.h>
+
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Input core to console keyboard binding");
+MODULE_LICENSE("GPL");
 
 char keybdev_name[] = "keyboard";
 

@@ -37,6 +37,10 @@
 #include <linux/gameport.h>
 #include <linux/init.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Logitech ADI joystick family driver");
+MODULE_LICENSE("GPL");
+
 /*
  * Times, array sizes, flags, ids.
  */
