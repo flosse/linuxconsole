@@ -342,6 +342,7 @@ struct input_types {
 	int speed;
 	int flags;
 	unsigned long type;
+	unsigned long id;
 	unsigned long extra;
 	int flush;
 	int (*init)(int fd, long *id, long *extra);
@@ -349,29 +350,33 @@ struct input_types {
 
 struct input_types input_types[] = {
 
-{ "--sunkbd",		"-skb",		B1200, CS8,			SERIO_SUNKBD,	0x00,	1,	NULL },
-{ "--lkkbd",		"-lk",		B4800, CS8|CSTOPB,		SERIO_LKKBD,	0x00,	1,	NULL },
-{ "--vsxxx-aa",		"-vs",		B4800, CS8|CSTOPB|PARENB|PARODD,SERIO_VSXXXAA,	0x00,	1,	NULL },
-{ "--spaceorb",		"-orb",		B9600, CS8,			SERIO_SPACEORB,	0x00,	1,	NULL },
-{ "--spaceball",	"-sbl",		B9600, CS8,			SERIO_SPACEBALL,0x00,	0,	spaceball_init },
-{ "--magellan",		"-mag",		B9600, CS8 | CSTOPB | CRTSCTS,	SERIO_MAGELLAN,	0x00,	1,	magellan_init },
-{ "--warrior",		"-war",		B1200, CS7 | CSTOPB,		SERIO_WARRIOR,	0x00,	1,	warrior_init },
-{ "--stinger",		"-sting",	B1200, CS8,			SERIO_STINGER,	0x00,	1,	stinger_init },
-{ "--mousesystems",	"-msc",		B1200, CS8,			SERIO_MSC,	0x01,	1,	NULL },
-{ "--sunmouse",		"-sun",		B1200, CS8,			SERIO_SUN,	0x01,	1,	NULL },
-{ "--microsoft",	"-bare",	B1200, CS7,			SERIO_MS,	0x00,	1,	NULL },
-{ "--mshack",		"-ms",		B1200, CS7,			SERIO_MS,	0x01,	1,	NULL },
-{ "--mouseman",		"-mman",	B1200, CS7,			SERIO_MP,	0x01,	1,	NULL },
-{ "--intellimouse",	"-ms3",		B1200, CS7,			SERIO_MZ,	0x11,	1,	NULL },
-{ "--mmwheel",		"-mmw",		B1200, CS7 | CSTOPB,		SERIO_MZP,	0x13,	1,	mzp_init },
-{ "--iforce",		"-ifor",	B38400, CS8,			SERIO_IFORCE,	0x00,	0,	NULL },
-{ "--newtonkbd",        "-newt",        B9600, CS8,                     SERIO_NEWTON,	0x00,   0,      newton_init },
-{ "--h3600ts",          "-ipaq",     	B115200, CS8,                   SERIO_H3600,	0x00,   0,      NULL },
-{ "--stowawaykbd",      "-ipaqkbd",     B115200, CS8,                   SERIO_STOWAWAY, 0x00,   0,      NULL },
-{ "--ps2serkbd",	"-ps2ser",	B1200, CS8,			SERIO_PS2SER,	0x00,	1,	NULL },
-{ "--twiddler",		"-twid",	B2400, CS8,			SERIO_TWIDKBD,	0x00,	0,	twiddler_init },
-{ "--twiddler-joy",	"-twidjoy",	B2400, CS8,			SERIO_TWIDJOY,	0x00,	0,	twiddler_init },
-{ "--dump",		"-dump",	B2400, CS8, 			0,		0x00,	0,	dump_init },
+{ "--sunkbd",		"-skb",		B1200, CS8,			SERIO_SUNKBD,	0,	0,	1,	NULL },
+{ "--lkkbd",		"-lk",		B4800, CS8|CSTOPB,		SERIO_LKKBD,	0,	0,	1,	NULL },
+{ "--vsxxx-aa",		"-vs",		B4800, CS8|CSTOPB|PARENB|PARODD,SERIO_VSXXXAA,	0,	0,	1,	NULL },
+{ "--spaceorb",		"-orb",		B9600, CS8,			SERIO_SPACEORB,	0,	0,	1,	NULL },
+{ "--spaceball",	"-sbl",		B9600, CS8,			SERIO_SPACEBALL,0,	0,	0,	spaceball_init },
+{ "--magellan",		"-mag",		B9600, CS8 | CSTOPB | CRTSCTS,	SERIO_MAGELLAN,	0,	0,	1,	magellan_init },
+{ "--warrior",		"-war",		B1200, CS7 | CSTOPB,		SERIO_WARRIOR,	0,	0,	1,	warrior_init },
+{ "--stinger",		"-sting",	B1200, CS8,			SERIO_STINGER,	0,	0,	1,	stinger_init },
+{ "--mousesystems",	"-msc",		B1200, CS8,			SERIO_MSC,	0,	0x01,	1,	NULL },
+{ "--sunmouse",		"-sun",		B1200, CS8,			SERIO_SUN,	0,	0x01,	1,	NULL },
+{ "--microsoft",	"-bare",	B1200, CS7,			SERIO_MS,	0,	0,	1,	NULL },
+{ "--mshack",		"-ms",		B1200, CS7,			SERIO_MS,	0,	0x01,	1,	NULL },
+{ "--mouseman",		"-mman",	B1200, CS7,			SERIO_MP,	0,	0x01,	1,	NULL },
+{ "--intellimouse",	"-ms3",		B1200, CS7,			SERIO_MZ,	0,	0x11,	1,	NULL },
+{ "--mmwheel",		"-mmw",		B1200, CS7 | CSTOPB,		SERIO_MZP,	0,	0x13,	1,	mzp_init },
+{ "--iforce",		"-ifor",	B38400, CS8,			SERIO_IFORCE,	0,	0,	0,	NULL },
+{ "--newtonkbd",        "-newt",        B9600, CS8,                     SERIO_NEWTON,	0,	0,	0,      newton_init },
+{ "--h3600ts",          "-ipaq",     	B115200, CS8,                   SERIO_H3600,	0,	0,	0,      NULL },
+{ "--stowawaykbd",      "-ipaqkbd",     B115200, CS8,                   SERIO_STOWAWAY, 0,	0,	0,      NULL },
+{ "--ps2serkbd",	"-ps2ser",	B1200, CS8,			SERIO_PS2SER,	0,	0,	1,	NULL },
+{ "--twiddler",		"-twid",	B2400, CS8,			SERIO_TWIDKBD,	0,	0,	0,	twiddler_init },
+{ "--twiddler-joy",	"-twidjoy",	B2400, CS8,			SERIO_TWIDJOY,	0,	0,	0,	twiddler_init },
+{ "--elotouch",		"-elo",		B9600, CS8 | CRTSCTS,		SERIO_ELO,	0,	0,	0,	NULL },
+{ "--elo4002",		"-elo6b",	B9600, CS8 | CRTSCTS,		SERIO_ELO,	1,	0,	0,	NULL },
+{ "--elo271-140",	"-elo4b",	B9600, CS8 | CRTSCTS,		SERIO_ELO,	2,	0,	0,	NULL },
+{ "--elo261-280",	"-elo3b",	B9600, CS8 | CRTSCTS,		SERIO_ELO,	3,	0,	0,	NULL },
+{ "--dump",		"-dump",	B2400, CS8, 			0,		0,	0,	0,	dump_init },
 { "", "", 0, 0 }
 
 };
@@ -436,7 +441,7 @@ int main(int argc, char **argv)
 	if (input_types[type].flush)
 		while (!readchar(fd, &c, 100));
 
-	id = 0;
+	id = input_types[type].id;
 	extra = input_types[type].extra;
 
 	if (input_types[type].init && input_types[type].init(fd, &id, &extra)) {
