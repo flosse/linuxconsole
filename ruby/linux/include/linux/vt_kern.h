@@ -223,6 +223,7 @@ struct vt_struct {
 	unsigned char	vc_mode;		/* KD_TEXT, ... */
 	struct vc_data  *fg_console;		/* VC being displayed */
         struct vc_data 	*last_console;     	/* VC we last switched from */
+	struct vc_data  *want_vc;		/* VC we want to switch to */
 	int scrollback_delta;			
 	int cursor_original;
 	char kmalloced;
@@ -242,6 +243,7 @@ struct vt_struct {
 	void *data_hook;			/* Hook for driver data */
 	const struct consw *vt_sw;		/* Display driver for VT */
 	struct vc_data *default_mode;	 	/* Default mode */
+	struct tasklet_struct vt_tasklet;	/* VT tasklet */
 	struct input_handle *keyboard;		/* Keyboard attached */
 	struct vc_pool  vcs;			 
 	struct vt_struct *next;				
