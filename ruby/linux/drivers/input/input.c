@@ -146,6 +146,8 @@ void input_event(struct input_dev *dev, unsigned int type, unsigned int code, in
 
 			if (code > MSC_MAX || !test_bit(code, dev->mscbit))
 				return;
+
+			if (dev->event) dev->event(dev, type, code, value);	
 	
 			break;
 

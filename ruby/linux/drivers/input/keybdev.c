@@ -35,6 +35,10 @@
 #include <linux/module.h>
 #include <linux/kbd_kern.h>
 
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Input core to console keyboard binding");
+MODULE_LICENSE("GPL");
+
 char keybdev_name[] = "keyboard";
 
 #if defined(CONFIG_X86) || defined(CONFIG_IA64) || defined(__alpha__) || \
@@ -150,6 +154,7 @@ static int emulate_raw(unsigned int keycode, int down)
 
 #endif /* CONFIG_X86 || CONFIG_IA64 || __alpha__ || __mips__ || CONFIG_PPC */
 
+
 static struct input_handler keybdev_handler;
 
 void keybdev_ledfunc(unsigned int led)
@@ -164,6 +169,23 @@ void keybdev_ledfunc(unsigned int led)
 
 	}
 }
+
+/* Tell the user who may be running in X and not see the console that we have 
+   panic'ed. This is to distingush panics from "real" lockups. 
+   Could in theory send the panic message as morse, but that is left as an
+   exercise for the reader.  */ 
+
+void panic_blink(void)
+{ 
+	static unsigned long last_jiffie;
+	static char led;
+	/* Roughly 1/2s frequency. KDB uses about 1s. Make sure it is different. */
+	if (jiffies - last_jiffie > HZ/2) {
+		led ^= 0x01 | 0x04;
+		keybdev_ledfunc(led);
+		last_jiffie = jiffies;
+	}
+}  
 
 void keybdev_event(struct input_handle *handle, unsigned int type, unsigned int code, int down)
 {
@@ -239,8 +261,4 @@ static void __exit keybdev_exit(void)
 
 module_init(keybdev_init);
 module_exit(keybdev_exit);
-
-MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
-MODULE_DESCRIPTION("Input core to console keyboard binding");
-MODULE_LICENSE("GPL");
 
