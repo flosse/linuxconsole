@@ -208,6 +208,7 @@ static void __devexit ns558_pci_remove(struct pci_dev *pdev)
 {
 	struct ns558 *port = (struct ns558 *)pdev->driver_data;
 	release_region(port->gameport.io, port->gameport.size);
+	kfree(port);
 }
 
 static struct pci_driver ns558_pci_driver = {
@@ -216,7 +217,10 @@ static struct pci_driver ns558_pci_driver = {
         probe:          ns558_pci_probe,
         remove:         ns558_pci_remove,
 };
+#else
+static struct pci_driver ns558_pci_driver;
 #endif /* CONFIG_PCI */
+
 
 #if defined(CONFIG_ISAPNP) || (defined(CONFIG_ISAPNP_MODULE) && defined(MODULE))
 #define NSS558_ISAPNP
@@ -313,13 +317,6 @@ int __init ns558_init(void)
 		ns558 = ns558_isa_probe(ns558_isa_portlist[i++], ns558);
 
 /*
- * Probe for PCI ports.
- */
-#ifdef CONFIG_PCI
-	pci_register_driver(&ns558_pci_driver);
-#endif
-
-/*
  * Probe for PnP ports.
  */
 
@@ -330,6 +327,13 @@ int __init ns558_init(void)
 		}
 	}
 #endif
+
+/*
+ * Probe for PCI ports.
+ */
+
+	if (!ns558 && pci_module_init(&ns558_pci_driver))
+		return -ENODEV;
 
 	return 0;
 }
@@ -360,9 +364,7 @@ void __exit ns558_exit(void)
 		port = port->next;
 	}
 
-#ifdef CONFIG_PCI
 	pci_unregister_driver(&ns558_pci_driver);
-#endif
 }
 
 module_init(ns558_init);
