@@ -56,6 +56,12 @@
 #define SW_LENGTH	512	/* Max number of bits in a packet */
 #define SW_REFRESH	HZ/50	/* Time to wait between updates of joystick data [20 ms] */
 
+#ifdef JS_SW_DEBUG
+#define dbg(format, arg...) printk(KERN_DEBUG __FILE__ ": " format "\n" , ## arg)
+#else
+#define dbg(format, arg...) do {} while (0)
+#endif
+
 /*
  * SideWinder joystick types ...
  */
@@ -71,33 +77,33 @@
  * Names, buttons, axes ...
  */
 
-static char *sw_names[] = {	"SideWinder 3D Pro", "SideWinder GamePad", "SideWinder Precision Pro",
+static char *sw_name[] = {	"SideWinder 3D Pro", "SideWinder GamePad", "SideWinder Precision Pro",
 				"SideWinder Force Feedback Pro", "SideWinder FreeStyle Pro",
 				"SideWinder Force Feedback Wheel" };
 
-static char sw_abs[][] = {
-	{ ABS_X, ABS_Y, ABS_RZ, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, 0 },
-	{ ABS_X, ABS_Y, 0 },
-	{ ABS_X, ABS_Y, ABS_RZ, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, 0 },
-	{ ABS_X, ABS_Y, ABS_RZ, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, 0 },
-	{ ABS_X, ABS_Y,         ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, 0 },
-	{ ABX_RX, ABS_RUDDER,   ABS_THROTTLE, 0 }},
+static char sw_abs[][7] = {
+	{ ABS_X, ABS_Y, ABS_RZ, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y },
+	{ ABS_X, ABS_Y },
+	{ ABS_X, ABS_Y, ABS_RZ, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y },
+	{ ABS_X, ABS_Y, ABS_RZ, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y },
+	{ ABS_X, ABS_Y,         ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y },
+	{ ABS_RX, ABS_RUDDER,   ABS_THROTTLE }};
 
-static char sw_bits[][] = {
-	{ 10, 10,  9, 10,  1,  1, 0 },
-	{  1,  1,  0                },
-	{ 10, 10,  6,  7,  1,  1, 0 },
-	{ 10, 10,  6,  7,  1,  1, 0 },
-	{ 10, 10,  6,  1,  1,  0    },
-	{ 10,  7,  7,  1,  1,  0    }};
+static char sw_bit[][7] = {
+	{ 10, 10,  9, 10,  1,  1 },
+	{  1,  1                 },
+	{ 10, 10,  6,  7,  1,  1 },
+	{ 10, 10,  6,  7,  1,  1 },
+	{ 10, 10,  6,  1,  1     },
+	{ 10,  7,  7,  1,  1     }};
 
-static short sw_btns[][] = {
-	{ BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_THUMB2, BTN_BASE, BTN_BASE2, BTN_BASE3, BTN_BASE4, BTN_BASE5, 0 },
-	{ BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_TL, BTN_TR, BTN_START, BTN_MODE, 0 },
-	{ BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_THUMB2, BTN_BASE, BTN_BASE2, BTN_BASE3, BTN_BASE4, 0 },
-	{ BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_THUMB2, BTN_BASE, BTN_BASE2, BTN_BASE3, BTN_BASE4, 0 },
-	{ BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_TL, BTN_TR, BTN_START, BTN_MODE, BTN_SELECT, 0 },
-	{ BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_THUMB2, BTN_BASE, BTN_BASE2, BTN_BASE3, 0 }};
+static short sw_btn[][12] = {
+	{ BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_THUMB2, BTN_BASE, BTN_BASE2, BTN_BASE3, BTN_BASE4, BTN_BASE5 },
+	{ BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_TL, BTN_TR, BTN_START, BTN_MODE },
+	{ BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_THUMB2, BTN_BASE, BTN_BASE2, BTN_BASE3, BTN_BASE4 },
+	{ BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_THUMB2, BTN_BASE, BTN_BASE2, BTN_BASE3, BTN_BASE4 },
+	{ BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_TL, BTN_TR, BTN_START, BTN_MODE, BTN_SELECT },
+	{ BTN_TRIGGER, BTN_TOP, BTN_THUMB, BTN_THUMB2, BTN_BASE, BTN_BASE2, BTN_BASE3 }};
 
 static struct {
 	int x;
@@ -106,6 +112,7 @@ static struct {
 
 struct sw {
 	struct gameport *gameport;
+	struct timer_list timer;
 	struct input_dev dev[4];
 	int length;
 	unsigned char type;
@@ -115,6 +122,7 @@ struct sw {
 	int ok;
 	int reads;
 	int bads;
+	int used;
 };
 
 /*
@@ -141,8 +149,8 @@ static int sw_read_packet(struct gameport *gameport, unsigned char *buf, int len
         __save_flags(flags);					/* Quiet, please */
         __cli();
 
-	gameport_trigger(gameport)				/* Trigger */
-	v = inb(io);
+	gameport_trigger(gameport);				/* Trigger */
+	v = gameport_read(gameport);
 
 	do {
 		bitout--;
@@ -289,7 +297,7 @@ static int sw_check(__u64 t)
  * the axes and buttons arrays.
  */
 
-static int sw_parse(unsigned char *buf, struct  *sw)
+static int sw_parse(unsigned char *buf, struct sw *sw)
 {
 	int hat, i, j;
 	struct input_dev *dev = sw->dev;
@@ -341,8 +349,8 @@ static int sw_parse(unsigned char *buf, struct  *sw)
 			input_report_abs(dev, ABS_RZ,       GB(36, 6));
 			input_report_abs(dev, ABS_THROTTLE, GB(29, 7));
 
-			input_report_abs(dev, ABS_HAT0X, sw_hat_to_axis[hat].x));
-			input_report_abs(dev, ABS_HAT0Y, sw_hat_to_axis[hat].y));
+			input_report_abs(dev, ABS_HAT0X, sw_hat_to_axis[hat].x);
+			input_report_abs(dev, ABS_HAT0Y, sw_hat_to_axis[hat].y);
 
 			for (j = 0; j < 9; j++)
 				input_report_key(dev, sw_btn[SW_ID_PP][j], !GB(j,1));
@@ -361,7 +369,7 @@ static int sw_parse(unsigned char *buf, struct  *sw)
 			input_report_abs(dev, ABS_HAT0Y, sw_hat_to_axis[hat].y);
 
 			for (j = 0; j < 6; j++)
-				input_report_key(dev, sw_btn[SW_ID_FSP][j], !GB(j+10,1,0));
+				input_report_key(dev, sw_btn[SW_ID_FSP][j], !GB(j+10,1));
 
 			input_report_key(dev, BTN_TR,     GB(26,1));
 			input_report_key(dev, BTN_START,  GB(27,1));
@@ -393,7 +401,7 @@ static int sw_parse(unsigned char *buf, struct  *sw)
  * called from the generic code to poll the joystick.
  */
 
-static void sw_read(struct sw *sw)
+static int sw_read(struct sw *sw)
 {
 	unsigned char buf[SW_LENGTH];
 	int i;
@@ -501,7 +509,7 @@ static void sw_print_packet(char *name, int length, unsigned char *buf, char bit
 
 	printk("sidewinder.c: %s packet, %d bits. [", name, length);
 	for (i = (((length + 3) >> 2) - 1); i >= 0; i--)
-		printk("%x", (int)sw_get_bits(buf, i << 2, 4, 0, bits));
+		printk("%x", (int)sw_get_bits(buf, i << 2, 4, bits));
 	printk("]\n");
 }
 
@@ -550,7 +558,7 @@ static int sw_guess_mode(unsigned char *buf, int len)
  * sw_connect() probes for SideWinder type joysticks.
  */
 
-static void sidewinder_connect(struct gameport *gameport, struct gameport_dev *dev)
+static void sw_connect(struct gameport *gameport, struct gameport_dev *dev)
 {
 	struct sw *sw;
 	int i, j, k, l;
@@ -561,33 +569,44 @@ static void sidewinder_connect(struct gameport *gameport, struct gameport_dev *d
 
 	comment[0] = 0;
 
-	if (check_region(io, 1)) return port;
+	if (!(sw = kmalloc(sizeof(struct sw), GFP_KERNEL))) return;
+	memset(sw, 0, sizeof(struct sw));
 
-	i = sw_read_packet(io, speed, buf, SW_LENGTH, 0);		/* Read normal packet */
+	gameport->private = sw;
+
+	sw->gameport = gameport;
+	init_timer(&sw->timer);
+	sw->timer.data = (long) sw;
+	sw->timer.function = sw_timer;
+
+	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW));
+		goto fail1;
+
+	i = sw_read_packet(gameport, buf, SW_LENGTH, 0);		/* Read normal packet */
 	m |= sw_guess_mode(buf, i);					/* Data packet (1-bit) can carry mode info [FSP] */
 	udelay(SW_TIMEOUT);
 	dbg("Init 1: Mode %d. Length %d.", m , i);
 
 	if (!i) {							/* No data. 3d Pro analog mode? */
-		sw_init_digital(io, speed);				/* Switch to digital */
+		sw_init_digital(gameport);				/* Switch to digital */
 		udelay(SW_TIMEOUT);
-		i = sw_read_packet(io, speed, buf, SW_LENGTH, 0);	/* Retry reading packet */
+		i = sw_read_packet(gameport, buf, SW_LENGTH, 0);	/* Retry reading packet */
 		udelay(SW_TIMEOUT);
 		dbg("Init 1b: Length %d.", i);
-		if (!i) return port;					/* No data -> FAIL */
+		if (!i) goto fail2;					/* No data -> FAIL */
 	}
 
-	j = sw_read_packet(io, speed, idbuf, SW_LENGTH, i);		/* Read ID. This initializes the stick */
+	j = sw_read_packet(gameport, idbuf, SW_LENGTH, i);		/* Read ID. This initializes the stick */
 	m |= sw_guess_mode(idbuf, j);					/* ID packet should carry mode info [3DP] */
 	dbg("Init 2: Mode %d. ID Length %d.", m , j);
 
 	if (!j) {							/* Read ID failed. Happens in 1-bit mode on PP */
 		udelay(SW_TIMEOUT);
-		i = sw_read_packet(io, speed, buf, SW_LENGTH, 0);	/* Retry reading packet */
+		i = sw_read_packet(gameport, buf, SW_LENGTH, 0);	/* Retry reading packet */
 		dbg("Init 2b: Mode %d. Length %d.", m , i);
-		if (!i) return port;
+		if (!i) goto fail2;
 		udelay(SW_TIMEOUT);
-		j = sw_read_packet(io, speed, idbuf, SW_LENGTH, i);	/* Retry reading ID */
+		j = sw_read_packet(gameport, idbuf, SW_LENGTH, i);	/* Retry reading ID */
 		dbg("Init 2c: ID Length %d.", j);
 	}
 
@@ -597,65 +616,61 @@ static void sidewinder_connect(struct gameport *gameport, struct gameport_dev *d
 	do {
 		k--;
 		udelay(SW_TIMEOUT);
-		i = sw_read_packet(io, speed, buf, SW_LENGTH, 0);	/* Read data packet */
+		i = sw_read_packet(gameport, buf, SW_LENGTH, 0);	/* Read data packet */
 		dbg("Init 3: Length %d.", i);
 
 		if (i > l) {						/* Longer? As we can only lose bits, it makes */
 									/* no sense to try detection for a packet shorter */
 			l = i;						/* than the previous one */
 
-			sw.number = 1;
-			sw.io = io;
-			sw.speed = speed;
-			sw.length = i;
-			sw.bits = m;
-			sw.fail = 0;
-			sw.ok = 0;
-			sw.type = 0;
+			sw->number = 1;
+			sw->gameport = gameport;
+			sw->length = i;
+			sw->bits = m;
 
 			switch (i * m) {
 				case 60:
-					sw.number++;
+					sw->number++;
 				case 45:				/* Ambiguous packet length */
 					if (j <= 40) {			/* ID length less or eq 40 -> FSP */	
 				case 43:
-						sw.type = SW_ID_FSP;
+						sw->type = SW_ID_FSP;
 						break;
 					}
-					sw.number++;
+					sw->number++;
 				case 30:
-					sw.number++;
+					sw->number++;
 				case 15:
-					sw.type = SW_ID_GP;
+					sw->type = SW_ID_GP;
 					break;
 				case 33:
 				case 31:
-					sw.type = SW_ID_FFW;
+					sw->type = SW_ID_FFW;
 					break;
 				case 48:				/* Ambiguous */
 					if (j == 14) {			/* ID length 14*3 -> FFP */
-						sw.type = SW_ID_FFP;
-						sprintf(comment, " [AC %s]", sw_get_bits(idbuf,38,1,0,3) ? "off" : "on");
+						sw->type = SW_ID_FFP;
+						sprintf(comment, " [AC %s]", sw_get_bits(idbuf,38,1,3) ? "off" : "on");
 					} else
-					sw.type = SW_ID_PP;
+					sw->type = SW_ID_PP;
 					break;
 				case 198:
-					sw.length = 22;
+					sw->length = 22;
 				case 64:
-					sw.type = SW_ID_3DP;
+					sw->type = SW_ID_3DP;
 					if (j == 160) sw_3dp_id(idbuf, comment);
 					break;
 			}
 		}
 
-	} while (k && !sw.type);
+	} while (k && !sw->type);
 
-	if (!sw.type) {
+	if (!sw->type) {
 		printk(KERN_WARNING "sidewinder.c: unknown joystick device detected "
-			"(io=%#x), contact <vojtech@suse.cz>\n", io);
+			"on gameport%d, contact <vojtech@suse.cz>\n", gameport->number);
 		sw_print_packet("ID", j * 3, idbuf, 3);
 		sw_print_packet("Data", i * m, buf, m);
-		return port;
+		goto fail2;
 	}
 
 #ifdef SW_DEBUG
@@ -664,46 +679,66 @@ static void sidewinder_connect(struct gameport *gameport, struct gameport_dev *d
 #endif
 
 	k = i;
+	l = j;
 
-	request_region(io, 1, "joystick (sidewinder)");
+	for (i = 0; i < sw->number; i++) {
+		int bits, code;
 
-	port = js_register_port(port, &sw, sw.number, sizeof(struct sw), sw_read);
+		sw->dev[i].private = sw;
 
-	for (i = 0; i < sw.number; i++)
-		printk(KERN_INFO "js%d: %s%s at %#x [%d ns res %d-bit id %d data %d]\n",
-			js_register_device(port, i, axes[sw.type], buttons[sw.type],
-				names[sw.type], sw_open, sw_close), names[sw.type], comment, io,
-				1000000 / speed, m, j, k);
+		sw->dev[i].name = sw_name[sw->type];
+		sw->dev[i].open = sw_open;
+		sw->dev[i].close = sw_close;
+	
+		sw->dev[i].evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 
-	sw_init_corr(axes[sw.type], sw.type, sw.number, port->corr);
+		for (j = 0; (code = sw_abs[sw->type][j]); j++) {
+			set_bit(code, sw->dev[i].absbit);
+			bits = sw_bit[sw->type][j];
+			sw->dev[i].absmax[code] = (1 << bits) - 1;
+			sw->dev[i].absmin[code] = (bits == 1) ? -1 : 0;
+			sw->dev[i].absflat[code] = (bits >= 5) ? (1 << (bits - 5)) : 0;
+			sw->dev[i].absfuzz[code] = ((bits >> 1) >= 2) ? (1 << ((bits >> 1) - 2)) : 0;
+		}
 
-	return port;
+		for (j = 0; (code = sw_btn[sw->type][j]); j++)
+			set_bit(code, sw->dev[i].keybit);
+
+		input_register_device(sw->dev + i);
+		printk(KERN_INFO "input%d: %s%s on gameport%d.%d [%d-bit id %d data %d]\n",
+			sw->dev[i].number, sw_name[sw->type], comment, gameport->number, i, m, l, k);
+	}
+
+	return;
+fail2:	gameport_close(gameport);
+fail1:	kfree(sw);
 }
+
+static void sw_disconnect(struct gameport *gameport)
+{
+	int i;
+
+	struct sw *sw = gameport->private;
+	for (i = 0; i < sw->number; i++)
+		input_unregister_device(sw->dev + i);
+	gameport_close(gameport);
+	kfree(sw);
+}
+
+static struct gameport_dev sw_dev = {
+	connect:	sw_connect,
+	disconnect:	sw_disconnect,
+};
 
 int __init sw_init(void)
 {
-	int *p;
-
-	for (p = sw_port_list; *p; p++) sw_port = sw_probe(*p, sw_port);
-	if (sw_port) return 0;
-
-	return -ENODEV;
+	gameport_register_device(&sw_dev);
+	return 0;
 }
 
 void __exit sw_exit(void)
 {
-	int i;
-	struct sw *sw;
-
-	while (sw_port) {
-		for (i = 0; i < sw_port->ndevs; i++)
-			if (sw_port->devs[i])
-				js_unregister_device(sw_port->devs[i]);
-		sw = sw_port->sw;
-		release_region(sw->io, 1);
-		sw_port = js_unregister_port(sw_port);
-	}
-
+	gameport_unregister_device(&sw_dev);
 }
 
 module_init(sw_init);
