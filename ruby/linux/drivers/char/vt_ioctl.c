@@ -2,13 +2,14 @@
  *  linux/drivers/char/vt_ioctl.c
  *
  *  Copyright (C) 1992 obz under the linux copyright
+ *  Copyright (C) 2001 James Simmons <jsimmons@transvirtual.com>
  *
  *  Dynamic diacritical handling - aeb@cwi.nl - Dec 1993
  *  Dynamic keymap and string allocation - aeb@cwi.nl - May 1994
  *  Restrict VT switching via ioctl() - grif@cs.ucr.edu - Dec 1995
  *  Some code moved for less code duplication - Andi Kleen - Mar 1997
  *  Made VC ioctls truly SYSV complient. Rewritten to support 
- *  multihead systems - James Simmons - Sept 2000
+ *  multihead systems and the linux input api  - James Simmons - Aug 2001
  */
 
 #include <linux/config.h>
@@ -16,7 +17,6 @@
 #include <linux/errno.h>
 #include <linux/sched.h>
 #include <linux/tty.h>
-#include <linux/timer.h>
 #include <linux/kernel.h>
 #include <linux/kd.h>
 #include <linux/vt.h>
@@ -25,7 +25,6 @@
 #include <linux/major.h>
 #include <linux/fs.h>
 #include <linux/console.h>
-#include <linux/spinlock.h>
 
 #include <asm/io.h>
 #include <asm/uaccess.h>
@@ -54,13 +53,15 @@
  * implicit aliasing to the current console is done by the main ioctl code.
  */
 
-struct vt_struct *vt_cons = NULL;
-
-/* Keyboard type: Default is KB_101, but can be set by machine
+/* 
+ * OBSOLETE !!!!!!!!!!!!!
+ *
+ * Keyboard type: Default is KB_101, but can be set by machine
  * specific code.
  */
 unsigned char keyboard_type = KB_101;
 
+/* Will go away in the future!!!!!! */
 #if !defined(__alpha__) && !defined(__ia64__) && !defined(__mips__) && !defined(__arm__) && !defined(__sh__)
 asmlinkage long sys_ioperm(unsigned long from, unsigned long num, int on);
 #endif
@@ -83,59 +84,24 @@ asmlinkage long sys_ioperm(unsigned long from, unsigned long num, int on);
  * We also return immediately, which is what was implied within the X
  * comments - KDMKTONE doesn't put the process to sleep.
  */
-
-#if defined(__i386__) || defined(__alpha__) || defined(__powerpc__) \
-    || (defined(__mips__) && !defined(CONFIG_SGI_IP22)) \
-    || (defined(__arm__) && defined(CONFIG_HOST_FOOTBRIDGE))
-
-static spinlock_t beep_lock = SPIN_LOCK_UNLOCKED;
-
-static void
-kd_nosound(unsigned long ignored)
+void kd_mksound(struct vc_data *vc, unsigned int period, unsigned int duration)
 {
-	/* disable counter 2 */
-	outb(inb_p(0x61)&0xFC, 0x61);
-	return;
+	struct input_handle *handle = vc->display_fg->keyboard;
+
+	/* 
+         * For this the period value is in clock cycles. Normally it 
+	 * is in something like msecs. Due to the various underlying
+	 * types of hardware we can't convert it to milliseconds. Sorry
+	 * but the console api sucks.
+         */
+	input_event(handle->dev, EV_REP, REP_PERIOD, period);
+	input_event(handle->dev, EV_REP, REP_DELAY, duration);
+
+	if (duration)
+		input_event(handle->dev, EV_SND, SND_BELL, 1);
+	else
+		input_event(handle->dev, EV_SND, SND_BELL, 0);
 }
-
-void kd_mksound(unsigned int hz, unsigned int ticks)
-{
-	static struct timer_list sound_timer = { function: kd_nosound };
-	unsigned int count = 0;
-	unsigned long flags;
-
-	if (hz > 20 && hz < 32767)
-		count = 1193180 / hz;
-
-	spin_lock_irqsave(&beep_lock, flags);	
-	del_timer(&sound_timer);
-	if (count) {
-		/* enable counter 2 */
-		outb_p(inb_p(0x61)|3, 0x61);
-		/* set command for counter 2, 2 byte write */
-		outb_p(0xB6, 0x43);
-		/* select desired HZ */
-		outb_p(count & 0xff, 0x42);
-		outb((count >> 8) & 0xff, 0x42);
-
-		if (ticks) {
-			sound_timer.expires = jiffies+ticks;
-			add_timer(&sound_timer);
-		}
-	} else
-		kd_nosound(0);
-	spin_unlock_irqrestore(&beep_lock, flags);
-	return;
-}
-
-#else
-
-void
-kd_mksound(unsigned int hz, unsigned int ticks)
-{
-}
-
-#endif
 
 /*
  * Sometimes we want to wait until a particular VT has been activated. We
@@ -650,26 +616,22 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	case KIOCSOUND:
 		if (!perm)
 			return -EPERM;
-		if (arg)
-			arg = 1193180 / arg;
-		kd_mksound(arg, 0);
+		kd_mksound(vc, arg, 0);
 		return 0;
 
 	case KDMKTONE:
 		if (!perm)
 			return -EPERM;
 	{
-		unsigned int ticks, count;
+		unsigned int duration, period;
 		
 		/*
 		 * Generate the tone for the appropriate number of ticks.
 		 * If the time is zero, turn off sound ourselves.
 		 */
-		ticks = HZ * ((arg >> 16) & 0xffff) / 1000;
-		count = ticks ? (arg & 0xffff) : 0;
-		if (count)
-			count = 1193180 / count;
-		kd_mksound(count, ticks);
+		duration = HZ * ((arg >> 16) & 0xffff) / 1000;
+		period = duration ? (arg & 0xffff) : 0;
+		kd_mksound(vc, period, duration);
 		return 0;
 	}
 

@@ -63,8 +63,9 @@ static struct tty_struct *console_table[MAX_NR_CONSOLES];
 static struct termios *console_termios[MAX_NR_CONSOLES];
 static struct termios *console_termios_locked[MAX_NR_CONSOLES];
 
-struct vt_struct *admin_vt;		/* Administrative VT */
 static unsigned int current_vc;		/* Which /dev/vc/X to allocate next */
+struct vt_struct *admin_vt;		/* Administrative VT */
+struct vt_struct *vt_cons;		/* Head to link list of VTs */
 
 #ifdef CONFIG_VT_CONSOLE
 struct console vt_console_driver;

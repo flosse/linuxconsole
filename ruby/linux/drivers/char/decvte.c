@@ -1072,7 +1072,7 @@ void terminal_emulation(struct tty_struct *tty, int c)
                 return;
         case 0x07:      /* BEL - Bell */
                 if (bell_duration)
-                        kd_mksound(bell_pitch, bell_duration);
+                        kd_mksound(vc, bell_pitch, bell_duration);
                 return;
         case 0x08:      /* BS - Back space */
                 vte_bs(vc);
