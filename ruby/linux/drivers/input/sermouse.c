@@ -47,7 +47,7 @@ MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
 
 struct sermouse {
 	struct input_dev dev;
-	char buf[8];
+	signed char buf[8];
 	unsigned char count;
 	unsigned char type;
 	unsigned long last;
@@ -55,12 +55,14 @@ struct sermouse {
 
 /*
  * sermouse_process_msc() analyzes the incoming MSC/Sun bytestream and
- * generates events from it as soon as possible.
+ * applies some prediction to the data, resulting in 96 updates per
+ * second, which is as good as a PS/2 or USB mouse.
  */
 
-static void sermouse_process_msc(struct sermouse *sermouse, char data)
+static void sermouse_process_msc(struct sermouse *sermouse, signed char data)
 {
 	struct input_dev *dev = &sermouse->dev;
+	signed char *buf = sermouse->buf;
 
 	switch (sermouse->count) {
 
@@ -73,15 +75,17 @@ static void sermouse_process_msc(struct sermouse *sermouse, char data)
 
 		case 1: 
 		case 3: 
-			sermouse->buf[0] = data;
+			input_report_rel(dev, REL_X, data / 2);
+			input_report_rel(dev, REL_Y, buf[1]);
+			buf[0] = data - data / 2;
 			break;
 
 		case 2: 
 		case 4:
-			input_report_rel(dev, REL_X, sermouse->buf[0]);
-			input_report_rel(dev, REL_Y,            -data);
+			input_report_rel(dev, REL_X, buf[0]);
+			input_report_rel(dev, REL_Y, buf[1] - data);
+			buf[1] = data / 2;
 			break;
-
 	}
 
 	if (++sermouse->count == (5 - ((sermouse->type == SERIO_SUN) << 1)))
@@ -90,41 +94,43 @@ static void sermouse_process_msc(struct sermouse *sermouse, char data)
 
 /*
  * sermouse_process_ms() anlyzes the incoming MS(Z/+/++) bytestream and
- * generates events.
+ * generates events. With prediction it gets 80 updates/sec, assuming
+ * standard 3-byte packets and 1200 bps.
  */
 
-static void sermouse_process_ms(struct sermouse *sermouse, char data)
+static void sermouse_process_ms(struct sermouse *sermouse, signed char data)
 {
 	struct input_dev *dev = &sermouse->dev;
-	char *buf = sermouse->buf;
+	signed char *buf = sermouse->buf;
 
 	if (data & 0x40) sermouse->count = 0;
 
 	switch (sermouse->count) {
 
 		case 0:
-
+			buf[1] = data;
 			input_report_key(dev, BTN_LEFT,   (data >> 5) & 1);
 			input_report_key(dev, BTN_RIGHT,  (data >> 4) & 1);
-
-			buf[1] = data;
 			break;
 
 		case 1:
 			buf[2] = data;
+			data = (signed char) (((buf[1] << 6) & 0xc0) | (data & 0x3f));
+			input_report_rel(dev, REL_X, data / 2);
+			input_report_rel(dev, REL_Y, buf[4]);
+			buf[3] = data - data / 2;
 			break;
 
 		case 2:
-
-			/* Guessing the state of the middle button on 3-button MS-protocol mice. This is ugly. */
+			/* Guessing the state of the middle button on 3-button MS-protocol mice - ugly. */
 			if ((sermouse->type == SERIO_MS) && !data && !buf[2] && !((buf[0] & 0xf0) ^ buf[1]))
 				input_report_key(dev, BTN_MIDDLE, !test_bit(BTN_MIDDLE, dev->key));
-
 			buf[0] = buf[1];
 
-			input_report_rel(dev, REL_X, (char) (((buf[1] << 6) & 0xc0) | (buf[2] & 0x3f)));
-			input_report_rel(dev, REL_Y, (char) (((buf[1] << 4) & 0xc0) | (data   & 0x3f)));
-
+			data = (signed char) (((buf[1] << 4) & 0xc0) | (data & 0x3f));
+			input_report_rel(dev, REL_X, buf[3]);
+			input_report_rel(dev, REL_Y, data - buf[4]);
+			buf[4] = data / 2;
 			break;
 
 		case 3:
