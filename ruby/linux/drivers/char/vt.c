@@ -521,9 +521,9 @@ void redraw_screen(int new_console, int is_switch)
 	}
 
 	if (redraw) {
-		set_origin(currcons);
 		if (sw->con_switch(vc_cons[currcons].d) && vcmode != KD_GRAPHICS)
 			/* Change the palette after a VT switch. */
+			set_origin(currcons);
 			sw->con_set_palette(vc_cons[currcons].d, color_table);
 			/* Update the screen contents */
 			do_update_region(currcons, origin, screenbuf_size/2);
