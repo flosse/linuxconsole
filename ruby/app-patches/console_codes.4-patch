@@ -1,0 +1,203 @@
+--- console_codes.4	2000/03/08 10:21:36	1.1
++++ console_codes.4	2000/03/11 10:00:08
+@@ -15,8 +15,13 @@
+ .\" by Eric S. Raymond <esr@thyrsus.com>.
+ .\"
+ .\" Tiny correction, aeb, 961107.
++.\" 
++.\" Updated for Linux Console Project version 2, 8 Mar 2000 by ESR.
++.\" The following undocumented codes were removed in version 2:
++.\"	\E[s	DECRC		removed
++.\"	\E[u	DECSC		removed
+ .\"
+-.TH CONSOLE_CODES 4 "October 31, 1996" "Linux" "Linux Programmer's Manual"
++.TH CONSOLE_CODES 4 "March 8, 2000" "Linux" "Linux Programmer's Manual"
+ .SH NAME
+ console_codes \- Linux console escape and control sequences
+ .SH DESCRIPTION
+@@ -173,6 +178,7 @@
+ F	CPL	Move cursor up the indicated # of rows, to column 1.
+ G	CHA	Move cursor to indicated column in current row.
+ H	CUP	Move cursor to the indicated row, column (origin at 1,1).
++I	CHT	Cursor forward tabulation by # stops (version >= 2.1.0).
+ J	ED	Erase display (default: from cursor to end of display).
+ 		ESC [ 1 J: erase from start to cursor.
+ 		ESC [ 2 J: erase whole display.
+@@ -182,15 +188,24 @@
+ L	IL	Insert the indicated # of blank lines.
+ M	DL	Delete the indicated # of lines.
+ P	DCH	Delete the indicated # of characters on the current line.
++W	CTC	#=0, set tab; #=2, clear tab; #=5 clear all tabs  
++		(version >= 2.1.0).
+ X	ECH	Erase the indicated # of characters on the current line.
++Y	CVT	Cursor Vertical Tab, equivalent to # line feeds 
++		(version >= 2.1.0).
++Z	CBT	Cursor Back Tab, back # stops
++		(version >= 2.1.0).
+ a	HPR	Move cursor right the indicated # of columns.
+ c	DA	Answer ESC [ ? 6 c: `I am a VT102'.
+ d	VPA	Move cursor to the indicated row, current column.
+-e	VPR	Move cursor down the indicated # of rows.
++e	VPR	Move cursor down the indicated # of rows
++		(version >= 2.1.0).
+ f	HVP	Move cursor to the indicated row, column.
+ g	TBC	Without parameter: clear tab stop at the current position.
+ 		ESC [ 3 g: delete all tab stops.
+ h	SM	Set Mode (see below).
++k	VPB	Move cursor up the indicated # of rows
++		(version >= 2.1.0).
+ l	RM	Reset Mode (see below).
+ m	SGR	Set attributes (see below).
+ n	DSR	Status report (see below).
+@@ -219,6 +234,7 @@
+ 	(the colors used to simulate dim or underline are set
+ 	using ESC ] ...)
+ 5	set blink
++6	set blink (version >= 2.1.0 and up)
+ 7	set reverse video
+ 10	reset selected mapping, display control flag,
+ 	and toggle meta flag.
+@@ -228,7 +244,8 @@
+ 	set toggle meta flag. (The toggle meta flag
+ 	causes the high bit of a byte to be toggled
+ 	before the mapping table translation is done.)
+-21	set normal intensity (this is not compatible with ECMA-48)
++21	set normal intensity (version 1.x.x only; 
++	this is not compatible with ECMA-48)
+ 22	set normal intensity
+ 24	underline off
+ 25	blink off
+@@ -273,48 +290,104 @@
+ Cursor position report (CPR): Answer is ESC [ \fIy\fP ; \fIx\fP R,
+ where \fIx,y\fP is the cursor location.
+ 
++.SS 8-bit operation
++
++Like a VT220, the console recognizes character 0x9b (128 + 27, alt-ESC)
++as a character sequence introducer (CSI) equivalent to ESC [.  At version
++2.1.0 and above the console also recognizes the following 8-bit control codes:
++.TS
++l l l.
++0x84	IND	Linefeed.
++0x85	NEL	Newline.
++0x88	HTS	Set tab stop at current column.
++0x8d	RI	Reverse linefeed.
++.TE
++
+ .SS DEC Private Mode (DECSET/DECRST) sequences.
+ 
+ These are not described in ECMA-48.  We list the Set Mode sequences;
+ the Reset Mode sequences are obtained by replacing the final `h'
+ by `l'.
+ .TP
+-ESC [ ? 1 h
++CSI ? 1 h
+ DECCKM (default off): When set, the cursor keys send an ESC O prefix,
+ rather than ESC [.
+ .TP
+-ESC [ ? 3 h
++CSI ? 3 h
+ DECCOLM (default off = 80 columns): 80/132 col mode switch.  The
+ driver sources note that this alone does not suffice; some user-mode
+ utility such as
+ .IR resizecons (8)
+ has to change the hardware registers on the console video card.
+ .TP
+-ESC [ ? 5 h
++CSI ? 5 h
+ DECSCNM (default off): Set reverse-video mode.
+ .TP
+-ESC [ ? 6 h
++CSI ? 6 h
+ DECOM (default off): When set, cursor addressing is relative to
+ the upper left corner of the scrolling region.
+ .TP
+-ESC [ ? 7 h
++CSI ? 7 h
+ DECAWM (default on): Set autowrap on.  In this mode, a graphic
+ character emitted after column 80 (or column 132 of DECCOLM is on)
+ forces a wrap to the beginning of the following line first.
+ .TP
+-ESC [ ? 8 h
++CSI ? 8 h
+ DECARM (default on): Set keyboard autorepreat on.
+ .TP
+-ESC [ ? 9 h
++CSI ? 9 h
+ X10 Mouse Reporting (default off): Set reporting mode to 1 (or reset to
+ 0) \- see below.
+ .TP
+-ESC [ ? 25 h
++CSI ? 25 h
+ DECCM (default on): Make cursor visible.
+ .TP
+-ESC [ ? 1000 h
++CSI ? 1000 h
+ X11 Mouse Reporting (default off): Set reporting mode to 2 (or reset
+ to 0) \- see below.
++.TP
++\E#8
++DEC Screen alignment test.
++
++.SS DEC Private Device Status sequences.
++
++.TP
++CSI ? 6n
++DEC extended Cursor position report (DECXCPR) 
++Answer is ESC [ \fIy\fP ; \fIx\fP ; \fIz\fR R,
++where \fIx,y\fP is the cursor location and \fIz\fR the number of the
++memory page on display (currently always 1).  Supported only in
++console version 2.1.0 and higher.
++.TP
++CSI ? 15n	
++DEC Printer Status query.  Currently always returns ESC [ ? 13 n,
++indicating no printer is present.
++.\" See <http://vt100.net>
++Supported only in console version 2.1.0 and higher.
++.TP
++CSI ? 25n
++DEC UDK status. Currently always returns ESC [ ? 21 n,
++indicating that user-definable keys are locked.
++.\" See <http://vt100.net>
++Supported only in console version 2.1.0 and higher.
++.TP
++CSI ? 26n	
++Keyboard status.  Currently always returns ESC [ ? 27 ; 1 ; 0 ; 1 n,
++describing a North American LK401 keyboard.
++.\" This response is documented in the VT420 Progamming Summary, p147.
++Supported only in console version 2.1.0 and higher.
++.TP
++CSI ? 75n
++Data integrity check.  Currently always returns ESC [ ? 70 n.
++Supported only in console version 2.1.0 and higher.
++.TP
++CSI x
++(DECREQTPARM) DEC Request Parameters
++Returns ESC [ ; 1 ; 1 ; 120 ; 120 ; 1 ; 0 x,
++describing a solicited report from a terminal in 8-bit no-parity mode
++running at 19200bps (the highest speed a VT100 can report).
++.\" See <http://www.cs.utk.edu/~shuford/terminal/virek100.txt>
++Supported only in console version 2.1.0 and higher.
+ 
+ .SS Linux Console Private CSI Sequences
+ 
+@@ -407,7 +480,7 @@
+ 
+ Many different terminal types are described, like the Linux console,
+ as being `VT100-compatible'.  Here we discuss differences vbetween the
+-Linux console an the two most important others, the DEC VT102 and
++Linux console and the two most important others, the DEC VT102 and
+ .IR xterm (1).
+ 
+ .SS Control-character handling
+@@ -508,8 +581,8 @@
+ The 
+ .I xterm
+ program will recognize all of the DEC Private Mode sequences listed
+-above, but none of the Linux private-mode sequences.  For discussion
+-of 
++above, but none of the DEC Device Status or Linux private-mode
++sequences. For discussion of 
+ .IR xterm 's
+ own private-mode sequences, refer to the
+ .I Xterm Control Sequences
