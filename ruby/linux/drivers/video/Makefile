@@ -4,7 +4,7 @@
 
 O_TARGET := video.o
 
-obj-y	+= dummycon.o 
+obj-y	:= 
 
 # All of the (potential) objects that export symbols.
 # This list comes from 'grep -l EXPORT_SYMBOL *.[hc]'.

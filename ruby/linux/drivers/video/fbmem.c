@@ -632,7 +632,7 @@ fb_open(struct inode *inode, struct file *file)
 
                	vc->vc_mode = KD_GRAPHICS;
                	vt->cache_sw = vt->vt_sw;
-               	take_over_console(vt, &dummy_con);
+               	//take_over_console(vt, &dummy_con);
        	}
 #endif
 	return res;
