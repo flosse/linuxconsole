@@ -2694,16 +2694,16 @@ static int sisfb_mmap(struct fb_info *info, struct file *file,
 }
 
 static struct fb_ops sisfb_ops = {
-	sisfb_open,
-	sisfb_release,
-	sisfb_get_fix,
-	sisfb_get_var,
-	sisfb_set_var,
-	sisfb_get_cmap,
-	sisfb_set_cmap,
-	sisfb_pan_display,
-	sisfb_ioctl,
-	sisfb_mmap
+	fb_open:	sisfb_open,
+	fb_release:	sisfb_release,
+	fb_get_fix:	sisfb_get_fix,
+	fb_get_var:	sisfb_get_var,
+	fb_set_var:	sisfb_set_var,
+	fb_get_cmap:	sisfb_get_cmap,
+	fb_set_cmap:	sisfb_set_cmap,
+	fb_pan_display:	sisfb_pan_display,
+	fb_ioctl:	sisfb_ioctl,
+	fb_mmap:	sisfb_mmap
 };
 
 int sisfb_setup(char *options)
