@@ -256,8 +256,11 @@ struct fb_ops {
     /* open/release and usage marking */
     int (*fb_open)(struct fb_info *info, int user);
     int (*fb_release)(struct fb_info *info, int user);
-    /* set settable parameters */
-    int (*fb_set_var)(struct fb_var_screeninfo *var, struct fb_info *info); 
+    /* check the settable parameters. See skeletonfb.c */  
+    int (*fb_check_var)(struct fb_var_screeninfo *var, void *par, 
+			struct fb_info *info);
+    /* set the video mode according to par */	
+    int (*fb_set_par)(void *par, struct fb_info *info);
     /* set a color register */
     int (*fb_setcolreg)(u_int regno, u_int red, u_int green, u_int blue,
                         u_int transp, struct fb_info *);
@@ -311,6 +314,7 @@ struct fb_info {
 #endif
 
 /* drivers/video/fbmem.c */
+extern int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info);
 extern int register_framebuffer(struct fb_info *fb_info);
 extern int unregister_framebuffer(struct fb_info *fb_info);
 
