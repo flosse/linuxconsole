@@ -73,6 +73,7 @@ static void vgacon_cursor(struct vc_data *vc, int mode);
 static int vgacon_switch(struct vc_data *vc);
 static int vgacon_blank(struct vc_data *vc, int blank);
 static int vgacon_font_op(struct vc_data *vc, struct console_font_op *op);
+static int vgacon_resize(struct vc_data *vc, unsigned int rows, unsigned int cols);
 static int vgacon_set_palette(struct vc_data *vc, unsigned char *table);
 static int vgacon_scrolldelta(struct vc_data *vc, int lines);
 static int vgacon_set_origin(struct vc_data *vc);
@@ -613,6 +614,26 @@ static int vgacon_switch(struct vc_data *vc)
 	return 0;	/* Redrawing not needed */
 }
 
+
+static int vgacon_resize(struct vc_data *vc, unsigned int rows, 
+			 unsigned int cols)
+{
+	struct vga_hw_state state = vgacon_state;
+	int err = 0;
+/*
+	err = vga_check_mode(cols * vc->vc_font.width, state.right, state.hslen, 			     state.left, cols * vc->vc_font.width, 
+			     rows * vc->vc_font.height, state.lower, 
+			     state.vslen, state.upper, 0);
+	if (err) return err; 		
+*/
+	state.xres = state.vxres = cols;
+	state.yres = rows * vc->vc_font.height;
+	
+	vga_set_mode(&state, 0);	
+	vgacon_state = state;
+	return 0;
+}
+
 static void vga_set_palette(struct vc_data *vc, unsigned char *table)
 {
 	int i, j ;
@@ -883,6 +904,7 @@ const struct consw vga_con = {
 	con_blank:		vgacon_blank,
 	con_font_op:		vgacon_font_op,
 	con_set_palette:	vgacon_set_palette,
+	con_resize:		vgacon_resize,
 	con_scrolldelta:	vgacon_scrolldelta,
 	con_set_origin:		vgacon_set_origin,
 	con_save_screen:	vgacon_save_screen,
@@ -894,7 +916,7 @@ const struct consw vga_con = {
 
 void module_init(void)
 {
-       take_over_console(&vga_con, 0, MAX_NR_CONSOLES-1, 0);
+       take_over_console(&vga_con, 0, MAX_NR_USER_CONSOLES-1, 0);
 }
 
 void module_exit(void)
