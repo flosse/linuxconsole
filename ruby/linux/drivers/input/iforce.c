@@ -105,6 +105,7 @@ static struct iforce_device {
 	signed short *abs;
 	signed short *ff;
 } iforce_device[] = {
+	{ 0x044f, 0xa01c, "Thrustmaster Motor Sport GT",		btn_wheel, abs_wheel, ff_iforce },
 	{ 0x046d, 0xc281, "Logitech WingMan Force",			btn_joystick, abs_joystick, ff_iforce },
 	{ 0x046d, 0xc283, "Logitech WingMan Force 3D",			btn_joystick, abs_joystick, ff_iforce },
 	{ 0x046d, 0xc285, "Logitech WingMan Strike Force 3D",		btn_joystick, abs_joystick, ff_iforce },
@@ -1111,6 +1112,7 @@ static void iforce_usb_disconnect(struct usb_device *dev, void *ptr)
 }
 
 static struct usb_device_id iforce_usb_ids [] = {
+	{ USB_DEVICE(0x044f, 0xa01c) },		/* Thrustmaster Motor Sport GT */
 	{ USB_DEVICE(0x046d, 0xc281) },		/* Logitech WingMan Force */
 	{ USB_DEVICE(0x046d, 0xc283) },		/* Logitech WingMan Force 3D */
 	{ USB_DEVICE(0x046d, 0xc285) },		/* Logitech WingMan Strike Force 3D */
