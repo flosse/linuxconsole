@@ -49,24 +49,17 @@ static struct fb_var_screeninfo q40fb_var __initdata = {
 /* frame buffer operations */
 int q40fb_init(void);
 
-static int q40fb_check_var(struct fb_var_screeninfo *var,struct fb_info *info); 
 static int q40fb_setcolreg(unsigned regno, unsigned red, unsigned green,
                            unsigned blue, unsigned transp,
                            struct fb_info *info);
 
 static struct fb_ops q40fb_ops = {
         owner:		THIS_MODULE,
-	fb_check_var:   q40fb_check_var,
         fb_setcolreg:   q40fb_setcolreg,
         fb_fillrect:    cfb_fillrect,
         fb_copyarea:    cfb_copyarea,
         fb_imageblit:   cfb_imageblit,
 };
-
-static int q40fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info) 
-{
-	return 0;
-}
 
 static int q40fb_setcolreg(unsigned regno, unsigned red, unsigned green,
 		  	   unsigned blue, unsigned transp,
@@ -100,7 +93,7 @@ int q40fb_init(void)
 	
 	fb_info.var = q40fb_var;
 	fb_info.fix = q40fb_fix;
-	fb_info.node = -1;
+	fb_info.node = NODEV;
 	fb_info.fbops = &q40fb_ops;
 	fb_info.flags = FBINFO_FLAG_DEFAULT;  /* not as module for now */
 	fb_info.pseudo_palette = pseudo_palette;	
@@ -116,4 +109,6 @@ int q40fb_init(void)
         printk(KERN_INFO "fb%d: Q40 frame buffer alive and kicking !\n",
 	       GET_FB_IDX(fb_info.node));
 	return 0;
-}	
+}
+
+MODULE_LICENSE("GPL");	
