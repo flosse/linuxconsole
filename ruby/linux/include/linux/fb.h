@@ -9,32 +9,24 @@
 #define FB_MAJOR		29
 #define FB_MAX			32	/* sufficient for now */
 
-/* ioctls */
-#define FB_IOC_MAGIC 'F'
-#define FB_IOC_MAXNR 255
-
-#define FBIOGET_VSCREENINFO     _IOWR(FB_IOC_MAGIC, 0, struct fb_var_screeninfo)
-#define FBIOPUT_VSCREENINFO     _IOWR(FB_IOC_MAGIC, 1, struct fb_var_screeninfo)
-#define FBIOGET_FSCREENINFO     _IOR(FB_IOC_MAGIC, 2, struct fb_fix_screeninfo)
-#define FBIOGETCMAP             _IOR(FB_IOC_MAGIC, 4, struct fb_cmap)
-#define FBIOPUTCMAP             _IOW(FB_IOC_MAGIC, 5, struct fb_cmap)
-#define FBIOPAN_DISPLAY         _IOWR(FB_IOC_MAGIC, 6, struct fb_var_screeninfo)
-/* Could be changed in the future */
-#define FBIOGET_FCURSORINFO     _IOR(FB_IOC_MAGIC, 7, struct fb_fix_cursorinfo)
-#define FBIOGET_VCURSORINFO     _IOR(FB_IOC_MAGIC, 8, struct fb_var_cursorinfo)
-#define FBIOPUT_VCURSORINFO     _IOW(FB_IOC_MAGIC, 9, struct fb_var_cursorinfo)
-#define FBIOGET_CURSORSTATE     _IOR(FB_IOC_MAGIC, 10, struct fb_cursorstate)
-#define FBIOPUT_CURSORSTATE     _IOW(FB_IOC_MAGIC, 11, struct fb_cursorstate)
-#define FBIOGET_MONITORSPEC     _IOR(FB_IOC_MAGIC, 12, struct fb_monspecs)
-#define FBIOPUT_MONITORSPEC     _IOW(FB_IOC_MAGIC, 13, struct fb_monspecs)
-#define FBIOSWITCH_MONIBIT      _IOW(FB_IOC_MAGIC, 14, int)
-
-#define FBIOGET_CON2FBMAP       _IOWR(FB_IOC_MAGIC, 15, struct fb_con2fbmap)
-#define FBIOPUT_CON2FBMAP       _IOW(FB_IOC_MAGIC, 16, struct fb_con2fbmap)
-#define FBIOBLANK               _IOW(FB_IOC_MAGIC, 17, int)     /* arg: 0 or vesa level + 1 */
-#define FBIOGET_VBLANK		_IOR(FB_IOC_MAGIC, 18, struct fb_vblank)
-#define FBIO_ALLOC              _IOW(FB_IOC_MAGIC, 19)
-#define FBIO_FREE               _IOW(FB_IOC_MAGIC, 20)
+/* ioctls
+   0x46 is 'F'								*/
+#define FBIOGET_VSCREENINFO	0x4600
+#define FBIOPUT_VSCREENINFO	0x4601
+#define FBIOGET_FSCREENINFO	0x4602
+#define FBIOGETCMAP		0x4604
+#define FBIOPUTCMAP		0x4605
+#define FBIOPAN_DISPLAY		0x4606
+/* 0x4607-0x460B are defined below */
+/* #define FBIOGET_MONITORSPEC	0x460C */
+/* #define FBIOPUT_MONITORSPEC	0x460D */
+/* #define FBIOSWITCH_MONIBIT	0x460E */
+#define FBIOGET_CON2FBMAP	0x460F
+#define FBIOPUT_CON2FBMAP	0x4610
+#define FBIOBLANK		0x4611		/* arg: 0 or vesa level + 1 */
+#define FBIOGET_VBLANK		_IOR('F', 0x12, struct fb_vblank)
+#define FBIO_ALLOC              0x4613
+#define FBIO_FREE               0x4614
 #define FBIOGET_GLYPH           0x4615
 #define FBIOGET_HWCINFO         0x4616
 
@@ -270,6 +262,7 @@ struct file;
 
 struct fb_ops {
     /* open/release and usage marking */
+    struct module *owner;
     int (*fb_open)(struct fb_info *info, int user);
     int (*fb_release)(struct fb_info *info, int user);
     /* get non settable parameters */
@@ -280,22 +273,18 @@ struct fb_ops {
 		      struct fb_info *info);		
     /* set settable parameters */
     int (*fb_set_var)(struct fb_var_screeninfo *var, int con,
-                      struct fb_info *info);
-    /* checks var and creates a par based on it */
-    int (*fb_check_var)(struct fb_var_screeninfo *var, struct fb_info *info); 
-    /* set the video mode according to par */
-    int (*fb_set_par)(struct fb_info *info);
+		      struct fb_info *info);		
     /* get colormap */
     int (*fb_get_cmap)(struct fb_cmap *cmap, int kspc, int con,
 		       struct fb_info *info);
     /* set colormap */
     int (*fb_set_cmap)(struct fb_cmap *cmap, int kspc, int con,
 		       struct fb_info *info);
-    /* set color register */	
+    /* set color register */
     int (*fb_setcolreg)(unsigned regno, unsigned red, unsigned green,
                         unsigned blue, unsigned transp, struct fb_info *info);
     /* blank display */
-    int (*fb_blank)(int blank, struct fb_info *info);
+    void (*fb_blank)(int blank, struct fb_info *info);
     /* pan display */
     int (*fb_pan_display)(struct fb_var_screeninfo *var, int con,
 			  struct fb_info *info);
@@ -308,15 +297,11 @@ struct fb_ops {
     int (*fb_rasterimg)(struct fb_info *info, int start);
 };
 
-/* fb_info flags */
-#define FBINFO_FLAG_MODULE      1       /* Low-level driver is a module */
-#define FBINFO_FLAG_OPEN        2       /* Has this been open already ? */
-
 struct fb_info {
    char modename[40];			/* default video mode */
    kdev_t node;
    int flags;
-   int count;                           /* Has this been open already ? */
+   int open;                            /* Has this been open already ? */
 #define FBINFO_FLAG_MODULE	1	/* Low-level driver is a module */
    struct fb_var_screeninfo var;        /* Current var */
    struct fb_fix_screeninfo fix;        /* Current fix */
@@ -326,6 +311,7 @@ struct fb_info {
    char *screen_base;                   /* Virtual address */
    struct display *disp;		/* initial display variable */
    struct vc_data *display_fg;		/* Console visible on this display */
+   char fontname[40];			/* default font name */
    devfs_handle_t devfs_handle;         /* Devfs handle for new name         */
    devfs_handle_t devfs_lhandle;        /* Devfs handle for compat. symlink  */
    int (*changevar)(int);		/* tell console var has changed */
@@ -347,6 +333,42 @@ struct fb_info {
 #endif
 
     /*
+     *  This structure abstracts from the underlying hardware. It is not
+     *  mandatory but used by the `generic' frame buffer operations.
+     *  Read drivers/video/skeletonfb.c for more information.
+     */
+
+struct fbgen_hwswitch {
+    void (*detect)(void);
+    int (*encode_fix)(struct fb_fix_screeninfo *fix, const void *par,
+		      struct fb_info_gen *info);
+    int (*decode_var)(const struct fb_var_screeninfo *var, void *par,
+		      struct fb_info_gen *info);
+    int (*encode_var)(struct fb_var_screeninfo *var, const void *par,
+		      struct fb_info_gen *info);
+    void (*get_par)(void *par, struct fb_info_gen *info);
+    void (*set_par)(const void *par, struct fb_info_gen *info);
+    int (*getcolreg)(unsigned regno, unsigned *red, unsigned *green,
+		     unsigned *blue, unsigned *transp, struct fb_info *info);
+    int (*pan_display)(const struct fb_var_screeninfo *var,
+		       struct fb_info_gen *info);
+    int (*blank)(int blank_mode, struct fb_info_gen *info);
+    void (*set_disp)(const void *par, struct display *disp,
+		     struct fb_info_gen *info);
+};
+
+struct fb_info_gen {
+    struct fb_info info;
+
+    /* Entries for a generic frame buffer device */
+    /* Yes, this starts looking like C++ */
+    u_int parsize;
+    struct fbgen_hwswitch *fbhw;
+
+   /* From here on everything is device dependent */
+};
+
+    /*
      *  `Generic' versions of the frame buffer device operations
      */
 
@@ -360,17 +382,24 @@ extern int fbgen_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 			  struct fb_info *info);
 extern int fbgen_set_cmap(struct fb_cmap *cmap, int kspc, int con,
 			  struct fb_info *info);
-extern int fbgen_blank(int blank, struct fb_info *info);
 extern int fbgen_pan_display(struct fb_var_screeninfo *var, int con,
 			     struct fb_info *info);
+extern int fbgen_ioctl(struct inode *inode, struct file *file,
+		       unsigned int cmd, unsigned long arg, int con,
+		       struct fb_info *info);
 
     /*
      *  Helper functions
      */
 
-extern void fbgen_set_disp(int con, struct fb_info *info);
+extern int fbgen_do_set_var(struct fb_var_screeninfo *var, int isactive,
+			    struct fb_info_gen *info);
+extern void fbgen_set_disp(int con, struct fb_info_gen *info);
+extern void fbgen_install_cmap(int con, struct fb_info_gen *info);
 extern int fbgen_update_var(int con, struct fb_info *info);
 extern int fbgen_switch(int con, struct fb_info *info);
+extern void fbgen_blank(int blank, struct fb_info *info);
+
 
 /* drivers/video/fbmem.c */
 extern int register_framebuffer(struct fb_info *fb_info);
@@ -392,7 +421,7 @@ extern int fb_get_cmap(struct fb_cmap *cmap, int kspc,
 		       int (*getcolreg)(u_int, u_int *, u_int *, u_int *,
 					u_int *, struct fb_info *),
 		       struct fb_info *fb_info);
-extern int fb_set_cmap(struct fb_cmap *cmap, int kspc, struct fb_info *info);
+extern int fb_set_cmap(struct fb_cmap *cmap, int kspc,struct fb_info *fb_info);
 extern struct fb_cmap *fb_default_cmap(int len);
 extern void fb_invert_cmaps(void);
 
@@ -463,6 +492,13 @@ extern int __init fb_find_mode(struct fb_var_screeninfo *var,
    /*
     *    Hardware Cursor
     */
+
+#define FBIOGET_FCURSORINFO     0x4607
+#define FBIOGET_VCURSORINFO     0x4608
+#define FBIOPUT_VCURSORINFO     0x4609
+#define FBIOGET_CURSORSTATE     0x460A
+#define FBIOPUT_CURSORSTATE     0x460B
+
 
 struct fb_fix_cursorinfo {
 	__u16 crsr_width;		/* width and height of the cursor in */
