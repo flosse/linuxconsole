@@ -533,15 +533,15 @@ void invert_screen(struct vc_data *vc, int offset, int count, int viewed)
                         while (cnt--) *q++ ^= 0x0800;
                 } else if (hi_font_mask == 0x100) {
                         while (cnt--) {
-                                u16 a = *q;
+				u16 a = scr_readw(q);
                                 a = ((a) & 0x11ff) | (((a) & 0xe000) >> 4) | (((a) & 0x0e00) << 4);
-                                *q++ = a;
+                                scr_writew(a, q++);
                         }
                 } else {
                         while (cnt--) {
-                                u16 a = *q;
+				u16 a = scr_readw(q);
                                 a = ((a) & 0x88ff) | (((a) & 0x7000) >> 4) | (((a) & 0x0700) << 4);
-                                *q++ = a;
+                                scr_writew(a, q++);
                         }
                 }
         }
