@@ -15,7 +15,6 @@
 #include <linux/kernel.h>
 #include <linux/string.h>
 #include <linux/errno.h>
-#include <linux/kd.h>
 #include <linux/malloc.h>
 #include <linux/major.h>
 #include <linux/mm.h>
@@ -680,8 +679,6 @@ static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
 static void visual_init(struct vc_data *vc)
 {
     /* ++Geert: sw->con_startup determines console size */
-        
-
     vc->vc_uni_pagedir_loc = &vc->vc_uni_pagedir;
     vc->vc_uni_pagedir = 0;
     hi_font_mask = 0;
@@ -823,8 +820,6 @@ int vc_allocate(unsigned int currcons)
             }
             screenbuf = (unsigned short *) q;
             vc_init(vc, 1);
-	    if (currcons - pool->first_vc == 0)
-	    	vt->last_console = vt->fg_console = vc;
 	
 	    pool->vc_cons[currcons - pool->first_vc] = vc;		
 	 	
