@@ -18,6 +18,7 @@
 #define FBIOGETCMAP		0x4604
 #define FBIOPUTCMAP		0x4605
 #define FBIOPAN_DISPLAY		0x4606
+#define FBIO_CURSOR     	_IOWR('F', 0x08, struct fbcursor)
 /* 0x4607-0x460B are defined below */
 /* #define FBIOGET_MONITORSPEC	0x460C */
 /* #define FBIOPUT_MONITORSPEC	0x460D */
@@ -239,6 +240,32 @@ struct fb_vblank {
 	__u32 reserved[4];		/* reserved for future compatibility */
 };
 
+/*
+ * hardware cursor control
+ */
+
+#define FB_CUR_SETCUR   0x01
+#define FB_CUR_SETPOS   0x02
+#define FB_CUR_SETHOT   0x04
+#define FB_CUR_SETCMAP  0x08
+#define FB_CUR_SETSHAPE 0x10
+#define FB_CUR_SETALL   0x1F
+
+struct fbcurpos {		
+        __u16 x, y;
+};
+
+struct fbcursor {
+        __u16 set;              /* what to set */
+        __u16 enable;           /* cursor on/off */
+        struct fbcurpos pos;    /* cursor position */
+        struct fbcurpos hot;    /* cursor hot spot */
+        struct fb_cmap cmap;    /* color map info */
+        struct fbcurpos size;   /* cursor bit map size */
+        char *image;            /* cursor image bits */
+        char *mask;             /* cursor mask bits */
+};
+
 struct fb_image {
 	__u32 width;			/* Size of image */
 	__u32 height;
@@ -278,6 +305,8 @@ struct fb_ops {
     int (*fb_check_var)(struct fb_var_screeninfo *var, struct fb_info *info);
     /* set the video mode according to par */
     int (*fb_set_par)(struct fb_info *info);
+    /* cursor control */
+    int (*fb_cursor)(struct fb_info *info, struct fbcursor *cursor);		
     /* set color register */
     int (*fb_setcolreg)(unsigned regno, unsigned red, unsigned green,
                         unsigned blue, unsigned transp, struct fb_info *info);
@@ -308,6 +337,7 @@ struct fb_info {
    struct fb_var_screeninfo var;        /* Current var */
    struct fb_fix_screeninfo fix;        /* Current fix */
    struct fb_monspecs monspecs;         /* Current Monitor specs */
+   struct fbcursor cursor;		/* Current cursor */
    struct fb_cmap cmap;                 /* Current cmap */
    struct fb_ops *fbops;
    char *screen_base;                   /* Virtual address */
@@ -461,48 +491,5 @@ extern int __init fb_find_mode(struct fb_var_screeninfo *var,
 #define FBCMD_SET_CURRENTPAR	0xDEAD8005
 
 #endif
-
-
-#if 1 /* Preliminary */
-
-   /*
-    *    Hardware Cursor
-    */
-
-#define FBIOGET_FCURSORINFO     0x4607
-#define FBIOGET_VCURSORINFO     0x4608
-#define FBIOPUT_VCURSORINFO     0x4609
-#define FBIOGET_CURSORSTATE     0x460A
-#define FBIOPUT_CURSORSTATE     0x460B
-
-
-struct fb_fix_cursorinfo {
-	__u16 crsr_width;		/* width and height of the cursor in */
-	__u16 crsr_height;		/* pixels (zero if no cursor)	*/
-	__u16 crsr_xsize;		/* cursor size in display pixels */
-	__u16 crsr_ysize;
-	__u16 crsr_color1;		/* colormap entry for cursor color1 */
-	__u16 crsr_color2;		/* colormap entry for cursor color2 */
-};
-
-struct fb_var_cursorinfo {
-	__u16 width;
-	__u16 height;
-	__u16 xspot;
-	__u16 yspot;
-	__u8 data[1];			/* field with [height][width]        */
-};
-
-struct fb_cursorstate {
-	__s16 xoffset;
-	__s16 yoffset;
-	__u16 mode;
-};
-
-#define FB_CURSOR_OFF		0
-#define FB_CURSOR_ON		1
-#define FB_CURSOR_FLASH		2
-
-#endif /* Preliminary */
 
 #endif /* _LINUX_FB_H */
