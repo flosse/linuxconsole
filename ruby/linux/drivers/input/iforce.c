@@ -60,6 +60,9 @@ MODULE_LICENSE("GPL");
 #define IFORCE_USB	2
 #endif
 
+#define FALSE 0
+#define TRUE 1
+
 #define FF_EFFECTS_MAX	32
 
 /* Each force feedback effect is made of one core effect, which can be
@@ -85,6 +88,12 @@ struct iforce_core_effect {
 	struct resource mod2_chunk;
 	unsigned long flags[NBITS(FF_MODCORE_MAX)];
 	pid_t owner;
+	/* Used to keep track of parameters of an effect. They are needed
+	 * to know what parts of an effect changed in an update operation.
+	 * We try to send only parameter packets if possible, as sending
+	 * effect parameter requires the effect to be stoped and restarted
+	 */
+	struct ff_effect effect;
 };
 
 #define FF_CMD_EFFECT		0x010e
@@ -861,7 +870,7 @@ static int make_core(struct iforce* iforce, u16 id, u16 mod_id1, u16 mod_id2,
  * Upload a periodic effect to the device
  */
 
-static int iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effect)
+static int iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effect, int is_update)
 {
 	u8 wave_code;
 	int core_id = effect->id;
@@ -871,14 +880,14 @@ static int iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effec
 	int err = 0;
 
 	err = make_period_modifier(iforce, mod1_chunk, 
-		test_bit(FF_MOD1_IS_USED, iforce->core_effects[core_id].flags),
+		is_update,
 		effect->u.periodic.magnitude, effect->u.periodic.offset,
 		effect->u.periodic.period, effect->u.periodic.phase);
 	if (err) return err;
 	set_bit(FF_MOD1_IS_USED, core_effect->flags);
 
 	err = make_shape_modifier(iforce, mod2_chunk,
-		test_bit(FF_MOD2_IS_USED, iforce->core_effects[core_id].flags),
+		is_update,
 		effect->u.periodic.shape.attack_length,
 		effect->u.periodic.shape.attack_level,
 		effect->u.periodic.shape.fade_length,
@@ -912,7 +921,7 @@ static int iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effec
 /*
  * Upload a constant force effect
  */
-static int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effect)
+static int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effect, int is_update)
 {
 	int core_id = effect->id;
 	struct iforce_core_effect* core_effect = iforce->core_effects + core_id;
@@ -923,13 +932,13 @@ static int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effec
 	printk(KERN_DEBUG "iforce.c: make constant effect\n");
 
 	err = make_magnitude_modifier(iforce, mod1_chunk,
-		test_bit(FF_MOD1_IS_USED, iforce->core_effects[core_id].flags),
+		is_update,
 		effect->u.constant.level);
 	if (err) return err;
 	set_bit(FF_MOD1_IS_USED, core_effect->flags);
 
 	err = make_shape_modifier(iforce, mod2_chunk,
-		test_bit(FF_MOD2_IS_USED, iforce->core_effects[core_id].flags),
+		is_update,
 		effect->u.constant.shape.attack_length,
 		effect->u.constant.shape.attack_level,
 		effect->u.constant.shape.fade_length,
@@ -954,7 +963,7 @@ static int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effec
 /*
  * Upload an interactive effect. Those are for example friction, inertia, springs...
  */
-static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* effect)
+static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* effect, int is_update)
 {
 	int core_id = effect->id;
 	struct iforce_core_effect* core_effect = iforce->core_effects + core_id;
@@ -972,7 +981,7 @@ static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* ef
 	}
 
 	err = make_interactive_modifier(iforce, mod_chunk,
-		test_bit(FF_MOD1_IS_USED, iforce->core_effects[core_id].flags),
+		is_update,
 		effect->u.interactive.right_saturation,
 		effect->u.interactive.left_saturation,
 		effect->u.interactive.right_coeff,
@@ -1037,6 +1046,8 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 {
 	struct iforce* iforce = (struct iforce*)(dev->private);
 	int id;
+	int ret;
+	int is_update;
 
 	printk(KERN_DEBUG "iforce.c: upload effect\n");
 
@@ -1054,16 +1065,20 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 		effect->id = id;
 		iforce->core_effects[id].owner = current->pid;
 		iforce->core_effects[id].flags[0] = (1<<FF_CORE_IS_USED);	/* Only IS_USED bit must be set */
+
+		is_update = FALSE;
 	}
 	else {
 		/* We want to update an effect */
-		if (!CHECK_OWNERSHIP(effect->id, iforce)) return -1;
+		if (!CHECK_OWNERSHIP(effect->id, iforce)) return -EACCES;
 		
 		/* Check the effect is not allready being updated */
 		if (test_and_set_bit(FF_CORE_UPDATE, iforce->core_effects[effect->id].flags)) {
 			printk(KERN_DEBUG "iforce.c: update too frequent refused\n");
-			return -1;
+			return -EAGAIN;
 		}
+
+		is_update = TRUE;
 	}
 
 /*
@@ -1072,18 +1087,20 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 	switch (effect->type) {
 
 		case FF_PERIODIC:
-			return iforce_upload_periodic(iforce, effect);
+			ret = iforce_upload_periodic(iforce, effect, is_update);
 
 		case FF_CONSTANT:
-			return iforce_upload_constant(iforce, effect);
+			ret = iforce_upload_constant(iforce, effect, is_update);
 
 		case FF_SPRING:
 		case FF_FRICTION:
-			return iforce_upload_interactive(iforce, effect);
+			ret = iforce_upload_interactive(iforce, effect, is_update);
 
 		default:
-			return -1;
+			return -EINVAL;
 	}
+	iforce->core_effects[id].effect = *effect;
+	return ret;
 }
 
 /*
