@@ -649,7 +649,7 @@ static void vgacon_cursor(struct vc_data *vc, int mode)
 
 	case CM_MOVE:
 	case CM_DRAW:
-	    val = (vc->vc_pos - vga_vram_base)/2;
+	    val = (vc->vc_y*vc->vc_size_row+(vc->vc_x<<1))/2;
 	    spin_lock_irqsave(&vga_lock, flags);
 	    v2 = val >> 8;
 	    vga_wcrt(NULL, VGA_CRTC_CURSOR_HI, v2);	
