@@ -25,13 +25,24 @@
 
 /* ---- `Generic' versions of the frame buffer device operations ----------- */
 
-    /*
-     *  Set the User Defined Part of the Display
-     */
-
+/**
+ * 	fb_set_var - set var
+ *
+ * 	@var:  frame buffer user defined part of display
+ * 	@info: frame buffer info structure
+ *
+ * 	This call sets the user defined part of the display.
+ *	
+ *	Returns 0 upon success, non 0 on error.
+ *
+ */
 int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
 {
     int oldbpp, err;
+
+    /* If we didn't define one, assume resolutions can't be changed */
+    if (!info->fbops->fb_check_var)
+    	return -EINVAL;
 	
     if (memcmp(&info->var, var, sizeof(var))) {	
 	if ((err = info->fbops->fb_check_var(var, info)))
@@ -59,12 +70,18 @@ int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
     return 0;
 }
 
-    /*
-     *  Pan or Wrap the Display
-     *
-     *  This call looks only at xoffset, yoffset and the FB_VMODE_YWRAP flag
-     */
-
+/**
+ * 	fb_pan_display - pan or wrap the display
+ *
+ * 	@var:  frame buffer user defined part of display
+ * 	@info: frame buffer info structure
+ *
+ * 	This call pans or wraps the display. It only looks at xoffset, yoffset
+ * 	and the FB_VMODE_YWRAP flag.
+ *
+ * 	Returns 0 upon success, -EINVAL on failure.
+ *
+ */
 int fb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info) 
 {
     int err;
@@ -107,6 +124,7 @@ extern const char *global_mode_option;
  * 		nomtrr	- disables MTRR usage (if supported)
  *
  * 	Returns 0 upon completion.
+ *
  */
 int __init fb_setup(char *options)
 {
