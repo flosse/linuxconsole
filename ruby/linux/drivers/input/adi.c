@@ -370,7 +370,8 @@ static void adi_id_decode(struct adi *adi, struct adi_port *port)
 		adi->cname[i] = adi_get_bits(adi, 8);
 	adi->cname[i] = 0;
 
-	if (adi->length != (t = 8 + adi->buttons + adi->axes10 * 10 + adi->axes8 * 8 + adi->hats * 4)) {
+	t = 8 + adi->buttons + adi->axes10 * 10 + adi->axes8 * 8 + adi->hats * 4;
+	if (adi->length != t && adi->length != t + (t & 1)) {
 		printk(KERN_WARNING "adi: Expected length %d != data length %d\n", t, adi->length);
 		adi->length = 0;
 		return;
