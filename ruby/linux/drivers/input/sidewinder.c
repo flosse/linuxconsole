@@ -326,15 +326,15 @@ static int sw_parse(unsigned char *buf, struct sw *sw)
 
 		case SW_ID_GP:
 
-			for (i = 0; i < sw->number * 15; i += 15) {
+			for (i = 0; i < sw->number; i ++) {
 
-				if (sw_parity(GB(i,15))) return -1;
+				if (sw_parity(GB(i*15,15))) return -1;
 
-				input_report_key(dev + i, ABS_X, GB(i+3,1) - GB(i+2,1));
-				input_report_key(dev + i, ABS_Y, GB(i+0,1) - GB(i+1,1));
+				input_report_key(dev + i, ABS_X, GB(i*15+3,1) - GB(i*15+2,1));
+				input_report_key(dev + i, ABS_Y, GB(i*15+0,1) - GB(i*15+1,1));
 
 				for (j = 0; j < 10; j++)
-					input_report_key(dev, sw_btn[SW_ID_GP][j], !GB(i+j+4,1));
+					input_report_key(dev, sw_btn[SW_ID_GP][j], !GB(i*15+j+4,1));
 			}
 
 			return 0;
