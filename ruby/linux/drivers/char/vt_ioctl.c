@@ -394,42 +394,39 @@ do_kdgkb_ioctl(int cmd, struct kbsentry *user_kdgkb, int perm)
 
 int con_font_op(struct vc_data *vc, struct console_font_op *op)
 {
-        int rc = -EINVAL;
-        int size = max_font_size, set = 0;
+	int size = max_font_size, set = 0;
+	struct console_font_op old_op;
+	int err = -EINVAL;
         u8 *temp = NULL;
-        struct console_font_op old_op;
 
         if (vc->display_fg->vc_mode != KD_TEXT)
-                goto quit;
+		return -EINVAL;
         memcpy(&old_op, op, sizeof(old_op));
         if (op->op == KD_FONT_OP_SET) {
-                if (!op->data)
+                if (!op->data || op->charcount > 512)
                         return -EINVAL;
-                if (op->charcount > 512)
-                        goto quit;
-                if (!op->height) {              /* Need to guess font height [compat] */
+		/* Need to guess font height [compat] */
+                if (!op->height) {      
                         int h, i;
                         u8 *charmap = op->data, tmp;              
-                        /* If from KDFONTOP ioctl, don't allow things which can be done in userland,
+                        /* If from KDFONTOP ioctl, don't allow things 
+			   which can be done in userland,
                            so that we can get rid of this soon */
                         if (!(op->flags & KD_FONT_FLAG_OLD))
-                                goto quit;
-                        rc = -EFAULT;
+                                return -EINVAL;
                         for (h = 32; h > 0; h--)
                                 for (i = 0; i < op->charcount; i++) {
                                         if (get_user(tmp, &charmap[32*i+h-1]))
-                                                goto quit;
+                                                return -EFAULT;
                                         if (tmp)
                                                 goto nonzero;
                                 }
-                        rc = -EINVAL;
-                        goto quit;
+			return -EINVAL;
                 nonzero:
-                        rc = -EINVAL;
                         op->height = h;
                 }
                 if (op->width > 32 || op->height > 32)
-                        goto quit;                               
+                	return -EINVAL;        
                 size = (op->width+7)/8 * 32 * op->charcount;
                 if (size > max_font_size)
                         return -ENOSPC;
@@ -443,39 +440,47 @@ int con_font_op(struct vc_data *vc, struct console_font_op *op)
                 if (!temp)
                         return -ENOMEM;
                 if (set && copy_from_user(temp, op->data, size)) {
-                        rc = -EFAULT;
-                        goto quit;
+        		kfree(temp);                
+			return -EFAULT;
                 }
                 op->data = temp;
         }                                                          
 
         spin_lock_irq(&console_lock);
-        rc = vc->display_fg->vt_sw->con_font_op(vc, op);
+        err = vc->display_fg->vt_sw->con_font_op(vc, op);
         spin_unlock_irq(&console_lock);
 
         op->data = old_op.data;
-        if (!rc && !set) {
+        if (!err && !set) {
                 int c = (op->width+7)/8 * 32 * op->charcount;
 
-                if (op->data && op->charcount > old_op.charcount)
-                        rc = -ENOSPC;
+                if (op->data && op->charcount > old_op.charcount) {
+			kfree(temp);
+                        return -ENOSPC;
+		}
                 if (!(op->flags & KD_FONT_FLAG_OLD)) {
-                        if (op->width > old_op.width ||
-                            op->height > old_op.height)
-                                rc = -ENOSPC;
+                        if (op->width > old_op.width || 
+                            op->height > old_op.height) { 
+                                kfree(temp);
+				return -ENOSPC;
+			}
                 } else {
-                        if (op->width != 8)
-                                rc = -EIO;
-                        else if ((old_op.height && op->height > old_op.height) ||
-                                 op->height > 32)
-                                rc = -ENOSPC;                    
+                        if (op->width != 8) {
+				kfree(temp);
+                                return -EIO;
+			}
+                        else if ((old_op.height && op->height > old_op.height) 
+					|| op->height > 32) {
+				kfree(temp);
+                                return -ENOSPC;                
+			}    
                 }
-                if (!rc && op->data && copy_to_user(op->data, temp, c))
-                        rc = -EFAULT;
+                if (!err && op->data && copy_to_user(op->data, temp, c)) {
+			kfree(temp);
+                        return -EFAULT;
+		}		
         }
-quit:   if (temp)
-                kfree(temp);
-        return rc;
+        return err;
 }                                
 
 static inline int 
