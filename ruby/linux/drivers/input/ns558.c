@@ -275,7 +275,7 @@ static struct ns558* ns558_pnp_probe(struct pci_dev *dev, struct ns558 *next)
 
 	port->next = next;
 	port->type = NS558_PNP;
-	port->gameport.io = ioport + (size > 1);
+	port->gameport.io = ioport + (iolen > 1);
 	port->gameport.size = iolen;
 	port->dev = dev;
 
