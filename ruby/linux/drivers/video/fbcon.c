@@ -557,9 +557,9 @@ void __init fb_console_init(void)
    struct vc_data *vc;	
    long q;
   
-   //take_over_console(vt_cons, &fb_con); 
+   take_over_console(admin_vt, &fb_con); 
    
-   /* Allocate the memory we need for this VT */ 
+   /* Allocate the memory we need for this VT  
    vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
    if (!vt) return;
    memset(vt, 0, sizeof(struct vt_struct));
@@ -599,6 +599,7 @@ void __init fb_console_init(void)
 
    printk("Console: %s %s %dx%d\n", vc->vc_can_do_color ? "colour" : "mono",
            display_desc, vc->vc_cols, vc->vc_rows);
+*/
 }
 
 /*
