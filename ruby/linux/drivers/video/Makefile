@@ -4,7 +4,7 @@
 
 O_TARGET := video.o
 
-mod-subdirs	:= matrox
+obj-y	+= dummycon.o 
 
 # All of the (potential) objects that export symbols.
 # This list comes from 'grep -l EXPORT_SYMBOL *.[hc]'.
@@ -12,9 +12,10 @@ mod-subdirs	:= matrox
 export-objs    := fbmem.o fbcmap.o fbcon.o fbmon.o modedb.o \
 		  vga.o vgacon.o cyber2000fb.o
 
+mod-subdirs	:= matrox
+
 # Each configuration option enables a list of files.
 
-obj-$(CONFIG_DUMMY_CONSOLE)       += dummycon.o
 obj-$(CONFIG_SGI_NEWPORT_CONSOLE) += newport_con.o
 obj-$(CONFIG_PROM_CONSOLE)        += promcon.o promcon_tbl.o
 obj-$(CONFIG_VGA_CONSOLE)         += vgacon.o vga.o
