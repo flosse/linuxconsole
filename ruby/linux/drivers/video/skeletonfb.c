@@ -5,9 +5,38 @@
  *
  *  Created 28 Dec 1997 by Geert Uytterhoeven
  *
- * This file is subject to the terms and conditions of the GNU General Public
- * License.  See the file COPYING in the main directory of this archive
- * for more details.
+ *
+ *  I have started rewriting this driver as a example of the upcoming new API
+ *  The primary goal is to remove the console code from fbdev and place it
+ *  into fbcon.c. This reduces the code and makes writing a new fbdev driver
+ *  easy since the author doesn't need to worry about console internals. It
+ *  also allows the ability to run fbdev without a console system on top of it.
+ *
+ *  First the roles of struct fb_info and struct display have changed. Struct
+ *  display has gone away. The upper framebuffer console layer only depends on
+ *  fb_info. For each framebuffer device when used as a VT console is allocate 
+ *  a set of virtual terminals to it. Only one virtual terminal can be active 
+ *  per framebuffer device. So I have struct fb_info represent all the data of
+ *  the current hardware state of the framebuffer. Meaning the resolution of  
+ *  the active VT (the one you're looking at) and other data is stored in the
+ *  fb_info struct. When you VT switch the current video state is translated
+ *  to a form to be stored by the the higher level console layer to be stored
+ *  for that terminal you just switched away from. Then the current video 
+ *  state is set to the data values stored in the upper console layer for the
+ *  virtual terminal you are switching to. As you can see doing this makes
+ *  the con parameter pretty much useless for the fb_ops functions, as it 
+ *  should be. Also having fb_var_screeninfo and other data in fb_info pretty 
+ *  much eliminates the need for get_fix and get_var. Once all drivers use the
+ *  fix, var, and cmap field fbcon can be written around these fields. This
+ *  will also eliminate the need to regenerate fb_var_screeninfo and
+ *  fb_fix_screeninfo data every time the get_var and get_fix functions are
+ *  called as many drivers do now. The fb_var_screeninfo and
+ *  fb_fix_screeninfo field in fb_info can be generated just in set_var and
+ *  placed into struct fb_info.
+ *
+ *  This file is subject to the terms and conditions of the GNU General Public
+ *  License. See the file COPYING in the main directory of this archive for
+ *  more details.
  */
 
 #include <linux/module.h>
@@ -109,11 +138,11 @@ static int xxxfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
  *      @info: frame buffer structure that represents a single frame buffer
  *
  *	Using the fb_var_screeninfo in fb_info we set the resolution of the
- *	this particular framebuffer. This function alters par stored in 
- *	fb_info. It doesn't not alter var in fb_info since we are using that
- *	data. This means we depend on the data in var inside fb_info to be
- *	supported by the hardware. xxxfb_check_var is always called before
- *	xxxfb_set_par to ensure this.  
+ *	this particular framebuffer. This function alters the par AND the
+ *	fb_fix_screeninfo stored in fb_info. It doesn't not alter var in 
+ *	fb_info since we are using that data. This means we depend on the
+ *	data in var inside fb_info to be supported by the hardware. 
+ *	xxxfb_check_var is always called before xxxfb_set_par to ensure this.
  *
  */
 static void xxxfb_set_par(struct fb_info *info)

@@ -5,36 +5,6 @@
  *
  *	Copyright (C) 1997 Geert Uytterhoeven
  *
- *  I have started rewriting this driver as a example of the upcoming new API
- *  The primary goal is to remove the console code from fbdev and place it 
- *  into fbcon.c. This reduces the code and makes writing a new fbdev driver
- *  easy since the author doesn't need to worry about console internals.
- * 
- *  First the roles of struct fb_info and struct display have changed. For 
- *  each framebuffer device you can allocate a set of virtual terminals to 
- *  it. Only one virtual terminal can be active per framebuffer device.
- *  So I have struct fb_info represent the current hardware state of the 
- *  framebuffer. Meaning the resolution of the active VT (the one you're 
- *  looking at) and other data is stored in the fb_info struct. When you VT 
- *  switch the current video state then is stored into struct display for that 
- *  terminal you just switched away from. Then the current video state is set
- *  to the data values stored in struct display for the VT you are switching
- *  too. As you can see doing this makes the con parameter pretty much useless
- *  for the fb_ops functions. As it should be. Since struct display is used to
- *  represent the video state of the hardware, for each terminal it also 
- *  represents the extra parameters for a framebuffer device to act as a 
- *  console terminal. In the future these parameters will be handled inside
- *  of fbcon.c so they will be of no concern to the driver writer.   
- *
- *  Also having fb_var_screeninfo and other data in fb_info pretty much 
- *  eliminates the need for get_fix and get_var. Once all drivers use the
- *  fix, var, and cmap field fbcon can be written around these fields. This 
- *  will also eliminate the need to regenerate fb_var_screeninfo and 
- *  fb_fix_screeninfo data every time the get_var and get_fix functions are
- *  called as many drivers do now. The fb_var_screeninfo and 
- *  fb_fix_screeninfo field in fb_info can be generated just in set_var and
- *  placed into struct fb_info. 
- *
  *  This file is subject to the terms and conditions of the GNU General Public
  *  License. See the file COPYING in the main directory of this archive for
  *  more details.
