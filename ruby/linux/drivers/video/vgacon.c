@@ -254,6 +254,85 @@ int vga_do_font_op(struct vc_data *vc, char *arg, int set, int ch512)
         spin_unlock_irq(&vga_lock);
         return 0;
 }
+	
+/*
+ * Adjust the screen to fit a font of a certain height
+ */
+static int
+vgacon_adjust_height(struct vc_data *vc, unsigned fontheight)
+{
+	unsigned char ovr, vde, fsr;
+	int rows, maxscan;
+
+	if (fontheight == vc->vc_font.height)
+		return 0;
+
+	vc->vc_font.height = fontheight;
+
+	rows = vc->vc_scan_lines/fontheight;	/* Number of video rows we end up with */
+	maxscan = rows*fontheight - 1;		/* Scan lines to actually display-1 */
+
+	/* Reprogram the CRTC for the new font size
+	   Note: the attempt to read the overflow register will fail
+	   on an EGA, but using 0xff for the previous value appears to
+	   be OK for EGA text modes in the range 257-512 scan lines, so I
+	   guess we don't need to worry about it.
+
+	   The same applies for the spill bits in the font size and cursor
+	   registers; they are write-only on EGA, but it appears that they
+	   are all don't care bits on EGA, so I guess it doesn't matter. */
+
+	spin_lock_irq(&vga_lock);
+        ovr = vga_rcrt(NULL, VGA_CRTC_OVERFLOW);   /* CRTC overflow register */
+        fsr = vga_rcrt(NULL, VGA_CRTC_MAX_SCAN);   /* Font size register */
+        spin_unlock_irq(&vga_lock);
+	
+	vde = maxscan & 0xff;			/* Vertical display end reg */
+	ovr = (ovr & 0xbd) +			/* Overflow register */
+	      ((maxscan & 0x100) >> 7) +
+	      ((maxscan & 0x200) >> 3);
+	fsr = (fsr & 0xe0) + (fontheight-1);    /*  Font size register */
+
+	spin_lock_irq(&vga_lock);
+        vga_wcrt(NULL, 0x07, ovr);               /* CRTC overflow register */
+        vga_wcrt(NULL, 0x09, fsr);               /* Font size */
+        vga_wcrt(NULL, 0x12, vde);               /* Vertical display limit */
+        spin_unlock_irq(&vga_lock);
+	return 0;
+}
+
+static int vgacon_font_op(struct vc_data *vc, struct console_font_op *op)
+{
+	int rc;
+
+	if (vgacon_state.video_type < VIDEO_TYPE_EGAM)
+		return -EINVAL;
+
+	if (op->op == KD_FONT_OP_SET) {
+		if (op->width != 8 || (op->charcount != 256 && op->charcount != 512))
+			return -EINVAL;
+		rc = vga_do_font_op(vc, op->data, 1, op->charcount == 512);
+		if (!rc && !(op->flags & KD_FONT_FLAG_DONT_RECALC))
+			rc = vgacon_adjust_height(vc, op->height);
+	} else if (op->op == KD_FONT_OP_GET) {
+		op->width = 8;
+		op->height = vc->vc_font.height;
+		op->charcount = vga_512_chars ? 512 : 256;
+		if (!op->data) return 0;
+		rc = vga_do_font_op(vc, op->data, 0, vga_512_chars);
+	} else
+		rc = -ENOSYS;
+	return rc;
+}
+
+#else
+
+static int vgacon_font_op(struct vc_data *vc, struct console_font_op *op)
+{
+	return -ENOSYS;
+}
+
+#endif
 
 static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 {
@@ -616,12 +695,12 @@ static int vgacon_resize(struct vc_data *vc, unsigned int rows,
 {
 	struct vga_hw_state state = vgacon_state;
 	int err = 0;
-/*
+	
 	err = vga_check_mode(cols * vc->vc_font.width, state.right, state.hslen, 			     state.left, cols * vc->vc_font.width, 
 			     rows * vc->vc_font.height, state.lower, 
 			     state.vslen, state.upper, 0);
 	if (err) return err; 		
-*/
+	
 	state.xres = state.vxres = cols;
 	state.yres = rows * vc->vc_font.height;
 	
@@ -691,85 +770,6 @@ static int vgacon_blank(struct vc_data *vc, int blank)
 		return 0;
 	}
 }
-
-/*
- * Adjust the screen to fit a font of a certain height
- */
-static int
-vgacon_adjust_height(struct vc_data *vc, unsigned fontheight)
-{
-	unsigned char ovr, vde, fsr;
-	int rows, maxscan;
-
-	if (fontheight == vc->vc_font.height)
-		return 0;
-
-	vc->vc_font.height = fontheight;
-
-	rows = vc->vc_scan_lines/fontheight;	/* Number of video rows we end up with */
-	maxscan = rows*fontheight - 1;		/* Scan lines to actually display-1 */
-
-	/* Reprogram the CRTC for the new font size
-	   Note: the attempt to read the overflow register will fail
-	   on an EGA, but using 0xff for the previous value appears to
-	   be OK for EGA text modes in the range 257-512 scan lines, so I
-	   guess we don't need to worry about it.
-
-	   The same applies for the spill bits in the font size and cursor
-	   registers; they are write-only on EGA, but it appears that they
-	   are all don't care bits on EGA, so I guess it doesn't matter. */
-
-	spin_lock_irq(&vga_lock);
-        ovr = vga_rcrt(NULL, VGA_CRTC_OVERFLOW);   /* CRTC overflow register */
-        fsr = vga_rcrt(NULL, VGA_CRTC_MAX_SCAN);   /* Font size register */
-        spin_unlock_irq(&vga_lock);
-	
-	vde = maxscan & 0xff;			/* Vertical display end reg */
-	ovr = (ovr & 0xbd) +			/* Overflow register */
-	      ((maxscan & 0x100) >> 7) +
-	      ((maxscan & 0x200) >> 3);
-	fsr = (fsr & 0xe0) + (fontheight-1);    /*  Font size register */
-
-	spin_lock_irq(&vga_lock);
-        vga_wcrt(NULL, 0x07, ovr);               /* CRTC overflow register */
-        vga_wcrt(NULL, 0x09, fsr);               /* Font size */
-        vga_wcrt(NULL, 0x12, vde);               /* Vertical display limit */
-        spin_unlock_irq(&vga_lock);
-	return 0;
-}
-
-static int vgacon_font_op(struct vc_data *vc, struct console_font_op *op)
-{
-	int rc;
-
-	if (vgacon_state.video_type < VIDEO_TYPE_EGAM)
-		return -EINVAL;
-
-	if (op->op == KD_FONT_OP_SET) {
-		if (op->width != 8 || (op->charcount != 256 && op->charcount != 512))
-			return -EINVAL;
-		rc = vga_do_font_op(vc, op->data, 1, op->charcount == 512);
-		if (!rc && !(op->flags & KD_FONT_FLAG_DONT_RECALC))
-			rc = vgacon_adjust_height(vc, op->height);
-	} else if (op->op == KD_FONT_OP_GET) {
-		op->width = 8;
-		op->height = vc->vc_font.height;
-		op->charcount = vga_512_chars ? 512 : 256;
-		if (!op->data) return 0;
-		rc = vga_do_font_op(vc, op->data, 0, vga_512_chars);
-	} else
-		rc = -ENOSYS;
-	return rc;
-}
-
-#else
-
-static int vgacon_font_op(struct vc_data *vc, struct console_font_op *op)
-{
-	return -ENOSYS;
-}
-
-#endif
 
 static int vgacon_scrolldelta(struct vc_data *c, int lines)
 {
