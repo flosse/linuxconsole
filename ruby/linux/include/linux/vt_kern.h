@@ -269,6 +269,7 @@ struct vc_data* find_vc(int currcons);
 int vc_allocate(unsigned int console);
 int vc_resize(struct vc_data *vc, unsigned int lines, unsigned int cols);
 void vc_disallocate(unsigned int console);
+void vc_init(struct vc_data *vc, int do_clear);
 void add_softcursor(struct vc_data *vc);
 void set_cursor(struct vc_data *vc);
 void hide_cursor(struct vc_data *vc);
