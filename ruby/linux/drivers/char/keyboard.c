@@ -884,7 +884,7 @@ static int emulate_raw(struct vc_data *vc, unsigned int keycode,
 		       unsigned char up_flag)
 {
 #ifdef CONFIG_MAC_EMUMOUSEBTN
-	if (mac_hid_mouse_emulate_buttons(1, keycode, down))
+	if (mac_hid_mouse_emulate_buttons(1, keycode, !up_flag))
 		return 0;
 #endif /* CONFIG_MAC_EMUMOUSEBTN */
 
