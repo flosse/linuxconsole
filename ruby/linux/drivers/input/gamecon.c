@@ -246,7 +246,6 @@ static int gc_psx_command(struct gc *gc, int b)
 		cmd = (b & 1) ? GC_PSX_COMMAND : 0;
 		parport_write_data(gc->pd->port, cmd | GC_PSX_POWER);
 		udelay(GC_PSX_DELAY);
-		if (parport_read_status(gc->pd->port) ^ 0x80) & gc->pads[GC_PSX])
 		data |= ((parport_read_status(gc->pd->port) ^ 0x80) & gc->pads[GC_PSX]) ? (1 << i) : 0;
 		parport_write_data(gc->pd->port, cmd | GC_PSX_CLOCK | GC_PSX_POWER);
 		udelay(GC_PSX_DELAY);
