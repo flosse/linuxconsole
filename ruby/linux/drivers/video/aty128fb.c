@@ -1190,7 +1190,7 @@ aty128_init(struct fb_info *info, struct pci_dev *pdev, const char *name)
 #ifdef CONFIG_PPC
     if (_machine == _MACH_Pmac) {
         if (mode_option) {
-            if (!mac_find_mode(&var, &info-> mode_option, 8))
+            if (!mac_find_mode(&var, &info, mode_option, 8))
                 var = default_var;
         } else {
             if (default_vmode <= 0 || default_vmode > VMODE_MAX)
