@@ -62,7 +62,7 @@ struct gc {
 	struct pardevice *pd;
 	struct input_dev dev[5];
 	struct timer_list timer;
-	unsigned char pads[GC_PSX + 1];
+	unsigned char pads[GC_MAX + 1];
 	int used;
 };
 
