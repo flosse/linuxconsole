@@ -652,7 +652,6 @@ static void pm3fb_write_mode(struct pm3fb_info *l_fb_info)
 		break;
 	}
 
-	PM3_SHOW_CUR_MODE;
 }
 
 static void pm3fb_read_mode(struct pm3fb_info *l_fb_info,
@@ -1083,8 +1082,6 @@ static void pm3fb_common_init(struct pm3fb_info *l_fb_info)
 
 	PM3_WRITE_DAC_REG(PM3RD_CursorMode,
 			  PM3RD_CursorMode_CURSOR_DISABLE);
-
-	PM3_SHOW_CUR_MODE;
 
 	pm3fb_write_mode(l_fb_info);
 
@@ -1881,7 +1878,6 @@ static int pm3fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 	DTRACE;
 	
 	DASSERT((var != NULL), "fb_var_screeninfo* not NULL");
-	DASSERT((par != NULL), "pm3fb_par* not NULL");
 	DASSERT((l_fb_info != NULL), "pm3fb_info* not NULL");
 	
 	if (!(depth_supported(var->bits_per_pixel)))
@@ -1922,7 +1918,7 @@ static int pm3fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 
 	if (PICOS2KHZ(var->pixclock) > PM3_MAX_PIXCLOCK) {
 		DPRINTK(1, "pixclock too high (%uKHz)\n",
-			temp_p.pixclock);
+			var->pixclock);
 		return (-EINVAL);
 	}
 
