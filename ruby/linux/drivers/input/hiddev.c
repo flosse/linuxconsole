@@ -37,7 +37,7 @@
 #include <linux/input.h>
 #include <linux/usb.h>
 #include "hid.h"
-#include "hiddev.h"
+#include <linux/hiddev.h>
 
 struct hiddev {
 	int exist;

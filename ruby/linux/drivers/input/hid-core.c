@@ -48,7 +48,7 @@
 
 #include "hid.h"
 #ifdef CONFIG_INPUT_HIDDEV
-#include "hiddev.h"
+#include <linux/hiddev.h>
 #endif
 
 static char *hid_types[] = {"Device", "Pointer", "Mouse", "Device", "Joystick",

@@ -46,7 +46,7 @@
 #include <linux/ioport.h>
 
 
-MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>, Johann Deneux <deneux@ifrance.com>");
 MODULE_DESCRIPTION("USB/RS232 I-Force joysticks and wheels driver");
 
 #define USB_VENDOR_ID_LOGITECH		0x046d
@@ -161,59 +161,61 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 #ifdef IFORCE_232
 		case BUS_RS232: {
 
-				unsigned char i;
-				unsigned char csum = 0x2b ^ HI(cmd) ^ LO(cmd);
-			 
-				serio_write(iforce->serio, 0x2b);
-				serio_write(iforce->serio, HI(cmd));
-				serio_write(iforce->serio, LO(cmd));
+			unsigned char i;
+			unsigned char csum = 0x2b ^ HI(cmd) ^ LO(cmd);
+		 
+			serio_write(iforce->serio, 0x2b);
+			serio_write(iforce->serio, HI(cmd));
+			serio_write(iforce->serio, LO(cmd));
 
-				for (i = 0; i < LO(cmd); i++) {
-					serio_write(iforce->serio, data[i]);
-					csum = csum ^ data[i];
-				}
-
-				serio_write(iforce->serio, csum);
-
-				return;
+			for (i = 0; i < LO(cmd); i++) {
+				serio_write(iforce->serio, data[i]);
+				csum = csum ^ data[i];
 			}
 
+			serio_write(iforce->serio, csum);
+
+			set_current_state(TASK_UNINTERRUPTIBLE);
+			schedule_timeout(HZ/100); /* 10 ms */
+
+			return;
+		}
 #endif
 #ifdef IFORCE_USB
 		case BUS_USB: {
 
-				DECLARE_WAITQUEUE(wait, current);
-				int status, timeout = 1000;
+			DECLARE_WAITQUEUE(wait, current);
+			int status, timeout = HZ * 10; /* 10 seconds */
 
-				memcpy(iforce->out.transfer_buffer + 1, data, LO(cmd));
-				((char*)iforce->out.transfer_buffer)[0] = HI(cmd);
-				iforce->out.transfer_buffer_length = LO(cmd) + 1;
-				iforce->out.dev = iforce->usbdev;
+			memcpy(iforce->out.transfer_buffer + 1, data, LO(cmd));
+			((char*)iforce->out.transfer_buffer)[0] = HI(cmd);
+			iforce->out.transfer_buffer_length = LO(cmd) + 1;
+			iforce->out.dev = iforce->usbdev;
 
-				init_waitqueue_head(&iforce->wait); 	
-				current->state = TASK_INTERRUPTIBLE;
-				add_wait_queue(&iforce->wait, &wait);
+			init_waitqueue_head(&iforce->wait); 	
+			set_current_state(TASK_INTERRUPTIBLE);
+			add_wait_queue(&iforce->wait, &wait);
 
-				if ((status = usb_submit_urb(&iforce->out))) {
-					current->state = TASK_RUNNING;
-					remove_wait_queue(&iforce->wait, &wait);
-					printk(KERN_WARNING "iforce.c: Failed to submit output urb. (%d)\n", status);
-					return;
-				}
-
-				while (timeout && iforce->out.status == -EINPROGRESS)
-					timeout = schedule_timeout(timeout);
-
-				current->state = TASK_RUNNING;
+			if ((status = usb_submit_urb(&iforce->out))) {
+				set_current_state(TASK_RUNNING);
 				remove_wait_queue(&iforce->wait, &wait);
-
-				if (!timeout) {
-					printk(KERN_WARNING "iforce.c: Output urb: timeout\n");
-					usb_unlink_urb(&iforce->out);
-				}
-
+				printk(KERN_WARNING "iforce.c: Failed to submit output urb. (%d)\n", status);
 				return;
 			}
+
+			while (timeout && iforce->out.status == -EINPROGRESS)
+				timeout = schedule_timeout(timeout);
+
+			set_current_state(TASK_RUNNING);
+			remove_wait_queue(&iforce->wait, &wait);
+
+			if (!timeout) {
+				printk(KERN_WARNING "iforce.c: Output urb: timeout\n");
+				usb_unlink_urb(&iforce->out);
+			}
+
+			return;
+		}
 #endif
 	}
 } 
@@ -267,20 +269,8 @@ static struct ff_init_data {
 static void iforce_init_ff(struct iforce *iforce)
 {
 	int i;
-	static const struct timespec pause = {0, 1000000}; /* 1 ms */
-
-	for (i = 0; ff_init_data[i].cmd; i++) {
+	for (i = 0; ff_init_data[i].cmd; i++)
 		send_packet(iforce, ff_init_data[i].cmd, ff_init_data[i].data);
-
-		/* When transmitting over a rs232 serial line, we have to
-		 * avoid sending packets too fast
-		 */
-		if (iforce->dev.idbus == BUS_RS232) {
-			set_current_state(TASK_UNINTERRUPTIBLE);
-			schedule_timeout(timespec_to_jiffies(&pause));
-		}
-
-	}
 }
 
 /*
@@ -295,7 +285,7 @@ static int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned
 	if (type != EV_FF)
 		return -1;
 
-	printk(KERN_DEBUG "iforce ff: input event %d %d %d\n", type, code, value);
+	printk(KERN_DEBUG "iforce ff: input_event(type = %d, code = %d, value = %d)\n", type, code, value);
 
         data[0] = LO(code);
         data[1] = (value > 0) ? ((value > 1) ? 0x41 : 0x01) : 0;
@@ -959,8 +949,11 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	FILL_BULK_URB(&iforce->out, dev, usb_sndbulkpipe(dev, epout->bEndpointAddress),
                         iforce + 1, 32, iforce_usb_out, iforce);
 
-	iforce_input_setup(iforce);
+	iforce_open(&iforce->dev);
 	iforce_init_ff(iforce);
+	iforce_close(&iforce->dev);
+
+	iforce_input_setup(iforce);
 
 	printk(KERN_INFO "input%d: %s on usb%d:%d.%d\n",
 		 iforce->dev.number, iforce_name, dev->bus->busnum, dev->devnum, ifnum);
