@@ -37,7 +37,7 @@
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 
-static unsigned char usbkbd_keycode[256] = {
+static unsigned char usb_kbd_keycode[256] = {
 	  0,  0,  0,  0, 30, 48, 46, 32, 18, 33, 34, 35, 23, 36, 37, 38,
 	 50, 49, 24, 25, 16, 19, 31, 20, 22, 47, 17, 45, 21, 44,  2,  3,
 	  4,  5,  6,  7,  8,  9, 10, 11, 28,  1, 14, 15, 57, 12, 13, 26,
@@ -56,7 +56,7 @@ static unsigned char usbkbd_keycode[256] = {
 	150,158,159,128,136,177,178,176,142,152,173,140
 };
 
-struct usbkbd {
+struct usb_kbd {
 	struct input_dev dev;
 	unsigned char new[8];
 	unsigned char old[8];
@@ -66,53 +66,53 @@ struct usbkbd {
 	int open;
 };
 
-static void usbkbd_irq(struct urb *urb)
+static void usb_kbd_irq(struct urb *urb)
 {
-	struct usbkbd *usbkbd = urb->context;
+	struct usb_kbd *kbd = urb->context;
 	int i;
 
 	if (urb->status) return;
 
 	for (i = 0; i < 8; i++)
-		input_report_key(&usbkbd->dev, usbkbd_keycode[i + 224], (usbkbd->new[0] >> i) & 1);
+		input_report_key(&kbd->dev, usb_kbd_keycode[i + 224], (kbd->new[0] >> i) & 1);
 
 	for (i = 2; i < 8; i++) {
 
-		if (usbkbd->old[i] > 3 && memscan(usbkbd->new + 2, usbkbd->old[i], 6) == usbkbd->new + 8) {
-			if (usbkbd_keycode[usbkbd->old[i]])
-				input_report_key(&usbkbd->dev, usbkbd_keycode[usbkbd->old[i]], 0);
+		if (kbd->old[i] > 3 && memscan(kbd->new + 2, kbd->old[i], 6) == kbd->new + 8) {
+			if (usb_kbd_keycode[kbd->old[i]])
+				input_report_key(&kbd->dev, usb_kbd_keycode[kbd->old[i]], 0);
 			else
-				info("Unknown key (scancode %#x) released.", usbkbd->old[i]);
+				info("Unknown key (scancode %#x) released.", kbd->old[i]);
 		}
 
-		if (usbkbd->new[i] > 3 && memscan(usbkbd->old + 2, usbkbd->new[i], 6) == usbkbd->old + 8) {
-			if (usbkbd_keycode[usbkbd->new[i]])
-				input_report_key(&usbkbd->dev, usbkbd_keycode[usbkbd->new[i]], 1);
+		if (kbd->new[i] > 3 && memscan(kbd->old + 2, kbd->new[i], 6) == kbd->old + 8) {
+			if (usb_kbd_keycode[kbd->new[i]])
+				input_report_key(&kbd->dev, usb_kbd_keycode[kbd->new[i]], 1);
 			else
-				info("Unknown key (scancode %#x) pressed.", usbkbd->new[i]);
+				info("Unknown key (scancode %#x) pressed.", kbd->new[i]);
 		}
 	}
 
-	memcpy(usbkbd->old, usbkbd->new, 8);
+	memcpy(kbd->old, kbd->new, 8);
 }
 
-int usbkbd_event(struct input_dev *dev, unsigned int type, unsigned int code, int value)
+int usb_kbd_event(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {
-	struct usbkbd *usbkbd = dev->private;
+	struct usb_kbd *kbd = dev->private;
 
 	if (type != EV_LED) return -1;
 
-	if (usbkbd->led.status == -EINPROGRESS) {
+	if (kbd->led.status == -EINPROGRESS) {
 		warn("had to kill led urb");
-		usb_unlink_urb(&usbkbd->led);
+		usb_unlink_urb(&kbd->led);
 	}
 
-	usbkbd->leds = (!!test_bit(LED_KANA,    dev->led) << 3) | (!!test_bit(LED_COMPOSE, dev->led) << 3) |
-		       (!!test_bit(LED_SCROLLL, dev->led) << 2) | (!!test_bit(LED_CAPSL,   dev->led) << 1) |
-		       (!!test_bit(LED_NUML,    dev->led));
+	kbd->leds = (!!test_bit(LED_KANA,    dev->led) << 3) | (!!test_bit(LED_COMPOSE, dev->led) << 3) |
+		    (!!test_bit(LED_SCROLLL, dev->led) << 2) | (!!test_bit(LED_CAPSL,   dev->led) << 1) |
+		    (!!test_bit(LED_NUML,    dev->led));
 
 
-	if (usb_submit_urb(&usbkbd->led)) {
+	if (usb_submit_urb(&kbd->led)) {
 		err("usb_submit_urb(leds) failed");
 		return -1;
 	}
@@ -120,39 +120,39 @@ int usbkbd_event(struct input_dev *dev, unsigned int type, unsigned int code, in
 	return 0;
 }
 
-static void usbkbd_led(struct urb *urb)
+static void usb_kbd_led(struct urb *urb)
 {
 	if (urb->status)
 		warn("led urb status %d received", urb->status);
 }
 
-static int usbkbd_open(struct input_dev *dev)
+static int usb_kbd_open(struct input_dev *dev)
 {
-	struct usbkbd *usbkbd = dev->private;
+	struct usb_kbd *kbd = dev->private;
 
-	if (usbkbd->open++)
+	if (kbd->open++)
 		return 0;
 
-	 if (usb_submit_urb(&usbkbd->irq)) {
-		kfree(usbkbd);
+	 if (usb_submit_urb(&kbd->irq)) {
+		kfree(kbd);
 		return -EIO;
 	}
 	return 0;
 }
 
-static void usbkbd_close(struct input_dev *dev)
+static void kbd_close(struct input_dev *dev)
 {
-	struct usbkbd *usbkbd = dev->private;
+	struct usbkbd *kbd = dev->private;
 
-	if (!--usbkbd->open)
-		usb_unlink_urb(&usbkbd->irq);
+	if (!--kbd->open)
+		usb_unlink_urb(&kbd->irq);
 }
 
-static void *usbkbd_probe(struct usb_device *dev, unsigned int ifnum)
+static void *usb_kbd_probe(struct usb_device *dev, unsigned int ifnum)
 {
 	struct usb_interface_descriptor *interface;
 	struct usb_endpoint_descriptor *endpoint;
-	struct usbkbd *usbkbd;
+	struct usb_kbd *kbd;
 	int i;
 
 	if (dev->descriptor.bNumConfigurations != 1) return NULL;
@@ -170,70 +170,75 @@ static void *usbkbd_probe(struct usb_device *dev, unsigned int ifnum)
 	usb_set_protocol(dev, interface->bInterfaceNumber, 0);
 	usb_set_idle(dev, interface->bInterfaceNumber, 0, 0);
 
-	if (!(usbkbd = kmalloc(sizeof(struct usbkbd), GFP_KERNEL))) return NULL;
-	memset(usbkbd, 0, sizeof(struct usbkbd));
+	if (!(kbd = kmalloc(sizeof(struct usb_kbd), GFP_KERNEL))) return NULL;
+	memset(kbd, 0, sizeof(struct usb_kbd));
 
-	usbkbd->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_LED) | BIT(EV_REP);
-	usbkbd->dev.ledbit[0] = BIT(LED_NUML) | BIT(LED_CAPSL) | BIT(LED_SCROLLL) | BIT(LED_COMPOSE) | BIT(LED_KANA);
+	kbd->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_LED) | BIT(EV_REP);
+	kbd->dev.ledbit[0] = BIT(LED_NUML) | BIT(LED_CAPSL) | BIT(LED_SCROLLL) | BIT(LED_COMPOSE) | BIT(LED_KANA);
 
 	for (i = 0; i < 255; i++)
-		set_bit(usbkbd_keycode[i], usbkbd->dev.keybit);
-	clear_bit(0, usbkbd->dev.keybit);
+		set_bit(usb_kbd_keycode[i], kbd->dev.keybit);
+	clear_bit(0, kbd->dev.keybit);
 	
-	usbkbd->dev.private = usbkbd;
-	usbkbd->dev.event = usbkbd_event;
-	usbkbd->dev.open = usbkbd_open;
-	usbkbd->dev.close = usbkbd_close;
+	kbd->dev.private = kbd;
+	kbd->dev.event = usb_kbd_event;
+	kbd->dev.open = usb_kbd_open;
+	kbd->dev.close = usb_kbd_close;
 
 	{
 		int pipe = usb_rcvintpipe(dev, endpoint->bEndpointAddress);
 		int maxp = usb_maxpacket(dev, pipe, usb_pipeout(pipe));
 
-		FILL_INT_URB(&usbkbd->irq, dev, pipe, usbkbd->new, maxp > 8 ? 8 : maxp,
-			usbkbd_irq, usbkbd, endpoint->bInterval);
+		FILL_INT_URB(&kbd->irq, dev, pipe, kbd->new, maxp > 8 ? 8 : maxp,
+			usb_kbd_irq, kbd, endpoint->bInterval);
 	}
 
-	usbkbd->dr.requesttype = USB_TYPE_CLASS | USB_RECIP_INTERFACE;
-	usbkbd->dr.request = USB_REQ_SET_REPORT;
-	usbkbd->dr.value = 0x200;
-	usbkbd->dr.index = interface->bInterfaceNumber;
-	usbkbd->dr.length = 1;
+	kbd->dr.requesttype = USB_TYPE_CLASS | USB_RECIP_INTERFACE;
+	kbd->dr.request = USB_REQ_SET_REPORT;
+	kbd->dr.value = 0x200;
+	kbd->dr.index = interface->bInterfaceNumber;
+	kbd->dr.length = 1;
 
-	FILL_CONTROL_URB(&usbkbd->led, dev, usb_sndctrlpipe(dev, 0),
-		(void*) &usbkbd->dr, &usbkbd->leds, 1, usbkbd_led, usbkbd);
+	FILL_CONTROL_URB(&kbd->led, dev, usb_sndctrlpipe(dev, 0),
+		(void*) &kbd->dr, &kbd->leds, 1, usb_kbd_led, kbd);
 			
+	if (usb_submit_urb(&kbd->irq)) {
+		kfree(kbd);
+		return NULL;
+	}
 
-	input_register_device(&usbkbd->dev);
+	input_register_device(&kbd->dev);
 
-	printk(KERN_INFO "input%d: USB HIDBP keyboard\n", usbkbd->dev.number);
+	printk(KERN_INFO "input%d: USB HIDBP keyboard\n", kbd->dev.number);
 
-	return usbkbd;
+
+	return kbd;
 }
 
-static void usbkbd_disconnect(struct usb_device *dev, void *ptr)
+static void usb_kbd_disconnect(struct usb_device *dev, void *ptr)
 {
-	struct usbkbd *usbkbd = ptr;
-	usb_unlink_urb(&usbkbd->irq);
-	input_unregister_device(&usbkbd->dev);
-	kfree(usbkbd);
+	struct usb_kbd *kbd = ptr;
+	usb_unlink_urb(&kbd->irq);
+	input_unregister_device(&kbd->dev);
+	kfree(kbd);
 }
 
-static struct usb_driver usbkbd_driver = {
+static struct usb_driver usb_kbd_driver = {
 	name:		"keyboard",
-	probe:		usbkbd_probe,
-	disconnect:	usbkbd_disconnect
+	probe:		usb_kbd_probe,
+	disconnect:	usb_kbd_disconnect
 };
 
-static int __init usbkbd_init(void)
+static int __init usb_kbd_init(void)
 {
-	usb_register(&usbkbd_driver);
+	usb_register(&usb_kbd_driver);
 	return 0;
 }
 
-static void __exit usbkbd_exit(void)
+static void __exit usb_kbd_exit(void)
 {
-	usb_deregister(&usbkbd_driver);
+	usb_deregister(&usb_kbd_driver);
 }
 
-module_init(usbkbd_init);
-module_exit(usbkbd_exit);
+module_init(usb_kbd_init);
+module_exit(usb_kbd_exit);
