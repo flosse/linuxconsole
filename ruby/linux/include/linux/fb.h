@@ -313,12 +313,7 @@ struct fb_info {
      *  `Generic' versions of the frame buffer device operations
      */
 
-extern int fbgen_get_fix(struct fb_fix_screeninfo *fix, 
-			 struct fb_info *info);
-extern int fbgen_get_var(struct fb_var_screeninfo *var,
-			 struct fb_info *info);
-extern int fbgen_set_var(struct fb_var_screeninfo *var,
-			 struct fb_info *info);
+extern int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info);
 extern void fbgen_blank(int blank, struct fb_info *info);
 extern int fbgen_pan_display(struct fb_var_screeninfo *var, 
 			     struct fb_info *info);
@@ -326,8 +321,6 @@ extern int fbgen_pan_display(struct fb_var_screeninfo *var,
     /*
      *  Helper functions
      */
-
-extern int fbgen_update_var(struct fb_info *info);
 
 /* drivers/video/fbmem.c */
 extern int register_framebuffer(struct fb_info *fb_info);
