@@ -809,6 +809,7 @@ static int __init input_init(void)
 
 	init_waitqueue_head(&input_devices_poll_wait);
 
+#ifdef CONFIG_PROC_FS
 	proc_bus_input_dir = proc_mkdir("input", proc_bus);
 	proc_bus_input_dir->owner = THIS_MODULE;
 	entry = create_proc_read_entry("devices", 0, proc_bus_input_dir, input_devices_read, NULL);
@@ -816,7 +817,7 @@ static int __init input_init(void)
 	entry->proc_fops->poll = input_devices_poll;
 	entry = create_proc_read_entry("handlers", 0, proc_bus_input_dir, input_handlers_read, NULL);
 	entry->owner = THIS_MODULE;
-
+#endif
 	if (devfs_register_chrdev(INPUT_MAJOR, "input", &input_fops)) {
 		printk(KERN_ERR "input: unable to register char major %d", INPUT_MAJOR);
 		return -EBUSY;
