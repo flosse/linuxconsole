@@ -1,5 +1,5 @@
-#define from	code
-#define to	xt
+#define from	usb
+#define to	code
 
 #include "scancodes.h"
 

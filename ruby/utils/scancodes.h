@@ -432,8 +432,30 @@ static struct scancode_list scancodes[] = {
 /*                                                                    
  * Japan alphabet switch key                                          
  */                                                                   
-                                                                      
-	{ 0x175, 0x068,    0,    0, 0x87,    0,    0,    0,    0,    0, 124 },	/* The Jpn key - clashes with Focus PF8 */
+
+	{ 0x175, 0x068,    0,    0, 0x87,    0,    0,    0,    0,    0, 181 },	/* Intl1 / Jpn key - clashes with Focus PF8 */
+	{     0,     0,    0,    0, 0x88,    0,    0,    0,    0,    0, 182 },  /* International2 */
+	{     0,     0,    0,    0, 0x89, 0x5d,    0,    0,    0,    0, 183 },  /* International3 */
+	{     0,     0,    0,    0, 0x8a,    0,    0,    0,    0,    0, 184 },  /* International4 */
+	{     0,     0,    0,    0, 0x8b,    0,    0,    0,    0,    0, 185 },  /* International5 */
+	{     0,     0,    0,    0, 0x8c,    0,    0,    0,    0,    0, 186 },  /* International6 */
+	{     0,     0,    0,    0, 0x8d,    0,    0,    0,    0,    0, 187 },  /* International7 */
+	{     0,     0,    0,    0, 0x8e,    0,    0,    0,    0,    0, 188 },  /* International8 */
+	{     0,     0,    0,    0, 0x8f,    0,    0,    0,    0,    0, 189 },  /* International9 */
+
+/*     
+ * USB language switching keys (see USB HID Usage Tables)
+ */
+
+	{     0,     0,    0,    0, 0x90, 0x68,    0,    0,    0,    0, 190 },  /* Language1 */
+	{     0,     0,    0,    0, 0x91, 0x66,    0,    0,    0,    0, 191 },  /* Language2 */
+	{     0,     0,    0,    0, 0x92,    0,    0,    0,    0,    0, 192 },  /* Language3 */
+	{     0,     0,    0,    0, 0x93,    0,    0,    0,    0,    0, 193 },  /* Language4 */
+	{     0,     0,    0,    0, 0x94,    0,    0,    0,    0,    0, 194 },  /* Language5 */
+	{     0,     0,    0,    0, 0x95,    0,    0,    0,    0,    0, 195 },  /* Language6 */
+	{     0,     0,    0,    0, 0x96,    0,    0,    0,    0,    0, 196 },  /* Language7 */
+	{     0,     0,    0,    0, 0x97,    0,    0,    0,    0,    0, 197 },  /* Language8 */
+	{     0,     0,    0,    0, 0x98,    0,    0,    0,    0,    0, 198 },  /* Language9 */
                                                                       
 /*                                                                    
  * Qtronic Scorpion USB                                               
@@ -463,7 +485,7 @@ static struct scancode_list scancodes[] = {
 	{ 0x063,     0,    0,    0,    0,    0,    0,    0,    0,    0, 169 },
 	{ 0x101,     0,    0,    0,    0,    0,    0,    0,    0,    0, 171 },
 	{ 0x102,     0,    0,    0,    0,    0,    0,    0,    0,    0, 172 },
-	{ 0x103,     0,    0,    0,    0,    0,    0,    0,    0,    0, 181 },
+	{ 0x103,     0,    0,    0,    0,    0,    0,    0,    0,    0, 124 },
 	{ 0x104,     0,    0,    0,    0,    0,    0,    0,    0,    0, 182 },
 	{ 0x105,     0,    0,    0,    0,    0,    0,    0,    0,    0, 183 },
 	{ 0x106,     0,    0,    0,    0,    0,    0,    0,    0,    0, 184 },
