@@ -250,13 +250,14 @@ struct vt_struct {
 	int blank_mode;	       /* 0:none 1:suspendV 2:suspendH 3:powerdown */
 	int blank_interval;			/* How long before blanking */
 	int off_interval;			
+	struct timer_list timer;                /* Timer for VT blanking */
        /* This is a temporary buffer used to prepare a tty console write
 	* so that we can easily avoid touching user space while holding the
  	* console spinlock. It is shared by with vc_screen read/write tty calls.
 	*/
 	char con_buf[PAGE_SIZE];		
 	struct semaphore lock;  		/* Lock for con_buf 	 */
-	struct timer_list timer;		/* Timer for VT blanking */
+	void *data_hook;			/* Hook for driver data */
 	struct consw	*vt_sw;			/* Display driver for VT */
 	struct input_handle *keyboard;		/* Keyboard attached */
 	struct vc_pool  vcs;			 
@@ -265,6 +266,7 @@ struct vt_struct {
 
 extern int current_vc;
 extern struct vt_struct *vt_cons;
+extern struct vt_struct *admin_vt;
 
 void (*kd_mksound)(unsigned int hz, unsigned int ticks);
 
