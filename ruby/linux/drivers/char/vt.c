@@ -1396,7 +1396,7 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
 {
         static unsigned long printing = 0;
         const ushort *start;
-	struct vc_data *vc;
+	struct vc_data *vc = admin_vt->fg_console;
         unsigned char c;
 	ushort cnt = 0;
         ushort myx;
@@ -1407,9 +1407,14 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
 
         /* pm_access(pm_con); */
 
-        if (kmsg_redirect && find_vc(kmsg_redirect-1))
-                co->index = kmsg_redirect-1;
-	vc = find_vc(co->index);	
+        if (kmsg_redirect) {
+		vc = find_vc(kmsg_redirect-1);
+		if (vc)
+			admin_vt = vc->display_fg;
+		else
+			/* Should we allocate a VC instead ? */
+			goto quit;
+	}
 
         /* read `x' only after setting co->index properly (otherwise
            the `x' macro will read the x of the foreground console). */
@@ -1478,11 +1483,7 @@ quit:
 
 static kdev_t vt_console_device(struct console *c)
 {
-	struct vc_data *vc = vc = find_vc(c->index);
-
-	admin_vt = vc->display_fg;
-	c->index = admin_vt->fg_console->vc_num;
-        return MKDEV(TTY_MAJOR, c->index);
+        return MKDEV(TTY_MAJOR, c->index ? c->index : admin_vt->fg_console->vc_num);
 }
 
 void vt_console_unblank(void)
@@ -1571,7 +1572,7 @@ void __init vt_console_init(void)
 	vc = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
 	vt->last_console = vt->fg_console = vt->vcs.vc_cons[0] = vc; 
 	vc->vc_num = 0;
-        vc->display_fg = vt;
+        vc->display_fg = admin_vt = vt;
 	visual_init(vc, 1);
         screenbuf = (unsigned short *) alloc_bootmem(screenbuf_size);
         vc_init(vc, !sw->con_save_screen); 
