@@ -1,0 +1,9 @@
+The orginal purpose of emerald was to create a patch that allowed for better 
+terminal emulation for 2.3.X in the hopes that it would be included in 2.4.X
+Unfortunely 2.4.X is coming out and linus is only accepting bug fixes. This 
+will be ported over to 2.4.X as soon as it comes out. 
+
+To use this console enhancement just copy this file over to your linux kernel
+source tree in the directory drivers/char. Its usually /usr/src/linux so a
+cp console.c to /usr/src/linux/drivers/char should do. If you have any questions
+just post them to the list. 
