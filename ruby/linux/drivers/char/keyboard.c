@@ -360,12 +360,13 @@ static void fn_dec_console(struct tty_struct *tty)
        int i, j = vc->display_fg->fg_console->vc_num;
 
        for (i = j-1; i != j; i--) {
-               if (i == -1)
-                       i = MAX_NR_USER_CONSOLES-1;
-               if (vc_cons_allocated(i))
-                       break;
+		if (i < vc->display_fg->vcs.first_vc)
+                	i = vc->display_fg->vcs.first_vc + MAX_NR_USER_CONSOLES;
+		vc = find_vc(i);
+                if (vc)
+			break;
        }
-       set_console(vc->display_fg->vcs.vc_cons[i]);
+       set_console(vc);
 }
 
 static void fn_inc_console(struct tty_struct *tty)
@@ -374,12 +375,13 @@ static void fn_inc_console(struct tty_struct *tty)
        int i, j = vc->display_fg->fg_console->vc_num;
 
        for (i = j+1; i != j; i++) {
-               if (i == MAX_NR_USER_CONSOLES)
-                       i = 0;
-               if (vc_cons_allocated(i))
-                       break;
+		if (i == vc->display_fg->vcs.first_vc + MAX_NR_USER_CONSOLES)
+                	i = vc->display_fg->vcs.first_vc;
+		vc = find_vc(i);
+		if (vc)
+                       	break;
        }
-       set_console(vc->display_fg->vcs.vc_cons[i]);
+       set_console(vc);
 }
 
 static void fn_send_intr(struct tty_struct *tty)
@@ -513,11 +515,12 @@ static void k_dead(struct tty_struct *tty, unsigned char value, char up_flag)
 
 static void k_cons(struct tty_struct *tty, unsigned char value, char up_flag)
 {
-	struct vc_data *vc = (struct vc_data *) tty->driver_data;
+	struct vc_data *tmp = (struct vc_data *) tty->driver_data; 
+	struct vc_data *vc = tmp->display_fg->vcs.vc_cons[value];
 
-	if (up_flag)
+	if (up_flag || !vc)
 		return;	
-	set_console(vc->display_fg->vcs.vc_cons[value]);
+	set_console(vc);
 }
 
 static void k_fn(struct tty_struct *tty, unsigned char value, char up_flag)
