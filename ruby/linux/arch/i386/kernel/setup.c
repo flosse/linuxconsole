@@ -494,6 +494,10 @@ static inline void parse_mem_cmdline (char ** cmdline_p)
 			if (!memcmp(from+4, "nopentium", 9)) {
 				from += 9+4;
 				boot_cpu_data.x86_capability &= ~X86_FEATURE_PSE;
+			} else if (!memcmp(from+4, "exactmap", 8)) {
+				from += 8+4;
+				e820.nr_map = 0;
+				usermem = 1;
 			} else {
 				/* If the user specifies memory size, we
 				 * blow away any automatically generated
@@ -1530,8 +1534,7 @@ int get_cpuinfo(char * buffer)
 	return p - buffer;
 }
 
-int cpus_initialized = 0;
-unsigned long cpu_initialized = 0;
+static unsigned long cpu_initialized __initdata = 0;
 
 /*
  * cpu_init() initializes state that is per-CPU. Some data is already
@@ -1548,7 +1551,6 @@ void __init cpu_init (void)
 		printk("CPU#%d already initialized!\n", nr);
 		for (;;) __sti();
 	}
-	cpus_initialized++;
 	printk("Initializing CPU#%d\n", nr);
 
 	if (cpu_has_vme || cpu_has_tsc || cpu_has_de)

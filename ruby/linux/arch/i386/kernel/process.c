@@ -308,13 +308,13 @@ void machine_restart(char * __unused)
 #endif
 
 #ifdef CONFIG_INPUT_I8042
-	/*
-	* Reset the 8042 back to original mode.
-	*/
-	{
-		extern void i8042_controller_cleanup(void);
-		i8042_controller_cleanup();
-	}
+        /*
+        * Reset the 8042 back to original mode.
+        */
+        {
+                extern void i8042_controller_cleanup(void);
+                i8042_controller_cleanup();
+        }
 #endif
 
 	if(!reboot_thru_bios) {
@@ -599,7 +599,6 @@ void dump_thread(struct pt_regs * regs, struct user * dump)
  * More important, however, is the fact that this allows us much
  * more flexibility.
  */
-extern int cpus_initialized;
 void __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 {
 	struct thread_struct *prev = &prev_p->thread,
