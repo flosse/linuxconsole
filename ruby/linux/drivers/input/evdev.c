@@ -153,7 +153,7 @@ static ssize_t evdev_write(struct file * file, const char * buffer, size_t count
 
 		if (copy_from_user(&event, buffer + retval, sizeof(struct input_event)))
 			return -EFAULT;
-		input_event(list->dev, event.type, event.code, event.data);
+		input_event(list->evdev->handle->dev, event.type, event.code, event.value);
 		retval += sizeof(struct input_event);
 	}
 
