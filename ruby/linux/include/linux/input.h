@@ -73,8 +73,6 @@ struct input_event {
 
 #define EVIOCSFF		_IOC(_IOC_WRITE, 'E', 0x80, sizeof(struct ff_effect))	/* send a force effect to a force feedback device */
 #define EVIOCRMFF		_IOW('E', 0x81, int)			/* Erase a force effect */
-#define EVIOCSGAIN		_IOW('E', 0x82, unsigned short)		/* Set overall gain */
-#define EVIOCSAUTOCENTER	_IOW('E', 0x83, unsigned short)		/* Enable or disable auto-centering */
 #define EVIOCGEFFECTS		_IOR('E', 0x84, int)			/* Report number of effects playable at the same time */
 
 /*
@@ -550,7 +548,8 @@ struct ff_periodic_effect {
 struct ff_effect {
 	__u16 type;
 /* Following field denotes the unique id assigned to an effect.
- * It is set by the driver.
+ * If user sets if to -1, a new effect is created, and its id is returned in the same field
+ * Else, the user sets it to the effect id it wants to update.
  */
 	__s16 id;
 
@@ -727,6 +726,7 @@ void input_event(struct input_dev *dev, unsigned int type, unsigned int code, in
 #define input_report_key(a,b,c) input_event(a, EV_KEY, b, !!(c))
 #define input_report_rel(a,b,c) input_event(a, EV_REL, b, c)
 #define input_report_abs(a,b,c) input_event(a, EV_ABS, b, c)
+#define input_report_ff(a,b,c)  input_event(a, EV_FF, b, c)
 
 #endif
 #endif
