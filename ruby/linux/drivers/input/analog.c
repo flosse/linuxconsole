@@ -68,10 +68,10 @@ static int js[24] = { -1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0 };
 #define ANALOG_BTNS_GAMEPAD	0xf000
 #define ANALOG_EXTENSIONS	0xff00
 
-#define ANALOG_MAX_TIME		3000	/* 3 ms */
-#define ANALOG_LOOP_TIME	2000	/* 2 t */
+#define ANALOG_MAX_TIME		3	/* 3 ms */
+#define ANALOG_LOOP_TIME	2000	/* 2 * loop */
 #define ANALOG_REFRESH_TIME	HZ/100	/* 10 ms */
-#define ANALOG_AXIS_TIME	2	/* 2 * refresh - 20 ms */
+#define ANALOG_AXIS_TIME	2	/* 2 * refresh */
 #define ANALOG_RESOLUTION	8	/* 8 bits */
 
 #define ANALOG_MAX_NAME_LENGTH  128
@@ -346,7 +346,7 @@ static void analog_calibrate_timer(struct analog_port *port)
 	}
 
         port->loop = (ANALOG_LOOP_TIME * tx) / 50000;
-	port->timeout = (ANALOG_MAX_TIME * port->speed) / 1000;
+	port->timeout = ANALOG_MAX_TIME * port->speed;
 }
 
 /*
@@ -534,7 +534,7 @@ static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
 		analog_calibrate_timer(port);
 		gameport_trigger(gameport);
 		port->mask = gameport_read(gameport);
-		udelay(ANALOG_MAX_TIME);
+		wait_ms(ANALOG_MAX_TIME);
 		port->mask = (gameport_read(gameport) ^ port->mask) & port->mask & 0xf;
 		analog_cooked_read(port);
 	}
