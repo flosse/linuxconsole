@@ -270,7 +270,9 @@ static int  noaccel = 0;
 static int  nopan   = 0;
 static int  nowrap  = 1;      // not implemented (yet)
 static int  inverse = 0;
+#ifdef CONFIG_MTRR
 static int  nomtrr = 0;
+#endif
 static int  nohwcursor = 0;
 static const char *mode_option __initdata = NULL;
 
@@ -1068,7 +1070,7 @@ int __init tdfxfb_init(void)
       fb_info.fix.mmio_start = pdev->resource[0].start;
       fb_info.fix.mmio_len = 1 << 24;
       par.regbase_virt = 
-	(u32)ioremap_nocache(fb_info.fix.smem_start, 1 << 24);
+	(unsigned long)ioremap_nocache(fb_info.fix.smem_start, 1 << 24);
       if(!par.regbase_virt) {
 	printk("fb: Can't remap %s register area.\n", fb_info.fix.id);
 	return -ENXIO;
