@@ -78,10 +78,18 @@ anakinfb_init(void)
 	fb_info.fbops = &anakinfb_ops;
 	fb_info.var = anakinfb_var;
 	fb_info.fix = anakinfb_fix;
-	fb_info.screen_base = ioremap(VGA_START, VGA_SIZE);
 
-	if (register_framebuffer(&fb_info) < 0)
+	if (!(request_mem_region(VGA_START, VGA_SIZE, "vga")))
+		return -ENOMEM;
+	if (!(fb_info.screen_base = ioremap(VGA_START, VGA_SIZE))) {
+		release_mem_region(VGA_START, VGA_SIZE);
+		return -EIO;
+	}
+	if (register_framebuffer(&fb_info) < 0) {
+		iounmap(fb_info.screen_base);
+		release_mem_region(VGA_START, VGA_SIZE);
 		return -EINVAL;
+	}
 
 	MOD_INC_USE_COUNT;
 	return 0;

@@ -25,6 +25,7 @@
 #include <asm/procinfo.h>
 #include <asm/setup.h>
 #include <asm/mach-types.h>
+#include <asm/tlbflush.h>
 
 #include <asm/mach/arch.h>
 #include <asm/mach/irq.h>
@@ -186,7 +187,7 @@ static inline void dump_cache(const char *prefix, unsigned int cache)
 {
 	unsigned int mult = 2 + (CACHE_M(cache) ? 1 : 0);
 
-	printk("%s size %dK associativity %d line length %d sets %d\n",
+	printk("%s: %d bytes, associativity %d, %d byte lines, %d sets\n",
 		prefix,
 		mult << (8 + CACHE_SIZE(cache)),
 		(mult << CACHE_ASSOC(cache)) >> 1,
@@ -253,7 +254,7 @@ static void __init setup_processor(void)
 	cpu_user = *list->user;
 #endif
 
-	printk("Processor: %s %s revision %d\n",
+	printk("CPU: %s %s revision %d\n",
 	       proc_info.manufacturer, proc_info.cpu_name,
 	       (int)processor_id & 15);
 
