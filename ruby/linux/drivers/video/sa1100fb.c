@@ -1190,6 +1190,9 @@ static struct fb_ops sa1100fb_ops = {
 	fb_set_par:	sa1100fb_set_par,
 	fb_setcolreg:	sa1100fb_setcolreg,
 	fb_blank:	sa1100fb_blank,
+        fb_fillrect:    cfb_fillrect,
+        fb_copyarea:    cfb_copyarea,
+        fb_imageblit:   cfb_imageblit,
 };
 
 /*
