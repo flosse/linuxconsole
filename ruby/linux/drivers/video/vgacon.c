@@ -100,14 +100,7 @@ static unsigned long   vga_origin;
 static u16             vga_video_port_reg;	/* Video register select port */
 static u16             vga_video_port_val;	/* Video register value port */
 static unsigned char   vga_hardscroll_enabled;
-#ifdef CONFIG_IA64_SOFTSDV_HACKS
-/*
- * SoftSDV doesn't have hardware assist VGA scrolling 
- */
-static unsigned char   vga_hardscroll_user_enable;
-#else
 static unsigned char   vga_hardscroll_user_enable = 1;
-#endif
 static int	       vga_is_gfx;
 static int	       vga_512_chars;
 static unsigned int    vga_rolled_over;

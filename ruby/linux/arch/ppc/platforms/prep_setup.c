@@ -1,8 +1,8 @@
 /*
- * BK Id: SCCS/s.prep_setup.c 1.47 12/19/01 09:45:54 trini
+ * BK Id: %F% %I% %G% %U% %#%
  */
 /*
- *  linux/arch/ppc/kernel/setup.c
+ *  arch/ppc/platforms/setup.c
  *
  *  Copyright (C) 1995  Linus Torvalds
  *  Adapted from 'alpha' version by Gary Thomas
@@ -53,16 +53,10 @@
 #include <asm/mk48t59.h>
 #include <asm/prep_nvram.h>
 #include <asm/raven.h>
+#include <asm/vga.h>
 #include <asm/time.h>
-
-#include "local_irq.h"
-#include "i8259.h"
-#include "open_pic.h"
-
-#if defined(CONFIG_SOUND) || defined(CONFIG_SOUND_MODULE)
-#include <../drivers/sound/sound_config.h>
-#include <../drivers/sound/dev_table.h>
-#endif
+#include <asm/i8259.h>
+#include <asm/open_pic.h>
 
 unsigned char ucSystemType;
 unsigned char ucBoardRev;
@@ -90,15 +84,17 @@ int _prep_type;
 
 /* for the mac fs */
 kdev_t boot_dev;
-/* used in nasty hack for sound - see prep_setup_arch() -- Cort */
+
+#ifdef CONFIG_SOUND_CS4232 
 long ppc_cs4232_dma, ppc_cs4232_dma2;
+#endif
 
 extern PTE *Hash, *Hash_end;
 extern unsigned long Hash_size, Hash_mask;
 extern int probingmem;
 extern unsigned long loops_per_jiffy;
 
-#ifdef CONFIG_SOUND_MODULE
+#ifdef CONFIG_SOUND_CS4232 
 EXPORT_SYMBOL(ppc_cs4232_dma);
 EXPORT_SYMBOL(ppc_cs4232_dma2);
 #endif
@@ -190,15 +186,13 @@ no_l2:
 static int __prep
 prep_show_percpuinfo(struct seq_file *m, int i)
 {
-	int len = 0;
-
 	/* PREP's without residual data will give incorrect values here */
 	seq_printf(m, "clock\t\t: ");
 #ifdef CONFIG_PREP_RESIDUAL	
 	if (res->ResidualLength)
 		seq_printf(m, "%ldMHz\n",
 			   (res->VitalProductData.ProcessorHz > 1024) ?
-			   res->VitalProductData.ProcessorHz>>20 :
+			   res->VitalProductData.ProcessorHz / 1000000 :
 			   res->VitalProductData.ProcessorHz);
 	else
 #endif /* CONFIG_PREP_RESIDUAL */
@@ -207,14 +201,119 @@ prep_show_percpuinfo(struct seq_file *m, int i)
 	return 0;
 }
 
+#ifdef CONFIG_SOUND_CS4232 
+static long __init masktoint(unsigned int i)
+{
+	int t = -1;
+	while (i >> ++t)
+		;
+	return (t-1);
+}
+
+/*
+ * ppc_cs4232_dma and ppc_cs4232_dma2 are used in include/asm/dma.h
+ * to distinguish sound dma-channels from others. This is because 
+ * blocksize on 16 bit dma-channels 5,6,7 is 128k, but
+ * the cs4232.c uses 64k like on 8 bit dma-channels 0,1,2,3
+ */
+
+static void __init prep_init_sound(void)
+{
+	PPC_DEVICE *audiodevice = NULL;
+
+	/*
+	 * Get the needed resource informations from residual data.
+	 * 
+	 */
+#ifdef CONFIG_PREP_RESIDUAL
+	audiodevice = residual_find_device(~0, NULL, MultimediaController,
+			AudioController, -1, 0);
+	if (audiodevice != NULL) {
+		PnP_TAG_PACKET *pkt;
+
+		pkt = PnP_find_packet((unsigned char *)&res->DevicePnPHeap[audiodevice->AllocatedOffset],
+				S5_Packet, 0);
+		if (pkt != NULL)
+			ppc_cs4232_dma = masktoint(pkt->S5_Pack.DMAMask);
+		pkt = PnP_find_packet((unsigned char*)&res->DevicePnPHeap[audiodevice->AllocatedOffset],
+				S5_Packet, 1);
+		if (pkt != NULL)
+			ppc_cs4232_dma2 = masktoint(pkt->S5_Pack.DMAMask);
+	}
+#endif
+
+	/*
+	 * These are the PReP specs' defaults for the cs4231.  We use these
+	 * as fallback incase we don't have residual data.
+	 * At least the IBM Thinkpad 850 with IDE DMA Channels at 6 and 7 
+	 * will use the other values.
+	 */
+	if (audiodevice == NULL) {
+		switch (_prep_type) {
+		case _PREP_IBM:
+			ppc_cs4232_dma = 1;
+			ppc_cs4232_dma2 = -1;
+			break;
+		default: 
+			ppc_cs4232_dma = 6;
+			ppc_cs4232_dma2 = 7;
+		}
+	}
+
+	/*
+	 * Find a way to push these informations to the cs4232 driver
+	 * Give it out with printk, when not in cmd_line?
+	 * Append it to  cmd_line and saved_command_line?
+	 * Format is cs4232=io,irq,dma,dma2
+	 */
+}
+#endif /* CONFIG_SOUND_CS4232 */
+
+/*
+ * Fill out screen_info according to the residual data. This allows us to use
+ * at least vesafb.
+ */
+static void __init
+prep_init_vesa(void)
+{
+#if defined(CONFIG_PREP_RESIDUAL) && \
+	(defined(CONFIG_FB_VGA16) || defined(CONFIG_FB_VGA_16_MODULE) || \
+	 defined(CONFIG_FB_VESA))
+	PPC_DEVICE *vgadev;
+
+	vgadev = residual_find_device(~0, NULL, DisplayController, SVGAController,
+									-1, 0);
+	if (vgadev != NULL) {
+		PnP_TAG_PACKET *pkt;
+
+		pkt = PnP_find_large_vendor_packet(
+				(unsigned char *)&res->DevicePnPHeap[vgadev->AllocatedOffset],
+				0x04, 0); /* 0x04 = Display Tag */
+		if (pkt != NULL) {
+			unsigned char *ptr = (unsigned char *)pkt;
+
+			if (ptr[4]) {
+				/* graphics mode */
+				screen_info.orig_video_isVGA = VIDEO_TYPE_VLFB;
+
+				screen_info.lfb_depth = ptr[4] * 8;
+
+				screen_info.lfb_width = swab16(*(short *)(ptr+6));
+				screen_info.lfb_height = swab16(*(short *)(ptr+8));
+				screen_info.lfb_linelength = swab16(*(short *)(ptr+10));
+
+				screen_info.lfb_base = swab32(*(long *)(ptr+12));
+				screen_info.lfb_size = swab32(*(long *)(ptr+20)) / 65536;
+			}
+		}
+	}
+#endif /* CONFIG_PREP_RESIDUAL */
+}
+
 static void __init
 prep_setup_arch(void)
 {
 	unsigned char reg;
-#if 0 /* unused?? */
-	unsigned char ucMothMemType;
-	unsigned char ucEquipPres1;
-#endif
 
 	/* init to some ~sane value until calibrate_delay() runs */
 	loops_per_jiffy = 50000000;
@@ -229,13 +328,6 @@ prep_setup_arch(void)
 	outb(reg, SIO_CONFIG_RD);
 	outb(reg, SIO_CONFIG_RD);	/* Have to write twice to change! */
 
-	/*
-	 * We need to set up the NvRAM access routines early as prep_init
-	 * has yet to be called
-	 */
-	ppc_md.nvram_read_val = prep_nvram_read_val;
-	ppc_md.nvram_write_val = prep_nvram_write_val;
-
 	/* we should determine this according to what we find! -- Cort */
 	switch ( _prep_type )
 	{
@@ -249,7 +341,7 @@ prep_setup_arch(void)
 		*(unsigned char *)(0x8000081c) |= 3;
 #ifdef CONFIG_BLK_DEV_INITRD
 		if (initrd_start)
-			ROOT_DEV = MKDEV(RAMDISK_MAJOR, 0); /* /dev/ram */
+			ROOT_DEV = mk_kdev(RAMDISK_MAJOR, 0); /* /dev/ram */
 		else
 #endif
 #ifdef CONFIG_ROOT_NFS
@@ -274,46 +366,11 @@ prep_setup_arch(void)
 		}
 	}
 
-#ifdef CONFIG_SOUND_CS4232
-	/*
-	 * setup proper values for the cs4232 driver so we don't have
-	 * to recompile for the motorola or ibm workstations sound systems.
-	 * This is a really nasty hack, but unless we change the driver
-	 * it's the only way to support both addrs from one binary.
-	 * -- Cort
-	 */
-	if ( _machine == _MACH_prep )
-	{
-		extern struct card_info snd_installed_cards[];
-		struct card_info *snd_ptr;
+#ifdef CONFIG_SOUND_CS4232 
+	prep_init_sound();
+#endif /* CONFIG_SOUND_CS4232 */
 
-		for ( snd_ptr = snd_installed_cards; 
-			snd_ptr < &snd_installed_cards[num_sound_cards];
-			snd_ptr++ )
-		{
-			if ( snd_ptr->card_type == SNDCARD_CS4232 )
-			{
-				if ( _prep_type == _PREP_Motorola )
-				{
-					snd_ptr->config.io_base = 0x830;
-					snd_ptr->config.irq = 10;
-					snd_ptr->config.dma = ppc_cs4232_dma = 6;
-					snd_ptr->config.dma2 = ppc_cs4232_dma2 = 7;
-				}
-				if ( _prep_type == _PREP_IBM )
-				{
-					snd_ptr->config.io_base = 0x530;
-					snd_ptr->config.irq = 5;
-					snd_ptr->config.dma = ppc_cs4232_dma = 1;
-					/* this is wrong - but leave it for now */
-					snd_ptr->config.dma2 = ppc_cs4232_dma2 = 7;
-				}
-			}
-		}
-	}
-#endif /* CONFIG_SOUND_CS4232 */	
-
-	/*print_residual_device_info();*/
+	prep_init_vesa();
 
 	switch (_prep_type) {
 	case _PREP_Motorola:
@@ -323,6 +380,14 @@ prep_setup_arch(void)
 		ibm_prep_init();
 		break;
 	}
+
+#ifdef CONFIG_VGA_CONSOLE
+	/* vgacon.c needs to know where we mapped IO memory in io_block_mapping() */
+	vgacon_remap_base = 0xf0000000;
+	conswitchp = &vga_con;
+#elif defined(CONFIG_DUMMY_CONSOLE)
+	conswitchp = &dummy_con;
+#endif
 }
 
 /*
@@ -580,12 +645,6 @@ static void __prep
 prep_power_off(void)
 {
 	if ( _prep_type == _PREP_IBM) {
-		/* tested on:
-		 * 		Carolina's: 7248-43P, 6070 (PowerSeries 850)
-		 * should work on:
-		 * 		Carolina: 6050 (PowerSeries 830)
-		 * 		7043-140 (Tiger 1)
-		 */
 		unsigned long flags;
 		__cli();
 		/* set exception prefix high - to the prom */
@@ -683,25 +742,6 @@ prep_ide_release_region(ide_ioreg_t from,
 {
 	release_region(from, extent);
 }
-
-static void __init
-prep_ide_init_hwif_ports (hw_regs_t *hw, ide_ioreg_t data_port, ide_ioreg_t ctrl_port, int *irq)
-{
-	ide_ioreg_t reg = data_port;
-	int i;
-
-	for (i = IDE_DATA_OFFSET; i <= IDE_STATUS_OFFSET; i++) {
-		hw->io_ports[i] = reg;
-		reg += 1;
-	}
-	if (ctrl_port) {
-		hw->io_ports[IDE_CONTROL_OFFSET] = ctrl_port;
-	} else {
-		hw->io_ports[IDE_CONTROL_OFFSET] = hw->io_ports[IDE_DATA_OFFSET] + 0x206;
-	}
-	if (irq != NULL)
-		*irq = 0;
-}
 #endif
 
 #ifdef CONFIG_SMP
@@ -792,8 +832,6 @@ prep_init2(void)
 #ifdef CONFIG_NVRAM
 	request_region(PREP_NVRAM_AS0, 0x8, "nvram");
 #endif
-	request_region(0x20,0x20,"pic1");
-	request_region(0xa0,0x20,"pic2");
 	request_region(0x00,0x20,"dma1");
 	request_region(0x40,0x20,"timer");
 	request_region(0x80,0x10,"dma page reg");
@@ -812,21 +850,6 @@ prep_init(unsigned long r3, unsigned long r4, unsigned long r5,
 	}
 #endif
 
-#ifdef CONFIG_BLK_DEV_INITRD
-	if ( r4 )
-	{
-		initrd_start = r4 + KERNELBASE;
-		initrd_end = r5 + KERNELBASE;
-	}
-#endif /* CONFIG_BLK_DEV_INITRD */
-
-	/* Copy cmd_line parameters */
-	if ( r6 )
-	{
-		*(char *)(r7 + KERNELBASE) = 0;
-		strcpy(cmd_line, (char *)(r6 + KERNELBASE));
-	}
-	
 	isa_io_base = PREP_ISA_IO_BASE;
 	isa_mem_base = PREP_ISA_MEM_BASE;
 	pci_dram_offset = PREP_PCI_DRAM_OFFSET;
@@ -836,14 +859,12 @@ prep_init(unsigned long r3, unsigned long r4, unsigned long r5,
 
 	/* figure out what kind of prep workstation we are */
 #ifdef CONFIG_PREP_RESIDUAL	
-	if ( res->ResidualLength != 0 )
-	{
+	if ( res->ResidualLength != 0 ) {
 		if ( !strncmp(res->VitalProductData.PrintableModel,"IBM",3) )
 			_prep_type = _PREP_IBM;
 		else
 			_prep_type = _PREP_Motorola;
-	}
-	else /* assume motorola if no residual (netboot?) */
+	} else /* assume motorola if no residual (netboot?) */
 #endif
 	{
 		_prep_type = _PREP_Motorola;
@@ -861,6 +882,9 @@ prep_init(unsigned long r3, unsigned long r4, unsigned long r5,
 	ppc_md.restart        = prep_restart;
 	ppc_md.power_off      = prep_power_off;
 	ppc_md.halt           = prep_halt;
+
+	ppc_md.nvram_read_val = prep_nvram_read_val;
+	ppc_md.nvram_write_val = prep_nvram_write_val;
 
 	ppc_md.time_init      = NULL;
 	if (_prep_type == _PREP_IBM) {
@@ -883,7 +907,6 @@ prep_init(unsigned long r3, unsigned long r4, unsigned long r5,
 	ppc_ide_md.ide_check_region = prep_ide_check_region;
 	ppc_ide_md.ide_request_region = prep_ide_request_region;
 	ppc_ide_md.ide_release_region = prep_ide_release_region;
-	ppc_ide_md.ide_init_hwif = prep_ide_init_hwif_ports;
 #endif
 
 #ifdef CONFIG_SMP

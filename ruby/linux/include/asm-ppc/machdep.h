@@ -1,5 +1,5 @@
 /*
- * BK Id: SCCS/s.machdep.h 1.28 12/27/01 10:08:52 trini
+ * BK Id: %F% %I% %G% %U% %#%
  */
 #ifdef __KERNEL__
 #ifndef _PPC_MACHDEP_H

@@ -1,8 +1,8 @@
 /*
- * BK Id: SCCS/s.pmac_setup.c 1.45 12/01/01 20:09:06 benh
+ * BK Id: %F% %I% %G% %U% %#%
  */
 /*
- *  linux/arch/ppc/kernel/setup.c
+ *  arch/ppc/platforms/setup.c
  *
  *  PowerPC version 
  *    Copyright (C) 1995-1996 Gary Thomas (gdt@linuxppc.org)
@@ -47,6 +47,7 @@
 #include <linux/adb.h>
 #include <linux/cuda.h>
 #include <linux/pmu.h>
+#include <linux/irq.h>
 #include <linux/seq_file.h>
 
 #include <asm/processor.h>
@@ -64,12 +65,10 @@
 #include <asm/bootx.h>
 #include <asm/cputable.h>
 #include <asm/btext.h>
-
 #include <asm/pmac_feature.h>
 #include <asm/time.h>
-#include "local_irq.h"
 #include "pmac_pic.h"
-#include "../mm/mem_pieces.h"
+#include "mem_pieces.h"
 
 #undef SHOW_GATWICK_IRQS
 
@@ -82,13 +81,12 @@ extern void pmac_pcibios_fixup(void);
 extern void pmac_find_bridges(void);
 extern int pmac_ide_check_base(ide_ioreg_t base);
 extern ide_ioreg_t pmac_ide_get_base(int index);
-extern void pmac_ide_init_hwif_ports(hw_regs_t *hw,
-	ide_ioreg_t data_port, ide_ioreg_t ctrl_port, int *irq);
-
 extern void pmac_nvram_update(void);
 
 extern int pmac_pci_enable_device_hook(struct pci_dev *dev, int initial);
 extern void pmac_pcibios_after_init(void);
+
+extern kdev_t sd_find_target(void *host, int tgt);
 
 struct device_node *memory_node;
 
@@ -252,27 +250,6 @@ pmac_show_cpuinfo(struct seq_file *m)
 	return 0;
 }
 
-#ifdef CONFIG_SCSI
-/* Find the device number for the disk (if any) at target tgt
-   on host adaptor host.  We just need to get the prototype from
-   sd.h */
-#include <linux/blkdev.h>
-#include "../../../drivers/scsi/scsi.h"
-#include "../../../drivers/scsi/sd.h"
-
-#endif
-
-#ifdef CONFIG_VT
-/*
- * Dummy mksound function that does nothing.
- * The real one is in the dmasound driver.
- */
-static void __pmac
-pmac_mksound(unsigned int hz, unsigned int ticks)
-{
-}
-#endif /* CONFIG_VT */
-
 static volatile u32 *sysctrl_regs;
 
 void __init
@@ -360,7 +337,7 @@ pmac_setup_arch(void)
 #endif
 #ifdef CONFIG_BLK_DEV_INITRD
 	if (initrd_start)
-		ROOT_DEV = MKDEV(RAMDISK_MAJOR, 0);
+		ROOT_DEV = mk_kdev(RAMDISK_MAJOR, 0);
 	else
 #endif
 		ROOT_DEV = to_kdev_t(DEFAULT_ROOT_DEVICE);
@@ -372,6 +349,8 @@ pmac_setup_arch(void)
 	else
 		ppc_md.smp_ops = &psurge_smp_ops;
 #endif /* CONFIG_SMP */
+
+	pci_create_OF_bus_map();
 }
 
 static void __init ohare_init(void)
@@ -455,10 +434,10 @@ find_ide_boot(void)
 	kdev_t __init pmac_find_ide_boot(char *bootdevice, int n);
 
 	if (bootdevice == NULL)
-		return 0;
+		return NODEV;
 	p = strrchr(bootdevice, '/');
 	if (p == NULL)
-		return 0;
+		return NODEV;
 	n = p - bootdevice;
 
 	return pmac_find_ide_boot(bootdevice, n);
@@ -471,7 +450,7 @@ find_boot_device(void)
 #if defined(CONFIG_SCSI) && defined(CONFIG_BLK_DEV_SD)
 	if (boot_host != NULL) {
 		boot_dev = sd_find_target(boot_host, boot_target);
-		if (boot_dev != 0)
+		if (!kdev_same(boot_dev, NODEV))
 			return;
 	}
 #endif
@@ -480,6 +459,16 @@ find_boot_device(void)
 #endif
 }
 
+static int initializing = 1;
+
+static int pmac_late_init(void)
+{
+	initializing = 0;
+	return 0;
+}
+
+late_initcall(pmac_late_init);
+
 /* can't be __init - can be called whenever a disk is first accessed */
 void __pmac
 note_bootable_part(kdev_t dev, int part, int goodness)
@@ -487,11 +476,10 @@ note_bootable_part(kdev_t dev, int part, int goodness)
 	static int found_boot = 0;
 	char *p;
 
-	/* Do nothing if the root has been mounted already. */
-	if (init_task.fs->rootmnt != NULL)
+	if (!initializing)
 		return;
 	if ((goodness <= current_root_goodness) &&
-	    (ROOT_DEV != to_kdev_t(DEFAULT_ROOT_DEVICE)))
+	    !kdev_same(ROOT_DEV, to_kdev_t(DEFAULT_ROOT_DEVICE)))
 		return;
 	p = strstr(saved_command_line, "root=");
 	if (p != NULL && (p == saved_command_line || p[-1] == ' '))
@@ -501,8 +489,8 @@ note_bootable_part(kdev_t dev, int part, int goodness)
 		find_boot_device();
 		found_boot = 1;
 	}
-	if (boot_dev == 0 || dev == boot_dev) {
-		ROOT_DEV = MKDEV(MAJOR(dev), MINOR(dev) + part);
+	if (kdev_same(boot_dev, NODEV) || kdev_same(dev, boot_dev)) {
+		ROOT_DEV = mk_kdev(major(dev), minor(dev) + part);
 		boot_dev = NODEV;
 		current_root_goodness = goodness;
 	}
@@ -609,33 +597,13 @@ pmac_ide_release_region(ide_ioreg_t from,
 #endif
 	release_region(from, extent);
 }
-
-#ifndef CONFIG_BLK_DEV_IDE_PMAC
-/*
- * This is only used if we have a PCI IDE controller, not
- * for the IDE controller in the ohare/paddington/heathrow/keylargo.
- */
-static void __pmac
-pmac_ide_pci_init_hwif_ports(hw_regs_t *hw, ide_ioreg_t data_port,
-		ide_ioreg_t ctrl_port, int *irq)
-{
-	ide_ioreg_t reg = data_port;
-	int i;
-
-	for (i = IDE_DATA_OFFSET; i <= IDE_STATUS_OFFSET; i++) {
-		hw->io_ports[i] = reg;
-		reg += 1;
-	}
-	hw->io_ports[IDE_CONTROL_OFFSET] = ctrl_port;
-}
-#endif /* CONFIG_BLK_DEV_IDE_PMAC */
 #endif /* defined(CONFIG_BLK_DEV_IDE) || defined(CONFIG_BLK_DEV_IDE_MODULE) */
 
 /*
  * Read in a property describing some pieces of memory.
  */
 
-static void __init
+static int __init
 get_mem_prop(char *name, struct mem_pieces *mp)
 {
 	struct reg_property *rp;
@@ -648,7 +616,7 @@ get_mem_prop(char *name, struct mem_pieces *mp)
 	if (ip == NULL) {
 		printk(KERN_ERR "error: couldn't get %s property on /memory\n",
 		       name);
-		abort();
+		return 0;
 	}
 	s /= (nsc + nac) * 4;
 	rp = mp->regions;
@@ -667,6 +635,7 @@ get_mem_prop(char *name, struct mem_pieces *mp)
 	/* Make sure the pieces are sorted. */
 	mem_pieces_sort(mp);
 	mem_pieces_coalesce(mp);
+	return 1;
 }
 
 /*
@@ -682,12 +651,6 @@ pmac_find_end_of_memory(void)
 	unsigned long a, total;
 	struct mem_pieces phys_mem;
 
-	memory_node = find_devices("memory");
-	if (memory_node == NULL) {
-		printk(KERN_ERR "can't find memory node\n");
-		abort();
-	}
-
 	/*
 	 * Find out where physical memory is, and check that it
 	 * starts at 0 and is contiguous.  It seems that RAM is
@@ -698,8 +661,9 @@ pmac_find_end_of_memory(void)
 	 * more complicated (or else you end up wasting space
 	 * in mem_map).
 	 */
-	get_mem_prop("reg", &phys_mem);
-	if (phys_mem.n_regions == 0)
+	memory_node = find_devices("memory");
+	if (memory_node == NULL || !get_mem_prop("reg", &phys_mem)
+	    || phys_mem.n_regions == 0)
 		panic("No RAM??");
 	a = phys_mem.regions[0].address;
 	if (a != 0)
@@ -755,12 +719,6 @@ pmac_init(unsigned long r3, unsigned long r4, unsigned long r5,
         ppc_ide_md.ide_check_region	= pmac_ide_check_region;
         ppc_ide_md.ide_request_region	= pmac_ide_request_region;
         ppc_ide_md.ide_release_region	= pmac_ide_release_region;
-#ifdef CONFIG_BLK_DEV_IDE_PMAC
-        ppc_ide_md.ide_init_hwif	= pmac_ide_init_hwif_ports;
-        ppc_ide_md.default_io_base	= pmac_ide_get_base;
-#else /* CONFIG_BLK_DEV_IDE_PMAC */
-        ppc_ide_md.ide_init_hwif	= pmac_ide_pci_init_hwif_ports;
-#endif /* CONFIG_BLK_DEV_IDE_PMAC */
 #endif /* defined(CONFIG_BLK_DEV_IDE) || defined(CONFIG_BLK_DEV_IDE_MODULE) */
 
 #ifdef CONFIG_BOOTX_TEXT
@@ -772,15 +730,12 @@ pmac_init(unsigned long r3, unsigned long r4, unsigned long r5,
 }
 
 #ifdef CONFIG_BOOTX_TEXT
-extern void drawchar(char c);
-extern void drawstring(const char *c);
-extern boot_infos_t *disp_bi;
 void __init
 pmac_progress(char *s, unsigned short hex)
 {
-	if (disp_bi == 0)
-		return;
-	btext_drawstring(s);
-	btext_drawchar('\n');
+	if (boot_text_mapped) {
+		btext_drawstring(s);
+		btext_drawchar('\n');
+	}
 }
 #endif /* CONFIG_BOOTX_TEXT */

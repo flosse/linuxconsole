@@ -1,8 +1,8 @@
 /*
- * BK Id: SCCS/s.apus_setup.c 1.24 11/13/01 21:26:07 paulus
+ * BK Id: %F% %I% %G% %U% %#%
  */
 /*
- *  linux/arch/ppc/kernel/apus_setup.c
+ *  arch/ppc/platforms/apus_setup.c
  *
  *  Copyright (C) 1998, 1999  Jesper Skov
  *
@@ -17,55 +17,14 @@
  */
 
 #include <linux/config.h>
-#include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/init.h>
-#include <linux/hdreg.h>
 #include <linux/blk.h>
-#include <linux/pci.h>
 #include <linux/seq_file.h>
-
-#ifdef CONFIG_APUS
-#include <asm/logging.h>
-#endif
 
 /* Needs INITSERIAL call in head.S! */
 #undef APUS_DEBUG
-
-
-#include <linux/ide.h>
-#define T_CHAR          (0x0000)        /* char:  don't touch  */
-#define T_SHORT         (0x4000)        /* short: 12 -> 21     */
-#define T_INT           (0x8000)        /* int:   1234 -> 4321 */
-#define T_TEXT          (0xc000)        /* text:  12 -> 21     */
-
-#define T_MASK_TYPE     (0xc000)
-#define T_MASK_COUNT    (0x3fff)
-
-#define D_CHAR(cnt)     (T_CHAR  | (cnt))
-#define D_SHORT(cnt)    (T_SHORT | (cnt))
-#define D_INT(cnt)      (T_INT   | (cnt))
-#define D_TEXT(cnt)     (T_TEXT  | (cnt))
-
-static u_short driveid_types[] = {
-        D_SHORT(10),    /* config - vendor2 */
-        D_TEXT(20),     /* serial_no */
-        D_SHORT(3),     /* buf_type, buf_size - ecc_bytes */
-        D_TEXT(48),     /* fw_rev - model */
-        D_CHAR(2),      /* max_multsect - vendor3 */
-        D_SHORT(1),     /* dword_io */
-        D_CHAR(2),      /* vendor4 - capability */
-        D_SHORT(1),     /* reserved50 */
-        D_CHAR(4),      /* vendor5 - tDMA */
-        D_SHORT(4),     /* field_valid - cur_sectors */
-        D_INT(1),       /* cur_capacity */
-        D_CHAR(2),      /* multsect - multsect_valid */
-        D_INT(1),       /* lba_capacity */
-        D_SHORT(194)    /* dma_1word - reservedyy */
-};
-
-#define num_driveid_types       (sizeof(driveid_types)/sizeof(*driveid_types))
 
 #include <asm/bootinfo.h>
 #include <asm/setup.h>
@@ -73,16 +32,16 @@ static u_short driveid_types[] = {
 #include <asm/amigaints.h>
 #include <asm/amigappc.h>
 #include <asm/pgtable.h>
-#include <asm/io.h>
 #include <asm/dma.h>
 #include <asm/machdep.h>
-
-#include "local_irq.h"
+#include <asm/time.h>
 
 unsigned long m68k_machtype;
 char debug_device[6] = "";
 
 extern void amiga_init_IRQ(void);
+
+extern void apus_setup_pci_ptrs(void);
 
 void (*mach_sched_init) (void (*handler)(int, void *, struct pt_regs *)) __initdata = NULL;
 /* machine dependent irq functions */
@@ -130,7 +89,7 @@ static int __bus_speed = 0;
 static int __speed_test_failed = 0;
 
 /********************************************** COMPILE PROTECTION */
-/* Provide some stubs that links to Amiga specific functions. 
+/* Provide some stubs that links to Amiga specific functions.
  * This allows CONFIG_APUS to be removed from generic PPC files while
  * preventing link errors for other PPC targets.
  */
@@ -138,7 +97,7 @@ unsigned long apus_get_rtc_time(void)
 {
 #ifdef CONFIG_APUS
 	extern unsigned long m68k_get_rtc_time(void);
-	
+
 	return m68k_get_rtc_time ();
 #else
 	return 0;
@@ -179,7 +138,7 @@ void __init apus_setup_arch(void)
 		    if ((q = strchr( debug_device, ' ' ))) *q = 0;
 		    i = 1;
 	    } else if (!strncmp( p, "60nsram", 7 )) {
-		    APUS_WRITE (APUS_REG_WAITSTATE, 
+		    APUS_WRITE (APUS_REG_WAITSTATE,
 				REGWAITSTATE_SETRESET
 				|REGWAITSTATE_PPCR
 				|REGWAITSTATE_PPCW);
@@ -243,7 +202,7 @@ static void get_current_tb(unsigned long long *time)
 			  "  bne   1b     \n\t"
 			  "  stw   4,0(%0)\n\t"
 			  "  stw   5,4(%0)\n\t"
-			  : 
+			  :
 			  : "r" (time)
 			  : "r4", "r5", "r6");
 }
@@ -346,7 +305,7 @@ void arch_gettod(int *year, int *mon, int *day, int *hour,
 
 /*********************************************************** FLOPPY */
 #if defined(CONFIG_AMIGA_FLOPPY)
-__init 
+__init
 void floppy_setup(char *str, int *ints)
 {
 	if (mach_floppy_setup)
@@ -367,7 +326,7 @@ static __inline__ pte_t *my_find_pte(struct mm_struct *mm,unsigned long va)
 	pte_t *pte = 0;
 
 	va &= PAGE_MASK;
-	
+
 	dir = pgd_offset( mm, va );
 	if (dir)
 	{
@@ -398,11 +357,11 @@ void kernel_set_cachemode( unsigned long address, unsigned long size,
 		flags = (_PAGE_NO_CACHE | _PAGE_GUARDED);
 		break;
 	default:
-		panic ("kernel_set_cachemode() doesn't support mode %d\n", 
+		panic ("kernel_set_cachemode() doesn't support mode %d\n",
 		       cmode);
 		break;
 	}
-	
+
 	size /= PAGE_SIZE;
 	address &= PAGE_MASK;
 	while (size--)
@@ -442,7 +401,7 @@ unsigned long mm_ptov (unsigned long paddr)
 				goto exit;
 			}
 		}
-		
+
 		ret = (unsigned long) __va(paddr);
 	}
 exit:
@@ -494,7 +453,7 @@ void cache_clear(__u32 addr, int length)
 	       "icbi 0,%0 \n\t"
 	       "isync \n\t"
 	       : : "r" (addr));
-	
+
 	addr += L1_CACHE_BYTES;
 	length -= L1_CACHE_BYTES;
 
@@ -521,11 +480,11 @@ apus_restart(char *cmd)
 {
 	cli();
 
-	APUS_WRITE(APUS_REG_LOCK, 
+	APUS_WRITE(APUS_REG_LOCK,
 		   REGLOCK_BLACKMAGICK1|REGLOCK_BLACKMAGICK2);
-	APUS_WRITE(APUS_REG_LOCK, 
+	APUS_WRITE(APUS_REG_LOCK,
 		   REGLOCK_BLACKMAGICK1|REGLOCK_BLACKMAGICK3);
-	APUS_WRITE(APUS_REG_LOCK, 
+	APUS_WRITE(APUS_REG_LOCK,
 		   REGLOCK_BLACKMAGICK2|REGLOCK_BLACKMAGICK3);
 	APUS_WRITE(APUS_REG_SHADOW, REGSHADOW_SELFRESET);
 	APUS_WRITE(APUS_REG_RESET, REGRESET_AMIGARESET);
@@ -544,180 +503,49 @@ apus_halt(void)
    apus_restart(NULL);
 }
 
-/****************************************************** from setup.c/IDE */
-#if defined(CONFIG_BLK_DEV_IDE) || defined(CONFIG_BLK_DEV_IDE_MODULE)
-/*
- * IDE stuff.
- */
-
-#if 0	/* no longer used  -- paulus */
-void
-apus_ide_fix_driveid(struct hd_driveid *id)
-{
-   u_char *p = (u_char *)id;
-   int i, j, cnt;
-   u_char t;
-
-   if (!MACH_IS_AMIGA && !MACH_IS_MAC)
-   	return;
-   for (i = 0; i < num_driveid_types; i++) {
-      cnt = driveid_types[i] & T_MASK_COUNT;
-      switch (driveid_types[i] & T_MASK_TYPE) {
-         case T_CHAR:
-            p += cnt;
-            break;
-         case T_SHORT:
-            for (j = 0; j < cnt; j++) {
-               t = p[0];
-               p[0] = p[1];
-               p[1] = t;
-               p += 2;
-            }
-            break;
-         case T_INT:
-            for (j = 0; j < cnt; j++) {
-               t = p[0];
-               p[0] = p[3];
-               p[3] = t;
-               t = p[1];
-               p[1] = p[2];
-               p[2] = t;
-               p += 4;
-            }
-            break;
-         case T_TEXT:
-            for (j = 0; j < cnt; j += 2) {
-               t = p[0];
-               p[0] = p[1];
-               p[1] = t;
-               p += 2;
-            }
-            break;
-      }
-   }
-}
-#endif /* 0 */
-
-__init
-void apus_ide_init_hwif_ports (hw_regs_t *hw, ide_ioreg_t data_port, 
-			       ide_ioreg_t ctrl_port, int *irq)
-{
-        if (data_port || ctrl_port)
-                printk("apus_ide_init_hwif_ports: must not be called\n");
-}
-#endif
 /****************************************************** IRQ stuff */
 
-static unsigned int apus_irq_cannonicalize(unsigned int irq)
-{
-	return irq;
-}
-
-int show_apus_interrupts(struct seq_file *p, void *v)
-{
-#ifdef CONFIG_APUS
-	extern int show_amiga_interrupts(struct seq_file *p, void *v)
-	
-	return show_amiga_interrupts(p, v);
-#else
-	return 0;
-#endif
-}
-
-/* IPL must be between 0 and 7 */
-static inline void apus_set_IPL(unsigned long ipl)
-{
-	APUS_WRITE(APUS_IPL_EMU, IPLEMU_SETRESET | IPLEMU_DISABLEINT);
-	APUS_WRITE(APUS_IPL_EMU, IPLEMU_IPLMASK);
-	APUS_WRITE(APUS_IPL_EMU, IPLEMU_SETRESET | ((~ipl) & IPLEMU_IPLMASK));
-	APUS_WRITE(APUS_IPL_EMU, IPLEMU_DISABLEINT);
-}
-
-static inline unsigned long apus_get_IPL(void)
-{
-	/* This returns the present IPL emulation level. */
-	unsigned long __f;
-	APUS_READ(APUS_IPL_EMU, __f);
-	return ((~__f) & IPLEMU_IPLMASK);
-}
-
-static inline unsigned long apus_get_prev_IPL(struct pt_regs* regs)
-{
-	/* The value saved in mq is the IPL_EMU value at the time of
-	   interrupt. The lower bits are the current interrupt level,
-	   the upper bits the requested level. Thus, to restore the
-	   IPL level to the post-interrupt state, we will need to use
-	   the lower bits. */
-	unsigned long __f = regs->mq;
-	return ((~__f) & IPLEMU_IPLMASK);
-}
-
-
-#ifdef CONFIG_APUS
-void free_irq(unsigned int irq, void *dev_id)
-{
-	extern void amiga_free_irq(unsigned int irq, void *dev_id);
-
-	amiga_free_irq (irq, dev_id);
-}
-
-int request_irq(unsigned int irq, void (*handler)(int, void *, struct pt_regs *),
-	unsigned long irqflags, const char * devname, void *dev_id)
-{
-	extern int  amiga_request_irq(unsigned int irq, 
-				      void (*handler)(int, void *, 
-						      struct pt_regs *),
-				      unsigned long flags, 
-				      const char *devname, 
-				      void *dev_id);
-
-	return amiga_request_irq (irq, handler, irqflags, devname, dev_id);
-}
-
-/* In Linux/m68k the sys_request_irq deals with vectors 0-7. That's what
-   callers expect - but on Linux/APUS we actually use the IRQ_AMIGA_AUTO
-   vectors (24-31), so we put this dummy function in between to adjust
-   the vector argument (rather have cruft here than in the generic irq.c). */
-int sys_request_irq(unsigned int irq, void (*handler)(int, void *, struct pt_regs *),
-		    unsigned long irqflags, const char * devname, void *dev_id)
-{
-	extern int request_sysirq(unsigned int irq, 
-				  void (*handler)(int, void *, 
-						  struct pt_regs *),
-				  unsigned long irqflags,
-				  const char * devname, void *dev_id);
-	return request_sysirq(irq+IRQ_AMIGA_AUTO, handler, irqflags, 
-			      devname, dev_id);
-}
-#endif
+static unsigned char last_ipl[8];
 
 int apus_get_irq(struct pt_regs* regs)
 {
-#ifdef CONFIG_APUS
-	int level = apus_get_IPL();
+	unsigned char ipl_emu, mask;
+	unsigned int level;
+
+	APUS_READ(APUS_IPL_EMU, ipl_emu);
+	level = (ipl_emu >> 3) & IPLEMU_IPLMASK;
+	mask = IPLEMU_SETRESET|IPLEMU_DISABLEINT|level;
+	level ^= 7;
+
+	/* Save previous IPL value */
+	if (last_ipl[level])
+		return -2;
+	last_ipl[level] = ipl_emu;
+
+	/* Set to current IPL value */
+	APUS_WRITE(APUS_IPL_EMU, mask);
+	APUS_WRITE(APUS_IPL_EMU, IPLEMU_DISABLEINT|level);
+
 
 #ifdef __INTERRUPT_DEBUG
-	printk("<%d:%d>", level, apus_get_prev_IPL(regs));
+	printk("<%d:%d>", level, ~ipl_emu & IPLEMU_IPLMASK);
 #endif
-
-	if (0 == level)
-		return -8;
-	if (7 == level)
-		return -9;
-
 	return level + IRQ_AMIGA_AUTO;
-#else
-	return 0;
-#endif
 }
 
-void apus_post_irq(struct pt_regs* regs, int level)
+void apus_end_irq(unsigned int irq)
 {
+	unsigned char ipl_emu;
+	unsigned int level = irq - IRQ_AMIGA_AUTO;
 #ifdef __INTERRUPT_DEBUG
-	printk("{%d}", apus_get_prev_IPL(regs));
+	printk("{%d}", ~last_ipl[level] & IPLEMU_IPLMASK);
 #endif
 	/* Restore IPL to the previous value */
-	apus_set_IPL(apus_get_prev_IPL(regs));
+	ipl_emu = last_ipl[level] & IPLEMU_IPLMASK;
+	APUS_WRITE(APUS_IPL_EMU, IPLEMU_SETRESET|IPLEMU_DISABLEINT|ipl_emu);
+	last_ipl[level] = 0;
+	ipl_emu ^= 7;
+	APUS_WRITE(APUS_IPL_EMU, IPLEMU_DISABLEINT|ipl_emu);
 }
 
 /****************************************************** debugging */
@@ -765,9 +593,9 @@ unsigned char __debug_ser_in( void )
 }
 
 int __debug_serinit( void )
-{	
+{
 	unsigned long flags;
-	
+
 	save_flags (flags);
 	cli();
 
@@ -785,7 +613,7 @@ int __debug_serinit( void )
 	 */
 	ciab.ddra |= (SER_DTR | SER_RTS);   /* outputs */
 	ciab.ddra &= ~(SER_DCD | SER_CTS | SER_DSR);  /* inputs */
-	
+
 #ifdef CONFIG_KGDB
 	/* turn Rx interrupts on for GDB */
 	custom.intena = IF_SETCLR | IF_RBF;
@@ -827,40 +655,21 @@ static void apus_progress(char *s, unsigned short value)
 /* The number of spurious interrupts */
 volatile unsigned int num_spurious;
 
-#define NUM_IRQ_NODES 100
-static irq_node_t nodes[NUM_IRQ_NODES];
+extern struct irqaction amiga_sys_irqaction[AUTO_IRQS];
 
-extern void (*amiga_default_handler[AUTO_IRQS])(int, void *, struct pt_regs *);
-
-static const char *default_names[SYS_IRQS] = {
-	"spurious int", "int1 handler", "int2 handler", "int3 handler",
-	"int4 handler", "int5 handler", "int6 handler", "int7 handler"
-};
-
-irq_node_t *new_irq_node(void)
-{
-	irq_node_t *node;
-	short i;
-
-	for (node = nodes, i = NUM_IRQ_NODES-1; i >= 0; node++, i--)
-		if (!node->handler)
-			return node;
-
-	printk ("new_irq_node: out of nodes\n");
-	return NULL;
-}
 
 extern void amiga_enable_irq(unsigned int irq);
 extern void amiga_disable_irq(unsigned int irq);
 
+struct hw_interrupt_type amiga_sys_irqctrl = {
+	typename: "Amiga IPL",
+	end: apus_end_irq,
+};
+
 struct hw_interrupt_type amiga_irqctrl = {
-	" Amiga  ",
-	NULL,
-	NULL,
-	amiga_enable_irq,
-	amiga_disable_irq,
-	0,
-	0
+	typename: "Amiga    ",
+	enable: amiga_enable_irq,
+	disable: amiga_disable_irq,
 };
 
 #define HARDWARE_MAPPED_SIZE (512*1024)
@@ -893,6 +702,8 @@ unsigned long __init apus_find_end_of_memory(void)
 		memory[0].size = ((size+0x001fffff) & 0xffe00000);
 	}
 
+	ppc_memstart = memory[0].addr;
+	ppc_memoffset = PAGE_OFFSET - PPC_MEMSTART;
 	total = memory[0].size;
 
 	/* Remove the memory chunks that are controlled by special
@@ -913,7 +724,6 @@ unsigned long __init apus_find_end_of_memory(void)
 	   the PowerUP board. Other system memory is horrible slow in
 	   comparison. The user can use other memory for swapping
 	   using the z2ram device. */
-	ram_phys_base = memory[0].addr;
 	return total;
 }
 
@@ -929,18 +739,23 @@ apus_map_io(void)
 __init
 void apus_init_IRQ(void)
 {
+	struct irqaction *action;
 	int i;
 
-	for ( i = 0 ; i < NR_IRQS ; i++ )
-		irq_desc[i].handler = &amiga_irqctrl;
+#ifdef CONFIG_PCI
+        apus_setup_pci_ptrs();
+#endif
 
-	for (i = 0; i < NUM_IRQ_NODES; i++)
-		nodes[i].handler = NULL;
-
-	for (i = 0; i < AUTO_IRQS; i++) {
-		if (amiga_default_handler[i] != NULL)
-			sys_request_irq(i, amiga_default_handler[i],
-					0, default_names[i], NULL);
+	for ( i = 0 ; i < AMI_IRQS; i++ ) {
+		irq_desc[i].status = IRQ_LEVEL;
+		if (i < IRQ_AMIGA_AUTO) {
+			irq_desc[i].handler = &amiga_irqctrl;
+		} else {
+			irq_desc[i].handler = &amiga_sys_irqctrl;
+			action = &amiga_sys_irqaction[i-IRQ_AMIGA_AUTO];
+			if (action->name)
+				setup_irq(i, action);
+		}
 	}
 
 	amiga_init_IRQ();
@@ -953,7 +768,7 @@ void platform_init(unsigned long r3, unsigned long r4, unsigned long r5,
 {
 	extern int parse_bootinfo(const struct bi_record *);
 	extern char _end[];
-	
+
 	/* Parse bootinfo. The bootinfo is located right after
            the kernel bss */
 	parse_bootinfo((const struct bi_record *)&_end);
@@ -963,7 +778,7 @@ void platform_init(unsigned long r3, unsigned long r4, unsigned long r5,
 	   registers when kernel is booted via a PPC reset. */
 	if ( ramdisk.addr ) {
 		initrd_start = (unsigned long) __va(ramdisk.addr);
-		initrd_end = (unsigned long) 
+		initrd_end = (unsigned long)
 			__va(ramdisk.size + ramdisk.addr);
 	}
 #endif /* CONFIG_BLK_DEV_INITRD */
@@ -972,13 +787,9 @@ void platform_init(unsigned long r3, unsigned long r4, unsigned long r5,
 
 	ppc_md.setup_arch     = apus_setup_arch;
 	ppc_md.show_cpuinfo   = apus_show_cpuinfo;
-	ppc_md.irq_cannonicalize = apus_irq_cannonicalize;
 	ppc_md.init_IRQ       = apus_init_IRQ;
 	ppc_md.get_irq        = apus_get_irq;
-	
-#error Should use the ->end() member of irq_desc[x]. -- Cort
-	/*ppc_md.post_irq       = apus_post_irq;*/
-	
+
 #ifdef CONFIG_HEARTBEAT
 	ppc_md.heartbeat      = apus_heartbeat;
 	ppc_md.heartbeat_count = 1;
@@ -1000,17 +811,4 @@ void platform_init(unsigned long r3, unsigned long r4, unsigned long r5,
 
 	ppc_md.find_end_of_memory = apus_find_end_of_memory;
 	ppc_md.setup_io_mappings = apus_map_io;
-
-	ppc_md.nvram_read_val = NULL;
-	ppc_md.nvram_write_val = NULL;
-
-#if defined(CONFIG_BLK_DEV_IDE) || defined(CONFIG_BLK_DEV_IDE_MODULE)
-        ppc_ide_md.ide_init_hwif = apus_ide_init_hwif_ports;
-#endif		
-}
-
-
-/*************************************************** coexistence */
-void __init adbdev_init(void)
-{
 }

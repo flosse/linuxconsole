@@ -37,7 +37,7 @@ Locking
 
 Generally, all locking is done by the core driver, except for the interrupt
 functions.  It is the responsibility of the low level hardware driver to
-perform the necessary locking there using info->lock. (since it is running
+perform the necessary locking there using port->lock. (since it is running
 in an interrupt, you only need to use spin_lock() and spin_unlock() from
 the interrupt handler).
 
@@ -56,6 +56,10 @@ hardware.
 	If the port does not support this operation, then it should
 	return TIOCSER_TEMT.
 
+	Locking: none.
+	Interrupts: caller dependent.
+	This call must not sleep
+
   set_mctrl(port, mctrl)
 	This function sets the modem control lines for port described
 	by 'port' to the state described by mctrl.  The relevant bits
@@ -67,6 +71,10 @@ hardware.
 	If the appropriate bit is set, the signal should be driven
 	active.  If the bit is clear, the signal should be driven
 	inactive.
+
+	Locking: port->lock taken.
+	Interrupts: locally disabled.
+	This call must not sleep
 
   get_mctrl(port)
 	Returns the current state of modem control inputs.  The state
@@ -81,21 +89,46 @@ hardware.
 	indicate that the signal is permanently active.  If RI is
 	not available, the signal should not be indicated as active.
 
-  stop_tx(port,from_tty)
+	Locking: none.
+	Interrupts: caller dependent.
+	This call must not sleep
+
+  stop_tx(port,tty_stop)
 	Stop transmitting characters.  This might be due to the CTS
 	line becoming inactive or the tty layer indicating we want
 	to stop transmission.
 
-  start_tx(port,nonempty,from_tty)
+	tty_stop: 1 if this call is due to the TTY layer issuing a
+	          TTY stop to the driver (equiv to rs_stop).
+
+	Locking: none.
+	Interrupts: caller dependent.
+	This call must not sleep
+
+  start_tx(port,tty_start)
 	start transmitting characters.  (incidentally, nonempty will
 	always be nonzero, and shouldn't be used - it will be dropped).
+
+	tty_start: 1 if this call was due to the TTY layer issuing
+	           a TTY start to the driver (equiv to rs_start)
+
+	Locking: port->lock taken.
+	Interrupts: locally disabled.
+	This call must not sleep
 
   stop_rx(port)
 	Stop receiving characters; the port is in the process of
 	being closed.
 
+	Locking: none.
+	Interrupts: caller dependent.
+	This call must not sleep
+
   enable_ms(port)
 	Enable the modem status interrupts.
+
+	Locking: none.
+	Interrupts: caller dependent.
 
   break_ctl(port,ctl)
 	Control the transmission of a break signal.  If ctl is
@@ -103,16 +136,26 @@ hardware.
 	should be terminated when another call is made with a zero
 	ctl.
 
-  startup(port,info)
+	Locking: none.
+	Interrupts: caller dependent.
+	This call must not sleep
+
+  startup(port)
 	Grab any interrupt resources and initialise any low level driver
 	state.  Enable the port for reception.  It should not activate
 	RTS nor DTR; this will be done via a separate call to set_mctrl.
 
-  shutdown(port,info)
+	Locking: port_sem taken.
+	Interrupts: globally disabled.
+
+  shutdown(port)
 	Disable the port, disable any break condition that may be in
 	effect, and free any interrupt resources.  It should not disable
 	RTS nor DTR; this will have already been done via a separate
 	call to set_mctrl.
+
+	Locking: port_sem taken.
+	Interrupts: caller dependent.
 
   change_speed(port,cflag,iflag,quot)
 	Change the port parameters, including word length, parity, stop
@@ -149,6 +192,10 @@ hardware.
 	Yes		1	1	character received, marked as
 					TTY_PARITY
 
+	Locking: none.
+	Interrupts: caller dependent.
+	This call must not sleep
+
   pm(port,state,oldstate)
 	perform any power management related activities on the specified
 	port.  state indicates the new state (defined by ACPI D0-D3),
@@ -157,14 +204,31 @@ hardware.
 
 	This function should not be used to grab any resources.
 
+	Locking: none.
+	Interrupts: caller dependent.
+
+  type(port)
+	Return a pointer to a string constant describing the specified
+	port, or return NULL, in which case the string 'unknown' is
+	substituted.
+
+	Locking: none.
+	Interrupts: caller dependent.
+
   release_port(port)
 	Release any memory and IO region resources currently in use by
 	the port.
+
+	Locking: none.
+	Interrupts: caller dependent.
 
   request_port(port)
 	Request any memory and IO region resources required by the port.
 	If any fail, no resources should be registered when this function
 	returns, and it should return -EBUSY on failure.
+
+	Locking: none.
+	Interrupts: caller dependent.
 
   config_port(port,type)
 	Perform any autoconfiguration steps required for the port.  `type`
@@ -178,13 +242,22 @@ hardware.
 	This is not necessary on platforms where ports have interrupts
 	internally hard wired (eg, system on a chip implementations).
 
+	Locking: none.
+	Interrupts: caller dependent.
+
   verify_port(port,serinfo)
 	Verify the new serial port information contained within serinfo is
 	suitable for this port type.
 
+	Locking: none.
+	Interrupts: caller dependent.
+
   ioctl(port,cmd,arg)
 	Perform any port specific IOCTLs.  IOCTL commands must be defined
 	using the standard numbering system found in <asm/ioctl.h>
+
+	Locking: none.
+	Interrupts: caller dependent.
 
 
 Other notes
