@@ -40,6 +40,13 @@
 #include <linux/serio.h>
 #include <linux/config.h>
 
+/* FF: This module provides arbitrary resource management routines.
+ * I use it to manage the device's memory.
+ * Despite the name of this module, I am *not* going to access the ioports.
+ */
+#include <linux/ioport.h>
+
+
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 MODULE_DESCRIPTION("USB/RS232 I-Force joysticks and wheels driver");
 
@@ -55,7 +62,28 @@ MODULE_DESCRIPTION("USB/RS232 I-Force joysticks and wheels driver");
 #define IFORCE_USB
 #endif
 
+/*TODO: use configuration */
+#define IFORCE_FF
+
 #define FF_EFFECTS_MAX	32
+
+/* Each force feedback effect is made of one core effect, which can be
+ * associated to at most to effect modifiers
+ */
+#define FF_MOD1_IS_USED		0
+#define FF_MOD1_IS_STORED	1
+#define FF_MOD2_IS_USED		2
+#define FF_MOD2_IS_STORED	3
+#define FF_CORE_IS_USED		4
+#define FF_CORE_IS_PLAYED	5
+#define FF_MODCORE_MAX		5
+
+struct iforce_core_effect {
+	/* Information about where modifiers are stored in the device's memory */
+	struct resource mod1_chunk;
+	struct resource mod2_chunk;
+	unsigned long flags[NBITS(FF_MODCORE_MAX)];
+};
 
 struct iforce {
         signed char data[IFORCE_MAX_LENGTH];
@@ -66,9 +94,9 @@ struct iforce {
         int open;
         int idx, pkt, len, id;
         unsigned char csum;
-	int ff_next_modifier_id;	/* FF: The id to assign to the next component of an effect */
 	struct semaphore ff_mutex;	/* FF: to avoid that several threads send commands at the same time to the device */
-	unsigned long ff_busy_effects_ids[NBITS(FF_EFFECTS_MAX)];
+	struct resource device_memory;
+	struct iforce_core_effect core_effects[FF_EFFECTS_MAX];
 };
 
 static struct {
@@ -86,6 +114,7 @@ static char *iforce_name = "I-Force joystick/wheel";
 /* Encode a time value */
 #define TIME_SCALE(a)	((a) == 0xffff ? 0xffff : (a) * 1000 / 256)
  
+#ifdef IFORCE_FF
 /*
  * Send a packet of bytes to the device
  */
@@ -148,40 +177,50 @@ printk(KERN_DEBUG "iforce ff: input event %d %d %d\n", type, code, value);
 
 /*
  * Set the magnitude of a constant force effect
- * Return the id of the modifier
+ * Return error code
  *
  * Note: caller must ensure exclusive access to device
  */
-static int make_magnitude_modifier(struct iforce* iforce, __s16 level)
+static int make_magnitude_modifier(struct iforce* iforce,
+	struct resource* mod_chunk, __s16 level)
 {
         unsigned char data[6] = {0x2b, 0x03, 0x03, 0x00, 0x00, 0x00};
         struct serio* serio = iforce->serio;
-	int id = iforce->ff_next_modifier_id;
  
-        data[3] = (unsigned char)LOW(iforce->ff_next_modifier_id);
-        data[4] = (unsigned char)HI(iforce->ff_next_modifier_id);
+	if (allocate_resource(&(iforce->device_memory), mod_chunk, 2,
+		iforce->device_memory.start, iforce->device_memory.end, 2L,
+		NULL, NULL)) {
+		return -ENOMEM;
+	}
+
+        data[3] = (unsigned char)LOW(mod_chunk->start);
+        data[4] = (unsigned char)HI(mod_chunk->start);
         data[5] = (unsigned char)(level >> 8);
  
         send_serio(serio, data);
 
-	iforce->ff_next_modifier_id += 0x02;
-	return id;
+	return 0;
 }
 /*
  * Upload the component of an effect dealing with the period, phase and magnitude
  */
-static int make_period_modifier(struct iforce* iforce,
+static int make_period_modifier(struct iforce* iforce, struct resource* mod_chunk,
 	__s16 magnitude, __s16 offset, __u16 period, __u16 phase)
 {
 	unsigned char data[10] = {0x2b, 0x04, 0x07,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 	struct serio* serio = iforce->serio;
-	int id = iforce->ff_next_modifier_id;
  
 	period = TIME_SCALE(period);
  
-	data[3] = (unsigned char)LOW(iforce->ff_next_modifier_id);
-	data[4] = (unsigned char)HI(iforce->ff_next_modifier_id);
+	if (allocate_resource(&(iforce->device_memory), mod_chunk, 0x0c,
+		iforce->device_memory.start, iforce->device_memory.end, 2L,
+		NULL, NULL)) {
+		return -ENOMEM;
+	}
+
+	data[3] = (unsigned char)LOW(mod_chunk->start);
+	data[4] = (unsigned char)HI(mod_chunk->start);
  
 	data[5] = (unsigned char)(magnitude >> 8);
 	data[6] = (unsigned char)(offset >> 8);
@@ -192,28 +231,31 @@ static int make_period_modifier(struct iforce* iforce,
  
 	send_serio(serio, data); 
 
-	iforce->ff_next_modifier_id += 0x0c;
-
-	return id;
+	return 0;
 }
 
 /*
  * Uploads the part of an effect setting the shape of the force
  */
-static int make_shape_modifier(struct iforce* iforce,
+static int make_shape_modifier(struct iforce* iforce, struct resource* mod_chunk,
         __u16 attack_duration, __s16 initial_level,
         __u16 fade_duration, __s16 final_level)
 {
 	unsigned char data[11] = {0x2b, 0x02, 0x08,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 	struct serio* serio = iforce->serio;
-	int id = iforce->ff_next_modifier_id;
  
 	attack_duration = TIME_SCALE(attack_duration);
 	fade_duration = TIME_SCALE(fade_duration);
  
-	data[3] = (unsigned char)LOW(iforce->ff_next_modifier_id);
-	data[4] = (unsigned char)HI(iforce->ff_next_modifier_id);
+	if (allocate_resource(&(iforce->device_memory), mod_chunk, 0x0e,
+		iforce->device_memory.start, iforce->device_memory.end, 2L,
+		NULL, NULL)) {
+		return -ENOMEM;
+	}
+
+	data[3] = (unsigned char)LOW(mod_chunk->start);
+	data[4] = (unsigned char)HI(mod_chunk->start);
  
 	data[5] = (unsigned char)LOW(attack_duration);
 	data[6] = (unsigned char)HI(attack_duration);
@@ -225,24 +267,28 @@ static int make_shape_modifier(struct iforce* iforce,
  
 	send_serio(serio, data);
 
-	iforce->ff_next_modifier_id += 0x0e;
-
-	return id;
+	return 0;
 }
 
 /*
  * Component of spring, friction, inertia... effects
  */
-static int make_interactive_modifier(struct iforce* iforce, __s16 rsat,
-	__s16 lsat, __s16 rk, __s16 lk, __u16 db, __s16 center)
+static int make_interactive_modifier(struct iforce* iforce, 
+	struct resource* mod_chunk,
+	__s16 rsat, __s16 lsat, __s16 rk, __s16 lk, __u16 db, __s16 center)
 {
         unsigned char data[13] = {0x2b, 0x05, 0x0a,
                 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00, 0x00};
-	int id = iforce->ff_next_modifier_id;
 
-        data[3] = (unsigned char)LOW(iforce->ff_next_modifier_id);
-        data[4] = (unsigned char)HI(iforce->ff_next_modifier_id);
+	if (allocate_resource(&(iforce->device_memory), mod_chunk, 8,
+		iforce->device_memory.start, iforce->device_memory.end, 2L,
+		NULL, NULL)) {
+		return -ENOMEM;
+	}
+
+        data[3] = (unsigned char)LOW(mod_chunk->start);
+        data[4] = (unsigned char)HI(mod_chunk->start);
 
         data[5] = (unsigned char)(rk>>8);
         data[6] = (unsigned char)(lk>>8);
@@ -257,14 +303,13 @@ static int make_interactive_modifier(struct iforce* iforce, __s16 rsat,
 
         send_serio(iforce->serio, data);
 
-	iforce->ff_next_modifier_id += 0x08;
-	return id;
+	return 0;
 }
 
 /*
  * Send the part common to all effects to the device
  */
-static void make_core(struct iforce* iforce, __u16 id, __u16 mod_id1, __u16 mod_id2,
+static int make_core(struct iforce* iforce, __u16 id, __u16 mod_id1, __u16 mod_id2,
 	__u8 effect_type, __u8 axes, __u16 duration, __u16 delay, __u16 button,
 	__u16 interval, __u16 direction)
 {
@@ -300,26 +345,37 @@ static void make_core(struct iforce* iforce, __u16 id, __u16 mod_id1, __u16 mod_
 	data[16] = (unsigned char)HI(delay);
 
 	send_serio(serio, data);                                               
+
+	return 0;
 }
 
 /*
  * Upload a periodic effect to the device
  */
-static void iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effect)
+static int iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effect)
 {
 	__u8 wave_code;
-	int period_id, shape_id;
- 
-	printk(KERN_DEBUG "iforce ff: make periodic effect \n"); 
-	period_id = make_period_modifier(iforce,
+	int core_id = effect->id;
+	struct iforce_core_effect* core_effect = iforce->core_effects + core_id;
+	struct resource* mod1_chunk = &(iforce->core_effects[core_id].mod1_chunk);
+	struct resource* mod2_chunk = &(iforce->core_effects[core_id].mod2_chunk);
+	int err = 0;
+	
+	err = make_period_modifier(iforce, mod1_chunk,
 		effect->u.periodic.magnitude, effect->u.periodic.offset,
 		effect->u.periodic.period, effect->u.periodic.phase);
+	if (err) return err;
+	set_bit(FF_MOD1_IS_USED, core_effect->flags);
+	set_bit(FF_MOD1_IS_STORED, core_effect->flags);
  
-        shape_id = make_shape_modifier(iforce,
+        err = make_shape_modifier(iforce, mod2_chunk,
                 effect->u.periodic.shape.attack_length,
 		effect->u.periodic.shape.attack_level,
                 effect->u.periodic.shape.fade_length,
 		effect->u.periodic.shape.fade_level);
+	if (err) return err;
+	set_bit(FF_MOD2_IS_USED, core_effect->flags);
+	set_bit(FF_MOD2_IS_STORED, core_effect->flags);
  
 	switch (effect->u.periodic.waveform) {
 	case FF_SQUARE:		wave_code = 0x20; break;
@@ -330,9 +386,9 @@ static void iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effe
 	default: 		wave_code = 0x20; break;
 	}
  
-	make_core(iforce, effect->id,
-                period_id,
-                shape_id,
+	err = make_core(iforce, effect->id,
+                mod1_chunk->start,
+                mod2_chunk->start,
                 wave_code,
 		0x20,
                 effect->replay.length,
@@ -341,6 +397,7 @@ static void iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effe
 		effect->trigger.interval,
 		effect->u.periodic.direction);
  
+	return err;
 }
 
 /*
@@ -348,22 +405,31 @@ static void iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effe
  */
 static int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effect)
 {
-	int magnitude_id;
-	int shape_id;
+	int core_id = effect->id;
+	struct iforce_core_effect* core_effect = iforce->core_effects + core_id;
+	struct resource* mod1_chunk = &(iforce->core_effects[core_id].mod1_chunk);
+	struct resource* mod2_chunk = &(iforce->core_effects[core_id].mod2_chunk);
+	int err = 0;
 
 	printk(KERN_DEBUG "iforce ff: make constant effect\n");
  
-	magnitude_id = make_magnitude_modifier(iforce, effect->u.constant.level);
+	err = make_magnitude_modifier(iforce, mod1_chunk, effect->u.constant.level);
+	if (err) return err;
+	set_bit(FF_MOD1_IS_USED, core_effect->flags);
+	set_bit(FF_MOD1_IS_STORED, core_effect->flags);
  
-	shape_id = make_shape_modifier(iforce,
+	err = make_shape_modifier(iforce, mod2_chunk,
 		effect->u.constant.shape.attack_length,
 		effect->u.constant.shape.attack_level,
 		effect->u.constant.shape.fade_length,
 		effect->u.constant.shape.fade_level);
+	if (err) return err;
+	set_bit(FF_MOD2_IS_USED, core_effect->flags);
+	set_bit(FF_MOD2_IS_STORED, core_effect->flags);
  
-	make_core(iforce, effect->id,
-		magnitude_id,
-		shape_id,
+	err = make_core(iforce, effect->id,
+		mod1_chunk->start,
+		mod2_chunk->start,
 		0x00,
 		0x20,
 		effect->replay.length,
@@ -372,7 +438,7 @@ static int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effec
 		effect->trigger.interval,
 		effect->u.constant.direction);
  
-	return 0;                                                               
+	return err;                                                               
 }
 
 /*
@@ -380,9 +446,12 @@ static int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effec
  */
 static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* effect)
 {
-	int interactive_id;
+	int core_id = effect->id;
+	struct iforce_core_effect* core_effect = iforce->core_effects + core_id;
+	struct resource* mod_chunk = &(core_effect->mod1_chunk);
 	__u8 type, axes;
 	__u16 mod1, mod2, direction;
+	int err = 0;
 
 	printk(KERN_DEBUG "iforce ff: make interactive effect");
 
@@ -392,17 +461,20 @@ static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* ef
 	default: return -1;
 	}
 
-	interactive_id = make_interactive_modifier(iforce,
+	err = make_interactive_modifier(iforce, mod_chunk,
 		effect->u.interactive.right_saturation,
 		effect->u.interactive.left_saturation,
 		effect->u.interactive.right_coeff,
 		effect->u.interactive.left_coeff,
 		effect->u.interactive.deadband,
 		effect->u.interactive.center);
+	if (err) return err;
+	set_bit(FF_MOD1_IS_USED, core_effect->flags);
+	set_bit(FF_MOD1_IS_STORED, core_effect->flags);
 
 	/* Only X axis */
 	if (effect->u.interactive.axis == BIT(FF_X)) {
-		mod1 = interactive_id;
+		mod1 = mod_chunk->start;
 		mod2 = 0xffff;
 		direction = 0x5a00;
 		axes = 0x40;
@@ -410,13 +482,13 @@ static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* ef
 	/* Only Y axis */
 	else if (effect->u.interactive.axis == BIT(FF_Y)) {
 		mod1 = 0xffff;
-		mod2 = interactive_id;
+		mod2 = mod_chunk->start;
 		direction = 0xb400;
 		axes = 0x80;
 	} 
 	/* Only one axis, choose orientation */
 	else if (effect->u.interactive.axis == 0) {
-		mod1 = interactive_id;
+		mod1 = mod_chunk->start;
 		mod2 = 0xffff;
 		direction = effect->u.interactive.direction;
 		axes = 0x20;
@@ -424,8 +496,8 @@ static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* ef
 	/* Both X and Y axes */
 	else if ( effect->u.interactive.axis == (BIT(FF_X)|BIT(FF_Y)) ) {
 		/* TODO: same setting for both axes is not mandatory */
-		mod1 = interactive_id;
-		mod2 = interactive_id;
+		mod1 = mod_chunk->start;
+		mod2 = mod_chunk->start;
 		direction = 0x6000;
 		axes = 0xc0;
 	}
@@ -434,40 +506,43 @@ static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* ef
 		return -1;
 	}
 
-
-	make_core(iforce, effect->id, 
+	err = make_core(iforce, effect->id, 
 		mod1, mod2,
 		type, axes,
 		effect->replay.length, effect->replay.delay,
 		effect->trigger.button, effect->trigger.interval,
 		direction);
 
-	return 0;
+	return err;
 }
 
 /*
  * Function called when an ioctl is performed on the event dev entry.
  * It uploads an effect to the device
  */
-static void iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
+static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 {
 	struct iforce* iforce = (struct iforce*)(dev->private);
+	int err = 0;
 
 	printk(KERN_DEBUG "iforce ff: upload effect\n");
 
 	down_interruptible(&(iforce->ff_mutex));
 
-	/* New effect ?
+	/* 
 	 * Get a free id
 	 */
-	if (effect->id == -1) {
+	{
 		int id;
 		for (id=0; id < FF_EFFECTS_MAX; ++id) {
-			if (!test_bit(id, iforce->ff_busy_effects_ids)) break;
+			if (!test_bit(FF_CORE_IS_USED, iforce->core_effects[id].flags)) break;
 		}
-		if ( id == FF_EFFECTS_MAX ) goto leave;
+		if ( id == FF_EFFECTS_MAX ) {
+			err = -ENOMEM;
+			goto leave;
+		}
 		effect->id = id;
-		set_bit(id, iforce->ff_busy_effects_ids);
+		set_bit(FF_CORE_IS_USED, iforce->core_effects[id].flags);
 	}
 	
 	switch (effect->type) {
@@ -487,7 +562,37 @@ static void iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect
 
 leave:
 	up(&(iforce->ff_mutex));
+	return err;
 }
+
+static int iforce_erase_effect(struct input_dev *dev, int effect_id)
+{
+	struct iforce* iforce = (struct iforce*)(dev->private);
+	int err = 0;
+	struct iforce_core_effect* core_effect;
+
+printk(KERN_DEBUG "iforce ff: erase effect %d\n", effect_id);
+
+	if (effect_id < 0 || effect_id >= FF_EFFECTS_MAX) {
+		return -EINVAL;
+	}
+
+	down_interruptible(&(iforce->ff_mutex));
+	core_effect = iforce->core_effects + effect_id;
+
+	if (test_bit(FF_MOD1_IS_STORED, core_effect->flags)) {
+		err = release_resource(&(iforce->core_effects[effect_id].mod1_chunk));
+	}
+	if (!err && test_bit(FF_MOD2_IS_STORED, core_effect->flags)) {
+		err = release_resource(&(iforce->core_effects[effect_id].mod2_chunk));
+	}
+	/*TODO: remember to change that if more FF_MOD* bits are added */
+	core_effect->flags[0] = 0;
+
+	up(&(iforce->ff_mutex));
+	return err;
+}
+#endif /* IFORCE_FF */
 
 static void iforce_process_packet(struct input_dev *dev, unsigned char id, int idx, unsigned char *data)
 {
@@ -556,6 +661,12 @@ static void iforce_close(struct input_dev *dev)
 static void iforce_input_setup(struct iforce *iforce)
 {
 	int i;
+#ifdef IFORCE_FF
+	/*
+	 * HACK: this mutex is only used to initialize iforce->ff_mutex
+	 */
+	static DECLARE_MUTEX(ff_mutex_initializer);
+#endif
 
 	iforce->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 	iforce->dev.keybit[LONG(BTN_JOYSTICK)] |= BIT(BTN_TRIGGER) | BIT(BTN_TOP) | BIT(BTN_THUMB) | BIT(BTN_TOP2) |
@@ -564,12 +675,11 @@ static void iforce_input_setup(struct iforce *iforce)
 	iforce->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y) | BIT(ABS_THROTTLE) | BIT(ABS_HAT0X) | BIT(ABS_HAT0Y)
 				| BIT(ABS_WHEEL) | BIT(ABS_GAS) | BIT(ABS_BRAKE);
 
-	/*
-	 * FF: set ffbit here
-	 */
+#ifdef IFORCE_FF
 	/* TODO: auto detect, or use option */
 	iforce->dev.evbit[0] |= BIT(EV_FF);
 	iforce->dev.ffbit[0] = BIT(FF_X) | BIT(FF_Y);
+#endif
 
 	for (i = ABS_X; i <= ABS_Y; i++) {
 		iforce->dev.absmax[i] =  1920;
@@ -595,8 +705,28 @@ static void iforce_input_setup(struct iforce *iforce)
 	iforce->dev.close = iforce_close;
 #endif
 
-#ifdef IFORCE_232
+#ifdef IFORCE_FF
+printk(KERN_DEBUG "iforce ff: iforce_input_setup start of ff init\n");
 	iforce->dev.event = iforce_input_event;
+
+	iforce->dev.upload_effect = iforce_upload_effect;
+	iforce->dev.erase_effect = iforce_erase_effect;
+printk(KERN_DEBUG "iforce ff: iforce functions registered \n");
+
+	/* initialize semaphore protecting write access to the device */
+	iforce->ff_mutex = ff_mutex_initializer;
+printk(KERN_DEBUG "iforce ff: mutex initialized \n");
+
+	/* memory avalaible on the device */
+	iforce->device_memory.name = "I-Force device effect memory";
+	iforce->device_memory.start = 0;
+	/*TODO: Get this value from device (the protocol certainly allows that) */
+	iforce->device_memory.end = 0x100;
+	iforce->device_memory.flags = IORESOURCE_MEM;
+	iforce->device_memory.parent = NULL;
+	iforce->device_memory.child = NULL;
+	iforce->device_memory.sibling = NULL;
+printk(KERN_DEBUG "iforce ff: memory detected \n");
 #endif
 
 	input_register_device(&iforce->dev);
@@ -714,11 +844,6 @@ static void iforce_serio_irq(struct serio *serio, unsigned char data, unsigned i
 static void iforce_serio_connect(struct serio *serio, struct serio_dev *dev)
 {
 	struct iforce *iforce;
-	/*
-	 * HACK: this mutex is only used to initialize iforce->ff_mutex
-	 */
-	static DECLARE_MUTEX(ff_mutex_initializer);
-
 	if (serio->type != (SERIO_RS232 | SERIO_IFORCE))
 		return;
 
@@ -731,14 +856,8 @@ static void iforce_serio_connect(struct serio *serio, struct serio_dev *dev)
 	iforce->dev.idproduct = 0x0001;
 	iforce->dev.idversion = 0x0100;
 
-	/* FF: function to be called when a effect is to be uploaded */
-	iforce->dev.upload_effect = iforce_upload_effect;
-
 	/* FF: iforce_input_event() needs a reference to serio */
 	iforce->serio = serio;
-
-	/* FF: initialize semaphore protecting write access to the device */
-	iforce->ff_mutex = ff_mutex_initializer;
 
 	serio->private = iforce;
 
