@@ -105,8 +105,7 @@ static int misc_open(struct inode * inode, struct file * file)
 	int minor = MINOR(inode->i_rdev);
 	struct miscdevice *c;
 	int err = -ENODEV;
-	
-	file->f_op = NULL;
+	struct file_operations *old_fops;
 	
 	down(&misc_sem);
 	
@@ -127,14 +126,22 @@ static int misc_open(struct inode * inode, struct file * file)
 			goto fail;
 	}
 
-	if ((file->f_op = c->fops) && file->f_op->open)
+	old_fops = file->f_op;
+	file->f_op = fops_get(c->fops);
+	if (file->f_op && file->f_op->open)
 		err=file->f_op->open(inode,file);
+	if (err) {
+		fops_put(file->f_op);
+		file->f_op = fops_get(old_fops);
+	}
+	fops_put(old_fops);
 fail:
 	up(&misc_sem);
 	return err;
 }
 
 static struct file_operations misc_fops = {
+	owner:		THIS_MODULE,
 	open:		misc_open,
 };
 
@@ -179,9 +186,9 @@ int misc_register(struct miscdevice * misc)
 	if (!devfs_handle)
 		devfs_handle = devfs_mk_dir (NULL, "misc", 4, NULL);
 	misc->devfs_handle =
-	    devfs_register (devfs_handle, misc->name, 0, DEVFS_FL_NONE,
+	    devfs_register (devfs_handle, misc->name, DEVFS_FL_NONE,
 			    MISC_MAJOR, misc->minor,
-			    S_IFCHR | S_IRUSR | S_IWUSR | S_IRGRP, 0, 0,
+			    S_IFCHR | S_IRUSR | S_IWUSR | S_IRGRP,
 			    misc->fops, NULL);
 
 	/*

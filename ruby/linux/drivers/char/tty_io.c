@@ -1426,49 +1426,6 @@ static unsigned int tty_poll(struct file * filp, poll_table * wait)
 	return 0;
 }
 
-/*
- * fasync_helper() is used by some character device drivers (mainly mice)
- * to set up the fasync queue. It returns negative on error, 0 if it did
- * no changes and positive if it added/deleted the entry.
- */
-int fasync_helper(int fd, struct file * filp, int on, struct fasync_struct **fapp)
-{
-	struct fasync_struct *fa, **fp;
-	unsigned long flags;
-
-	for (fp = fapp; (fa = *fp) != NULL; fp = &fa->fa_next) {
-		if (fa->fa_file == filp)
-			break;
-	}
-
-	if (on) {
-		if (fa) {
-			fa->fa_fd = fd;
-			return 0;
-		}
-		fa = (struct fasync_struct *)kmalloc(sizeof(struct fasync_struct), GFP_KERNEL);
-		if (!fa)
-			return -ENOMEM;
-		fa->magic = FASYNC_MAGIC;
-		fa->fa_file = filp;
-		fa->fa_fd = fd;
-		save_flags(flags);
-		cli();
-		fa->fa_next = *fapp;
-		*fapp = fa;
-		restore_flags(flags);
-		return 1;
-	}
-	if (!fa)
-		return 0;
-	save_flags(flags);
-	cli();
-	*fp = fa->fa_next;
-	restore_flags(flags);
-	kfree(fa);
-	return 1;
-}
-
 static int tty_fasync(int fd, struct file * filp, int on)
 {
 	struct tty_struct * tty;
@@ -2010,8 +1967,6 @@ void tty_register_devfs (struct tty_driver *driver, unsigned int flags,
 {
 #ifdef CONFIG_DEVFS_FS
 	umode_t mode = S_IFCHR | S_IRUSR | S_IWUSR;
-	uid_t uid = 0;
-	gid_t gid = 0;
 	struct tty_struct tty;
 	char buf[32];
 
@@ -2035,14 +1990,11 @@ void tty_register_devfs (struct tty_driver *driver, unsigned int flags,
 	}
 #  ifdef CONFIG_UNIX98_PTYS
 	if ( (driver->major >= UNIX98_PTY_SLAVE_MAJOR) &&
-	     (driver->major < UNIX98_PTY_SLAVE_MAJOR + UNIX98_NR_MAJORS) ) {
-		uid = current->uid;
-		gid = current->gid;
-	}
+	     (driver->major < UNIX98_PTY_SLAVE_MAJOR + UNIX98_NR_MAJORS) )
+		flags |= DEVFS_FL_CURRENT_OWNER;
 #  endif
-	devfs_register (NULL, tty_name (&tty, buf), 0,flags | DEVFS_FL_DEFAULT,
-			driver->major, minor, mode, uid, gid,
-			&tty_fops, NULL);
+	devfs_register (NULL, tty_name (&tty, buf), flags | DEVFS_FL_DEFAULT,
+			driver->major, minor, mode, &tty_fops, NULL);
 #endif /* CONFIG_DEVFS_FS */
 }
 
