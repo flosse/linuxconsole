@@ -92,7 +92,7 @@ module in kernel, either loaded or compiled in:
 
   For gameport joysticks, you'll have to load the gameport driver as well;
 
-	modprove ns558
+	modprobe ns558
 
   And for serial port joysticks, you'll need the serial input line
 discipline module loaded and the inputattach utility started:
@@ -108,7 +108,7 @@ usually you'll have an analog joystick:
   For automatic module loading, something like this might work:
 
 	alias tty-ldisc-2 serport
-	alias char-major-13 joydev ns558 analog
+	probeall char-major-13 joydev ns558 analog
 
 2.5 Verifying that it works
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
