@@ -42,6 +42,8 @@
 #include <linux/pci.h>
 #include <linux/pci_ids.h>
 #include <linux/init.h>
+#include <linux/slab.h>
+#include <linux/sched.h>
 #include <linux/gameport.h>
 
 #define PCI_VENDOR_ID_AUREAL	0x12eb
