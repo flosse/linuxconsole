@@ -45,7 +45,6 @@ MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
 
 #define NS558_ISA	1
 #define NS558_PNP	2
-#define NS558_PCI	3
 
 static int ns558_isa_portlist[] = { 0x200, 0x201, 0x202, 0x203, 0x204, 0x205, 0x207, 0x209,
 				    0x20b, 0x20c, 0x20e, 0x20f, 0x211, 0x219, 0x101, 0 };
@@ -58,7 +57,6 @@ struct ns558 {
 };
 	
 static struct ns558 *ns558;
-static int ns558_pci;
 
 /*
  * ns558_isa_probe() tries to find an isa gameport at the
@@ -132,7 +130,7 @@ static struct ns558* ns558_isa_probe(int io, struct ns558 *next)
 	i--;
 
 	if (!(port = kmalloc(sizeof(struct ns558), GFP_KERNEL))) {
-		printk(KERN_ERR "Memory allocation failed.\n");
+		printk(KERN_ERR "ns558: Memory allocation failed.\n");
 		return next;
 	}
        	memset(port, 0, sizeof(struct ns558));
@@ -152,75 +150,6 @@ static struct ns558* ns558_isa_probe(int io, struct ns558 *next)
 
 	return port;
 }
-
-#ifdef CONFIG_PCI
-static struct pci_device_id ns558_pci_tbl[] __devinitdata = {
-	{ 0x1102, 0x7002, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0 }, /* SB Live! gameport */
-	{ 0x125d, 0x1969, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 4 }, /* ESS Solo 1 */
-	{ 0x5333, 0xca00, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 4 }, /* S3 SonicVibes */
-	{ 0, }
-};
-MODULE_DEVICE_TABLE(pci, ns558_pci_tbl);
-
-static int __devinit ns558_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
-{
-	int ioport, iolen;
-	int rc;
-	struct ns558 *port;
-        
-	rc = pci_enable_device(pdev);
-	if (rc) {
-		printk(KERN_ERR "ns558: Cannot enable PCI gameport (bus %d, devfn %d) error=%d\n",
-			pdev->bus->number, pdev->devfn, rc);
-		return rc;
-	}
-
-	ioport = pci_resource_start(pdev, ent->driver_data);
-	iolen = pci_resource_len(pdev, ent->driver_data);
-
-	if (!request_region(ioport, iolen, "ns558-pci"))
-		return -EBUSY;
-
-	if (!(port = kmalloc(sizeof(struct ns558), GFP_KERNEL))) {
-		printk(KERN_ERR "Memory allocation failed.\n");
-		release_region(ioport, iolen);
-		return -ENOMEM;
-	}
-	memset(port, 0, sizeof(struct ns558));
-
-	port->type = NS558_PCI;
-	port->gameport.io = ioport;
-	port->gameport.size = iolen;
-	port->dev = pdev;
-
-	pdev->driver_data = port;
-
-	gameport_register_port(&port->gameport);
-
-	printk(KERN_INFO "gameport%d: NS558 PCI at %#x", port->gameport.number, port->gameport.io);
-	if (port->gameport.size > 1) printk(" size %d", port->gameport.size);
-	printk(" speed %d kHz\n", port->gameport.speed);
-
-	return 0;
-}
-
-static void __devexit ns558_pci_remove(struct pci_dev *pdev)
-{
-	struct ns558 *port = (struct ns558 *)pdev->driver_data;
-	release_region(port->gameport.io, port->gameport.size);
-	kfree(port);
-}
-
-static struct pci_driver ns558_pci_driver = {
-        name:           "PCI Gameport",
-        id_table:       ns558_pci_tbl,
-        probe:          ns558_pci_probe,
-        remove:         ns558_pci_remove,
-};
-#else
-static struct pci_driver ns558_pci_driver;
-#endif /* CONFIG_PCI */
-
 
 #if defined(CONFIG_ISAPNP) || (defined(CONFIG_ISAPNP_MODULE) && defined(MODULE))
 #define NSS558_ISAPNP
@@ -263,12 +192,12 @@ static struct ns558* ns558_pnp_probe(struct pci_dev *dev, struct ns558 *next)
 		return next;
 
 	if (!(dev->resource[0].flags & IORESOURCE_IO)) {
-		printk(KERN_WARNING "No i/o ports on a gameport? Weird\n");
+		printk(KERN_WARNING "ns558: No i/o ports on a gameport? Weird\n");
 		return next;
 	}
 
 	if (dev->activate && dev->activate(dev) < 0) {
-		printk(KERN_ERR "PnP resource allocation failed\n");
+		printk(KERN_ERR "ns558: PnP resource allocation failed\n");
 		return next;
 	}
 	
@@ -279,7 +208,7 @@ static struct ns558* ns558_pnp_probe(struct pci_dev *dev, struct ns558 *next)
 		goto deactivate;
 
 	if (!(port = kmalloc(sizeof(struct ns558), GFP_KERNEL))) {
-		printk(KERN_ERR "Memory allocation failed.\n");
+		printk(KERN_ERR "ns558: Memory allocation failed.\n");
 		goto deactivate;
 	}
 	memset(port, 0, sizeof(struct ns558));
@@ -309,16 +238,8 @@ int __init ns558_init(void)
 {
 	int i = 0;
 #ifdef NSS558_ISAPNP
-	struct pci_dev *dev = NULL;
 	struct isapnp_device_id *devid;
 #endif
-
-/*
- * Probe for PCI ports.  Always probe for PCI first,
- * it is the least-invasive probe.
- */
-
-	ns558_pci = !pci_module_init(&ns558_pci_driver);
 
 /*
  * Probe for ISA ports.
@@ -339,7 +260,7 @@ int __init ns558_init(void)
 	}
 #endif
 
-	return (ns558 || ns558_pci) ? 0 : -ENODEV;
+	return ns558 ? 0 : -ENODEV;
 }
 
 void __exit ns558_exit(void)
@@ -369,9 +290,6 @@ void __exit ns558_exit(void)
 		kfree(port);
 		port = next;
 	}
-
-	if (ns558_pci)
-		pci_unregister_driver(&ns558_pci_driver);
 }
 
 module_init(ns558_init);
