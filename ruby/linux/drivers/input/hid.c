@@ -924,6 +924,8 @@ static void hid_configure_usage(struct hid_device *device, struct hid_field *fie
 		usage->code = find_next_zero_bit(bit, max + 1, usage->code);
 	}
 
+	if (usage->code > max) return;
+
 	if (usage->type == EV_ABS) {
 		int a = field->logical_minimum;
 		int b = field->logical_maximum;
@@ -936,7 +938,7 @@ static void hid_configure_usage(struct hid_device *device, struct hid_field *fie
 
 	if (usage->hat) {
 		int i;
-		for (i = usage->code; i < usage->code + 2; i++) {
+		for (i = usage->code; i < usage->code + 2 && i <= max; i++) {
 			input->absmax[i] = 1;
 			input->absmin[i] = -1;
 			input->absfuzz[i] = 0;
