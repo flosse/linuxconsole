@@ -81,13 +81,21 @@ int main(int argc, char** argv)
 	printf("Device %s opened\n", device_file_name);
 
 	if (autocenter >= 0 && autocenter <= 100) {
-		if (ioctl(fd, EVIOCSAUTOCENTER, (unsigned short)(0xFFFF*autocenter/100)) == -1)
-				perror("set auto-center");
+		struct input_event ie;
+		ie.type = EV_FF;
+		ie.code = FF_AUTOCENTER;
+		ie.value = 0xFFFFUL * autocenter / 100;
+		if (write(fd, &ie, sizeof(ie)) == -1)
+			perror("set auto-center");
 	}
 
 	if (gain >= 0 && gain <= 100) {
-		if (ioctl(fd, EVIOCSGAIN, (unsigned short)(0xFFFF*gain/100)) == -1)
-				perror("set gain");
+		struct input_event ie;
+		ie.type = EV_FF;
+		ie.code = FF_GAIN;
+		ie.value = 0xFFFFUL * gain / 100;
+		if (write(fd, &ie, sizeof(ie)) == -1)
+			perror("set gain");
 	}
 
 	exit(0);
