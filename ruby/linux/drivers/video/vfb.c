@@ -446,15 +446,13 @@ int __init vfb_init(void)
 }
 
 #ifdef MODULE
-int init_module(void)
-{
-    return vfb_init();
-}
 
-void cleanup_module(void)
+static void __exit vfb_cleanup(void)
 {
     unregister_framebuffer(&fb_info);
     vfree(videomemory);
 }
 
+module_init(vfb_init);
+module_exit(vfb_cleanup);
 #endif /* MODULE */

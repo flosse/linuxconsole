@@ -284,7 +284,7 @@ int __init xxxfb_init(void)
      *  Cleanup
      */
 
-void xxxfb_cleanup(struct fb_info *info)
+static void __exit xxxfb_cleanup(void)
 {
     /*
      *  If your driver supports multiple boards, you should unregister and
@@ -294,7 +294,6 @@ void xxxfb_cleanup(struct fb_info *info)
     unregister_framebuffer(info);
     /* ... */
 }
-
 
     /*
      *  Setup
@@ -348,13 +347,6 @@ static struct fb_ops xxxfb_ops = {
      */
 
 #ifdef MODULE
-int init_module(void)
-{
-    return xxxfb_init();
-}
-
-void cleanup_module(void)
-{
-    xxxfb_cleanup(void);
-}
+module_init(xxxfb_init);
+module_exit(xxxfb_cleanup);
 #endif /* MODULE */
