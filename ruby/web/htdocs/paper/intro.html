@@ -1,0 +1,145 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+
+<!--Converted with LaTeX2HTML 2K.1beta (1.48)
+original version by:  Nikos Drakos, CBLU, University of Leeds
+* revised and updated by:  Marcus Hennecke, Ross Moore, Herb Swan
+* with significant contributions from:
+  Jens Lippmann, Marek Rouchal, Martin Wilck and others -->
+<HTML>
+<HEAD>
+<TITLE>Introduction</TITLE>
+<META NAME="description" CONTENT="Introduction">
+<META NAME="keywords" CONTENT="console_paper">
+<META NAME="resource-type" CONTENT="document">
+<META NAME="distribution" CONTENT="global">
+
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=iso-8859-1">
+<META NAME="Generator" CONTENT="LaTeX2HTML v2K.1beta">
+<META HTTP-EQUIV="Content-Style-Type" CONTENT="text/css">
+
+<LINK REL="STYLESHEET" HREF="console_paper.css">
+
+<LINK REL="next" HREF="node3.html">
+<LINK REL="previous" HREF="intro.html">
+<LINK REL="up" HREF="console_paper.html">
+<LINK REL="next" HREF="node3.html">
+</HEAD>
+
+<BODY >
+<!--Navigation Panel-->
+<A NAME="tex2html85"
+  HREF="node3.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next" SRC="next.png"></A> 
+<A NAME="tex2html81"
+  HREF="ss_paper.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up" SRC="up.png"></A> 
+<A NAME="tex2html75"
+  HREF="intro.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous" SRC="prev.png"></A> 
+<A NAME="tex2html83"
+  HREF="intro.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents" SRC="contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html86"
+  HREF="node3.html">Using the Input API</A>
+<B> Up:</B> <A NAME="tex2html82"
+  HREF="console_paper.html">New Linux Console System </A>
+<B> Previous:</B> <A NAME="tex2html76"
+  HREF="intro.html">Contents</A>
+ &nbsp <B>  <A NAME="tex2html84"
+  HREF="intro.html">Contents</A></B> 
+<BR>
+<BR>
+<!--End of Navigation Panel-->
+
+<H1><A NAME="SECTION00020000000000000000">
+Introduction</A>
+</H1>
+
+<P>
+Ten years when Linus was written it was on a intel machine with basic VGA 
+support. Linus like other UNIX based operation systems developed a concept 
+of a virtual terminal. In the old mainframe days the only way to access the
+mainframe was via a TTY (terminal teletype) device. They basically where a 
+monochrome, stylish green, display and a keyboard together that connected 
+to the mainframe by a serial line. With todays PC we still have a monitor 
+and a keyboard attached. So Linux simulates these type of TTYs. The
+flexiablity of POSIX TTYs allows it to be applied to other types of hardware 
+such as modems. 
+
+<P>
+As you can see the TTY layer covers many types of pieces of hardware. Because 
+it does cover so many types this presents very difficult issues. What we have
+seen is no clear boundaries between the various types of devices. You see 
+things pieces of tty/console code sprinckled through out various low level
+drivers. This makes driver writing more complex than it needs to be. 
+
+<P>
+The second issue is the new types of hardware Linux has encountered. For 
+example is the Compaq iPAQ. It has a framebuffer display but no permenant
+keyboard. Having a built in VT makes no sense in this case. Having console
+code inside the framebuffer driver makes no sense. Have a pseudo keyboard 
+make even less sense. 
+   
+<P>
+So the first step is to rework the lower device layers. Also in the process 
+we form a uniform api for these layers. For various input devices we find we
+are lacking a standard api. So for one part of the project we begain the 
+task of porting every human input device over to a universal api. The api 
+choosen was the input api implemented for the USB layer. This migrates the
+VT code for keyboard handling from a PC centeric keyboard design to a more 
+device indepedent format. 
+ 
+<P>
+The second layer to rework is the framebuffer layer. The basic goal was to 
+removal all the console code out of the lower level drivers and make the
+framebuffer layer be able to stand on it own to handle PDA type devices.
+
+<P>
+The final layer is the serial layer. The final goal is to model this layer 
+after the parport layer. Here we with have device interface independent layer
+and have device interfaces register with the core code. The reason for this
+apporach is to deal with serial based input devices. Some platforms have serial
+keyboards and it is unacceptable to have to run a unserland application just to
+be able to use it via the tty layer. Again their is great code redundecy.
+
+<P>
+The final change was to the console layer itself. The main goal was to move away
+from the VGA text mode centric design. Also another goal was to allow the console
+and tty system more flexiable as I will point out later in this paper.
+
+<P>
+This paper will examine designing and implementing a new tty layer that
+is smaller, lighter weight and much more flexiable than the current system.
+
+<P>
+<HR>
+<!--Navigation Panel-->
+<A NAME="tex2html85"
+  HREF="node3.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next" SRC="next.png"></A> 
+<A NAME="tex2html81"
+  HREF="ss_paper.html">
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up" SRC="up.png"></A> 
+<A NAME="tex2html75"
+  HREF="intro.html">
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous" SRC="prev.png"></A> 
+<A NAME="tex2html83"
+  HREF="intro.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents" SRC="contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html86"
+  HREF="node3.html">Using the Input API</A>
+<B> Up:</B> <A NAME="tex2html82"
+  HREF="console_paper.html">New Linux Console System</A>
+<B> Previous:</B> <A NAME="tex2html76"
+  HREF="intro.html">Contents</A>
+ &nbsp <B>  <A NAME="tex2html84"
+  HREF="intro.html">Contents</A></B> 
+<!--End of Navigation Panel-->
+<ADDRESS>
+jsimmons
+2002-4-4
+</ADDRESS>
+</BODY>
+</HTML>

@@ -1,0 +1,205 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+
+<!--Converted with LaTeX2HTML 2K.1beta (1.48)
+original version by:  Nikos Drakos, CBLU, University of Leeds
+* revised and updated by:  Marcus Hennecke, Ross Moore, Herb Swan
+* with significant contributions from:
+  Jens Lippmann, Marek Rouchal, Martin Wilck and others -->
+<HTML>
+<HEAD>
+<TITLE>Reconstruction of the TTY layer for linux to deal with Embedded techology</TITLE>
+<META NAME="description" CONTENT="Reconstruction of the TTY layer for linux to deal with Embedded techology">
+<META NAME="keywords" CONTENT="console_paper">
+<META NAME="resource-type" CONTENT="document">
+<META NAME="distribution" CONTENT="global">
+
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=iso-8859-1">
+<META NAME="Generator" CONTENT="LaTeX2HTML v2K.1beta">
+<META HTTP-EQUIV="Content-Style-Type" CONTENT="text/css">
+
+<LINK REL="STYLESHEET" HREF="console_paper.css">
+
+<LINK REL="next" HREF="contents.html">
+</HEAD>
+
+<BODY >
+<!--Navigation Panel-->
+<A NAME="tex2html18"
+  HREF="contents.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next" SRC="next.png"></A> 
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up" SRC="up_g.png"> 
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous" SRC="prev_g.png"> 
+<A NAME="tex2html16"
+  HREF="contents.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents" SRC="contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html19"
+  HREF="contents.html">Contents</A>
+ &nbsp <B>  <A NAME="tex2html17"
+  HREF="contents.html">Contents</A></B> 
+<BR>
+<BR>
+<!--End of Navigation Panel-->
+
+<P>
+
+<P>
+<H1 ALIGN="CENTER">Reconstruction of the TTY layer for linux to deal with Embedded techology</H1> 
+<P ALIGN="CENTER"><STRONG>James Simmons 
+<BR>         <TT>jsimmons@transvirtual.com</TT></STRONG></P>
+<P ALIGN="CENTER"><STRONG> 
+  April 2002
+<BR>  <BR>
+<BR>
+<BR>
+  <TT>http://linuxconsole.sf.net/</TT>
+</STRONG></P>
+
+<P>
+<BR>
+
+<P>
+<DIV ALIGN="CENTER">
+<B>Acknowledgement</B>
+
+</DIV>
+
+<P>
+I would like to acknowledge my employer Transvirtual&nbsp;Technologies&nbsp;Inc, who  
+granted me time to work on this project. Special thanks goes to Vojtech&nbsp;Buxton 
+for his valuable assistance.
+
+<P>
+<BR>
+<BR>
+
+<P>
+
+<P>
+<BR>
+
+<P>
+<DIV ALIGN="CENTER">
+<B>Licence</B>
+
+</DIV>
+
+<P>
+This paper is copyright 2002 James&nbsp;Simmons and is released under the terms
+of the GNU&nbsp;General&nbsp;Public&nbsp;Licence, a copy of which is distributed with the
+source for this document.
+
+<P>
+All trademarks and software are the property of their respective owners.
+
+<P>
+
+<P>
+<DIV ALIGN="CENTER">
+<B>Presented</B>
+
+</DIV>
+
+<P>
+<I>Ottowa Linux Symposium</I> 
+<BR>
+25th - 28th July 2002 
+<BR>
+Ottowa Congress Centre 
+<BR>
+Ottowa, Ontario, Canada
+
+<P>
+
+<P>
+<H3>Abstract:</H3>
+<DIV>
+
+<P>
+Linux continues to be ported to different types of hardware devices. As it
+expands into different hardware sectors we see that these different sectors
+have very different needs and are very different from the classical PC. 
+The initial Linux kernel code was designed on the standard PC which had a large 
+influence on the code design. As Linux appears on new types of hardware devices
+we begain to see limitations to some of the central designs. As Linux kept 
+evolving and expanding to new platforms hardware was encountered that didn't
+fit the "PC" model. So instead often a extra interface of some kind either 
+userland or in kernel space was developed to compensate. 
+
+<P>
+One of the major areas of the kernel affected by this is the tty layer. Here we 
+we witness things like the classical definition for a virtual terminal
+starting to break down and the handling of complex human input devices 
+addressed by the tty layer. Also for embedded devices size is critical 
+especially when dealing with boot loaders which often make certain assumptions 
+or place certain limitations. Modular is also lacking. Often with modern embedded 
+devices we have removable pieces of hardware including things like keyboards
+which where in a classic PC sense critical to have.
+
+<P>
+A major way of rethinking was needed to rework the tty layer. That way was to 
+reverse the flow of developement. The current way of thinking is expand the tty
+features with new device interfaces that influence the behavior of the TTY. A
+example of this is for a framebuffer console we use a /dev/fb interface to resize
+a tty device. The proper method to resize would be to use a standard that already
+exist i.e the POSIX tty ioctl call TIOCSWINSZ.  
+
+<P>
+</DIV>
+<P>
+
+<P>
+
+<BR><HR>
+<!--Table of Child-Links-->
+<A NAME="CHILD_LINKS"></A>
+
+<UL>
+<LI><A NAME="tex2html20"
+  HREF="contents.html">Contents</A>
+<LI><A NAME="tex2html21"
+  HREF="intro.html">Introduction</A>
+<LI><A NAME="tex2html22"
+  HREF="serial.html">New serial layer</A>
+<LI><A NAME="tex2html23"
+  HREF="vt.html">Reworking Virtual Terminal Support</A>
+<UL>
+<LI><A NAME="tex2html24"
+  HREF="input.html">Using the Input API</A>
+<LI><A NAME="tex2html25"
+  HREF="fbdev.html">Restructing the framebuffer layer</A>
+</UL>
+<LI><A NAME="tex2html26"
+  HREF="tty.html">Upper TTY layer management</A>
+<BR>
+<LI><A NAME="tex2html34"
+  HREF="implement.html">Implementation: Ruby&nbsp;Dave Jones tree</A>
+<UL>
+<BR>
+<LI><A NAME="tex2html40"
+  HREF="conclusion.html">Conclusion</A>
+<LI><A NAME="tex2html41"
+  HREF="bio.html">Bibliography</A>
+<!--End of Table of Child-Links-->
+<HR>
+<!--Navigation Panel-->
+<A NAME="tex2html18"
+  HREF="contents.html">
+<IMG WIDTH="37" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="next" SRC="next.png"></A> 
+<IMG WIDTH="26" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="up" SRC="up_g.png"> 
+<IMG WIDTH="63" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="previous" SRC="prev_g.png"> 
+<A NAME="tex2html16"
+  HREF="contents.html">
+<IMG WIDTH="65" HEIGHT="24" ALIGN="BOTTOM" BORDER="0" ALT="contents" SRC="contents.png"></A>  
+<BR>
+<B> Next:</B> <A NAME="tex2html19"
+  HREF="contents.html">Contents</A>
+ &nbsp <B>  <A NAME="tex2html17"
+  HREF="contents.html">Contents</A></B> 
+<!--End of Navigation Panel-->
+<ADDRESS>
+James Simmons
+2002-4-5
+</ADDRESS>
+</BODY>
+</HTML>
