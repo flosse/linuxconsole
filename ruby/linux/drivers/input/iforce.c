@@ -1,0 +1,303 @@
+/*
+ * $Id$
+ *
+ *  Copyright (c) 2000 Vojtech Pavlik
+ *
+ *  USB Logitech WingMan Force joystick support
+ *
+ *  Sponsored by SuSE
+ */
+
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or 
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ * 
+ * Should you need to contact me, the author, you can do so either by
+ * e-mail - mail your message to <vojtech@suse.cz>, or by paper mail:
+ * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
+ */
+
+#include <linux/kernel.h>
+#include <linux/malloc.h>
+#include <linux/input.h>
+#include <linux/module.h>
+#include <linux/init.h>
+#include <linux/usb.h>
+#include <linux/serio.h>
+
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
+
+#define USB_VENDOR_ID_LOGITECH		0x046d
+#define USB_DEVICE_ID_LOGITECH_IFORCE	0xc281
+
+#define IFORCE_MAX_LENGTH	16
+
+struct iforce {
+	signed char data[IFORCE_MAX_LENGTH];
+	struct input_dev dev;
+	struct urb irq;
+	int open;
+	int idx, pkt, len, id;
+};
+
+static struct {
+        __s32 x;
+        __s32 y;
+} iforce_hat_to_axis[16] = {{ 0,-1}, { 1,-1}, { 1, 0}, { 1, 1}, { 0, 1}, {-1, 1}, {-1, 0}, {-1,-1}};
+
+static char *iforce_name = "I-Force device";
+
+static void iforce_process_packet(struct input_dev *dev, unsigned char id, int idx, unsigned char *data)
+{
+	int i;
+
+	
+	switch (id) {
+
+		case 1:	/* joystick position data */
+			input_report_abs(dev, ABS_X, (__s16) (((__s16)data[1] << 8) | data[0]));
+			input_report_abs(dev, ABS_Y, (__s16) (((__s16)data[3] << 8) | data[2]));
+			input_report_abs(dev, ABS_THROTTLE, data[4]);
+			input_report_abs(dev, ABS_HAT0X, iforce_hat_to_axis[data[6] >> 4].x);
+			input_report_abs(dev, ABS_HAT0Y, iforce_hat_to_axis[data[6] >> 4].y);
+
+			input_report_key(dev, BTN_TRIGGER, data[5] & 0x01);
+			input_report_key(dev, BTN_TOP,     data[5] & 0x02);
+			input_report_key(dev, BTN_THUMB,   data[5] & 0x04);
+			input_report_key(dev, BTN_TOP2,    data[5] & 0x08);
+			input_report_key(dev, BTN_BASE,    data[5] & 0x10);
+			input_report_key(dev, BTN_BASE2,   data[5] & 0x20);
+			input_report_key(dev, BTN_BASE3,   data[5] & 0x40);
+			input_report_key(dev, BTN_BASE4,   data[5] & 0x80);
+			input_report_key(dev, BTN_BASE5,   data[6] & 0x01);
+			break;
+
+		case 2: /* force feedback effect status */
+
+printk("Data packet %d len %d: ", id, idx);
+	for (i = 0; i < idx; i++)
+		printk(" %02x", data[i]);
+	printk("\n");
+			break;
+
+
+		case 3: /* wheel position data */
+
+				break;
+	}
+}
+
+static void iforce_usb_irq(struct urb *urb)
+{
+	struct iforce *iforce = urb->context;
+	if (urb->status) return;
+	iforce_process_packet(&iforce->dev, iforce->data[0], 8, iforce->data + 1);
+}
+
+static void iforce_serio_irq(struct serio *serio, unsigned char data, unsigned int flags)
+{
+        struct iforce* iforce = serio->private;
+
+	if (!iforce->pkt) {
+		if (data != 0x2b) {
+			return;
+		}
+		iforce->pkt = 1;
+		return;
+	}
+
+        if (!iforce->id) {
+		if (data > 3) {
+			iforce->pkt = 0;
+			return;
+		}
+                iforce->id = data;
+		return;
+        }
+
+	if (!iforce->len) {
+		if (data > IFORCE_MAX_LENGTH) {
+			iforce->pkt = 0;
+			iforce->id = 0;
+			return;
+		}
+		iforce->len = data + 1;
+		return;
+	}
+
+        if (iforce->idx < iforce->len)
+                iforce->data[iforce->idx++] = data;
+
+        if (iforce->idx == iforce->len) {
+		iforce_process_packet(&iforce->dev, iforce->id, iforce->idx, iforce->data);
+		iforce->pkt = 0;
+		iforce->id  = 0;
+                iforce->len = 0;
+                iforce->idx = 0;
+        }
+}
+
+static int iforce_open(struct input_dev *dev)
+{
+	struct iforce *iforce = dev->private;
+
+	if (dev->idbus == BUS_USB && !iforce->open++)
+		if (usb_submit_urb(&iforce->irq))
+			return -EIO;
+
+	return 0;
+}
+
+static void iforce_close(struct input_dev *dev)
+{
+	struct iforce *iforce = dev->private;
+
+	if (dev->idbus == BUS_USB && !--iforce->open)
+		usb_unlink_urb(&iforce->irq);
+}
+
+static void iforce_input_setup(struct iforce *iforce)
+{
+	int i;
+
+	iforce->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
+	iforce->dev.keybit[LONG(BTN_JOYSTICK)] = BIT(BTN_TRIGGER) | BIT(BTN_TOP) | BIT(BTN_THUMB) | BIT(BTN_TOP2) |
+					BIT(BTN_BASE) | BIT(BTN_BASE2) | BIT(BTN_BASE3) | BIT(BTN_BASE4) | BIT(BTN_BASE5);
+	iforce->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y) | BIT(ABS_THROTTLE) | BIT(ABS_HAT0X) | BIT(ABS_HAT0Y);
+
+	for (i = ABS_X; i <= ABS_Y; i++) {
+		iforce->dev.absmax[i] =  1920;
+		iforce->dev.absmin[i] = -1920;
+		iforce->dev.absflat[i] = 128;
+		iforce->dev.absfuzz[i] = 16;
+	}
+
+	iforce->dev.absmax[ABS_THROTTLE] = 255;
+	iforce->dev.absmin[ABS_THROTTLE] = 0;
+
+	for (i = ABS_HAT0X; i <= ABS_HAT0Y; i++) {
+		iforce->dev.absmax[i] =  1;
+		iforce->dev.absmin[i] = -1;
+	}
+
+	iforce->dev.private = iforce;
+	iforce->dev.open = iforce_open;
+	iforce->dev.close = iforce_close;
+
+	input_register_device(&iforce->dev);
+}
+
+static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum)
+{
+	struct usb_endpoint_descriptor *endpoint;
+	struct iforce *iforce;
+
+	if (dev->descriptor.idVendor != USB_VENDOR_ID_LOGITECH ||
+	    dev->descriptor.idProduct != USB_DEVICE_ID_LOGITECH_IFORCE)
+		return NULL;
+
+	endpoint = dev->config[0].interface[ifnum].altsetting[0].endpoint + 0;
+
+	if (!(iforce = kmalloc(sizeof(struct iforce), GFP_KERNEL))) return NULL;
+	memset(iforce, 0, sizeof(struct iforce));
+
+	iforce->dev.name = iforce_name;
+	iforce->dev.idbus = BUS_USB;
+	iforce->dev.idvendor = dev->descriptor.idVendor;
+	iforce->dev.idproduct = dev->descriptor.idProduct;
+	iforce->dev.idversion = dev->descriptor.bcdDevice;
+
+	FILL_INT_URB(&iforce->irq, dev, usb_rcvintpipe(dev, endpoint->bEndpointAddress),
+			iforce->data, 8, iforce_usb_irq, iforce, endpoint->bInterval);
+
+	iforce_input_setup(iforce);
+
+	printk(KERN_INFO "input%d: %s on usb%d:%d.%d\n",
+		 iforce->dev.number, iforce_name, dev->bus->busnum, dev->devnum, ifnum);
+
+	return iforce;
+}
+
+static void iforce_usb_disconnect(struct usb_device *dev, void *ptr)
+{
+	struct iforce *iforce = ptr;
+	usb_unlink_urb(&iforce->irq);
+	input_unregister_device(&iforce->dev);
+	kfree(iforce);
+}
+
+static struct usb_driver iforce_usb_driver = {
+	name:		"iforce",
+	probe:		iforce_usb_probe,
+	disconnect:	iforce_usb_disconnect,
+};
+
+static void iforce_serio_connect(struct serio *serio, struct serio_dev *dev)
+{
+	struct iforce *iforce;
+
+	if (serio->type != (SERIO_RS232 | SERIO_IFORCE))
+		return;
+
+	if (!(iforce = kmalloc(sizeof(struct iforce), GFP_KERNEL))) return;
+	memset(iforce, 0, sizeof(struct iforce));
+
+	iforce->dev.name = iforce_name;
+	iforce->dev.idbus = BUS_RS232;
+	iforce->dev.idvendor = SERIO_IFORCE;
+	iforce->dev.idproduct = 0x0001;
+	iforce->dev.idversion = 0x0100;
+
+	serio->private = iforce;
+
+	if (serio_open(serio, dev)) {
+		kfree(iforce);
+		return;
+	}
+
+	iforce_input_setup(iforce);
+
+	printk(KERN_INFO "input%d: %s on serio%d\n",
+		 iforce->dev.number, iforce_name, serio->number);
+}
+
+static void iforce_serio_disconnect(struct serio *serio)
+{
+	struct iforce* iforce = serio->private;
+	input_unregister_device(&iforce->dev);
+	serio_close(serio);
+	kfree(iforce);
+}
+
+static struct serio_dev iforce_serio_dev = {
+	interrupt:	iforce_serio_irq,
+	connect:	iforce_serio_connect,
+	disconnect:	iforce_serio_disconnect,
+};
+
+static int __init iforce_init(void)
+{
+	usb_register(&iforce_usb_driver);
+	serio_register_device(&iforce_serio_dev);
+	return 0;
+}
+
+static void __exit iforce_exit(void)
+{
+	usb_deregister(&iforce_usb_driver);
+	serio_unregister_device(&iforce_serio_dev);
+}
+
+module_init(iforce_init);
+module_exit(iforce_exit);
