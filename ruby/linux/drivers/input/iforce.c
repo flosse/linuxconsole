@@ -86,31 +86,22 @@ struct iforce_core_effect {
 #define FF_CMD_PERIOD		0x0407
 #define FF_CMD_INTERACT		0x050a
 
-#define FF_CMD_INIT_0_A		0x4002
-#define FF_CMD_INIT_0_B		0x4003
+#define FF_CMD_DEF_SPRING	0x4002
 #define FF_CMD_PLAY		0x4103
-#define FF_CMD_INIT_2		0x4201
-#define FF_CMD_INIT_3		0x4301
+#define FF_CMD_ENABLE		0x4201
+#define FF_CMD_GAIN		0x4301
 
-#define FF_CMD_INIT_F		0xff01
-
-/* For iforce->init_done: Tells what parts of the init process are completed */
-#define FF_INIT_RAMSIZE		0x01
-#define FF_INIT_N_EFFECTS	0x02
-#define FF_INIT_DEV_TYPE	0x04
-#define FF_INIT_VID		0x08
-#define FF_INIT_PID		0x10
-#define FF_INIT_ALL_MASK	0x1f	
+#define FF_CMD_QUERY		0xff01
 
 struct iforce {
 	struct input_dev dev;		/* Input device interface */
         int open;
 	int type;
-	int expect_packet;
 
         unsigned char data[IFORCE_MAX_LENGTH];
         unsigned char edata[IFORCE_MAX_LENGTH];
 	u16 ecmd;
+	u16 expect_packet;
 
 #ifdef IFORCE_232
         struct serio *serio;		/* RS232 transfer */
@@ -123,7 +114,6 @@ struct iforce {
 #endif
 					/* Force Feedback */
 	wait_queue_head_t wait;
-	unsigned long init_done;
 	struct resource device_memory;  
 	int n_effects_max;
 	struct iforce_core_effect core_effects[FF_EFFECTS_MAX];
@@ -757,8 +747,8 @@ static void iforce_close(struct input_dev *dev)
 
 static int get_ff_packet(struct iforce *iforce, char *packet)
 {
-	expect_packet(iforce, FF_CMD_INIT_F);
-	send_packet(iforce, FF_CMD_INIT_F, packet);
+	expect_packet(iforce, FF_CMD_QUERY);
+	send_packet(iforce, FF_CMD_QUERY, packet);
 	if (wait_packet(iforce, HZ/4))
 		return -1;
 	return -(iforce->edata[0] != packet[0]);
@@ -807,7 +797,7 @@ static void iforce_init_device(struct iforce *iforce)
  * Wait until device ready - till it sends first packet.
  */
 
-	expect_packet(iforce, 0x0207);
+	expect_packet(iforce, 0x0200);
 	wait_packet(iforce, HZ*10);
 
 /*
@@ -835,12 +825,13 @@ static void iforce_init_device(struct iforce *iforce)
  * Disable spring, enable force feedback.
  */
 
-	send_packet(iforce, FF_CMD_INIT_0_A, "\004\000");
-	send_packet(iforce, FF_CMD_INIT_2, "\004");
+	send_packet(iforce, FF_CMD_DEF_SPRING, "\004\000");
+	send_packet(iforce, FF_CMD_ENABLE, "\004");
 
 /*
  * Detect if the device is a wheel or a joystick
  */
+
 	expect_packet(iforce, 0x0100);
 	if (wait_packet(iforce, HZ/5)) {
 		
