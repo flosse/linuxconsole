@@ -231,7 +231,7 @@ static void gc_multi_read_packet(struct gc *gc, int length, unsigned char *data)
 
 static short gc_psx_abs[] = { ABS_X, ABS_Y, ABS_RX, ABS_RY, ABS_HAT0X, ABS_HAT0Y };
 static short gc_psx_btn[] = { BTN_TL, BTN_TR, BTN_TL2, BTN_TR2, BTN_A, BTN_B, BTN_X, BTN_Y,
-				BTN_START, BTN_SELECT, BTN_THUMB, BTN_THUMB2 };
+				BTN_START, BTN_SELECT, BTN_THUMBL, BTN_THUMBR };
 
 /*
  * gc_psx_command() writes 8bit command and reads 8bit data from

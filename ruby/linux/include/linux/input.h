@@ -351,6 +351,8 @@ struct input_event {
 #define BTN_SELECT		0x13a
 #define BTN_START		0x13b
 #define BTN_MODE		0x13c
+#define BTN_THUMBL		0x13d
+#define BTN_THUMBR		0x13e
 
 #define BTN_DIGI		0x140
 #define BTN_TOOL_PEN		0x140
