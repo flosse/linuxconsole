@@ -126,39 +126,43 @@ void add_softcursor(struct vc_data *vc)
 		i ^= 0x7000;
         if ((type & 0x40) && ((i & 0x700) == ((i & 0x7000) >> 4))) i ^= 0x0700;
         scr_writew(i, (u16 *) pos);
-        if (DO_UPDATE)
+        if (IS_VISIBLE && sw->con_putc)
                 sw->con_putc(vc, i, y, x);
 }
 
 void hide_cursor(struct vc_data *vc)
 {
-	spin_lock_irq(&console_lock);
+	unsigned long flags;	
+
+	spin_lock_irqsave(&console_lock, flags);
         if (cons_num == sel_cons)
                 clear_selection();
         if (softcursor_original != -1) {
                 scr_writew(softcursor_original,(u16 *) pos);
-                if (DO_UPDATE)
+                if (IS_VISIBLE && sw->con_putc)
 			sw->con_putc(vc, softcursor_original, y, x);
                 softcursor_original = -1;
         }
         sw->con_cursor(vc, CM_ERASE);
-	spin_unlock_irq(&console_lock);
+	spin_unlock_irqrestore(&console_lock, flags);
 }
 
 void set_cursor(struct vc_data *vc)
 {
-    if (!IS_VISIBLE || vc->display_fg->vt_blanked || vcmode == KD_GRAPHICS)
-        return;
-    spin_lock_irq(&console_lock); 		
-    if (dectcem) {
-        if (cons_num == sel_cons)
-                clear_selection();
-        add_softcursor(vc);
-        if ((cursor_type & 0x0f) != 1)
-            sw->con_cursor(vc, CM_DRAW);
-    } else
-        hide_cursor(vc);
-    spin_unlock_irq(&console_lock);	
+	unsigned long flags; 	
+
+    	if (!IS_VISIBLE || vc->display_fg->vt_blanked || vcmode == KD_GRAPHICS)
+        	return;
+    	spin_lock_irqsave(&console_lock, flags);
+	if (dectcem) {
+        	if (cons_num == sel_cons)
+                	clear_selection();
+        	add_softcursor(vc);
+        	if ((cursor_type & 0x0f) != 1)
+            		sw->con_cursor(vc, CM_DRAW);
+    	} else
+        	hide_cursor(vc);
+	spin_unlock_irqrestore(&console_lock, flags);
 }
 
 /*
@@ -205,7 +209,7 @@ inline void gotoxay(struct vc_data *vc, int new_x, int new_y)
 
 void set_palette(struct vc_data *vc)
 {
-        if (IS_VISIBLE && vcmode != KD_GRAPHICS)
+        if (IS_VISIBLE && sw->con_set_palette && vcmode != KD_GRAPHICS)
                 sw->con_set_palette(vc, color_table);
 }
 
@@ -290,12 +294,6 @@ void default_attr(struct vc_data *vc)
         color = def_color;
 }
 
-static u8 build_attr(struct vc_data *vc, u8 _color, u8 _intensity, u8 _blink, u8 _underline, u8 _reverse)
-{
-        if (sw->con_build_attr)
-                return sw->con_build_attr(vc, _color, _intensity, _blink, _underline, _reverse);
-
-#ifndef VT_BUF_VRAM_ONLY
 /*
  * ++roman: I completely changed the attribute format for monochrome
  * mode (!can_do_color). The formerly used MDA (monochrome display
@@ -306,8 +304,13 @@ static u8 build_attr(struct vc_data *vc, u8 _color, u8 _intensity, u8 _blink, u8
  *  Bit 3   : reverse
  *  Bit 7   : blink
  */
-        {
-        u8 a = color;
+static u8 build_attr(struct vc_data *vc, u8 _color, u8 _intensity, u8 _blink, u8 _underline, u8 _reverse)
+{
+	u8 a;	
+
+	if (sw->con_build_attr)
+        	return sw->con_build_attr(vc, _color, _intensity, _blink, _underline, _reverse);
+        a = color;
         if (!can_do_color)
                 return _intensity |
                        (_underline ? 4 : 0) |
@@ -326,10 +329,6 @@ static u8 build_attr(struct vc_data *vc, u8 _color, u8 _intensity, u8 _blink, u8
         if (hi_font_mask == 0x100)
                 a <<= 1;
         return a;
-        }
-#else
-        return 0;
-#endif
 }
 
 void update_attr(struct vc_data *vc)
@@ -350,7 +349,7 @@ void insert_char(struct vc_data *vc, unsigned int nr)
                 scr_writew(scr_readw(p), p + nr);
         scr_memsetw(q, video_erase_char, nr*2);
         need_wrap = 0;
-        if (DO_UPDATE) {
+        if (IS_VISIBLE && sw->con_bmove && sw->con_putc) {
                 unsigned short oldattr = attr;
                 sw->con_bmove(vc, y, x, y, x+nr, 1, video_num_columns-x-nr);
                 attr = video_erase_char >> 8;
@@ -371,7 +370,7 @@ void delete_char(struct vc_data *vc, unsigned int nr)
         }
         scr_memsetw(p, video_erase_char, nr*2);
         need_wrap = 0;
-        if (DO_UPDATE) {
+        if (IS_VISIBLE && sw->con_bmove && sw->con_putc) {
                 unsigned short oldattr = attr;
                 sw->con_bmove(vc, y, x+nr, y, x, 1, video_num_columns-x-nr);
                 attr = video_erase_char >> 8;
@@ -406,16 +405,16 @@ void set_origin(struct vc_data *vc)
         pos = origin + video_size_row*y + 2*x;
 }
 
-inline void save_screen(struct vc_data *vc)
+inline void clear_region(struct vc_data *vc,int sx,int sy,int height,int width) 
 {
-        if (sw->con_save_screen)
-                sw->con_save_screen(vc);
+	/* Clears the video memory, not the screen buffer */
+        if (IS_VISIBLE && sw->con_clear)
+                return sw->con_clear(vc, x, y, height, width);
 }
 
 void do_update_region(struct vc_data *vc, unsigned long start, int count)
 {
-#ifndef VT_BUF_VRAM_ONLY
-        unsigned int xx, yy, offset;
+	unsigned int xx, yy, offset;
         u16 *p;
 
         p = (u16 *) start;
@@ -455,16 +454,38 @@ void do_update_region(struct vc_data *vc, unsigned long start, int count)
                         start = sw->con_getxy(vc, start, NULL, NULL);
                 }
         }
-#endif
 }
 
 void update_region(struct vc_data *vc, unsigned long start, int count)
 {
-        if (DO_UPDATE) {
+        if (IS_VISIBLE) {
                 hide_cursor(vc);
                 do_update_region(vc, start, count);
                 set_cursor(vc);
         }
+}
+
+inline void save_screen(struct vc_data *vc)
+{
+        if (sw->con_save_screen)
+                sw->con_save_screen(vc);
+}
+
+/*      Redrawing of screen */
+void update_screen(struct vc_data *vc)
+{
+	int update;
+
+        hide_cursor(vc);
+        set_origin(vc);
+        update = sw->con_switch(vc);
+        set_palette(vc);
+
+        if (update && vcmode != KD_GRAPHICS) {
+               /* Update the screen contents */
+               do_update_region(vc, origin, screenbuf_size/2);
+        }
+        set_cursor(vc);
 }
 
 inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed)
@@ -489,7 +510,6 @@ void invert_screen(struct vc_data *vc, int offset, int count, int viewed)
         p = screenpos(vc, offset, viewed);
         if (sw->con_invert_region)
                 sw->con_invert_region(vc, p, count);
-#ifndef VT_BUF_VRAM_ONLY
         else {
                 u16 *q = p;
                 int cnt = count;
@@ -510,8 +530,7 @@ void invert_screen(struct vc_data *vc, int offset, int count, int viewed)
                         }
                 }
         }
-#endif
-        if (DO_UPDATE)
+        if (IS_VISIBLE)
                 do_update_region(vc, (unsigned long) p, count);
 }
 
@@ -524,7 +543,7 @@ void complement_pos(struct vc_data *vc, int offset)
 
         if (p) {
                 scr_writew(old, p);
-                if (DO_UPDATE)
+                if (IS_VISIBLE && sw->con_putc)
                         sw->con_putc(vc, old, oldy, oldx);
         }
         if (offset == -1)
@@ -535,29 +554,12 @@ void complement_pos(struct vc_data *vc, int offset)
                 old = scr_readw(p);
                 new = old ^ complement_mask;
                 scr_writew(new, p);
-                if (DO_UPDATE) {
+                if (IS_VISIBLE && sw->con_putc) {
                         oldx = (offset >> 1) % video_num_columns;
                         oldy = (offset >> 1) / video_num_columns;
                         sw->con_putc(vc, new, oldy, oldx);
                 }
         }
-}
-
-/*      Redrawing of screen */
-void update_screen(struct vc_data *vc)
-{
-	int update;
-
-        hide_cursor(vc);
-	set_origin(vc);
-	update = sw->con_switch(vc);
-        set_palette(vc);
-
-        if (update && vcmode != KD_GRAPHICS) {
-        	/* Update the screen contents */
-        	do_update_region(vc, origin, screenbuf_size/2);
-        }
-        set_cursor(vc);
 }
 
 /*
@@ -878,17 +880,20 @@ int vc_resize(struct vc_data *vc, unsigned int lines, unsigned int cols)
         unsigned int cc, ll, ss, sr;
 	int err = 0;
 
+	if (!vc) return 0;
+
         cc = (cols ? cols : video_num_columns);
         ll = (lines ? lines : video_num_lines);
         sr = cc << 1;
         ss = sr * ll;
 
-        if (!vc || (cc == video_num_columns && ll == video_num_lines))
-		return 0;       
+	if (!vc || (cc == video_num_columns && ll == video_num_lines))
+                return 0;
+
+        if (vc->display_fg->vt_sw->con_resize)
+                err = vc->display_fg->vt_sw->con_resize(vc, ll, cc);
 	
-	if (vc->display_fg->vt_sw->con_resize)
-		err = vc->display_fg->vt_sw->con_resize(vc, ll, cc);    
-	
+	// err = resize_screen(vc, ll, cc);    
 	if (err) return err;    
 	
 	newscreens = (unsigned short *) kmalloc(ss, GFP_USER);
@@ -1130,7 +1135,7 @@ again:
                                      ((attr << 8) & ~himask) + ((tc & 0x100) ? himask : 0) + (tc & 0xff) :
                                      (attr << 8) + tc,
                                    (u16 *) pos);
-                        if (DO_UPDATE && draw_x < 0) {
+                        if (IS_VISIBLE && sw->con_putc && draw_x < 0) {
                                 draw_x = x;
                                 draw_from = pos;
                         }
@@ -1332,12 +1337,9 @@ static int con_write_room(struct tty_struct *tty)
 static void con_flush_chars(struct tty_struct *tty)
 {
         struct vc_data *vc = (struct vc_data *)tty->driver_data;
-        unsigned long flags;
 
         pm_access(vc->display_fg->pm_con);
-        spin_lock_irqsave(&console_lock, flags);
         set_cursor(vc);
-        spin_unlock_irqrestore(&console_lock, flags);
 }
 
 static int con_chars_in_buffer(struct tty_struct *tty)
