@@ -248,6 +248,20 @@ static const char *fbcon_startup(struct vt_struct *vt, int init)
 	return NULL;
     fb_set_cmap(&info->cmap, 1, info);	
 
+    /* Create the default cursor 	
+    info->cursor.set = FB_CUR_SETALL;
+    info->cursor.enable = 1;
+    info->cursor.pos.x = vc->vc_x * vc->vc_font.width;
+    info->cursor.pos.y = vc->vc_y * vc->vc_font.height;
+    info->cursor.hot.x = info->cursor.pos.x;
+    info->cursor.hot.y = info->cursor.pos.y;
+    info->cursor.cmap.len = 2;
+    info->cursor.cmap.start = 0;
+    fb_alloc_cmap(&info->cursor.cmap, 0, 0);
+    info->cursor.size.x = vc->vc_font.width;
+    info->cursor.size.y = vc->vc_font.height;
+    info->fbops->fb_cursor(info, &info->cursor); 
+*/
     DPRINTK("mode:   %s\n", info->fix.id);
     DPRINTK("visual: %d\n", info->fix.visual);
     DPRINTK("res:    %dx%d-%d\n",info->var.xres, info->var.yres, info->var.bits_per_pixel); 
@@ -385,41 +399,44 @@ static void fbcon_cursor(struct vc_data *vc, int mode)
 {
     struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
     struct fbcursor cursor;	
+    int i;	
  
     fbcon_set_origin(vc);
 
-    cursor.pos.x = vc->vc_x * vc->vc_font.width;
-    cursor.pos.y = vc->vc_y * vc->vc_font.height;
-
     /* Avoid flickering if there's no real change. */
-    if (info->cursor.pos.x == cursor->pos.x && 
-	info->cursor.pos.y == cursor->pox.y &&
+    if (info->cursor.pos.x == vc->vc_x * vc->vc_font.width && 
+	info->cursor.pos.y == vc->vc_y * vc->vc_font.height &&
         (mode == CM_ERASE) == !cursor.enable)
         return;
 
-    cursor.size.x = vc->vc_font.width;
-    cursor.size.y = vc->vc_font.height;	
-	
     switch (mode) {
         case CM_ERASE:
-	    	if (info->cursor.enable) {
-			info->cursor.enable = 0;
-			info->cursor.set = FB_CUR_SETCUR;
-			info->fbops->fb_cursor(info, info->cursor);
-	    	}
+		info->cursor.enable = 0;
+		info->cursor.set = FB_CUR_SETCUR;
+		info->fbops->fb_cursor(info, &info->cursor);
             	break;
         case CM_MOVE:
         case CM_DRAW:
-		info->cursor.set = FB_CUR_SETALL;
+		info->cursor.set = FB_CUR_SETCUR|FB_CUR_SETPOS|FB_CUR_SETHOT;
 		info->cursor.enable = 1;
-		info->cursor.size.x = vc->vc_font.width;
-		info->cursor.size.y = vc->vc_font.height;
 		info->cursor.pos.x = vc->vc_x * vc->vc_font.width;
 		info->cursor.pos.y = vc->vc_y * vc->vc_font.height;
-		info->fbops->fb_cursor(info, info->cursor); 
+		info->cursor.hot.x = info->cursor.pos.x;
+		info->cursor.hot.y = info->cursor.pos.y;
+		info->fbops->fb_cursor(info, &info->cursor); 
 		break;
 	case CM_CHANGE: {
 		int top_scanline, bottom_scanline = vc->vc_font.height;
+		char *pixmap, *mask;
+
+		cursor.size.x = vc->vc_font.width;
+    		cursor.size.y = vc->vc_font.height;
+		cursor.cmap.len = 2;
+		cursor.cmap.start = 0;
+		fb_alloc_cmap(&cursor.cmap, 0, 0);
+
+		pixmap = kmalloc(((cursor.size.x*cursor.size.y)>>3),GFP_KERNEL);
+		mask = kmalloc(((cursor.size.x*cursor.size.y)>>3),GFP_KERNEL);
 
 		if (bottom_scanline >= 10) bottom_scanline--;
 		switch (vc->vc_cursor_type & CUR_HWMASK) {
@@ -444,7 +461,15 @@ static void fbcon_cursor(struct vc_data *vc, int mode)
 				top_scanline = bottom_scanline - 2;
 				break;
 		}
-            break;
+		for (i = 0; i < top_scanline; i++) 
+			pixmap[i] = 0; mask[i] = -1;
+		for (;i < bottom_scanline; i++) 
+			pixmap[i] = -1; mask[i] = -1;
+		
+		cursor.image = pixmap;
+		cursor.mask = mask;
+		info->fbops->fb_cursor(info, &cursor); 
+            	break;
         }
     }
 }
@@ -601,7 +626,7 @@ const struct consw fb_con = {
     con_clear: 		fbcon_clear,
     con_putc: 		fbcon_putc,
     con_putcs: 		fbcon_putcs,
-    //con_cursor: 	fbcon_cursor,
+    con_cursor: 	fbcon_cursor,
     con_scroll_region: 	fbcon_scroll_region,
     con_bmove: 		fbcon_bmove,
     con_blank: 		fbcon_blank,
