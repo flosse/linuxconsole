@@ -54,10 +54,6 @@
 #include <linux/fb.h>
 #include <linux/init.h>
 
-#include "fbcon.h"
-
-#define arraysize(x)	(sizeof(x)/sizeof(*(x)))
-
     /*
      *  RAM we reserve for the frame buffer. This defines the maximum screen
      *  size
@@ -74,8 +70,6 @@ static const char *mode_option __initdata = NULL;
 
 static struct fb_info fb_info;
 static u32 vfb_pseudo_palette[17];
-
-#define DEFAULT_MODE "640x480@60"
 
 static struct fb_var_screeninfo vfb_default __initdata = {
     /* 640x480, 8 bpp */
