@@ -5,13 +5,23 @@
  *
  * Copyright (C) 2001 Paul Mundt <pmundt@mvista.com>
  *
+ * Released under the terms of the GNU GPL v2.0.
+ *
  */
 #ifndef __GFXFS_FS_H
 #define __GFXFS_FS_H
 
 #include <linux/fs.h>
+#include <linux/config.h>
 
 #define GFXFS_SUPER_MAGIC	0x8048494	/* "gfxfs" */
+
+#ifdef CONFIG_GFXFS_FS_DEBUG
+  #define gfxfs_debug(x...)	printk(KERN_DEBUG "gfxfs: " \
+  				       __FUNCTION__ "(): " ##x)
+#else
+  #define gfxfs_debug(x...)	do { } while (0)
+#endif /* CONFIG_GFXFS_FS_DEBUG */
 
 /*
  * struct gfxfs_dentry - gfxfs dentry
@@ -32,6 +42,17 @@ struct gfxfs_dentry {
 	struct dentry *f_dentry;
 	struct file_operations *f_ops;
 };
+
+/* fs/gfxfs/inode.c */
+extern void gfxfs_read_inode(struct inode *inode);
+extern struct inode *gfxfs_get_inode(struct super_block *sb, int mode, int dev);
+
+/* fs/gfxfs/file.c */
+extern struct file_operations gfxfs_file_ops;
+
+/* fs/gfxfs/dir.c */
+extern struct file_operations gfxfs_dir_ops;
+extern struct inode_operations gfxfs_dir_inode_ops;
 
 #endif /* __GFXFS_FS_H */
 
