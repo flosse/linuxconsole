@@ -1,12 +1,17 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef from
 #define from	at2
+#endif
+
+#ifndef to
 #define to	code
+#endif
 
 #include "scancodes.h"
 
-void main(void)
+int main(void)
 {
 
 	int i, j;
@@ -47,4 +52,5 @@ void main(void)
 #endif
 
 	printf("\n");
+	return 0;
 }

@@ -480,7 +480,7 @@ static struct scancode_list scancodes[] = {
  * USB International keys (see USB HID Usage Tables)
  */
 
-	{ 0x175, 0x068,    0,    0, 0x87, 0x5e,    0,    0,    0,    0, 181 },	/* Intl1 / Jpn key - clashes with Focus PF8 */
+	{ 0x07d, 0x068,    0,    0, 0x87, 0x5e,    0,    0,    0,    0, 181 },	/* Intl1 / Jpn key - clashes with Focus PF8 */
 	{     0,     0,    0,    0, 0x88,    0,    0,    0,    0,    0, 182 },  /* International2 */
 	{     0,     0,    0,    0, 0x89, 0x5d,    0,    0,    0,    0, 183 },  /* International3 */
 	{     0,     0,    0,    0, 0x8a,    0,    0,    0,    0,    0, 184 },  /* International4 */
