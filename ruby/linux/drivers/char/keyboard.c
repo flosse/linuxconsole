@@ -441,8 +441,10 @@ static void fn_boot_it(struct tty_struct *tty)
 {
 	struct vc_data *vc = (struct vc_data *) tty->driver_data;
 
+	/*
 	if (vc->display_fg == admin_vt)
-		/* ctrl_alt_del(); */
+		ctrl_alt_del(); 
+	*/
 }
 
 static void fn_null(struct tty_struct *tty)
