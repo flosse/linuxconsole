@@ -346,6 +346,108 @@ do_kdgkb_ioctl(int cmd, struct kbsentry *user_kdgkb, int perm)
 	return 0;
 }
 
+/*
+ *  Font switching
+ *
+ *  Currently we only support fonts up to 32 pixels wide, at a maximum height
+ *  of 32 pixels. Userspace fontdata is stored with 32 bytes (shorts/ints,
+ *  depending on width) reserved for each character which is kinda wasty, but
+ *  this is done in order to maintain compatibility with the EGA/VGA fonts. It
+ *  is upto the actual low-level console-driver convert data into its favorite
+ *  format (maybe we should add a `fontoffset' field to the `display'
+ *  structure so we wont have to convert the fontdata all the time.
+ *  /Jes
+ */                     
+
+
+#define max_font_size 65536
+
+int con_font_op(int currcons, struct console_font_op *op)
+{
+        int rc = -EINVAL;
+        int size = max_font_size, set;
+        u8 *temp = NULL;
+        struct console_font_op old_op;
+
+        if (vt_cons[currcons]->vc_mode != KD_TEXT)
+                goto quit;
+        memcpy(&old_op, op, sizeof(old_op));
+        if (op->op == KD_FONT_OP_SET) {
+                if (!op->data)
+                        return -EINVAL;
+                if (op->charcount > 512)
+                        goto quit;
+                if (!op->height) {              /* Need to guess font height [compat] */
+                        int h, i;
+                        u8 *charmap = op->data, tmp;              
+                        /* If from KDFONTOP ioctl, don't allow things which can be done in userland,
+                           so that we can get rid of this soon */
+                        if (!(op->flags & KD_FONT_FLAG_OLD))
+                                goto quit;
+                        rc = -EFAULT;
+                        for (h = 32; h > 0; h--)
+                                for (i = 0; i < op->charcount; i++) {
+                                        if (get_user(tmp, &charmap[32*i+h-1]))
+                                                goto quit;
+                                        if (tmp)
+                                                goto nonzero;
+                                }
+                        rc = -EINVAL;
+                        goto quit;
+                nonzero:
+                        rc = -EINVAL;
+                        op->height = h;
+                }
+                if (op->width > 32 || op->height > 32)
+                        goto quit;                               
+                size = (op->width+7)/8 * 32 * op->charcount;
+                if (size > max_font_size)
+                        return -ENOSPC;
+                set = 1;
+        } else if (op->op == KD_FONT_OP_GET)
+                set = 0;
+        else
+                return vc_cons[currcons].d->vc_sw->con_font_op(vc_cons[currcons].d, op);
+        if (op->data) {
+                temp = kmalloc(size, GFP_KERNEL);
+                if (!temp)
+                        return -ENOMEM;
+                if (set && copy_from_user(temp, op->data, size)) {
+                        rc = -EFAULT;
+                        goto quit;
+                }
+                op->data = temp;
+        }                                                          
+
+        spin_lock_irq(&console_lock);
+        rc = vc_cons[currcons].d->vc_sw->con_font_op(vc_cons[currcons].d, op);
+        spin_unlock_irq(&console_lock);
+
+        op->data = old_op.data;
+        if (!rc && !set) {
+                int c = (op->width+7)/8 * 32 * op->charcount;
+
+                if (op->data && op->charcount > old_op.charcount)
+                        rc = -ENOSPC;
+                if (!(op->flags & KD_FONT_FLAG_OLD)) {
+                        if (op->width > old_op.width ||
+                            op->height > old_op.height)
+                                rc = -ENOSPC;
+                } else {
+                        if (op->width != 8)
+                                rc = -EIO;
+                        else if ((old_op.height && op->height > old_op.height) ||
+                                 op->height > 32)
+                                rc = -ENOSPC;                    
+                }
+                if (!rc && op->data && copy_to_user(op->data, temp, c))
+                        rc = -EFAULT;
+        }
+quit:   if (temp)
+                kfree_s(temp, size);
+        return rc;
+}                                
+
 static inline int 
 do_fontx_ioctl(int cmd, struct consolefontdesc *user_cfd, int perm)
 {
