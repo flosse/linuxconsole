@@ -829,10 +829,32 @@ static unsigned char find_button(struct iforce *iforce, signed short button)
 }
 
 /*
+ * Analyse the changes in an effect, and tell if we need to send an interactive 
+ * parameter packet
+ */
+static int need_interactive_modifier(struct iforce* iforce, struct ff_effect* new)
+{
+	int id = new->id;
+	struct ff_effect* old = &iforce->core_effects[id].effect;
+
+	if (new->type != FF_SPRING && new->type != FF_FRICTION) {
+		printk(KERN_WARNING "iforce.c: bad effect type in need_interactive_modifier\n");
+		return FALSE;
+	}
+
+	return (old->u.interactive.right_saturation != new->u.interactive.right_saturation
+		|| old->u.interactive.left_saturation != new->u.interactive.left_saturation
+		|| old->u.interactive.right_coeff != new->u.interactive.right_coeff
+		|| old->u.interactive.left_coeff != new->u.interactive.left_coeff
+		|| old->u.interactive.deadband != new->u.interactive.deadband
+		|| old->u.interactive.center != new->u.interactive.center);
+}
+
+/*
  * Analyse the changes in an effect, and tell if we need to send a magnitude
  * parameter packet
  */
-static int need_magnitude_modifier(struct iforce* iforce, const struct ff_effect* effect)
+static int need_magnitude_modifier(struct iforce* iforce, struct ff_effect* effect)
 {
 	int id = effect->id;
 	struct ff_effect* old = &iforce->core_effects[id].effect;
@@ -849,7 +871,7 @@ static int need_magnitude_modifier(struct iforce* iforce, const struct ff_effect
  * Analyse the changes in an effect, and tell if we need to send a shape
  * parameter packet
  */
-static int need_shape_modifier(struct iforce* iforce, const struct ff_effect* effect)
+static int need_shape_modifier(struct iforce* iforce, struct ff_effect* effect)
 {
 	int id = effect->id;
 	struct ff_effect* old = &iforce->core_effects[id].effect;
@@ -879,10 +901,30 @@ static int need_shape_modifier(struct iforce* iforce, const struct ff_effect* ef
 }
 
 /*
+ * Analyse the changes in an effect, and tell if we need to send a periodic
+ * parameter effect
+ */
+static int need_period_modifier(struct iforce* iforce, struct ff_effect* new)
+{
+	int id = new->id;
+	struct ff_effect* old = &iforce->core_effects[id].effect;
+
+	if (new->type != FF_PERIODIC) {
+		printk(KERN_WARNING "iforce.c: bad effect type in need_periodic_modifier\n");
+		return FALSE;
+	}
+
+	return (old->u.periodic.period != new->u.periodic.period
+		|| old->u.periodic.magnitude != new->u.periodic.magnitude
+		|| old->u.periodic.offset != new->u.periodic.offset
+		|| old->u.periodic.phase != new->u.periodic.phase);
+}
+
+/*
  * Analyse the changes in an effect, and tell if we need to send an effect
  * packet
  */
-static int need_core(struct iforce* iforce, const struct ff_effect* new)
+static int need_core(struct iforce* iforce, struct ff_effect* new)
 {
 	int id = new->id;
 	struct ff_effect* old = &iforce->core_effects[id].effect;
@@ -936,8 +978,8 @@ static int make_core(struct iforce* iforce, u16 id, u16 mod_id1, u16 mod_id2,
 
 /*
  * Upload a periodic effect to the device
+ * See also iforce_upload_constant.
  */
-
 static int iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effect, int is_update)
 {
 	u8 wave_code;
@@ -945,23 +987,27 @@ static int iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effec
 	struct iforce_core_effect* core_effect = iforce->core_effects + core_id;
 	struct resource* mod1_chunk = &(iforce->core_effects[core_id].mod1_chunk);
 	struct resource* mod2_chunk = &(iforce->core_effects[core_id].mod2_chunk);
-	int err = 0;
+	int err = 1;
 
-	err = make_period_modifier(iforce, mod1_chunk, 
-		is_update,
-		effect->u.periodic.magnitude, effect->u.periodic.offset,
-		effect->u.periodic.period, effect->u.periodic.phase);
-	if (err) return err;
-	set_bit(FF_MOD1_IS_USED, core_effect->flags);
+	if (!is_update || need_period_modifier(iforce, effect)) {
+		err = make_period_modifier(iforce, mod1_chunk, 
+			is_update,
+			effect->u.periodic.magnitude, effect->u.periodic.offset,
+			effect->u.periodic.period, effect->u.periodic.phase);
+		if (err) return err;
+		set_bit(FF_MOD1_IS_USED, core_effect->flags);
+	}
 
-	err = make_shape_modifier(iforce, mod2_chunk,
-		is_update,
-		effect->u.periodic.shape.attack_length,
-		effect->u.periodic.shape.attack_level,
-		effect->u.periodic.shape.fade_length,
-		effect->u.periodic.shape.fade_level);
-	if (err) return err;
-	set_bit(FF_MOD2_IS_USED, core_effect->flags);
+	if (!is_update || need_shape_modifier(iforce, effect)) {
+		err = make_shape_modifier(iforce, mod2_chunk,
+			is_update,
+			effect->u.periodic.shape.attack_length,
+			effect->u.periodic.shape.attack_level,
+			effect->u.periodic.shape.fade_length,
+			effect->u.periodic.shape.fade_level);
+		if (err) return err;
+		set_bit(FF_MOD2_IS_USED, core_effect->flags);
+	}
 
 	switch (effect->u.periodic.waveform) {
 		case FF_SQUARE:		wave_code = 0x20; break;
@@ -972,16 +1018,21 @@ static int iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effec
 		default:		wave_code = 0x20; break;
 	}
 
-	err = make_core(iforce, effect->id,
-		mod1_chunk->start,
-		mod2_chunk->start,
-		wave_code,
-		0x20,
-		effect->replay.length,
-		effect->replay.delay,
-		effect->trigger.button,
-		effect->trigger.interval,
-		effect->direction);
+	if (!is_update || need_core(iforce, effect)) {
+		err = make_core(iforce, effect->id,
+			mod1_chunk->start,
+			mod2_chunk->start,
+			wave_code,
+			0x20,
+			effect->replay.length,
+			effect->replay.delay,
+			effect->trigger.button,
+			effect->trigger.interval,
+			effect->direction);
+	}
+	else {
+		printk(KERN_DEBUG "iforce.c: no effect packet was needed\n");
+	}
 
 	return err;
 }
@@ -1051,7 +1102,7 @@ static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* ef
 	struct resource* mod_chunk = &(core_effect->mod1_chunk);
 	u8 type, axes;
 	u16 mod1, mod2, direction;
-	int err = 0;
+	int err = 1;
 
 	printk(KERN_DEBUG "iforce.c: make interactive effect\n");
 
@@ -1061,16 +1112,18 @@ static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* ef
 		default: return -1;
 	}
 
-	err = make_interactive_modifier(iforce, mod_chunk,
-		is_update,
-		effect->u.interactive.right_saturation,
-		effect->u.interactive.left_saturation,
-		effect->u.interactive.right_coeff,
-		effect->u.interactive.left_coeff,
-		effect->u.interactive.deadband,
-		effect->u.interactive.center);
-	if (err) return err;
-	set_bit(FF_MOD1_IS_USED, core_effect->flags);
+	if (!is_update || need_interactive_modifier(iforce, effect)) {
+		err = make_interactive_modifier(iforce, mod_chunk,
+			is_update,
+			effect->u.interactive.right_saturation,
+			effect->u.interactive.left_saturation,
+			effect->u.interactive.right_coeff,
+			effect->u.interactive.left_coeff,
+			effect->u.interactive.deadband,
+			effect->u.interactive.center);
+		if (err) return err;
+		set_bit(FF_MOD1_IS_USED, core_effect->flags);
+	}
 
 	switch ((test_bit(ABS_X, &effect->u.interactive.axis) ||
 		test_bit(ABS_WHEEL, &effect->u.interactive.axis)) |
@@ -1109,12 +1162,14 @@ static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* ef
 			return -1;
 	}
 
-	err = make_core(iforce, effect->id,
-		mod1, mod2,
-		type, axes,
-		effect->replay.length, effect->replay.delay,
-		effect->trigger.button, effect->trigger.interval,
-		direction);
+	if (!is_update || need_core(iforce, effect)) {
+		err = make_core(iforce, effect->id,
+			mod1, mod2,
+			type, axes,
+			effect->replay.length, effect->replay.delay,
+			effect->trigger.button, effect->trigger.interval,
+			direction);
+	}
 
 	return err;
 }
