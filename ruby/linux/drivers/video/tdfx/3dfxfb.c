@@ -74,6 +74,10 @@
 #include <video/tdfx.h>
 #include <linux/spinlock.h>
 
+#ifndef PCI_DEVICE_ID_3DFX_VOODOO5
+#define PCI_DEVICE_ID_3DFX_VOODOO5      0x0009
+#endif
+
 //#define TDFXFB_DEBUG 
 #ifdef TDFXFB_DEBUG
 #define DPRINTK(a,b...) printk(KERN_DEBUG "fb: %s: " a, __FUNCTION__ , ## b)
@@ -1222,7 +1226,7 @@ void tdfxfb_setup(char *options, int *ints)
   if(!options || !*options)
     return;
 
-  while(this_opt = strsep(&options, ",")) { 
+  while((this_opt = strsep(&options, ","))) { 
     if(!*this_opt)
       continue;
     if(!strcmp(this_opt, "inverse")) {
