@@ -354,7 +354,7 @@ int con_font_op(struct vc_data *vc, struct console_font_op *op)
 	struct console_font_op old_op;
 	u8 *temp = NULL;
 
-	if (vc->vc_mode != KD_TEXT)
+	if (vc->vc_mode != KD_TEXT || !op)
 		return -EINVAL;
 
 	switch (op->op) {
@@ -400,11 +400,30 @@ int con_font_op(struct vc_data *vc, struct console_font_op *op)
 			return -EFAULT;
 		}
 		op->data = temp;
+
 		acquire_console_sem(vc->vc_tty->device);
+		/* First we ensure that if the font passed in requires
+		 * us to change the screen size that we can actually do 
+		 * that. */		
+		if ((op->height != vc->vc_font.height || 
+		     op->width != vc->vc_font.width)) { 
+			if (op->flags & KD_FONT_FLAG_DONT_RECALC)
+				return -EINVAL;
+			err = resize_screen(vc, vc->vc_cols*op->width, 
+						vc->vc_rows*op->height);	
+			if (err) {
+				resize_screen(vc,vc->vc_cols*vc->vc_font.width,
+					       vc->vc_rows*vc->vc_font.height);
+				return -EINVAL;	
+			}
+		}
 		err = vc->display_fg->vt_sw->con_font_op(vc, op);
-		release_console_sem(vc->vc_tty->device);
 		if (!err)
 			vc->vc_font = *op;
+		else
+			resize_screen(vc,vc->vc_cols*vc->vc_font.width,
+				       	vc->vc_rows*vc->vc_font.height);
+		release_console_sem(vc->vc_tty->device);
 		break;
 	case KD_FONT_OP_GET:
 		/* Save passed in console_font_op */
@@ -1337,8 +1356,9 @@ inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
 		vt->fg_console = new_vc;
                 set_origin(old_vc);               
 		
-		resize_screen(new_vc, new_vc->vc_cols, new_vc->vc_rows);
-		set_origin(new_vc);	
+		resize_screen(new_vc, new_vc->vc_cols*new_vc->vc_font.width, 
+				      new_vc->vc_rows*new_vc->vc_font.height);
+		set_origin(new_vc);
 		set_palette(new_vc);
 /*	
 		if (new_vc->vc_font.height != old_vc->vc_font.height ||
@@ -1348,7 +1368,6 @@ inline void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
 			vt->vt_sw->con_font_op(new_vc, &new_vc->vc_font);
 		}
 */
-	
 		if (new_vc->vc_cursor_type != old_vc->vc_cursor_type)
 			update_cursor_attr(new_vc);
                 if (new_vc->vc_mode != KD_GRAPHICS) { 
