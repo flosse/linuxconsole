@@ -91,10 +91,10 @@ struct tmdc {
 
 static int tmdc_read_packet(struct gameport *gameport, unsigned char data[2][TMDC_MAX_LENGTH])
 {
-	unsigned int t[2], p;
 	unsigned char u, v, w, x;
-	int i[2], j[2], k;
+	unsigned int t[2], p;
 	unsigned long flags;
+	int i[2], j[2], k;
 
 	p = gameport_time(gameport, TMDC_MAX_STROBE);
 
@@ -114,40 +114,20 @@ static int tmdc_read_packet(struct gameport *gameport, unsigned char data[2][TMD
 		w = gameport_read(gameport) >> 4;
 
 		for (k = 0, v = w, u = x; k < 2; k++, v >>= 2, u >>= 2) {
-
-			t[k]--; 
-
 			if (~v & u & 2) {
-
-				if (t[k] <= 0)
-					continue;
-
-				if (j[k] == 0) {				 /* Start bit */
-					if ((~v & 1) || i[k] >= TMDC_MAX_LENGTH) {
-						t[k] = 0;
-						continue;
-					}
-					data[k][i[k]] = 0;
-					t[k] = p;
-					j[k]++;
-					continue;
-				}
-
-				if (j[k] == 9) {				/* Stop bit */
-					if (v & 1) {
-						t[k] = 0;
-						continue;
-					}
-					t[k] = p;
-					j[k] = 0;
-					i[k]++;
-					continue;
-				}
-
-				data[k][i[k]] |= (~v & 1) << (j[k] - 1);	/* Data bit */
+				if (t[k] <= 0 || i[k] >= TMDC_MAX_LENGTH) continue;
 				t[k] = p;
-				j[k]++;
+				if (j[k] == 0) {				 /* Start bit */
+					if (~v & 1) t[k] = 0;
+					data[k][i[k]] = 0; j[k]++; continue;
+				}
+				if (j[k] == 9) {				/* Stop bit */
+					if (v & 1) t[k] = 0;
+					j[k] = 0; i[k]++; continue;
+				}
+				data[k][i[k]] |= (~v & 1) << (j[k]++ - 1);	/* Data bit */
 			}
+			t[k]--; 
 		}
 	} while (t[0] > 0 || t[1] > 0);
 
