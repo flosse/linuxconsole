@@ -25,6 +25,9 @@
 #ifdef CONFIG_KMOD
 #include <linux/kmod.h>
 #endif
+#ifdef CONFIG_VT
+#include <linux/vt_kern.h>
+#endif
 #include <linux/devfs_fs_kernel.h>
 
 #if defined(__mc68000__) || defined(CONFIG_APUS)
@@ -565,6 +568,7 @@ static int
 fb_open(struct inode *inode, struct file *file)
 {
 	int fbidx = GET_FB_IDX(inode->i_rdev);
+	struct tty_struct *tty = current->tty;
 	struct fb_info *info;
 	int res = 0;
 
@@ -581,6 +585,16 @@ fb_open(struct inode *inode, struct file *file)
 		if (res && info->fbops->owner)
 			__MOD_DEC_USE_COUNT(info->fbops->owner);
 	}
+#ifdef CONFIG_VT
+	if (tty && (tty->driver.type == TTY_DRIVER_TYPE_CONSOLE)) {
+		struct vc_data *vc = (struct vc_data *) tty->driver_data;
+		struct vt_struct *vt = vc->display_fg;	
+	
+		vc->vc_mode = KD_GRAPHICS;	
+		vt->cache_sw = vt->vt_sw;
+		take_over_console(vt, &dummy_con);
+	}
+#endif	 
 	return res;
 }
 
@@ -588,6 +602,7 @@ static int
 fb_release(struct inode *inode, struct file *file)
 {
 	int fbidx = GET_FB_IDX(inode->i_rdev);
+	struct tty_struct *tty = current->tty;
 	struct fb_info *info;
 
 	lock_kernel();
@@ -596,6 +611,18 @@ fb_release(struct inode *inode, struct file *file)
 		info->fbops->fb_release(info,1);
 	if (info->fbops->owner)
 		__MOD_DEC_USE_COUNT(info->fbops->owner);
+#ifdef CONFIG_VT
+	if (tty && (tty->driver.type == TTY_DRIVER_TYPE_CONSOLE)) {
+                struct vc_data *vc = (struct vc_data *) tty->driver_data;
+		struct vt_struct *vt = vc->display_fg;
+		
+		if (vt->cache_sw) {
+        		take_over_console(vt, vt->cache_sw);
+			if (vc->vc_mode == KD_GRAPHICS)
+                        	vc->vc_mode = KD_TEXT;
+		}
+	}
+#endif
 	unlock_kernel();
 	return 0;
 }
