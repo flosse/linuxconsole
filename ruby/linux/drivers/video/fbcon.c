@@ -590,7 +590,7 @@ static int fbcon_font_op(struct vc_data *vc, struct console_font_op *op)
     if (op->width != 8)
 	return -ENXIO;	
 #endif
-    if ((info->var.xres % op->width) || (info->yres % op->width))	
+    if ((info->var.xres % op->width) || (info->var.yres % op->width))	
 	return -ENXIO;
 }
 
