@@ -466,7 +466,7 @@ struct input_handler {
 	void *private;
 
 	void (*event)(struct input_handle *handle, unsigned int type, unsigned int code, int value);
-	int (*connect)(struct input_handler *handler, struct input_dev *dev);
+	struct input_handle* (*connect)(struct input_handler *handler, struct input_dev *dev);
 	void (*disconnect)(struct input_handle *handle);
 
 	struct file_operations *fops;
@@ -479,6 +479,8 @@ struct input_handler {
 struct input_handle {
 
 	void *private;
+
+	int open;
 	
 	struct input_dev *dev;
 	struct input_handler *handler;
@@ -493,7 +495,7 @@ void input_unregister_device(struct input_dev *);
 void input_register_handler(struct input_handler *);
 void input_unregister_handler(struct input_handler *);
 
-void input_open_device(struct input_handle *);
+int input_open_device(struct input_handle *);
 void input_close_device(struct input_handle *);
 
 devfs_handle_t input_register_minor(char *name, int minor, int minor_base);
