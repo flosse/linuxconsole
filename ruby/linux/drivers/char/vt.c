@@ -65,10 +65,10 @@ static struct termios *console_termios_locked[MAX_NR_CONSOLES];
 static void con_flush_chars(struct tty_struct *tty);
 
 static int printable = 0;               /* Is console ready for printing? */
-static int current_vc = 0;		/* Which /dev/vc/X to allcoate next */
+static int current_vc = 0;		/* Which /dev/vc/X to allocate next */
+struct vt_struct *admin_vt = NULL;	/* VT of /dev/console */
 
 /*
- * fg_console is the current virtual console,
  * want_vc is the virtual console we want to switch to,
  * kmsg_redirect is the virtual console for kernel messages,
  */
@@ -551,9 +551,8 @@ void update_screen(struct vc_data *vc)
 {
         hide_cursor(vc);
 	set_origin(vc);
-        if (sw->con_switch(vc) && vcmode != KD_GRAPHICS) {
-       	 	/* Change the palette after a VT switch. */
-        	sw->con_set_palette(vc, color_table);
+        if (vcmode != KD_GRAPHICS) {
+		sw->con_set_palette(vc, color_table);
         	/* Update the screen contents */
         	do_update_region(vc, origin, screenbuf_size/2);
         }
@@ -619,7 +618,7 @@ static void blank_screen(unsigned long private)
                 return;
 	*/
         if (vt->blank_mode)
-                vt->vt_sw->con_blank(vt->fg_console, vt->blank_mode + 1);          
+		vt->vt_sw->con_blank(vt->fg_console, vt->blank_mode + 1);
 }
 
 void unblank_screen(struct vt_struct *vt)
@@ -691,6 +690,7 @@ const char *create_vt(struct vt_struct *vt, struct consw *vt_sw)
         vt->off_interval = 0;
 	init_MUTEX(&vt->lock);
 	vt->keyboard = NULL;
+	vt->data_hook = NULL;
 	vt->vcs.first_vc = current_vc;  
 	vt->vcs.next = NULL;
         vt->next = vt_cons;
@@ -832,14 +832,37 @@ int vc_allocate(unsigned int currcons)
 
 void vc_disallocate(unsigned int currcons)
 {
-	struct vc_data *vc = find_vc(currcons);
-        if (vc) {
+	struct vt_struct *vt = vt_cons;
+        struct vc_pool *pool = &vt->vcs;
+        struct vc_data *vc;
+
+        if (currcons >= MAX_NR_CONSOLES)
+                return;
+
+        for (;;) {
+                if (currcons >= pool->first_vc + MAX_NR_USER_CONSOLES ||
+                    currcons < pool->first_vc)
+                        pool = pool->next;
+                else
+                        break;
+
+                if (!pool) {
+                        vt = vt->next;
+                        if (vt)
+                                pool = &vt->vcs;
+                        else
+                                return;
+                }
+        }
+	vc = pool->vc_cons[currcons - pool->first_vc];
+        
+	if (vc) {
             sw->con_deinit(vc);
             if (vc->display_fg->kmalloced)
                 kfree(screenbuf);
             if (currcons >= MIN_NR_CONSOLES)
                 kfree(vc);
-            vc = NULL;
+            pool->vc_cons[currcons - pool->first_vc] = NULL;
         }
 }                     
 
@@ -1293,7 +1316,7 @@ static int con_write(struct tty_struct * tty, int from_user,
 
 static void con_put_char(struct tty_struct *tty, unsigned char ch)
 {
-        pm_access(pm_con);
+        /* pm_access(pm_con); */
         do_con_write(tty, 0, &ch, 1);
 }
 
@@ -1309,7 +1332,7 @@ static void con_flush_chars(struct tty_struct *tty)
         struct vc_data *vc = (struct vc_data *)tty->driver_data;
         unsigned long flags;
 
-        pm_access(pm_con);
+        /* pm_access(pm_con); */
         spin_lock_irqsave(&console_lock, flags);
         set_cursor(vc);
         spin_unlock_irqrestore(&console_lock, flags);
@@ -1363,7 +1386,6 @@ static void con_unthrottle(struct tty_struct *tty)
 }
 
 #ifdef CONFIG_VT_CONSOLE
-
 /*
  *      Console on virtual terminal
  *
@@ -1372,9 +1394,9 @@ static void con_unthrottle(struct tty_struct *tty)
 
 void vt_console_print(struct console *co, const char * b, unsigned count)
 {
+	struct vc_data *vc = find_vc(co->index);
         static unsigned long printing = 0;
         const ushort *start;
-	struct vc_data *vc;
         unsigned char c;
 	ushort cnt = 0;
         ushort myx;
@@ -1383,21 +1405,11 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
         if (!printable || test_and_set_bit(0, &printing))
                 return;
 
-        pm_access(pm_con);
+        /* pm_access(pm_con); */
 
-        if (kmsg_redirect && find_vc(kmsg_redirect-1))
-                co->index = kmsg_redirect - 1;
-
-	vc = find_vc(co->index);
-
-        /* read `x' only after setting currecons properly (otherwise
+        /* read `x' only after setting co->index properly (otherwise
            the `x' macro will read the x of the foreground console). */
         myx = x;
-
-	if (!vc) {
-		/* impossible */
-                goto quit;
-        }
 
         if (vcmode != KD_TEXT)
                 goto quit;
@@ -1455,16 +1467,26 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
         }
         set_cursor(vc);
         poke_blanked_console(vc->display_fg);
-
 quit:
         clear_bit(0, &printing);
 }
 
 static kdev_t vt_console_device(struct console *c)
 {
-	struct vc_data *vc = find_vc(c->index);
+	struct vc_data *vc = vc = find_vc(c->index);
 
-        return MKDEV(TTY_MAJOR, vc->display_fg->fg_console->vc_num);
+	c->index = vc->display_fg->fg_console->vc_num;
+	if (kmsg_redirect && find_vc(kmsg_redirect-1)) 
+                c->index = kmsg_redirect-1;
+        else
+        	c->index = vc->display_fg->fg_console->vc_num;
+	admin_vt = vc->display_fg;
+        return MKDEV(TTY_MAJOR, c->index);
+}
+
+void vt_console_unblank(void)
+{
+	unblank_screen(admin_vt);		
 }
 
 struct console vt_console_driver = {
@@ -1473,8 +1495,7 @@ struct console vt_console_driver = {
         NULL,
         vt_console_device,
         keyboard_wait_for_keypress,
-	NULL,
-        /* unblank_screen, */
+        vt_console_unblank, 
         NULL,
         CON_PRINTBUFFER,
         -1,
