@@ -87,6 +87,7 @@
 
 #define BANSHEE_MAX_PIXCLOCK 270000.0
 #define VOODOO3_MAX_PIXCLOCK 300000.0
+#define VOODOO5_MAX_PIXCLOCK 350000.0
 
 static struct fb_fix_screeninfo tdfx_fix __initdata = {
     "3Dfx", (unsigned long) NULL, 0, FB_TYPE_PACKED_PIXELS, 0,
@@ -395,6 +396,7 @@ static void do_write_regs(struct banshee_reg* reg)
   tdfx_outl(VIDDESKSTART,  reg->startaddr);
   tdfx_outl(VIDPROCCFG,    reg->vidcfg);
   tdfx_outl(VGAINIT1,      reg->vgainit1);  
+  tdfx_outl(MISCINIT0,    reg->miscinit0);	
 
   banshee_make_room(8);
   tdfx_outl(SRCBASE,         reg->srcbase);
@@ -419,14 +421,25 @@ static unsigned long do_lfb_size(void)
 
   draminit0 = tdfx_inl(DRAMINIT0);  
   draminit1 = tdfx_inl(DRAMINIT1);
-   
-  sgram_p = (draminit1 & DRAMINIT1_MEM_SDRAM) ? 0 : 1;
   
-  lfbsize = sgram_p ?
-    (((draminit0 & DRAMINIT0_SGRAM_NUM)  ? 2 : 1) * 
-     ((draminit0 & DRAMINIT0_SGRAM_TYPE) ? 8 : 4) * 1024 * 1024) :
-    16 * 1024 * 1024;
+  if ((fb_info.dev == PCI_DEVICE_ID_3DFX_BANSHEE) ||
+      (fb_info.dev == PCI_DEVICE_ID_3DFX_VOODOO3)) {             	 
+	sgram_p = (draminit1 & DRAMINIT1_MEM_SDRAM) ? 0 : 1;
+  
+	lfbsize = sgram_p ?
+    		(((draminit0 & DRAMINIT0_SGRAM_NUM)  ? 2 : 1) * 
+     		((draminit0 & DRAMINIT0_SGRAM_TYPE) ? 8 : 4) * 1024 * 1024) :
+    		16 * 1024 * 1024;
+  } else {
+     /* Voodoo4/5 */
+     u32 chips, psize, banks;
 
+     chips = ((draminit0 & (1 << 26)) == 0) ? 4 : 8;
+     psize = 1 << ((draminit0 & 0x38000000) >> 28);
+     banks = ((draminit0 & (1 << 30)) == 0) ? 2 : 4;
+     lfbsize = chips * psize * banks;
+     lfbsize <<= 20;
+  }                 
   /* disable block writes for SDRAM (why?) */
   miscinit1 = tdfx_inl(MISCINIT1);
   miscinit1 |= sgram_p ? 0 : MISCINIT1_2DBLOCK_DIS;
@@ -703,7 +716,25 @@ static int tdfxfb_set_par(struct fb_info *info)
 
   reg.screensize = info->var.xres | (info->var.yres << 12);
   reg.vidcfg &= ~VIDCFG_HALF_MODE;
+  reg.miscinit0 = tdfx_inl(MISCINIT0);
 
+#if defined(__BIG_ENDIAN)
+  switch (info->var.bits_per_pixel) {
+    case 8:
+      reg.miscinit0 &= ~(1 << 30);
+      reg.miscinit0 &= ~(1 << 31);
+      break;
+    case 16:
+      reg.miscinit0 |= (1 << 30);
+      reg.miscinit0 |= (1 << 31);
+      break;
+    case 24:
+    case 32:
+      reg.miscinit0 |= (1 << 30);
+      reg.miscinit0 &= ~(1 << 31);
+      break;
+  }
+#endif             
   do_write_regs(&reg);
   memcpy(info->par, par, sizeof(struct tdfx_par));
 
@@ -1079,16 +1110,24 @@ int __init tdfxfb_init(void)
   while ((pdev = pci_find_device(PCI_VENDOR_ID_3DFX, PCI_ANY_ID, pdev))) {
     if(((pdev->class >> 16) == PCI_BASE_CLASS_DISPLAY) &&
        ((pdev->device == PCI_DEVICE_ID_3DFX_BANSHEE) ||
-	(pdev->device == PCI_DEVICE_ID_3DFX_VOODOO3))) {
+	(pdev->device == PCI_DEVICE_ID_3DFX_VOODOO3) || 
+	(pdev->device == PCI_DEVICE_ID_3DFX_VOODOO5))) {
       /* Configure the default fb_fix_screeninfo first */
       memset(&fb_info, 0, sizeof(fb_info));
-      fb_info.par = &default_par;	
-      if (pdev->device == PCI_DEVICE_ID_3DFX_BANSHEE) {
-         strcat(tdfx_fix.id, " Banshee");
-         default_par.max_pixclock = BANSHEE_MAX_PIXCLOCK;
-      } else {
-         strcat(tdfx_fix.id, " Voodoo3");
-         default_par.max_pixclock = VOODOO3_MAX_PIXCLOCK;
+      fb_info.par = &default_par;
+      switch (pdev->device) {
+	case PCI_DEVICE_ID_3DFX_BANSHEE:	
+         	strcat(tdfx_fix.id, " Banshee");
+         	default_par.max_pixclock = BANSHEE_MAX_PIXCLOCK;
+		break;
+      	case PCI_DEVICE_ID_3DFX_VOODOO3:
+         	strcat(tdfx_fix.id, " Voodoo3");
+         	default_par.max_pixclock = VOODOO3_MAX_PIXCLOCK;
+     		break;
+	case PCI_DEVICE_ID_3DFX_VOODOO5:
+         	strcat(tdfx_fix.id, " Voodoo5");
+         	default_par.max_pixclock = VOODOO5_MAX_PIXCLOCK;
+     		break;
       }
 
       tdfx_fix.mmio_start = pci_resource_start(pdev, 0);

@@ -106,6 +106,8 @@ obj-$(CONFIG_FB_HGA)              += hgafb.o
 obj-$(CONFIG_FB_SA1100)           += sa1100fb.o
 obj-$(CONFIG_FB_VIRTUAL)          += vfb.o cfbfillrect.o cfbcopyarea.o cfbimgblt.o 
 obj-$(CONFIG_FB_HIT)              += hitfb.o fbgen.o
+obj-$(CONFIG_FB_E1355)            += epson1355fb.o fbgen.o
+obj-$(CONFIG_FB_DC)               += dcfb.o fbgen.o          
 
 include $(TOPDIR)/Rules.make
 

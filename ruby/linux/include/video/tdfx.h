@@ -166,6 +166,7 @@ struct banshee_reg {
   unsigned long clip1max;
   unsigned long srcbase;
   unsigned long dstbase;
+  unsigned long miscinit0;	
 };
 
 struct tdfx_par {

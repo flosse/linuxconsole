@@ -123,6 +123,9 @@ extern int radeonfb_init(void);
 extern int radeonfb_setup(char*);
 extern int sstfb_init(void);
 extern int sstfb_setup(char*);
+extern int e1355fb_init(void);
+extern int e1355fb_setup(char*);
+extern int dcfb_init(void);
 
 static struct {
 	const char *name;
@@ -270,6 +273,12 @@ static struct {
 #ifdef CONFIG_FB_HIT
 	{ "hitfb", hitfb_init, NULL },
 #endif
+#ifdef CONFIG_FB_E1355
+        { "e1355fb", e1355fb_init, e1355fb_setup },
+#endif
+#ifdef CONFIG_FB_DC
+        { "dcfb", dcfb_init, NULL },
+#endif          
 
 	/*
 	 * Generic drivers that don't use resource management (yet)
@@ -521,22 +530,6 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 	vma->vm_pgoff = off >> PAGE_SHIFT;
 #if defined(__sparc_v9__)
 	vma->vm_flags |= (VM_SHM | VM_LOCKED);
-	{
-		unsigned long align, j;
-		for (align = 0x400000; align > PAGE_SIZE; align >>= 3)
-			if (len >= align && !((start & ~PAGE_MASK) & (align - 1)))
-				break;
-		if (align > PAGE_SIZE && vma->vm_start & (align - 1)) {
-			/* align as much as possible */
-			struct vm_area_struct *vmm;
-			j = (-vma->vm_start) & (align - 1);
-			vmm = find_vma(current->mm, vma->vm_start);
-			if (!vmm || vmm->vm_start >= vma->vm_end + j) {
-				vma->vm_start += j;
-				vma->vm_end += j;
-			}
-		}
-	}
 	if (io_remap_page_range(vma->vm_start, off,
 				vma->vm_end - vma->vm_start, vma->vm_page_prot, 0))
 		return -EAGAIN;
@@ -652,6 +645,9 @@ static struct file_operations fb_fops = {
 	mmap:		fb_mmap,
 	open:		fb_open,
 	release:	fb_release,
+#ifdef HAVE_ARCH_FB_UNMAPPED_AREA
+        get_unmapped_area: get_fb_unmapped_area,
+#endif    	
 };
 
 static devfs_handle_t devfs_handle;

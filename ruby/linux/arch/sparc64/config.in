@@ -21,6 +21,8 @@ endmenu
 mainmenu_option next_comment
 comment 'General setup'
 
+tristate 'UltraSPARC-III bootbus i2c controller driver' CONFIG_BBC_I2C
+
 define_bool CONFIG_VT y
 define_bool CONFIG_VT_CONSOLE y
 define_bool CONFIG_INPUT y
@@ -32,6 +34,8 @@ define_bool CONFIG_SPARC64 y
 
 # Global things across all Sun machines.
 define_bool CONFIG_HAVE_DEC_LOCK y
+define_bool CONFIG_RWSEM_GENERIC_SPINLOCK n
+define_bool CONFIG_RWSEM_XCHGADD_ALGORITHM y
 define_bool CONFIG_ISA n
 define_bool CONFIG_EISA n
 define_bool CONFIG_MCA n

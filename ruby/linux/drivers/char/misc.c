@@ -69,7 +69,6 @@ extern void streamable_init(void);
 extern int rtc_DP8570A_init(void);
 extern int rtc_MK48T08_init(void);
 extern int ds1286_init(void);
-extern int dsp56k_init(void);
 extern int radio_init(void);
 extern int pmu_device_init(void);
 extern int tosh_init(void);
@@ -168,10 +167,20 @@ static struct file_operations misc_fops = {
 int misc_register(struct miscdevice * misc)
 {
 	static devfs_handle_t devfs_handle;
-
+	struct miscdevice *c;
+	
 	if (misc->next || misc->prev)
 		return -EBUSY;
 	down(&misc_sem);
+	c = misc_list.next;
+
+	while ((c != &misc_list) && (c->minor != misc->minor))
+		c = c->next;
+	if (c != &misc_list) {
+		up(&misc_sem);
+		return -EBUSY;
+	}
+
 	if (misc->minor == MISC_DYNAMIC_MINOR) {
 		int i = DYNAMIC_MINORS;
 		while (--i >= 0)
@@ -248,9 +257,6 @@ int __init misc_init(void)
 #endif
 #ifdef CONFIG_SGI_DS1286
 	ds1286_init();
-#endif
-#ifdef CONFIG_ATARI_DSP56K
-	dsp56k_init();
 #endif
 #ifdef CONFIG_MISC_RADIO
 	radio_init();

@@ -15,7 +15,7 @@
  * This file also contains code originally written by Linus Torvalds,
  * Copyright 1991, 1992, 1993, and by Julian Cowley, Copyright 1994.
  * 
- * This file may be redistributed under the terms of the GNU Public
+ * This file may be redistributed under the terms of the GNU General Public
  * License.
  *
  * Reduced memory usage for older ARM systems  - Russell King.
@@ -85,19 +85,24 @@ static inline void free_buf(unsigned char *buf)
 		free_page((unsigned long) buf);
 }
 
-static inline void put_tty_queue(unsigned char c, struct tty_struct *tty)
+static inline void put_tty_queue_nolock(unsigned char c, struct tty_struct *tty)
 {
-	unsigned long flags;
-	/*
-	 *	The problem of stomping on the buffers ends here.
-	 *	Why didn't anyone see this one comming? --AJK
-	*/
-	spin_lock_irqsave(&tty->read_lock, flags);
 	if (tty->read_cnt < N_TTY_BUF_SIZE) {
 		tty->read_buf[tty->read_head] = c;
 		tty->read_head = (tty->read_head + 1) & (N_TTY_BUF_SIZE-1);
 		tty->read_cnt++;
 	}
+}
+
+static inline void put_tty_queue(unsigned char c, struct tty_struct *tty)
+{
+	unsigned long flags;
+	/*
+	 *	The problem of stomping on the buffers ends here.
+	 *	Why didn't anyone see this one coming? --AJK
+	*/
+	spin_lock_irqsave(&tty->read_lock, flags);
+	put_tty_queue_nolock(c, tty);
 	spin_unlock_irqrestore(&tty->read_lock, flags);
 }
 
@@ -498,6 +503,8 @@ static inline void n_tty_receive_parity_error(struct tty_struct *tty,
 
 static inline void n_tty_receive_char(struct tty_struct *tty, unsigned char c)
 {
+	unsigned long flags;
+
 	if (tty->raw) {
 		put_tty_queue(c, tty);
 		return;
@@ -650,10 +657,12 @@ send_signal:
 				put_tty_queue(c, tty);
 
 		handle_newline:
+			spin_lock_irqsave(&tty->read_lock, flags);
 			set_bit(tty->read_head, &tty->read_flags);
-			put_tty_queue(c, tty);
+			put_tty_queue_nolock(c, tty);
 			tty->canon_head = tty->read_head;
 			tty->canon_data++;
+			spin_unlock_irqrestore(&tty->read_lock, flags);
 			kill_fasync(&tty->fasync, SIGIO, POLL_IN);
 			if (waitqueue_active(&tty->read_wait))
 				wake_up_interruptible(&tty->read_wait);
@@ -1053,12 +1062,6 @@ do_it_again:
 				tty->read_tail = ((tty->read_tail+1) &
 						  (N_TTY_BUF_SIZE-1));
 				tty->read_cnt--;
-				spin_unlock_irqrestore(&tty->read_lock, flags);
-
-				if (!eol || (c != __DISABLED_CHAR)) {
-					put_user(c, b++);
-					nr--;
-				}
 				if (eol) {
 					/* this test should be redundant:
 					 * we shouldn't be reading data if
@@ -1066,8 +1069,15 @@ do_it_again:
 					 */
 					if (--tty->canon_data < 0)
 						tty->canon_data = 0;
-					break;
 				}
+				spin_unlock_irqrestore(&tty->read_lock, flags);
+
+				if (!eol || (c != __DISABLED_CHAR)) {
+					put_user(c, b++);
+					nr--;
+				}
+				if (eol)
+					break;
 			}
 		} else {
 			int uncopied;

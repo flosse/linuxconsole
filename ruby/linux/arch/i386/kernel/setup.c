@@ -58,6 +58,12 @@
  *  Massive cleanup of CPU detection and bug handling;
  *  Transmeta CPU detection,
  *  H. Peter Anvin <hpa@zytor.com>, November 2000
+ *
+ *  Added E820 sanitization routine (removes overlapping memory regions);
+ *  Brian Moyle <bmoyle@mvista.com>, February 2001
+ *
+ *  VIA C3 Support.
+ *  Dave Jones <davej@suse.de>, March 2001
  */
 
 /*
@@ -134,12 +140,6 @@ struct sys_desc_table_struct {
 struct e820map e820;
 
 unsigned char aux_device_present;
-
-#ifdef CONFIG_BLK_DEV_RAM
-extern int rd_doload;		/* 1 = load ramdisk, 0 = don't load */
-extern int rd_prompt;		/* 1 = prompt for ramdisk, 0 = don't prompt */
-extern int rd_image_start;	/* starting block # of image */
-#endif
 
 extern int root_mountflags;
 extern char _text, _etext, _edata, _end;
@@ -293,7 +293,7 @@ visws_get_board_type_and_rev(void)
 			visws_board_rev = raw;
 		}
 
-		printk("Silicon Graphics %s (rev %d)\n",
+		printk(KERN_INFO "Silicon Graphics %s (rev %d)\n",
 			visws_board_type == VISWS_320 ? "320" :
 			(visws_board_type == VISWS_540 ? "540" :
 					"unknown"),
@@ -400,7 +400,7 @@ void __init add_memory_region(unsigned long long start,
 	int x = e820.nr_map;
 
 	if (x == E820MAX) {
-	    printk("Ooops! Too many entries in the memory map!\n");
+	    printk(KERN_ERR "Ooops! Too many entries in the memory map!\n");
 	    return;
 	}
 
@@ -417,8 +417,9 @@ static void __init print_memory_map(char *who)
 	int i;
 
 	for (i = 0; i < e820.nr_map; i++) {
-		printk(" %s: %016Lx @ %016Lx ", who,
-			e820.map[i].size, e820.map[i].addr);
+		printk(" %s: %016Lx - %016Lx ", who,
+			e820.map[i].addr,
+			e820.map[i].addr + e820.map[i].size);
 		switch (e820.map[i].type) {
 		case E820_RAM:	printk("(usable)\n");
 				break;
@@ -435,6 +436,170 @@ static void __init print_memory_map(char *who)
 				break;
 		}
 	}
+}
+
+/*
+ * Sanitize the BIOS e820 map.
+ *
+ * Some e820 responses include overlapping entries.  The following 
+ * replaces the original e820 map with a new one, removing overlaps.
+ *
+ */
+static int __init sanitize_e820_map(struct e820entry * biosmap, char * pnr_map)
+{
+	struct change_member {
+		struct e820entry *pbios; /* pointer to original bios entry */
+		unsigned long long addr; /* address for this change point */
+	};
+	struct change_member change_point_list[2*E820MAX];
+	struct change_member *change_point[2*E820MAX];
+	struct e820entry *overlap_list[E820MAX];
+	struct e820entry new_bios[E820MAX];
+	struct change_member *change_tmp;
+	unsigned long current_type, last_type;
+	unsigned long long last_addr;
+	int chgidx, still_changing;
+	int overlap_entries;
+	int new_bios_entry;
+	int old_nr, new_nr;
+	int i;
+
+	/*
+		Visually we're performing the following (1,2,3,4 = memory types)...
+
+		Sample memory map (w/overlaps):
+		   ____22__________________
+		   ______________________4_
+		   ____1111________________
+		   _44_____________________
+		   11111111________________
+		   ____________________33__
+		   ___________44___________
+		   __________33333_________
+		   ______________22________
+		   ___________________2222_
+		   _________111111111______
+		   _____________________11_
+		   _________________4______
+
+		Sanitized equivalent (no overlap):
+		   1_______________________
+		   _44_____________________
+		   ___1____________________
+		   ____22__________________
+		   ______11________________
+		   _________1______________
+		   __________3_____________
+		   ___________44___________
+		   _____________33_________
+		   _______________2________
+		   ________________1_______
+		   _________________4______
+		   ___________________2____
+		   ____________________33__
+		   ______________________4_
+	*/
+
+	/* if there's only one memory region, don't bother */
+	if (*pnr_map < 2)
+		return -1;
+
+	old_nr = *pnr_map;
+
+	/* bail out if we find any unreasonable addresses in bios map */
+	for (i=0; i<old_nr; i++)
+		if (biosmap[i].addr + biosmap[i].size < biosmap[i].addr)
+			return -1;
+
+	/* create pointers for initial change-point information (for sorting) */
+	for (i=0; i < 2*old_nr; i++)
+		change_point[i] = &change_point_list[i];
+
+	/* record all known change-points (starting and ending addresses) */
+	chgidx = 0;
+	for (i=0; i < old_nr; i++)	{
+		change_point[chgidx]->addr = biosmap[i].addr;
+		change_point[chgidx++]->pbios = &biosmap[i];
+		change_point[chgidx]->addr = biosmap[i].addr + biosmap[i].size;
+		change_point[chgidx++]->pbios = &biosmap[i];
+	}
+
+	/* sort change-point list by memory addresses (low -> high) */
+	still_changing = 1;
+	while (still_changing)	{
+		still_changing = 0;
+		for (i=1; i < 2*old_nr; i++)  {
+			/* if <current_addr> > <last_addr>, swap */
+			/* or, if current=<start_addr> & last=<end_addr>, swap */
+			if ((change_point[i]->addr < change_point[i-1]->addr) ||
+				((change_point[i]->addr == change_point[i-1]->addr) &&
+				 (change_point[i]->addr == change_point[i]->pbios->addr) &&
+				 (change_point[i-1]->addr != change_point[i-1]->pbios->addr))
+			   )
+			{
+				change_tmp = change_point[i];
+				change_point[i] = change_point[i-1];
+				change_point[i-1] = change_tmp;
+				still_changing=1;
+			}
+		}
+	}
+
+	/* create a new bios memory map, removing overlaps */
+	overlap_entries=0;	 /* number of entries in the overlap table */
+	new_bios_entry=0;	 /* index for creating new bios map entries */
+	last_type = 0;		 /* start with undefined memory type */
+	last_addr = 0;		 /* start with 0 as last starting address */
+	/* loop through change-points, determining affect on the new bios map */
+	for (chgidx=0; chgidx < 2*old_nr; chgidx++)
+	{
+		/* keep track of all overlapping bios entries */
+		if (change_point[chgidx]->addr == change_point[chgidx]->pbios->addr)
+		{
+			/* add map entry to overlap list (> 1 entry implies an overlap) */
+			overlap_list[overlap_entries++]=change_point[chgidx]->pbios;
+		}
+		else
+		{
+			/* remove entry from list (order independent, so swap with last) */
+			for (i=0; i<overlap_entries; i++)
+			{
+				if (overlap_list[i] == change_point[chgidx]->pbios)
+					overlap_list[i] = overlap_list[overlap_entries-1];
+			}
+			overlap_entries--;
+		}
+		/* if there are overlapping entries, decide which "type" to use */
+		/* (larger value takes precedence -- 1=usable, 2,3,4,4+=unusable) */
+		current_type = 0;
+		for (i=0; i<overlap_entries; i++)
+			if (overlap_list[i]->type > current_type)
+				current_type = overlap_list[i]->type;
+		/* continue building up new bios map based on this information */
+		if (current_type != last_type)	{
+			if (last_type != 0)	 {
+				new_bios[new_bios_entry].size =
+					change_point[chgidx]->addr - last_addr;
+				/* move forward only if the new size was non-zero */
+				if (new_bios[new_bios_entry].size != 0)
+					if (++new_bios_entry >= E820MAX)
+						break; 	/* no more space left for new bios entries */
+			}
+			if (current_type != 0)	{
+				new_bios[new_bios_entry].addr = change_point[chgidx]->addr;
+				new_bios[new_bios_entry].type = current_type;
+				last_addr=change_point[chgidx]->addr;
+			}
+			last_type = current_type;
+		}
+	}
+	new_nr = new_bios_entry;   /* retain count for new bios entries */
+
+	/* copy new bios mapping into original location */
+	memcpy(biosmap, new_bios, new_nr*sizeof(struct e820entry));
+	*pnr_map = new_nr;
+
+	return 0;
 }
 
 /*
@@ -504,6 +669,7 @@ void __init setup_memory_region(void)
 	 * Otherwise fake a memory map; one section from 0k->640k,
 	 * the next section from 1mb->appropriate_mem_k
 	 */
+	sanitize_e820_map(E820_MAP, &E820_MAP_NR);
 	if (copy_e820_map(E820_MAP, E820_MAP_NR) < 0) {
 		unsigned long mem_size;
 
@@ -520,7 +686,7 @@ void __init setup_memory_region(void)
 		add_memory_region(0, LOWMEMSIZE(), E820_RAM);
 		add_memory_region(HIGH_MEMORY, mem_size << 10, E820_RAM);
   	}
-	printk("BIOS-provided physical RAM map:\n");
+	printk(KERN_INFO "BIOS-provided physical RAM map:\n");
 	print_memory_map(who);
 } /* setup_memory_region */
 
@@ -558,7 +724,7 @@ static inline void parse_mem_cmdline (char ** cmdline_p)
 				 * blow away any automatically generated
 				 * size
 				 */
-				unsigned long start_at, mem_size;
+				unsigned long long start_at, mem_size;
  
 				if (usermem == 0) {
 					/* first time in: zap the whitelist
@@ -590,7 +756,7 @@ static inline void parse_mem_cmdline (char ** cmdline_p)
 	*to = '\0';
 	*cmdline_p = command_line;
 	if (usermem) {
-		printk("user-defined physical RAM map:\n");
+		printk(KERN_INFO "user-defined physical RAM map:\n");
 		print_memory_map("user");
 	}
 }
@@ -797,7 +963,7 @@ void __init setup_arch(char **cmdline_p)
 			initrd_end = initrd_start+INITRD_SIZE;
 		}
 		else {
-			printk("initrd extends beyond end of memory "
+			printk(KERN_ERR "initrd extends beyond end of memory "
 			    "(0x%08lx > 0x%08lx)\ndisabling initrd\n",
 			    INITRD_START + INITRD_SIZE,
 			    max_low_pfn << PAGE_SHIFT);
@@ -893,7 +1059,7 @@ static void __init display_cacheinfo(struct cpuinfo_x86 *c)
 
 	if (n >= 0x80000005) {
 		cpuid(0x80000005, &dummy, &dummy, &ecx, &edx);
-		printk("CPU: L1 I Cache: %dK (%d bytes/line), D cache %dK (%d bytes/line)\n",
+		printk(KERN_INFO "CPU: L1 I Cache: %dK (%d bytes/line), D cache %dK (%d bytes/line)\n",
 			edx>>24, edx&0xFF, ecx>>24, ecx&0xFF);
 		c->x86_cache_size=(ecx>>24)+(edx>>24);	
 	}
@@ -917,7 +1083,7 @@ static void __init display_cacheinfo(struct cpuinfo_x86 *c)
 
 	c->x86_cache_size = l2size;
 
-	printk("CPU: L2 Cache: %dK (%d bytes/line)\n",
+	printk(KERN_INFO "CPU: L2 Cache: %dK (%d bytes/line)\n",
 	       l2size, ecx & 0xFF);
 }
 
@@ -1330,7 +1496,7 @@ static void __init init_centaur(struct cpuinfo_x86 *c)
 				name="C6";
 				fcr_set=ECX8|DSMC|EDCTLB|EMMX|ERETSTK;
 				fcr_clr=DPDC;
-				printk("Disabling bugged TSC.\n");
+				printk(KERN_NOTICE "Disabling bugged TSC.\n");
 				clear_bit(X86_FEATURE_TSC, &c->x86_capability);
 				break;
 			case 8:
@@ -1367,10 +1533,10 @@ static void __init init_centaur(struct cpuinfo_x86 *c)
 			newlo=(lo|fcr_set) & (~fcr_clr);
 
 			if (newlo!=lo) {
-				printk("Centaur FCR was 0x%X now 0x%X\n", lo, newlo );
+				printk(KERN_INFO "Centaur FCR was 0x%X now 0x%X\n", lo, newlo );
 				wrmsr(0x107, newlo, hi );
 			} else {
-				printk("Centaur FCR is 0x%X\n",lo);
+				printk(KERN_INFO "Centaur FCR is 0x%X\n",lo);
 			}
 			/* Emulate MTRRs using Centaur's MCR. */
 			set_bit(X86_FEATURE_CENTAUR_MCR, &c->x86_capability);
@@ -1391,7 +1557,7 @@ static void __init init_centaur(struct cpuinfo_x86 *c)
 
 		case 6:
 			switch (c->x86_model) {
-				case 6:	/* Cyrix III */
+				case 6 ... 7:		/* Cyrix III or C3 */
 					rdmsr (0x1107, lo, hi);
 					lo |= (1<<1 | 1<<7);	/* Report CX8 & enable PGE */
 					wrmsr (0x1107, lo, hi);
@@ -1423,7 +1589,7 @@ static void __init init_transmeta(struct cpuinfo_x86 *c)
 	max = cpuid_eax(0x80860000);
 	if ( max >= 0x80860001 ) {
 		cpuid(0x80860001, &dummy, &cpu_rev, &cpu_freq, &cpu_flags); 
-		printk("CPU: Processor revision %u.%u.%u.%u, %u MHz\n",
+		printk(KERN_INFO "CPU: Processor revision %u.%u.%u.%u, %u MHz\n",
 		       (cpu_rev >> 24) & 0xff,
 		       (cpu_rev >> 16) & 0xff,
 		       (cpu_rev >> 8) & 0xff,
@@ -1432,7 +1598,7 @@ static void __init init_transmeta(struct cpuinfo_x86 *c)
 	}
 	if ( max >= 0x80860002 ) {
 		cpuid(0x80860002, &dummy, &cms_rev1, &cms_rev2, &dummy);
-		printk("CPU: Code Morphing Software revision %u.%u.%u-%u-%u\n",
+		printk(KERN_INFO "CPU: Code Morphing Software revision %u.%u.%u-%u-%u\n",
 		       (cms_rev1 >> 24) & 0xff,
 		       (cms_rev1 >> 16) & 0xff,
 		       (cms_rev1 >> 8) & 0xff,
@@ -1461,7 +1627,7 @@ static void __init init_transmeta(struct cpuinfo_x86 *c)
 		      (void *)&cpu_info[56],
 		      (void *)&cpu_info[60]);
 		cpu_info[64] = '\0';
-		printk("CPU: %s\n", cpu_info);
+		printk(KERN_INFO "CPU: %s\n", cpu_info);
 	}
 
 	/* Unhide possibly hidden capability flags */
@@ -1470,6 +1636,32 @@ static void __init init_transmeta(struct cpuinfo_x86 *c)
 	c->x86_capability[0] = cpuid_edx(0x00000001);
 	wrmsr(0x80860004, cap_mask, uk);
 }
+
+
+static void __init init_rise(struct cpuinfo_x86 *c)
+{
+	printk("CPU: Rise iDragon");
+	if (c->x86_model > 2)
+		printk(" II");
+	printk("\n");
+	printk("If you have one of these please email davej@suse.de\n");
+
+	/* Unhide possibly hidden capability flags
+	   The mp6 iDragon family don't have MSRs.
+	   We switch on extra features with this cpuid wierdness: */
+	__asm__ (
+		"movl $0x6363452a, %%eax\n\t"
+		"movl $0x3231206c, %%ecx\n\t"
+		"movl $0x2a32313a, %%edx\n\t"
+		"cpuid\n\t"
+		"movl $0x63634523, %%eax\n\t"
+		"movl $0x32315f6c, %%ecx\n\t"
+		"movl $0x2333313a, %%edx\n\t"
+		"cpuid\n\t" : : : "eax", "ebx", "ecx", "edx"
+	);
+	set_bit(X86_FEATURE_CX8, &c->x86_capability);
+}
+
 
 extern void trap_init_f00f_bug(void);
 
@@ -1493,7 +1685,7 @@ static void __init init_intel(struct cpuinfo_x86 *c)
 		c->f00f_bug = 1;
 		if ( !f00f_workaround_enabled ) {
 			trap_init_f00f_bug();
-			printk(KERN_INFO "Intel Pentium with F0 0F bug - workaround enabled.\n");
+			printk(KERN_NOTICE "Intel Pentium with F0 0F bug - workaround enabled.\n");
 			f00f_workaround_enabled = 1;
 		}
 	}
@@ -1601,12 +1793,12 @@ static void __init init_intel(struct cpuinfo_x86 *c)
 			}
 		}
 		if ( l1i || l1d )
-			printk("CPU: L1 I cache: %dK, L1 D cache: %dK\n",
+			printk(KERN_INFO "CPU: L1 I cache: %dK, L1 D cache: %dK\n",
 			       l1i, l1d);
 		if ( l2 )
-			printk("CPU: L2 cache: %dK\n", l2);
+			printk(KERN_INFO "CPU: L2 cache: %dK\n", l2);
 		if ( l3 )
-			printk("CPU: L3 cache: %dK\n", l3);
+			printk(KERN_INFO "CPU: L3 cache: %dK\n", l3);
 
 		/*
 		 * This assumes the L3 cache is shared; it typically lives in
@@ -1722,8 +1914,8 @@ static struct cpu_model_info cpu_models[] __initdata = {
 	  { "Nx586", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 	    NULL, NULL, NULL, NULL, NULL, NULL, NULL }},
 	{ X86_VENDOR_RISE,	5,
-	  { "mP6", "mP6", NULL, NULL, NULL, NULL, NULL,
-	    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }},
+	  { "iDragon", NULL, "iDragon", NULL, NULL, NULL, NULL,
+	    NULL, "iDragon II", "iDragon II", NULL, NULL, NULL, NULL, NULL, NULL }},
 };
 
 /* Look up CPU names by table lookup. */
@@ -1776,7 +1968,7 @@ static void __init squash_the_stupid_serial_number(struct cpuinfo_x86 *c)
 		rdmsr(0x119,lo,hi);
 		lo |= 0x200000;
 		wrmsr(0x119,lo,hi);
-		printk(KERN_INFO "CPU serial number disabled.\n");
+		printk(KERN_NOTICE "CPU serial number disabled.\n");
 		clear_bit(X86_FEATURE_PN, &c->x86_capability);
 	}
 }
@@ -1967,7 +2159,7 @@ void __init identify_cpu(struct cpuinfo_x86 *c)
 		}
 	}
 
-	printk("CPU: Before vendor init, caps: %08x %08x %08x, vendor = %d\n",
+	printk(KERN_DEBUG "CPU: Before vendor init, caps: %08x %08x %08x, vendor = %d\n",
 	       c->x86_capability[0],
 	       c->x86_capability[1],
 	       c->x86_capability[2],
@@ -1987,6 +2179,15 @@ void __init identify_cpu(struct cpuinfo_x86 *c)
 	case X86_VENDOR_UNKNOWN:
 	default:
 		/* Not much we can do here... */
+		/* Check if at least it has cpuid */
+		if (c->cpuid_level == -1)
+		{
+			/* No cpuid. It must be an ancient CPU */
+			if (c->x86 == 4)
+				strcpy(c->x86_model_id, "486");
+			else if (c->x86 == 3)
+				strcpy(c->x86_model_id, "386");
+		}
 		break;
 
 	case X86_VENDOR_CYRIX:
@@ -2012,9 +2213,13 @@ void __init identify_cpu(struct cpuinfo_x86 *c)
 	case X86_VENDOR_TRANSMETA:
 		init_transmeta(c);
 		break;
+
+	case X86_VENDOR_RISE:
+		init_rise(c);
+		break;
 	}
 	
-	printk("CPU: After vendor init, caps: %08x %08x %08x %08x\n",
+	printk(KERN_DEBUG "CPU: After vendor init, caps: %08x %08x %08x %08x\n",
 	       c->x86_capability[0],
 	       c->x86_capability[1],
 	       c->x86_capability[2],
@@ -2054,7 +2259,7 @@ void __init identify_cpu(struct cpuinfo_x86 *c)
 
 	/* Now the feature flags better reflect actual CPU features! */
 
-	printk("CPU: After generic, caps: %08x %08x %08x %08x\n",
+	printk(KERN_DEBUG "CPU: After generic, caps: %08x %08x %08x %08x\n",
 	       c->x86_capability[0],
 	       c->x86_capability[1],
 	       c->x86_capability[2],
@@ -2072,7 +2277,7 @@ void __init identify_cpu(struct cpuinfo_x86 *c)
 			boot_cpu_data.x86_capability[i] &= c->x86_capability[i];
 	}
 
-	printk("CPU: Common caps: %08x %08x %08x %08x\n",
+	printk(KERN_DEBUG "CPU: Common caps: %08x %08x %08x %08x\n",
 	       boot_cpu_data.x86_capability[0],
 	       boot_cpu_data.x86_capability[1],
 	       boot_cpu_data.x86_capability[2],
@@ -2240,16 +2445,16 @@ void __init cpu_init (void)
 	struct tss_struct * t = &init_tss[nr];
 
 	if (test_and_set_bit(nr, &cpu_initialized)) {
-		printk("CPU#%d already initialized!\n", nr);
+		printk(KERN_WARNING "CPU#%d already initialized!\n", nr);
 		for (;;) __sti();
 	}
-	printk("Initializing CPU#%d\n", nr);
+	printk(KERN_INFO "Initializing CPU#%d\n", nr);
 
 	if (cpu_has_vme || cpu_has_tsc || cpu_has_de)
 		clear_in_cr4(X86_CR4_VME|X86_CR4_PVI|X86_CR4_TSD|X86_CR4_DE);
 #ifndef CONFIG_X86_TSC
 	if (tsc_disable && cpu_has_tsc) {
-		printk("Disabling TSC...\n");
+		printk(KERN_NOTICE "Disabling TSC...\n");
 		/**** FIX-HPA: DOES THIS REALLY BELONG HERE? ****/
 		clear_bit(X86_FEATURE_TSC, boot_cpu_data.x86_capability);
 		set_in_cr4(X86_CR4_TSD);
