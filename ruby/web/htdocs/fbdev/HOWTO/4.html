@@ -1,0 +1,389 @@
+<html>
+<head>
+<title>Linux Framebuffer Driver Writing HOWTO</title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+</head>
+
+<body bgcolor="#FFFFFF">
+<h2><font face="Arial, Helvetica, sans-serif">4.  Framebuffer internal API</font></h2>
+<hr width="100%" size="2">
+<p><font face="Arial, Helvetica, sans-serif">Now that we understand the basic 
+  ideas behind video card technology and mode setting, we can now look at how 
+  the framebuffer devices abstract them. Also, we will see that fbdev actually 
+  handles most of the mode setting issues for you to make life much easier. In 
+  the older API, the console code was heavily linked to the framebuffer devices. 
+  The newer API has now moved nearly all console handling code into fbcon itself. 
+  Now, fbcon is a true wrapper around the video card&#146;s abilities. This allows 
+  for massive code reduction and easier driver development. A good example of 
+  a framebuffer driver is the virtual framebuffer (vfb). The vfb driver is not 
+  a true framebuffer driver. All it does is map a chunk of memory to userspace. 
+  It's used for demonstration purposes and testing.</font></p>
+<h3><font face="Arial, Helvetica, sans-serif">4.1 Data Structures</font></h3>
+<p><font face="Arial, Helvetica, sans-serif">The framebuffer drivers depend heavily 
+  on four data structures. These structures are declared in fb.h. They are <i><font face="Courier New, Courier, mono">fb_var_screeninfo</font></i>, 
+  <i><font face="Courier New, Courier, mono">fb_fix_screeninfo</font></i>, <i><font face="Courier New, Courier, mono">fb_monospecs</font></i>, 
+  and <i><font face="Courier New, Courier, mono">fb_info</font></i>. The first 
+  three can be made available to and from userland. First let me describe what 
+  each means and how they are used.</font></p>
+<p><font face="Arial, Helvetica, sans-serif"><i><font face="Courier New, Courier, mono">fb_var_screeninfo</font></i> 
+  is used to describe the features of a video card you normally can set. With 
+  <i><font face="Courier New, Courier, mono">fb_var_screeninfo</font></i>, you 
+  can define such things as depth and the resolution you want.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">The next structure is<i> <font face="Courier New, Courier, mono">fb_fix_screeninfo</font></i>. 
+  This defines the properties of a card that are created when you set a mode and 
+  can't be changed otherwise. A good example is the start of the framebuffer memory. 
+  This can depend on what mode is set. Now while using that mode, you don't want 
+  to have the memory position change on you. In this case, the video hardware 
+  tells you the memory location and you have no say about it.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">The third structure is <i><font face="Courier New, Courier, mono">fb_monospecs</font></i>. 
+  In the old API, the importance of <i><font face="Courier New, Courier, mono">fb_monospecs</font></i> 
+  was very little. This allowed for forbidden things such as setting a mode of 
+  800x600 on a fix frequency monitor. With the new API, <i><font face="Courier New, Courier, mono">fb_monospecs</font></i> 
+  prevents such things, and if used correctly, can prevent a monitor from being 
+  cooked.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">The final data structure is <i><font face="Courier New, Courier, mono">fb_info</font></i>. 
+  This defines the current state of the video card. <i><font face="Courier New, Courier, mono">fb_info</font></i> 
+  is only visible from the kernel. Inside of <i><font face="Courier New, Courier, mono">fb_info</font></i>, 
+  there exist a <i><font face="Courier New, Courier, mono">fb_ops</font></i> which 
+  is a collection of needed functions to make fbdev and fbcon work.</font></p>
+<h3><font face="Arial, Helvetica, sans-serif">4.2 Driver layout</font></h3>
+<p><font face="Arial, Helvetica, sans-serif">Here I describe a clean way to code 
+  your drivers. A good example of the basic layout is vfb.c. In the example driver, 
+  we first present our data structures in the beginning of the file. Note that 
+  there is no<i> <font face="Courier New, Courier, mono">fb_monospecs</font></i> 
+  since this is handled by code in fbmon.c. This can be done since monitors are 
+  independent in behavior from video cards. First, we define our three basic data 
+  structures. For all the data structures I defined them static and declare the 
+  default values. The reason I do this is because it's less memory intensive than 
+  to allocate a piece of memory and filling in the default values. Note that drivers 
+  that support multihead (multiple video cards) of the same card, then the <font face="Courier New, Courier, mono">fb_info</font> 
+  should be dynamically allocated for each card present. For <i><font face="Courier New, Courier, mono">fb_var_screeninfo</font></i> 
+  and <i><font face="Courier New, Courier, mono">fb_fix_screeninfo</font></i>, 
+  they still are declared static since all the cards can be set to the same mode.</font></p>
+<h3><font face="Arial, Helvetica, sans-serif">4.3 Initialization and boot time 
+  parameter handling</font></h3>
+<p><font face="Arial, Helvetica, sans-serif">There are two functions that handle 
+  the video card at boot time:</font></p>
+<blockquote> 
+  <pre><font face="Courier New, Courier, mono"><i>int xxfb_init(void);
+</i></font><font face="Courier New, Courier, mono"><i>int xxfb_setup(char*);</i></font></pre>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">In the example driver as with most 
+  drivers, these functions are placed at the end of the driver. Both are very 
+  card specific. In order to link your driver directly into the kernel, both of 
+  these functions must add the above definition with extern in front to fbmem.c. 
+  Add these functions to the following in fbmem.c:</font></p>
+<blockquote> 
+  <pre><font face="Courier New, Courier, mono"><i>static struct {
+</i></font><font face="Courier New, Courier, mono"><i>     const char *name;
+
+</i></font><font face="Courier New, Courier, mono"><i>     int (*init)(void);
+</i></font><font face="Courier New, Courier, mono"><i>     int (*setup)(char*);</i></font></pre>
+  <pre><font face="Courier New, Courier, mono"><i>} fb_drivers[] __initdata = {
+</i></font><font face="Courier New, Courier, mono"><i>#ifdef CONFIG_FB_YOURCARD
+</i></font><font face="Courier New, Courier, mono"><i>     { &quot;driver_name&quot;, xxxfb_init, xxxfb_setup },
+</i></font><font face="Courier New, Courier, mono"><i>#endif</i></font></pre>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">Setup is used to pass card specific 
+  options from the boot prompt of your favorite boot loader. A good example is:</font></p>
+<blockquote> 
+  <p><font face="Arial, Helvetica, sans-serif">boot: video=matrox: vesa: 443</font></p>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">The basic setup function is:</font></p>
+<blockquote> 
+  <pre><font face="Courier New, Courier, mono"><i>int __init xxxfb_setup(char *options)
+</i></font><font face="Courier New, Courier, mono"><i>{
+    </i></font><font face="Courier New, Courier, mono"><i>char *this_opt;
+
+    </i></font><font face="Courier New, Courier, mono"><i>if (!options || !*options)
+        </i></font><font face="Courier New, Courier, mono"><i>return 0;</i></font></pre>
+  <pre><font face="Courier New, Courier, mono"><i>    for (this_opt = strtok(options, &quot;,&quot;); this_opt;
+        </i></font><font face="Courier New, Courier, mono"><i>this_opt = strtok(NULL,      &quot;,&quot;))</i></font></pre>
+  <pre><font face="Courier New, Courier, mono"><i>        if (!strcmp(this_opt, &quot;my_option&quot;)) {
+        </i></font><font face="Courier New, Courier, mono"><i>/* Do your stuff. Usually set some static flags that the driver later uses */</i></font></pre>
+  <pre><font face="Courier New, Courier, mono"><i>        } else if (!strncmp(this_opt, &quot;Other_option:&quot;, 5))
+            </i></font><font face="Courier New, Courier, mono"><i>strcpy(some_flag_driver_uses, this_opt+5);
+        </i></font><font face="Courier New, Courier, mono"><i>} else ....
+    }
+</i></font><font face="Courier New, Courier, mono"><i>}</i></font></pre>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">The <i>xxfb_init</i> function sets 
+  the initial state of the video card. This function has to consider bus and platform 
+  handling since today most cards can exist on many platforms. For bus types we 
+  have to deal with, there are PCI, ISA, and zorro. Also, some platforms offer 
+  firmware that returns information about the video card. In this case, we often 
+  don't need to deal with the bus unless we need more control over the card. Let 
+  us look at Open Firmware that&#146;s available on PowerPCs. If you are going 
+  to use Open Firmware to initialize your card, you need to add the following 
+  to offb.c.</font></p>
+<blockquote> 
+  <pre><font face="Courier New, Courier, mono"><i>#ifdef CONFIG_FB_YOUR_CARD
+</i></font><font face="Courier New, Courier, mono"><i>extern void xxxfb_of_init(struct device_node *dp);
+</i></font><font face="Courier New, Courier, mono"><i>#endif /* CONFIG_FB_YOUR_CARD */</i></font></pre>
+  <pre><font face="Courier New, Courier, mono"><i>Then in the function offb_init_driver, you add something similar to the following:</i></font></pre>
+  <pre><font face="Courier New, Courier, mono"><i>#ifdef CONFIG_FB_YOUR_CARD
+</i></font><font face="Courier New, Courier, mono"><i>if (!strncmp(dp-&gt;name,&quot;Open Firmware number of your card &quot;, size_of_name)) {
+    </i></font><font face="Courier New, Courier, mono"><i>xxxfb_of_init(dp);
+    </i></font><font face="Courier New, Courier, mono"><i>return 1;
+</i></font><font face="Courier New, Courier, mono"><i>}
+</i></font><font face="Courier New, Courier, mono"><i>#endif /* CONFIG_FB_YOUR_CARD */</i></font></pre>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">If Open Firmware doesn't detect your 
+  card, Open Firmware sets up a generic video mode for you. Now in your driver 
+  you really need two initialization functions. </font></p>
+<p><font face="Arial, Helvetica, sans-serif">The next major part of the driver 
+  is declaring the functions of <i><font face="Courier New, Courier, mono">fb_ops</font></i> 
+  that are declared in <i><font face="Courier New, Courier, mono">fb_info</font></i><font face="Courier New, Courier, mono"> 
+  </font>for the driver. </font></p>
+<p><font face="Arial, Helvetica, sans-serif">The first two functions,<i> <font face="Courier New, Courier, mono">xxfb_open</font></i> 
+  and <i><font face="Courier New, Courier, mono">xxfb_release</font></i>, can 
+  be called from both fbcon and fbdev. In fact, that's the use of the user flag. 
+  If user equals zero then fbcon wants to access this device, else it's an explicit 
+  open of the framebuffer device. This way, you can handle the framebuffer device 
+  for the console in a special way for a particular video card. For most drivers, 
+  this function just does a <i><font face="Courier New, Courier, mono">MOD_INC_USE_COUNT</font></i> 
+  or <i><font face="Courier New, Courier, mono">MOD_DEC_USE_COUNT</font></i>.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">These are the functions that are 
+  at the heart of mode setting. There do exist a few cards that don't support 
+  mode changing. For these we have this function return an -EINVAL to let the 
+  user know he/she can't set the mode. Actually, set_var does more than just set 
+  modes. It can check them as well. In <i><font face="Courier New, Courier, mono">fb_var_screeninfo</font></i>, 
+  there exists a flag called activate. This flag can take on the following values: 
+  <i><font face="Courier New, Courier, mono">FB_ACTIVATE_NOW</font></i>, <i><font face="Courier New, Courier, mono">FB_ACTIVATE_NXTOPEN</font></i>, 
+  and <i><font face="Courier New, Courier, mono">FB_ACTIVATE_TEST</font></i>. 
+  </font></p>
+<p><font face="Arial, Helvetica, sans-serif"><i><font face="Courier New, Courier, mono">FB_ACTIVATE_TEST</font></i> 
+  tells us if the hardware can handle what the user requested. <i><font face="Courier New, Courier, mono">FB_ACTIVATE_NXTOPEN</font></i> 
+  sets the values wanted on the next explicit open of fbdev. The final one <i><font face="Courier New, Courier, mono">FB_ACTIVATE_NOW</font></i><font face="Courier New, Courier, mono"> 
+  </font>checks the mode to see if it can be done and then sets the mode. You 
+  MUST check the mode before all things. Note that this function is very card 
+  specific, but I will attempt to give you the most general layout. The basic 
+  layout then for <font face="Courier New, Courier, mono">xxxfb_set_var</font> 
+  is:</font></p>
+<blockquote> 
+  <pre><font face="Courier New, Courier, mono"><i>static int vfb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
+</i></font><font face="Courier New, Courier, mono"><i>{
+    int line_length;</i></font></pre>
+  <blockquote> 
+    <pre><font face="Courier New, Courier, mono"><i>/* Basic setup test. Here we look at what the user passed in that he/she wants.
+   For example to test the fb_var_screeninfo field vmode like its done in vfb.c.
+   Here we see if the user has FB_VMODE_YWARP. Also we should look to see if
+   the user tried to pass in invalid values like 17 bpp (bits per pixel) */</i></font></pre>
+    <pre><font face="Courier New, Courier, mono"><i>/* Remember the above discussion on how monitors see a mode. They don't care
+   about bit depth.  So you can divide the checking into two parts. One is to
+   see if the user changed a mode from say 640x480 at 8 bpp to 640x480 at 32 bpp.
+   Remember the var in fb_info represents the current video mode. Before we
+   actually change any resolutions we have to make sure the card has enough 
+   memory for the new mode. Discovering how much memory a video card has varies
+   from card to card.  Also finding out how much memory we have is done in
+   xxxfb_init since this never changes unless you add more memory to your card,
+   which requires a reboot of the machine anyway. You might have to do other
+   tests depending on make of your card. Note the par filed in fb_info. This
+   is used to store card specific data. This data can affect set_var. Also it
+   is present to allow other possible drivers that could effect the framebuffer
+   device such as a special driver for an accel engine or memory mapping the
+   Z buffer on a card */</i></font></pre>
+    <pre><font face="Courier New, Courier, mono"><i>/* Summary. First look at any var fields to see if they are valid. Next test
+   hardware with these fields without setting the hardware. An example of one
+   is to find what the line_length would be for the new mode. Then test the
+   following: */</i></font></pre>
+  </blockquote>
+  <pre><font face="Courier New, Courier, mono"><i>     if ((line_length * var-&gt;yres_virtual) &gt; info-&gt;fix.smem_len)
+        return -ENOMEM; </i></font></pre>
+  <pre><font face="Courier New, Courier, mono"><i>    if (info-&gt;var.xres != var-&gt;xres || info-&gt;var.yres != var-&gt;yres ||
+        info-&gt;var.xres_virtual != var-&gt;xres_virtual ||
+        info-&gt;var.yres_vitual != var-&gt;yres_virtual) {
+
+        /* Resolution changed !!! */
+
+        /* Next you must check to see if the monitor can handle this mode. Don't
+           want to fry your monitor or mess up the display really badly */</i></font></pre>
+  <pre><font face="Courier New, Courier, mono"><i>        if (fbmon_valid_timings(u_int pixclock, u_int htotal, u_int vtotal,
+                                              const struct fb_info *fb_info))
+    </i></font><font face="Courier New, Courier, mono"><i>   /* Can't handle these timings. */
+           </i></font><font face="Courier New, Courier, mono"><i>return -EINVAL;</i></font></pre>
+  <blockquote> 
+    <pre><font face="Courier New, Courier, mono"><i>    /* Timings are okay. Next we see if we really want to change this mode */
+    </i></font><font face="Courier New, Courier, mono"><i>if ((activate &amp; FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
+
+        </i></font><font face="Courier New, Courier, mono"><i>/* Now lets program the clocks on this card. Here the code is
+           very card specific. Remember to change any fields for fix in
+           info that might be affected by the changing of the resolution. */
+        </i></font><font face="Courier New, Courier, mono"><i>info-&gt;fix.line_length      = line_length;</i></font></pre>
+  </blockquote>
+  <blockquote> 
+    <pre><font face="Courier New, Courier, mono"><i>        /* Now that we have dealt with the possible changing resolutions lets
+           handle a possible change of bit depth. */
+        </i></font><font face="Courier New, Courier, mono"><i>if (info-&gt;var.bits_per_pixel != var-&gt;bits_per_pixel) {
+            </i></font><font face="Courier New, Courier, mono"><i>if ((err = fb_alloc_cmap(&amp;info-&gt;cmap, 0, 0)))
+                </i></font><font face="Courier New, Courier, mono"><i>return err;
+        </i></font><font face="Courier New, Courier, mono"><i>}
+    </i></font><font face="Courier New, Courier, mono"><i>}</i></font></pre>
+  </blockquote>
+  <blockquote> 
+    <pre><font face="Courier New, Courier, mono"><i>    /* We have shown that the monitor and video card can handle this mode or
+       have actually set the mode.  Next the fb_bitfield structure in
+       fb_var_screeninfo is filled in. Even if you don't set the mode you get
+       a feel of the mode before you really set it. These are typical values
+       but may be different for your card. For truecolor modes all the fields
+       matter. For pseudocolor modes only the length matters.  Thus all the
+       lengths should be the same (=bpp). */
+    </i></font><font face="Courier New, Courier, mono"><i>switch (var-&gt;bits_per_pixel) {
+        </i></font><font face="Courier New, Courier, mono"><i>case 1:
+        </i></font><font face="Courier New, Courier, mono"><i>case 8:
+        </i></font><font face="Courier New, Courier, mono"><i>    /* Pseudocolor mode example */
+        </i></font><font face="Courier New, Courier, mono"><i>    var-&gt;red.offset    = 0;
+        </i></font><font face="Courier New, Courier, mono"><i>    var-&gt;red.length    = 8;
+</i></font><font face="Courier New, Courier, mono"><i>            var-&gt;green.offset  = 0;
+</i></font><font face="Courier New, Courier, mono"><i>            var-&gt;green.length  = 8;
+</i></font><font face="Courier New, Courier, mono"><i>            var-&gt;blue.offset   = 0;
+</i></font><font face="Courier New, Courier, mono"><i>            var-&gt;blue.length   = 8;
+</i></font><font face="Courier New, Courier, mono"><i>            var-&gt;transp.offset = 0;
+</i></font><font face="Courier New, Courier, mono"><i>            var-&gt;transp.length = 0;
+</i></font><font face="Courier New, Courier, mono"><i>            break;
+        </i></font><font face="Courier New, Courier, mono"><i>case 16:        /* RGB 565 */
+            </i></font><font face="Courier New, Courier, mono"><i>var-&gt;red.offset    = 0;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;red.length    = 5;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;green.offset  = 5;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;green.length  = 6;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;blue.offset   = 11;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;blue.length   = 5;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;transp.offset = 0;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;transp.length = 0;
+ </i></font><font face="Courier New, Courier, mono"><i>           break;
+        </i></font><font face="Courier New, Courier, mono"><i>case 24:        /* RGB 888 */
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;red.offset    = 0;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;red.length    = 8;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;green.offset  = 8;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;green.length  = 8;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;blue.offset   = 16;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;blue.length   = 8;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;transp.offset = 0;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;transp.length = 0;
+ </i></font><font face="Courier New, Courier, mono"><i>           break;
+        </i></font><font face="Courier New, Courier, mono"><i>case 32:        /* RGBA 8888 */
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;red.offset    = 0;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;red.length    = 8;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;green.offset  = 8;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;green.length  = 8;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;blue.offset   = 16;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;blue.length   = 8;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;transp.offset = 24;
+ </i></font><font face="Courier New, Courier, mono"><i>           var-&gt;transp.length = 8;
+ </i></font><font face="Courier New, Courier, mono"><i>           break;
+    </i></font><font face="Courier New, Courier, mono"><i>}
+    </i></font><font face="Courier New, Courier, mono"><i>/* Yeah. We are done !!! */
+</i></font><font face="Courier New, Courier, mono"><i>}</i></font></pre>
+  </blockquote>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">The function <i><font face="Courier New, Courier, mono">xxxfb_setcolreg</font></i> 
+  is used to set a single color register for a video card. To use this properly, 
+  you must understand colors, which is described above. This routine sets a color 
+  map entry. The regno passed into the routine represents the color map index 
+  which is equal to the color that&#146;s composed of the amount of red, green, 
+  blue, and even alpha that are also passed into the function. For pseudocolor 
+  modes, this color map index (regno) represents the pixel value. So if you place 
+  a pixel value of regno in video memory, you get the color that&#146;s made of 
+  the red, green, blue that you passed into <i><font face="Courier New, Courier, mono">xxxfb_setcolreg</font></i>. 
+  Now for truecolor and directcolor mode, it&#146;s a little different. In this 
+  case, we simulate a pseudo color map. The reason for this is the console system 
+  always has a color map, which has 16 entries. In<font face="Courier New, Courier, mono"> 
+  <i>fb_info</i></font>, there exist the pseudo_palette, which gives a mapping 
+  from a non-color map mode to a color map based system. The pseudo_palette always 
+  has 17 entries. The first 16 is for the console colors and the last one for 
+  the cursor. So if we wanted to display the 4 entry in the color map of the console, 
+  we would place the value of info-&gt;psuedo_palette[4] directly into the video 
+  memory. This is, of course, taken care of by fbcon. You just need to code the 
+  &quot;formula&quot; that does this translation. An example follows for 32-bit 
+  mode:</font></p>
+<blockquote> 
+  <pre><font face="Courier New, Courier, mono"><i>red &gt;&gt;= 8;
+</i></font><font face="Courier New, Courier, mono"><i>green &gt;&gt;= 8;
+</i></font><font face="Courier New, Courier, mono"><i>blue &gt;&gt;= 8;</i></font></pre>
+  <pre><font face="Courier New, Courier, mono"><i>info-&gt;pseudo_palette[regno] =
+</i></font><font face="Courier New, Courier, mono"><i>       (red   &lt;&lt; info-&gt;var.red.offset)        |
+</i></font><font face="Courier New, Courier, mono"><i>       (green &lt;&lt; info-&gt;var.green.offset)      |
+</i></font><font face="Courier New, Courier, mono"><i>       (blue  &lt;&lt; info-&gt;var.blue.offset);</i></font></pre>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">Here, we first scale down the color 
+  components. Each color passed to set_colreg is 16 bits in size. For 32-bit mode, 
+  each color is 8 bits in size. Next, we OR the colors together after we have 
+  offseted them. The offset is used because the pixel layout in 32 bits could 
+  be RBGA, ARGBA, etc. In setcol_reg of vfb.c, is the standard way to deal with 
+  packed pixel format of various image depths. Regno is the index to get this 
+  particular color.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">That does it for required functions 
+  besides the set of needed accel functions, which has not been discussed yet. 
+  If the video card doesn't support the function, then we just place a NULL in 
+  <i><font face="Courier New, Courier, mono">fb_ops</font></i>. The next function 
+  in <i><font face="Courier New, Courier, mono">fb_ops</font></i> is <i><font face="Courier New, Courier, mono">xxxfb_blank</font></i>. 
+  This function provides support for hardware blanking. For <i><font face="Courier New, Courier, mono">xxxfb_blank</font></i>, 
+  the first parameter represents the blanking modes available. They are <i><font face="Courier New, Courier, mono">VESA_NO_BLANKING</font></i>, 
+  <i><font face="Courier New, Courier, mono">VESA_VSYNC_SUSPEND</font></i>, <i><font face="Courier New, Courier, mono">VESA_HSYNC_SUSPEND</font></i>, 
+  and <i><font face="Courier New, Courier, mono">VESA_POWERDOWN</font></i>. <i><font face="Courier New, Courier, mono">VESA_NO_BLANKING</font></i> 
+  powers up the display again. <i><font face="Courier New, Courier, mono">VESA_POWERDOWN</font></i> 
+  turns off the display. This is a great power saving feature on a laptop. </font></p>
+<p><font face="Arial, Helvetica, sans-serif">The next optional function is <i><font face="Courier New, Courier, mono">xxxfb_pan_display</font></i>. 
+  This function enables panning. Panning is often used for scrolling. </font></p>
+<p><font face="Arial, Helvetica, sans-serif">The ioctl function gives you the 
+  power to take advantage of special features other cards don't have. If your 
+  card is nothing special then just give this<i> <font face="Courier New, Courier, mono">fb_ops</font></i> 
+  function a NULL pointer. The sky is the limit for defining your ioctl calls.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">There exists a default memory map 
+  function for fbdev, but sometimes it just doesn't have the power you truly need. 
+  A good example of this is video cards that work in sparc workstations that need 
+  their own mmap functions because of the way sparcs handle memory is different 
+  from other platforms. This is true even for sparcs with PCI buses. </font></p>
+<p><font face="Arial, Helvetica, sans-serif">Now here is the next class of functions 
+  that are optional -- <i><font face="Courier New, Courier, mono">xxxfb_accel_init</font> 
+  </i>and <i><font face="Courier New, Courier, mono">xxfb_accel_done</font></i>. 
+  <i><font face="Courier New, Courier, mono">xxxfb_accel_init</font></i> really 
+  depends on the card. It is intended to initialize the engine or set the accel 
+  engine into a state so that you can use the acceleration engine. It also ensures 
+  that the framebuffer is not accessed at the same time as the accel engine. This 
+  can lock a system. Usually, there exists a bit to test to see if an accel engine 
+  is idle or if the card generates an interrupt. For cards that used the old fb_rasterimg, 
+  this function replaces it. Some cards have separate states for 3D and 2D. This 
+  function insures that the card goes into a 2D state. Just in case a previous 
+  application set the accel engine into a 3D state or made the accel engine very 
+  unhappy. The next function that encompasses this set is <i><font face="Courier New, Courier, mono">xxxfb_accel_done</font></i>. 
+  This function sets the video card in a state such that you can write to the 
+  framebuffer again. You should provide both functions if your driver uses even 
+  one hardware accelerated function. The reason being is to ensure that the framebuffer 
+  is not accessed at the same time as the accel engine.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">Finally, the third class of fb_op 
+  functions. Like the first, they are required. If your card does not support 
+  any of these accelerated functions, there exist default functions for packed 
+  pixel framebuffer formats. They are <i><font face="Courier New, Courier, mono">cfba_fillrect</font></i>, 
+  <i><font face="Courier New, Courier, mono">cfba_copyarea</font></i>, and <i><font face="Courier New, Courier, mono">cfba_imgblit</font></i>. 
+  If your driver supports some but not all of the accels available, you can still 
+  use some of these software emulated accels. Each software-emulated accel is 
+  stored in a separate file. Now lets describe each accel function. Before we 
+  discuss these functions we need to note not to draw in areas pass the video 
+  boundaries. If it does, you need to adjust the width and height of the areas 
+  to avoid this problem.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">The first function just fills in 
+  a rectangle starting at x1 and y1 of some width and height with a pixel value 
+  of packed pixel format. If the video memory mapping is not a direct mapping 
+  from the pixel value (not <i><font face="Courier New, Courier, mono">FB_TYPE_PACKED_PIXEL</font></i>), 
+  you will have to do some translating. There are two ways to fill in the rectangle, 
+  <i><font face="Courier New, Courier, mono">FBA_ROP_COPY</font></i> and <i><font face="Courier New, Courier, mono">FBA_ROP_XOR</font>. 
+  <font face="Courier New, Courier, mono">FBA_ROP_XOR</font></i> exclusive ORs 
+  the pixel value with the current pixel value. This allows things like quickly 
+  erasing a rectangular area. The other function just directly copies the data.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">The next function is <i><font face="Courier New, Courier, mono">xxxfb_copyarea</font></i>. 
+  It just copies one area of the framebuffer at source x and source y of some 
+  width and height to some destination x and y.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">The final function is <i><font face="Courier New, Courier, mono">xxxfb_imageblt</font></i>. 
+  This function copies an image from system memory to video memory. You can get 
+  really fancy here but this is fbdev, which has the purpose of mode setting only. 
+  All the image blit function does is draw bitmaps, image made of a foreground 
+  and background color, and a color image of the same color depth as the framebuffer. 
+  The second part is used to draw the little penguins. The drawing of bitmaps 
+  is used to draw our fonts.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">That does it for the functions. Now 
+  you should be set for writing your driver.</font></p>
+<p align="center"><a href="index.html"><font face="Arial, Helvetica, sans-serif">index</font></a> 
+  <font face="Arial, Helvetica, sans-serif"><a href="3.html">back</a></font></p>
+</body>
+</html>

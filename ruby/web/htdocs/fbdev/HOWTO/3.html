@@ -1,0 +1,340 @@
+<html>
+<head>
+<title>Linux Framebuffer Driver Writing HOWTO</title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+</head>
+
+<body bgcolor="#FFFFFF">
+<h2><font face="Arial, Helvetica, sans-serif">3. Actually calculating a mode</font></h2>
+<hr width="100%" size="2">
+<p><font face="Arial, Helvetica, sans-serif">If you look at the fbdev driver you 
+  think yikes. Yes, it's complex, but not as much as you think. A side note about 
+  standard modes -- It's a common misconception that graphics cards cannot do 
+  anything but the VGA/VESA induced &quot;standard&quot; modes like 640x480, 800x600, 
+  1024x768, 1280x960, ... With most cards, about any resolution can be programmed, 
+  though many accelerators have been optimized for the above mentioned modes, 
+  so that it is usually NOT wise to use other widths, as one might need to turn 
+  OFF accelerator support. So if you write a driver, don't cling to these modes. 
+  If the card can handle it, allow any mode.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">Here, the type of monitor has a big 
+  impact on what kind of modes we can have. There are two basic types of monitors: 
+  fixed frequency (they usually can do multiple vertical frequencies, though, 
+  which are much less critical, as they are much lower) and multifrequency. </font></p>
+<h3><font face="Arial, Helvetica, sans-serif">3.1 Fixed frequency monitors</font></h3>
+<p><font face="Arial, Helvetica, sans-serif">The monitor manual says the horizontal 
+  frequency (hfreq) is 31.5 kHz.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">We want to display a given mode, 
+  say 640x480.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">We can now already determine the 
+  absolute minimum dotclock we need, as</font></p>
+<blockquote> 
+  <p><font face="Courier New, Courier, mono" size="2">dotclock = horiz_total * 
+    hfreq</font></p>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">and</font></p>
+<blockquote> 
+  <p><font face="Courier New, Courier, mono" size="2">horiz_total = width + right_border 
+    + sync + left_border &gt; width</font></p>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">The minimum dotclock computes to 
+  20.16 MHz. We will probably need something around 20% &quot;slack&quot; for 
+  borders and sync, so let's say we need about a 24MHz clock. Now we look at the 
+  next higher clock our card can handle, which is 25.175 MHz, as we assume we 
+  have a VGA compatible card.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">Now we can compute the horizontal 
+  total:</font></p>
+<blockquote> 
+  <p><font face="Courier New, Courier, mono" size="2">horiz_total = dotclock / 
+    hfreq = 799.2</font></p>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">We can only program this as multiples 
+  of 8, so we round to 800. Now, we still need to determine the length and placement 
+  of the sync pulse, which will give all remaining parameters.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">There is no clean mathematical requirement 
+  for those. Technically, the sync must be long enough to be detected, and placed 
+  in a way that the mode is centered. The centering issue is not very pressing 
+  anymore, as digitally controlled monitors are common, which allow to control 
+  that externally. Generally, you should place the sync pulse early (i.e. keep 
+  right_border small), as this will usually not cause artifacts that would arise 
+  from turning on the output again too early when the sync pulse is placed too 
+  late.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">So, if we as a &quot;rule-of-thumb&quot; 
+  use a half of the blanking period for the sync and divide the rest as 1/3 right-border, 
+  2/3 left border, we get a modeline of:</font></p>
+<blockquote> 
+  <p><font face="Arial, Helvetica, sans-serif">&quot;640x480&quot; 25.175   640 
+    664 744 800  ??? ??? ??? ???</font></p>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">While this is not perfectly the same 
+  as a standard VGA timing, it should run as well on VGA monitors. The sync is 
+  a bit shorter, but that shouldn't be a real problem.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">Now, for the vertical timing. At 
+  480 lines, a VGA monitor uses 60Hz.</font></p>
+<blockquote> 
+  <p><font face="Courier New, Courier, mono" size="2">hfreq = vfreq * vert_total</font></p>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">This yields a vert_total=525. The 
+  vertical timings usually use much less overhead than the horizontal ones, as 
+  here we count whole lines. This means much longer delays than just pixels. 10% 
+  overhead will suffice here and we again split the borders 1/3: 2/3, with only 
+  a few lines (say 2) for the sync pulse, as this is already much longer than 
+  a HSYNC and thus easily detectable.</font></p>
+<blockquote> 
+  <p><font face="Arial, Helvetica, sans-serif">&quot;640x480&quot; 25.175   640 
+    664 744 800   480 495 497 525</font></p>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">Let us compare that to an XF86 modeline 
+  that claims to be standard VGA:</font></p>
+<blockquote> 
+  <p><font face="Arial, Helvetica, sans-serif">Modeline &quot;640x480&quot;     
+    25.175 640  664  760  800   480  491  493  525</font></p>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">Not much difference - right? They 
+  should both work well, just a little shifted against each other vertically.</font></p>
+<h3><font face="Arial, Helvetica, sans-serif">3.2 Multiscan monitor</font></h3>
+<p><font face="Arial, Helvetica, sans-serif">Here we will consider a theoretical 
+  monitor that can do hfreq 31-95kHz and vfreq 50-130Hz. Now, let's look at a 
+  640x480 mode. Our heuristics say, that we will need about 768x528 (20% and 10% 
+  more) for borders and sync. We want a maximum refresh rate, so let's look what 
+  limits the mode:</font></p>
+<blockquote> 
+  <p><font face="Courier New, Courier, mono" size="2">hfreq = vfreq * vtotal = 
+    130 * 528 = 68.6 kHz</font></p>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">Oh - we cannot use the full hfreq 
+  of our monitor... well no problem. What counts is the vfreq, as it determines 
+  how much flicker we see.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">O.K. - what pixelclock will we need? 
+  </font></p>
+<blockquote> 
+  <p><font face="Courier New, Courier, mono" size="2">pixclock = hfreq * htotal</font></p>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">The calculation yields 52.7MHz.  
+  </font></p>
+<p><font face="Arial, Helvetica, sans-serif">Now we look what the card can do. 
+  Say we have a fixed set of clocks. We look what clocks we have close by. Assume 
+  the card can do 50 and 60 MHz.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">Now we have a choice: We can either 
+  use a lower clock, thus scaling down the refresh rate a bit (by 5% ... so what...): 
+  This is what one usually does.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">Or we can use a higher clock, but 
+  this would exceed the monitor specifications. That can be countered by adding 
+  more border, but this is usually not done, as it is a waste of space on the 
+  screen. However, keep it in mind as a trick for displaying 320x200, when you 
+  do not have doubling features. It will display in a tiny window in the middle 
+  of the screen, but it will display.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">O.K. - what will our calculation 
+  yield?</font></p>
+<blockquote> 
+  <p><font face="Arial, Helvetica, sans-serif">&quot;640x480&quot;    50   640 
+    664 728 768   480 496 498 528 <i># 65kHz 123Hz</i></font></p>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">I just mentioned doubling features. 
+  This is how VGA does 320x200. It displays each pixel twice in both directions. 
+  Thus it effectively is a 640x400 mode. If this would not be done, you would 
+  need a pixelclock of 12.59MHz and you would still have the problem of needing 
+  a 140Hz refresh, if hsync should stay at 31.5kHz.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">A horizontal doubling feature allows 
+  us to use the 25.175MHz clock intended for 640, and a line-doubling feature 
+  keeps the vsync the same as 400 lines. Actually the line-doubler is programmable, 
+  so you can as well use modes as sick as 640x50.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">O.K. - another example. Same monitor, 
+  1280x1024.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">Now we need about 1536x1126 total 
+  (same rule of thumb). That yields 130Hz*1126lines = 146 kHz. We would exceed 
+  the hfreq with that, so now the hfreq is the limit and we can only reach a refresh 
+  rate of about (95kHz/1126) 84 Hz anymore.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">The required clock is now 146MHz. 
+  That would yield:</font></p>
+<blockquote> 
+  <p><font face="Arial, Helvetica, sans-serif">&quot;1280x1024&quot;   146   1280 
+    1320 1448 1536   1024 1058 1060 1126 <i># 95kHz 84Hz</i></font></p>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">Now the clock might be programmable, 
+  but keep in mind that there may be limits to the clock. <b>DO NOT OVERCLOCK</b> 
+  a graphics card. This will result in the RAMDAC producing blurry images (as 
+  it cannot cope with the high speed), and more importantly, the RAMDAC will OVERHEAT 
+  and might be destroyed.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">Another issue is memory bandwidth. 
+  The video memory can only give a certain amount of data per time unit. This 
+  often limits the maximum clock at modes with high color depth (i.e. much data 
+  per pixel). In the case of my card, it limits the clock to 130MHz at 16-bit 
+  depth, which would produce:</font></p>
+<blockquote> 
+  <p><font face="Arial, Helvetica, sans-serif">&quot;1280x1024&quot;   130   1280 
+    1320 1448 1536   1024 1058 1060 1126 <i># 85kHz 75Hz</i></font></p>
+</blockquote>
+<p><font face="Arial, Helvetica, sans-serif">This is pretty much what my monitor 
+  shows now, if I ask it.</font></p>
+<h3><font face="Arial, Helvetica, sans-serif">3.3 Recipe for multisync monitors</font></h3>
+<p><font face="Arial, Helvetica, sans-serif">a) Determine the totals by calculating 
+  htotal = width*1.2 and vtotal = height*1.1.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">b) Check what limits the refresh 
+  rate by calculating vfreq2 = hfreqmax/vtotal. If that exceeds vfreqmax, the 
+  limit is on the vfreq side and we use vfre = vfreqmax and hfreq = vfreqmax*vtotal. 
+  If it doesn't, the mode is limited by hfreq and we have to use vfreq = vfreq2. 
+  Note, that if this is smaller than vfreqmin, the mode cannot be displayed. In 
+  the vfreq-limited case, you might exceed hfreqmin, which can be countered by 
+  using line doubling facilities, if available. You can also add extra blank lines 
+  (increase vtotal) as a last-resort alternative.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">c) Now that you have hfreq and vfreq, 
+  calculate the pixel clock using pixclock=hfreq*htotal. Use the next lower pixel 
+  clock. If you are below the lowest clock, you might want to try horizontal doubling 
+  features or you will have to pad the mode by increasing htotal.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">d) Again, check the monitor limits. 
+  You might be violating lower bounds now... In that case you might need to resort 
+  to choosing a higher clock and padding as well.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">e) You now have pixclock, width, 
+  height, htotal and vtotal. Calculate the sync start positions: hss=width+(htotal-width)/2/3; 
+  vss=height+(vtotal-height)/3. Make sure to properly align them as required by 
+  the video card hardware. hss usually has to be a multiple of 8.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">f) SyncEnd is calculated similarly: 
+  hse=hss+(htotal-width)/2 and vse=vss+2.</font></p>
+<h3><font face="Arial, Helvetica, sans-serif">3.4 Recipe for Monosync</font></h3>
+<p><font face="Arial, Helvetica, sans-serif">a) Calculate the number of lines. 
+  As hfreq and vfreq are given, vtotal is fixed: vtotal=hfreq/vfreq. If there 
+  are multiple vfreqs allowed, choose them according to your desired vtotal (i.e. 
+  one that gives the lowest vtotal above what you really need).</font></p>
+<p><font face="Arial, Helvetica, sans-serif">b) Calculate the pixelclock. pixclock=hfreq*htotal. 
+  htotal starts at the same estimate (width*1.2) we used above.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">c) Adjust the pixelclock to hardware-limits. 
+  Adjust <b>UP</b>. Now recalculate the htotal=pixclock/hfreq.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">d) Go to 3.3. </font></p>
+<p><font face="Arial, Helvetica, sans-serif">An important final word. Most video 
+  card documentations give you the exact equations needed to set a mode. Here, 
+  we give approached values. Use the exact values given in the documents.</font></p>
+<h3><font face="Arial, Helvetica, sans-serif">3.5 Colors</font></h3>
+<p><font face="Arial, Helvetica, sans-serif">There exist an endless number of 
+  colors, but colors have a special property. If you take two colors and mix them 
+  together you get a different color. There exist many models to represent colors, 
+  but fbdev is based on what is known as the RGB color model. Out of all the colors, 
+  there exist three colors in this model which when mixed in different amounts 
+  can produce any color. These colors are known as primary colors. There does 
+  exist a physical limit to mixing colors. If you take and mix red, green, and 
+  blue in equal amounts you get gray. Now if you make each color component equally 
+  brighter, the final color will become white. Now their reaches a point when 
+  making each component brighter and brighter you will still end up with white. 
+  You can increase the intensity of a color component by any amount from some 
+  initial value up to this physical limit. This is where the image depth comes 
+  in. As you know, on most cards you can have an image depth from one bit to 32 
+  bits. Image depth is independent of the mapping from the pixel to the color 
+  components. It is also independent of the memory layout to pixel mapping. Note 
+  that some cards have a complex mapping from the pixel values to the color components 
+  (red, blue, green) as well as video memory to pixel mapping. If this is the 
+  case, you will have to consult your documentation on your video card to see 
+  what the mapping exactly is. Here are the mappings defined from top to bottom 
+  in fbdev starting with the value of the color components:</font></p>
+<table width="151" border="0" cellpadding="0" cellspacing="0" align="center">
+  <tr align="center"> 
+    <td><font face="Courier New, Courier, mono" size="2"> {red, blue, green}</font></td>
+  </tr>
+  <tr align="center"> 
+    <td><font face="Courier New, Courier, mono" size="2"> |</font></td>
+  </tr>
+  <tr align="center"> 
+    <td> <font face="Courier New, Courier, mono" size="2"><i>FB_VISUAL_MONO01</i></font></td>
+  </tr>
+  <tr align="center"> 
+    <td> <font face="Courier New, Courier, mono" size="2"><i>FB_VISUAL_MONO10</i></font></td>
+  </tr>
+  <tr align="center"> 
+    <td> <font face="Courier New, Courier, mono" size="2"><i>FB_VISUAL_TRUECOLOR 
+      </i></font></td>
+  </tr>
+  <tr align="center"> 
+    <td> <font face="Courier New, Courier, mono" size="2"><i>FB_VISUAL_PSEUDOCOLOR 
+      </i></font></td>
+  </tr>
+  <tr align="center"> 
+    <td> <font face="Courier New, Courier, mono" size="2"><i>FB_VISUAL_DIRECTCOLOR 
+      </i></font></td>
+  </tr>
+  <tr align="center"> 
+    <td> <font face="Courier New, Courier, mono" size="2"><i>FB_VISUAL_STATIC_PSEUDOCOLOR</i></font></td>
+  </tr>
+  <tr align="center"> 
+    <td><font face="Courier New, Courier, mono" size="2"> |</font></td>
+  </tr>
+  <tr align="center"> 
+    <td><font face="Courier New, Courier, mono" size="2"> pixel value</font></td>
+  </tr>
+  <tr align="center"> 
+    <td height="21"> <font face="Courier New, Courier, mono" size="2"><i>FB_TYPE_PACKED_PIXELS</i></font></td>
+  </tr>
+  <tr align="center"> 
+    <td> <font face="Courier New, Courier, mono" size="2"><i>FB_TYPE_PLANES</i></font></td>
+  </tr>
+  <tr align="center"> 
+    <td> <font face="Courier New, Courier, mono" size="2"><i>FB_TYPE_INTERLEAVED_PLANES</i></font></td>
+  </tr>
+  <tr align="center"> 
+    <td> <font face="Courier New, Courier, mono" size="2"><i>FB_TYPE_TEXT</i></font></td>
+  </tr>
+  <tr align="center"> 
+    <td> <font face="Courier New, Courier, mono" size="2"><i>FB_TYPE_VGA_PLANES</i></font></td>
+  </tr>
+  <tr align="center"> 
+    <td><font face="Courier New, Courier, mono" size="2"> |</font></td>
+  </tr>
+  <tr align="center"> 
+    <td><font face="Courier New, Courier, mono" size="2"> value in video memory</font></td>
+  </tr>
+</table>
+<p><font face="Arial, Helvetica, sans-serif">The way fbdev tells what this video 
+  memory to pixel mapping is, is with the type field in </font><i><font face="Courier New, Courier, mono" size="2">fb_fix_screeninfo</font></i><font face="Arial, Helvetica, sans-serif">. 
+  Here, I'm going to describe the </font><i><font face="Courier New, Courier, mono" size="2">FB_TYPE_PACKED_PIXELS</font></i><font face="Arial, Helvetica, sans-serif"> 
+  layout since it is the most common. Here, there exists a direct mapping from 
+  video memory to a pixel value. If you place a 5 in video memory then the pixel 
+  value at that position will be 5. This is important when you have memory mapped 
+  the video memory to userland. Next, we consider the mapping from a pixel value 
+  to the colors. This is represented in the fbdev API by the visual field in </font><i><font face="Courier New, Courier, mono" size="2">fb_fix_screeninfo</font></i><font face="Arial, Helvetica, sans-serif">. 
+  As you can see from the above diagram, this mapping is independent from the 
+  mapping from video memory to pixel value. This means that </font><i><font face="Courier New, Courier, mono" size="2">FB_TYPE_PLANES</font></i><font face="Arial, Helvetica, sans-serif"><i> 
+  </i>could have<i> </i></font><i><font face="Courier New, Courier, mono" size="2">FB_VISUAL_MONO01</font></i> 
+  <font face="Arial, Helvetica, sans-serif">just like </font><i><font face="Courier New, Courier, mono" size="2">FB_TYPE_PACKED_PIXELS</font></i><font face="Arial, Helvetica, sans-serif"> 
+  can.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">To understand visuals, we have to 
+  go back to the first types of video hardware. In the beginning there was just 
+  monochrome monitors. Here we could only display 2 colors: the foreground and 
+  background color. Traditionally, these colors are black and white, but if you 
+  are old enough, you would remember the old green monitors. In the fbdev API, 
+  we define two types of monochrome modes. The difference between the two is that 
+  the foreground and background colors are swapped.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">Then computers began to support color. 
+  The only problem was they could only display a small number of colors at one 
+  time. What if you wanted to have an application display a certain set of colors. 
+  Well, the way that was developed to get around this was the idea of a color 
+  map. A color map translated a pixel value to the colors needed. If your application 
+  needs a specific set of colors it would switch the color maps and you would 
+  get the needed colors. Of course, this also switches the other colors in the 
+  applications. That was the trade off. This became what is known as pseudocolor 
+  mode. In the fbdev API, there exist two types of pseudocolor mappings -- A static 
+  one and a dynamic one. </font></p>
+<p><i><font face="Courier New, Courier, mono" size="2">FB_VISUAL_STATIC_PSEUDOCOLOR</font></i><font face="Arial, Helvetica, sans-serif"> 
+  defines a video card that has a non-programmable color map. What colors you 
+  get are what you are stuck with. The other type of color map can be changed.</font></p>
+<p><font face="Arial, Helvetica, sans-serif">In time, video cards started to support 
+  more colors but this required having a larger color map. Also, video memory 
+  prices started to drop and video cards began to sell with more of it. To properly 
+  support 256 color intensity levels for each color component, you would need 
+  a color map of 16 million colors. New mappings where developed in which specific 
+  fields of a pixel where directly proportional to the intensity of a color component. 
+  Two types of mappings were developed -- One being truecolor and the other directcolor. 
+  </font></p>
+<p><font face="Arial, Helvetica, sans-serif">In truecolor, you cannot change the 
+  mappings from the pixel value to color intensities. Setting a value of 64 to 
+  the red component of the pixel will result in a red intensity of 64. How bright 
+  of a red this is depends on the image depth. For directcolor, you can control 
+  this. You could make a pixel value in the red field of 64 equal 128 for the 
+  intensity. Also some cards support an alpha value, which is used in higher graphics, 
+  which for fbdev is of little importance. It should always be set to the highest 
+  value it can have. For most cards, alpha shows up for 15-bit modes where each 
+  color component can have up to 32 intensity levels (2^5) and one bit represents 
+  the alpha component. It also shows up for 32-bit modes where each component 
+  red, blue, green, and alpha are given 256 intensity levels (2^8). 24-bit mode 
+  is like 32-bit mode except it lacks the alpha component. An important note is 
+  that some cards only support 24-bit mode on certain architectures.</font></p>
+<p align="center"><a href="index.html"><font face="Arial, Helvetica, sans-serif">index</font></a> 
+  <a href="2.html"><font face="Arial, Helvetica, sans-serif">back</font></a> <a href="4.html"><font face="Arial, Helvetica, sans-serif">forward</font></a></p>
+</body>
+</html>
