@@ -92,13 +92,13 @@ static unsigned char   vga_hardscroll_enabled;
 /*
  * SoftSDV doesn't have hardware assist VGA scrolling 
  */
-static unsigned char   vga_hardscroll_user_enable = 0;
+static unsigned char   vga_hardscroll_user_enable;
 #else
 static unsigned char   vga_hardscroll_user_enable = 1;
 #endif
 static int	       vga_is_gfx;
 static int	       vga_512_chars;
-static unsigned int    vga_rolled_over = 0;
+static unsigned int    vga_rolled_over;
 static char 	       vga_fonts[8192*4];
 static struct vga_hw_state vgacon_state = {
 	80, 80, 2, 12, 2, 400, 8, 2, 39, 0, 0, 0, 0, 0, 0xFF, 0,
@@ -799,7 +799,7 @@ static int vgacon_set_origin(struct vc_data *c)
 
 static void vgacon_save_screen(struct vc_data *c)
 {
-	static int vga_bootup_console = 0;
+	static int vga_bootup_console;
 
 	if (!vga_bootup_console) {
 		/* This is a gross hack, but here is the only place we can
