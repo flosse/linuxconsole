@@ -207,7 +207,7 @@ static int  noaccel __initdata = 0;
 static char *mode __initdata = NULL;
 static int  nomtrr __initdata = 0;
 
-static const char *mode_option __initdata = NULL;
+static char *mode_option __initdata = NULL;
 
 /* PLL constants */
 struct aty128_constants {
@@ -711,7 +711,7 @@ aty128_var_to_crtc(const struct fb_var_screeninfo *var,
     crtc->pitch = var->xres_virtual >> 3;
 
     crtc->offset = 0;
-    crtc->offset_cntl = 0;
+    crtc->offset_cntl = 0x00010000;
     crtc->bpp = var->bits_per_pixel;
     return 0;
 }
@@ -1086,7 +1086,7 @@ aty128fb_setup(char *options)
     if (!options || !*options)
 	return 0;
 
-    while ((this_opt = strsep(&options, ","))) {
+    while ((this_opt = strsep(&options, ",")) != NULL) {	
 	if (!strncmp(this_opt, "font:", 5)) {
 	    char *p;
 	    int i;
@@ -1711,6 +1711,7 @@ aty128_rectcopy(int srcx, int srcy, int dstx, int dsty,
 #ifdef MODULE
 MODULE_AUTHOR("(c)1999-2000 Brad Douglas <brad@neruo.com>");
 MODULE_DESCRIPTION("FBDev driver for ATI Rage128 / Pro cards");
+MODULE_LICENSE("GPL");
 MODULE_PARM(noaccel, "i");
 MODULE_PARM_DESC(noaccel, "Disable hardware acceleration (0 or 1=disabled) (default=0)");
 MODULE_PARM(mode, "s");

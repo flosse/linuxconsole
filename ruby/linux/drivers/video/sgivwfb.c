@@ -611,7 +611,7 @@ int __init sgivwfb_setup(char *options)
   if (!options || !*options)
     return 0;
 
-  while (this_opt = strsep(&options, ",")) {	
+  while ((this_opt = strsep(&options, ",")) != NULL) {	
   }
   return 0;
 }

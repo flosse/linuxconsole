@@ -67,6 +67,10 @@
  *
  *  AMD Athlon/Duron/Thunderbird bluesmoke support.
  *  Dave Jones <davej@suse.de>, April 2001.
+ *
+ *  CacheSize bug workaround updates for AMD, Intel & VIA Cyrix.
+ *  Dave Jones <davej@suse.de>, September, October 2001.
+ *
  */
 
 /*
@@ -94,6 +98,7 @@
 #endif
 #include <linux/highmem.h>
 #include <linux/bootmem.h>
+#include <linux/seq_file.h>
 #include <asm/processor.h>
 #include <asm/mtrr.h>
 #include <asm/uaccess.h>
@@ -152,6 +157,8 @@ extern char _text, _etext, _edata, _end;
 
 static int disable_x86_serial_nr __initdata = 1;
 static int disable_x86_fxsr __initdata = 0;
+
+int enable_acpi_smp_table;
 
 /*
  * This is set up by the setup-routine at boot-time
@@ -750,6 +757,10 @@ static void __init parse_mem_cmdline (char ** cmdline_p)
 				add_memory_region(start_at, mem_size, E820_RAM);
 			}
 		}
+		/* acpismp=force forces parsing and use of the ACPI SMP table */
+		if (c == ' ' && !memcmp(from, "acpismp=force", 13)) 	
+			 enable_acpi_smp_table = 1;
+	
 		c = *(from++);
 		if (!c)
 			break;
@@ -1023,6 +1034,15 @@ void __init setup_arch(char **cmdline_p)
 		pci_mem_start = low_mem_size;
 }
 
+static int cachesize_override __initdata = -1;
+static int __init cachesize_setup(char *str)
+{
+	get_option (&str, &cachesize_override);
+	return 1;
+}
+__setup("cachesize=", cachesize_setup);
+
+
 #ifndef CONFIG_X86_TSC
 static int tsc_disable __initdata = 0;
 
@@ -1093,11 +1113,24 @@ static void __init display_cacheinfo(struct cpuinfo_x86 *c)
 			l2size = 256;
 	}
 
+	/* Intel PIII Tualatin. This comes in two flavours.
+	 * One has 256kb of cache, the other 512. We have no way
+	 * to determine which, so we use a boottime override
+	 * for the 512kb model, and assume 256 otherwise.
+	 */
+	if ((c->x86_vendor == X86_VENDOR_INTEL) && (c->x86 == 6) &&
+		(c->x86_model == 11) && (l2size == 0))
+		l2size = 256;
+
 	/* VIA C3 CPUs (670-68F) need further shifting. */
 	if (c->x86_vendor == X86_VENDOR_CENTAUR && (c->x86 == 6) &&
 		((c->x86_model == 7) || (c->x86_model == 8))) {
 		l2size = l2size >> 8;
 	}
+
+	/* Allow user to override all this if necessary. */
+	if (cachesize_override != -1)
+		l2size = cachesize_override;
 
 	if ( l2size == 0 )
 		return;		/* Again, no L2 cache is possible */
@@ -1188,13 +1221,12 @@ static int __init init_amd(struct cpuinfo_x86 *c)
 			}
 
 			/* K6 with old style WHCR */
-			if( c->x86_model < 8 ||
-				(c->x86_model== 8 && c->x86_mask < 8))
-			{
+			if (c->x86_model < 8 ||
+			   (c->x86_model== 8 && c->x86_mask < 8)) {
 				/* We can only write allocate on the low 508Mb */
 				if(mbytes>508)
 					mbytes=508;
-					
+
 				rdmsr(MSR_K6_WHCR, l, h);
 				if ((l&0x0000FFFF)==0) {
 					unsigned long flags;
@@ -1205,14 +1237,14 @@ static int __init init_amd(struct cpuinfo_x86 *c)
 					local_irq_restore(flags);
 					printk(KERN_INFO "Enabling old style K6 write allocation for %d Mb\n",
 						mbytes);
-					
 				}
 				break;
 			}
-			if (c->x86_model == 8 || c->x86_model == 9 || c->x86_model == 13)
-			{
+
+			if ((c->x86_model == 8 && c->x86_mask >7) ||
+			     c->x86_model == 9 || c->x86_model == 13) {
 				/* The more serious chips .. */
-				
+
 				if(mbytes>4092)
 					mbytes=4092;
 
@@ -1229,10 +1261,8 @@ static int __init init_amd(struct cpuinfo_x86 *c)
 				}
 
 				/*  Set MTRR capability flag if appropriate */
-				if ( (c->x86_model == 13) ||
-				     (c->x86_model == 9) ||
-				     ((c->x86_model == 8) && 
-				     (c->x86_mask >= 8)) )
+				if (c->x86_model == 13 || c->x86_model == 9 ||
+				   (c->x86_model == 8 && c->x86_mask >= 8))
 					set_bit(X86_FEATURE_K6_MTRR, &c->x86_capability);
 				break;
 			}
@@ -2289,14 +2319,14 @@ static void __init squash_the_stupid_serial_number(struct cpuinfo_x86 *c)
 }
 
 
-int __init x86_serial_nr_setup(char *s)
+static int __init x86_serial_nr_setup(char *s)
 {
 	disable_x86_serial_nr = 0;
 	return 1;
 }
 __setup("serialnumber", x86_serial_nr_setup);
 
-int __init x86_fxsr_setup(char * s)
+static int __init x86_fxsr_setup(char * s)
 {
 	disable_x86_fxsr = 1;
 	return 1;
@@ -2391,7 +2421,6 @@ static int __init id_and_try_enable_cpuid(struct cpuinfo_x86 *c)
    	        {
 			unsigned char ccr3, ccr4;
 			unsigned long flags;
-
 			printk(KERN_INFO "Enabling CPUID on Cyrix processor.\n");
 			local_irq_save(flags);
 			ccr3 = getCx86(CX86_CCR3);
@@ -2643,11 +2672,8 @@ void __init print_cpu_info(struct cpuinfo_x86 *c)
 /*
  *	Get CPU information for use by the procfs.
  */
-
-int get_cpuinfo(char * buffer)
+static int show_cpuinfo(struct seq_file *m, void *v)
 {
-	char *p = buffer;
-
 	/* 
 	 * These flag bits must match the definitions in <asm/cpufeature.h>.
 	 * NULL means this bit is undefined or reserved; either way it doesn't
@@ -2681,75 +2707,88 @@ int get_cpuinfo(char * buffer)
 		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 	};
-	struct cpuinfo_x86 *c = cpu_data;
-	int i, n;
+	struct cpuinfo_x86 *c = v;
+	int i, n = c - cpu_data;
+	int fpu_exception;
 
-	for (n = 0; n < NR_CPUS; n++, c++) {
-		int fpu_exception;
 #ifdef CONFIG_SMP
-		if (!(cpu_online_map & (1<<n)))
-			continue;
+	if (!(cpu_online_map & (1<<n)))
+		return 0;
 #endif
-		/* Stupid hack */
-		if (p - buffer > (3*PAGE_SIZE)/4)
-			break;
+	seq_printf(m, "processor\t: %d\n"
+		"vendor_id\t: %s\n"
+		"cpu family\t: %d\n"
+		"model\t\t: %d\n"
+		"model name\t: %s\n",
+		n,
+		c->x86_vendor_id[0] ? c->x86_vendor_id : "unknown",
+		c->x86,
+		c->x86_model,
+		c->x86_model_id[0] ? c->x86_model_id : "unknown");
 
-		p += sprintf(p,"processor\t: %d\n"
-			"vendor_id\t: %s\n"
-			"cpu family\t: %d\n"
-			"model\t\t: %d\n"
-			"model name\t: %s\n",
-			n,
-			c->x86_vendor_id[0] ? c->x86_vendor_id : "unknown",
-			c->x86,
-			c->x86_model,
-			c->x86_model_id[0] ? c->x86_model_id : "unknown");
+	if (c->x86_mask || c->cpuid_level >= 0)
+		seq_printf(m, "stepping\t: %d\n", c->x86_mask);
+	else
+		seq_printf(m, "stepping\t: unknown\n");
 
-		if (c->x86_mask || c->cpuid_level >= 0)
-			p += sprintf(p, "stepping\t: %d\n", c->x86_mask);
-		else
-			p += sprintf(p, "stepping\t: unknown\n");
-
-		if ( test_bit(X86_FEATURE_TSC, &c->x86_capability) ) {
-			p += sprintf(p, "cpu MHz\t\t: %lu.%03lu\n",
-				cpu_khz / 1000, (cpu_khz % 1000));
-		}
-
-		/* Cache size */
-		if (c->x86_cache_size >= 0)
-			p += sprintf(p, "cache size\t: %d KB\n", c->x86_cache_size);
-		
-		/* We use exception 16 if we have hardware math and we've either seen it or the CPU claims it is internal */
-		fpu_exception = c->hard_math && (ignore_irq13 || cpu_has_fpu);
-		p += sprintf(p, "fdiv_bug\t: %s\n"
-			        "hlt_bug\t\t: %s\n"
-			        "f00f_bug\t: %s\n"
-			        "coma_bug\t: %s\n"
-			        "fpu\t\t: %s\n"
-			        "fpu_exception\t: %s\n"
-			        "cpuid level\t: %d\n"
-			        "wp\t\t: %s\n"
-			        "flags\t\t:",
-			     c->fdiv_bug ? "yes" : "no",
-			     c->hlt_works_ok ? "no" : "yes",
-			     c->f00f_bug ? "yes" : "no",
-			     c->coma_bug ? "yes" : "no",
-			     c->hard_math ? "yes" : "no",
-			     fpu_exception ? "yes" : "no",
-			     c->cpuid_level,
-			     c->wp_works_ok ? "yes" : "no");
-
-		for ( i = 0 ; i < 32*NCAPINTS ; i++ )
-			if ( test_bit(i, &c->x86_capability) &&
-			     x86_cap_flags[i] != NULL )
-				p += sprintf(p, " %s", x86_cap_flags[i]);
-
-		p += sprintf(p, "\nbogomips\t: %lu.%02lu\n\n",
-			     c->loops_per_jiffy/(500000/HZ),
-			     (c->loops_per_jiffy/(5000/HZ)) % 100);
+	if ( test_bit(X86_FEATURE_TSC, &c->x86_capability) ) {
+		seq_printf(m, "cpu MHz\t\t: %lu.%03lu\n",
+			cpu_khz / 1000, (cpu_khz % 1000));
 	}
-	return p - buffer;
+
+	/* Cache size */
+	if (c->x86_cache_size >= 0)
+		seq_printf(m, "cache size\t: %d KB\n", c->x86_cache_size);
+	
+	/* We use exception 16 if we have hardware math and we've either seen it or the CPU claims it is internal */
+	fpu_exception = c->hard_math && (ignore_irq13 || cpu_has_fpu);
+	seq_printf(m, "fdiv_bug\t: %s\n"
+			"hlt_bug\t\t: %s\n"
+			"f00f_bug\t: %s\n"
+			"coma_bug\t: %s\n"
+			"fpu\t\t: %s\n"
+			"fpu_exception\t: %s\n"
+			"cpuid level\t: %d\n"
+			"wp\t\t: %s\n"
+			"flags\t\t:",
+		     c->fdiv_bug ? "yes" : "no",
+		     c->hlt_works_ok ? "no" : "yes",
+		     c->f00f_bug ? "yes" : "no",
+		     c->coma_bug ? "yes" : "no",
+		     c->hard_math ? "yes" : "no",
+		     fpu_exception ? "yes" : "no",
+		     c->cpuid_level,
+		     c->wp_works_ok ? "yes" : "no");
+
+	for ( i = 0 ; i < 32*NCAPINTS ; i++ )
+		if ( test_bit(i, &c->x86_capability) &&
+		     x86_cap_flags[i] != NULL )
+			seq_printf(m, " %s", x86_cap_flags[i]);
+
+	seq_printf(m, "\nbogomips\t: %lu.%02lu\n\n",
+		     c->loops_per_jiffy/(500000/HZ),
+		     (c->loops_per_jiffy/(5000/HZ)) % 100);
+	return 0;
 }
+
+static void *c_start(struct seq_file *m, loff_t *pos)
+{
+	return *pos < NR_CPUS ? cpu_data + *pos : NULL;
+}
+static void *c_next(struct seq_file *m, void *v, loff_t *pos)
+{
+	++*pos;
+	return c_start(m, pos);
+}
+static void c_stop(struct seq_file *m, void *v)
+{
+}
+struct seq_operations cpuinfo_op = {
+	start:	c_start,
+	next:	c_next,
+	stop:	c_stop,
+	show:	show_cpuinfo,
+};
 
 unsigned long cpu_initialized __initdata = 0;
 
@@ -2822,6 +2861,53 @@ void __init cpu_init (void)
 	stts();
 }
 
+/*
+ *	Early probe support logic for ppro memory erratum #50
+ *
+ *	This is called before we do cpu ident work
+ */
+ 
+int __init ppro_with_ram_bug(void)
+{
+	char vendor_id[16];
+	int ident;
+
+	/* Must have CPUID */
+	if(!have_cpuid_p())
+		return 0;
+	if(cpuid_eax(0)<1)
+		return 0;
+	
+	/* Must be Intel */
+	cpuid(0, &ident, 
+		(int *)&vendor_id[0],
+		(int *)&vendor_id[8],
+		(int *)&vendor_id[4]);
+	
+	if(memcmp(vendor_id, "IntelInside", 12))
+		return 0;
+	
+	ident = cpuid_eax(1);
+
+	/* Model 6 */
+
+	if(((ident>>8)&15)!=6)
+		return 0;
+	
+	/* Pentium Pro */
+
+	if(((ident>>4)&15)!=1)
+		return 0;
+	
+	if((ident&15) < 8)
+	{
+		printk(KERN_INFO "Pentium Pro with Errata#50 detected. Taking evasive action.\n");
+		return 1;
+	}
+	printk(KERN_INFO "Your Pentium Pro seems ok.\n");
+	return 0;
+}
+	
 /*
  * Local Variables:
  * mode:c

@@ -365,7 +365,7 @@ int __init vfb_setup(char *options)
     if (!options || !*options)
 	return 1;
 
-    while (this_opt = strsep(&options, ",")) {
+    while ((this_opt = strsep(&options, ",")) != NULL) {	
     	if (!*this_opt)
 	    continue;
 	if (!strncmp(this_opt, "disable", 7))

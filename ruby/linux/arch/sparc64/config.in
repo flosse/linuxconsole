@@ -175,8 +175,17 @@ if [ "$CONFIG_SCSI" != "n" ]; then
             bool '  Collect statistics to report in /proc' CONFIG_AIC7XXX_OLD_PROC_STATS
          fi
       fi
-      dep_tristate 'NCR53C8XX SCSI support' CONFIG_SCSI_NCR53C8XX $CONFIG_SCSI
-      dep_tristate 'SYM53C8XX SCSI support' CONFIG_SCSI_SYM53C8XX $CONFIG_SCSI
+      dep_tristate 'SYM53C8XX Version 2 SCSI support' CONFIG_SCSI_SYM53C8XX_2 $CONFIG_SCSI
+      if [ "$CONFIG_SCSI_SYM53C8XX_2" != "n" ]; then
+         int  '  DMA addressing mode' CONFIG_SCSI_SYM53C8XX_DMA_ADDRESSING_MODE 1
+         int  '  default tagged command queue depth' CONFIG_SCSI_SYM53C8XX_DEFAULT_TAGS 16
+         int  '  maximum number of queued commands' CONFIG_SCSI_SYM53C8XX_MAX_TAGS 64
+         bool '  use normal IO' CONFIG_SCSI_SYM53C8XX_IOMAPPED
+      fi
+      if [ "$CONFIG_SCSI_SYM53C8XX_2" != "y" ]; then
+         dep_tristate 'NCR53C8XX SCSI support' CONFIG_SCSI_NCR53C8XX $CONFIG_SCSI
+         dep_tristate 'SYM53C8XX SCSI support' CONFIG_SCSI_SYM53C8XX $CONFIG_SCSI
+      fi
       if [ "$CONFIG_SCSI_NCR53C8XX" != "n" -o "$CONFIG_SCSI_SYM53C8XX" != "n" ]; then
 	 int 'default tagged command queue depth' CONFIG_SCSI_NCR53C8XX_DEFAULT_TAGS 8
 	 int 'maximum number of queued commands' CONFIG_SCSI_NCR53C8XX_MAX_TAGS 32
@@ -195,7 +204,7 @@ if [ "$CONFIG_SCSI" != "n" ]; then
       dep_tristate 'Qlogic ISP SCSI support' CONFIG_SCSI_QLOGIC_ISP $CONFIG_SCSI
       dep_tristate 'Qlogic ISP FC SCSI support' CONFIG_SCSI_QLOGIC_FC $CONFIG_SCSI
       if [ "$CONFIG_SCSI_QLOGIC_FC" != "n" ]; then
-	 define_bool CONFIG_SCSI_QLOGIC_FC_FIRMWARE y
+         define_bool CONFIG_SCSI_QLOGIC_FC_FIRMWARE y
       fi
    fi
 
@@ -205,7 +214,9 @@ endmenu
 
 source drivers/fc4/Config.in
 
-source drivers/message/fusion/Config.in
+if [ "$CONFIG_PCI" = "y" ]; then
+   source drivers/message/fusion/Config.in
+fi
 
 source drivers/ieee1394/Config.in
 

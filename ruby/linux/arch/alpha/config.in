@@ -296,6 +296,10 @@ if [ "$CONFIG_SCSI" != "n" ]; then
 fi
 endmenu
 
+if [ "$CONFIG_PCI" = "y" ]; then
+  source drivers/message/fusion/Config.in
+fi
+
 if [ "$CONFIG_NET" = "y" ]; then
   mainmenu_option next_comment
   comment 'Network device support'
@@ -357,14 +361,18 @@ fi
 mainmenu_option next_comment
 comment 'Kernel hacking'
 
-if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
-  tristate 'Kernel FP software completion' CONFIG_MATHEMU
-else
-  define_tristate CONFIG_MATHEMU y
-fi
-
-bool 'Magic SysRq key' CONFIG_MAGIC_SYSRQ
-
 bool 'Legacy kernel start address' CONFIG_ALPHA_LEGACY_START_ADDRESS
+
+bool 'Kernel debugging' CONFIG_DEBUG_KERNEL
+if [ "$CONFIG_DEBUG_KERNEL" != "n" ]; then
+   tristate '  Kernel FP software completion' CONFIG_MATHEMU
+   bool '  Debug memory allocations' CONFIG_DEBUG_SLAB
+   bool '  Magic SysRq key' CONFIG_MAGIC_SYSRQ
+   bool '  Spinlock debugging' CONFIG_DEBUG_SPINLOCK
+   bool '  Read-write spinlock debugging' CONFIG_DEBUG_RWLOCK
+   bool '  Semaphore debugging' CONFIG_DEBUG_SEMAPHORE
+else
+   define_tristate CONFIG_MATHEMU y
+fi
 
 endmenu

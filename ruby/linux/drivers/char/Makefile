@@ -42,6 +42,7 @@ endif
 
 obj-$(CONFIG_VT) += vt.o vt_ioctl.o decvte.o vc_screen.o consolemap.o consolemap_deftbl.o selection.o keyboard.o defkeymap.o
 obj-$(CONFIG_SERIAL) += $(SERIAL)
+obj-$(CONFIG_SERIAL_ACPI) += acpi_serial.o
 
 obj-$(CONFIG_MAGIC_SYSRQ) += sysrq.o
 obj-$(CONFIG_ATARI_DSP56K) += dsp56k.o

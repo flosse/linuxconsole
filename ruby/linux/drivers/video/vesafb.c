@@ -187,8 +187,8 @@ int __init vesafb_setup(char *options)
 	
 	if (!options || !*options)
 		return 0;
-	
-	while ((this_opt = strsep(&options, ","))) {
+
+	while ((this_opt = strsep(&options, ",")) != NULL) {	
 		if (!*this_opt) continue;
 		
 		if (! strcmp(this_opt, "inverse"))
@@ -232,10 +232,11 @@ int __init vesafb_init(void)
 		FB_VISUAL_PSEUDOCOLOR : FB_VISUAL_TRUECOLOR;
 
 	if (!request_mem_region(video_base, video_size, "vesafb")) {
-		printk(KERN_ERR
+		printk(KERN_WARNING
 		       "vesafb: abort, cannot reserve video memory at 0x%lx\n",
 			video_base);
-		return -EBUSY;
+		/* We cannot make this fatal. Sometimes this comes from magic
+		   spaces our resource handlers simply don't know about */	
 	}
 
 	printk("Got requested region (framebuffer)\n");
@@ -369,3 +370,5 @@ int __init vesafb_init(void)
  * c-basic-offset: 8
  * End:
  */
+
+MODULE_LICENSE("GPL");

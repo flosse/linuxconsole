@@ -134,7 +134,7 @@ int __init fb_setup(char *options)
 		return 0;
 	}
 
-	while ((this_opt = strsep(&options, ","))) {
+	while ((this_opt = strsep(&options, ",")) != NULL) {
 		if (!*this_opt) {
 			continue;
 		}

@@ -1,5 +1,5 @@
 /*
- * BK Id: SCCS/s.chrp_setup.c 1.36 09/08/01 15:47:42 paulus
+ * BK Id: SCCS/s.chrp_setup.c 1.38 11/13/01 21:26:07 paulus
  */
 /*
  *  linux/arch/ppc/kernel/setup.c
@@ -37,6 +37,7 @@
 #include <linux/module.h>
 #include <linux/delay.h>
 #include <linux/ide.h>
+#include <linux/seq_file.h>
 
 #include <asm/mmu.h>
 #include <asm/processor.h>
@@ -68,8 +69,8 @@ void chrp_event_scan(void);
 void rtas_display_progress(char *, unsigned short);
 void rtas_indicator_progress(char *, unsigned short);
 void btext_progress(char *, unsigned short);
-
 extern unsigned long pmac_find_end_of_memory(void);
+
 extern kdev_t boot_dev;
 extern PTE *Hash, *Hash_end;
 extern unsigned long Hash_size, Hash_mask;
@@ -97,9 +98,9 @@ static const char *gg2_cachemodes[4] = {
 };
 
 int __chrp
-chrp_get_cpuinfo(char *buffer)
+chrp_show_cpuinfo(struct seq_file *m)
 {
-	int i, len, sdramen;
+	int i, sdramen;
 	unsigned int t;
 	struct device_node *root;
 	const char *model = "";
@@ -107,11 +108,10 @@ chrp_get_cpuinfo(char *buffer)
 	root = find_path_device("/");
 	if (root)
 		model = get_property(root, "model", NULL);
-	len = sprintf(buffer,"machine\t\t: CHRP %s\n", model);
+	seq_printf(m, "machine\t\t: CHRP %s\n", model);
 
 	/* longtrail (goldengate) stuff */
-	if ( !strncmp( model, "IBM,LongTrail", 13 ) )
-	{
+	if (!strncmp(model, "IBM,LongTrail", 13)) {
 		/* VLSI VAS96011/12 `Golden Gate 2' */
 		/* Memory banks */
 		sdramen = (in_le32((unsigned *)(GG2_PCI_CONFIG_BASE+
@@ -146,17 +146,17 @@ chrp_get_cpuinfo(char *buffer)
 				model = "Reserved";
 				break;
 			}
-			len += sprintf(buffer+len, "memory bank %d\t: %s %s\n", i, model,
-				       gg2_memtypes[sdramen ? 1 : ((t>>1) & 3)]);
+			seq_printf(m, "memory bank %d\t: %s %s\n", i, model,
+				   gg2_memtypes[sdramen ? 1 : ((t>>1) & 3)]);
 		}
 		/* L2 cache */
 		t = in_le32((unsigned *)(GG2_PCI_CONFIG_BASE+GG2_PCI_CC_CTRL));
-		len += sprintf(buffer+len, "board l2\t: %s %s (%s)\n",
-			       gg2_cachesizes[(t>>7) & 3],
-			       gg2_cachetypes[(t>>2) & 3],
-			       gg2_cachemodes[t & 3]);
+		seq_printf(m, "board l2\t: %s %s (%s)\n",
+			   gg2_cachesizes[(t>>7) & 3],
+			   gg2_cachetypes[(t>>2) & 3],
+			   gg2_cachemodes[t & 3]);
 	}
-	return len;
+	return 0;
 }
 
 /*
@@ -263,13 +263,6 @@ chrp_setup_arch(void)
 	 */
 	sio_init();
 
-	/*
-	 *  Setup the console operations
-	 */
-#ifdef CONFIG_DUMMY_CONSOLE
-	conswitchp = &dummy_con;
-#endif
-
 	/* Get the event scan rate for the rtas so we know how
 	 * often it expects a heartbeat. -- Cort
 	 */
@@ -328,13 +321,8 @@ u_int __chrp
 chrp_irq_cannonicalize(u_int irq)
 {
 	if (irq == 2)
-	{
 		return 9;
-	}
-	else
-	{
-		return irq;
-	}
+	return irq;
 }
 
 void __init chrp_init_IRQ(void)
@@ -471,8 +459,8 @@ chrp_init(unsigned long r3, unsigned long r4, unsigned long r5,
 	isa_io_base = CHRP_ISA_IO_BASE;		/* default value */
 
 	ppc_md.setup_arch     = chrp_setup_arch;
-	ppc_md.setup_residual = NULL;
-	ppc_md.get_cpuinfo    = chrp_get_cpuinfo;
+	ppc_md.show_percpuinfo = of_show_percpuinfo;
+	ppc_md.show_cpuinfo   = chrp_show_cpuinfo;
 	ppc_md.irq_cannonicalize = chrp_irq_cannonicalize;
 #ifndef CONFIG_POWER4
 	ppc_md.init_IRQ       = chrp_init_IRQ;
