@@ -66,6 +66,7 @@ struct psmouse {
 	char ack;
 	char error;
 	char devname[64];
+	char phys[32];
 };
 
 #define PSMOUSE_PS2	1
@@ -532,7 +533,7 @@ static void psmouse_initialize(struct psmouse *psmouse)
  */
 
 	if (psmouse_command(psmouse, NULL, PSMOUSE_CMD_ENABLE)) {
-		printk(KERN_WARNING "psmouse.c: Failed to enable mouse on serio%d\n", psmouse->serio->number);
+		printk(KERN_WARNING "psmouse.c: Failed to enable mouse on %s\n", psmouse->serio->phys);
 	}
 
 }
@@ -607,8 +608,11 @@ static void psmouse_connect(struct serio *serio, struct serio_dev *dev)
 	
 	sprintf(psmouse->devname, "%s %s %s",
 		psmouse_protocols[psmouse->type], psmouse->vendor, psmouse->name);
+	sprintf(psmouse->phys, "%s/input0",
+		serio->phys);
 
 	psmouse->dev.name = psmouse->devname;
+	psmouse->dev.phys = psmouse->phys;
 	psmouse->dev.idbus = BUS_I8042;
 	psmouse->dev.idvendor = psmouse->type;
 	psmouse->dev.idproduct = 0x0002;
@@ -616,7 +620,7 @@ static void psmouse_connect(struct serio *serio, struct serio_dev *dev)
 
 	input_register_device(&psmouse->dev);
 	
-	printk(KERN_INFO "input%d: %s on serio%d\n", psmouse->dev.number, psmouse->devname, serio->number);
+	printk(KERN_INFO "input: %s on %s\n", psmouse->devname, serio->phys);
 
 	psmouse_initialize(psmouse);
 }

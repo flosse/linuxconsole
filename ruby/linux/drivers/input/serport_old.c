@@ -43,7 +43,10 @@ struct serport {
 	struct tty_struct *tty;
 	wait_queue_head_t wait;
 	struct serio serio;
+	char phys[32];
 };
+
+char serport_name[] = "Serial port";
 
 /*
  * Callback functions from the serio code.
@@ -75,6 +78,8 @@ static void serport_serio_close(struct serio *serio)
 static int serport_ldisc_open(struct tty_struct *tty)
 {
 	struct serport *serport;
+	char ttyname[64];
+	int i;
 
 	MOD_INC_USE_COUNT;
 
@@ -88,6 +93,15 @@ static int serport_ldisc_open(struct tty_struct *tty)
 	set_bit(TTY_DO_WRITE_WAKEUP, &tty->flags);
 	serport->tty = tty;
 	tty->disc_data = serport;
+
+	strcpy(ttyname, tty->driver.name);
+	for (i = 0; ttyname[i] != 0 && ttyname[i] != '/'; i++);
+	ttyname[i] = 0;
+
+	sprintf(serport->phys, "%s%d/serio0", ttyname, MINOR(tty->device) - tty->driver.minor_start);
+
+	serport->serio.name = serport_name;
+	serport->serio.phys = serport->phys;
 
 	serport->serio.type = SERIO_RS232;
 	serport->serio.write = serport_serio_write;
@@ -157,7 +171,7 @@ static ssize_t serport_ldisc_read(struct tty_struct * tty, struct file * file, u
 
 	serio_register_port(&serport->serio);
 
-	printk(KERN_INFO "serio%d: Serial port %s\n", serport->serio.number, name);
+	printk(KERN_INFO "serio: Serial port %s\n", name);
 
 	add_wait_queue(&serport->wait, &wait);
 	current->state = TASK_INTERRUPTIBLE;

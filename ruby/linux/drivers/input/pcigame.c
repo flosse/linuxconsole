@@ -72,6 +72,7 @@ struct pcigame {
 	struct pci_dev *dev;
         unsigned char *base;
 	struct pcigame_data *data;
+	char phys[32];
 };
 
 static unsigned char pcigame_read(struct gameport *gameport)
@@ -131,8 +132,9 @@ static int __devinit pcigame_probe(struct pci_dev *dev, const struct pci_device_
 
 
 	pcigame->data = pcigame_data + id->driver_data;
-
 	pcigame->dev = dev;
+	sprintf(pcigame->phys, "pci%s/gameport0", dev->slot_name);
+
 	dev->driver_data = pcigame;
 
 	pcigame->gameport.private = pcigame;
@@ -142,6 +144,12 @@ static int __devinit pcigame_probe(struct pci_dev *dev, const struct pci_device_
 	pcigame->gameport.trigger = pcigame_trigger;
 	pcigame->gameport.cooked_read = pcigame_cooked_read;
 	pcigame->gameport.open = pcigame_open;
+
+	pcigame->gameport.name = dev->name;
+	pcigame->gameport.phys = pcigame->phys;
+	pcigame->gameport.idbus = BUS_PCI;
+	pcigame->gameport.idvendor = dev->vendor;
+	pcigame->gameport.idproduct = dev->device;
 
 	for (i = 0; i < 6; i++)
 		if (~pci_resource_flags(dev, i) & IORESOURCE_IO)
@@ -154,9 +162,8 @@ static int __devinit pcigame_probe(struct pci_dev *dev, const struct pci_device_
 
 	gameport_register_port(&pcigame->gameport);
 	
-	printk(KERN_INFO "gameport%d: %s at pci%02x:%02x.%x speed %d kHz\n",
-		pcigame->gameport.number, dev->name, dev->bus->number,
-			PCI_SLOT(dev->devfn), PCI_FUNC(dev->devfn), pcigame->gameport.speed);
+	printk(KERN_INFO "gameport: %s at pci%s speed %d kHz\n",
+		dev->name, dev->slot_name, pcigame->gameport.speed);
 
 	return 0;
 }

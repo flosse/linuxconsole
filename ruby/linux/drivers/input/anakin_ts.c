@@ -54,6 +54,7 @@ static unsigned short buffer[TSBUF_SIZE][4];
 static int head, tail, xscale, xtrans, yscale, ytrans;
 
 static char *anakin_ts_name = "Anakin TouchScreen";
+static char *anakin_ts_phys[32];
 
 /*
  * Interrupt handler
@@ -146,7 +147,10 @@ static int __init anakin_ts_init(void)
         anakin_ts_dev.open = anakin_ts_open;
         anakin_ts_dev.close = anakin_ts_close;
 
+	sprintf(anakin_ts_phys, "isa%04x/input0", IO_BASE);
+
         anakin_ts_dev.name = anakin_ts_name;
+	anakin_ts_dev.phys = anakin_ts_phys;
         anakin_ts_dev.idbus = BUS_ISA;
         anakin_ts_dev.idvendor = 0x0003;
         anakin_ts_dev.idproduct = 0x0001;
@@ -154,8 +158,8 @@ static int __init anakin_ts_init(void)
 
 	input_register_device(&anakin_ts_dev);
 
-        printk(KERN_INFO "input%d: %s at %#x irq %d\n", anakin_ts_dev.number,
-                anakin_ts_name, IO_BASE, IRQ_TOUCHSCREEN);
+        printk(KERN_INFO "input: %s at %#x irq %d\n",
+		anakin_ts_name, IO_BASE, IRQ_TOUCHSCREEN);
         return 0;
 }
 

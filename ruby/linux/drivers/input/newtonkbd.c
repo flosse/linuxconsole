@@ -66,6 +66,7 @@ struct nkbd {
   unsigned char keycode[128];
   struct input_dev dev;
   struct serio *serio;
+  char phys[32];
 };
 
 void nkbd_interrupt(struct serio *serio, unsigned char data, unsigned int flags)
@@ -76,7 +77,7 @@ void nkbd_interrupt(struct serio *serio, unsigned char data, unsigned int flags)
   if (nkbd->keycode[data & NKBD_KEY])
     input_report_key(&nkbd->dev, nkbd->keycode[data & NKBD_KEY], data & NKBD_PRESS);
   else if (data == 0xe7) /* end of init sequence */ 
-    printk(KERN_INFO "input%d: %s on serio%d\n", nkbd->dev.number, nkbd_name, serio->number);
+    printk(KERN_INFO "input: %s on %s\n", nkbd_name, serio->phys);
 
 }
 
@@ -112,7 +113,10 @@ void nkbd_connect(struct serio *serio, struct serio_dev *dev)
               set_bit(nkbd->keycode[i], nkbd->dev.keybit);
        clear_bit(0, nkbd->dev.keybit);
 
+       sprintf(nkbd->phys, "%s/input0", serio->phys);
+
        nkbd->dev.name = nkbd_name;
+       nkbd->dev.phys = nkbd->phys;
        nkbd->dev.idbus = BUS_RS232;
        nkbd->dev.idvendor = SERIO_NEWTON;
        nkbd->dev.idproduct = 0x0001;
@@ -120,7 +124,7 @@ void nkbd_connect(struct serio *serio, struct serio_dev *dev)
 
        input_register_device(&nkbd->dev);
 
-       printk(KERN_INFO "input%d: %s on serio%d\n", nkbd->dev.number, nkbd_name, serio->number);
+       printk(KERN_INFO "input: %s on %s\n", nkbd_name, serio->phys);
 }
 
 void nkbd_disconnect(struct serio *serio)

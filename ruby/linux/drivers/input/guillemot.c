@@ -71,6 +71,7 @@ struct guillemot {
 	int reads;
 	struct guillemot_type *type;
 	unsigned char length;
+	char phys[32];
 };
 
 static struct guillemot_type guillemot_type[] = {
@@ -205,10 +206,12 @@ static void guillemot_connect(struct gameport *gameport, struct gameport_dev *de
 			break;
 
 	if (!guillemot_type[i].name) {
-		printk(KERN_WARNING "guillemot.c: Unknown joystick on gameport%d. [ %02x%02x:%04x, ver %d.%02d ]\n",
-			gameport->number, data[12], data[13], data[11], data[14], data[15]);
+		printk(KERN_WARNING "guillemot.c: Unknown joystick on %s. [ %02x%02x:%04x, ver %d.%02d ]\n",
+			gameport->phys, data[12], data[13], data[11], data[14], data[15]);
 		goto fail2;	
 	}
+
+	sprintf(guillemot->phys, "%s/input0", gameport->phys);
 
 	guillemot->type = guillemot_type + i;
 
@@ -217,6 +220,7 @@ static void guillemot_connect(struct gameport *gameport, struct gameport_dev *de
 	guillemot->dev.close = guillemot_close;
 
 	guillemot->dev.name = guillemot_type[i].name;
+	guillemot->dev.phys = guillemot->phys;
 	guillemot->dev.idbus = BUS_GAMEPORT;
 	guillemot->dev.idvendor = GAMEPORT_ID_VENDOR_GUILLEMOT;
 	guillemot->dev.idproduct = guillemot_type[i].id;
@@ -242,8 +246,8 @@ static void guillemot_connect(struct gameport *gameport, struct gameport_dev *de
 		set_bit(t, guillemot->dev.keybit);
 
 	input_register_device(&guillemot->dev);
-	printk(KERN_INFO "input%d: %s ver %d.%02d on gameport%d.0\n",
-		guillemot->dev.number, guillemot->type->name, data[14], data[15], gameport->number);
+	printk(KERN_INFO "input: %s ver %d.%02d on %s\n",
+		guillemot->type->name, data[14], data[15], gameport->phys);
 
 	return;
 fail2:	gameport_close(gameport);

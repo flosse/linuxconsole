@@ -85,6 +85,7 @@ struct gf2k {
 	int used;
 	unsigned char id;
 	unsigned char length;
+	char phys[32];
 };
 
 /*
@@ -278,10 +279,12 @@ static void gf2k_connect(struct gameport *gameport, struct gameport_dev *dev)
 #endif
 
 	if (gf2k->id > GF2K_ID_MAX || !gf2k_axes[gf2k->id]) {
-		printk(KERN_WARNING "gf2k.c: Not yet supported joystick on gameport%d. [id: %d type:%s]\n",
-			gameport->number, gf2k->id, gf2k->id > GF2K_ID_MAX ? "Unknown" : gf2k_names[gf2k->id]);
+		printk(KERN_WARNING "gf2k.c: Not yet supported joystick on %s. [id: %d type:%s]\n",
+			gameport->phys, gf2k->id, gf2k->id > GF2K_ID_MAX ? "Unknown" : gf2k_names[gf2k->id]);
 		goto fail2;
 	}
+
+	sprintf(gf2k->phys, "%s/input0", gameport->phys);
 
 	gf2k->length = gf2k_lens[gf2k->id];
 
@@ -291,6 +294,7 @@ static void gf2k_connect(struct gameport *gameport, struct gameport_dev *dev)
 	gf2k->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 
 	gf2k->dev.name = gf2k_names[gf2k->id];
+	gf2k->dev.phys = gf2k->phys;
 	gf2k->dev.idbus = BUS_GAMEPORT;
 	gf2k->dev.idvendor = GAMEPORT_ID_VENDOR_GENIUS;
 	gf2k->dev.idproduct = gf2k->id;
@@ -323,8 +327,7 @@ static void gf2k_connect(struct gameport *gameport, struct gameport_dev *dev)
 	}
 
 	input_register_device(&gf2k->dev);
-	printk(KERN_INFO "input%d: %s on gameport%d.0\n",
-		gf2k->dev.number, gf2k_names[gf2k->id], gameport->number);
+	printk(KERN_INFO "input: %s on %s\n", gf2k_names[gf2k->id], gameport->phys);
 
 	return;
 fail2:	gameport_close(gameport);

@@ -54,6 +54,7 @@ static struct input_dev rpcmouse_dev = {
 	keybit: 	{ [LONG(BTN_LEFT)] = BIT(BTN_LEFT) | BIT(BTN_MIDDLE) | BIT(BTN_RIGHT) },
 	relbit:		{ BIT(REL_X) | BIT(REL_Y) },
 	name:		"Acorn RiscPC Mouse",
+	phys:		"rpcmouse/input0",
 	idbus:		BUS_ISA,
 	idvendor:	0x0005,
 	idproduct:	0x0001,

@@ -53,6 +53,7 @@ static int amimouse_lastx, amimouse_lasty;
 static struct input_dev amimouse_dev;
 
 static char *amimouse_name = "Amiga mouse";
+static char *amimouse_phys = "amimouse/input0";
 
 static void amimouse_interrupt(int irq, void *dummy, struct pt_regs *fp)
 {
@@ -124,6 +125,7 @@ static int __init amimouse_init(void)
 	amimouse_dev.close = amimouse_close;
 
 	amimouse_dev.name = amimouse_name;
+	amimouse_dev.phys = amimouse_phys;
 	amimouse_dev.idbus = BUS_AMIGA;
 	amimouse_dev.idvendor = 0x0001;
 	amimouse_dev.idproduct = 0x0002;
@@ -131,7 +133,7 @@ static int __init amimouse_init(void)
         
 	input_register_device(&amimouse_dev);
 
-        printk(KERN_INFO "input%d: %s at joy0dat\n", amimouse_dev.number, amimouse_name);
+        printk(KERN_INFO "input: %s at joy0dat\n", amimouse_name);
 }
 
 static void __exit amimouse_exit(void)

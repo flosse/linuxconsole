@@ -59,6 +59,7 @@ struct grip {
 	int used;
 	int reads;
 	int bads;
+	char phys[2][32];
 };
 
 static int grip_btn_gpp[] = { BTN_START, BTN_SELECT, BTN_TR2, BTN_Y, 0, BTN_TL2, BTN_A, BTN_B, BTN_X, 0, BTN_TL, BTN_TR, -1 };
@@ -340,12 +341,15 @@ static void grip_connect(struct gameport *gameport, struct gameport_dev *dev)
 	for (i = 0; i < 2; i++)
 		if (grip->mode[i]) {
 
+			sprintf(grip->phys[i], "%s/input%d", gameport->phys, i);
+
 			grip->dev[i].private = grip;
 
 			grip->dev[i].open = grip_open;
 			grip->dev[i].close = grip_close;
 
 			grip->dev[i].name = grip_name[grip->mode[i]];
+			grip->dev[i].phys = grip->phys[i];
 			grip->dev[i].idbus = BUS_GAMEPORT;
 			grip->dev[i].idvendor = GAMEPORT_ID_VENDOR_GRAVIS;
 			grip->dev[i].idproduct = grip->mode[i];
@@ -382,8 +386,8 @@ static void grip_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 			input_register_device(grip->dev + i);
 
-			printk(KERN_INFO "input%d: %s on gameport%d.%d\n",
-				grip->dev[i].number, grip_name[grip->mode[i]], gameport->number, i);
+			printk(KERN_INFO "input: %s on %s\n",
+				grip_name[grip->mode[i]], gameport->phys);
 		}
 
 	return;

@@ -2,8 +2,6 @@
  * $Id$
  *
  *  Copyright (c) 1998-2000 Vojtech Pavlik
- *
- *  Sponsored by SuSE
  */
 
 /*
@@ -63,6 +61,8 @@ struct a3d {
 	int used;
 	int reads;
 	int bads;
+	char phys[32];
+	char adcphys[32];
 };
 
 /*
@@ -280,10 +280,12 @@ static void a3d_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 	if (!a3d->mode || a3d->mode > 5) {
 		printk(KERN_WARNING "a3d.c: Unknown A3D device detected "
-			"(gameport%d, id=%d), contact <vojtech@suse.cz>\n", gameport->number, a3d->mode);
+			"(%s, id=%d), contact <vojtech@suse.cz>\n", gameport->phys, a3d->mode);
 		goto fail2;
 	}
 
+	sprintf(a3d->phys, "%s/input0", gameport->phys);
+	sprintf(a3d->adcphys, "%s/gameport0", gameport->phys);
 
 	if (a3d->mode == A3D_MODE_PXL) {
 
@@ -329,11 +331,17 @@ static void a3d_connect(struct gameport *gameport, struct gameport_dev *dev)
 		a3d->adc.cooked_read = a3d_adc_cooked_read;
 		a3d->adc.fuzz = 1; 
 
+		a3d->adc.name = a3d_names[a3d->mode];
+		a3d->adc.phys = a3d->adcphys;
+		a3d->adc.idbus = BUS_GAMEPORT;
+		a3d->adc.idvendor = GAMEPORT_ID_VENDOR_MADCATZ;
+		a3d->adc.idproduct = a3d->mode;
+		a3d->adc.idversion = 0x0100;
+
 		a3d_read(a3d, data);
 
 		gameport_register_port(&a3d->adc);
-		printk(KERN_INFO "gameport%d: %s on gameport%d.0\n",
-			a3d->adc.number, a3d_names[a3d->mode], gameport->number);
+		printk(KERN_INFO "gameport: %s on %s\n", a3d_names[a3d->mode], gameport->phys);
 	}
 
 	a3d->dev.private = a3d;
@@ -341,14 +349,14 @@ static void a3d_connect(struct gameport *gameport, struct gameport_dev *dev)
 	a3d->dev.close = a3d_close;
 
 	a3d->dev.name = a3d_names[a3d->mode];
+	a3d->dev.phys = a3d->phys;
 	a3d->dev.idbus = BUS_GAMEPORT;
 	a3d->dev.idvendor = GAMEPORT_ID_VENDOR_MADCATZ;
 	a3d->dev.idproduct = a3d->mode;
 	a3d->dev.idversion = 0x0100;
 
 	input_register_device(&a3d->dev);
-	printk(KERN_INFO "input%d: %s on gameport%d.0\n",
-		a3d->dev.number, a3d_names[a3d->mode], gameport->number);
+	printk(KERN_INFO "input: %s on %s\n", a3d_names[a3d->mode], a3d->phys);
 
 	return;
 fail2:	gameport_close(gameport);

@@ -8,8 +8,6 @@
  *	Peter Cervasio		Christoph Niemann
  *	Philip Blundell		Russell King
  *	Bob Harris
- *
- *  Sponsored by SuSE
  */
 
 /*
@@ -112,6 +110,7 @@ static struct input_dev inport_dev = {
 	open:		inport_open,
 	close:		inport_close,
 	name:		INPORT_NAME,
+	phys:		"isa023c/input0",
 	idbus:		BUS_ISA,
 	idvendor:	INPORT_VENDOR,
 	idproduct:	0x0001,
@@ -174,8 +173,8 @@ static int __init inport_init(void)
 
 	input_register_device(&inport_dev);
 
-	printk(KERN_INFO "input%d: " INPORT_NAME " at %#x irq %d\n",
-		inport_dev.number, INPORT_BASE, inport_irq);
+	printk(KERN_INFO "input: " INPORT_NAME " at %#x irq %d\n",
+		INPORT_BASE, inport_irq);
 
 	return 0;
 }

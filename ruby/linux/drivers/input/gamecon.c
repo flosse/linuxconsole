@@ -64,6 +64,7 @@ struct gc {
 	struct timer_list timer;
 	unsigned char pads[GC_MAX + 1];
 	int used;
+	char phys[5][32];
 };
 
 static struct gc *gc_base[3];
@@ -589,7 +590,10 @@ static struct gc __init *gc_probe(int *config)
 				break;
 		}
 
+		sprintf(gc->phys[i], "%s/input%d", gc->pd->port->name, i);
+		
                 gc->dev[i].name = gc_names[config[i + 1]];
+		gc->dev[i].phys = gc->phys[i];
                 gc->dev[i].idbus = BUS_PARPORT;
                 gc->dev[i].idvendor = 0x0001;
                 gc->dev[i].idproduct = config[i + 1];
@@ -607,7 +611,7 @@ static struct gc __init *gc_probe(int *config)
 	for (i = 0; i < 5; i++) 
 		if (gc->pads[0] & gc_status_bit[i]) {
 			input_register_device(gc->dev + i);
-			printk(KERN_INFO "input%d: %s on %s\n", gc->dev[i].number, gc->dev[i].name, gc->pd->port->name);
+			printk(KERN_INFO "input: %s on %s\n", gc->dev[i].name, gc->pd->port->name);
 		}
 
 	return gc;

@@ -67,6 +67,7 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/usb.h>
+#include "usbpath.h"
 
 /*
  * Version Information
@@ -105,6 +106,7 @@ struct wacom {
 	int open;
 	int x, y;
 	__u32 serial[2];
+	char phys[32];
 };
 
 static void wacom_pl_irq(struct urb *urb)
@@ -353,6 +355,7 @@ static void *wacom_probe(struct usb_device *dev, unsigned int ifnum, const struc
 {
 	struct usb_endpoint_descriptor *endpoint;
 	struct wacom *wacom;
+	char path[64];
 
 	if (!(wacom = kmalloc(sizeof(struct wacom), GFP_KERNEL))) return NULL;
 	memset(wacom, 0, sizeof(struct wacom));
@@ -387,7 +390,11 @@ static void *wacom_probe(struct usb_device *dev, unsigned int ifnum, const struc
 	wacom->dev.open = wacom_open;
 	wacom->dev.close = wacom_close;
 
+	usb_make_path(dev, path, 64);
+	sprintf(wacom->phys, "%s/input0", path);
+
 	wacom->dev.name = wacom->features->name;
+	wacom->dev.phys = wacom->phys;
 	wacom->dev.idbus = BUS_USB;
 	wacom->dev.idvendor = dev->descriptor.idVendor;
 	wacom->dev.idproduct = dev->descriptor.idProduct;
@@ -401,8 +408,7 @@ static void *wacom_probe(struct usb_device *dev, unsigned int ifnum, const struc
 
 	input_register_device(&wacom->dev);
 
-	printk(KERN_INFO "input%d: %s on usb%d:%d.%d\n",
-		 wacom->dev.number, wacom->features->name, dev->bus->busnum, dev->devnum, ifnum);
+	printk(KERN_INFO "input: %s on %s\n", wacom->features->name, path);
 
 	return wacom;
 }

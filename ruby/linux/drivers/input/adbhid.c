@@ -76,6 +76,7 @@ struct adbhid {
 	int mouse_kind;
 	unsigned char *keycode;
 	char name[64];
+	char phys[32];
 };
 
 static struct adbhid *adbhid[16] = { 0 };
@@ -422,6 +423,7 @@ adbhid_input_register(int id, int default_id, int original_handler_id,
 		return;
 
 	memset(adbhid[id], 0, sizeof(struct adbhid));
+	sprintf(adbhid[id]->phys, "adb%d:%d.%02x/input0", id, default_id, original_handler_id);
 
 	adbhid[id]->id = default_id;
 	adbhid[id]->original_handler_id = original_handler_id;
@@ -429,6 +431,7 @@ adbhid_input_register(int id, int default_id, int original_handler_id,
 	adbhid[id]->mouse_kind = mouse_kind;
 	adbhid[id]->input.private = adbhid[id];
 	adbhid[id]->input.name = adbhid[id]->name;
+	adbhid[id]->input.phys = adbhid[id]->phys;
 	adbhid[id]->input.idbus = BUS_ADB;
 	adbhid[id]->input.idvendor = 0x0001;
 	adbhid[id]->input.idproduct = (id << 12) | (default_id << 8) | original_handler_id;
@@ -441,8 +444,7 @@ adbhid_input_register(int id, int default_id, int original_handler_id,
 			return;
 		}
 
-		sprintf(adbhid[id]->name, "ADB keyboard on ID %d:%d.%02x",
-			id, default_id, original_handler_id);
+		sprintf(adbhid[id]->name, "ADB keyboard");
 
 		memcpy(adbhid[id]->keycode, adb_to_linux_keycodes, sizeof(adb_to_linux_keycodes));
 
@@ -489,8 +491,7 @@ adbhid_input_register(int id, int default_id, int original_handler_id,
 		break;
 
 	case ADB_MOUSE:
-		sprintf(adbhid[id]->name, "ADB mouse on ID %d:%d.%02x",
-			id, default_id, original_handler_id);
+		sprintf(adbhid[id]->name, "ADB mouse");
 
 		adbhid[id]->input.evbit[0] = BIT(EV_KEY) | BIT(EV_REL);
 		adbhid[id]->input.keybit[LONG(BTN_MOUSE)] = BIT(BTN_LEFT) | BIT(BTN_MIDDLE) | BIT(BTN_RIGHT);
@@ -500,12 +501,10 @@ adbhid_input_register(int id, int default_id, int original_handler_id,
 	case ADB_MISC:
 		switch (original_handler_id) {
 		case 0x02: /* Adjustable keyboard button device */
-			sprintf(adbhid[id]->name, "ADB adjustable keyboard buttons on ID %d:%d.%02x",
-				id, default_id, original_handler_id);
+			sprintf(adbhid[id]->name, "ADB adjustable keyboard buttons");
 			break;
 		case 0x1f: /* Powerbook button device */
-			sprintf(adbhid[id]->name, "ADB Powerbook buttons on ID %d:%d.%02x",
-				id, default_id, original_handler_id);
+			sprintf(adbhid[id]->name, "ADB Powerbook buttons");
 			break;
 		}
 		if (adbhid[id]->name[0])
@@ -522,8 +521,8 @@ adbhid_input_register(int id, int default_id, int original_handler_id,
 
 	input_register_device(&adbhid[id]->input);
 
-	printk(KERN_INFO "input%d: ADB HID on ID %d:%d.%02x\n",
-	       adbhid[id]->input.number, id, default_id, original_handler_id);
+	printk(KERN_INFO "input: %s on adb%d:%d.%02x\n",
+	       adbhid[id]->name, id, default_id, original_handler_id);
 
 	if (default_id == ADB_KEYBOARD) {
 		/* HACK WARNING!! This should go away as soon there is an utility

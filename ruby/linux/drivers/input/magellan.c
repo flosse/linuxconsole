@@ -55,6 +55,7 @@ struct magellan {
 	struct input_dev dev;
 	int idx;
 	unsigned char data[MAGELLAN_MAX_LENGTH];
+	char phys[32];
 };
 
 /*
@@ -162,8 +163,11 @@ static void magellan_connect(struct serio *serio, struct serio_dev *dev)
 		magellan->dev.absmax[t] =  360;
 	}
 
+	sprintf(magellan->phys, "%s/input0", serio->phys);
+
 	magellan->dev.private = magellan;
 	magellan->dev.name = magellan_name;
+	magellan->dev.phys = magellan->phys;
 	magellan->dev.idbus = BUS_RS232;
 	magellan->dev.idvendor = SERIO_MAGELLAN;
 	magellan->dev.idproduct = 0x0001;
@@ -178,7 +182,7 @@ static void magellan_connect(struct serio *serio, struct serio_dev *dev)
 
 	input_register_device(&magellan->dev);
 
-	printk(KERN_INFO "input%d: %s on serio%d\n", magellan->dev.number, magellan_name, serio->number);
+	printk(KERN_INFO "input: %s on %s\n", magellan_name, serio->phys);
 }
 
 /*

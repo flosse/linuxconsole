@@ -58,6 +58,7 @@ struct interact {
 	int reads;
 	unsigned char type;
 	unsigned char length;
+	char phys[32];
 };
 
 static short interact_abs_hhfx[] = 
@@ -236,10 +237,12 @@ static void interact_connect(struct gameport *gameport, struct gameport_dev *dev
 			break;
 
 	if (!interact_type[i].length) {
-		printk(KERN_WARNING "interact.c: Unknown joystick on gameport%d. [len %d d0 %08x d1 %08x i2 %08x]\n",
-			gameport->number, i, data[0], data[1], data[2]);
+		printk(KERN_WARNING "interact.c: Unknown joystick on %s. [len %d d0 %08x d1 %08x i2 %08x]\n",
+			gameport->phys, i, data[0], data[1], data[2]);
 		goto fail2;	
 	}
+
+	sprintf(interact->phys, "%s/input0", gameport->phys);
 
 	interact->type = i;
 	interact->length = interact_type[i].length;
@@ -249,6 +252,7 @@ static void interact_connect(struct gameport *gameport, struct gameport_dev *dev
 	interact->dev.close = interact_close;
 
 	interact->dev.name = interact_type[i].name;
+	interact->dev.phys = interact->phys;
 	interact->dev.idbus = BUS_GAMEPORT;
 	interact->dev.idvendor = GAMEPORT_ID_VENDOR_INTERACT;
 	interact->dev.idproduct = interact_type[i].id;
@@ -271,8 +275,8 @@ static void interact_connect(struct gameport *gameport, struct gameport_dev *dev
 		set_bit(t, interact->dev.keybit);
 
 	input_register_device(&interact->dev);
-	printk(KERN_INFO "input%d: %s on gameport%d.0\n",
-		interact->dev.number, interact_type[interact->type].name, gameport->number);
+	printk(KERN_INFO "input: %s on %s\n",
+		interact_type[interact->type].name, gameport->phys);
 
 	return;
 fail2:	gameport_close(gameport);

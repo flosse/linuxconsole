@@ -46,6 +46,7 @@ MODULE_PARM(amijoy, "1-2i");
 static int amijoy[2] = { 0, 1 };
 static int amijoy_used[2] = { 0, 0 };
 static struct input_dev amijoy_dev[2];
+static char *amijoy_phys[2] = { "amijoy/input0", "amijoy/input1" };
 
 static char *amijoy_name = "Amiga joystick";
 
@@ -132,6 +133,7 @@ static int __init amijoy_init(void)
 			}
 
 			amijoy->dev[i].name = amijoy_name;
+			amijoy->dev[i].phys = amijoy_phys[i];
 			amijoy->dev[i].idbus = BUS_AMIGA;
 			amijoy->dev[i].idvendor = 0x0001;
 			amijoy->dev[i].idproduct = 0x0003;
@@ -140,7 +142,7 @@ static int __init amijoy_init(void)
 			amijoy_dev[i].private = amijoy_used + i;
 
 			input_register_device(amijoy_dev + i);
-			printk(KERN_INFO "input%d: %s at joy%ddat\n", amijoy_dev[i].number, amijoy_name, i);
+			printk(KERN_INFO "input: %s at joy%ddat\n", amijoy_name, i);
 		}
 	return 0;
 }

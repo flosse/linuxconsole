@@ -47,7 +47,6 @@ EXPORT_SYMBOL(serio_rescan);
 
 static struct serio *serio_list;
 static struct serio_dev *serio_dev;
-static int serio_number;
 
 static void serio_find_dev(struct serio *serio)
 {
@@ -69,7 +68,6 @@ void serio_rescan(struct serio *serio)
 
 void serio_register_port(struct serio *serio)
 {
-	serio->number = serio_number++;
 	serio->next = serio_list;	
 	serio_list = serio;
 	serio_find_dev(serio);
@@ -84,8 +82,6 @@ void serio_unregister_port(struct serio *serio)
 
 	if (serio->dev && serio->dev->disconnect)
 		serio->dev->disconnect(serio);
-
-	serio_number--;
 }
 
 void serio_register_device(struct serio_dev *dev)

@@ -37,7 +37,7 @@
 
 static void evbug_event(struct input_handle *handle, unsigned int type, unsigned int code, int value)
 {
-	printk(KERN_DEBUG "evbug.c: Event. Dev: input%d, Type: %d, Code: %d, Value: %d\n", handle->dev->number, type, code, value);
+	printk(KERN_DEBUG "evbug.c: Event. Dev: %s, Type: %d, Code: %d, Value: %d\n", handle->dev->phys, type, code, value);
 }
 
 static struct input_handle *evbug_connect(struct input_handler *handler, struct input_dev *dev, struct input_device_id *id)
@@ -53,14 +53,14 @@ static struct input_handle *evbug_connect(struct input_handler *handler, struct 
 
 	input_open_device(handle);
 
-	printk(KERN_DEBUG "evbug.c: Connected device: input%d\n", dev->number);
+	printk(KERN_DEBUG "evbug.c: Connected device: \"%s\", %s\n", dev->name, dev->phys);
 
 	return handle;
 }
 
 static void evbug_disconnect(struct input_handle *handle)
 {
-	printk(KERN_DEBUG "evbug.c: Disconnected device: input%d\n", handle->dev->number);
+	printk(KERN_DEBUG "evbug.c: Disconnected device: %s\n", handle->dev->phys);
 	
 	input_close_device(handle);
 

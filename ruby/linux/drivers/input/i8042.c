@@ -62,6 +62,7 @@ struct i8042_values {
 	unsigned char irqen;
 	unsigned char exists;
 	unsigned char *name;
+	unsigned char *phys;
 };
 
 static struct serio i8042_kbd_port;
@@ -327,6 +328,8 @@ static struct serio i8042_kbd_port =
 	open:		i8042_open,
 	close:		i8042_close,
 	driver:		&i8042_kbd_values,
+	name:		"i8042 Kbd Port",
+	phys:		"isa0060/serio0",
 };
 
 static struct i8042_values i8042_aux_values = {
@@ -344,6 +347,8 @@ static struct serio i8042_aux_port =
 	open:		i8042_open,
 	close:		i8042_close,
 	driver:		&i8042_aux_values,
+	name:		"i8042 Aux Port",
+	phys:		"isa0060/serio1",
 };
 
 /*
@@ -605,8 +610,8 @@ static int __init i8042_port_register(struct i8042_values *values, struct serio 
 {
 	values->exists = 1;
 	serio_register_port(port);
-	printk(KERN_INFO "serio%d: i8042 %s port at %#x,%#x irq %d\n",
-		port->number, values->name, I8042_DATA_REG, I8042_COMMAND_REG, values->irq);
+	printk(KERN_INFO "serio: i8042 %s port at %#x,%#x irq %d\n",
+		values->name, I8042_DATA_REG, I8042_COMMAND_REG, values->irq);
 
 	return 0;
 }

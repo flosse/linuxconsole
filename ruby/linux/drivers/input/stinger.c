@@ -54,6 +54,7 @@ struct stinger {
 	struct input_dev dev;
 	int idx;
 	unsigned char data[STINGER_MAX_LENGTH];
+	char phys[32];
 };
 
 /*
@@ -145,7 +146,10 @@ static void stinger_connect(struct serio *serio, struct serio_dev *dev)
 					   BIT(BTN_START) | BIT(BTN_SELECT);
 	stinger->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y);
 
+	sprintf(stinger->phys, "%s/serio0", serio->phys);
+
 	stinger->dev.name = stinger_name;
+	stinger->dev.phys = stinger->phys;
 	stinger->dev.idbus = BUS_RS232;
 	stinger->dev.idvendor = SERIO_STINGER;
 	stinger->dev.idproduct = 0x0001;
@@ -168,7 +172,7 @@ static void stinger_connect(struct serio *serio, struct serio_dev *dev)
 
 	input_register_device(&stinger->dev);
 
-	printk(KERN_INFO "input%d: %s on serio%d\n", stinger->dev.number, stinger_name, serio->number);
+	printk(KERN_INFO "input: %s on %s\n",  stinger_name, serio->phys);
 }
 
 /*

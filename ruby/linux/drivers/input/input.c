@@ -62,8 +62,6 @@ static struct input_dev *input_dev;
 static struct input_handler *input_handler;
 static struct input_handler *input_table[8];
 static devfs_handle_t input_devfs_handle;
-static int input_number;
-static long input_devices[NBITS(INPUT_DEVICES)];
 
 #ifdef CONFIG_PROC_FS
 static struct proc_dir_entry *proc_bus_input_dir;
@@ -397,12 +395,16 @@ static void input_call_hotplug(char *verb, struct input_dev *dev)
 	envp[i++] = scratch;
 	scratch += sprintf(scratch, "PRODUCT=%x/%x/%x/%x",
 		dev->idbus, dev->idvendor, dev->idproduct, dev->idversion) + 1; 
+	
+	if (dev->name) {
+		envp[i++] = scratch;
+		scratch += sprintf(scratch, "NAME=%s", dev->name) + 1; 
+	}
 
-	envp[i++] = scratch;
-	scratch += sprintf(scratch, "NAME=%s", dev->name ? dev->name : "N/A") + 1; 
-
-	envp[i++] = scratch;
-	scratch += sprintf(scratch, "PHYS=%s", dev->phys ? dev->phys : "N/A") + 1; 
+	if (dev->phys) {
+		envp[i++] = scratch;
+		scratch += sprintf(scratch, "PHYS=%s", dev->phys) + 1; 
+	]
 
 	SPRINTF_BIT_A(evbit, "EV=", EV_MAX);
 	SPRINTF_BIT_A2(keybit, "KEY=", KEY_MAX, EV_KEY);
@@ -449,17 +451,8 @@ void input_register_device(struct input_dev *dev)
  * Add the device.
  */
 
-	if (input_number >= INPUT_DEVICES) {
-		printk(KERN_WARNING "input: ran out of input device numbers!\n");
-		dev->number = input_number;
-	} else {
-		dev->number = find_first_zero_bit(input_devices, INPUT_DEVICES);
-		set_bit(dev->number, input_devices);
-	}
-		
 	dev->next = input_dev;	
 	input_dev = dev;
-	input_number++;
 
 /*
  * Notify handlers.
@@ -532,10 +525,6 @@ void input_unregister_device(struct input_dev *dev)
  * Remove the device.
  */
 	input_find_and_remove(struct input_dev, input_dev, dev, next);
-	input_number--;
-
-	if (dev->number < INPUT_DEVICES)
-		clear_bit(dev->number, input_devices);
 
 /*
  * Notify /proc.
@@ -724,8 +713,8 @@ static int input_devices_read(char *buf, char **start, off_t pos, int count, int
 		len = sprintf(buf, "I: Bus=%04x Vendor=%04x Product=%04x Version=%04x\n",
 			dev->idbus, dev->idvendor, dev->idproduct, dev->idversion);
 
-		len += sprintf(buf + len, "N: Number=%d Name=\"%s\"\n", dev->number, dev->name ? dev->name : "N/A");
-		len += sprintf(buf + len, "P: Phys=%s\n", dev->phys ? dev->phys : "N/A");
+		len += sprintf(buf + len, "N: Name=\"%s\"\n", dev->name ? dev->name : "");
+		len += sprintf(buf + len, "P: Phys=%s\n", dev->phys ? dev->phys : "");
 		len += sprintf(buf + len, "D: Drivers=");
 
 		handle = dev->handle;

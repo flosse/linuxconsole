@@ -53,6 +53,7 @@ struct cobra {
 	int reads;
 	int bads;
 	unsigned char exists;
+	char phys[2][32];
 };
 
 static unsigned char cobra_read_packet(struct gameport *gameport, unsigned int *data)
@@ -178,8 +179,8 @@ static void cobra_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 	for (i = 0; i < 2; i++) 
 		if ((cobra->exists >> i) & data[i] & 1) {
-			printk(KERN_WARNING "cobra.c: Device on gameport%d.%d has the Ext bit set. ID is: %d"
-				" Contact vojtech@suse.cz\n", gameport->number, i, (data[i] >> 2) & 7);
+			printk(KERN_WARNING "cobra.c: Device %d on %s has the Ext bit set. ID is: %d"
+				" Contact vojtech@suse.cz\n", i, gameport->phys, (data[i] >> 2) & 7);
 			cobra->exists &= ~(1 << i);
 		}
 
@@ -189,11 +190,14 @@ static void cobra_connect(struct gameport *gameport, struct gameport_dev *dev)
 	for (i = 0; i < 2; i++)
 		if ((cobra->exists >> i) & 1) {
 
+			sprintf(cobra->phys[i], "%s/input%d", gameport->phys, i);
+
 			cobra->dev[i].private = cobra;
 			cobra->dev[i].open = cobra_open;
 			cobra->dev[i].close = cobra_close;
 
 			cobra->dev[i].name = cobra_name;
+			cobra->dev[i].phys = cobra->phys[i];
 			cobra->dev[i].idbus = BUS_GAMEPORT;
 			cobra->dev[i].idvendor = GAMEPORT_ID_VENDOR_CREATIVE;
 			cobra->dev[i].idproduct = 0x0008;
@@ -209,10 +213,8 @@ static void cobra_connect(struct gameport *gameport, struct gameport_dev *dev)
 			cobra->dev[i].absmin[ABS_Y] = -1; cobra->dev[i].absmax[ABS_Y] = 1;
 
 			input_register_device(cobra->dev + i);
-			printk(KERN_INFO "input%d: %s on gameport%d.%d\n",
-				cobra->dev[i].number, cobra_name, gameport->number, i);
+			printk(KERN_INFO "input: %s on %s\n", cobra_name, gameport->phys);
 		}
-
 
 	return;
 fail2:	gameport_close(gameport);

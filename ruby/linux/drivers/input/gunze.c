@@ -55,6 +55,7 @@ struct gunze {
 	struct serio *serio;
 	int idx;
 	unsigned char data[GUNZE_MAX_LENGTH];
+	char phys[32];
 };
 
 static void gunze_process_packet(struct gunze* gunze)
@@ -126,8 +127,11 @@ static void gunze_connect(struct serio *serio, struct serio_dev *dev)
 	gunze->serio = serio;
 	serio->private = gunze;
 
+	sprintf(gunze->phys, "%s/input0", serio->phys);
+
 	gunze->dev.private = gunze;
 	gunze->dev.name = gunze_name;
+	gunze->dev.phys = gunze->phys;
 	gunze->dev.idbus = BUS_RS232;
 	gunze->dev.idvendor = SERIO_GUNZE;
 	gunze->dev.idproduct = 0x0051;
@@ -140,7 +144,7 @@ static void gunze_connect(struct serio *serio, struct serio_dev *dev)
 
 	input_register_device(&gunze->dev);
 
-	printk(KERN_INFO "input%d: %s on serio%d\n", gunze->dev.number, gunze_name, serio->number);
+	printk(KERN_INFO "input: %s on %s\n", gunze_name, serio->phys);
 }
 
 /*

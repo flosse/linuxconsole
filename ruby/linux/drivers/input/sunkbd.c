@@ -75,6 +75,7 @@ struct sunkbd {
 	struct serio *serio;
 	struct tq_struct tq;
 	char name[64];
+	char phys[32];
 	char type;
 	char reset;
 	char layout;
@@ -263,7 +264,10 @@ static void sunkbd_connect(struct serio *serio, struct serio_dev *dev)
 		set_bit(sunkbd->keycode[i], sunkbd->dev.keybit);
 	clear_bit(0, sunkbd->dev.keybit);
 
+	sprintf(sunkbd->name, "%s/input", serio->phys);
+
 	sunkbd->dev.name = sunkbd->name;
+	sunkbd->dev.phys = sunkbd->phys;
 	sunkbd->dev.idbus = BUS_RS232;
 	sunkbd->dev.idvendor = SERIO_SUNKBD;
 	sunkbd->dev.idproduct = sunkbd->type;
@@ -271,7 +275,7 @@ static void sunkbd_connect(struct serio *serio, struct serio_dev *dev)
 
 	input_register_device(&sunkbd->dev);
 
-	printk(KERN_INFO "input%d: %s on serio%d\n", sunkbd->dev.number, sunkbd->name, serio->number);
+	printk(KERN_INFO "input: %s on %s\n", sunkbd->name, serio->phys);
 }
 
 /*

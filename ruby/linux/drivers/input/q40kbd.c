@@ -54,6 +54,8 @@ static struct serio q40kbd_port =
 {
 	type:   SERIO_8042,
 	write:  q40kbd_write,
+	name:	"Q40 PS/2 kbd port",
+	phys:	"isa0060/serio0",
 };
 
 static void q40kbd_interrupt(int irq, void *dev_id, struct pt_regs *regs)
@@ -86,7 +88,7 @@ void __init q40kbd_init(void)
 	master_outb(1,KEY_IRQ_ENABLE_REG);
 
 	register_serio_port(&q40kbd_port);
-	printk(KERN_INFO "serio%d: Q40 PS/2 kbd port irq %d\n", q40kbd_port.number, Q40_IRQ_KEYBOARD);
+	printk(KERN_INFO "serio: Q40 PS/2 kbd port irq %d\n", Q40_IRQ_KEYBOARD);
 }
 
 void __exit q40kbd_exit(void)

@@ -53,6 +53,7 @@ struct warrior {
 	struct input_dev dev;
 	int idx, len;
 	unsigned char data[WARRIOR_MAX_LENGTH];
+	char phys[32];
 };
 
 /*
@@ -149,7 +150,10 @@ static void warrior_connect(struct serio *serio, struct serio_dev *dev)
 	warrior->dev.relbit[0] = BIT(REL_DIAL);
 	warrior->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y) | BIT(ABS_THROTTLE) | BIT(ABS_HAT0X) | BIT(ABS_HAT0Y);
 
+	sprintf(warrior->phys, "%s/input0", serio->phys);
+
 	warrior->dev.name = warrior_name;
+	warrior->dev.phys = warrior->phys;
 	warrior->dev.idbus = BUS_RS232;
 	warrior->dev.idvendor = SERIO_WARRIOR;
 	warrior->dev.idproduct = 0x0001;
@@ -180,7 +184,7 @@ static void warrior_connect(struct serio *serio, struct serio_dev *dev)
 
 	input_register_device(&warrior->dev);
 
-	printk(KERN_INFO "input%d: Logitech WingMan Warrior on serio%d\n", warrior->dev.number, serio->number);
+	printk(KERN_INFO "input: Logitech WingMan Warrior on %s\n", serio->phys);
 }
 
 /*

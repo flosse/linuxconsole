@@ -68,6 +68,7 @@ struct tgfx {
 	struct pardevice *pd;
 	struct timer_list timer;
 	struct input_dev dev[7];
+	char phys[7][32];
 	int sticks;
 	int used;
 } *tgfx_base[3];
@@ -173,7 +174,10 @@ static struct tgfx __init *tgfx_probe(int *config)
 			tgfx->dev[i].open = tgfx_open;
 			tgfx->dev[i].close = tgfx_close;
 
+			sprintf(tgfx->phys[i], "%s/input0", tgfx->pd->port->name);
+
 			tgfx->dev[i].name = tgfx_name;
+			tgfx->dev[i].phys = tgfx->phys[i];
 			tgfx->dev[i].idbus = BUS_PARPORT;
 			tgfx->dev[i].idvendor = 0x0003;
 			tgfx->dev[i].idproduct = config[i+1];
@@ -189,8 +193,8 @@ static struct tgfx __init *tgfx_probe(int *config)
 			tgfx->dev[i].absmin[ABS_Y] = -1; tgfx->dev[i].absmax[ABS_Y] = 1;
 
 			input_register_device(tgfx->dev + i);
-			printk(KERN_INFO "input%d: %d-button Multisystem joystick on %s\n",
-				tgfx->dev[i].number, config[i+1], tgfx->pd->port->name);
+			printk(KERN_INFO "input: %d-button Multisystem joystick on %s\n",
+				config[i+1], tgfx->pd->port->name);
 		}
 
         if (!tgfx->sticks) {

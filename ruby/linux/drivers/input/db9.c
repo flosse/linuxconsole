@@ -86,6 +86,7 @@ struct db9 {
 	struct pardevice *pd;	
 	int mode;
 	int used;
+	char phys[2][32];
 };
 
 static struct db9 *db9_base[3];
@@ -341,11 +342,14 @@ static struct db9 __init *db9_probe(int *config)
 
 	for (i = 0; i < 1 + (db9->mode == DB9_MULTI_0802_2); i++) {
 
+		sprintf(db9->phys[i], "%s/input%d", db9->pd->port->name, i);
+
 		db9->dev[i].private = db9;
 		db9->dev[i].open = db9_open;
 		db9->dev[i].close = db9_close;
 
 		db9->dev[i].name = db9_name[db9->mode];
+		db9->dev[i].phys = db9->phys[i];
 		db9->dev[i].idbus = BUS_PARPORT;
 		db9->dev[i].idvendor = 0x0002;
 		db9->dev[i].idproduct = config[1];
@@ -361,8 +365,7 @@ static struct db9 __init *db9_probe(int *config)
 		db9->dev[i].absmin[ABS_Y] = -1; db9->dev[i].absmax[ABS_Y] = 1;
 
 		input_register_device(db9->dev + i);
-		printk(KERN_INFO "input%d: %s on %s\n",
-			db9->dev[i].number, db9_name[db9->mode], db9->pd->port->name);
+		printk(KERN_INFO "input: %s on %s\n", db9->dev[i].name, db9->pd->port->name);
 	}
 
 	return db9;

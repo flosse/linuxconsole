@@ -59,6 +59,7 @@ struct spaceorb {
 	struct serio *serio;
 	int idx;
 	unsigned char data[SPACEORB_MAX_LENGTH];
+	char phys[32];
 };
 
 static unsigned char spaceorb_xor[] = "SpaceWare";
@@ -88,8 +89,8 @@ static void spaceorb_process_packet(struct spaceorb *spaceorb)
 		case 'R':				/* Reset packet */
 			spaceorb->data[spaceorb->idx - 1] = 0;
 			for (i = 1; i < spaceorb->idx && spaceorb->data[i] == ' '; i++);
-			printk(KERN_INFO "input%d: %s [%s] on serio%d\n",
-				 spaceorb->dev.number, spaceorb_name, spaceorb->data + i, spaceorb->serio->number);
+			printk(KERN_INFO "input: %s [%s] on %s\n",
+				 spaceorb_name, spaceorb->data + i, spaceorb->serio->phys);
 			break;
 
 		case 'D':				/* Ball + button data */
@@ -180,7 +181,10 @@ static void spaceorb_connect(struct serio *serio, struct serio_dev *dev)
 	spaceorb->serio = serio;
 	spaceorb->dev.private = spaceorb;
 
+	sprintf(spaceorb->phys, "%s/input0", serio->phys);
+
 	spaceorb->dev.name = spaceorb_name;
+	spaceorb->dev.phys = spaceorb->phys;
 	spaceorb->dev.idbus = BUS_RS232;
 	spaceorb->dev.idvendor = SERIO_SPACEORB;
 	spaceorb->dev.idproduct = 0x0001;

@@ -60,6 +60,7 @@ struct xtkbd {
 	unsigned char keycode[256];
 	struct input_dev dev;
 	struct serio *serio;
+	char phys[32];
 };
 
 void xtkbd_interrupt(struct serio *serio, unsigned char data, unsigned int flags)
@@ -113,7 +114,10 @@ void xtkbd_connect(struct serio *serio, struct serio_dev *dev)
 		set_bit(xtkbd->keycode[i], xtkbd->dev.keybit);
 	clear_bit(0, xtkbd->dev.keybit);
 
+	sprintf(xtkbd->phys, "%s/input0", serio->phys);
+
 	xtkbd->dev.name = xtkbd_name;
+	xtkbd->dev.phys = xtkbd->phys;
 	xtkbd->dev.idbus = BUS_XTKBD;
 	xtkbd->dev.idvendor = 0x0001;
 	xtkbd->dev.idproduct = 0x0001;
@@ -121,7 +125,7 @@ void xtkbd_connect(struct serio *serio, struct serio_dev *dev)
 
 	input_register_device(&xtkbd->dev);
 
-	printk(KERN_INFO "input%d: %s on serio%d\n", xtkbd->dev.number, xtkbd_name, serio->number);
+	printk(KERN_INFO "input: %s on %s\n", xtkbd_name, serio->phys);
 }
 
 void xtkbd_disconnect(struct serio *serio)

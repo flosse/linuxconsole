@@ -53,6 +53,9 @@ static unsigned long parkbd_start = 0;
 
 static struct pardevice *parkbd_dev;
 
+static char parkbd_name[] = "PARKBD AT/XT keyboard adapter";
+static char parkbd_phys[32];
+
 static int parkbd_readlines(void)
 {
 	return (parport_read_status(parkbd_dev->port) >> 6) ^ 2;
@@ -96,6 +99,8 @@ static struct serio parkbd_port =
 	write:	parkbd_write,
 	open:	parkbd_open,
 	close:	parkbd_close,
+	name:	parkbd_name,
+	phys:	parkbd_phys,
 };
 
 static void parkbd_interrupt(int irq, void *dev_id, struct pt_regs *regs)
@@ -176,10 +181,12 @@ int __init parkbd_init(void)
 	parkbd_writelines(3);
 	parkbd_port.type = parkbd_mode;
 
+	sprintf(parkbd_phys, "%s/serio0", parkbd_dev->port->name);
+
 	serio_register_port(&parkbd_port);
 
-	printk(KERN_INFO "serio%d: PARKBD %s adapter on %s\n",
-                        parkbd_port.number, parkbd_mode ? "AT" : "XT", parkbd_dev->port->name);
+	printk(KERN_INFO "serio: PARKBD %s adapter on %s\n",
+                        parkbd_mode ? "AT" : "XT", parkbd_dev->port->name);
 
 	return 0;
 }

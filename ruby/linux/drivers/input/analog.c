@@ -419,7 +419,7 @@ static void analog_init_device(struct analog_port *port, struct analog *analog, 
 	int i, j, t, v, w, x, y, z;
 
 	analog_name(analog);
-	sprintf(analog->phys, "gameport%d.%d", port->gameport->number, index);
+	sprintf(analog->phys, "%s/input%d", port->gameport->phys, index);
 
 	analog->buttons = (analog->mask & ANALOG_GAMEPAD) ? analog_pad_btn : analog_joy_btn;
 
@@ -494,8 +494,7 @@ static void analog_init_device(struct analog_port *port, struct analog *analog, 
 
 	input_register_device(&analog->dev);
 
-	printk(KERN_INFO "input%d: %s at %s",
-		analog->dev.number, analog->name, analog->phys);
+	printk(KERN_INFO "input: %s at %s", analog->name, port->gameport->phys);
 
 	if (port->cooked)
 		printk(" [ADC port]\n");
@@ -520,12 +519,13 @@ static int analog_init_masks(struct analog_port *port)
 
 	if ((port->mask & 3) != 3 && port->mask != 0xc) {
 		printk(KERN_WARNING "analog.c: Unknown joystick device found  "
-			"(data=%#x, gameport%d), probably not analog joystick.\n",
-			port->mask, port->gameport->number);
+			"(data=%#x, %s), probably not analog joystick.\n",
+			port->mask, port->gameport->phys);
 		return -1;
 	}
 
-	i = port->gameport->number < ANALOG_PORTS ? analog_options[port->gameport->number] : 0xff;
+
+	i = analog_options[0]; /* FIXME !!! - need to specify options for different ports */
 
 	analog[0].mask = i & 0xfffff;
 
@@ -605,8 +605,8 @@ static int analog_init_port(struct gameport *gameport, struct gameport_dev *dev,
 		gameport_trigger(gameport);
 		while ((gameport_read(port->gameport) & port->mask) && (v < t)) v++; 
 
-		if (v < (u >> 1) && port->gameport->number < ANALOG_PORTS) {
-			analog_options[port->gameport->number] |=
+		if (v < (u >> 1)) { /* FIXME - more than one port */
+			analog_options[0] |= /* FIXME - more than one port */
 				ANALOG_SAITEK | ANALOG_BTNS_CHF | ANALOG_HBTN_CHF | ANALOG_HAT1_CHF;
 			return 0;
 		}
@@ -667,9 +667,9 @@ static void analog_disconnect(struct gameport *gameport)
 		if (port->analog[i].mask)
 			input_unregister_device(&port->analog[i].dev);
 	gameport_close(gameport);
-	printk(KERN_INFO "analog.c: %d out of %d reads (%d%%) on gameport%d failed\n",
+	printk(KERN_INFO "analog.c: %d out of %d reads (%d%%) on %s failed\n",
 		port->bads, port->reads, port->reads ? (port->bads * 100 / port->reads) : 0,
-		port->gameport->number);
+		port->gameport->phys);
 	kfree(port);
 }
 

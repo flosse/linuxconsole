@@ -53,6 +53,8 @@ static struct serio rpckbd_port =
 {
 	type:	SERIO_8042,
 	write:	rpckbd_write,
+	name: 	"RiscPC PS/2 kbd port",
+	phys:	"rpckbd/serio0",
 };
 
 static void rpckbd_rx(int irq, void *dev_id, struct pt_regs *regs)
@@ -96,8 +98,7 @@ static int __init rpckbd_init(void)
 	restore_flags(flags);
 
 	register_serio_port(&rpckbd_port);
-	printk(KERN_INFO "serio%d: RiscPC PS/2 kbd port irq %d %d\n",
-			rpckbd_port.number, IRQ_KEYBOARDRX, IRQ_KEYBOARDTX);
+	printk(KERN_INFO "serio: RiscPC PS/2 kbd port irq %d %d\n", IRQ_KEYBOARDRX, IRQ_KEYBOARDTX);
 
 	return 0;
 }

@@ -108,7 +108,6 @@ static struct input_handle *power_connect(struct input_handler *handler,
 					  struct input_device_id *id)
 {
 	struct input_handle *handle;
-	int i;
 
 	if (!test_bit(EV_KEY, dev->evbit) || !test_bit(EV_PWR, dev->evbit))
 		return NULL;	

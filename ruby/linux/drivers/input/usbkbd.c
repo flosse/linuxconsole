@@ -34,6 +34,7 @@
 #include <linux/input.h>
 #include <linux/init.h>
 #include <linux/usb.h>
+#include "usbpath.h"
 
 /*
  * Version Information
@@ -73,6 +74,7 @@ struct usb_kbd {
 	devrequest dr;
 	unsigned char leds, newleds;
 	char name[128];
+	char phys[64];
 	int open;
 };
 
@@ -177,6 +179,7 @@ static void *usb_kbd_probe(struct usb_device *dev, unsigned int ifnum,
 	struct usb_endpoint_descriptor *endpoint;
 	struct usb_kbd *kbd;
 	int i, pipe, maxp;
+	char path[64];
 	char *buf;
 
 	iface = &dev->actconfig->interface[ifnum];
@@ -220,7 +223,11 @@ static void *usb_kbd_probe(struct usb_device *dev, unsigned int ifnum,
 	kbd->dr.index = interface->bInterfaceNumber;
 	kbd->dr.length = 1;
 
+	usb_make_path(dev, path, 64);
+	sprintf(kbd->phys, "%s/input0", path);
+
 	kbd->dev.name = kbd->name;
+	kbd->dev.phys = kbd->phys;	
 	kbd->dev.idbus = BUS_USB;
 	kbd->dev.idvendor = dev->descriptor.idVendor;
 	kbd->dev.idproduct = dev->descriptor.idProduct;
@@ -249,8 +256,7 @@ static void *usb_kbd_probe(struct usb_device *dev, unsigned int ifnum,
 			
 	input_register_device(&kbd->dev);
 
-	printk(KERN_INFO "input%d: %s on usb%d:%d.%d\n",
-		 kbd->dev.number, kbd->name, dev->bus->busnum, dev->devnum, ifnum);
+	printk(KERN_INFO "input: %s on %s\n", kbd->name, path);
 
 	return kbd;
 }

@@ -100,6 +100,7 @@ struct h3600_dev {
 	unsigned char len;
 	unsigned char idx;
 	unsigned char buf[H3600_MAX_LENGTH];
+	char phys[32];
 };
 
 static void action_button_handler(int irq, void *dev_id, struct pt_regs *regs)
@@ -411,9 +412,12 @@ static void h3600ts_connect(struct serio *serio, struct serio_dev *dev)
 	ts->dev.keybit[LONG(BTN_TOUCH)] |= BIT(BTN_TOUCH);
 	ts->dev.keybit[LONG(KEY_SUSPEND)] |= BIT(KEY_SUSPEND);
 
+	sprintf(ts->phys, "%s/input0", serio->phys);
+
        	ts->dev.event = h3600ts_event;
 	ts->dev.private = ts;
 	ts->dev.name = h3600_name;
+	ts->dev.phys = ts->phys;
 	ts->dev.idbus = BUS_RS232;
 	ts->dev.idvendor = SERIO_H3600;
 	ts->dev.idproduct = 0x0666;  /* FIXME !!! We can ask the hardware */
@@ -434,8 +438,7 @@ static void h3600ts_connect(struct serio *serio, struct serio_dev *dev)
 #endif
 	input_register_device(&ts->dev);
 
-	printk(KERN_INFO "input%d: %s on serio%d\n", ts->dev.number, 
-		h3600_name, serio->number);
+	printk(KERN_INFO "input: %s on %s\n", h3600_name, serio->phys);
 }
 
 /*

@@ -34,6 +34,7 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/usb.h>
+#include "usbpath.h"
 
 /*
  * Version Information
@@ -48,6 +49,7 @@ MODULE_DESCRIPTION( DRIVER_DESC );
 struct usb_mouse {
 	signed char data[8];
 	char name[128];
+	char phys[64];
 	struct usb_device *usbdev;
 	struct input_dev dev;
 	struct urb irq;
@@ -103,6 +105,7 @@ static void *usb_mouse_probe(struct usb_device *dev, unsigned int ifnum,
 	struct usb_endpoint_descriptor *endpoint;
 	struct usb_mouse *mouse;
 	int pipe, maxp;
+	char path[64];
 	char *buf;
 
 	iface = &dev->actconfig->interface[ifnum];
@@ -134,7 +137,11 @@ static void *usb_mouse_probe(struct usb_device *dev, unsigned int ifnum,
 	mouse->dev.open = usb_mouse_open;
 	mouse->dev.close = usb_mouse_close;
 
+	usb_make_path(dev, path, 64);
+	sprintf(mouse->phys, "%s/input0", path);
+
 	mouse->dev.name = mouse->name;
+	mouse->dev.phys = mouse->phys;
 	mouse->dev.idbus = BUS_USB;
 	mouse->dev.idvendor = dev->descriptor.idVendor;
 	mouse->dev.idproduct = dev->descriptor.idProduct;
@@ -163,8 +170,7 @@ static void *usb_mouse_probe(struct usb_device *dev, unsigned int ifnum,
 
 	input_register_device(&mouse->dev);
 
-	printk(KERN_INFO "input%d: %s on usb%d:%d.%d\n",
-		 mouse->dev.number, mouse->name, dev->bus->busnum, dev->devnum, ifnum);
+	printk(KERN_INFO "input: %s on %s\n", mouse->name, path);
 
 	return mouse;
 }

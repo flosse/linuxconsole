@@ -45,6 +45,7 @@
 #undef DEBUG_DATA
 
 #include <linux/usb.h>
+#include "usbpath.h"
 
 #include "hid.h"
 #ifdef CONFIG_USB_HIDDEV
@@ -55,7 +56,7 @@
  * Version Information
  */
 
-#define DRIVER_VERSION "v1.8"
+#define DRIVER_VERSION "v1.27"
 #define DRIVER_AUTHOR "Andreas Gal, Vojtech Pavlik <vojtech@suse.cz>"
 #define DRIVER_DESC "USB HID support drivers"
 
@@ -1093,40 +1094,6 @@ struct hid_blacklist {
 	{ 0, 0 }
 };
 
-static int usb_make_path(struct usb_device *dev, char *buf, int maxlen)
-{
-	struct usb_device *pdev = dev->parent;
-	char *tmp, *port;
-	int i;
-
-	if (!(port = kmalloc(maxlen, GFP_KERNEL)))
-                return -1;
-	if (!(tmp = kmalloc(maxlen, GFP_KERNEL)))
-                return -1;
-
-	*port = 0;
-
-	while (pdev) {
-
-		for (i = 0; i < pdev->maxchild; i++)
-			if (pdev->children[i] == dev)
-				break;
-
-		if (pdev->children[i] != dev)
-				return -1;
-
-		strcpy(tmp, port);
-		
-		sprintf(port, strlen(port) ? "%d-%s" : "%d", i + 1, tmp);
-
-		dev = pdev;
-		pdev = dev->parent;
-	}
-
-	sprintf(buf, "usb%d:%s", dev->bus->busnum, port);
-	return 0;
-}
-
 static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 {
 	struct usb_interface_descriptor *interface = dev->actconfig->interface[ifnum].altsetting + 0;
@@ -1220,7 +1187,7 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 		sprintf(hid->name, "%04x:%04x", dev->descriptor.idVendor, dev->descriptor.idProduct);
 
 	usb_make_path(dev, buf, 63);
-	sprintf(hid->phys, "%s.%d", buf, ifnum);
+	sprintf(hid->phys, "%s/input%d", buf, ifnum);
 
 	if (usb_string(dev, dev->descriptor.iSerialNumber, hid->uniq, 64) <= 0)
 		hid->uniq[0] = 0;
@@ -1236,6 +1203,7 @@ static void* hid_probe(struct usb_device *dev, unsigned int ifnum,
 		       const struct usb_device_id *id)
 {
 	struct hid_device *hid;
+	char path[64];
 	int i;
 	char *c;
 
@@ -1256,7 +1224,7 @@ static void* hid_probe(struct usb_device *dev, unsigned int ifnum,
 	printk(KERN_INFO);
 
 	if (hid->claimed & HID_CLAIMED_INPUT)
-		printk("input%d", hid->input.number);
+		printk("input");
 	if (hid->claimed == (HID_CLAIMED_INPUT | HID_CLAIMED_HIDDEV))
 		printk(",");
 	if (hid->claimed & HID_CLAIMED_HIDDEV)
@@ -1269,8 +1237,10 @@ static void* hid_probe(struct usb_device *dev, unsigned int ifnum,
 			break;
 		}
 
+	usb_make_path(dev, path, 63);
+
 	printk(": USB HID v%x.%02x %s [%s] on %s\n",
-		hid->version >> 8, hid->version & 0xff, c, hid->name, hid->phys);
+		hid->version >> 8, hid->version & 0xff, c, hid->name, path);
 
 	return hid;
 }

@@ -41,6 +41,8 @@
 #include <linux/circ_buf.h>
 #include <asm/semaphore.h>
 
+#include "usbpath.h"
+
 /* FF: This module provides arbitrary resource management routines.
  * I use it to manage the device's memory.
  * Despite the name of this module, I am *not* going to access the ioports.
@@ -140,6 +142,7 @@ struct iforce {
 	struct input_dev dev;		/* Input device interface */
 	struct iforce_device *type;
 	char name[64];
+	char phys[64];
 	int open;
 	int bus;
 
@@ -567,8 +570,7 @@ static int iforce_flush(struct input_dev *dev, struct file *file)
 
 			/* Free ressources assigned to effect */
 			if (iforce_erase_effect(dev, i)) {
-				printk(KERN_WARNING "input%d: iforce_flush: erase effect %d failed\n",
-					dev->number, i);
+				printk(KERN_WARNING "iforce_flush: (%s) erase effect %d failed\n", dev->phys, i);
 			}
 		}
 
@@ -1116,6 +1118,7 @@ static int iforce_erase_effect(struct input_dev *dev, int effect_id)
 static int iforce_init_device(struct iforce *iforce)
 {
 	unsigned char c[] = "CEOV";
+	char path[64];
 	int i;
 
 	init_waitqueue_head(&iforce->wait);
@@ -1125,6 +1128,21 @@ static int iforce_init_device(struct iforce *iforce)
 
 	iforce->dev.ff_effects_max = 10;
 
+	switch (iforce->bus) {
+#ifdef IFORCE_232
+		case IFORCE_232:
+			strcpy(path, iforce->serio->phys);
+			break;
+#endif
+#ifdef IFORCE_USB
+		case IFORCE_USB:
+			usb_make_path(iforce->usbdev, path, 64);
+			break;
+#endif
+	}
+
+	sprintf(iforce->phys, "%s/input0", path);
+
 /*
  * Input device fields.
  */
@@ -1132,6 +1150,7 @@ static int iforce_init_device(struct iforce *iforce)
 	iforce->dev.idbus = BUS_USB;
 	iforce->dev.private = iforce;
 	iforce->dev.name = iforce->name;
+	iforce->dev.name = iforce->phys;
 	iforce->dev.open = iforce_open;
 	iforce->dev.close = iforce_close;
 	iforce->dev.flush = iforce_flush;
@@ -1271,6 +1290,10 @@ static int iforce_init_device(struct iforce *iforce)
 
 	input_register_device(&iforce->dev);
 
+	printk(KERN_INFO "input: %s [%d effects, %ld bytes memory] on %s\n",
+		iforce->dev.name, iforce->dev.ff_effects_max,
+		iforce->device_memory.end, path);
+
 	return 0;
 }
 
@@ -1337,10 +1360,6 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 		kfree(iforce);
 		return NULL;
 	}
-
-	printk(KERN_INFO "input%d: %s [%d effects, %ld bytes memory] on usb%d:%d.%d\n",
-		iforce->dev.number, iforce->dev.name, iforce->dev.ff_effects_max,
-		iforce->device_memory.end, dev->bus->busnum, dev->devnum, ifnum);
 
 	return iforce;
 }
@@ -1447,10 +1466,6 @@ static void iforce_serio_connect(struct serio *serio, struct serio_dev *dev)
 		kfree(iforce);
 		return;
 	}
-
-	printk(KERN_INFO "input%d: %s [%d effects, %ld bytes memory] on serio%d\n",
-		iforce->dev.number, iforce->dev.name, iforce->dev.ff_effects_max,
-		iforce->device_memory.end, serio->number);
 }
 
 static void iforce_serio_disconnect(struct serio *serio)

@@ -45,6 +45,9 @@
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
 
+static char ct82c710_name[] = "C&T 82c710 mouse port";
+static char ct82c710_phys[16];
+
 /*
  * ct82c710 interface
  */
@@ -141,9 +144,11 @@ static int ct82c710_write(struct serio *port, unsigned char c)
 static struct serio ct82c710_port =
 {
 	type:	SERIO_8042,
+	name:	ct82c710_name,
+	phys:	ct82c710_phys,
 	write:	ct82c710_write,
 	open:	ct82c710_open,
-	close:	ct82c710_close
+	close:	ct82c710_close,
 };
 
 /*
@@ -189,10 +194,12 @@ int __init ct82c710_init(void)
 	if (request_region(ct82c710_data, 2, "ct82c710"))
 		return -EBUSY;
 
+	sprintf(ct82c710_phys, "isa%04x/serio0", ct82c710_data);
+
 	serio_register_port(&ct82c710_port);
 
-	printk(KERN_INFO "serio%d: C&T 82c710 mouse port at %#x irq %d\n",
-		ct82c710_port.number, ct82c710_data, CT82C710_IRQ);
+	printk(KERN_INFO "serio: C&T 82c710 mouse port at %#x irq %d\n",
+		ct82c710_data, CT82C710_IRQ);
 
 	return 0;
 }

@@ -53,7 +53,6 @@ EXPORT_SYMBOL(gameport_cooked_read);
 
 static struct gameport *gameport_list;
 static struct gameport_dev *gameport_dev;
-static int gameport_number;
 
 /*
  * gameport_measure_speed() measures the gameport i/o speed.
@@ -121,7 +120,6 @@ void gameport_rescan(struct gameport *gameport)
 
 void gameport_register_port(struct gameport *gameport)
 {
-	gameport->number = gameport_number++;
 	gameport->next = gameport_list;	
 	gameport_list = gameport;
 
@@ -139,8 +137,6 @@ void gameport_unregister_port(struct gameport *gameport)
 
 	if (gameport->dev && gameport->dev->disconnect)
 		gameport->dev->disconnect(gameport);
-
-	gameport_number--;
 }
 
 void gameport_register_device(struct gameport_dev *dev)

@@ -71,6 +71,7 @@ struct spaceball {
 	int idx;
 	int escape;
 	unsigned char data[SPACEBALL_MAX_LENGTH];
+	char phys[32];
 };
 
 /*
@@ -233,7 +234,10 @@ static void spaceball_connect(struct serio *serio, struct serio_dev *dev)
 	spaceball->serio = serio;
 	spaceball->dev.private = spaceball;
 
+	sprintf(spaceball->phys, "%s/input0", serio->phys);
+
 	spaceball->dev.name = spaceball_names[id];
+	spaceball->dev.phys = spaceball->phys;
 	spaceball->dev.idbus = BUS_RS232;
 	spaceball->dev.idvendor = SERIO_SPACEBALL;
 	spaceball->dev.idproduct = id;
@@ -248,8 +252,8 @@ static void spaceball_connect(struct serio *serio, struct serio_dev *dev)
 
 	input_register_device(&spaceball->dev);
 
-	printk(KERN_INFO "input%d: %s on serio%d\n",
-		spaceball->dev.number, spaceball_names[id], serio->number);
+	printk(KERN_INFO "input: %s on serio%s\n",
+		spaceball_names[id], serio->phys);
 }
 
 /*

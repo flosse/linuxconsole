@@ -102,8 +102,9 @@ static struct input_dev logibm_dev = {
 	open:		logibm_open,
 	close:		logibm_close,
 	name:		"Logitech bus mouse",
+	phys:		"isa023c/input0",
 	idbus:		BUS_ISA,
-	idvendor:	0x0002,
+	idvendor:	0x0003,
 	idproduct:	0x0001,
 	idversion:	0x0100,
 };
@@ -164,8 +165,7 @@ static int __init logibm_init(void)
 
 	input_register_device(&logibm_dev);
 
-	printk(KERN_INFO "input%d: Logitech bus mouse at %#x irq %d\n",
-		logibm_dev.number, LOGIBM_BASE, logibm_irq);
+	printk(KERN_INFO "input: Logitech bus mouse at %#x irq %d\n", LOGIBM_BASE, logibm_irq);
 
 	return 0;
 }

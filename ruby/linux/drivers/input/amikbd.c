@@ -65,6 +65,7 @@ static char *amikbd_messages[] = {
 static struct input_dev amikbd_dev;
 
 static char *amikbd_name = "Amiga keyboard";
+static char *amikbd_phys = "amikbd/input0";
 
 static void amikbd_interrupt(int irq, void *dummy, struct pt_regs *fp)
 {
@@ -114,6 +115,7 @@ static int __init amikbd_init(void)
 	request_irq(IRQ_AMIGA_CIAA_SP, amikbd_interrupt, 0, "amikbd", NULL);
 
 	amikbd_dev.name = amikbd_name;
+	amikbd_dev.phys = amikbd_phys;
 	amikbd_dev.idbus = BUS_AMIGA;
 	amikbd_dev.idvendor = 0x0001;
 	amikbd_dev.idproduct = 0x0001;
@@ -121,7 +123,7 @@ static int __init amikbd_init(void)
 
 	input_register_device(&amikbd_dev);
 
-	printk(KERN_INFO "input%d: %s\n", amikbd_dev.number, amikbd_name);
+	printk(KERN_INFO "input: %s\n", amikbd_name);
 
 	return 0;
 }

@@ -2,8 +2,6 @@
  * $Id$
  *
  *  Copyright (c) 1998-2001 Vojtech Pavlik
- *
- *  Sponsored by SuSE
  */
 
 /*
@@ -56,7 +54,10 @@ MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 struct l4 {
 	struct gameport gameport;
 	unsigned char port;
+	char phys[32];
 } *l4_port[8];
+
+char l4_name[] = "PDPI Lightning 4";
 
 /*
  * l4_wait_ready() waits for the L4 to become ready.
@@ -246,11 +247,17 @@ int __init l4_init(void)
 			l4 = l4_port[i * 4 + j] = l4_port[i * 4] + j;
 			l4->port = i * 4 + j;
 
+			sprintf(l4->phys, "isa%04x/gameport%d", L4_PORT, 4 * i + j);
+
 			gameport = &l4->gameport;
 			gameport->private = l4;
 			gameport->open = l4_open;
 			gameport->cooked_read = l4_cooked_read;
 			gameport->calibrate = l4_calibrate;
+
+			gameport->name = l4_name;
+			gameport->phys = l4->phys;
+			gameport->idbus = BUS_ISA;
 
 			if (!i && !j)
 				gameport->io = L4_PORT;
@@ -261,9 +268,7 @@ int __init l4_init(void)
 			gameport_register_port(gameport);
 		}
 
-		printk(KERN_INFO "gameport%d,%d,%d,%d: PDPI Lightning 4 %s card v%d.%d at %#x\n",
-			l4_port[i * 4 + 0]->gameport.number, l4_port[i * 4 + 1]->gameport.number, 
-			l4_port[i * 4 + 2]->gameport.number, l4_port[i * 4 + 3]->gameport.number, 
+		printk(KERN_INFO "gameport: PDPI Lightning 4 %s card v%d.%d at %#x\n",
 			i ? "secondary" : "primary", rev >> 4, rev, L4_PORT);
 
 		cards++;

@@ -30,14 +30,20 @@
  */
 
 #include <asm/io.h>
+#include <linux/input.h>
 
 struct gameport;
 
 struct gameport {
 
 	void *private;
+	char *name;
+	char *phys;
 
-	int number;
+	unsigned short idbus;
+        unsigned short idvendor;
+        unsigned short idproduct;
+        unsigned short idversion;
 
 	int io;
 	int speed;
@@ -57,6 +63,7 @@ struct gameport {
 struct gameport_dev {
 
 	void *private;
+	char *name;
 
 	void (*connect)(struct gameport *, struct gameport_dev *dev);
 	void (*disconnect)(struct gameport *);

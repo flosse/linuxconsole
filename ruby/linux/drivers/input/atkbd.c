@@ -119,6 +119,7 @@ struct atkbd {
 	struct input_dev dev;
 	struct serio *serio;
 	char name[64];
+	char phys[32];
 	struct tq_struct tq;
 	unsigned char cmdbuf[4];
 	unsigned char cmdcnt;
@@ -183,8 +184,8 @@ static void atkbd_interrupt(struct serio *serio, unsigned char data, unsigned in
 		case ATKBD_KEY_NULL:
 			break;
 		case ATKBD_KEY_UNKNOWN:
-			printk(KERN_WARNING "atkbd.c: Unknown key (set %d, scancode %#x) %s.\n",
-				atkbd->set, code, atkbd->release ? "released" : "pressed");
+			printk(KERN_WARNING "atkbd.c: Unknown key (set %d, scancode %#x, on %s) %s.\n",
+				atkbd->set, code, serio->phys, atkbd->release ? "released" : "pressed");
 			break;
 		default:
 			input_report_key(&atkbd->dev, atkbd->keycode[code], !atkbd->release);
@@ -371,7 +372,8 @@ static int atkbd_probe(struct atkbd *atkbd)
 
 	if (atkbd->id != 0xab83 && atkbd->id != 0xab84 && atkbd->id != 0xaca1 &&
 	    atkbd->id != 0xab7f && atkbd->id != 0xab02 && atkbd->id != 0xab03)
-		printk(KERN_WARNING "atkbd.c: Unusual keyboard ID: %#x\n", atkbd->id);
+		printk(KERN_WARNING "atkbd.c: Unusual keyboard ID: %#x on %s\n",
+			atkbd->id, atkbd->serio->phys);
 
 	return 0;
 }
@@ -406,7 +408,8 @@ static void atkbd_initialize(struct atkbd *atkbd)
  */
 
 	if (atkbd_command(atkbd, NULL, ATKBD_CMD_ENABLE))
-		printk(KERN_ERR "atkbd.c: Failed to enable keyboard on serio%d\n", atkbd->serio->number);
+		printk(KERN_ERR "atkbd.c: Failed to enable keyboard on %s\n",
+			atkbd->serio->phys);
 }
 
 /*
@@ -489,12 +492,15 @@ static void atkbd_connect(struct serio *serio, struct serio_dev *dev)
 	} else
 		sprintf(atkbd->name, "AT Set %d keyboard", atkbd->set);
 
+	sprintf(atkbd->phys, "%s/input0", serio->phys);
+
 	if (atkbd->set == 3)
 		memcpy(atkbd->keycode, atkbd_set3_keycode, sizeof(atkbd->keycode));
 	else
 		memcpy(atkbd->keycode, atkbd_set2_keycode, sizeof(atkbd->keycode));
 
 	atkbd->dev.name = atkbd->name;
+	atkbd->dev.phys = atkbd->phys;
 	atkbd->dev.idbus = BUS_I8042;
 	atkbd->dev.idvendor = 0x0001;
 	atkbd->dev.idproduct = atkbd->set;
@@ -506,7 +512,7 @@ static void atkbd_connect(struct serio *serio, struct serio_dev *dev)
 
 	input_register_device(&atkbd->dev);
 
-	printk(KERN_INFO "input%d: %s on serio%d\n", atkbd->dev.number, atkbd->name, serio->number);
+	printk(KERN_INFO "input: %s on %s\n", atkbd->name, serio->phys);
 
 	atkbd_initialize(atkbd);
 }

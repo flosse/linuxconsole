@@ -649,7 +649,6 @@ struct input_dev {
 
 	void *private;
 
-	int number;
 	char *name;
 	char *phys;
 	char *uniq;

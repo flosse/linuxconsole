@@ -55,7 +55,7 @@ static void __devinit joydump_connect(struct gameport *gameport, struct gameport
 	unsigned char u;
 
 	printk(KERN_INFO "joydump: ,------------------- START ------------------.\n");
-	printk(KERN_INFO "joydump: | Dumping gameport%d.                         |\n", gameport->number);
+	printk(KERN_INFO "joydump: | Dumping gameport%s.\n", gameport->phys);
 	printk(KERN_INFO "joydump: | Speed: %4d kHz.                            |\n", gameport->speed);
 
 	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW)) {

@@ -74,7 +74,7 @@
  * to be raised / lowered.
  */
 
-#define I8042_CTL_TIMEOUT 83000
+#define I8042_CTL_TIMEOUT	83000
 
 /*
  * Register numbers.

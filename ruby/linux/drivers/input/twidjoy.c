@@ -94,6 +94,7 @@ struct twidjoy {
 	struct input_dev dev;
 	int idx;
 	unsigned char data[TWIDJOY_MAX_LENGTH];
+	char phys[32];
 };
 
 /*
@@ -194,7 +195,10 @@ static void twidjoy_connect(struct serio *serio, struct serio_dev *dev)
 
 	memset(twidjoy, 0, sizeof(struct twidjoy));
 
+	sprintf(twidjoy->phys, "%s/input0", serio->phys);
+
 	twidjoy->dev.name = twidjoy_name;
+	twidjoy->dev.phys = twidjoy->phys;
 	twidjoy->dev.idbus = BUS_RS232;
 	twidjoy->dev.idvendor = SERIO_TWIDJOY;
 	twidjoy->dev.idproduct = 0x0001;
@@ -229,7 +233,7 @@ static void twidjoy_connect(struct serio *serio, struct serio_dev *dev)
 
 	input_register_device(&twidjoy->dev);
 
-	printk(KERN_INFO "input%d: %s on serio%d\n", twidjoy->dev.number, twidjoy_name, serio->number);
+	printk(KERN_INFO "input: %s on %s\n", twidjoy_name, serio->phys);
 }
 
 /*

@@ -40,24 +40,30 @@ struct serio;
 
 struct serio {
 
-	void *private;
+        void *private;
 	void *driver;
+        char *name;
+        char *phys;
+ 
+        unsigned short idbus;
+        unsigned short idvendor;
+        unsigned short idproduct;
+        unsigned short idversion; 
 
 	unsigned long type;
-	int number;
 
 	int (*write)(struct serio *, unsigned char);
 	int (*open)(struct serio *);
 	void (*close)(struct serio *);
 
 	struct serio_dev *dev;
-
 	struct serio *next;
 };
 
 struct serio_dev {
 
 	void *private;
+	char *name;
 
 	void (*write_wakeup)(struct serio *);
 	void (*interrupt)(struct serio *, unsigned char, unsigned int);

@@ -94,6 +94,7 @@ struct tmdc {
 	struct timer_list timer;
 	struct input_dev dev[2];
 	char name[2][64];
+	char phys[2][32];
 	int mode[2];
 	signed char *abs[2];
 	short *btn[2];
@@ -303,11 +304,14 @@ static void tmdc_connect(struct gameport *gameport, struct gameport_dev *dev)
 			sprintf(tmdc->name[j], models[m].name, models[m].abs,
 				(data[j][TMDC_BYTE_DEF] & 0xf) << 3, tmdc->mode[j]);
 
+			sprintf(tmdc->phys[j], "%s/input%d", gameport->phys, j);
+
 			tmdc->dev[j].private = tmdc;
 			tmdc->dev[j].open = tmdc_open;
 			tmdc->dev[j].close = tmdc_close;
 
 			tmdc->dev[j].name = tmdc->name[j];
+			tmdc->dev[j].phys = tmdc->phys[j];
 			tmdc->dev[j].idbus = BUS_GAMEPORT;
 			tmdc->dev[j].idvendor = GAMEPORT_ID_VENDOR_THRUSTMASTER;
 			tmdc->dev[j].idproduct = models[m].id;
@@ -337,8 +341,7 @@ static void tmdc_connect(struct gameport *gameport, struct gameport_dev *dev)
 			}
 
 			input_register_device(tmdc->dev + j);
-			printk(KERN_INFO "input%d: %s on gameport%d.%d\n",
-				tmdc->dev[j].number, tmdc->name[j], gameport->number, j);
+			printk(KERN_INFO "input: %s on %s\n", tmdc->name[j], gameport->phys);
 		}
 
 	return;

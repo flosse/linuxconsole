@@ -51,6 +51,7 @@ struct sermouse {
 	unsigned char count;
 	unsigned char type;
 	unsigned long last;
+	char phys[32];
 };
 
 /*
@@ -258,7 +259,10 @@ static void sermouse_connect(struct serio *serio, struct serio_dev *dev)
 	if (c & 0x10) set_bit(REL_WHEEL, &sermouse->dev.relbit);
 	if (c & 0x20) set_bit(REL_HWHEEL, &sermouse->dev.relbit);
 
+	sprintf(sermouse->phys, "%s/input0", serio->phys);
+
 	sermouse->dev.name = sermouse_protocols[sermouse->type];
+	sermouse->dev.phys = sermouse->phys;
 	sermouse->dev.idbus = BUS_RS232;
 	sermouse->dev.idvendor = sermouse->type;
 	sermouse->dev.idproduct = c;
@@ -271,8 +275,7 @@ static void sermouse_connect(struct serio *serio, struct serio_dev *dev)
 
 	input_register_device(&sermouse->dev);
 	
-	printk(KERN_INFO "input%d: %s on serio%d\n", sermouse->dev.number,
-		sermouse_protocols[sermouse->type], serio->number);
+	printk(KERN_INFO "input: %s on %s\n", sermouse_protocols[sermouse->type], serio->phys);
 }
 
 static struct serio_dev sermouse_dev = {

@@ -86,6 +86,7 @@ int mac_hid_mouse_emulate_buttons(int caller, unsigned int keycode, int down)
 static void emumousebtn_input_register(void)
 {
 	emumousebtn.name = "Macintosh mouse button emulation";
+	emumousebtn.phys = "machid/input0"; /* FIXME */
 
 	emumousebtn.evbit[0] = BIT(EV_KEY) | BIT(EV_REL);
 	emumousebtn.keybit[LONG(BTN_MOUSE)] = BIT(BTN_LEFT) | BIT(BTN_MIDDLE) | BIT(BTN_RIGHT);

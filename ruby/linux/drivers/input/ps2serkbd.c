@@ -38,8 +38,7 @@
 #include <linux/interrupt.h>
 #include <linux/init.h>
 #include <linux/input.h>
-/* #include <linux/serio.h> */
-#include "serio.h"
+#include <linux/serio.h>
 
 #define ATKBD_CMD_SETLEDS	0x10ed
 #define ATKBD_CMD_GSCANSET	0x11f0
@@ -97,6 +96,7 @@ struct ps2serkbd {
     struct input_dev dev;
     struct serio *serio;
     char name[64];
+    char phys[32];
     struct tq_struct tq;
     unsigned char cmdbuf[4];
     unsigned char cmdcnt;
@@ -249,7 +249,10 @@ static void ps2serkbd_connect(struct serio *serio, struct serio_dev *dev)
     }
     memcpy(ps2serkbd->keycode, ps2serkbd_set2_keycode, sizeof(ps2serkbd->keycode));
 
+    sprintf(ps2serkbd->phys, "%s/input0", serio->phys);
+
     ps2serkbd->dev.name = ps2serkbd->name;
+    ps2serkbd->dev.phys = ps2serkbd->phys;
     ps2serkbd->dev.idbus = BUS_RS232; 
     ps2serkbd->dev.idvendor = SERIO_PS2SER;
     ps2serkbd->dev.idproduct = ps2serkbd->set;
