@@ -283,7 +283,7 @@ static struct input_handle *evdev_connect(struct input_handler *handler, struct 
 
 	evdev->devfs = input_register_minor("event%d", minor, EVDEV_MINOR_BASE);
 
-	printk("event%d: Event device for input%d\n", minor, dev->number);
+	printk(KERN_INFO "event%d: Event device for input%d\n", minor, dev->number);
 
 	return &evdev->handle;
 }
