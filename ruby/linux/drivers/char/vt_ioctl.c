@@ -209,7 +209,7 @@ do_kdsk_ioctl(int cmd, struct kbentry *user_kbe, int perm, struct kbd_struct *kb
 			if (s && key_map) {
 			    key_maps[s] = 0;
 			    if (key_map[0] == U(K_ALLOCATED)) {
-					kfree_s(key_map, sizeof(plain_map));
+					kfree(key_map);
 					keymap_count--;
 			    }
 			}
@@ -366,7 +366,7 @@ do_kdgkb_ioctl(int cmd, struct kbsentry *user_kdgkb, int perm)
 			    func_table[k] = fnw + (func_table[k] - funcbufptr) + delta;
 		    }
 		    if (funcbufptr != func_buf)
-		      kfree_s(funcbufptr, funcbufsize);
+		      kfree(funcbufptr);
 		    funcbufptr = fnw;
 		    funcbufleft = funcbufleft - delta + sz - funcbufsize;
 		    funcbufsize = sz;
@@ -474,7 +474,7 @@ int con_font_op(struct vc_data *vc, struct console_font_op *op)
                         rc = -EFAULT;
         }
 quit:   if (temp)
-                kfree_s(temp, size);
+                kfree(temp);
         return rc;
 }                                
 

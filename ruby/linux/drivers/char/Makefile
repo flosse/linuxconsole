@@ -38,10 +38,12 @@ obj-y	 += tty_io.o n_tty.o tty_ioctl.o mem.o raw.o pty.o misc.o random.o
 
 export-objs     :=	vt.o i2c-old.o keyboard.o sysrq.o \
 			misc.o pty.o random.o selection.o serial.o videodev.o \
-			tty_io.o bttv.o cpia.o
+			tty_io.o bttv-if.o cpia.o
+
+list-multi	:=	bttv.o
+bttv-objs	:=	bttv-driver.o bttv-cards.o bttv-if.o
 
 KEYMAP   =defkeymap.o
-KEYBD    =
 CONSOLE  =vt.o
 SERIAL   =serial.o
 
@@ -54,24 +56,11 @@ ifeq ($(ARCH),m68k)
    SERIAL   =
 endif
 
-ifeq ($(ARCH),arm)
-  CONSOLE  =
-endif
-
 ifeq ($(ARCH),sh)
   CONSOLE  =
-  SERIAL =
   ifeq ($(CONFIG_SH_HP600),y)
   KEYMAP   = defkeymap.o
   KEYBD    = scan_keyb.o hp600_keyb.o
-  CONSOLE  = console.o
-  endif
-  ifeq ($(CONFIG_SERIAL),y)
-  SERIAL = generic_serial.o sh-sci.o
-  else
-    ifeq ($(CONFIG_SERIAL),m)
-    SERIAL = sh-sci.o
-    endif
   endif
 endif
 
@@ -87,8 +76,7 @@ ifneq ($(CONFIG_SUN_SERIAL),)
   SERIAL   =
 endif
 
-
-obj-$(CONFIG_VT) += vt_ioctl.o decvte.o vc_screen.o consolemap.o consolemap_deftbl.o $(CONSOLE) selection.o
+obj-$(CONFIG_VT) += vt_ioctl.o vc_screen.o consolemap.o consolemap_deftbl.o $(CONSOLE) selection.o
 obj-$(CONFIG_SERIAL) += $(SERIAL)
 obj-$(CONFIG_SERIAL_21285) += serial_21285.o
 
@@ -131,7 +119,7 @@ obj-$(CONFIG_AMIGA_BUILTIN_SERIAL) += amiserial.o
 # So this should simply provide the wanted functionality!
 obj-$(CONFIG_SX) += sx.o generic_serial.o
 obj-$(CONFIG_RIO) += rio/rio.o generic_serial.o
-
+obj-$(CONFIG_SH_SCI) += sh-sci.o generic_serial.o
 
 ifeq ($(CONFIG_RIO),y)
   SUB_DIRS += rio
@@ -330,6 +318,8 @@ O_OBJS          := $(filter-out $(export-objs), $(obj-y))
 OX_OBJS         := $(filter     $(export-objs), $(obj-y))
 M_OBJS          := $(sort $(filter-out $(export-objs), $(obj-m)))
 MX_OBJS         := $(sort $(filter     $(export-objs), $(obj-m)))
+MI_OBJS		:= $(sort $(filter-out $(export-objs), $(int-m)))
+MIX_OBJS	:= $(sort $(filter     $(export-objs), $(int-m)))
 
 include $(TOPDIR)/Rules.make
 
@@ -348,3 +338,7 @@ defkeymap.c: defkeymap.map
 
 zoran.o: zr36120.o zr36120_i2c.o zr36120_mem.o
 	$(LD) $(LD_RFLAG) -r -o $@ zr36120.o zr36120_i2c.o zr36120_mem.o
+
+bttv.o: $(bttv-objs)
+	$(LD) $(LD_RFLAG) -r -o $@ $(bttv-objs)
+

@@ -826,7 +826,7 @@ int vc_allocate(unsigned int currcons)
                 con_set_default_unimap(vc);
             q = (long)kmalloc(screenbuf_size, GFP_KERNEL);
             if (!q) {
-                kfree_s((char *) p, sizeof(struct vc_data));
+                kfree((char *) p);
                 vc = NULL;
                 return -ENOMEM;
             }
@@ -850,9 +850,9 @@ void vc_disallocate(unsigned int currcons)
         if (vc) {
             sw->con_deinit(vc);
             if (vc->display_fg->kmalloced)
-                kfree_s(screenbuf, screenbuf_size);
+                kfree(screenbuf);
             if (currcons >= MIN_NR_CONSOLES)
-                kfree_s(vc, sizeof(struct vc_data));
+                kfree(vc);
             vc = NULL;
         }
 }                     
@@ -913,7 +913,7 @@ int vc_resize(struct vc_data *vc, unsigned int lines, unsigned int cols)
         
 	/* 
 	if (vc->display_fg->kmalloced)
-        	kfree_s(screenbuf, oss); 
+        	kfree(screenbuf); 
 	*/
         screenbuf = newscreens;
         /* vc->display_fg->kmalloced = 1; */
