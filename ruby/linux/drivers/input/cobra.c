@@ -24,7 +24,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  *
  * Should you need to contact me, the author, you can do so either by
- * e-mail - mail your message to <vojtech@suse.cz>, or by paper mail:
+ * e-mail - mail your message to <vojtech@ucw.cz>, or by paper mail:
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
  */
 
@@ -178,7 +178,7 @@ static void cobra_connect(struct gameport *gameport, struct gameport_dev *dev)
 	for (i = 0; i < 2; i++) 
 		if ((cobra->exists >> i) & data[i] & 1) {
 			printk(KERN_WARNING "cobra.c: Device %d on %s has the Ext bit set. ID is: %d"
-				" Contact vojtech@suse.cz\n", i, gameport->phys, (data[i] >> 2) & 7);
+				" Contact vojtech@ucw.cz\n", i, gameport->phys, (data[i] >> 2) & 7);
 			cobra->exists &= ~(1 << i);
 		}
 

@@ -24,7 +24,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  * 
  * Should you need to contact me, the author, you can do so either by
- * e-mail - mail your message to <vojtech@suse.cz>, or by paper mail:
+ * e-mail - mail your message to <vojtech@ucw.cz>, or by paper mail:
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
  */
 
@@ -38,7 +38,7 @@
 #include <linux/stddef.h>
 #include <linux/delay.h>
 
-MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
 
 EXPORT_SYMBOL(gameport_register_port);
 EXPORT_SYMBOL(gameport_unregister_port);

@@ -1,5 +1,5 @@
 			  Linux Input drivers v1.0
-	       (c) 1999-2001 Vojtech Pavlik <vojtech@suse.cz>
+	       (c) 1999-2001 Vojtech Pavlik <vojtech@ucw.cz>
 			     Sponsored by SuSE
 	    $Id$
 ----------------------------------------------------------------------------
@@ -21,7 +21,7 @@ with this program; if not, write to the Free Software Foundation, Inc., 59
 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
   Should you need to contact me, the author, you can do so either by e-mail
-- mail your message to <vojtech@suse.cz>, or by paper mail: Vojtech Pavlik,
+- mail your message to <vojtech@ucw.cz>, or by paper mail: Vojtech Pavlik,
 Simunkova 1594, Prague 8, 182 00 Czech Republic
 
   For your convenience, the GNU General Public License version 2 is included
@@ -263,7 +263,7 @@ in the LinuxConsole project CVS archive (see the URL below).
 5. Event interface
 ~~~~~~~~~~~~~~~~~~
   Should you want to add event device support into any application (X, gpm,
-svgalib ...) I <vojtech@suse.cz> will be happy to provide you any help I
+svgalib ...) I <vojtech@ucw.cz> will be happy to provide you any help I
 can. Here goes a description of the current state of things, which is going
 to be extended, but not changed incompatibly as time goes:
 

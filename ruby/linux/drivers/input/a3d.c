@@ -24,7 +24,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  *
  * Should you need to contact me, the author, you can do so either by
- * e-mail - mail your message to <vojtech@suse.cz>, or by paper mail:
+ * e-mail - mail your message to <vojtech@ucw.cz>, or by paper mail:
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
  */
 
@@ -280,7 +280,7 @@ static void a3d_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 	if (!a3d->mode || a3d->mode > 5) {
 		printk(KERN_WARNING "a3d.c: Unknown A3D device detected "
-			"(%s, id=%d), contact <vojtech@suse.cz>\n", gameport->phys, a3d->mode);
+			"(%s, id=%d), contact <vojtech@ucw.cz>\n", gameport->phys, a3d->mode);
 		goto fail2;
 	}
 
