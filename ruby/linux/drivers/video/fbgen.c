@@ -1,6 +1,8 @@
 /*
  * linux/drivers/video/fbgen.c -- Generic routines for frame buffer devices
  *
+ *  fb_setup() added June 2001 by Paul Mundt
+ *  
  *  Modified to new API May 2000 by James Simmons
  *
  *  Created 3 Jan 1998 by Geert Uytterhoeven
@@ -15,6 +17,8 @@
 #include <linux/tty.h>
 #include <linux/fb.h>
 #include <linux/slab.h>
+#include <linux/init.h>
+#include <linux/config.h>
 
 #include <asm/uaccess.h>
 #include <asm/io.h>
@@ -83,3 +87,51 @@ int fb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 	info->var.vmode &= ~FB_VMODE_YWRAP;
     return 0;
 }
+
+extern const char *global_mode_option;
+
+/**
+ * 	fb_setup - generic setup function
+ *
+ * 	@options: String of options, ',' delimited.
+ *
+ * 	Process command line options for frame buffer driver.
+ *
+ *	Command line example:
+ *
+ *		video=drivername:opt1,opt2,...,optN
+ *
+ * 	Supported options:
+ *
+ * 		inverse	- inverts colormap
+ * 		nomtrr	- disables MTRR usage (if supported)
+ *
+ * 	Returns 0 upon completion.
+ */
+int __init fb_setup(char *options)
+{
+	char *this_opt;
+
+	if (!options || !*options) {
+		return 0;
+	}
+
+	while (this_opt = strsep(&options, ",")) {
+		if (!*this_opt) {
+			continue;
+		}
+
+		if (!strncmp(this_opt, "inverse"), 7) {
+			fb_invert_cmaps();
+#ifdef CONFIG_MTRR
+		} else if (!strncmp(this_opt, "nomtrr"), 6) {
+			fb_disable_mtrrs();
+#endif
+		} else {
+			global_mode_option = this_opt;
+		}
+	}
+
+	return 0;
+}
+

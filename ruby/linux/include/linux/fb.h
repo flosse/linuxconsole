@@ -403,6 +403,7 @@ struct fb_info {
 
 extern int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info);
 extern int fb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info); 
+extern int fb_setup(char *options);
 extern void cfb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,
                   	 unsigned int rows, unsigned long color, int rop); 
 extern void cfb_copyarea(struct fb_info *p, int sx, int sy, unsigned int width,

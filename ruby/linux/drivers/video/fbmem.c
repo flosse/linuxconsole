@@ -844,8 +844,15 @@ int __init video_setup(char *options)
 					    fb_drivers[i].init;
 				    fb_drivers[i].init = NULL;
 			    }
-			    if (fb_drivers[i].setup)
+			    if (fb_drivers[i].setup) {
 				    fb_drivers[i].setup(options+j+1);
+			    } else {
+			    	    /*
+				     * If the driver didn't supply one,
+				     * try our own.
+				     */
+			    	    fb_setup(options+j+1);
+			    }
 		    }
 		    return 0;
 	    }
@@ -865,7 +872,9 @@ __setup("video=", video_setup);
      *  Visible symbols for modules
      */
 
+#ifdef CONFIG_MTRR
 EXPORT_SYMBOL(fb_disable_mtrrs);
+#endif
 EXPORT_SYMBOL(register_framebuffer);
 EXPORT_SYMBOL(unregister_framebuffer);
 EXPORT_SYMBOL(registered_fb);
