@@ -18,6 +18,11 @@
  * Voodoo3 support was contributed Harold Oga. Lots of additions
  * (proper acceleration, 24 bpp, hardware cursor) and bug fixes by Attila
  * Kesmarki. Thanks guys!
+ *
+ * Voodoo1 and Voodoo2 support aren't relevant to this driver as they
+ * behave very differently from the Voodoo3/4/5. For anyone wanting to
+ * use frame buffer on the Voodoo1/2, see the sstfb driver (which is
+ * located at http://www.sourceforge.net/projects/sstfb).
  * 
  * While I _am_ grateful to 3Dfx for releasing the specs for Banshee,
  * I do wish the next version is a bit more complete. Without the XF86
@@ -32,9 +37,6 @@
  * TODO:
  * - support for 16/32 bpp needs fixing (funky bootup penguin)
  * - multihead support (basically need to support an array of fb_infos)
- * - banshee and voodoo3 now supported -- any others? afaik, the original
- *   voodoo was a 3d-only card, so we won't consider that. what about
- *   voodoo2?
  * - support other architectures (PPC, Alpha); does the fact that the VGA
  *   core can be accessed only thru I/O (not memory mapped) complicate
  *   things?
@@ -105,6 +107,34 @@ static struct fb_var_screeninfo tdfx_var __initdata = {
 };
 
 /*
+ * PCI driver prototypes
+ */
+static int tdfxfb_probe(struct pci_dev *pdev, const struct pci_device_id *id);
+static void tdfxfb_remove(struct pci_dev *pdev);
+
+static struct pci_device_id tdfxfb_id_table[] __devinitdata = {
+       { PCI_VENDOR_ID_3DFX, PCI_DEVICE_ID_3DFX_BANSHEE,
+         PCI_ANY_ID, PCI_ANY_ID, PCI_BASE_CLASS_DISPLAY << 16,
+         0xff0000, 0 },
+       { PCI_VENDOR_ID_3DFX, PCI_DEVICE_ID_3DFX_VOODOO3,
+         PCI_ANY_ID, PCI_ANY_ID, PCI_BASE_CLASS_DISPLAY << 16,
+         0xff0000, 0 },
+       { PCI_VENDOR_ID_3DFX, PCI_DEVICE_ID_3DFX_VOODOO5,
+         PCI_ANY_ID, PCI_ANY_ID, PCI_BASE_CLASS_DISPLAY << 16,
+         0xff0000, 0 },
+       { 0, }
+};
+
+static struct pci_driver tdfxfb_driver = {
+	name:           "tdfxfb",
+       	id_table:       tdfxfb_id_table,
+       	probe:          tdfxfb_probe,
+       	remove:         tdfxfb_remove,
+};
+
+MODULE_DEVICE_TABLE(pci, tdfxfb_id_table);
+
+/*
  *  Frame buffer device API
  */
 int tdfxfb_init(void);
@@ -124,8 +154,6 @@ static void tdfxfb_copyarea(struct fb_info *info, int sx, int sy,
 			    unsigned int width, unsigned int height,
 		            int dx, int dy); 
 static void tdfxfb_imageblit(struct fb_info *info, struct fb_image *image); 
-static int tdfxfb_ioctl(struct inode* inode, struct file *file, u_int cmd, 
-			u_long arg, struct fb_info *info); 
 
 static struct fb_ops tdfxfb_ops = {
 	owner:		THIS_MODULE,
@@ -138,7 +166,6 @@ static struct fb_ops tdfxfb_ops = {
 	fb_fillrect:	tdfxfb_fillrect,
 	fb_copyarea:	tdfxfb_copyarea,
 	fb_imageblit:	tdfxfb_imageblit,
-	fb_ioctl:	tdfxfb_ioctl,
 };
 
 /*
@@ -161,7 +188,7 @@ static int  nopan   = 0;
 static int  nowrap  = 1;      // not implemented (yet)
 static int  inverse = 0;
 static int  nohwcursor = 0;
-static const char *mode_option __initdata = NULL;
+static char *mode_option __initdata = NULL;
 
 /* ------------------------------------------------------------------------- 
  *                      Hardware-specific funcions
@@ -1077,21 +1104,6 @@ static void tdfxfb_imageblit(struct fb_info *info, struct fb_image *pixmap)
    banshee_wait_idle();
 }
 
-static int tdfxfb_ioctl(struct inode *inode, struct file *file, u_int cmd, 
-			u_long arg, struct fb_info *info)
-{ 
-/* These IOCTLs ar just for testing only... 
-   switch (cmd) {
-    case 0x4680: 
-      nowrap=nopan=0;
-      return 0;
-    case 0x4681:
-      nowrap=nopan=1;
-      return 0;
-   }*/
-   return -EINVAL;
-}
-
 static void tdfxfb_hwcursor_init(struct fb_info *info) 
 {
    unsigned int start;
@@ -1103,15 +1115,18 @@ static void tdfxfb_hwcursor_init(struct fb_info *info)
 	   info->cursor.image);
 }
 
-int __init tdfxfb_init(void) 
+/**
+ *      tdfxfb_probe - Device Initializiation
+ *
+ *      @pdev:  PCI Device to initialize
+ *      @id:    PCI Device ID
+ *
+ *      Initializes and allocates resources for PCI device @pdev.
+ *
+ */
+static int __devinit tdfxfb_probe(struct pci_dev *pdev,
+                                  const struct pci_device_id *id)
 {
-  struct pci_dev *pdev = NULL;
- 	 
-  while ((pdev = pci_find_device(PCI_VENDOR_ID_3DFX, PCI_ANY_ID, pdev))) {
-    if(((pdev->class >> 16) == PCI_BASE_CLASS_DISPLAY) &&
-       ((pdev->device == PCI_DEVICE_ID_3DFX_BANSHEE) ||
-	(pdev->device == PCI_DEVICE_ID_3DFX_VOODOO3) || 
-	(pdev->device == PCI_DEVICE_ID_3DFX_VOODOO5))) {
       /* Configure the default fb_fix_screeninfo first */
       memset(&fb_info, 0, sizeof(fb_info));
       fb_info.par = &default_par;
@@ -1189,27 +1204,36 @@ int __init tdfxfb_init(void)
 
       printk("fb%d: %s frame buffer device\n", GET_FB_IDX(fb_info.node), 
 	     fb_info.fix.id);
-    }
-  }
-  return 0; 
+      return 0; 
 }
 
 /**
- *	tdfxfb_exit - Driver cleanup
+ *      tdfxfb_remove - Device removal
  *
- *	Releases all resources allocated during the
- *	course of the driver's lifetime.
+ *      @pdev:  PCI Device to cleanup
  *
- *	FIXME - do results of fb_alloc_cmap need disposal?
+ *      Releases all resources allocated during the course of the driver's
+ *      lifetime for the PCI device @pdev.
+ *
  */
-static void __exit tdfxfb_exit (void)
+static void __devexit tdfxfb_remove(struct pci_dev *pdev)
 {
 	struct tdfx_par *par = (struct tdfx_par *) fb_info.par;
 
 	unregister_framebuffer(&fb_info);
-	del_timer_sync(&par->hwcursor.timer);
+	//del_timer_sync(&par->hwcursor.timer);
 	iounmap(par->regbase_virt);
 	iounmap(fb_info.screen_base);
+}
+
+int __init tdfxfb_init(void)
+{
+        return pci_module_init(&tdfxfb_driver);
+}
+
+static void __exit tdfxfb_exit(void)
+{
+        pci_unregister_driver(&tdfxfb_driver);
 }
 
 MODULE_AUTHOR("Hannu Mallat <hmallat@cc.hut.fi>");
