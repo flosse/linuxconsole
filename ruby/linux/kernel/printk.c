@@ -490,8 +490,12 @@ EXPORT_SYMBOL(acquire_console_sem);
 /**
  * release_console_sem - unlock the console system
  *
- * Releases the semaphore which the caller holds on the console system
- * and the console driver list.
+ * Releases the semaphore which the caller holds that is shared between
+ * the TTY and console system. This function is the most complex. It can
+ * be called by a driver that only has a console i.e lp console and no
+ * tty, the tty system that has no console associated with it, or the final
+ * type which is hardware driven by both a console driver and tty driver.
+ * We have to handle all 3 cases.
  *
  * While the semaphore was held, console output may have been buffered
  * by printk().  If this is the case, release_console_sem() emits
@@ -509,13 +513,16 @@ void release_console_sem(kdev_t device)
 	unsigned long flags;
 	struct console *con;
 
-	spin_lock(&console_lock);
-	/* Look for new messages */
-	for (con = console_drivers; con; con = con->next) {
-		if (con->device(con) == device)
-			break;
+	if (driver && driver->console)
+		con = driver->console;
+	else {
+		spin_lock(&console_lock);
+		for (con = console_drivers; con; con = con->next) {
+			if (con->device(con) == device)
+				break;
+		}
+		spin_unlock(&console_lock);
 	}
-	spin_unlock(&console_lock);
 
 	if (con) {
 		for ( ; ; ) {
@@ -533,13 +540,13 @@ void release_console_sem(kdev_t device)
 		if (must_wake_klogd && !oops_in_progress)
 			wake_up_interruptible(&log_wait);
 		up(&con->lock);
+		return;
 	}
-/*
+
 	if (driver) {
 		driver->may_schedule = 0;
-		up(&driver->tty_lock);
+		up(driver->tty_lock);
 	}
-*/
 }
 
 /** console_conditional_schedule - yield the CPU if required
