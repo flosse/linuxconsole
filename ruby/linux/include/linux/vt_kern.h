@@ -178,14 +178,14 @@ struct consw {
         void    (*con_putc)(struct vc_data *, int, int, int);
         void    (*con_putcs)(struct vc_data *, const unsigned short *, int, int, int);
         void    (*con_cursor)(struct vc_data *, int);
-        int     (*con_scroll)(struct vc_data *, int, int, int, int);
+        int     (*con_scroll_region)(struct vc_data *, int, int, int, int);
         void    (*con_bmove)(struct vc_data *, int, int, int, int, int, int);
         int     (*con_switch)(struct vc_data *);
         int     (*con_blank)(struct vc_data *, int);
         int     (*con_font_op)(struct vc_data *, struct console_font_op *);
         int	(*con_resize)(struct vc_data *, unsigned int, unsigned int);
 	int     (*con_set_palette)(struct vc_data *, unsigned char *);
-        int     (*con_scrolldelta)(struct vc_data *, int);
+        int     (*con_scroll)(struct vc_data *, int);
         int     (*con_set_origin)(struct vc_data *);
         void    (*con_save_screen)(struct vc_data *);
         u8      (*con_build_attr)(struct vc_data *, u8, u8, u8, u8, u8);
