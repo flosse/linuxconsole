@@ -1499,7 +1499,7 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
 /*
  * Mapping and unmapping VT display  
  */
-const char *create_vt(struct tty_driver *drv, struct vt_struct *vt, int init)
+const char *create_vt(struct vt_struct *vt, int init)
 {
 	const char *display_desc = vt->vt_sw->con_startup(vt, init);
 

@@ -250,7 +250,7 @@ void terminal_emulation(struct tty_struct *tty, int c);
 
 /* vt.c */
 struct console_font_op;
-const char* create_vt(struct tty_driver *drv, struct vt_struct *vt, int init);
+const char* create_vt(struct vt_struct *vt, int init);
 int release_vt(struct vt_struct *vt);
 struct vc_data* find_vc(int currcons);
 struct vc_data* vc_allocate(unsigned int console);

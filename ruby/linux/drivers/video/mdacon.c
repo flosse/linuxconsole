@@ -67,12 +67,6 @@ static int	mda_cursor_size_to=-1;
 static enum { TYPE_MDA, TYPE_HERC, TYPE_HERCPLUS, TYPE_HERCCOLOR } mda_type;
 static char *mda_type_name;
 
-static struct tty_struct *mdacon_table[MAX_NR_USER_CONSOLES];
-static struct termios *mdacon_termios[MAX_NR_USER_CONSOLES];
-static struct termios *mdacon_termios_locked[MAX_NR_USER_CONSOLES];
-static int mdacon_refcount;
-struct tty_driver mdacon_driver;
-
 static struct vc_data mda_default;
 static struct vt_struct mda_vt;
 
@@ -591,12 +585,6 @@ int __init mda_console_init(void)
 {
         const char *display_desc = NULL;
 
-        memset(&mdacon_driver, 0, sizeof(struct tty_driver));
-        mdacon_driver.refcount = &mdacon_refcount;
-        mdacon_driver.table = mdacon_table;
-        mdacon_driver.termios = mdacon_termios;
-        mdacon_driver.termios_locked = mdacon_termios_locked;
-
         memset(&mda_vt, 0, sizeof(struct vt_struct));
 #ifdef MODULE
         mda_vt.kmalloced = 1;
@@ -604,7 +592,7 @@ int __init mda_console_init(void)
         mda_vt.kmalloced = 0;
 #endif
         mda_vt.vt_sw = &mda_con;
-        display_desc = create_vt(&mdacon_driver, &mda_vt, 1);
+        display_desc = create_vt(&mda_vt, 1);
         if (!display_desc) return -ENODEV;
         printk("Console: mono %s %dx%d\n", display_desc,
                 mda_vt.default_mode->vc_cols, mda_vt.default_mode->vc_rows);
