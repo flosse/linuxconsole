@@ -114,9 +114,9 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	iforce->bus = IFORCE_USB;
 	iforce->usbdev = dev;
 
-	iforce->dr.bRequestType = USB_TYPE_VENDOR | USB_DIR_IN | USB_RECIP_INTERFACE;
-	iforce->dr.wIndex = 0;
-	iforce->dr.wLength = 16;
+	iforce->cr.bRequestType = USB_TYPE_VENDOR | USB_DIR_IN | USB_RECIP_INTERFACE;
+	iforce->cr.wIndex = 0;
+	iforce->cr.wLength = 16;
 
 	FILL_INT_URB(&iforce->irq, dev, usb_rcvintpipe(dev, epirq->bEndpointAddress),
 			iforce->data, 16, iforce_usb_irq, iforce, epirq->bInterval);
@@ -125,7 +125,7 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 			iforce + 1, 32, iforce_usb_out, iforce);
 
 	FILL_CONTROL_URB(&iforce->ctrl, dev, usb_rcvctrlpipe(dev, 0),
-			(void*) &iforce->dr, iforce->edata, 16, iforce_usb_ctrl, iforce);
+			(void*) &iforce->cr, iforce->edata, 16, iforce_usb_ctrl, iforce);
 
 	if (iforce_init_device(iforce)) {
 		kfree(iforce);

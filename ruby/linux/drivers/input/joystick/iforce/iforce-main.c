@@ -28,7 +28,6 @@
  */
 
 #include "iforce.h"
-#include "usbpath.h"
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>, Johann Deneux <deneux@ifrance.com>");
 MODULE_DESCRIPTION("USB/RS232 I-Force joysticks and wheels driver");
@@ -256,7 +255,7 @@ static int iforce_flush(struct input_dev *dev, struct file *file)
 
 			/* Free ressources assigned to effect */
 			if (iforce_erase_effect(dev, i)) {
-				printk(KERN_WARNING "iforce_flush: (%s) erase effect %d failed\n", dev->phys, i);
+				printk(KERN_WARNING "iforce_flush: erase effect %d failed\n", i);
 			}
 		}
 
@@ -287,7 +286,6 @@ static void iforce_close(struct input_dev *dev)
 int iforce_init_device(struct iforce *iforce)
 {
 	unsigned char c[] = "CEOV";
-	char path[64];
 	int i;
 
 	init_waitqueue_head(&iforce->wait);
@@ -297,28 +295,13 @@ int iforce_init_device(struct iforce *iforce)
 
 	iforce->dev.ff_effects_max = 10;
 
-	switch (iforce->bus) {
-#ifdef IFORCE_232
-		case IFORCE_232:
-			strcpy(path, iforce->serio->phys);
-			break;
-#endif
-#ifdef IFORCE_USB
-		case IFORCE_USB:
-			usb_make_path(iforce->usbdev, path, 64);
-			break;
-#endif
-	}
-
-	sprintf(iforce->phys, "%s/input0", path);
-
 /*
  * Input device fields.
  */
 
 	iforce->dev.idbus = BUS_USB;
 	iforce->dev.private = iforce;
-	iforce->dev.name = iforce->phys;
+	iforce->dev.name = "Unknown I-Force device";
 	iforce->dev.open = iforce_open;
 	iforce->dev.close = iforce_close;
 	iforce->dev.flush = iforce_flush;
@@ -398,8 +381,7 @@ int iforce_init_device(struct iforce *iforce)
 
 	iforce->type = iforce_device + i;
 
-	sprintf(iforce->name, iforce->type->name,
-		iforce->dev.idproduct, iforce->dev.idvendor);
+	iforce->name = iforce->type->name;
 
 /*
  * Set input device bitfields and ranges.

@@ -235,7 +235,7 @@ int iforce_get_id_packet(struct iforce *iforce, char *packet)
 #ifdef IFORCE_USB
 		case IFORCE_USB:
 
-			iforce->dr.bRequest = packet[0];
+			iforce->cr.bRequest = packet[0];
 			iforce->ctrl.dev = iforce->usbdev;
 
 			set_current_state(TASK_INTERRUPTIBLE);

@@ -47,10 +47,10 @@
 
 #define IFORCE_MAX_LENGTH	16
 
-#if defined(CONFIG_INPUT_IFORCE_232) || defined(CONFIG_INPUT_IFORCE_232_MODULE)
+#if defined(CONFIG_JOYSTICK_IFORCE_232) || defined(CONFIG_JOYSTICK_IFORCE_232_MODULE)
 #define IFORCE_232	1
 #endif
-#if defined(CONFIG_INPUT_IFORCE_USB) || defined(CONFIG_INPUT_IFORCE_USB_MODULE)
+#if defined(CONFIG_JOYSTICK_IFORCE_USB) || defined(CONFIG_JOYSTICK_IFORCE_USB_MODULE)
 #define IFORCE_USB	2
 #endif
 
@@ -123,7 +123,6 @@ struct iforce {
 	struct input_dev dev;		/* Input device interface */
 	struct iforce_device *type;
 	char name[64];
-	char phys[64];
 	int open;
 	int bus;
 
@@ -140,7 +139,7 @@ struct iforce {
 #ifdef IFORCE_USB
 	struct usb_device *usbdev;	/* USB transfer */
 	struct urb irq, out, ctrl;
-	struct usb_ctrlrequest dr;
+	struct usb_ctrlrequest cr;
 #endif
 	spinlock_t xmit_lock;
 	/* Buffer used for asynchronous sending of bytes to the device */
