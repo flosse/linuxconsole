@@ -18,7 +18,7 @@ MX_OBJS		:=
 
 # Object file lists.
 
-obj-y   	:= 
+obj-y   	:=
 obj-m		:=
 obj-n		:=
 obj-		:=
@@ -28,7 +28,12 @@ obj-$(CONFIG_DUALSP_SERIAL)	+= serial-dualsp.o
 obj-$(CONFIG_ARCH_ACORN)	+= defkeymap-acorn.o
 
 # Do the i2c and rtc last
-obj-y		+= $(obj-$(MACHINE)) i2c.o pcf8583.o
+obj-y		+= $(obj-$(MACHINE)) 
+
+# CL-PS7500 does not have these devices.
+ifneq ($(CONFIG_ARCH_CLPS7500),y)
+obj-y += i2c.o pcf8583.o
+endif
 
 O_OBJS		:= $(filter-out $(export-objs), $(obj-y))
 OX_OBJS		:= $(filter     $(export-objs), $(obj-y))
