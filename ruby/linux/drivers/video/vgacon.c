@@ -77,7 +77,7 @@
  *  Interface used by the world
  */
 
-static const char *vgacon_startup(void);
+static const char *vgacon_startup(struct vt_struct *vt);
 static void vgacon_init(struct vc_data *c, int init);
 static void vgacon_deinit(struct vc_data *c);
 static void vgacon_cursor(struct vc_data *c, int mode);
@@ -168,7 +168,7 @@ static inline void write_vga(unsigned char reg, unsigned int val)
 	restore_flags(flags);
 }
 
-static const char __init *vgacon_startup(void)
+static const char __init *vgacon_startup(struct vt_struct *vt)
 {
 	const char *display_desc = NULL;
 	u16 saved1, saved2;
@@ -177,8 +177,8 @@ static const char __init *vgacon_startup(void)
 	if (ORIG_VIDEO_ISVGA == VIDEO_TYPE_VLFB) {
 	no_vga:
 #ifdef CONFIG_DUMMY_CONSOLE
-		conswitchp = &dummy_con;
-		return conswitchp->con_startup();
+		vt->vt_sw = &dummy_con;
+		return vt->vt_sw->con_startup(vt);
 #else
 		return NULL;
 #endif
