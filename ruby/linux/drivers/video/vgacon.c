@@ -825,33 +825,22 @@ static int vgacon_resize(struct vc_data *vc, unsigned int rows,
 	return err;
 }
 
-static int vgacon_scroll(struct vc_data *c, int lines)
+static int vgacon_scroll(struct vc_data *vc, int lines)
 {
-	if (!lines)			/* Turn scrollback off */
-		vga_origin = vga_vram_base;
-/*
-	else {
-		int vram_size = vga_vram_end - vga_vram_base;
-		int margin = c->vc_size_row * 4;
-		int ul, we, p, st;
-
-		if (vga_rolled_over > (c->vc_scr_end - vga_vram_base) + margin) {
-			ul = c->vc_scr_end - vga_vram_base;
-			we = vga_rolled_over + c->vc_size_row;
-		} else {
-			ul = 0;
-			we = vram_size;
-		}
-		p = (vga_origin - vga_vram_base - ul + we) % we + lines * c->vc_size_row;
-		st = (vga_origin - vga_vram_base - ul + we) % we;
-		if (p < margin)
-			p = 0;
-		if (p > st - margin)
-			p = st;
-		vga_origin = vga_vram_base + (p + ul) % we;
+	if (lines < 0) {
+               /* Scroll up */
+        	scr_memmovew(VGA_ADDR(vc, 0, 0), VGA_ADDR(vc, 0, abs(lines)),
+                                (vc->vc_rows + lines)*vc->vc_cols*2);
+                scr_memsetw(VGA_ADDR(vc, 0, vc->vc_rows + lines),
+                               vc->vc_video_erase_char,
+                               abs(lines)*vc->vc_cols*2);
+       	} else {
+               /* Scroll down */
+               scr_memmovew(VGA_ADDR(vc, 0, lines), VGA_ADDR(vc, 0, 0),
+                                (vc->vc_rows - lines)*vc->vc_cols*2);
+               scr_memsetw(VGA_ADDR(vc, 0, 0), vc->vc_video_erase_char,
+                               lines*vc->vc_cols*2);
 	}
-*/
-	vga_set_mem_top(c);
 	return 1;
 }
 
