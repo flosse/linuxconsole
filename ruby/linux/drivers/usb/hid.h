@@ -356,6 +356,10 @@ struct hid_device {							/* device report descriptor */
 	char name[128];							/* Device name */
 	char phys[64];							/* Device physical location */
 	char uniq[64];							/* Device unique identifier (serial #) */
+
+	void *ff_private;                                               /* Private data for the force-feedback driver */
+	void (*exit_ff)(struct hid_device*);                            /* Called by hid_exit_ff(hid) */
+	int (*ff_event)(struct input_dev*, unsigned int type, unsigned int code, int value);
 };
 
 #define HID_GLOBAL_STACK_SIZE 4
@@ -410,3 +414,7 @@ int hid_find_field(struct hid_device *, unsigned int, unsigned int, struct hid_f
 int hid_set_field(struct hid_field *, unsigned, __s32);
 void hid_submit_report(struct hid_device *, struct hid_report *, unsigned char dir);
 void hid_init_reports(struct hid_device *hid);
+
+#ifdef CONFIG_HID_FF
+int hid_init_ff(struct hid_device *hid);
+#endif

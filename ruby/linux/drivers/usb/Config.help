@@ -105,6 +105,18 @@ CONFIG_USB_HID
   The module will be called hid.o. If you want to compile it as a
   module, say M here and read <file:Documentation/modules.txt>.
 
+CONFIG_HID_FF
+  Say Y here is you want force feedback support for a few hid devices. See
+  below for a list of supported devices.
+  See Documentation/input/ff.txt for a description of the force feedback API.
+
+  If unsure, say N.
+
+CONFIG_LOGITECH_RUMBLE
+  Say Y here if you have a Logitech WingMan Cordless rumble pad and if you
+  want to enable force feedback. Note: if you say N here, this device will
+  still be supported, but without force feedback.
+
 CONFIG_USB_HIDDEV
   Say Y here if you want to support HID devices (from the USB
   specification standpoint) that aren't strictly user interface
@@ -519,6 +531,21 @@ CONFIG_USB_DABUSB
   The module will be called dabusb.o.  If you want to compile it as a
   module, say M here and read <file:Documentation/modules.txt>.
 
+CONFIG_USB_KONICAWC
+  Say Y here if you want support for webcams based on a Konica
+  chipset. This is known to work with the Intel YC76 webcam.
+
+  This driver uses the Video For Linux API.  You must enable
+  (Y or M in config) Video For Linux (under Character Devices)
+  to use this driver.  Information on this API and pointers to
+  "v4l" programs may be found on the WWW at
+  <http://roadrunner.swansea.uk.linux.org/v4l.shtml>.
+
+  This code is also available as a module ( = code which can be
+  inserted in and removed from the running kernel whenever you want).
+  The module will be called konicawc.o. If you want to compile it as
+  a module, say M here and read <file:Documentation/modules.txt>.
+
 CONFIG_USB_USBNET
   This driver supports network links over USB with USB "Network"
   or "data transfer" cables, often used to network laptops to PCs.
@@ -592,14 +619,14 @@ CONFIG_USB_MICROTEK
   Support for anything but the X6 is experimental.
   Please report failures and successes.
   The scanner will appear as a scsi generic device to the rest
-  of the system. Scsi support is required for this driver to compile
-  and work. SANE 1.0.4 or newer is needed to make use of your scanner.
-  This driver can be compiled as a module.
+  of the system. Scsi support is required.
+  This driver can be compiled as a module, called microtek.o.
 
 CONFIG_USB_HPUSBSCSI
   Say Y here if you want support for the HP 53xx series of scanners
   and the Minolta Scan Dual. This driver is experimental.
   The scanner will be accessible as a SCSI device.
+  This can be compiled as a module, called hpusbscsi.o.
 
 CONFIG_USB_BLUETOOTH
   Say Y here if you want to connect a USB Bluetooth device to your

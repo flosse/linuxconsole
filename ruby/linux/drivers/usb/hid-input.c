@@ -377,16 +377,28 @@ void hidinput_hid_event(struct hid_device *hid, struct hid_field *field, struct 
 static int hidinput_input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {
 	struct hid_device *hid = dev->private;
-	struct hid_field *field = NULL;
-	int offset;
 
-	if ((offset = hid_find_field(hid, type, code, &field)) == -1) {
-		warn("event field not found");
-		return -1;
+	warn("hid input event");
+
+#ifdef CONFIG_HID_FF
+	if (type == EV_FF) {
+		return hid->ff_event? hid->ff_event(dev, type, code, value) : -1;
 	}
+#else
+	if (0) {}
+#endif		
+	else {
+		struct hid_field *field = NULL;
+		int offset;
 
-	hid_set_field(field, offset, value);
-	hid_submit_report(hid, field->report, USB_DIR_OUT);
+		if ((offset = hid_find_field(hid, type, code, &field)) == -1) {
+			warn("event field not found");
+			return -1;
+		}
+
+		hid_set_field(field, offset, value);
+		hid_submit_report(hid, field->report, USB_DIR_OUT);
+	}
 
 	return 0;
 }
@@ -428,7 +440,6 @@ int hidinput_connect(struct hid_device *hid)
 	hid->input.event = hidinput_input_event;
 	hid->input.open = hidinput_open;
 	hid->input.close = hidinput_close;
-
 	hid->input.name = hid->name;
 	hid->input.phys = hid->phys;
 	hid->input.uniq = hid->uniq;

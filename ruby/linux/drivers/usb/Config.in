@@ -18,7 +18,8 @@ comment 'Miscellaneous USB options'
    bool '  Long timeout for slow-responding devices (some MGE Ellipse UPSes)' CONFIG_USB_LONG_TIMEOUT
 fi
 
-comment 'USB Controllers'
+comment 'USB Host Controller Drivers'
+source drivers/usb/hcd/Config.in
 if [ "$CONFIG_USB_UHCI_ALT" != "y" ]; then
    dep_tristate '  UHCI (Intel PIIX4, VIA, ...) support' CONFIG_USB_UHCI $CONFIG_USB
 fi
@@ -32,6 +33,9 @@ dep_tristate '  OHCI (Compaq, iMacs, OPTi, SiS, ALi, ...) support' CONFIG_USB_OH
 comment 'USB Device Class drivers'
 dep_tristate '  USB Audio support' CONFIG_USB_AUDIO $CONFIG_USB $CONFIG_SOUND
 dep_tristate '  USB Bluetooth support (EXPERIMENTAL)' CONFIG_USB_BLUETOOTH $CONFIG_USB $CONFIG_EXPERIMENTAL
+if [ "$CONFIG_SCSI" = "n" ]; then
+   comment '  SCSI support is needed for USB Storage'
+fi
 dep_tristate '  USB Mass Storage support' CONFIG_USB_STORAGE $CONFIG_USB $CONFIG_SCSI
    dep_mbool '    USB Mass Storage verbose debug' CONFIG_USB_STORAGE_DEBUG $CONFIG_USB_STORAGE
    dep_mbool '    Datafab MDCFE-B Compact Flash Reader support' CONFIG_USB_STORAGE_DATAFAB $CONFIG_USB_STORAGE $CONFIG_EXPERIMENTAL
@@ -43,6 +47,22 @@ dep_tristate '  USB Mass Storage support' CONFIG_USB_STORAGE $CONFIG_USB $CONFIG
    dep_mbool '    Lexar Jumpshot Compact Flash Reader' CONFIG_USB_STORAGE_JUMPSHOT $CONFIG_USB_STORAGE $CONFIG_EXPERIMENTAL
 dep_tristate '  USB Modem (CDC ACM) support' CONFIG_USB_ACM $CONFIG_USB
 dep_tristate '  USB Printer support' CONFIG_USB_PRINTER $CONFIG_USB
+
+comment 'USB Human Interface Devices (HID)'
+if [ "$CONFIG_INPUT" = "n" ]; then
+   comment '  Input core support is needed for USB HID'
+else
+   dep_tristate '  USB Human Interface Device (full HID) support' CONFIG_USB_HID $CONFIG_USB $CONFIG_INPUT
+      dep_mbool '    /dev/hiddev raw HID device support (EXPERIMENTAL)' CONFIG_USB_HIDDEV $CONFIG_USB_HID
+   if [ "$CONFIG_USB_HID" != "y" ]; then
+      dep_tristate '  USB HIDBP Keyboard (basic) support' CONFIG_USB_KBD $CONFIG_USB $CONFIG_INPUT
+      dep_tristate '  USB HIDBP Mouse (basic) support' CONFIG_USB_MOUSE $CONFIG_USB $CONFIG_INPUT
+   fi
+   dep_tristate '  Wacom Intuos/Graphire tablet support' CONFIG_USB_WACOM $CONFIG_USB $CONFIG_INPUT
+   dep_tristate '  Griffin Technology PowerMate support' CONFIG_USB_POWERMATE $CONFIG_USB $CONFIG_INPUT
+   dep_mbool '  Force feedback support' CONFIG_HID_FF $CONFIG_USB_HID
+   dep_mbool '  Logitech RumblePad support' CONFIG_LOGITECH_RUMBLE $CONFIG_USB_HID $CONFIG_HID_FF
+fi
 
 comment 'USB Imaging devices'
 dep_tristate '  USB Kodak DC-2xx Camera support' CONFIG_USB_DC2XX $CONFIG_USB
@@ -59,8 +79,11 @@ else
    dep_tristate '  USB OV511 Camera support' CONFIG_USB_OV511 $CONFIG_USB $CONFIG_VIDEO_DEV
    dep_tristate '  USB Philips Cameras' CONFIG_USB_PWC $CONFIG_USB $CONFIG_VIDEO_DEV
    dep_tristate '  USB SE401 Camera support' CONFIG_USB_SE401 $CONFIG_USB $CONFIG_VIDEO_DEV
+   dep_tristate '  USB STV680 (Pencam) Camera support' CONFIG_USB_STV680 $CONFIG_USB $CONFIG_VIDEO_DEV
+   dep_tristate '  USB 3com HomeConnect (aka vicam) support (EXPERIMENTAL)' CONFIG_USB_VICAM $CONFIG_USB $CONFIG_VIDEO_DEV $CONFIG_EXPERIMENTAL
    dep_tristate '  D-Link USB FM radio support (EXPERIMENTAL)' CONFIG_USB_DSBR $CONFIG_USB $CONFIG_VIDEO_DEV $CONFIG_EXPERIMENTAL
    dep_tristate '  DABUSB driver' CONFIG_USB_DABUSB $CONFIG_USB
+   dep_tristate '  USB Konica Webcam support' CONFIG_USB_KONICAWC $CONFIG_USB $CONFIG_VIDEO_DEV
 fi
 
 comment 'USB Network adaptors'
@@ -80,5 +103,6 @@ source drivers/usb/serial/Config.in
 
 comment 'USB Miscellaneous drivers'
 dep_tristate '  USB Diamond Rio500 support (EXPERIMENTAL)' CONFIG_USB_RIO500 $CONFIG_USB $CONFIG_EXPERIMENTAL
+dep_tristate '  USB Auerswald ISDN support (EXPERIMENTAL)' CONFIG_USB_AUERSWALD $CONFIG_USB $CONFIG_EXPERIMENTAL
 
 endmenu
