@@ -295,7 +295,6 @@ struct fb_info {
    struct vc_data *display_fg;		/* Console visible on this display */
    devfs_handle_t devfs_handle;         /* Devfs handle for new name         */
    devfs_handle_t devfs_lhandle;        /* Devfs handle for compat. symlink  */
-   int (*changevar)(int);		/* tell console var has changed */
    int (*switch_con)(int, struct fb_info*);
 					/* tell fb to switch consoles */
    int (*updatevar)(int, struct fb_info*);
