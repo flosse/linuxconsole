@@ -35,6 +35,7 @@
 #include <linux/vt_kern.h>
 #include <linux/vt_buffer.h>
 #include <linux/selection.h>
+#include <linux/spinlock.h>
 #include <linux/ioport.h>
 #include <linux/delay.h>
 #include <linux/init.h>
@@ -42,6 +43,7 @@
 #include <asm/io.h>
 #include <asm/vga.h>
 
+static spinlock_t mda_lock = SPIN_LOCK_UNLOCKED;
 
 /* description of the hardware layout */
 
@@ -95,39 +97,38 @@ static void write_mda_b(unsigned int val, unsigned char reg)
 {
 	unsigned long flags;
 
-	save_flags(flags); cli();
+	spin_lock_irqsave(&mda_lock, flags);
 
 	outb_p(reg, mda_index_port); 
 	outb_p(val, mda_value_port);
 
-	restore_flags(flags);
+	spin_unlock_irqrestore(&mda_lock, flags);
 }
 
 static void write_mda_w(unsigned int val, unsigned char reg)
 {
 	unsigned long flags;
 
-	save_flags(flags); cli();
-
+	spin_lock_irqsave(&mda_lock, flags);
+	
 	outb_p(reg,   mda_index_port); outb_p(val >> 8,   mda_value_port);
 	outb_p(reg+1, mda_index_port); outb_p(val & 0xff, mda_value_port);
 
-	restore_flags(flags);
+	spin_unlock_irqrestore(&mda_lock, flags);
 }
 
 static int test_mda_b(unsigned char val, unsigned char reg)
 {
 	unsigned long flags;
 
-	save_flags(flags); cli();
+	spin_lock_irqsave(&mda_lock, flags);
 
 	outb_p(reg, mda_index_port); 
 	outb(val, mda_value_port);
 
 	udelay(20); val = (inb_p(mda_value_port) == val);
 
-	restore_flags(flags);
-
+	spin_unlock_irqrestore(&mda_lock, flags);
 	return val;
 }
 
@@ -387,7 +388,8 @@ static u8 mdacon_build_attr(struct vc_data *c, u8 color, u8 intensity,
 static void mdacon_invert_region(struct vc_data *c, u16 *p, int count)
 {
 	for (; count > 0; count--) {
-		scr_writew(scr_readw(p) ^ 0x0800, p++);
+		scr_writew(scr_readw(p) ^ 0x0800, p);
+		p++;
 	}
 }
 
@@ -550,7 +552,7 @@ static int mdacon_scroll(struct vc_data *c, int t, int b, int dir, int lines)
  *  The console `switch' structure for the MDA based console
  */
 
-struct consw mda_con = {
+const struct consw mda_con = {
 	con_startup:		mdacon_startup,
 	con_init:		mdacon_init,
 	con_deinit:		mdacon_deinit,

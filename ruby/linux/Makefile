@@ -1,7 +1,7 @@
 VERSION = 2
 PATCHLEVEL = 4
 SUBLEVEL = 0
-EXTRAVERSION = -test9-ruby
+EXTRAVERSION = -test10-ruby
 
 KERNELRELEASE=$(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
 
@@ -87,7 +87,7 @@ export MODLIB
 
 CPPFLAGS := -D__KERNEL__ -I$(HPATH)
 
-CFLAGS := $(CPPFLAGS) -Wall -Wstrict-prototypes -O2 -fomit-frame-pointer
+CFLAGS := $(CPPFLAGS) -Wall -Wstrict-prototypes -O2 -fomit-frame-pointer -fno-strict-aliasing
 AFLAGS := -D__ASSEMBLY__ $(CPPFLAGS)
 
 #
@@ -158,7 +158,7 @@ DRIVERS-$(CONFIG_PCMCIA) += drivers/pcmcia/pcmcia.o
 DRIVERS-$(CONFIG_PCMCIA_NETCARD) += drivers/net/pcmcia/pcmcia_net.o
 DRIVERS-$(CONFIG_PCMCIA_CHRDEV) += drivers/char/pcmcia/pcmcia_char.o
 DRIVERS-$(CONFIG_DIO) += drivers/dio/dio.a
-DRIVERS-$(CONFIG_SBUS) += drivers/sbus/sbus.a
+DRIVERS-$(CONFIG_SBUS) += drivers/sbus/sbus_all.o
 DRIVERS-$(CONFIG_ZORRO) += drivers/zorro/zorro.a
 DRIVERS-$(CONFIG_FC4) += drivers/fc4/fc4.a
 DRIVERS-$(CONFIG_ALL_PPC) += drivers/macintosh/macintosh.o
@@ -181,9 +181,6 @@ DRIVERS-$(CONFIG_MD) += drivers/md/mddev.o
 DRIVERS += $(DRIVERS-y)
 
 include arch/$(ARCH)/Makefile
-
-# use '-fno-strict-aliasing', but only if the compiler can take it
-CFLAGS += $(shell if $(CC) -fno-strict-aliasing -S -o /dev/null -xc /dev/null >/dev/null 2>&1; then echo "-fno-strict-aliasing"; fi)
 
 export	CPPFLAGS CFLAGS AFLAGS
 
@@ -291,7 +288,7 @@ TAGS: dummy
 
 # Exuberant ctags works better with -I
 tags: dummy
-	CTAGSF=`ctags --version | grep -i exuberant >/dev/null && echo "-I __initdata,__initlocaldata,__exitdata,EXPORT_SYMBOL,EXPORT_SYMBOL_NOVERS"`; \
+	CTAGSF=`ctags --version | grep -i exuberant >/dev/null && echo "-I __initdata,__exitdata,EXPORT_SYMBOL,EXPORT_SYMBOL_NOVERS"`; \
 	ctags $$CTAGSF `find include/asm-$(ARCH) -name '*.h'` && \
 	find include -type d \( -name "asm-*" -o -name config \) -prune -o -name '*.h' -print | xargs ctags $$CTAGSF -a && \
 	find $(SUBDIRS) init -name '*.c' | xargs ctags $$CTAGSF -a
@@ -367,6 +364,7 @@ clean:	archclean
 	rm -f drivers/char/consolemap_deftbl.c drivers/video/promcon_tbl.c
 	rm -f drivers/char/conmakehash
 	rm -f drivers/pci/devlist.h drivers/pci/classlist.h drivers/pci/gen-devlist
+	rm -f drivers/zorro/devlist.h drivers/zorro/gen-devlist
 	rm -f drivers/sound/bin2hex drivers/sound/hex2hex
 	rm -f drivers/atm/fore200e_mkfirm drivers/atm/{pca,sba}*{.bin,.bin1,.bin2}
 	rm -f net/khttpd/make_times_h

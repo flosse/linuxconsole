@@ -42,7 +42,7 @@
 
 #include "console_macros.h"
 
-struct consw *conswitchp = NULL;
+struct consw *conswitchp;
 
 /* A bitmap for codes <32. A bit of 1 indicates that the code
  * corresponding to that bit number invokes some special action
@@ -64,16 +64,16 @@ static struct termios *console_termios_locked[MAX_NR_CONSOLES];
 
 static void con_flush_chars(struct tty_struct *tty);
 
-static int printable = 0;               /* Is console ready for printing? */
-static int current_vc = 0;		/* Which /dev/vc/X to allocate next */
-struct vt_struct *admin_vt = NULL;	/* VT of /dev/console */
+static int printable;	                /* Is console ready for printing? */
+static int current_vc;			/* Which /dev/vc/X to allocate next */
+struct vt_struct *admin_vt;		/* VT of /dev/console */
 
 /*
  * want_vc is the virtual console we want to switch to,
  * kmsg_redirect is the virtual console for kernel messages,
  */
-struct vc_data *want_vc = NULL;
-int kmsg_redirect = 0;
+struct vc_data *want_vc;
+int kmsg_redirect;
 
 /* 
  * the default colour table, for VGA+ colour systems 
@@ -101,7 +101,7 @@ void respond_string(const char * p, struct tty_struct * tty)
  * Hook so that the power management routines can (un)blank
  * the console on our behalf.
  */
-int (*console_blank_hook)(int) = NULL;
+int (*console_blank_hook)(int);
 
 /* keyboard macros */
 #define set_kbd(kbd_table, x) set_vc_kbd_mode(kbd_table, x)
@@ -537,9 +537,8 @@ void invert_screen(struct vc_data *vc, int offset, int count, int viewed)
 /* used by selection: complement pointer position */
 void complement_pos(struct vc_data *vc, int offset)
 {
-        static unsigned short *p = NULL;
-        static unsigned short old = 0;
-        static unsigned short oldx = 0, oldy = 0;
+	static unsigned short old, oldx, oldy;
+        static unsigned short *p;
 
         if (p) {
                 scr_writew(old, p);
@@ -1400,12 +1399,11 @@ static void con_unthrottle(struct tty_struct *tty)
 
 void vt_console_print(struct console *co, const char * b, unsigned count)
 {
-        static unsigned long printing = 0;
-        const ushort *start;
-	struct vc_data *vc = admin_vt->fg_console;
+        struct vc_data *vc = admin_vt->fg_console;
+	static unsigned long printing;
+     	ushort cnt, ushort myx; 
+	const ushort *start;
         unsigned char c;
-	ushort cnt = 0;
-        ushort myx;
 
         /* console busy or not yet initialized */
         if (!printable || test_and_set_bit(0, &printing))
@@ -1618,7 +1616,7 @@ static void clear_buffer_attributes(struct vc_data *vc)
  *      and become default driver for newly opened ones.
  */
 
-void take_over_console(struct vt_struct *vt, struct consw *csw)
+void take_over_console(struct vt_struct *vt, const struct consw *csw)
 {
         const char *desc;
 	int i;
@@ -1655,7 +1653,7 @@ void take_over_console(struct vt_struct *vt, struct consw *csw)
                 desc, vc->vc_cols, vc->vc_rows);
 }
 
-void give_up_console(struct vt_struct *vt, struct consw *csw)
+void give_up_console(struct vt_struct *vt, const struct consw *csw)
 {
 }
 

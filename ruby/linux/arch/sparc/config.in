@@ -75,9 +75,6 @@ if [ "$CONFIG_SUN4" != "y" ]; then
    source drivers/sbus/audio/Config.in
 fi
 
-source drivers/input/Config.in
-source drivers/video/Config.in
-
 mainmenu_option next_comment
 comment 'Block devices'
 
@@ -91,7 +88,7 @@ dep_tristate 'Network block device support' CONFIG_BLK_DEV_NBD $CONFIG_NET
 #   bool '   LVM information in proc filesystem' CONFIG_LVM_PROC_FS Y
 #fi
 
-include drivers/md/Config.in
+source drivers/md/Config.in
 
 tristate 'RAM disk support' CONFIG_BLK_DEV_RAM
 if [ "$CONFIG_BLK_DEV_RAM" = "y" -o "$CONFIG_BLK_DEV_RAM" = "m" ]; then
@@ -242,6 +239,8 @@ fi
 endmenu
 
 source fs/Config.in
+source drivers/input/Config.in
+source drivers/video/Config.in
 
 mainmenu_option next_comment
 comment 'Watchdog'

@@ -32,11 +32,9 @@ define_bool CONFIG_ISA n
 define_bool CONFIG_PCMCIA n
 define_bool CONFIG_SBUS y
 define_bool CONFIG_SBUSCHAR y
-define_bool CONFIG_SUN_MOUSE y
 define_bool CONFIG_SERIAL y
 define_bool CONFIG_SUN_SERIAL y
 define_bool CONFIG_SERIAL_CONSOLE y
-define_bool CONFIG_SUN_KEYBOARD y
 define_bool CONFIG_SUN_CONSOLE y
 define_bool CONFIG_SUN_AUXIO y
 define_bool CONFIG_SUN_IO y
@@ -73,8 +71,6 @@ endmenu
 source drivers/sbus/char/Config.in
 source drivers/sbus/audio/Config.in
 source drivers/mtd/Config.in
-source drivers/video/Config.in
-
 mainmenu_option next_comment
 comment 'Block devices'
 
@@ -83,12 +79,7 @@ bool 'Normal floppy disk support' CONFIG_BLK_DEV_FD
 tristate 'Loopback device support' CONFIG_BLK_DEV_LOOP
 dep_tristate 'Network block device support' CONFIG_BLK_DEV_NBD $CONFIG_NET
 
-#tristate 'Logical volume manager (LVM) support' CONFIG_BLK_DEV_LVM N
-#if [ "$CONFIG_BLK_DEV_LVM" != "n" ]; then
-#   bool '   LVM information in proc filesystem' CONFIG_LVM_PROC_FS Y
-#fi
-
-include drivers/md/Config.in
+source drivers/md/Config.in
 
 tristate 'RAM disk support' CONFIG_BLK_DEV_RAM
 if [ "$CONFIG_BLK_DEV_RAM" = "y" -o "$CONFIG_BLK_DEV_RAM" = "m" ]; then
@@ -160,7 +151,7 @@ if [ "$CONFIG_SCSI" != "n" ]; then
    if [ "$CONFIG_PCI" != "n" ]; then
       dep_tristate 'Adaptec AIC7xxx support' CONFIG_SCSI_AIC7XXX $CONFIG_SCSI
       if [ "$CONFIG_SCSI_AIC7XXX" != "n" ]; then
-	 bool '  Enable tagged command queueing (TCQ) by default' CONFIG_AIC7XXX_TAGGED_QUEUEING Y
+	 bool '  Enable tagged command queueing (TCQ) by default' CONFIG_AIC7XXX_TAGGED_QUEUEING
 	 int  '  Maximum number of TCQ commands per device' CONFIG_AIC7XXX_CMDS_PER_DEVICE 8
   	 bool '  Collect statistics to report in /proc' CONFIG_AIC7XXX_PROC_STATS N
 	 int  '  Delay in seconds after SCSI bus reset' CONFIG_AIC7XXX_RESET_DELAY 5
@@ -299,6 +290,9 @@ if [ "$CONFIG_UNIX98_PTYS" = "y" ]; then
    int 'Maximum number of Unix98 PTYs in use (0-2048)' CONFIG_UNIX98_PTY_COUNT 256
 fi
 endmenu
+
+source drivers/input/Config.in
+source drivers/video/Config.in
 
 mainmenu_option next_comment
 comment 'Video For Linux'

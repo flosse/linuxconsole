@@ -1845,12 +1845,13 @@ static unsigned long fbcon_getxy(struct vc_data *vc, unsigned long pos, int *px,
     	    y += par->softback_lines;
     	ret = pos + (vc->vc_cols - x) * 2;
     } else if (IS_VISIBLE && par->softback_lines) {
-    	unsigned long offset = (pos - par->softback_curr) / 2;
-    	
+    	unsigned long offset = pos - par->softback_curr;
+    
+	if (pos < softback_curr)
+            offset += softback_end - softback_buf;
+        offset /= 2;
     	x = offset % vc->vc_cols;
     	y = offset / vc->vc_cols;
-    	if (pos < par->softback_curr)
-	    y += (par->softback_end - par->softback_buf) / vc->vc_size_row;
 	ret = pos + (vc->vc_cols - x) * 2;
 	if (ret == par->softback_end)
 	    ret = par->softback_buf;
@@ -2326,7 +2327,7 @@ static int __init fbcon_show_logo(struct vc_data *vc)
  *  The console `switch' structure for the frame buffer based console
  */
  
-struct consw fb_con = {
+const struct consw fb_con = {
     con_startup: 	fbcon_startup, 
     con_init: 		fbcon_init,
     con_deinit: 	fbcon_deinit,

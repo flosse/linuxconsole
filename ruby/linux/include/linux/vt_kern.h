@@ -12,18 +12,6 @@
 #include <linux/kbd_kern.h>
 #include <linux/input.h>
 
-/*
- * Presently, a lot of graphics programs do not restore the contents of
- * the higher font pages.  Defining this flag will avoid use of them, but
- * will lose support for PIO_FONTRESET.  Note that many font operations are
- * not likely to work with these programs anyway; they need to be
- * fixed.  The linux/Documentation directory includes a code snippet
- * to save and restore the text font.
- */
-#ifdef CONFIG_VGA_CONSOLE
-#define BROKEN_GRAPHICS_PROGRAMS 1
-#endif
-
 /* scroll */
 #define SM_UP       (1)
 #define SM_DOWN     (2)
@@ -56,6 +44,7 @@ extern int default_red[];
 extern int default_grn[];
 extern int default_blu[];      
 
+/* Bad race condition :-( Must fix */
 extern struct vc_data *want_vc;
                          
 extern inline void set_console(struct vc_data *vc)
@@ -212,16 +201,16 @@ struct consw {
         unsigned long (*con_getxy)(struct vc_data *,unsigned long,int *,int *);
 };
 
-extern struct consw *conswitchp;
+extern const struct consw *conswitchp;
 
-extern struct consw dummy_con;   /* dummy console buffer */
-extern struct consw fb_con;      /* frame buffer based console */
-extern struct consw vga_con;     /* VGA text console */
-extern struct consw newport_con; /* SGI Newport console  */
-extern struct consw prom_con;    /* SPARC PROM console */
+extern const struct consw dummy_con;   /* dummy console buffer */
+extern const struct consw fb_con;      /* frame buffer based console */
+extern const struct consw vga_con;     /* VGA text console */
+extern const struct consw newport_con; /* SGI Newport console  */
+extern const struct consw prom_con;    /* SPARC PROM console */
 
-void take_over_console(struct vt_struct *vt, struct consw *sw);
-void give_up_console(struct vt_struct *vt, struct consw *sw);
+void take_over_console(struct vt_struct *vt, const struct consw *sw);
+void give_up_console(struct vt_struct *vt, const struct consw *sw);
 
 struct vc_pool {
 	/* 
@@ -254,7 +243,7 @@ struct vt_struct {
 	char con_buf[PAGE_SIZE];		
 	struct semaphore lock;  		/* Lock for con_buf 	 */
 	void *data_hook;			/* Hook for driver data */
-	struct consw	*vt_sw;			/* Display driver for VT */
+	const struct consw *vt_sw;		/* Display driver for VT */
 	struct console_font_op default_font;	/* Default font */
 	struct input_handle *keyboard;		/* Keyboard attached */
 	struct vc_pool  vcs;			 
@@ -278,7 +267,7 @@ void terminal_emulation(struct tty_struct *tty, int c);
 
 /* vt.c */
 struct console_font_op;
-const char* create_vt(struct vt_struct *vt, struct consw *sw);
+const char* create_vt(struct vt_struct *vt, const struct consw *sw);
 struct vc_data* find_vc(int currcons);
 int vc_allocate(unsigned int console);
 int vc_resize(struct vc_data *vc, unsigned int lines, unsigned int cols);
