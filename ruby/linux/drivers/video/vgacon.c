@@ -87,8 +87,6 @@ static unsigned long   vga_vram_base;		/* Base of video memory */
 static unsigned long   vga_vram_end;		/* End of video memory */
 static u16             vga_video_port_reg;	/* Video register select port */
 static u16             vga_video_port_val;	/* Video register value port */
-static unsigned int    vga_video_num_columns;	/* Number of text columns */
-static unsigned int    vga_video_num_lines;	/* Number of text lines */
 static int	       vga_can_do_color = 0;	/* Do we support colors? */
 static unsigned char   vga_hardscroll_enabled;
 #ifdef CONFIG_IA64_SOFTSDV_HACKS
@@ -99,7 +97,6 @@ static unsigned char   vga_hardscroll_user_enable = 0;
 #else
 static unsigned char   vga_hardscroll_user_enable = 1;
 #endif
-static unsigned char   vga_font_is_default = 1;
 static int	       vga_is_gfx;
 static int	       vga_512_chars;
 static unsigned int    vga_rolled_over = 0;
@@ -199,12 +196,11 @@ int vga_do_font_op(char *arg, int set, int ch512)
          */
 
         if (set) {
-                vga_font_is_default = !arg;
                 if (!arg)
                         ch512 = 0;              /* Default font is always 256 */                font_select = arg ? (ch512 ? 0x0e : 0x0a) : 0x00;
         }
 
-        if ( !vga_font_is_default )
+        if (set && arg)
                 charmap += 4*cmapsz;
 
         spin_lock_irq(&vga_lock);
@@ -316,8 +312,8 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
            (ORIG_VIDEO_MODE == 0x6A))   /* 800x600/4, 0x6A is very common */
                goto no_vga;
 
-	vga_video_num_lines = ORIG_VIDEO_LINES;
-	vga_video_num_columns = ORIG_VIDEO_COLS;
+	vt->default_mode->vc_rows = ORIG_VIDEO_LINES;
+	vt->default_mode->vc_cols = ORIG_VIDEO_COLS;
 
 	if (ORIG_VIDEO_MODE == 7) {	/* Is this a monochrome display? */
 		vga_vram_base = 0xb0000;
@@ -478,8 +474,8 @@ static void vgacon_init(struct vc_data *vc)
 	unsigned long p;
 	
 	vc->vc_can_do_color = vga_can_do_color;
-	vc->vc_cols = vga_video_num_columns;
-	vc->vc_rows = vga_video_num_lines;
+	vc->vc_cols = vc->display_fg->default_mode->vc_cols;
+	vc->vc_rows = vc->display_fg->default_mode->vc_rows;
 	vc->vc_complement_mask = 0x7700;
 	p = *vc->vc_uni_pagedir_loc;
 	if (vc->vc_uni_pagedir_loc == &vc->vc_uni_pagedir ||
