@@ -100,7 +100,7 @@ static int serport_ldisc_open(struct tty_struct *tty)
 	for (i = 0; ttyname[i] != 0 && ttyname[i] != '/'; i++);
 	ttyname[i] = 0;
 
-	sprintf(serport->phys, "%s%d/serio0", ttyname, MINOR(tty->device) - tty->driver.minor_start);
+	sprintf(serport->phys, "%s%d/serio0", ttyname, minor(tty->device) - tty->driver.minor_start);
 
 	serport->serio.name = serport_name;
 	serport->serio.phys = serport->phys;
@@ -166,9 +166,9 @@ static ssize_t serport_ldisc_read(struct tty_struct * tty, struct file * file, u
 	char name[32];
 
 #ifdef CONFIG_DEVFS_FS
-	sprintf(name, tty->driver.name, MINOR(tty->device) - tty->driver.minor_start);
+	sprintf(name, tty->driver.name, minor(tty->device) - tty->driver.minor_start);
 #else
-	sprintf(name, "%s%d", tty->driver.name, MINOR(tty->device) - tty->driver.minor_start);
+	sprintf(name, "%s%d", tty->driver.name, minor(tty->device) - tty->driver.minor_start);
 #endif
 
 	serio_register_port(&serport->serio);
