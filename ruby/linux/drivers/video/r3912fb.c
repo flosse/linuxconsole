@@ -15,7 +15,7 @@
 #include <linux/string.h>
 #include <linux/mm.h>
 #include <linux/tty.h>
-#include <linux/malloc.h>
+#include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
@@ -26,16 +26,6 @@
 #include <asm/bootinfo.h>
 #include <asm/r39xx.h>
 #include <asm/uaccess.h>
-
-#include <video/fbcon.h>
-#include <video/fbcon-mfb.h>
-#include <video/fbcon-cfb2.h>
-#include <video/fbcon-cfb4.h>
-#include <video/fbcon-cfb8.h>
-#include <video/fbcon-cfb16.h>
-#include <video/fbcon-cfb24.h>
-#include <video/fbcon-cfb32.h>
-#include <video/fbcon-mac.h>
 
 /*
  * This can go back into a header file if/when more platforms are defined.
@@ -189,8 +179,6 @@ int turn_off_helio_lcd(void)
 }
 
 #ifdef CONFIG_PM
-struct pm_dev* pmdev;
-
 static
 int pm_request(struct pm_dev* dev, pm_request_t req, void* data)
 {
@@ -359,8 +347,8 @@ int __init r3912fb_init(void)
 	return -EINVAL;
 
 #ifdef CONFIG_PM
-    pmdev = pm_register(PM_SYS_DEV,PM_SYS_VGA,pm_request);
-    if (!pmdev)
+    fb_info.pm_fb = pm_register(PM_SYS_DEV,PM_SYS_VGA,pm_request);
+    if (!fb_info.pm_fb)
 	    printk(KERN_INFO "fb%d: unable to register by PM\n",
 		 GET_FB_IDX(fb_info.node));
 #endif
@@ -371,8 +359,8 @@ int __init r3912fb_init(void)
 static void __exit r3912fb_exit(void)
 {
 #ifdef CONFIG_PM
-	if (pmdev)
-		pm_unregister_device(pmdev);
+	if (fb_info.pm_fb)
+		pm_unregister_device(fb_info.pm_fb);
 #endif
 
     unregister_framebuffer(&fb_info);

@@ -40,17 +40,6 @@
 #include <asm/io.h>
 #include <asm/machw.h>
 
-#include "fbcon.h"
-#include <video/fbcon-mfb.h>
-#include <video/fbcon-cfb2.h>
-#include <video/fbcon-cfb4.h>
-#include <video/fbcon-cfb8.h>
-#include <video/fbcon-cfb16.h>
-#include <video/fbcon-cfb24.h>
-#include <video/fbcon-cfb32.h>
-
-#if defined(FBCON_HAS_CFB8) || defined(FBCON_HAS_CFB4) || defined(FBCON_HAS_CFB2)
-
 /* Common DAC base address for the LC, RBV, Valkyrie, and IIvx */
 #define DAC_BASE 0x50f24000
 
@@ -188,20 +177,8 @@ static struct fb_var_screeninfo macfb_defined={
 	{0,0,0,0,0,0}
 };
 
-static struct display disp;
 static struct fb_info fb_info;
 static struct { u_short blue, green, red, pad; } palette[256];
-static union {
-#ifdef FBCON_HAS_CFB16
-    u16 cfb16[16];
-#endif
-#ifdef FBCON_HAS_CFB24
-    u32 cfb24[16];
-#endif
-#ifdef FBCON_HAS_CFB32
-    u32 cfb32[16];
-#endif
-} fbcon_cmap;
 
 static int             inverse   = 0;
 static int             vidtest   = 0;

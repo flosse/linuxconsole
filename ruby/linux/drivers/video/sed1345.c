@@ -19,8 +19,6 @@
 #include <linux/fb.h>
 #include <linux/init.h>
 #include <linux/config.h>
-#include <video/fbcon.h>
-#include <video/fbcon-cfb8.h>
 #include <asm/addrspace.h>
 
 #ifdef CONFIG_VADEM_CLIO_1000
