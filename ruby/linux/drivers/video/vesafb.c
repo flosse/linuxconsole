@@ -265,7 +265,7 @@ static int vesafb_set_var(struct fb_var_screeninfo *var, int con,
 			vesafb_defined.yres_virtual = var->yres_virtual;
 			if (con != -1) {
 				fb_display[con].var = vesafb_defined;
-				fbcon_changevar(con);
+				fbcon_changevar(fb_display[con].conp);
 			}
 		}
 

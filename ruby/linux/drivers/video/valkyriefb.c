@@ -222,7 +222,7 @@ static int valkyrie_set_var(struct fb_var_screeninfo *var, int con,
 	
 	if (!switching) {
 		/* Don't want to do this if just switching consoles. */
-		fbcon_changevar(con);
+		fbcon_changevar(&disp->conp);
 	}
 	if (con == currcon)
 		valkyrie_set_par(&par, p);

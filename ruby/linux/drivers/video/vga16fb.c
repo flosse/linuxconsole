@@ -532,7 +532,7 @@ static int vga16fb_set_var(struct fb_var_screeninfo *var, int con,
 		    oldvxres != var->xres_virtual || oldvyres != var->yres_virtual ||
 		    oldbpp != var->bits_per_pixel) {
 			vga16fb_set_disp(con, info);
-			fbcon_changevar(con);
+			fbcon_changevar(display->conp);
 		}
 		if (con == currcon)
 			vga16fb_set_par(&par, info);

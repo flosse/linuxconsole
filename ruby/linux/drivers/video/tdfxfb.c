@@ -1729,7 +1729,7 @@ static int tdfxfb_set_var(struct fb_var_screeninfo *var,
 	 
 	 if(nopan) display->scrollmode = SCROLL_YREDRAW;
 	
-	 fbcon_changevar(con);
+	 fbcon_changevar(display->conp);
       }
       if (var->bits_per_pixel==8)
 	for(j = 0; j < 16; j++) {
