@@ -147,7 +147,7 @@ static struct fb_ops tdfxfb_ops = {
 static void do_flashcursor(unsigned long ptr);
 static u32 do_calc_pll(int freq, int *freq_out);
 static void  do_write_regs(struct banshee_reg *reg);
-static unsigned long do_lfb_size(void);
+static unsigned long do_lfb_size(unsigned short);
 
 /*
  * Driver data 
@@ -411,7 +411,7 @@ static void do_write_regs(struct banshee_reg* reg)
   banshee_wait_idle();
 }
 
-static unsigned long do_lfb_size(void) 
+static unsigned long do_lfb_size(unsigned short dev_id) 
 {
   u32 draminit0 = 0;
   u32 draminit1 = 0;
@@ -421,9 +421,9 @@ static unsigned long do_lfb_size(void)
 
   draminit0 = tdfx_inl(DRAMINIT0);  
   draminit1 = tdfx_inl(DRAMINIT1);
-  
-  if ((fb_info.dev == PCI_DEVICE_ID_3DFX_BANSHEE) ||
-      (fb_info.dev == PCI_DEVICE_ID_3DFX_VOODOO3)) {             	 
+ 
+  if ((dev_id == PCI_DEVICE_ID_3DFX_BANSHEE) ||
+      (dev_id == PCI_DEVICE_ID_3DFX_VOODOO3)) {             	 
 	sgram_p = (draminit1 & DRAMINIT1_MEM_SDRAM) ? 0 : 1;
   
 	lfbsize = sgram_p ?
@@ -1139,7 +1139,7 @@ int __init tdfxfb_init(void)
       }
       
       tdfx_fix.smem_start = pci_resource_start(pdev, 1);
-      if(!(tdfx_fix.smem_len = do_lfb_size())) {
+      if(!(tdfx_fix.smem_len = do_lfb_size(pdev->device))) {
 	iounmap(default_par.regbase_virt);
 	printk("fb: Can't count %s memory.\n", tdfx_fix.id);
 	return -ENXIO;
@@ -1245,7 +1245,7 @@ void tdfxfb_setup(char *options, int *ints)
   if(!options || !*options)
     return;
 
-  while(this_opt = strsep(&options, ",")) {
+  while(this_opt = strsep(&options, ",")) { 
     if(!*this_opt)
       continue;
     if(!strcmp(this_opt, "inverse")) {
