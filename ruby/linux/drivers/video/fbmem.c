@@ -37,6 +37,10 @@
 #include <asm/setup.h>
 #endif
 
+#ifdef CONFIG_MTRR
+#include <asm/mtrr.h>
+#endif
+
 #include <asm/io.h>
 #include <asm/uaccess.h>
 #include <asm/page.h>
@@ -650,6 +654,27 @@ static struct file_operations fb_fops = {
 #endif    	
 };
 
+#ifdef CONFIG_MTRR
+/* Enable MTRR support by default */
+static int enable_mtrr = 1;
+
+/**
+ * 	fb_disable_mtrrs - disable MTRR usage for frame buffer device
+ * 	@fb_info: frame buffer info structure
+ *
+ * 	Disables MTRR handle for frame buffer device @fb_info.
+ * 	This is useful for when you have MTRR support turned on
+ * 	in your kernel, but do not wish the frame buffer driver
+ * 	to utilize it.
+ *
+ */
+void
+fb_disable_mtrrs(void)
+{
+	enable_mtrr = 0;
+}
+#endif
+
 static devfs_handle_t devfs_handle;
 
 
@@ -683,6 +708,17 @@ register_framebuffer(struct fb_info *fb_info)
 	    devfs_register (devfs_handle, name_buf, DEVFS_FL_DEFAULT,
 			    FB_MAJOR, i, S_IFCHR | S_IRUGO | S_IWUGO,
 			    &fb_fops, NULL);
+#ifdef CONFIG_MTRR
+	/*
+	 * Enable MTRR support if desired.
+	 */
+	if (enable_mtrr) {
+		fb_info->mtrr_handle = mtrr_add(fb_info->fix.smem_start,
+						fb_info->fix.smem_len,
+						MTRR_TYPE_WRCOMB, 1);
+		printk("%s: MTRR turned on\n", fb_info->fix.id);
+	}
+#endif
 
 	return 0;
 }
@@ -708,6 +744,15 @@ unregister_framebuffer(struct fb_info *fb_info)
 		return -EBUSY;
 	if (!registered_fb[i])
 		return -EINVAL;
+#ifdef CONFIG_MTRR
+	/*
+	 * Disable MTRR support if it's enabled.
+	 */
+	if (enable_mtrr) {
+		mtrr_del(fb_info->fix.smem_start, fb_info->fix.smem_len);
+		printk("%s: MTRR turned off\n", fb_info->fix.id);
+	}
+#endif
 	devfs_unregister (fb_info->devfs_handle);
 	fb_info->devfs_handle = NULL;
 	devfs_unregister (fb_info->devfs_lhandle);
@@ -819,6 +864,7 @@ __setup("video=", video_setup);
      *  Visible symbols for modules
      */
 
+EXPORT_SYMBOL(fb_disable_mtrrs);
 EXPORT_SYMBOL(register_framebuffer);
 EXPORT_SYMBOL(unregister_framebuffer);
 EXPORT_SYMBOL(registered_fb);

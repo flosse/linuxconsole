@@ -346,6 +346,10 @@ struct fb_info {
    void *pseudo_palette;                /* Fake palette of 16 colors and 
 					   the cursor's color for non
                                            palette mode */
+#ifdef CONFIG_MTRR
+   int mtrr_handle;			/* MTRR handle */
+#endif
+
    /* From here on everything is device dependent */
    void *par;	
 };
@@ -414,6 +418,10 @@ extern int unregister_framebuffer(struct fb_info *fb_info);
 
 extern int num_registered_fb;
 extern struct fb_info *registered_fb[FB_MAX];
+
+#ifdef CONFIG_MTRR
+extern void fb_disable_mtrrs(void);
+#endif
 
 /* drivers/video/fbmon.c */
 extern int fbmon_valid_timings(u_int pixclock, u_int htotal, u_int vtotal,
