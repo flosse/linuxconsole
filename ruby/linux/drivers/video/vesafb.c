@@ -17,20 +17,11 @@
 #include <linux/malloc.h>
 #include <linux/delay.h>
 #include <linux/fb.h>
-#include <linux/console.h>
-#include <linux/selection.h>
 #include <linux/ioport.h>
 #include <linux/init.h>
 
 #include <asm/io.h>
 #include <asm/mtrr.h>
-
-#include "fbcon.h"
-#include <video/fbcon-cfb8.h>
-#include <video/fbcon-cfb16.h>
-#include <video/fbcon-cfb24.h>
-#include <video/fbcon-cfb32.h>
-#include "fbcon-mac.h"
 
 #define dac_reg	(0x3c8)
 #define dac_val	(0x3c9)
@@ -77,24 +68,11 @@ static struct fb_var_screeninfo vesafb_defined = {
 	{0,0,0,0,0,0}
 };
 
-static struct display disp;
 static struct fb_info fb_info;
 static struct { u_short blue, green, red, pad; } palette[256];
-static union {
-#ifdef FBCON_HAS_CFB16
-    u16 cfb16[16];
-#endif
-#ifdef FBCON_HAS_CFB24
-    u32 cfb24[16];
-#endif
-#ifdef FBCON_HAS_CFB32
-    u32 cfb32[16];
-#endif
-} fbcon_cmap;
 
 static int             inverse   = 0;
 static int             mtrr      = 0;
-static int             currcon   = 0;
 
 static int             pmi_setpal = 0;	/* pmi for palette changes ??? */
 static int             ypan       = 0;  /* 0..nothing, 1..ypan, 2..ywrap */
@@ -102,11 +80,9 @@ static unsigned short  *pmi_base  = 0;
 static void            (*pmi_start)(void);
 static void            (*pmi_pal)(void);
 
-static struct display_switch vesafb_sw;
-
 /* --------------------------------------------------------------------- */
 
-static int vesafb_pan_display(struct fb_var_screeninfo *var, int con,
+static int vesafb_pan_display(struct fb_var_screeninfo *var, 
                               struct fb_info *info)
 {
 	int offset;
@@ -133,15 +109,6 @@ static int vesafb_pan_display(struct fb_var_screeninfo *var, int con,
 	return 0;
 }
 
-static int vesafb_update_var(int con, struct fb_info *info)
-{
-	if (con == currcon && ypan) {
-		struct fb_var_screeninfo *var = &fb_display[currcon].var;
-		return vesafb_pan_display(var,con,info);
-	}
-	return 0;
-}
-
 static int vesafb_get_fix(struct fb_fix_screeninfo *fix, int con,
 			 struct fb_info *info)
 {
@@ -157,84 +124,6 @@ static int vesafb_get_fix(struct fb_fix_screeninfo *fix, int con,
 	fix->ywrapstep = (ypan>1) ? 1 : 0;
 	fix->line_length=video_linelength;
 	return 0;
-}
-
-static int vesafb_get_var(struct fb_var_screeninfo *var, int con,
-			 struct fb_info *info)
-{
-	if(con==-1)
-		memcpy(var, &vesafb_defined, sizeof(struct fb_var_screeninfo));
-	else
-		*var=fb_display[con].var;
-	return 0;
-}
-
-static void vesafb_set_disp(int con)
-{
-	struct fb_fix_screeninfo fix;
-	struct display *display;
-	struct display_switch *sw;
-	
-	if (con >= 0)
-		display = &fb_display[con];
-	else
-		display = &disp;	/* used during initialization */
-
-	vesafb_get_fix(&fix, con, 0);
-
-	memset(display, 0, sizeof(struct display));
-	display->screen_base = video_vbase;
-	display->visual = fix.visual;
-	display->type = fix.type;
-	display->type_aux = fix.type_aux;
-	display->ypanstep = fix.ypanstep;
-	display->ywrapstep = fix.ywrapstep;
-	display->line_length = fix.line_length;
-	display->next_line = fix.line_length;
-	display->can_soft_blank = 0;
-	display->inverse = inverse;
-	vesafb_get_var(&display->var, -1, &fb_info);
-
-	switch (video_bpp) {
-#ifdef FBCON_HAS_CFB8
-	case 8:
-		sw = &fbcon_cfb8;
-		break;
-#endif
-#ifdef FBCON_HAS_CFB16
-	case 15:
-	case 16:
-		sw = &fbcon_cfb16;
-		display->dispsw_data = fbcon_cmap.cfb16;
-		break;
-#endif
-#ifdef FBCON_HAS_CFB24
-	case 24:
-		sw = &fbcon_cfb24;
-		display->dispsw_data = fbcon_cmap.cfb24;
-		break;
-#endif
-#ifdef FBCON_HAS_CFB32
-	case 32:
-		sw = &fbcon_cfb32;
-		display->dispsw_data = fbcon_cmap.cfb32;
-		break;
-#endif
-	default:
-#ifdef FBCON_HAS_MAC
-		sw = &fbcon_mac;
-		break;
-#else
-		sw = &fbcon_dummy;
-		return;
-#endif
-	}
-	memcpy(&vesafb_sw, sw, sizeof(*sw));
-	display->dispsw = &vesafb_sw;
-	if (!ypan) {
-		display->scrollmode = SCROLL_YREDRAW;
-		vesafb_sw.bmove = fbcon_redraw_bmove;
-	}
 }
 
 static int vesafb_set_var(struct fb_var_screeninfo *var, int con,
@@ -265,6 +154,7 @@ static int vesafb_set_var(struct fb_var_screeninfo *var, int con,
 			vesafb_defined.yres_virtual = var->yres_virtual;
 			if (con != -1) {
 				fb_display[con].var = vesafb_defined;
+				info->changevar(con);
 			}
 		}
 
@@ -277,27 +167,6 @@ static int vesafb_set_var(struct fb_var_screeninfo *var, int con,
 		return -EINVAL;
 	return 0;
 }
-
-static int vesa_getcolreg(unsigned regno, unsigned *red, unsigned *green,
-			  unsigned *blue, unsigned *transp,
-			  struct fb_info *fb_info)
-{
-	/*
-	 *  Read a single color register and split it into colors/transparent.
-	 *  Return != 0 for invalid regno.
-	 */
-
-	if (regno >= video_cmap_len)
-		return 1;
-
-	*red   = palette[regno].red;
-	*green = palette[regno].green;
-	*blue  = palette[regno].blue;
-	*transp = 0;
-	return 0;
-}
-
-#ifdef FBCON_HAS_CFB8
 
 static void vesa_setpalette(int regno, unsigned red, unsigned green, unsigned blue)
 {
@@ -326,8 +195,6 @@ static void vesa_setpalette(int regno, unsigned red, unsigned green, unsigned bl
 	}
 }
 
-#endif
-
 static int vesafb_setcolreg(unsigned regno, unsigned red, unsigned green,
 			    unsigned blue, unsigned transp,
 			    struct fb_info *fb_info)
@@ -347,12 +214,9 @@ static int vesafb_setcolreg(unsigned regno, unsigned red, unsigned green,
 	palette[regno].blue  = blue;
 	
 	switch (video_bpp) {
-#ifdef FBCON_HAS_CFB8
 	case 8:
 		vesa_setpalette(regno,red,green,blue);
 		break;
-#endif
-#ifdef FBCON_HAS_CFB16
 	case 15:
 	case 16:
 		if (vesafb_defined.red.offset == 10) {
@@ -369,8 +233,6 @@ static int vesafb_setcolreg(unsigned regno, unsigned red, unsigned green,
 				((blue  & 0xf800) >> 11);
 		}
 		break;
-#endif
-#ifdef FBCON_HAS_CFB24
 	case 24:
 		red   >>= 8;
 		green >>= 8;
@@ -380,8 +242,6 @@ static int vesafb_setcolreg(unsigned regno, unsigned red, unsigned green,
 			(green << vesafb_defined.green.offset) |
 			(blue  << vesafb_defined.blue.offset);
 		break;
-#endif
-#ifdef FBCON_HAS_CFB32
 	case 32:
 		red   >>= 8;
 		green >>= 8;
@@ -391,19 +251,8 @@ static int vesafb_setcolreg(unsigned regno, unsigned red, unsigned green,
 			(green << vesafb_defined.green.offset) |
 			(blue  << vesafb_defined.blue.offset);
 		break;
-#endif
     }
     return 0;
-}
-
-static void do_install_cmap(int con, struct fb_info *info)
-{
-	if (con != currcon)
-		return;
-	if (fb_display[con].cmap.len)
-		fb_set_cmap(&fb_display[con].cmap, 1, info);
-	else
-		fb_set_cmap(fb_default_cmap(video_cmap_len), 1, info); 
 }
 
 static struct fb_ops vesafb_ops = {
@@ -411,15 +260,14 @@ static struct fb_ops vesafb_ops = {
 	fb_get_fix:	vesafb_get_fix,
 	fb_get_var:	vesafb_get_var,
 	fb_set_var:	vesafb_set_var,
-	fb_setcolreg:	vesafb_setcolreg,
+	fb_get_cmap:	vesafb_get_cmap,
+	fb_set_cmap:	vesafb_set_cmap,
 	fb_pan_display:	vesafb_pan_display,
 };
 
-int vesafb_setup(char *options)
+int __init vesafb_setup(char *options)
 {
 	char *this_opt;
-	
-	fb_info.fontname[0] = '\0';
 	
 	if (!options || !*options)
 		return 0;
@@ -441,24 +289,8 @@ int vesafb_setup(char *options)
 			pmi_setpal=1;
 		else if (! strcmp(this_opt, "mtrr"))
 			mtrr=1;
-		else if (!strncmp(this_opt, "font:", 5))
-			strcpy(fb_info.fontname, this_opt+5);
 	}
 	return 0;
-}
-
-static int vesafb_switch(int con, struct fb_info *info)
-{
-	/* Do we have to save the colormap? */
-	if (fb_display[currcon].cmap.len)
-		fb_get_cmap(&fb_display[currcon].cmap, 1, vesa_getcolreg,
-			    info);
-	
-	currcon = con;
-	/* Install new colormap */
-	do_install_cmap(con, info);
-	vesafb_update_var(con,info);
-	return 1;
 }
 
 int __init vesafb_init(void)
@@ -580,12 +412,6 @@ int __init vesafb_init(void)
 		vesafb_defined.red.length   = 6;
 		vesafb_defined.green.length = 6;
 		vesafb_defined.blue.length  = 6;
-		for(i = 0; i < 16; i++) {
-			j = color_table[i];
-			palette[i].red   = default_red[j];
-			palette[i].green = default_grn[j];
-			palette[i].blue  = default_blu[j];
-		}
 		video_cmap_len = 256;
 	}
 
@@ -603,11 +429,8 @@ int __init vesafb_init(void)
 	strcpy(fb_info.modename, "VESA VGA");
 	fb_info.node = -1;
 	fb_info.fbops = &vesafb_ops;
-	fb_info.disp=&disp;
-	fb_info.switch_con=&vesafb_switch;
-	fb_info.updatevar=&vesafb_update_var;
+	fb_info.var = vesafb_defined;
 	fb_info.flags=FBINFO_FLAG_DEFAULT;
-	vesafb_set_disp(-1);
 
 	if (register_framebuffer(&fb_info)<0)
 		return -EINVAL;
