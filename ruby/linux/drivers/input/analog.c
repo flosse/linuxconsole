@@ -86,8 +86,8 @@ static int analog_options[ANALOG_PORTS];
 #define ANALOG_SAITEK_DELAY	200	/* 200 us */
 #define ANALOG_AXIS_TIME	2	/* 2 * refresh */
 #define ANALOG_INIT_RETRIES	8	/* 8 times */
-#define ANALOG_RESOLUTION	12	/* 12 bits */
-#define ANALOG_FUZZ		5	/* 5 bit gauss */
+#define ANALOG_FUZZ_BITS	2	/* 2 bit more */
+#define ANALOG_FUZZ_FILTER	5	/* 5 bit gauss */
 
 #define ANALOG_MAX_NAME_LENGTH  128
 
@@ -117,7 +117,6 @@ struct analog_port {
 	int reads;
 	int speed;
 	int loop;
-	int timeout;
 	int fuzz;
 	int cooked;
 	int axes[4];
@@ -208,10 +207,13 @@ static void analog_decode(struct analog *analog, int *axes, int *initial, int bu
 static int analog_cooked_read(struct analog_port *port)
 {
 	struct gameport *gameport = port->gameport;
-	unsigned int time[4], start, loop, now;
+	unsigned int time[4], start, loop, now, loopout, timeout;
 	unsigned char data[4], this, last;
 	unsigned long flags;
 	int i, j;
+
+	loopout = (ANALOG_LOOP_TIME * port->loop) / 1000;
+	timeout = ANALOG_MAX_TIME * port->speed;
 	
 	__save_flags(flags);
 	__cli();
@@ -232,13 +234,13 @@ static int analog_cooked_read(struct analog_port *port)
 		GET_TIME(now);
 		__restore_flags(flags);
 
-		if ((last ^ this) && (DELTA(loop, now) < port->loop)) {
+		if ((last ^ this) && (DELTA(loop, now) < loopout)) {
 			data[i] = last ^ this;
 			time[i] = now;
 			i++;
 		}
 
-	} while (this && (i < 4) && (DELTA(start, now) < port->timeout));
+	} while (this && (i < 4) && (DELTA(start, now) < timeout));
 
 	this <<= 4;
 
@@ -246,7 +248,7 @@ static int analog_cooked_read(struct analog_port *port)
 		this |= data[i];
 		for (j = 0; j < 4; j++)
 			if (data[i] & (1 << j))
-				port->axes[j] = (DELTA(start, time[i]) << ANALOG_RESOLUTION) / port->speed;
+				port->axes[j] = (DELTA(start, time[i]) << ANALOG_FUZZ_BITS) / port->loop;
 	}
 
 	return -(this != port->mask);
@@ -377,8 +379,7 @@ static void analog_calibrate_timer(struct analog_port *port)
 		if (t < tx) tx = t;
 	}
 
-        port->loop = (ANALOG_LOOP_TIME * tx) / 50000;
-	port->timeout = ANALOG_MAX_TIME * port->speed;
+        port->loop = tx / 50;
 }
 
 /*
@@ -485,8 +486,7 @@ static void analog_init_device(struct analog_port *port, struct analog *analog, 
 	else
 		printk(" ["TIME_NAME" timer, %d %sHz clock, %d ns res]\n",
 		port->speed > 10000 ? (port->speed + 800) / 1000 : port->speed,
-		port->speed > 10000 ? "M" : "k",
-		((((port->loop * 1000000) / port->speed) * 1000) / ANALOG_LOOP_TIME));
+		port->speed > 10000 ? "M" : "k", (port->loop * 1000000) / port->speed);
 }
 
 /*
@@ -597,7 +597,7 @@ static void analog_connect(struct gameport *gameport, struct gameport_dev *dev)
 		for (i = 0; i < ANALOG_INIT_RETRIES; i++)
 			if (!analog_cooked_read(port))
 				break;
-		port->fuzz = 1 << ANALOG_FUZZ;
+		port->fuzz = 1 << ANALOG_FUZZ_FILTER;
 	}
 
 	if (analog_init_masks(port)) {
