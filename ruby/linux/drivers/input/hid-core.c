@@ -321,7 +321,10 @@ static int hid_parser_global(struct hid_parser *parser, struct hid_item *item)
 			return 0;
 
 		case HID_GLOBAL_ITEM_TAG_PHYSICAL_MAXIMUM:
-			parser->global.physical_maximum = item_sdata(item);
+			if (parser->global.physical_minimum < 0)
+				parser->global.physical_maximum = item_sdata(item);
+			else
+				parser->global.physical_maximum = item_udata(item);
 			return 0;
 
 		case HID_GLOBAL_ITEM_TAG_UNIT_EXPONENT:
