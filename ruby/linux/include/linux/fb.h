@@ -267,6 +267,28 @@ struct fbcursor {
         char *mask;             /* cursor mask bits */
 };
 
+/* Userland HW accel */
+#define ROP_COPY 0
+#define ROP_XOR  1
+
+struct fb_copyarea {
+	__u32 sx; /* screen-relative */
+	__u32 sy;
+	__u32 width;
+	__u32 height;
+	__u32 dx;
+	__u32 dy;
+};
+
+struct fb_fillrect {
+	__u32 x1; /* screen-relative */
+	__u32 y1;
+	__u32 width;
+	__u32 height;
+	__u32 color;
+	__u32 rop;
+};
+
 struct fb_image {
 	__u32 width;			/* Size of image */
 	__u32 height;
@@ -278,6 +300,9 @@ struct fb_image {
 	char  *data;			/* Pointer to image data */
 }; 
 
+#define FBIOPUT_COPYAREA        _IOR('F', 0x19, struct fb_copyarea)
+#define FBIOPUT_FILLRECT        _IOR('F', 0x20, struct fb_fillrect)
+
 #ifdef __KERNEL__
 
 #define GET_FB_IDX(node)	(MINOR(node))
@@ -286,9 +311,6 @@ struct fb_image {
 #include <linux/poll.h>
 #include <linux/init.h>
 #include <linux/devfs_fs_kernel.h>
-
-#define ROP_COPY 0
-#define ROP_XOR  1
 
 struct fb_info;
 struct vm_area_struct;
@@ -504,27 +526,5 @@ extern int __init fb_find_mode(struct fb_var_screeninfo *var,
 #define FBCMD_SET_CURRENTPAR	0xDEAD8005
 
 #endif
-
-/* Userland HW accel */
-struct fb_copyarea {
-	u32 sx; /* screen-relative */
-	u32 sy;
-	u32 width;
-	u32 height;
-	u32 dx;
-	u32 dy;
-};
-
-struct fb_fillrect {
-	u32 x1; /* screen-relative */
-	u32 y1;
-	u32 width;
-	u32 height;
-	u32 color;
-	int rop;
-};
-
-#define FBIOPUT_COPYAREA        _IOR('F', 0x19, struct fb_copyarea)
-#define FBIOPUT_FILLRECT        _IOR('F', 0x20, struct fb_fillrect)
 
 #endif /* _LINUX_FB_H */
