@@ -579,7 +579,26 @@ static int tdfxfb_set_par(struct fb_info *info)
  
   memset(&reg, 0, sizeof(reg));
   cpp = (info->var.bits_per_pixel + 7)/8;
-  
+ 
+  reg.vidcfg = VIDCFG_VIDPROC_ENABLE | VIDCFG_DESK_ENABLE | VIDCFG_CURS_X11 |
+		((cpp - 1) << VIDCFG_PIXFMT_SHIFT) | 
+		(cpp != 1 ? VIDCFG_CLUT_BYPASS : 0);
+
+  /* PLL settings */
+  freq = PICOS2KHZ(info->var.pixclock);
+
+  reg.dacmode = 0;
+  reg.vidcfg  &= ~VIDCFG_2X;
+
+  if (freq > par->max_pixclock/2) {
+ 	freq = freq > par->max_pixclock ? par->max_pixclock : freq;
+	reg.dacmode |= DACMODE_2X;
+	reg.vidcfg  |= VIDCFG_2X;
+	par->hdispend >>= 1;
+	par->hsyncsta >>= 1;
+	par->hsyncend >>= 1;
+	par->htotal   >>= 1;
+  }
   wd = (info->var.xres >> 3) - 1;
 
   hd  = (info->var.xres >> 3) - 1;
@@ -646,9 +665,7 @@ static int tdfxfb_set_par(struct fb_info *info)
   reg.crt[0x02] = hbs;
   reg.crt[0x03] = 0x80 | (hbe & 0x1f);
   reg.crt[0x04] = hs;
-  reg.crt[0x05] = 
-    ((hbe & 0x20) << 2) | 
-    (he & 0x1f);
+  reg.crt[0x05] = ((hbe & 0x20) << 2) | (he & 0x1f); 
   reg.crt[0x06] = vt;
   reg.crt[0x07] = 
     ((vs & 0x200) >> 2) |
@@ -660,9 +677,7 @@ static int tdfxfb_set_par(struct fb_info *info)
     ((vd  & 0x100) >> 7) |
     ((vt  & 0x100) >> 8);
   reg.crt[0x08] = 0x00;
-  reg.crt[0x09] = 
-    0x40 |
-    ((vbs & 0x200) >> 4);
+  reg.crt[0x09] = 0x40 | ((vbs & 0x200) >> 4); 
   reg.crt[0x0a] = 0x00;
   reg.crt[0x0b] = 0x00;
   reg.crt[0x0c] = 0x00;
@@ -670,9 +685,7 @@ static int tdfxfb_set_par(struct fb_info *info)
   reg.crt[0x0e] = 0x00;
   reg.crt[0x0f] = 0x00;
   reg.crt[0x10] = vs;
-  reg.crt[0x11] = 
-    (ve & 0x0f) |
-    0x20;
+  reg.crt[0x11] = (ve & 0x0f) | 0x20; 
   reg.crt[0x12] = vd;
   reg.crt[0x13] = wd;
   reg.crt[0x14] = 0x00;
@@ -701,13 +714,6 @@ static int tdfxfb_set_par(struct fb_info *info)
     VGAINIT0_EXTSHIFTOUT;
   reg.vgainit1 = tdfx_inl(VGAINIT1) & 0x1fffff;
 
-  reg.vidcfg = 
-    VIDCFG_VIDPROC_ENABLE |
-    VIDCFG_DESK_ENABLE    |
-    VIDCFG_CURS_X11 |
-    ((cpp - 1) << VIDCFG_PIXFMT_SHIFT) |
-    (cpp != 1 ? VIDCFG_CLUT_BYPASS : 0);
- 
   /* Setup the cursor */	 
   par->hwcursor.enable=reg.vidcfg | VIDCFG_HWCURSOR_ENABLE;
   par->hwcursor.disable=reg.vidcfg;
@@ -762,6 +768,13 @@ static int tdfxfb_set_par(struct fb_info *info)
   }
 #endif             
   do_write_regs(&reg);
+
+  if (reg.vidcfg & VIDCFG_2X) {
+	par->hdispend <<= 1;
+	par->hsyncsta <<= 1;
+	par->hsyncend <<= 1;
+	par->htotal   <<= 1;
+  }
   memcpy(info->par, par, sizeof(struct tdfx_par));
 
   /* Now change fb_fix_screeninfo according to changes in par */
