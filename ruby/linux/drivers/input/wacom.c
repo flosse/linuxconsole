@@ -154,6 +154,7 @@ struct wacom {
 	struct wacom_features *features;
 	int tool;
 	int open;
+	int x, y, mx, my;
 };
 
 static void wacom_graphire_irq(struct urb *urb)
@@ -161,16 +162,15 @@ static void wacom_graphire_irq(struct urb *urb)
 	struct wacom *wacom = urb->context;
 	unsigned char *data = wacom->data;
 	struct input_dev *dev = &wacom->dev;
+	int x, y;
 
 	if (urb->status) return;
 
 	if (data[0] != 2)
 		dbg("received unknown report #%d", data[0]);
 
-	if ( data[1] & 0x80 ) {
-		input_report_abs(dev, ABS_X, data[2] | ((__u32)data[3] << 8));
-		input_report_abs(dev, ABS_Y, data[4] | ((__u32)data[5] << 8));
-	}
+	x = data[2] | ((__u32)data[3] << 8);
+	y = data[4] | ((__u32)data[5] << 8);
 
 	switch ((data[1] >> 5) & 3) {
 
@@ -188,12 +188,32 @@ static void wacom_graphire_irq(struct urb *urb)
 			input_report_key(dev, BTN_RIGHT, data[1] & 0x02);
 			input_report_key(dev, BTN_MIDDLE, data[1] & 0x04);
 			input_report_abs(dev, ABS_DISTANCE, data[7]);
-			input_report_rel(dev, REL_WHEEL, (signed char) data[6]);
+			input_report_rel(dev, REL_WHEEL, -(signed char) data[6]);
+
+			if (data[7] < 12) {
+				wacom->mx = -1;
+				return;
+			}
+
+			if (~data[1] & 0x80)
+				return;
+
+			if (wacom->mx > 0) {
+				input_report_abs(dev, ABS_X, wacom->x += (x - wacom->mx));
+				input_report_abs(dev, ABS_Y, wacom->y += (y - wacom->my));
+			}
+
+			wacom->mx = x;
+			wacom->my = y;
 			return;
 	}
 
-	input_report_abs(dev, ABS_PRESSURE, data[6] | ((__u32)data[7] << 8));
+	if (data[1] & 0x80) {
+		input_report_abs(dev, ABS_X, wacom->x = x);
+		input_report_abs(dev, ABS_Y, wacom->y = y);
+	}
 
+	input_report_abs(dev, ABS_PRESSURE, data[6] | ((__u32)data[7] << 8));
 	input_report_key(dev, BTN_TOUCH, data[1] & 0x01);
 	input_report_key(dev, BTN_STYLUS, data[1] & 0x02);
 	input_report_key(dev, BTN_STYLUS2, data[1] & 0x04);
