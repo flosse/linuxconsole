@@ -20,6 +20,7 @@
 #include <linux/string.h>
 #include <linux/fb.h>
 #include <asm/types.h>
+#include <video/fbcon.h>
 
 void cfb_fillrect(struct fb_info *p, struct fb_fillrect *rect)  
 {
@@ -42,10 +43,10 @@ void cfb_fillrect(struct fb_info *p, struct fb_fillrect *rect)
 	height = y2 - rect->dy;
 
 	/* Size of the scanline in bytes */ 	
-	n = ((rect->width * p->var.bits_per_pixel) >> 3);	
+	n = (rect->width * (p->var.bits_per_pixel >> 3));	
 	ppw = BITS_PER_LONG/p->var.bits_per_pixel;
 
-	dst1 = p->screen_base + rect->dy * linesize + ((rect->dx * p->var.bits_per_pixel) >> 3); 
+	dst1 = p->screen_base + (rect->dy * linesize) + (rect->dx * (p->var.bits_per_pixel >> 3));
 	start_index = ((unsigned long) dst1 & (bpl-1));
 	end_index = ((unsigned long)(dst1 + n) & (bpl-1));	
 
@@ -114,27 +115,31 @@ void cfb_fillrect(struct fb_info *p, struct fb_fillrect *rect)
 					fb_writeq(fb_readq(dst) | end_mask, dst);
 #endif
 					dst1+=linesize;
-				} while (--height);
-				break;
+			} while (--height);
+			break;
 		case ROP_XOR:
 			do {
 				dst = (unsigned long *) (dst1 - start_index);
+
+				if (start_mask) {
 #if BITS_PER_LONG == 32
-				fb_writel(fb_readl(dst) ^ start_mask, dst);
+					fb_writel(fb_readl(dst) ^ start_mask, dst);
 #else
-				fb_writeq(fb_readq(dst) ^ start_mask, dst);
+					fb_writeq(fb_readq(dst) ^ start_mask, dst);
 #endif
-				for( i=0; i < n; i++) {
 					dst++;
+				}
+
+				for( i=0; i < n; i++) {
 #if BITS_PER_LONG == 32
 					fb_writel(fb_readl(dst) ^ fg, dst); 
 #else
 					fb_writeq(fb_readq(dst) ^ fg, dst); 
 #endif
+					dst++;
 				}
 	
 				if (end_mask) {
-					dst++;
 #if BITS_PER_LONG == 32
 					fb_writel(fb_readl(dst) ^ end_mask, dst);
 #else
