@@ -34,6 +34,7 @@
 #include <linux/input.h>
 #include <linux/module.h>
 #include <linux/random.h>
+#include <linux/pm.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 MODULE_DESCRIPTION("Input layer module");
@@ -63,6 +64,12 @@ static long input_devices[NBITS(INPUT_DEVICES)];
 void input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {
 	struct input_handle *handle = dev->handle;
+
+/*
+ * Wake up the device if it is sleeping.
+ */
+	if (dev->pm_dev)
+		pm_access(dev->pm_dev);
 
 /*
  * Filter non-events, and bad input values out.
@@ -195,6 +202,8 @@ int input_accept_device(struct input_handle *handle, struct file *file)
 
 int input_open_device(struct input_handle *handle)
 {
+	if (handle->dev->pm_dev)
+		pm_access(handle->dev->pm_dev);
 	handle->open++;
 	if (handle->dev->open)
 		return handle->dev->open(handle->dev);
@@ -211,6 +220,8 @@ int input_flush_device(struct input_handle* handle, struct file* file)
 
 void input_close_device(struct input_handle *handle)
 {
+	if (handle->dev->pm_dev)
+		pm_dev_idle(handle->dev->pm_dev);
 	if (handle->dev->close)
 		handle->dev->close(handle->dev);
 	handle->open--;
@@ -286,6 +297,12 @@ void input_unregister_device(struct input_dev *dev)
 	struct input_handle *handle = dev->handle;
 	struct input_dev **devptr = &input_dev;
 	struct input_handle *dnext;
+
+/*
+ * Turn off power management.
+ */
+	if (dev->pm_dev)
+		pm_unregister(dev->pm_dev);
 
 /*
  * Kill any pending repeat timers.
