@@ -124,9 +124,6 @@ static struct ns558* ns558_isa_probe(int io, struct ns558 *next)
 			if (inb(io & (-1 << i)) != inb((io & (-1 << i)) + (1 << i) - 1)) b++;
 		wait_ms(3);
 
-		printk(KERN_DEBUG "ns558.c: io0 %#x io1 %#x io2 %#x b = %d\n",
-				io, io & (-1 << i), (io & (-1 << i)) + (1 << i) - 1, b);	
-
 		if (b > 300)					/* We allow 30% difference */
 			break;
 	}
@@ -188,7 +185,7 @@ static int __devinit ns558_pci_probe(struct pci_dev *pdev, const struct pci_devi
 
 	port->next = ns558;
 	port->type = NS558_PCI;
-	port->gameport.io = ioport + (iolen > 1);
+	port->gameport.io = ioport;
 	port->gameport.size = iolen;
 	port->dev = pdev;
 	ns558 = port;
@@ -207,7 +204,7 @@ static int __devinit ns558_pci_probe(struct pci_dev *pdev, const struct pci_devi
 static void __devexit ns558_pci_remove(struct pci_dev *pdev)
 {
 	struct ns558 *port = (struct ns558 *)pdev->driver_data;
-	release_region(port->gameport.io - (port->gameport.size > 1), port->gameport.size);
+	release_region(port->gameport.io, port->gameport.size);
 }
 
 static struct pci_driver ns558_pci_driver = {
@@ -275,7 +272,7 @@ static struct ns558* ns558_pnp_probe(struct pci_dev *dev, struct ns558 *next)
 
 	port->next = next;
 	port->type = NS558_PNP;
-	port->gameport.io = ioport + (iolen > 1);
+	port->gameport.io = ioport;
 	port->gameport.size = iolen;
 	port->dev = dev;
 

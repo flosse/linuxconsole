@@ -76,65 +76,86 @@ static unsigned short tmdc_btn_joy[TMDC_BTN_JOY] =
 struct tmdc {
 	struct gameport *gameport;
 	struct timer_list timer;
-	struct input_dev dev;
-	char name[64];
-	int mode;
+	struct input_dev dev[2];
+	char name[2][64];
+	int mode[2];
 	int used;
 	int reads;
 	int bads;	
+	unsigned char exists;
 };
 
 /*
  * tmdc_read_packet() reads a ThrustMaster packet.
  */
 
-static int tmdc_read_packet(struct gameport *gameport, unsigned char *data)
+static int tmdc_read_packet(struct gameport *gameport, unsigned char data[2][TMDC_MAX_LENGTH])
 {
-	unsigned int t, p;
-	unsigned char u, v, error;
-	int i, j;
+	unsigned int t[2], p;
+	unsigned char u, v, w, x;
+	int i[2], j[2], k;
 	unsigned long flags;
 
-	t = gameport_time(gameport, TMDC_MAX_START);
 	p = gameport_time(gameport, TMDC_MAX_STROBE);
 
-	error = 0;
-	i = j = 0;
-	t = p;
+	for (k = 0; k < 1; k++) {
+		t[k] = gameport_time(gameport, TMDC_MAX_START);
+		i[k] = j[k] = 0;
+	}
 
 	__save_flags(flags);
 	__cli();
 	gameport_trigger(gameport);
 	
-	v = gameport_read(gameport) >> 4;
+	w = gameport_read(gameport) >> 4;
 
 	do {
-		t--;
-		u = v; v = gameport_read(gameport) >> 4;
-		if (~v & u & 2) {
-			if (j) {
-				if (j < 9) {				/* Data bit */
-					data[i] |= (~v & 1) << (j - 1);
-					j++;
-				} else {				/* Stop bit */
-					error |= v & 1;
-					j = 0;
-					i++;
+		x = w;
+		w = gameport_read(gameport) >> 4;
+
+		for (k = 0, v = w, u = x; k < 2; k++, v >>= 2, u >>= 2) {
+
+			t[k]--; 
+
+			if (~v & u & 2) {
+
+				if (t[k] <= 0)
+					continue;
+
+				if (j[k] == 0) {				 /* Start bit */
+					if ((~v & 1) || i[k] >= TMDC_MAX_LENGTH) {
+						t[k] = 0;
+						continue;
+					}
+					data[k][i[k]] = 0;
+					t[k] = p;
+					j[k]++;
+					continue;
 				}
-			} else {					/* Start bit */
-				data[i] = 0;
-				error |= ~v & 1;
-				j++;
+
+				if (j[k] == 9) {				/* Stop bit */
+					if (v & 1) {
+						t[k] = 0;
+						continue;
+					}
+					t[k] = p;
+					j[k] = 0;
+					i[k]++;
+					continue;
+				}
+
+				data[k][i[k]] |= (~v & 1) << (j[k] - 1);	/* Data bit */
+				t[k] = p;
+				j[k]++;
 			}
-			t = p;
 		}
-	} while (!error && i < TMDC_MAX_LENGTH && t > 0);
+	} while (t[0] > 0 || t[1] > 0);
 
 	__restore_flags(flags);
 
-	printk(KERN_DEBUG "tmdc.c: error %d, i %d, t %d\n", error, i, t);
+	printk(KERN_DEBUG "tmdc.c: t0 %d t1 %d i0 %d i1 %d\n", t[0], t[1], i[0], i[1]);
 
-	return -(i != TMDC_MAX_LENGTH);
+	return (i[0] == TMDC_MAX_LENGTH) | ((t[1] == TMDC_MAX_LENGTH) << 1);
 }
 
 /*
@@ -143,57 +164,69 @@ static int tmdc_read_packet(struct gameport *gameport, unsigned char *data)
 
 static void tmdc_timer(unsigned long private)
 {
+	unsigned char data[2][TMDC_MAX_LENGTH];
 	struct tmdc *tmdc = (void *) private;
-	struct input_dev *dev = &tmdc->dev;
-	unsigned char data[TMDC_MAX_LENGTH];
-	int i;
+	struct input_dev *dev;
+	unsigned char r, bad = 0;
+	int i, j;
 
 	tmdc->reads++;
 
-	if (tmdc_read_packet(tmdc->gameport, data) || data[TMDC_BYTE_ID] != tmdc->mode) {
-		tmdc->bads++;
-	} else {
+	if ((r = tmdc_read_packet(tmdc->gameport, data)) != tmdc->exists)
+		bad = 1;
 
-		for (i = 0; i < data[TMDC_BYTE_DEF] >> 4; i++)
-			input_report_abs(dev, tmdc_abs[i], data[tmdc_byte_a[i]]);
+	for (j = 0; j < 2; j++) 
+		if (r & (1 << j) & tmdc->exists) {
 
-		switch (tmdc->mode) {
+			if (data[j][TMDC_BYTE_ID] != tmdc->mode[j]) {
+				bad = 1;
+				continue;
+			}
 
-			case TMDC_MODE_M3DI:
+			dev = tmdc->dev + j;
 
-				i = tmdc_byte_d[0];
+			for (i = 0; i < data[j][TMDC_BYTE_DEF] >> 4; i++)
+				input_report_abs(dev, tmdc_abs[i], data[j][tmdc_byte_a[i]]);
 
-				input_report_abs(dev, ABS_HAT0X, ((data[i] >> 3) & 1) - ((data[i] >> 1) & 1));
-				input_report_abs(dev, ABS_HAT0Y, ((data[i] >> 2) & 1) - ( data[i]       & 1));
+			switch (tmdc->mode[j]) {
 
-				for (i = 0; i < 4; i++)
-					input_report_key(dev, tmdc_btn_joy[i],
-						(data[tmdc_byte_d[0]] >> (i + 4)) & 1);
-				for (i = 0; i < 2; i++)
-					input_report_key(dev, tmdc_btn_joy[i + 4],
-						(data[tmdc_byte_d[1]] >> (i + 6)) & 1);
+				case TMDC_MODE_M3DI:
 
-				break;
+					i = tmdc_byte_d[0];
 
-			case TMDC_MODE_3DRP:
-			case TMDC_MODE_FGP:
+					input_report_abs(dev, ABS_HAT0X, ((data[j][i] >> 3) & 1) - ((data[j][i] >> 1) & 1));
+					input_report_abs(dev, ABS_HAT0Y, ((data[j][i] >> 2) & 1) - ( data[j][i]       & 1));
 
-				for (i = 0; i < 10; i++)
-					input_report_key(dev, tmdc_btn_pad[i],
-						(data[tmdc_byte_d[i >> 3]] >> (i & 7)) & 1);
+					for (i = 0; i < 4; i++)
+						input_report_key(dev, tmdc_btn_joy[i],
+							(data[j][tmdc_byte_d[0]] >> (i + 4)) & 1);
+					for (i = 0; i < 2; i++)
+						input_report_key(dev, tmdc_btn_joy[i + 4],
+							(data[j][tmdc_byte_d[1]] >> (i + 6)) & 1);
 
-				break;
+					break;
 
-			default:
+				case TMDC_MODE_3DRP:
+				case TMDC_MODE_FGP:
 
-				for (i = 0; i < ((data[TMDC_BYTE_DEF] & 0xf) << 3) && i < TMDC_BTN_JOY; i++)
-					input_report_key(dev, tmdc_btn_joy[i],
-						(data[tmdc_byte_d[i >> 3]] >> (i & 7)) & 1);
+					for (i = 0; i < 10; i++)
+						input_report_key(dev, tmdc_btn_pad[i],
+							(data[j][tmdc_byte_d[i >> 3]] >> (i & 7)) & 1);
 
-				break;
+					break;
 
-		}
+				default:
+
+					for (i = 0; i < ((data[j][TMDC_BYTE_DEF] & 0xf) << 3) && i < TMDC_BTN_JOY; i++)
+						input_report_key(dev, tmdc_btn_joy[i],
+							(data[j][tmdc_byte_d[i >> 3]] >> (i & 7)) & 1);
+
+					break;
+
+			}
 	}
+
+	tmdc->bads += bad;
 
 	mod_timer(&tmdc->timer, jiffies + TMDC_REFRESH_TIME);
 }
@@ -231,8 +264,8 @@ static void tmdc_connect(struct gameport *gameport, struct gameport_dev *dev)
 			{   3, "ThrustMaster Rage 3D Gamepad",		  2, 0, 0, 10 },
 			{ 163, "Thrustmaster Fusion GamePad",		  2, 0, 0, 10 },
 			{   0, "Unknown %d-axis, %d-button TM device %d", 0, 0, 0,  0 }};
-	unsigned char data[TMDC_MAX_LENGTH];
-	int i, m;
+	unsigned char data[2][TMDC_MAX_LENGTH];
+	int i, j, m;
 
 	if (!(tmdc = kmalloc(sizeof(struct tmdc), GFP_KERNEL)))
 		return;
@@ -248,63 +281,63 @@ static void tmdc_connect(struct gameport *gameport, struct gameport_dev *dev)
 	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW))
 		goto fail1;
 
-	if (tmdc_read_packet(gameport, data)) {
-		printk(KERN_DEBUG "tmdc.c: failed packet read.\n");
+	if (!(tmdc->exists = tmdc_read_packet(gameport, data))) {
+		printk(KERN_DEBUG "tmdc.c: No joysticks found.\n");
 		goto fail2;
 	}
 
-	tmdc->mode = data[TMDC_BYTE_ID];
+	for (j = 0; j < 2; j++)
+		if (tmdc->exists & (1 << j)) {
 
-	printk(KERN_DEBUG "tmdc.c: id=%d\n", tmdc->mode);
+			tmdc->mode[j] = data[j][TMDC_BYTE_ID];
 
-	if (!tmdc->mode)
-		goto fail2;
+			printk(KERN_DEBUG "tmdc.c: %d id=%d\n", j, tmdc->mode[j]);
 
-	for (m = 0; models[m].id && models[m].id != tmdc->mode; m++);
+			for (m = 0; models[m].id && models[m].id != tmdc->mode[j]; m++);
 
-	if (!models[m].id) {
-		models[m].abs = data[TMDC_BYTE_DEF] >> 4;
-		models[m].joybtn = (data[TMDC_BYTE_DEF] & 0xf) << 3;
-	}
+			if (!models[m].id) {
+				models[m].abs = data[j][TMDC_BYTE_DEF] >> 4;
+				models[m].joybtn = (data[j][TMDC_BYTE_DEF] & 0xf) << 3;
+			}
 
-	sprintf(tmdc->name, models[m].name, models[m].abs, models[m].joybtn, tmdc->mode);
+			sprintf(tmdc->name[j], models[m].name, models[m].abs, models[m].joybtn, tmdc->mode[j]);
 
-	tmdc->dev.private = tmdc;
-	tmdc->dev.name = tmdc->name;
-	tmdc->dev.open = tmdc_open;
-	tmdc->dev.close = tmdc_close;
+			tmdc->dev[j].private = tmdc;
+			tmdc->dev[j].open = tmdc_open;
+			tmdc->dev[j].close = tmdc_close;
 
-	tmdc->dev.name = tmdc->name;
-	tmdc->dev.idbus = BUS_GAMEPORT;
-	tmdc->dev.idvendor = GAMEPORT_ID_VENDOR_THRUSTMASTER;
-	tmdc->dev.idproduct = models[m].id;
-	tmdc->dev.idversion = 0x0100;
+			tmdc->dev[j].name = tmdc->name[j];
+			tmdc->dev[j].idbus = BUS_GAMEPORT;
+			tmdc->dev[j].idvendor = GAMEPORT_ID_VENDOR_THRUSTMASTER;
+			tmdc->dev[j].idproduct = models[m].id;
+			tmdc->dev[j].idversion = 0x0100;
 
-	tmdc->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
+			tmdc->dev[j].evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 
-	for (i = 0; i < models[m].abs && i < TMDC_ABS; i++) {
-		set_bit(tmdc_abs[i], tmdc->dev.absbit);
-		tmdc->dev.absmin[tmdc_abs[i]] = 8;
-		tmdc->dev.absmax[tmdc_abs[i]] = 248;
-		tmdc->dev.absfuzz[tmdc_abs[i]] = 2;
-		tmdc->dev.absflat[tmdc_abs[i]] = 4;
-	}
+			for (i = 0; i < models[m].abs && i < TMDC_ABS; i++) {
+				set_bit(tmdc_abs[i], tmdc->dev[j].absbit);
+				tmdc->dev[j].absmin[tmdc_abs[i]] = 8;
+				tmdc->dev[j].absmax[tmdc_abs[i]] = 248;
+				tmdc->dev[j].absfuzz[tmdc_abs[i]] = 2;
+				tmdc->dev[j].absflat[tmdc_abs[i]] = 4;
+			}
 
-	for (i = 0; i < models[m].hats && i < TMDC_ABS_HAT; i++) {
-		set_bit(tmdc_abs_hat[i], tmdc->dev.absbit);
-		tmdc->dev.absmin[tmdc_abs_hat[i]] = -1;
-		tmdc->dev.absmax[tmdc_abs_hat[i]] = 1;
-	}
+			for (i = 0; i < models[m].hats && i < TMDC_ABS_HAT; i++) {
+				set_bit(tmdc_abs_hat[i], tmdc->dev[j].absbit);
+				tmdc->dev[j].absmin[tmdc_abs_hat[i]] = -1;
+				tmdc->dev[j].absmax[tmdc_abs_hat[i]] = 1;
+			}
 
-	for (i = 0; i < models[m].joybtn && i < TMDC_BTN_JOY; i++)
-		set_bit(tmdc_btn_joy[i], tmdc->dev.keybit);
+			for (i = 0; i < models[m].joybtn && i < TMDC_BTN_JOY; i++)
+				set_bit(tmdc_btn_joy[i], tmdc->dev[j].keybit);
 
-	for (i = 0; i < models[m].padbtn && i < TMDC_BTN_PAD; i++)
-		set_bit(tmdc_btn_pad[i], tmdc->dev.keybit);
+			for (i = 0; i < models[m].padbtn && i < TMDC_BTN_PAD; i++)
+				set_bit(tmdc_btn_pad[i], tmdc->dev[j].keybit);
 
-	input_register_device(&tmdc->dev);
-	printk(KERN_INFO "input%d: %s on gameport%d.%d\n",
-		tmdc->dev.number, tmdc->name, gameport->number, 0);
+			input_register_device(tmdc->dev + j);
+			printk(KERN_INFO "input%d: %s on gameport%d.%d\n",
+				tmdc->dev[j].number, tmdc->name[j], gameport->number, i);
+		}
 
 	return;
 fail2:	gameport_close(gameport);
@@ -314,7 +347,10 @@ fail1:	kfree(tmdc);
 static void tmdc_disconnect(struct gameport *gameport)
 {
 	struct tmdc *tmdc = gameport->private;
-	input_unregister_device(&tmdc->dev);
+	int i;
+	for (i = 0; i < 2; i++)
+		if (tmdc->exists & (1 << i)) 
+			input_unregister_device(tmdc->dev + i);
 	gameport_close(gameport);
 	kfree(tmdc);
 }
