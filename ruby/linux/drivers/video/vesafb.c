@@ -371,7 +371,6 @@ int __init vesafb_init(void)
 		}
 	}
 	
-	strcpy(fb_info.modename, "VESA VGA");
 	fb_info.node = -1;
 	fb_info.fbops = &vesafb_ops;
 	fb_info.var = vesafb_defined;
@@ -382,7 +381,7 @@ int __init vesafb_init(void)
 		return -EINVAL;
 
 	printk(KERN_INFO "fb%d: %s frame buffer device\n",
-	       GET_FB_IDX(fb_info.node), fb_info.modename);
+	       GET_FB_IDX(fb_info.node), fb_info.fix.id);
 	return 0;
 }
 
