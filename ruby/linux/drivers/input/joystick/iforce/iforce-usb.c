@@ -135,15 +135,22 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	return iforce;
 }
 
+/* Called by iforce_delete() */
+void iforce_usb_delete(struct iforce* iforce)
+{
+	usb_unlink_urb(&iforce->irq);
+	usb_unlink_urb(&iforce->out);
+	usb_unlink_urb(&iforce->ctrl);
+}
+
 static void iforce_usb_disconnect(struct usb_device *dev, void *ptr)
 {
 	struct iforce *iforce = ptr;
-	usb_unlink_urb(&iforce->irq);
 	iforce->usbdev = NULL;
 	input_unregister_device(&iforce->dev);
-#if 0
-	kfree(iforce);
-#endif
+
+	if (iforce->open <= 0)
+		iforce_delete(iforce);
 }
 
 static struct usb_device_id iforce_usb_ids [] = {

@@ -276,11 +276,28 @@ static void iforce_close(struct input_dev *dev)
 	switch (iforce->bus) {
 #ifdef IFORCE_USB
 		case IFORCE_USB:
-			if (!--iforce->open)
+			if (!--iforce->open) {
 				usb_unlink_urb(&iforce->irq);
+				usb_unlink_urb(&iforce->out);
+
+				/* The device was unplugged before the file
+				 * was released */
+				if (iforce->usbdev == NULL) {
+					iforce_delete(iforce);
+				}
+			}
 			break;
 #endif
 	}
+}
+
+void iforce_delete(struct iforce *iforce)
+{
+#ifdef IFORCE_USB
+	iforce_usb_delete(iforce);
+#endif
+
+	kfree(iforce);
 }
 
 int iforce_init_device(struct iforce *iforce)
