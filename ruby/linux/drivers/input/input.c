@@ -126,7 +126,7 @@ void input_event(struct input_dev *dev, unsigned int type, unsigned int code, in
 
 		case EV_MSC:
 
-			if (code > MSC_MAX || !test_bit(code, dev->mscbit)
+			if (code > MSC_MAX || !test_bit(code, dev->mscbit))
 				return;
 	
 			break;
