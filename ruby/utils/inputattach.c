@@ -212,6 +212,7 @@ struct input_types input_types[] = {
 { "--newtonkbd",        "-newt",        B9600, CS8,                     SERIO_NEWTON,  0x00,    0,      newton_init },
 { "--h3600ts",          "-ipaq",     	B115200, CS8,                   SERIO_H3600,   0x00,    0,      NULL },
 { "--stowawaykbd",      "-ipaqkbd",     B115200, CS8,                   SERIO_STOWAWAY, 0x00,   0,      NULL },
+{ "--ps2serkbd",	"-ps2ser",	B1200, CS8,			SERIO_PS2SER,	0x00,	1,	NULL },
 { "--dump",		"-dump",	B1200, CS7, 			0,		0x00,	0,	dump_init },
 { "", "", 0, 0 }
 
@@ -246,6 +247,7 @@ int main(int argc, char **argv)
 		puts("  --iforce        -ifor  I-Force joysticks and wheels");
                 puts("  --h3600ts       -ipaq  Ipaq h3600 touchscreen");
 		puts("  --stowawaykbd   -ipaqkbd  Stowaway keyboard");
+		puts("  --ps2serkbd     -ps2ser PS/2 via serial keyboard");
 		puts("");
                 return 1;
         }
