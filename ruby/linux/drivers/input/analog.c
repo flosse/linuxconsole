@@ -83,10 +83,10 @@ static struct {
 #define ANALOG_AXES	0
 #define ANALOG_HATS	4
 
-static int analog_axes[] = { ABS_X, ABS_Y, ABS_RUDDER, ABS_THROTTLE }
+static int analog_axes[] = { ABS_X, ABS_Y, ABS_RUDDER, ABS_THROTTLE };
 static int analog_hats[] = { ABS_HAT0X, ABS_HAT0Y, ABS_HAT1X, ABS_HAT1Y, ABS_HAT2X, ABS_HAT2Y };
 static int analog_exts[] = { ANALOG_HAT1_CHF, ANALOG_HAT2_CHF, ANALOG_ANY_CHF };
-static int analog_pad_btn[] = { BTN_A, BTN_B, BTN_C, BTN_D, BTN_TL2, BTN_TR2, BTN_X, BTN_Y, BTN_TL, BTN_TR };
+static int analog_pad_btn[] = { BTN_A, BTN_B, BTN_X, BTN_Y, BTN_TL2, BTN_TR2, BTN_C, BTN_Z };
 static int analog_joy_btn[] = { BTN_TRIGGER, BTN_THUMB, BTN_TOP, BTN_TOP2, BTN_BASE, BTN_BASE2,
 				BTN_BASE3, BTN_BASE4, BTN_BASE5, BTN_THUMB2 };
 
@@ -363,8 +363,7 @@ static void analog_name(struct analog *analog)
 		sprintf(analog->name, "%s %d-hat",
 			analog->name, hweight16(analog->mask & ANALOG_HATS_ALL));
 
-	strcat(analog->name, " %s",
-		(analog->buttons == analog_btn_joy) ? "joystick" : "gamepad");
+	strcat(analog->name, (analog->buttons == analog_joy_btn) ? " joystick" : " gamepad");
 
 	if (analog->mask & ANALOG_EXTENSIONS)
 		sprintf(analog->name, "%s with%s%s%s extensions",
@@ -379,7 +378,7 @@ static void analog_name(struct analog *analog)
  * analog_init_device()
  */
 
-static int analog_init_device(struct analog_port *port, struct analog *analog)
+static void analog_init_device(struct analog_port *port, struct analog *analog)
 {
 	int i, j, t, x;
 
@@ -401,10 +400,10 @@ static int analog_init_device(struct analog_port *port, struct analog *analog)
 			if ((i == 2 || i == 3) && (t == ABS_THROTTLE || t == ABS_RUDDER))
 				x = (port->axes[1] + port->axes[2]) >> 1;
 
-			adi->dev.absmax[t] = x * 2 - 32;
-			adi->dev.absmin[t] = 32;
-			adi->dev.absfuzz[t] = 2;
-			adi->dev.absflat[t] = 8;
+			analog->dev.absmax[t] = x * 2 - 32;
+			analog->dev.absmin[t] = 32;
+			analog->dev.absfuzz[t] = 2;
+			analog->dev.absflat[t] = 8;
 
 			j++;
 		}
@@ -414,8 +413,8 @@ static int analog_init_device(struct analog_port *port, struct analog *analog)
 			for (j = 0; j < 2; j++) {
 				t = analog_hats[i * 2 + j];
 				set_bit(t, analog->dev.absbit);
-				adi->dev.absmax[t] = 1;
-				adi->dev.absmin[t] = -1;
+				analog->dev.absmax[t] = 1;
+				analog->dev.absmin[t] = -1;
 			}
 
 	for (i = j = 0; i < 4; i++)
@@ -471,11 +470,13 @@ static int analog_init_masks(struct analog_port *port)
 	analog[0].buttons = analog_joy_btn;
 
 	for (i = 0; i < 24; i += 3)
-		if (js[i] == port->gameport->number) {
-			analog[j].mask = js[i + j + 1];
-			analog[j].buttons = (analog[j].mask & ANALOG_BTNS_GAMEPAD) ? analog_pad_btn : analog_joy_btn;
-			break;
-		}
+		for (j = 0; j < 2; j++)
+			if (js[i] == port->gameport->number) {
+				analog[j].mask = js[i + j + 1];
+				analog[j].buttons = (analog[j].mask & ANALOG_BTNS_GAMEPAD)
+						  ? analog_pad_btn : analog_joy_btn;
+				break;
+			}
 
 	analog[0].mask &= ~(ANALOG_AXES_STD | ANALOG_HAT_FCS | ANALOG_BTNS_GAMEPAD)
 			| port->mask | ((port->mask & 0x80) << 4)
@@ -572,7 +573,7 @@ static struct gameport_dev analog_dev = {
 static int __init analog_setup(char *str)
 {
 	int i;
-	int ints[25]
+	int ints[25];
 	str = get_options(str, ARRAY_SIZE(ints), ints);
 	for (i = 0; i <= ints[0] && i < 24; i++) js[i] = ints[i+1];
 	return 1;
