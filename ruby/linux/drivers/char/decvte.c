@@ -1713,6 +1713,7 @@ void terminal_emulation(struct tty_struct *tty, int c)
                                 setledstate(&vc->kbd_table, 
 						(par[0] < 3) ? par[0] : 4);
                         case 4: /* LED 4 on */
+				;
                         }
                         return;
                 case 'r':       /* DECSTBM - Set top and bottom margin */
@@ -1782,6 +1783,7 @@ void terminal_emulation(struct tty_struct *tty, int c)
 attribute */
                                 return;
                         case 'v':       /* DECRQDE - Request window report */
+				;
                 }
                 return;
         case EScsi_dollar:
