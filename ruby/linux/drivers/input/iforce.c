@@ -63,6 +63,7 @@ struct iforce {
         int open;
         int idx, pkt, len, id;
         unsigned char csum;
+	int ff_next_id;		/* The id to assign to the next component of an effect */
 };
 
 static struct {
@@ -80,13 +81,6 @@ static char *iforce_name = "I-Force joystick/wheel";
 /* Encode a time value */
 #define TIME_SCALE(a)	((a)==0xffff?0xffff:(((a)*0x03e8)/0x0100))
  
-/* Macros computing the damned mysterious magic values of effect ids */
-#define MOD_ID_PERIOD(a)	((a) << 4)
-#define MOD_ID_SHAPE(a)		(((a) << 4) | 0x0c)
-#define MOD_ID_MAGNITUDE(a)	((a) << 4)
-#define MOD_ID_POSITION_X(a)	(((a) << 4) | 0x0a)
-#define MOD_ID_POSITION_Y(a)	(((a) << 4) | 0x0c)
-
 /*
  * Send a packet of bytes to the device
  */
@@ -109,9 +103,11 @@ static void send_serio(struct serio* pserio, unsigned char* data)
 /*
  * Start or stop playing an effect
  */
-int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value)
+static int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {
 	struct serio* serio = ((struct iforce*)(dev->private))->serio;
+
+printk(KERN_DEBUG "iforce feedback: input event %d %d %d\n", type, code, value);
 
 	if (code & FF_PLAY) {
 		unsigned char data[6] = {0x2b, 0x41, 0x03, 0x00, 0x00, 0x00};
@@ -143,32 +139,43 @@ int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned int co
 /*
  * Initialise the device
  */
-void iforce_ff_init(struct iforce* iforce)
+static void iforce_ff_init(struct iforce* iforce)
 {
-	unsigned char data[] = {
-		0x2b, 0xff, 0x01, 0x4f, 0x9a, 0x2b, 0xff, 0x01,
-		0x56, 0x83, 0x2b, 0xff, 0x01, 0x4e, 0x9b, 0x2b,
-		0xff, 0x01, 0x42, 0x97, 0x2b, 0xff, 0x01, 0x4d,
-		0x98, 0x2b, 0xff, 0x01, 0x50, 0x85, 0x2b, 0x40,
-		0x03, 0x06, 0xf4, 0x01, 0x9b, 0x2b, 0x43, 0x01,
-		0x80, 0xe9, 0x2b, 0x42, 0x01, 0x04, 0x6c, 0x2b,
-		0x42, 0x01, 0x05, 0x6d, 0x2b, 0x40, 0x02, 0x03,
-		0x29, 0x43, 0x2b, 0x40, 0x02, 0x04, 0x01, 0x6c,
-		0x2b, 0x42, 0x01, 0x05, 0x6d, 0x2b, 0x40, 0x02,
-		0x03, 0x29, 0x43, 0x2b, 0x40, 0x02, 0x04, 0x01,
-		0x6c, 0x2b, 0x43, 0x01, 0x80, 0xe9, 0x2b, 0x42,
-		0x01, 0x05, 0x6d, 0x2b, 0x40, 0x02, 0x04, 0x00,
-		0x6d, 0x2b, 0x42, 0x01, 0x05, 0x6d, 0x2b, 0x40,
-		0x02, 0x04, 0x00, 0x6d, 0x2b, 0x43, 0x01, 0x80,
-		0xe9, 0x2b, 0x43, 0x01, 0x80, 0xe9, 0x2b, 0x40,
-		0x02, 0x04, 0x00, 0x6d
-	};
+	/* Init data for AVB Top Shot Pegasus */
+	unsigned char data_avb_top_shot_pegasus[] = {
+		0x2B, 0xFF, 0x01, 0x4F, 0x9A, 0x2B, 0xFF, 0x01,
+		0x56, 0x83, 0x2B, 0xFF, 0x01, 0x4E, 0x9B, 0x2B,
+		0xFF, 0x01, 0x42, 0x97, 0x2B, 0xFF, 0x01, 0x4D,
+		0x98, 0x2B, 0xFF, 0x01, 0x50, 0x85, 0x2B, 0x40,
+		0x03, 0x06, 0xF4, 0x01, 0x9B, 0x2B, 0x43, 0x01,
+		0x80, 0xE9, 0x2B, 0x42, 0x01, 0x04, 0x6C, 0x2B,
+		0x42, 0x01, 0x04, 0x6C, 0x2B, 0x42, 0x01, 0x05,
+		0x6D, 0x2B, 0x40, 0x02, 0x04, 0x00, 0x6D, 0x2B,
+		0x42, 0x01, 0x05, 0x6D, 0x2B, 0x40, 0x02, 0x04,
+		0x00, 0x6D, 0x2B, 0x43, 0x01, 0x80, 0xE9, 0x2B,
+		0x42, 0x01, 0x05, 0x6D, 0x2B, 0x40, 0x02, 0x04,
+		0x00, 0x6D, 0x2B, 0x42, 0x01, 0x01, 0x69, 0x2B,
+		0x42, 0x01, 0x00, 0x68, 0x2B, 0xFF, 0x01, 0x4F,
+		0x9A, 0x2B, 0xFF, 0x01, 0x56, 0x83, 0x2B, 0xFF,
+		0x01, 0x4E, 0x9B, 0x2B, 0xFF, 0x01, 0x42, 0x97,
+		0x2B, 0xFF, 0x01, 0x4D, 0x98, 0x2B, 0xFF, 0x01,
+		0x50, 0x85, 0x2B, 0x40, 0x03, 0x06, 0xF4, 0x01,
+		0x9B, 0x2B, 0x43, 0x01, 0x80, 0xE9, 0x2B, 0x42,
+		0x01, 0x04, 0x6C, 0x2B, 0x42, 0x01, 0x04, 0x6C,
+		0x2B, 0x42, 0x01, 0x05, 0x6D, 0x2B, 0x42, 0x01,
+		0x04, 0x6C, 0x2B, 0x40, 0x02, 0x04, 0x00, 0x6D,
+		0x2B, 0x42, 0x01, 0x05, 0x6D, 0x2B, 0x40, 0x02,
+		0x04, 0x00, 0x6D, 0x2B, 0x43, 0x01, 0x80, 0xE9 };
+	int len_avb_top_shot_pegasus = 184;
 
 	int i;
 	struct serio* serio = iforce->serio;
  
+	int len = len_avb_top_shot_pegasus;
+	unsigned char* data = data_avb_top_shot_pegasus;
+
         printk(KERN_INFO "iforce ff: init\n");
-        for (i=0; i<124; ++i) {
+        for (i=0; i<len; ++i) {
                 serio->write(serio, data[i]);
         }                                    
 }
@@ -176,25 +183,44 @@ void iforce_ff_init(struct iforce* iforce)
 /*
  * Deinitialise the device
  */
-void iforce_ff_close(struct iforce* iforce)
+static void iforce_ff_close(struct iforce* iforce)
 {
 	/* TODO: iforce_ff_close */
 }
 
 /*
+ * Set the magnitude of a constant force effect
+ */
+static int make_magnitude_modifier(struct iforce* iforce, __u16 dummy, __s16 level)
+{
+        unsigned char data[6] = {0x2b, 0x03, 0x03, 0x00, 0x00, 0x00};
+        struct serio* serio = iforce->serio;
+	int id = iforce->ff_next_id;
+ 
+        data[3] = (unsigned char)LOW(iforce->ff_next_id);
+        data[4] = (unsigned char)HI(iforce->ff_next_id);
+        data[5] = (unsigned char)(level >> 8);
+ 
+        send_serio(serio, data);
+
+	iforce->ff_next_id += 0x02;
+	return id;
+}
+/*
  * Upload the component of an effect dealing with the period, phase and magnitude
  */
-static void make_period_modifier(struct iforce* iforce,
-	__u16 id, __s16 magnitude, __s16 offset, __u16 period, __u16 phase)
+static int make_period_modifier(struct iforce* iforce,
+	__u16 dummy, __s16 magnitude, __s16 offset, __u16 period, __u16 phase)
 {
 	unsigned char data[10] = {0x2b, 0x04, 0x07,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 	struct serio* serio = iforce->serio;
+	int id = iforce->ff_next_id;
  
 	period = TIME_SCALE(period);
  
-	data[3] = (unsigned char)LOW(MOD_ID_PERIOD(id));
-	data[4] = (unsigned char)HI(MOD_ID_PERIOD(id));
+	data[3] = (unsigned char)LOW(iforce->ff_next_id);
+	data[4] = (unsigned char)HI(iforce->ff_next_id);
  
 	data[5] = (unsigned char)(magnitude >> 8);
 	data[6] = (unsigned char)(offset >> 8);
@@ -204,24 +230,29 @@ static void make_period_modifier(struct iforce* iforce,
 	data[9] = (unsigned char)HI(period);
  
 	send_serio(serio, data); 
+
+	iforce->ff_next_id += 0x0c;
+
+	return id;
 }
 
 /*
  * Uploads the part of an effect setting the shape of the force
  */
-static void make_shape_modifier(struct iforce* iforce, __u16 id,
+static int make_shape_modifier(struct iforce* iforce, __u16 dummy,
         __u16 attack_duration, __s16 initial_level,
         __u16 fade_duration, __s16 final_level)
 {
 	unsigned char data[11] = {0x2b, 0x02, 0x08,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 	struct serio* serio = iforce->serio;
+	int id = iforce->ff_next_id;
  
 	attack_duration = TIME_SCALE(attack_duration);
 	fade_duration = TIME_SCALE(fade_duration);
  
-	data[3] = (unsigned char)LOW(MOD_ID_SHAPE(id));
-	data[4] = (unsigned char)HI(MOD_ID_SHAPE(id));
+	data[3] = (unsigned char)LOW(iforce->ff_next_id);
+	data[4] = (unsigned char)HI(iforce->ff_next_id);
  
 	data[5] = (unsigned char)LOW(attack_duration);
 	data[6] = (unsigned char)HI(attack_duration);
@@ -232,8 +263,15 @@ static void make_shape_modifier(struct iforce* iforce, __u16 id,
 	data[10] = (unsigned char)(final_level >> 8);
  
 	send_serio(serio, data);
+
+	iforce->ff_next_id += 0x0e;
+
+	return id;
 }
 
+/*
+ * Send the part common to all effects to the device
+ */
 static void make_core(struct iforce* iforce, __u16 id, __u16 mod_id1, __u16 mod_id2,
 	__u8 effect_type, __u16 duration, __u16 delay, __u16 button,
 	__u16 interval, __u16 direction)
@@ -280,13 +318,14 @@ static void make_core(struct iforce* iforce, __u16 id, __u16 mod_id1, __u16 mod_
 static void iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effect)
 {
 	__u8 wave_code;
+	int period_id, shape_id;
  
 	printk(KERN_DEBUG "iforce ff: make periodic effect \n"); 
-	make_period_modifier(iforce, effect->id,
+	period_id = make_period_modifier(iforce, effect->id,
 		effect->u.periodic.magnitude, effect->u.periodic.offset,
 		effect->u.periodic.period, effect->u.periodic.phase);
  
-        make_shape_modifier(iforce, effect->id,
+        shape_id = make_shape_modifier(iforce, effect->id,
                 effect->u.periodic.shape.attack_length,
 		effect->u.periodic.shape.attack_level,
                 effect->u.periodic.shape.fade_length,
@@ -302,8 +341,8 @@ static void iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effe
 	}
  
 	make_core(iforce, effect->id,
-                MOD_ID_PERIOD(effect->id),
-                MOD_ID_SHAPE(effect->id),
+                period_id,
+                shape_id,
                 wave_code,
                 effect->u.periodic.replay.length,
 		effect->u.periodic.replay.delay,
@@ -314,21 +353,60 @@ static void iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effe
 }
 
 /*
+ * Upload a constant force effect
+ */
+static int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effect)
+{
+	int magnitude_id;
+	int shape_id;
+
+	printk(KERN_DEBUG "iforce ff: make constant effect\n");
+ 
+	magnitude_id = make_magnitude_modifier(iforce, effect->id, effect->u.constant.level);
+ 
+	shape_id = make_shape_modifier(iforce, effect->id,
+		effect->u.constant.shape.attack_length,
+		effect->u.constant.shape.attack_level,
+		effect->u.constant.shape.fade_length,
+		effect->u.constant.shape.fade_level);
+ 
+	make_core(iforce, effect->id,
+		magnitude_id,
+		shape_id,
+		0x00,
+		effect->u.constant.replay.length,
+		effect->u.constant.replay.delay,
+		effect->u.constant.trigger.button,
+		effect->u.constant.trigger.interval,
+		effect->u.constant.direction);
+ 
+	return 0;                                                               
+}
+
+/*
  * Function called when an ioctl is performed on the event dev entry.
  * It uploads an effect to the device
+ * TODO: Need mutex ?
  */
-void iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
+static void iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 {
 	struct iforce* iforce = (struct iforce*)(dev->private);
 
 	printk(KERN_DEBUG "iforce ff: upload effect\n");
+
+	/* If needed, reset the effect ids */
+	if (effect->id == 0) {
+		printk(KERN_DEBUG "iforce ff: new coupound started\n");
+		iforce->ff_next_id = 0;
+	}
+
 	switch (effect->type) {
 	case FF_PERIODIC:
 		iforce_upload_periodic(iforce, effect);
 		break;
 
 	case FF_CONSTANT:
-/*		iforce_upload_constant(serio, effect);*/
+		iforce_upload_constant(iforce, effect);
 		break;
 
 	case FF_SPRING:
@@ -417,6 +495,7 @@ static void iforce_input_setup(struct iforce *iforce)
 	 * FF: set ffbit here
 	 */
 	/* TODO: auto detect, or use option */
+	iforce->dev.evbit[0] |= BIT(EV_FF);
 	iforce->dev.ffbit[0] = BIT(FF_X) | BIT(FF_Y);
 
 	for (i = ABS_X; i <= ABS_Y; i++) {
