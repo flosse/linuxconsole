@@ -185,7 +185,10 @@ struct vc_data {
 	unsigned char vc_saved_GS;
 };
 
+struct module;
+
 struct consw {
+	struct module *owner;
 	const char *(*con_startup)(struct vt_struct *, int);
 	void	(*con_init)(struct vc_data *, int);
 	void	(*con_deinit)(struct vc_data *);
@@ -312,7 +315,7 @@ void unblank_vt(struct vt_struct *vt);
 void unblank_screen(void);
 void poke_blanked_console(struct vt_struct *vt);
 int con_font_op(struct vc_data *vc, struct console_font_op *op);
-void take_over_console(struct vt_struct *vt, const struct consw *sw);
+int take_over_console(struct vt_struct *vt, const struct consw *sw);
 
 int tioclinux(struct tty_struct *tty, unsigned long arg);
 
@@ -320,14 +323,14 @@ int tioclinux(struct tty_struct *tty, unsigned long arg);
 struct unimapinit;
 struct unipair;
 
-int con_set_trans_old(struct vc_data *vc, unsigned char *table);
-int con_get_trans_old(struct vc_data *vc, unsigned char *table);
-int con_set_trans_new(struct vc_data *vc, unsigned short *table);
-int con_get_trans_new(struct vc_data *vc, unsigned short *table);
+int con_set_trans_old(struct vc_data *vc, unsigned char __user *table);
+int con_get_trans_old(struct vc_data *vc, unsigned char __user *table);
+int con_set_trans_new(struct vc_data *vc, unsigned short __user *table);
+int con_get_trans_new(struct vc_data *vc, unsigned short __user *table);
 int con_clear_unimap(struct vc_data *vc, struct unimapinit *ui);
-int con_set_unimap(struct vc_data *vc, ushort ct, struct unipair *list);
-int con_get_unimap(struct vc_data *vc, ushort ct, ushort * uct,
-		   struct unipair *list);
+int con_set_unimap(struct vc_data *vc, ushort ct, struct unipair __user *list);
+int con_get_unimap(struct vc_data *vc, ushort ct, ushort __user * uct,
+		   struct unipair __user *list);
 int con_set_default_unimap(struct vc_data *vc);
 void con_free_unimap(struct vc_data *vc);
 void con_protect_unimap(struct vc_data *vc, int rdonly);

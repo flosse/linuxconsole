@@ -255,12 +255,12 @@ static void update_user_maps(struct vc_data *vc)
  * 0xf000-0xf0ff "transparent" Unicodes) whereas the "new" variants set
  * Unicodes explicitly.
  */
-int con_set_trans_old(struct vc_data *vc, unsigned char * arg)
+int con_set_trans_old(struct vc_data *vc, unsigned char __user * arg)
 {
 	int i;
 	unsigned short *p = translations[USER_MAP];
 
-	i = verify_area(VERIFY_READ, (void *)arg, E_TABSZ);
+	i = verify_area(VERIFY_READ, arg, E_TABSZ);
 	if (i)
 		return i;
 
@@ -274,12 +274,12 @@ int con_set_trans_old(struct vc_data *vc, unsigned char * arg)
 	return 0;
 }
 
-int con_get_trans_old(struct vc_data *vc, unsigned char * arg)
+int con_get_trans_old(struct vc_data *vc, unsigned char __user * arg)
 {
 	int i, ch;
 	unsigned short *p = translations[USER_MAP];
 
-	i = verify_area(VERIFY_WRITE, (void *)arg, E_TABSZ);
+	i = verify_area(VERIFY_WRITE, arg, E_TABSZ);
 	if (i)
 		return i;
 
@@ -291,13 +291,12 @@ int con_get_trans_old(struct vc_data *vc, unsigned char * arg)
 	return 0;
 }
 
-int con_set_trans_new(struct vc_data *vc, ushort * arg)
+int con_set_trans_new(struct vc_data *vc, ushort __user * arg)
 {
 	int i;
 	unsigned short *p = translations[USER_MAP];
 
-	i = verify_area(VERIFY_READ, (void *)arg,
-			E_TABSZ*sizeof(unsigned short));
+	i = verify_area(VERIFY_READ, arg, E_TABSZ*sizeof(unsigned short));
 	if (i)
 		return i;
 
@@ -311,13 +310,12 @@ int con_set_trans_new(struct vc_data *vc, ushort * arg)
 	return 0;
 }
 
-int con_get_trans_new(struct vc_data *vc, ushort * arg)
+int con_get_trans_new(struct vc_data *vc, ushort __user * arg)
 {
 	int i;
 	unsigned short *p = translations[USER_MAP];
 
-	i = verify_area(VERIFY_WRITE, (void *)arg,
-			E_TABSZ*sizeof(unsigned short));
+	i = verify_area(VERIFY_WRITE, arg, E_TABSZ*sizeof(unsigned short));
 	if (i)
 		return i;
 
@@ -468,7 +466,7 @@ int con_clear_unimap(struct vc_data *vc, struct unimapinit *ui)
 }
 
 int
-con_set_unimap(struct vc_data *vc, ushort ct, struct unipair *list)
+con_set_unimap(struct vc_data *vc, ushort ct, struct unipair __user *list)
 {
 	struct uni_pagedir *p, *q;
 	int err = 0, err1, i;
@@ -571,6 +569,7 @@ con_set_default_unimap(struct vc_data *vc)
 	dflt = p;
 	return err;
 }
+EXPORT_SYMBOL(con_set_default_unimap);
 
 int
 con_copy_unimap(struct vc_data *dst, struct vc_data *src)
@@ -589,7 +588,7 @@ con_copy_unimap(struct vc_data *dst, struct vc_data *src)
 }
 
 int
-con_get_unimap(struct vc_data *vc, ushort ct, ushort *uct, struct unipair *list)
+con_get_unimap(struct vc_data *vc, ushort ct, ushort *uct, struct unipair __user *list)
 {
 	int i, j, k, ect;
 	u16 **p1, *p2;

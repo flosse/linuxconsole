@@ -1114,17 +1114,17 @@ int vc_resize(struct vc_data *vc, unsigned int cols, unsigned int lines)
 	old_row_size = video_size_row;
 	old_screenbuf_size = screenbuf_size;
 
-	video_num_lines = new_rows;
-	video_num_columns = new_cols;
-	video_size_row = new_row_size;
-	screenbuf_size = ss;
-
 	err = resize_screen(vc, new_cols, new_rows);
 	if (err) {
 		resize_screen(vc, old_cols, old_rows);
 		kfree(newscreen);
 		return err;
 	}
+
+	video_num_lines = new_rows;
+	video_num_columns = new_cols;
+	video_size_row = new_row_size;
+	screenbuf_size = ss;
 
 	rlth = min(old_row_size, new_row_size);
 	rrem = new_row_size - rlth;
@@ -1684,20 +1684,21 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
 {
 	struct vc_data *vc = tty->driver_data;
 	char type, data;
+	char __user *p = (char __user *)arg;
 	int lines, ret;
 
 	if (tty->driver->type != TTY_DRIVER_TYPE_CONSOLE)
 		return -EINVAL;
 	if (current->signal->tty != tty && !capable(CAP_SYS_ADMIN))
 		return -EPERM;
-	if (get_user(type, (char *)arg))
+	if (get_user(type, p))
 		return -EFAULT;
 	ret = 0;
 	switch (type)
 	{
 		case TIOCL_SETSEL:
 			acquire_console_sem();
-			ret = set_selection((struct tiocl_selection *)((char *)arg+1), tty, 1);
+			ret = set_selection((struct tiocl_selection __user *)(p+1), tty);
 			release_console_sem();
 			break;
 		case TIOCL_PASTESEL:
@@ -1707,7 +1708,7 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
 			unblank_screen();
 			break;
 		case TIOCL_SELLOADLUT:
-			ret = sel_loadlut(arg);
+			ret = sel_loadlut(p);
 			break;
 		case TIOCL_GETSHIFTSTATE:
 			
@@ -1718,14 +1719,14 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
 	 * related to the kernel should not use this.
 	 */
 	 		data = shift_state;
-			ret = __put_user(data, (char *) arg);
+			ret = __put_user(data, p);
 			break;
 		case TIOCL_GETMOUSEREPORTING:
 			data = mouse_reporting(vc);
-			ret = __put_user(data, (char *) arg);
+			ret = __put_user(data, p);
 			break;
 		case TIOCL_SETVESABLANK:
-			if (get_user(data, (char *) arg + 1))
+			if (get_user(data, p + 1))
 				return -EFAULT;
 			vc->display_fg->blank_mode = (data < 4) ? data : 0;
 			break;
@@ -1733,7 +1734,7 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
 			if (!capable(CAP_SYS_ADMIN)) {
 				ret = -EPERM;
 			} else {
-				if (get_user(data, (char *)arg))
+				if (get_user(data, p+1))
 					ret = -EFAULT;
 				else
 					kmsg_redirect = data;
@@ -1743,7 +1744,7 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
 			ret = vc->display_fg->fg_console->vc_num;
 			break;
 		case TIOCL_SCROLLCONSOLE:
-			if (get_user(lines, (s32 *)((char *)arg+4))) {
+			if (get_user(lines, (s32 __user *)(p+4))) {
 				ret = -EFAULT;
 			} else {
 				scroll_down(vc, lines);
@@ -1911,11 +1912,16 @@ int __init vty_init(void)
  *	and become default driver for newly opened ones.
  */
 
-void take_over_console(struct vt_struct *vt, const struct consw *csw)
+int take_over_console(struct vt_struct *vt, const struct consw *csw)
 {
 	struct vc_data *vc = vt->fg_console;
 	const char *desc;
 	int i;
+	struct module *owner;
+
+	owner = csw->owner;
+	if (!try_module_get(owner))
+		return -ENODEV;
 
 	acquire_console_sem();
 
@@ -1928,13 +1934,18 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
 			sw->con_deinit(vc);
 	}
 
+	/* under Linux-ruby one reference per console driver */
+	module_put(vt->vt_sw->owner);
+	__module_get(owner);
+
 	/* Test new hardware state */
 	desc = csw->con_startup(vt, 0);
 	if (!desc) {
 		/* Make sure the original driver state is restored to normal */
 		vt->vt_sw->con_startup(vt, 1);
 		release_console_sem();
-		return;
+		module_put(owner);
+		return -ENODEV;
 	}
 	vt->vt_sw = csw;
 	vt->display_desc = (char *)desc;
@@ -1967,6 +1978,9 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
 			vt->first_vc + 1, vt->first_vc + vt->vc_count);
 
 	release_console_sem();
+
+	module_put(owner);
+	return 0;
 }
 
 /*
