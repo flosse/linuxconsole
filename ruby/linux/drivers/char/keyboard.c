@@ -996,6 +996,8 @@ void kbd_keycode(void  *private, unsigned int keycode, int down)
 		tty = NULL;
 	}
 
+	if (!tty)	return;
+
 	/* If the console is blanked unblank it */
 	vt->want_vc = vc;
         tasklet_schedule(&vt->vt_tasklet);
