@@ -83,7 +83,7 @@ static __inline__ int serio_write(struct serio *serio, unsigned char data)
 
 static __inline__ void serio_dev_write_wakeup(struct serio *serio)
 {
-	if (serio->dev) {
+	if (serio->dev && serio->dev->write_wakeup) {
 		serio->dev->write_wakeup(serio);
 	}
 }
