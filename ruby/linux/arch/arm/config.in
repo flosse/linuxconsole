@@ -39,7 +39,7 @@ choice 'ARM system type' \
  	 CLPS711x/EP721x-based	CONFIG_ARCH_CLPS711X \
 	 Co-EBSA285		CONFIG_ARCH_CO285 \
 	 EBSA-110		CONFIG_ARCH_EBSA110 \
-	 Epxa10db		CONFIG_ARCH_CAMELOT \
+ 	 Epxa10db               CONFIG_ARCH_CAMELOT \
 	 FootBridge		CONFIG_ARCH_FOOTBRIDGE \
 	 Integrator		CONFIG_ARCH_INTEGRATOR \
 	 LinkUp-L7200		CONFIG_ARCH_L7200 \
@@ -123,11 +123,12 @@ fi
 
 dep_tristate 'SA1100 USB function support' CONFIG_SA1100_USB $CONFIG_ARCH_SA1100
 dep_tristate '  Support for SA11x0 USB network link function' CONFIG_SA1100_USB_NETLINK $CONFIG_SA1100_USB
-dep_tristate '  Support for SA11x0 USB character device emulation' CONFIG_SA110_USB_CHAR $CONFIG_SA1100_USB
+dep_tristate '  Support for SA11x0 USB character device emulation' CONFIG_SA1100_USB_CHAR $CONFIG_SA1100_USB
 endmenu
 
 mainmenu_option next_comment
 comment 'CLPS711X/EP721X Implementations'
+dep_bool '  AUTCPU12' CONFIG_ARCH_AUTCPU12 $CONFIG_ARCH_CLPS711X
 dep_bool '  CDB89712' CONFIG_ARCH_CDB89712 $CONFIG_ARCH_CLPS711X
 dep_bool '  CLEP7312' CONFIG_ARCH_CLEP7312 $CONFIG_ARCH_CLPS711X
 dep_bool '  EDB7211' CONFIG_ARCH_EDB7211 $CONFIG_ARCH_CLPS711X
@@ -265,6 +266,21 @@ if [ "$CONFIG_CPU_ARM920T" = "y" ]; then
    fi
 fi
 
+# ARM922T
+if [ "$CONFIG_ARCH_CAMELOT" = "y" ]; then
+         define_bool CONFIG_CPU_ARM922T y
+else
+         define_bool CONFIG_CPU_ARM922T n
+fi
+if [ "$CONFIG_CPU_ARM922T" = "y" ]; then
+   bool '  ARM922T CPU idle' CONFIG_CPU_ARM922_CPU_IDLE
+   bool '  ARM922T I-Cache on' CONFIG_CPU_ARM922_I_CACHE_ON
+   bool '  ARM922T D-Cache on' CONFIG_CPU_ARM922_D_CACHE_ON
+   if [ "$CONFIG_CPU_ARM922_D_CACHE_ON" = "y" ] ; then
+      bool '  Force write through caches on ARM922T' CONFIG_CPU_ARM922_WRITETHROUGH
+   fi
+fi
+
 # ARM926T
 if [ "$CONFIG_ARCH_INTEGRATOR" = "y" ]; then
    bool 'Support ARM926T processor' CONFIG_CPU_ARM926T
@@ -291,10 +307,14 @@ else
     define_bool CONFIG_CPU_ARM1020 n
 fi
 if [ "$CONFIG_CPU_ARM1020" = "y" ]; then
-   bool '  ARM10 I-Cache on' CONFIG_CPU_ARM10_I_CACHE_ON
-   bool '  ARM10 D-Cache on' CONFIG_CPU_ARM10_D_CACHE_ON
-   if [ "$CONFIG_CPU_ARM10_D_CACHE_ON" = "y" ] ; then
-      bool '  Force write through caches on ARM10' CONFIG_CPU_ARM10_FORCE_WRITE_THROUGH
+   bool '  ARM1020 I-Cache on' CONFIG_CPU_ARM1020_I_CACHE_ON
+   bool '  ARM10 D-Cache on' CONFIG_CPU_ARM1020_D_CACHE_ON
+   if [ "$CONFIG_CPU_ARM1020_D_CACHE_ON" = "y" ] ; then
+      bool '  Force write through caches on ARM1020' CONFIG_CPU_ARM1020_FORCE_WRITE_THROUGH
+   fi
+   if [ "$CONFIG_CPU_ARM1020_I_CACHE_ON" = "y" -o \
+        "$CONFIG_CPU_ARM1020_D_CACHE_ON" = "y" ]; then
+      bool '  Round robin I and D cache replacement algorithm' CONFIG_CPU_ARM1020_ROUND_ROBIN
    fi
 fi
 
@@ -403,7 +423,7 @@ if [ "$CONFIG_ARCH_EBSA110" = "y" -o         \
      "$CONFIG_ARCH_CATS" = "y" -o            \
      "$CONFIG_ARCH_P720T" = "y" -o	     \
      "$CONFIG_ARCH_CDB89712" = "y" -o	     \
-     "$CONFIG_ARCH_CAMELOT" = "y" -o         \	
+     "$CONFIG_ARCH_CAMELOT" = "y" -o	     \
      "$CONFIG_ARCH_ANAKIN" = "y" ]; then
    string 'Default kernel command string' CONFIG_CMDLINE ""
 fi
@@ -439,6 +459,7 @@ if [ "$CONFIG_CPU_32" = "y" -a "$CONFIG_ARCH_EBSA110" != "y" ]; then
 fi
 endmenu
 
+source drivers/serial/Config.in
 source drivers/parport/Config.in
 
 if [ "$CONFIG_ALIGNMENT_TRAP" = "y" ]; then
@@ -513,56 +534,12 @@ endmenu
 #
 # input before char - char/joystick depends on it. As does USB.
 #
+source drivers/usb/Config.in
 source drivers/input/Config.in
 
 source drivers/char/Config.in
-if [ "$CONFIG_ARCH_ACORN" = "y" -a \
-     "$CONFIG_BUSMOUSE" = "y" ]; then
-   if [ "$CONFIG_ARCH_RPC" != "y" ]; then
-      define_bool CONFIG_KBDMOUSE y
-   else
-      define_bool CONFIG_RPCMOUSE y
-   fi
-fi
-
-source drivers/media/Config.in
 
 source fs/Config.in
-
-if [ "$CONFIG_VT" = "y" ]; then
-   mainmenu_option next_comment
-   comment 'Console drivers'
-   # Select the keyboard type for this architecture.
-   if [ "$CONFIG_FOOTBRIDGE_HOST" = "y" -o \
-        "$CONFIG_ARCH_CLPS7500" = "y" -o   \
-        "$CONFIG_ARCH_SHARK" = "y" ]; then
-      define_bool CONFIG_PC_KEYB y
-   fi
-   if [ "$CONFIG_ARCH_INTEGRATOR" = "y" ]; then
-      define_bool CONFIG_KMI_KEYB y
-      define_bool CONFIG_KMI_MOUSE y
-   fi
-   if [ "$CONFIG_ARCH_L7200" = "y" ]; then
-      define_bool CONFIG_L7200_KEYB y
-   fi
-
-   # Do we use the PC-type keyboard map?
-   if [ "$CONFIG_FOOTBRIDGE_HOST" = "y" -o \
-        "$CONFIG_ARCH_SHARK" = "y" -o      \
-        "$CONFIG_ARCH_SA1100" = "y" -o     \
-        "$CONFIG_ARCH_INTEGRATOR" = "y" -o \
-        "$CONFIG_ARCH_TBOX" = "y" -o       \
-        "$CONFIG_ARCH_CLPS7500" = "y" -o   \
-        "$CONFIG_ARCH_P720T" = "y" -o      \
-        "$CONFIG_ARCH_ANAKIN" = "y" ]; then
-      define_bool CONFIG_PC_KEYMAP y
-   fi
-   if [ "$CONFIG_ARCH_ACORN" != "y" -a "$CONFIG_ARCH_EBSA110" != "y" ]; then
-      bool 'VGA text console' CONFIG_VGA_CONSOLE
-   fi
-   source drivers/video/Config.in
-   endmenu
-fi
 
 if [ "$CONFIG_ARCH_ACORN" = "y" -o \
      "$CONFIG_ARCH_CLPS7500" = "y" -o \
@@ -582,7 +559,8 @@ fi
 
 source drivers/misc/Config.in
 
-source drivers/usb/Config.in
+source drivers/media/Config.in
+source drivers/video/Config.in
 
 if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
    source net/bluetooth/Config.in
@@ -594,15 +572,18 @@ comment 'Kernel hacking'
 # Always compile kernel with framepointer (until 2.4 real comes out)
 # Bug reports aren't much use without this.
 bool 'Compile kernel without frame pointer' CONFIG_NO_FRAME_POINTER
-bool 'Verbose kernel error messages' CONFIG_DEBUG_ERRORS
 bool 'Verbose user fault messages' CONFIG_DEBUG_USER
 bool 'Include debugging information in kernel binary' CONFIG_DEBUG_INFO
-bool 'Debug memory allocations' CONFIG_DEBUG_SLAB
-bool 'Magic SysRq key' CONFIG_MAGIC_SYSRQ
-bool 'Spinlock debugging' CONFIG_DEBUG_SPINLOCK
 dep_bool 'Disable pgtable cache' CONFIG_NO_PGT_CACHE $CONFIG_CPU_26
+
+bool 'Kernel debugging' CONFIG_DEBUG_KERNEL
+dep_bool '  Debug memory allocations' CONFIG_DEBUG_SLAB $CONFIG_DEBUG_KERNEL
+dep_bool '  Magic SysRq key' CONFIG_MAGIC_SYSRQ $CONFIG_DEBUG_KERNEL
+dep_bool '  Spinlock debugging' CONFIG_DEBUG_SPINLOCK $CONFIG_DEBUG_KERNEL
+dep_bool '  Verbose BUG() reporting (adds 70K)' CONFIG_DEBUG_BUGVERBOSE $CONFIG_DEBUG_KERNEL
+dep_bool '  Verbose kernel error messages' CONFIG_DEBUG_ERRORS $CONFIG_DEBUG_KERNEL
 # These options are only for real kernel hackers who want to get their hands dirty. 
-dep_bool 'Kernel low-level debugging functions' CONFIG_DEBUG_LL $CONFIG_EXPERIMENTAL
-dep_bool '  Kernel low-level debugging messages via footbridge serial port' CONFIG_DEBUG_DC21285_PORT $CONFIG_DEBUG_LL $CONFIG_FOOTBRIDGE
-dep_bool '  kernel low-level debugging messages via UART2' CONFIG_DEBUG_CLPS711X_UART2 $CONFIG_DEBUG_LL $CONFIG_ARCH_CLPS711X
+dep_bool '  Kernel low-level debugging functions' CONFIG_DEBUG_LL $CONFIG_DEBUG_KERNEL
+dep_bool '    Kernel low-level debugging messages via footbridge serial port' CONFIG_DEBUG_DC21285_PORT $CONFIG_DEBUG_LL $CONFIG_FOOTBRIDGE
+dep_bool '    kernel low-level debugging messages via UART2' CONFIG_DEBUG_CLPS711X_UART2 $CONFIG_DEBUG_LL $CONFIG_ARCH_CLPS711X
 endmenu

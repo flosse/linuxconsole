@@ -133,6 +133,12 @@ ifeq ($(CONFIG_MWAVE),y)
   obj-y += mwave/mwave.o
 endif
 
+ifeq ($(CONFIG_ARCH_ACORN),y)
+mod-subdirs    += ../acorn/char
+subdir-y       += ../acorn/char
+obj-y          += ../acorn/char/acorn-char.o
+endif
+
 include $(TOPDIR)/Rules.make
 
 fastdep:

@@ -132,7 +132,6 @@ DRIVERS-  :=
 DRIVERS-$(CONFIG_ACPI) += drivers/acpi/acpi.o
 DRIVERS-$(CONFIG_PARPORT) += drivers/parport/driver.o
 DRIVERS-$(CONFIG_I2C) += drivers/i2c/i2c.o
-DRIVERS-$(CONFIG_L3) += drivers/l3/l3.o
 DRIVERS-$(CONFIG_AGP) += drivers/char/agp/agp.o
 DRIVERS-y += drivers/char/char.o \
 	drivers/block/block.o \
@@ -160,6 +159,7 @@ DRIVERS-y += drivers/cdrom/driver.o
 endif
 
 DRIVERS-$(CONFIG_SSI) += drivers/ssi/ssi.o
+DRIVERS-$(CONFIG_L3) += drivers/l3/l3.o
 DRIVERS-$(CONFIG_UART) += drivers/serial/uart.o 
 DRIVERS-$(CONFIG_SOUND) += drivers/sound/sounddrivers.o
 DRIVERS-$(CONFIG_PCI) += drivers/pci/driver.o

@@ -133,6 +133,11 @@ if [ "$CONFIG_WATCHDOG" != "n" ]; then
    tristate '  Berkshire Products PC Watchdog' CONFIG_PCWATCHDOG
    tristate '  Acquire SBC Watchdog Timer' CONFIG_ACQUIRE_WDT
    tristate '  Advantech SBC Watchdog Timer' CONFIG_ADVANTECH_WDT
+   if [ "$CONFIG_ARM" = "y" ]; then
+      dep_tristate '  DC21285 watchdog' CONFIG_21285_WATCHDOG $CONFIG_FOOTBRIDGE
+      dep_tristate '  NetWinder WB83C977 watchdog' CONFIG_977_WATCHDOG $CONFIG_ARCH_NETWINDER
+      dep_tristate '  SA1100 watchdog' CONFIG_SA1100_WATCHDOG $CONFIG_ARCH_SA1100
+   fi
    tristate '  IB700 SBC Watchdog Timer' CONFIG_IB700_WDT
    tristate '  SBC-60XX Watchdog Timer' CONFIG_60XX_WDT
    tristate '  W83877F (EMACS) Watchdog Timer' CONFIG_W83877F_WDT
