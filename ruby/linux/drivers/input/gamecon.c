@@ -208,6 +208,7 @@ static void gc_multi_read_packet(struct gc *gc, int length, unsigned char *data)
  * See documentation at:
  *	http://www.dim.com/~mackys/psxmemcard/ps-eng2.txt
  *	http://www.gamesx.com/controldata/psxcont/psxcont.htm
+ *	ftp://milano.usal.es/pablo/
  *	
  */
 
