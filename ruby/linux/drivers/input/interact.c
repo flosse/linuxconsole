@@ -137,40 +137,41 @@ static void interact_timer(unsigned long private)
 
 	if (interact_read_packet(interact->gameport, interact->length, data) < interact->length) {
 		interact->bads++;
-	} else
+	} else {
 
-	for (i = 0; i < 3; i++)
-		data[i] <<= INTERACT_MAX_LENGTH - interact->length;
+		for (i = 0; i < 3; i++)
+			data[i] <<= INTERACT_MAX_LENGTH - interact->length;
 
-	switch (interact->type) {
+		switch (interact->type) {
 
-		case INTERACT_TYPE_HHFX:
+			case INTERACT_TYPE_HHFX:
 
-			for (i = 0; i < 4; i++)
-				input_report_abs(dev, interact_abs_hhfx[i], (data[i & 1] >> ((i >> 1) << 3)) & 0xff);
+				for (i = 0; i < 4; i++)
+					input_report_abs(dev, interact_abs_hhfx[i], (data[i & 1] >> ((i >> 1) << 3)) & 0xff);
 
-			for (i = 0; i < 2; i++)
-				input_report_abs(dev, ABS_HAT0Y - i,
-					((data[1] >> ((i << 1) + 17)) & 1)  - ((data[1] >> ((i << 1) + 16)) & 1));
+				for (i = 0; i < 2; i++)
+					input_report_abs(dev, ABS_HAT0Y - i,
+						((data[1] >> ((i << 1) + 17)) & 1)  - ((data[1] >> ((i << 1) + 16)) & 1));
 
-			for (i = 0; i < 8; i++)
-				input_report_key(dev, interact_btn_hhfx[i], (data[0] >> (i + 16)) & 1);
+				for (i = 0; i < 8; i++)
+					input_report_key(dev, interact_btn_hhfx[i], (data[0] >> (i + 16)) & 1);
 
-			for (i = 0; i < 4; i++)
-				input_report_key(dev, interact_btn_hhfx[i + 8], (data[1] >> (i + 20)) & 1);
+				for (i = 0; i < 4; i++)
+					input_report_key(dev, interact_btn_hhfx[i + 8], (data[1] >> (i + 20)) & 1);
 
-			break;
+				break;
 
-		case INTERACT_TYPE_PP8D:
+			case INTERACT_TYPE_PP8D:
 
-			for (i = 0; i < 2; i++)
-				input_report_abs(dev, interact_abs_pp8d[i], 
-					((data[0] >> ((i << 1) + 20)) & 1)  - ((data[0] >> ((i << 1) + 21)) & 1));
+				for (i = 0; i < 2; i++)
+					input_report_abs(dev, interact_abs_pp8d[i], 
+						((data[0] >> ((i << 1) + 20)) & 1)  - ((data[0] >> ((i << 1) + 21)) & 1));
 
-			for (i = 0; i < 8; i++)
-				input_report_key(dev, interact_btn_pp8d[i], (data[1] >> (i + 16)) & 1);
+				for (i = 0; i < 8; i++)
+					input_report_key(dev, interact_btn_pp8d[i], (data[1] >> (i + 16)) & 1);
 
-			break;
+				break;
+		}
 	}
 
 	mod_timer(&interact->timer, jiffies + INTERACT_REFRESH_TIME);

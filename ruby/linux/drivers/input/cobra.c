@@ -121,6 +121,7 @@ static void cobra_timer(unsigned long private)
 
 	if ((r = cobra_read_packet(cobra->gameport, data)) != cobra->exists)
 		cobra->bads++;
+	else
 
 	for (i = 0; i < 2; i++)
 		if (cobra->exists & r & (1 << i)) {
