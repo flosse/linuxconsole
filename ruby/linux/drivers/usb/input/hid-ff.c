@@ -36,8 +36,13 @@
 
 /* Drivers' initializing functions */
 extern int hid_lgff_init(struct hid_device* hid);
+extern int hid_lg3d_init(struct hid_device* hid);
 extern int hid_pid_init(struct hid_device* hid);
 
+/*
+ * This table contains pointers to initializers. To add support for new
+ * devices, you need to add the USB vendor and product ids here.
+ */
 struct hid_ff_initializer {
 	__u16 idVendor;
 	__u16 idProduct;

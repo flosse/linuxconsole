@@ -1,7 +1,9 @@
 /*
  * $$
  *
- *  Force feedback support for hid-compliant devices from Logitech.
+ * Force feedback support for hid-compliant for some of the devices from
+ * Logitech, namely:
+ * - WingMan Cordless RumblePad
  *
  *  Copyright (c) 2002 Johann Deneux
  */
@@ -51,10 +53,8 @@
         || effect.owner == current->pid)
 
 /* **************************************************************************/
-/* Implements the protocol used by the Logitech WingMan Cordless rumble pad */
+/* Implements the protocol used by the Logitech WingMan Cordless RumblePad */
 /* **************************************************************************/
-
-#ifdef CONFIG_LOGITECH_RUMBLE
 
 #define LGFF_CHECK_OWNERSHIP(i, l) \
         (i>=0 && i<LGFF_EFFECTS \
@@ -494,5 +494,3 @@ static void hid_lgff_timer(unsigned long timer_data)
 
 	spin_unlock_irqrestore(&lgff->lock, flags);
 }
-
-#endif /* CONFIG_LOGITECH_RUMBLE */
