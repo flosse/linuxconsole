@@ -85,8 +85,7 @@ static inline void console_verbose(void)
 		console_loglevel = 15;
 }
 
-
-/* If set, an oops, panic(), BUG() or die() is in progress */   
+/* If set, an oops, panic(), BUG() or die() is in progress */
 extern void bust_spinlocks(int yes);
 extern int oops_in_progress;
 
@@ -136,6 +135,7 @@ struct sysinfo {
 	unsigned long totalswap;	/* Total swap space size */
 	unsigned long freeswap;		/* swap space still available */
 	unsigned short procs;		/* Number of current processes */
+	unsigned short pad;		/* explicit padding for m68k */
 	unsigned long totalhigh;	/* Total high memory size */
 	unsigned long freehigh;		/* Available high memory size */
 	unsigned int mem_unit;		/* Memory unit size in bytes */
