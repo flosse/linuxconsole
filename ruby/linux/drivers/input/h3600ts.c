@@ -81,7 +81,8 @@
 static char *h3600_name = "H3600 TouchScreen";
 
 static unsigned char h3600_keycode[10] = {
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0       	 
+	KEY_RESERVED, KEY_RECORD, 0 /* CALENDAR */, 0 /* CONTACTS */, KEY_Q, 
+	0 /* start ? */, KEY_UP, KEY_RIGHT, KEY_LEFT, KEY_DOWN       	 
 };
 
 /*
@@ -136,7 +137,7 @@ static void npower_button_handler(int irq, void *dev_id, struct pt_regs *regs)
 	struct input_dev *dev = (struct input_dev *) dev_id;
 
         if (suspend_button_mode == PBM_GENERATE_KEYPRESS) {
-               	input_report_key(dev, KEY_POWER, down); 	
+               	input_report_key(dev, KEY_SUSPEND, down); 	
         } else {
                 if (!suspend_button_pushed) {
                         suspend_button_pushed = 1;
@@ -334,7 +335,7 @@ static void h3600ts_connect(struct serio *serio, struct serio_dev *dev)
 			"h3600_action", ts)) {
 		printk(KERN_ERR "h3600ts.c: Could not allocate Action Button IRQ!\n");
 		kfree(ts);
-		return -EBUSY;
+		return;
 	}
 
         if (request_irq(IRQ_GPIO_BITSY_NPOWER_BUTTON, npower_button_handler,
@@ -343,7 +344,7 @@ static void h3600ts_connect(struct serio *serio, struct serio_dev *dev)
 		free_irq(IRQ_GPIO_BITSY_ACTION_BUTTON, NULL);
 		printk(KERN_ERR "h3600ts.c: Could not allocate Power Button IRQ!\n");
 		kfree(ts);
-		return -EBUSY;
+		return;
 	}
 	/* Now we have things going we setup our input device */
 	ts->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS) | BIT(EV_LED);	
