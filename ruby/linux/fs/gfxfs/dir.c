@@ -9,10 +9,12 @@
  *
  */
 #include <linux/gfxfs_fs.h>
+#include <linux/dcache.h>
 
 /* FIXME: Keep things happy for now, add our own later */
 struct file_operations gfxfs_dir_ops = {
 	read:		generic_read_dir,
+	readdir:	dcache_readdir,
 };
 
 /* Ditto */
