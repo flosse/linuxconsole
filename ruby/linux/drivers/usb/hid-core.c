@@ -918,11 +918,6 @@ int hid_set_field(struct hid_field *field, unsigned offset, __s32 value)
 			return -1;
 		}
 	}
-	if (   (value > field->logical_maximum)
-	    || (value < field->logical_minimum)) {
-		dbg("value %d is invalid", value);
-		return -1;
-	}
 	field->value[offset] = value;
 	return 0;
 }

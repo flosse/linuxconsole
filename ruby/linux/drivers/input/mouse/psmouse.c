@@ -185,6 +185,11 @@ static void psmouse_interrupt(struct serio *serio, unsigned char data, unsigned 
 			case PSMOUSE_RET_NAK:
 				psmouse->ack = -1;
 				break;
+			default:
+				psmouse->ack = 1;	/* Workaround for mice which don't ACK the Get ID command */
+				if (psmouse->cmdcnt)
+					psmouse->cmdbuf[--psmouse->cmdcnt] = data;
+				break;
 		}
 		psmouse->acking = 0;
 		return;
