@@ -22,26 +22,6 @@
 /* ---- `Generic' versions of the frame buffer device operations ----------- */
 
     /*
-     *  Get the Fixed Part of the Display
-     */
-
-int fbgen_get_fix(struct fb_fix_screeninfo *fix, struct fb_info *info)
-{
-    *fix = info->fix;	    
-    return 0;
-}
-
-    /*
-     *  Get the User Defined Part of the Display
-     */
-
-int fbgen_get_var(struct fb_var_screeninfo *var, struct fb_info *info)
-{
-    *var = info->var;
-    return 0;
-}
-
-    /*
      *  Set the User Defined Part of the Display
      */
 
