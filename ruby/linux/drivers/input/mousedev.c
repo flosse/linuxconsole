@@ -90,6 +90,8 @@ static void mousedev_event(struct input_handle *handle, unsigned int type, unsig
 		while (list) {
 			switch (type) {
 				case EV_ABS:
+					if (test_bit(BTN_TRIGGER, dev->keybit))
+						break;
 					switch (code) {
 						case ABS_X:	
 							size = handle->dev->absmax[ABS_X] - handle->dev->absmin[ABS_X];
@@ -103,6 +105,7 @@ static void mousedev_event(struct input_handle *handle, unsigned int type, unsig
 							break;
 					}
 					break;
+
 				case EV_REL:
 					switch (code) {
 						case REL_X:	list->dx += value; break;
