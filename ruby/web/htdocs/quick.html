@@ -1,21 +1,21 @@
 <!DOCTYPE "-//IETF//DTD HTML 3.2//EN" PUBLIC>
 <html>
 <head>
-<meta name="description" content="Linux Input drivers">
-<meta name="keywords" content="joystick gamepad keyboard mouse wheel force feedback touchpad tablet input device linux driver gnu">
+<meta name="description" content="Linux Console Project">
+<meta name="keywords" content="console terminal TTY serial joystick gamepad keyboard mouse wheel force feedback touchpad tablet input device linux driver gnu">
 <title>Linux Input Drivers</title>
-<LINK REV=MADE HREF="mailto:vojtech@suse.cz">
+<LINK REV=MADE HREF="mailto:jsimmons@transvirtual.com">
 </head>
 
 <body text="#000000" bgcolor="#ffffff">
 
 <table border=0 cellspacing=0 cellpadding=0 width="100%" bgcolor="#FFFFFF">
-<tr><td><img SRC="images/l1i.png" border=0 width=32 height=64 alt=""><br></td><td width="100%" background="images/m1i.png">
-<img src="images/title.png" border=0 alt="Linux Input Drivers" width=512 height=64><br></td><td>
-<img SRC="images/r1i.png" border=0 width=32 height=64 alt=""><br></td></tr>
-<tr><td><img src="images/l2i.png" border=0 width=32 height=16 alt=""><br></td><td></td><td>
-<img SRC="images/r2i.png" border=0 width=32 height=16 alt=""><br></td></tr>
-<tr><td background="images/l3i.png"><img src="images/l3i.png" border=0 width=32 height=16 alt=""><br></td><td>
+<tr><td><img SRC="input/l1i.png" border=0 width=32 height=64 alt=""><br></td><td width="100%" background="input/m1i.png">
+<img src="input/title.png" border=0 alt="Linux Input Drivers" width=512 height=64><br></td><td>
+<img SRC="input/r1i.png" border=0 width=32 height=64 alt=""><br></td></tr>
+<tr><td><img src="input/l2i.png" border=0 width=32 height=16 alt=""><br></td><td></td><td>
+<img SRC="input/r2i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td background="input/l3i.png"><img src="input/l3i.png" border=0 width=32 height=16 alt=""><br></td><td>
 <div align=center><strong>
 
 <a href="index.html#introduction">Introduction</a> -
@@ -28,15 +28,15 @@
 <a href="adapters.html">Adapters</a> -
 <a href="input_links.html">Links</a><br>
 
-</strong></div></td><td background="images/r3i.png"><img src="images/r3i.png" border=0 width=32 height=16 alt=""><br></td></tr>
-<tr><td><img src="images/l4i.png" border=0 width=32 height=16 alt=""><br></td><td>
-</td><td><img SRC="images/r4i.png" border=0 width=32 height=16 alt=""><br></td></tr>
-<tr><td><img src="images/l6i.png" border=0 width=32 height=16 alt=""><br></td><td background="images/m2i.png">
-<img src="images/m2i.png" border=0 width=32 height=16 alt=""><br></td><td>
-<img src="images/r6i.png" border=0 width=32 height=16 alt=""><br></td></tr>
-<tr><td><img src="images/l2i.png" border=0 width=32 height=16 alt=""><br></td><td>
-</td><td><img SRC="images/r2i.png" border=0 width=32 height=16 alt=""><br></td></tr>
-<tr><td background="images/l3i.png"><img src="images/l3i.png" border=0 width=32 height=16 alt=""><br></td><td>
+</strong></div></td><td background="input/r3i.png"><img src="input/r3i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="input/l4i.png" border=0 width=32 height=16 alt=""><br></td><td>
+</td><td><img SRC="input/r4i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="input/l6i.png" border=0 width=32 height=16 alt=""><br></td><td background="input/m2i.png">
+<img src="input/m2i.png" border=0 width=32 height=16 alt=""><br></td><td>
+<img src="input/r6i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="input/l2i.png" border=0 width=32 height=16 alt=""><br></td><td>
+</td><td><img SRC="input/r2i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td background="input/l3i.png"><img src="input/l3i.png" border=0 width=32 height=16 alt=""><br></td><td>
 
 <!----------------------------------------------------------------------------------------------------------->
 <h2>Quick Start</h2>
@@ -82,9 +82,9 @@ kernel to use the drivers with. You can get it from
 <p>
 
 <code>
-wget ftp://ftp.kernel.org/pub/linux/kernel/v2.4/linux-2.4.0-test1.tar.bz2<br>
+wget ftp://ftp.kernel.org/pub/linux/kernel/v2.4/linux-2.4.13.tar.bz2<br>
 mv linux linux-old<br>
-tar xIvf linux-2.4.0-test1.tar.bz2<br>
+tar xIvf linux-2.4.13.tar.bz2<br>
 </code>
 <p>
 
@@ -111,9 +111,84 @@ make menuconfig<br>
 </code>
 <p>
 
-This part is a little tricky. You have to select quite a bunch of options to
-have your system operate correctly. For a most usual setup with a PS/2 mouse
-and a AT keyboard you need to select:
+You will see because the subsystems that compose the different types of
+TTYs can exist independently that even the main menu has changed. You will
+noticed in the top level menu we now have:
+<p>
+
+<code>
+Parallel port support  ---&gt;<br>
+Serial drivers  ---&gt;<br>
+Block devices  ---&gt;<br>
+</code>
+<p>
+
+and we have:
+<p>
+
+<code>
+USB support  ---&gt;<br>
+Input device support  ---&gt;<br>
+Character devices  ---&gt;<br>
+</code>
+<p>          
+
+This order is important since the devices in the next menu depend on the 
+devices before them. 
+
+Also we have renamed the Console driver menu to:
+<p>
+
+<code>
+Video  ---&gt;<br>   
+</code>
+<p>
+
+The Serial Driver menu selects the new experimental serial drivers based on
+Russel King's code from the ARM tree. We have taken this code to make it less
+and less TTY dependent. This menu comes before the input and char menus since
+alot of things are effected by this. If you select the new serial drivers you 
+can't select the old drivers. This prevents clashs. If you decided to try out
+the new serial drivers you will see:
+<p>
+
+<code>
+&nbsp;&nbsp; Serial port support<br>    
+</code>
+<p>
+
+If you enable it for the ix86 platform you will see:
+<p>
+
+<code>
+&nbsp;&nbsp; Serial port support<br>
+&nbsp;&nbsp; 8250/16550 and compatible serial support (EXPERIMENTAL) (NEW)<br>
+</code>
+<p>
+
+Now if you enable 8250/16550 support you will see support for a serial console
+on the 8250/16550. You will also see support for extended options for more
+advance 16550 types devices. Enabling extended options you will end up seeing:
+<p>
+
+<code>
+&nbsp;&nbsp; Serial port support<br>
+&nbsp;&nbsp; 8250/16550 and compatible serial support (EXPERIMENTAL) (NEW)<br>
+&nbsp;&nbsp;   Console on 8250/16550 and compatible serial port (EXPERIMENTAL)<br>
+&nbsp;&nbsp; Extended 8250/16550 serial driver options<br> 
+&nbsp;&nbsp;   Support more than 4 serial ports<br>
+&nbsp;&nbsp;   Support for sharing serial interrupt<br>
+&nbsp;&nbsp;   Autodetect IRQ on standard ports (unsafe)<br>
+&nbsp;&nbsp;   Support special multiport boards<br>
+&nbsp;&nbsp;   Support Bell Technologies HUB6 card<br> 
+</code>
+<p>    
+
+Now you have finished the serial configuration if you decided to give it a
+try we go onto configuring your Input Drivers. This part is a little tricky.
+You have to select quite a bunch of options to have your system operate 
+correctly. For a most usual setup with a PS/2 mouse and a AT keyboard you 
+need to select:
 <p>
 
 <code>
@@ -123,9 +198,20 @@ Input device support  ---&gt;<br>
 &nbsp;&nbsp;AT and PS/2 keyboards<br>
 &nbsp;&nbsp;PS/2 mouse<br>
 &nbsp;&nbsp;Mouse interface<br>
+&nbsp;&nbsp;Event interface<br>
 </code>
 <p>
 
+The reason for this is because the i8042 chipset that controls PS/2 devices
+is used on many platforms. A result of this is often the way to program the 
+chip varies. So the input api was designed to be modular for this. This 
+allows us to use the same PS/2 keybaord driver on different platforms. It 
+is the underlying driver for the chipset that could vary. For example I can
+use the same PS/2 keyboard for my intel box as well as for the iPAQ I have. 
+I have a special adaptor that allows me to plug in my PS/2 keyboard into a 
+iPAQ.
+<p>
+  
 For a setup with an USB mouse and keyboard you'd use:
 <p>
 
@@ -139,8 +225,18 @@ Input device support  ---&gt;<br>
 &nbsp;&nbsp;Input device support<br>
 &nbsp;&nbsp;USB Human Interface Device<br>
 &nbsp;&nbsp;Mouse interface<br>
+&nbsp;&nbsp;Event interface<br>
 </code>
 <p>
+
+The USB selection above will be in the USB menu.
+<p>
+Please note the Event 
+interface can be used with any type of input device. 
+This is how we can access keyboards with a tty as well as talk to touchscreens,
+joysticks, mice, and other various devices in a standard way. The mouse 
+interface is for backwards compatibality. Please use the Event interface for
+userland apps.  
 
 For serial mice you need:
 <p>
@@ -150,13 +246,16 @@ Input device support  ---&gt;<br>
 &nbsp;&nbsp;Serial port input line discipline<br>
 &nbsp;&nbsp;Serial mouse<br>
 &nbsp;&nbsp;Mouse interface<br>
+&nbsp;&nbsp;Event interface<br> 
 </code>
 <p>
 
 And in your init scripts a call to the inputattach utility (can be found in
 the utils subdir in the ruby tree). See the help for this utility about what
 the command line will be for your mouse - there are quite a couple different
-types of them.
+types of them. Over time the inputattach utility has grow to be used with a
+varity of different types of serial devices besides mice. We hope with the
+serial layer being written that in the future you will not need this.
 <p>
 
 <code>
@@ -178,7 +277,80 @@ Input device support  ---&gt<br>
 For other joystick types and gameport types you can select other joystick
 and gameport drivers if you have them. The same for mice, keyboards and
 other drivers.
+
+Please note the Event interface can be used with any type of input device. 
+This is how we can access keyboards with a tty as well as talk to touchscreens,
+joysticks, mice, and other various devices in a standard way. The mouse 
+interface is for backwards compatibality. Please use the Event interface for
+userland apps.  
 <p>
+
+Now that you have all your input devices configured now to the graphics
+devices and the VT layer. Remember you don't need the Console system to
+access your keyboard, but you do need Input support for the VT Console
+system. The same is also true for the framebuffer drivers. Go from the
+top menu into:
+<p>  
+
+<code>
+Character devices  ---&gt<br> 
+</code>
+<p>
+
+Now you will see something like:
+<p>
+
+<code>
+&nbsp;&nbsp;Virtual terminal<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Support for console on virtual terminal<br>
+</code>
+<p>
+
+You need to enable these if you want standard VT support. Now for say
+a embedded device which lacks a keyboard you don't need to select this.
+You can just use the input layer to access your device instead and the
+framebuffer to access the display if it has one. 
+
+If you don't see: 
+<p>
+
+<code>
+&nbsp;&nbsp;Standard/generic (8250/16550 and compatible UARTs) serial support<br>
+</code>
+<p>     
+
+This just means you will use the new serial drivers instead. Select the other
+devices you need in the character menu and then we can go onto the Video menu.
+
+When you enter the video menu you will see either:
+<p>
+
+<code>
+&nbsp;Support for frame buffer devices (EXPERIMENTAL)<br>
+&nbsp;Frame-buffer support  ---&gt<br>
+</code>
+<p>              
+
+You would see the above if you didn't select VT support. This would be
+what you would want for a embedded device lacking a keyboard. Or if we 
+selected VT support we see:
+<p>
+
+<code>
+&nbsp;Support for frame buffer devices (EXPERIMENTAL)<br>
+&nbsp;Frame-buffer support  ---&gt<br>
+&nbsp;--- Console drivers<br>
+&nbsp;VGA text console<br>
+&nbsp;Video mode selection support<br>
+&nbsp;MDA text console (EXPERIMENTAL)<br>
+&nbsp;NVIDIA hardware text console<br>
+&nbsp;Support for frame buffer console<br>
+&nbsp;&nbsp;&nbsp;Select compiled-in fonts<br>
+</code>
+<p>      
+
+Even with VT support we still can select framebuffer support without 
+framebuffer console support. 
 
 When you're done with configuring the kernel, you compile and install it
 (make sure your /etc/lilo.conf has an entry for this new kernel):
