@@ -43,17 +43,6 @@
 #define GUILLEMOT_MAX_LENGTH	17	/* 17 bytes */
 #define GUILLEMOT_REFRESH_TIME	HZ/50	/* 20 ms */
 
-struct guillemot {
-	struct gameport *gameport;
-	struct input_dev dev;
-	struct timer_list timer;
-	int used;
-	int bads;
-	int reads;
-	unsigned char type;
-	unsigned char length;
-};
-
 static short guillemot_abs_pad[] = 
 	{ ABS_X, ABS_Y, ABS_THROTTLE, ABS_RUDDER, -1 };
 
@@ -66,10 +55,22 @@ static struct {
 } guillemot_hat_to_axis[16] = {{ 0,-1}, { 1,-1}, { 1, 0}, { 1, 1}, { 0, 1}, {-1, 1}, {-1, 0}, {-1,-1}};
 
 struct guillemot_type {
+	unsigned char id;
 	short *abs;
 	short *btn;
 	int hat;
 	char *name;
+};
+
+struct guillemot {
+	struct gameport *gameport;
+	struct input_dev dev;
+	struct timer_list timer;
+	int used;
+	int bads;
+	int reads;
+	struct guillemot_type *type;
+	unsigned char length;
 };
 
 static struct guillemot_type guillemot_type[] = {
@@ -122,24 +123,26 @@ static void guillemot_timer(unsigned long private)
 {
 	struct guillemot *guillemot = (struct guillemot *) private;
 	struct input_dev *dev = &guillemot->dev;
-	u32 data[3];
+	u8 data[GUILLEMOT_MAX_LENGTH];
 	int i;
 
 	guillemot->reads++;
 
-	if (guillemot_read_packet(guillemot->gameport data) != GUILLEMOT_MAX_LENGTH * 8 ||
+	if (guillemot_read_packet(guillemot->gameport, data) != GUILLEMOT_MAX_LENGTH * 8 ||
 		data[0] != 0x55 || data[16] != 0xaa) {
 		guillemot->bads++;
 	} else {
 
-		for (i = 0; i < 6 && guillemot->abs[i] >= 0; i++)
-			input_report_abs(dev, guillemot->abs[i], data[i + 5]);
+		for (i = 0; i < 6 && guillemot->type->abs[i] >= 0; i++)
+			input_report_abs(dev, guillemot->type->abs[i], data[i + 5]);
 
-		input_report_abs(dev, ABS_HAT0X, guillemot_hat_to_axis[data[4] >> 4].x);
-		input_report_abs(dev, ABS_HAT0Y, guillemot_hat_to_axis[data[4] >> 4].y);
+		if (guillemot->type->hat) {
+			input_report_abs(dev, ABS_HAT0X, guillemot_hat_to_axis[data[4] >> 4].x);
+			input_report_abs(dev, ABS_HAT0Y, guillemot_hat_to_axis[data[4] >> 4].y);
+		}
 
-		for (i = 0; i < 16 && guillemot->btn[i] >= 0; i++)
-			input_report_key(dev, guillemot->btn[i], (data[2 + (i >> 3)] >> (i & 7)) & 1);
+		for (i = 0; i < 16 && guillemot->type->btn[i] >= 0; i++)
+			input_report_key(dev, guillemot->type->btn[i], (data[2 + (i >> 3)] >> (i & 7)) & 1);
 	}
 
 	mod_timer(&guillemot->timer, jiffies + GUILLEMOT_REFRESH_TIME);
@@ -175,7 +178,7 @@ static void guillemot_close(struct input_dev *dev)
 static void guillemot_connect(struct gameport *gameport, struct gameport_dev *dev)
 {
 	struct guillemot *guillemot;
-	__u32 data[3];
+	u8 data[GUILLEMOT_MAX_LENGTH];
 	int i, t;
 
 	if (!(guillemot = kmalloc(sizeof(struct guillemot), GFP_KERNEL)))
@@ -207,9 +210,7 @@ static void guillemot_connect(struct gameport *gameport, struct gameport_dev *de
 		goto fail2;	
 	}
 
-	guillemot->abs = guillemot_type[i].abs;
-	guillemot->btn = guillemot_type[i].btn;
-	guillemot->hat = guillemot_type[i].hat;
+	guillemot->type = guillemot_type + i;
 
 	guillemot->dev.private = guillemot;
 	guillemot->dev.open = guillemot_open;
@@ -223,13 +224,13 @@ static void guillemot_connect(struct gameport *gameport, struct gameport_dev *de
 
 	guillemot->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 
-	for (i = 0; (t = guillemot->abs[i]) >= 0; i++) {
+	for (i = 0; (t = guillemot->type->abs[i]) >= 0; i++) {
 		set_bit(t, guillemot->dev.absbit);
 		guillemot->dev.absmin[t] = 0;
 		guillemot->dev.absmax[t] = 255;
 	}
 
-	if (guillemot->hat) 
+	if (guillemot->type->hat) 
 		for (i = 0; i < 2; i++) {
 			t = ABS_HAT0X + i;
 			set_bit(t, guillemot->dev.absbit);
@@ -237,12 +238,12 @@ static void guillemot_connect(struct gameport *gameport, struct gameport_dev *de
 			guillemot->dev.absmax[t] = 1;
 		}
 
-	for (i = 0; (t = guillemot_type[guillemot->type].btn[i]) >= 0; i++)
+	for (i = 0; (t = guillemot->type->btn[i]) >= 0; i++)
 		set_bit(t, guillemot->dev.keybit);
 
 	input_register_device(&guillemot->dev);
 	printk(KERN_INFO "input%d: %s ver %d.%02d on gameport%d.0\n",
-		guillemot->dev.number, guillemot_type[guillemot->type].name, data[14], data[15], gameport->number);
+		guillemot->dev.number, guillemot->type->name, data[14], data[15], gameport->number);
 
 	return;
 fail2:	gameport_close(gameport);
