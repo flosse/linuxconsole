@@ -113,7 +113,7 @@ struct analog_port {
 	struct gameport *gameport;
 	struct timer_list timer;
 	struct analog analog[2];
-	char mask;
+	unsigned char mask;
 	char saitek;
 	char cooked;
 	int bads;
