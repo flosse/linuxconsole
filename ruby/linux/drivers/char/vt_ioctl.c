@@ -447,7 +447,8 @@ quit:   if (temp)
 }                                
 
 static inline int 
-do_fontx_ioctl(int cmd, struct consolefontdesc *user_cfd, int perm)
+do_fontx_ioctl(struct vc_data *vc, int cmd, struct consolefontdesc *user_cfd, 
+	       int perm)
 {
 	struct consolefontdesc cfdarg;
 	struct console_font_op op;
@@ -466,7 +467,7 @@ do_fontx_ioctl(int cmd, struct consolefontdesc *user_cfd, int perm)
 		op.height = cfdarg.charheight;
 		op.charcount = cfdarg.charcount;
 		op.data = cfdarg.chardata;
-		return con_font_op(vc_cons[fg_console], &op);
+		return con_font_op(vc, &op);
 	case GIO_FONTX: {
 		op.op = KD_FONT_OP_GET;
 		op.flags = KD_FONT_FLAG_OLD;
@@ -474,7 +475,7 @@ do_fontx_ioctl(int cmd, struct consolefontdesc *user_cfd, int perm)
 		op.height = cfdarg.charheight;
 		op.charcount = cfdarg.charcount;
 		op.data = cfdarg.chardata;
-		i = con_font_op(vc_cons[fg_console], &op);
+		i = con_font_op(vc, &op);
 		if (i)
 			return i;
 		cfdarg.charheight = op.height;
@@ -488,7 +489,7 @@ do_fontx_ioctl(int cmd, struct consolefontdesc *user_cfd, int perm)
 }
 
 static inline int 
-do_unimap_ioctl(int cmd, struct unimapdesc *user_ud,int perm)
+do_unimap_ioctl(struct vc_data *vc,int cmd, struct unimapdesc *user_ud,int perm)
 {
 	struct unimapdesc tmp;
 	int i = 0; 
@@ -504,9 +505,9 @@ do_unimap_ioctl(int cmd, struct unimapdesc *user_ud,int perm)
 	case PIO_UNIMAP:
 		if (!perm)
 			return -EPERM;
-		return con_set_unimap(vc_cons[fg_console], tmp.entry_ct, tmp.entries);
+		return con_set_unimap(vc, tmp.entry_ct, tmp.entries);
 	case GIO_UNIMAP:
-		return con_get_unimap(vc_cons[fg_console], tmp.entry_ct, &(user_ud->entry_ct), tmp.entries);
+		return con_get_unimap(vc, tmp.entry_ct, &(user_ud->entry_ct), tmp.entries);
 	}
 	return 0;
 }
@@ -526,12 +527,13 @@ int con_set_cmap(unsigned char *arg)
         }
         for (i = 0; i < MAX_NR_CONSOLES; i++) {
                 if (vc_cons_allocated(i)) {
+			struct vc_data *vc = vt_cons->vcs.vc_cons[i];
                         for (j = k = 0; j < 16; j++) {
-                                vc_cons[i]->vc_palette[k++] = default_red[j];
-                                vc_cons[i]->vc_palette[k++] = default_grn[j];
-                                vc_cons[i]->vc_palette[k++] = default_blu[j];
+                                vc->vc_palette[k++] = default_red[j];
+                                vc->vc_palette[k++] = default_grn[j];
+                                vc->vc_palette[k++] = default_blu[j];
                         }
-                        set_palette(vc_cons[i]);
+                        set_palette(vc);
                 }                                                       
         }
         return 0;
@@ -551,7 +553,7 @@ int con_get_cmap(unsigned char *arg)
               
 void do_blank_screen()
 {
-        struct vc_data *vc = vc_cons[fg_console];
+        struct vc_data *vc = vt_cons->vcs.vc_cons[fg_console];
 
         if (vc->display_fg->vt_blanked)
                 return;
@@ -572,15 +574,12 @@ void do_blank_screen()
 int vt_ioctl(struct tty_struct *tty, struct file * file,
 	     unsigned int cmd, unsigned long arg)
 {
-	int i, perm;
-	unsigned int console;
-	unsigned char ucval;
-	struct kbd_struct * kbd;
 	struct vc_data *vc = (struct vc_data *)tty->driver_data;
+	struct kbd_struct * kbd;
+	unsigned char ucval;
+	int i, perm;
 
-	console = vc->vc_num;
-
-	if (!vc_cons_allocated(console)) 	/* impossible? */
+	if (!vc_cons_allocated(vc->vc_num)) 	/* impossible? */
 		return -ENOIOCTLCMD;
 
 	/*
@@ -666,10 +665,10 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		default:
 			return -EINVAL;
 		}
-		if (vt_cons->vc_mode == (unsigned char) arg)
+		if (vc->display_fg->vc_mode == (unsigned char) arg)
 			return 0;
-		vt_cons->vc_mode = (unsigned char) arg;
-		if (console != fg_console)
+		vc->display_fg->vc_mode = (unsigned char) arg;
+		if (vc->vc_num != fg_console)
 			return 0;
 		/*
 		 * explicitly blank/unblank the screen if switching modes
@@ -681,7 +680,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		return 0;
 
 	case KDGETMODE:
-		ucval = vt_cons->vc_mode;
+		ucval = vc->display_fg->vc_mode;
 		goto setint;
 
 	case KDMAPDISP:
@@ -897,6 +896,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	 * to preserve sanity).
 	 */
 	case VT_ACTIVATE:
+	{
 		if (!perm)
 			return -EPERM;
 		if (arg == 0 || arg > MAX_NR_CONSOLES)
@@ -907,7 +907,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 			return i;
 		set_console(arg);
 		return 0;
-
+	}
 	/*
 	 * wait until the specified VT has been activated
 	 */
@@ -953,8 +953,8 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 				 * complete the switch.
 				 */
 				int newvt = vc->vt_newvt;
-				vc->vt_newvt = -1;
 				i = vc_allocate(newvt);
+				vc->vt_newvt = -1;
 				if (i)
 					return i;
 				/*
@@ -963,8 +963,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 				 * other console switches..
 				 */
 				spin_lock_irq(&console_lock);
-				complete_change_console(vc_cons[newvt], 
-							vc_cons[fg_console]);
+				complete_change_console(vc->display_fg->vcs.vc_cons[newvt], vc->display_fg->vcs.vc_cons[fg_console]);
 				spin_unlock_irq(&console_lock);
 			}
 		}
@@ -1076,7 +1075,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		op.height = 0;
 		op.charcount = 256;
 		op.data = (char *) arg;
-		return con_font_op(vc_cons[fg_console], &op);
+		return con_font_op(vc, &op);
 	}
 
 	case GIO_FONT: {
@@ -1087,7 +1086,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		op.height = 32;
 		op.charcount = 256;
 		op.data = (char *) arg;
-		return con_font_op(vc_cons[fg_console], &op);
+		return con_font_op(vc, &op);
 	}
 
 	case PIO_CMAP:
@@ -1100,7 +1099,8 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 
 	case PIO_FONTX:
 	case GIO_FONTX:
-		return do_fontx_ioctl(cmd, (struct consolefontdesc *)arg, perm);
+		return do_fontx_ioctl(vc, cmd, (struct consolefontdesc *)arg, 
+				      perm);
 
 	case PIO_FONTRESET:
 	{
@@ -1116,9 +1116,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		struct console_font_op op;
 		op.op = KD_FONT_OP_SET_DEFAULT;
 		op.data = NULL;
-		i = con_font_op(vc_cons[fg_console], &op);
+		i = con_font_op(vc, &op);
 		if (i) return i;
-		con_set_default_unimap(vc_cons[fg_console]);
+		con_set_default_unimap(vc);
 		return 0;
 		}
 #endif
@@ -1140,18 +1140,18 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	case PIO_SCRNMAP:
 		if (!perm)
 			return -EPERM;
-		return con_set_trans_old((unsigned char *)arg);
+		return con_set_trans_old(vc, (unsigned char *)arg);
 
 	case GIO_SCRNMAP:
-		return con_get_trans_old((unsigned char *)arg);
+		return con_get_trans_old(vc, (unsigned char *)arg);
 
 	case PIO_UNISCRNMAP:
 		if (!perm)
 			return -EPERM;
-		return con_set_trans_new((unsigned short *)arg);
+		return con_set_trans_new(vc, (unsigned short *)arg);
 
 	case GIO_UNISCRNMAP:
-		return con_get_trans_new((unsigned short *)arg);
+		return con_get_trans_new(vc, (unsigned short *)arg);
 
 	case PIO_UNIMAPCLR:
 	      { struct unimapinit ui;
@@ -1159,13 +1159,13 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 			return -EPERM;
 		i = copy_from_user(&ui, (void *)arg, sizeof(struct unimapinit));
 		if (i) return -EFAULT;
-		con_clear_unimap(vc_cons[fg_console], &ui);
+		con_clear_unimap(vc, &ui);
 		return 0;
 	      }
 
 	case PIO_UNIMAP:
 	case GIO_UNIMAP:
-		return do_unimap_ioctl(cmd, (struct unimapdesc *)arg, perm);
+		return do_unimap_ioctl(vc, cmd, (struct unimapdesc *)arg, perm);
 
 	case VT_LOCKSWITCH:
 		if (!suser())
@@ -1312,13 +1312,10 @@ void switch_screen(struct vc_data *new_vc, struct vc_data *old_vc)
 
         hide_cursor(old_vc);
         if (old_vc->vc_num != new_vc->vc_num) {
-                int currcons = old_vc->vc_num; 
 		fg_console = new_vc->vc_num;
+               	save_screen(old_vc);
+                set_origin(old_vc);               
 		
-                if (!IS_VISIBLE) {
-                	save_screen(old_vc);
-                        set_origin(old_vc);               
-                }
 		set_origin(new_vc);		
                 if (new_vc->display_fg->sw->con_switch(new_vc) && new_vc->display_fg->vc_mode != KD_GRAPHICS) {
                         /* Change the palette after a VT switch. */
@@ -1405,7 +1402,7 @@ void complete_change_console(struct vc_data *new_vc, struct vc_data *old_vc)
 {
 	unsigned char old_vc_mode;
 
-	last_console = old_vc->vc_num;
+	old_vc->display_fg->last_console = old_vc->vc_num;
 
 	/*
 	 * If we're switching, we could be going from KD_GRAPHICS to
