@@ -45,10 +45,8 @@ LEN= 0e
 08-09 Address of periodicity or magnitude parameters
 0a-0b Address of attack and fade parameters, or ffff if none.
 *or*
-08-09 Address of interactive parameters for X-axis, or ffff if not
-applicable
-0a-0b Address of interactive parameters for Y-axis, or ffff if not
-applicable
+08-09 Address of interactive parameters for X-axis, or ffff if not applicable
+0a-0b Address of interactive parameters for Y-axis, or ffff if not applicable
 
 0c-0d Delay before execution of effect (little endian encoding, in ms)
 
@@ -80,7 +78,6 @@ LEN= 07
 05-06 Period (little endian encoding, in ms)
 
 ** Interactive parameters **
-
 OP=  05
 LEN= 0a
 00-01 Address
@@ -108,7 +105,7 @@ LEN= 03
 OP=  ff
 Query command. Length varies according to the query type.
 The general format of this packet is:
-ff 01 QUERY CHECKSUM
+ff 01 QUERY [INDEX] CHECKSUM
 reponses are of the same form:
 FF LEN QUERY VALUE_QUERIED CHECKSUM2
 where LEN = 1 + length(VALUE_QUERIED)
@@ -133,41 +130,54 @@ Query the vendors'id (2 bytes)
 QUERY = 50 ('P'roduct)
 Query the product id (2 bytes)
 
-**** Other features ****
-QUERY = 43 ('C') - sends back 'C' and 0 bytes
-QUERY = 45 ('E') - sends back 2 bytes (00 00 or 00 01)
-QUERY = 4f ('O') - sends back 'O' and 0 bytes
-QUERY = 56 ('V'ersion) - sends back 3 bytes (02 03 00 or 02 04 00 or 02 05 00)
+**** Open device ****
+QUERY = 4f ('O'pen) 
+No data returned.
+
+**** Close device *****
+QUERY = 43 ('C')lose
+No data returned.
+
+**** Query effect ****
+QUERY = 45 ('E') 
+Send effect type.
+Returns nonzero if supported (2 bytes)
+
+**** Firmware Version ****
+QUERY = 56 ('V'ersion)
+Sends back 3 bytes - major, minor, subminor
 
 *** Initialisation of the device ***
 
-**** Setting a default spring ****
-OP=  40
+**** Set Control ****
+!!! Device dependent, can be different on different models !!!
+OP=  40 <idx> <val> [<val>]
 LEN= 2 or 3
-00 Command type:
-   Val 03 Set the strength of the spring
-   Val 04 Enable or disable the spring 
-01 Strength of the spring if 00 = Val 03
-   Enable (Val 01) or disable (00) the default spring if 00 = Val 04
-02 ???
+00 Idx
+   Idx 00 Set dead zone (0..2048) 
+   Idx 01 Ignore Deadman sensor (0..1)     
+   Idx 02 Enable comm watchdog (0..1)     
+   Idx 03 Set the strength of the spring (0..100)   
+   Idx 04 Enable or disable the spring (0/1)
+   Idx 05 Set axis saturation threshold (0..2048) 
 
-**** ???? ****
-OP=  42
+**** Set Effect State ****
+OP=  42 <val>
 LEN= 1
-00 FF enable/disable?
-   Val 01 Disables force feedback
-   Val 04 Enables force feedback
-   Val 05 Enables force feedback
+00 State
+   Bit 3 Pause force feedback
+   Bit 2 Enable force feedback
+   Bit 0 Stop all effects
 
-**** Setting overall gain ****
-OP=  43
+**** Set overall gain ****
+OP=  43 <val>
 LEN= 1
 00 Gain
    Val 00 = 0%
    Val 40 = 50%
    Val 80 = 100%
 
-** Parameters' memory **
+** Parameter memory **
 
 Each device has a certain amount of memory to store parameters of effects.
 The amount of RAM may vary, I encountered values from 200 to 1000 bytes. Below
