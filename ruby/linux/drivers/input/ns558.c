@@ -342,9 +342,6 @@ void __exit ns558_exit(void)
 {
 	struct ns558 *next, *port = ns558;
 
-	if (ns558_pci)
-		pci_unregister_driver(&ns558_pci_driver);
-
 	while (port) {
 		gameport_unregister_port(&port->gameport);
 		switch (port->type) {
@@ -368,6 +365,9 @@ void __exit ns558_exit(void)
 		kfree(port);
 		port = next;
 	}
+
+	if (ns558_pci)
+		pci_unregister_driver(&ns558_pci_driver);
 }
 
 module_init(ns558_init);
