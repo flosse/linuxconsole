@@ -121,6 +121,7 @@ struct iforce {
 	char name[64];
 	int open;
 	int bus;
+	pid_t writer_pid;
 
 	unsigned char data[IFORCE_MAX_LENGTH];
 	unsigned char edata[IFORCE_MAX_LENGTH];
@@ -339,6 +340,17 @@ static int get_id_packet(struct iforce *iforce, char *packet)
 	return -(iforce->edata[0] != packet[0]);
 }
 
+/* Allow only one writer process at a time */
+static int iforce_accept(struct input_dev *dev, struct file *file)
+{
+	if (file->f_mode & FMODE_WRITE) {
+		struct iforce *iforce = dev->private;
+		if (iforce->writer_pid) return -EBUSY;
+		iforce->writer_pid = current->pid;
+	}
+	return 0;
+}
+
 static int iforce_open(struct input_dev *dev)
 {
 	struct iforce *iforce = dev->private;
@@ -358,6 +370,16 @@ static int iforce_open(struct input_dev *dev)
 	/* Reset device */
 	send_packet(iforce, FF_CMD_ENABLE, "\004");
 
+	return 0;
+}
+
+static int iforce_flush(struct input_dev *dev, struct file *file)
+{
+	struct iforce *iforce = dev->private;
+
+	if ((file->f_mode & FMODE_WRITE) && current->pid == iforce->writer_pid) {
+		iforce->writer_pid = 0;
+	}
 	return 0;
 }
 
@@ -872,6 +894,8 @@ static int iforce_init_device(struct iforce *iforce)
 	iforce->dev.name = iforce->name;
 	iforce->dev.open = iforce_open;
 	iforce->dev.close = iforce_close;
+	iforce->dev.accept = iforce_accept;
+	iforce->dev.flush = iforce_flush;
 	iforce->dev.event = iforce_input_event;
 	iforce->dev.upload_effect = iforce_upload_effect;
 	iforce->dev.erase_effect = iforce_erase_effect;
@@ -1002,8 +1026,6 @@ static int iforce_init_device(struct iforce *iforce)
 	for (i = 0; iforce->type->ff[i] >= 0; i++)
 		set_bit(iforce->type->ff[i], iforce->dev.ffbit);
 
-	/* Only one process is allowed to open us for writing */
-	iforce->dev.only_one_writer = 1;
 /*
  * Register input device.
  */
