@@ -543,8 +543,8 @@ struct ff_interactive_effect {
  */
 	__u16 axis;
 
-	__s16 right_saturation; /* Max level when joystick is on the right */
-	__s16 left_saturation;	/* Max level when joystick in on the left */
+	__u16 right_saturation; /* Max level when joystick is on the right */
+	__u16 left_saturation;	/* Max level when joystick in on the left */
 
 	__s16 right_coeff;	/* Indicates how fast the force grows when the
 				   joystick moves to the right */
