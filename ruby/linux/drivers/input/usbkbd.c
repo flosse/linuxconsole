@@ -137,6 +137,7 @@ static int usbkbd_open(struct input_dev *dev)
 		kfree(usbkbd);
 		return -EIO;
 	}
+	return 0;
 }
 
 static void usbkbd_close(struct input_dev *dev)
@@ -181,6 +182,8 @@ static void *usbkbd_probe(struct usb_device *dev, unsigned int ifnum)
 	
 	usbkbd->dev.private = usbkbd;
 	usbkbd->dev.event = usbkbd_event;
+	usbkbd->dev.open = usbkbd_open;
+	usbkbd->dev.close = usbkbd_close;
 
 	{
 		int pipe = usb_rcvintpipe(dev, endpoint->bEndpointAddress);
@@ -203,7 +206,6 @@ static void *usbkbd_probe(struct usb_device *dev, unsigned int ifnum)
 	input_register_device(&usbkbd->dev);
 
 	printk(KERN_INFO "input%d: USB HIDBP keyboard\n", usbkbd->dev.number);
-
 
 	return usbkbd;
 }

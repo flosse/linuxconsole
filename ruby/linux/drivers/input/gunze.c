@@ -58,16 +58,14 @@ struct gunze {
 static void gunze_process_packet(struct gunze* gunze)
 {
 	struct input_dev *dev = &gunze->dev;
-	unsigned char *data = gunze->data;
-	int i, t;
 
 	if (gunze->idx != 11 || gunze->data[5] != ',' || gunze->data[10] != '\r' ||
-		(gunze->data[0] != 'T' && gunze->data[0] != 'R') {
+		(gunze->data[0] != 'T' && gunze->data[0] != 'R')) {
 		printk(KERN_WARNING "gunze.c: bad packet\n");
 		return;
 	}
 
-	input_report_key(dev, BTN_TOUCH, gunze->data[0] == 'T'); break;
+	input_report_key(dev, BTN_TOUCH, gunze->data[0] == 'T');
 	input_report_abs(dev, ABS_X, simple_strtol(gunze->data + 1, NULL, 10) * 4);
 	input_report_abs(dev, ABS_Y, simple_strtol(gunze->data + 1, NULL, 10) * 3);
 }
@@ -106,7 +104,6 @@ static void gunze_disconnect(struct serio *serio)
 static void gunze_connect(struct serio *serio, struct serio_dev *dev)
 {
 	struct gunze *gunze;
-	int i;
 
 	if (serio->type != (SERIO_RS232 | SERIO_GUNZE))
 		return;
