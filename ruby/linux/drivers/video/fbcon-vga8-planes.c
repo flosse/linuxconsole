@@ -53,22 +53,22 @@ static inline void rmw(volatile char *p)
 static inline int setmode(int mode)
 {
 	int oldmode;
-	vga_io_w(GRAPHICS_ADDR_REG, GRAPHICS_MODE_INDEX);
-	oldmode = vga_io_r(GRAPHICS_DATA_REG);
-	vga_io_w(GRAPHICS_DATA_REG, mode);
+	vga_w(NULL, GRAPHICS_ADDR_REG, GRAPHICS_MODE_INDEX);
+	oldmode = vga_r(NULL, GRAPHICS_DATA_REG);
+	vga_w(NULL, GRAPHICS_DATA_REG, mode);
 	return oldmode;
 }
 
 /* Select the Bit Mask Register and return its value. */
 static inline int selectmask(void)
 {
-	return vga_io_rgfx(BIT_MASK_INDEX);
+	return vga_rgfx(NULL, BIT_MASK_INDEX);
 }
 
 /* Set the value of the Bit Mask Register. */
 static inline void setmask(int mask)
 {
-	vga_io_w(GRAPHICS_DATA_REG, mask);
+	vga_w(NULL, GRAPHICS_DATA_REG, mask);
 }
 
 /* Set the Data Rotate Register and return its old value.  Bits 0-2
@@ -77,9 +77,9 @@ static inline void setmask(int mask)
 static inline int setop(int op)
 {
 	int oldop;
-	vga_io_w(GRAPHICS_ADDR_REG, DATA_ROTATE_INDEX);
-	oldop = vga_io_r(GRAPHICS_DATA_REG);
-	vga_io_w(GRAPHICS_DATA_REG, op);
+	vga_w(NULL, GRAPHICS_ADDR_REG, DATA_ROTATE_INDEX);
+	oldop = vga_r(NULL, GRAPHICS_DATA_REG);
+	vga_w(NULL, GRAPHICS_DATA_REG, op);
 	return oldop;
 }
 
@@ -88,9 +88,9 @@ static inline int setop(int op)
 static inline int setsr(int sr)
 {
 	int oldsr;
-	vga_io_w(GRAPHICS_ADDR_REG, ENABLE_SET_RESET_INDEX);
-	oldsr = vga_io_r(GRAPHICS_DATA_REG);
-	vga_io_w(GRAPHICS_DATA_REG, sr);
+	vga_w(NULL, GRAPHICS_ADDR_REG, ENABLE_SET_RESET_INDEX);
+	oldsr = vga_r(NULL, GRAPHICS_DATA_REG);
+	vga_w(NULL, GRAPHICS_DATA_REG, sr);
 	return oldsr;
 }
 
@@ -98,22 +98,22 @@ static inline int setsr(int sr)
 static inline int setcolor(int color)
 {
 	int oldcolor;
-	vga_io_w(GRAPHICS_ADDR_REG, SET_RESET_INDEX);
-	oldcolor = vga_io_r(GRAPHICS_DATA_REG);
-	vga_io_w(GRAPHICS_DATA_REG, color);
+	vga_w(NULL, GRAPHICS_ADDR_REG, SET_RESET_INDEX);
+	oldcolor = vga_r(NULL, GRAPHICS_DATA_REG);
+	vga_w(NULL, GRAPHICS_DATA_REG, color);
 	return oldcolor;
 }
 
 /* Return the value in the Graphics Address Register. */
 static inline int getindex(void)
 {
-	return vga_io_r(GRAPHICS_ADDR_REG);
+	return vga_r(NULL, GRAPHICS_ADDR_REG);
 }
 
 /* Set the value in the Graphics Address Register. */
 static inline void setindex(int index)
 {
-	vga_io_w(GRAPHICS_ADDR_REG, index);
+	vga_w(NULL, GRAPHICS_ADDR_REG, index);
 }
 
 static void fbcon_vga8_planes_setup(struct display *p)

@@ -77,19 +77,19 @@ static void vga16fb_pan_var(struct fb_info *info,struct fb_var_screeninfo *var)
 			xoffset--;
 		pos = (var->xres_virtual * var->yoffset + xoffset) >> 3;
 	}
-	vga_io_wcrt(VGA_CRTC_START_HI, pos >> 8);
-	vga_io_wcrt(VGA_CRTC_START_LO, pos & 0xFF);
+	vga_wcrt(NULL, VGA_CRTC_START_HI, pos >> 8);
+	vga_wcrt(NULL, VGA_CRTC_START_LO, pos & 0xFF);
 	/* if we support CFB4, then we must! support xoffset with pixel 
 	   granularity */
 	/* if someone supports xoffset in bit resolution */
-	vga_io_r(VGA_IS1_RC);		/* reset flip-flop */
-	vga_io_w(VGA_ATT_IW, VGA_ATC_PEL);
+	vga_r(NULL, VGA_IS1_RC);		/* reset flip-flop */
+	vga_w(NULL, VGA_ATT_IW, VGA_ATC_PEL);
 	if (var->bits_per_pixel == 8)
-		vga_io_w(VGA_ATT_IW, (xoffset & 3) << 1);
+		vga_w(NULL, VGA_ATT_IW, (xoffset & 3) << 1);
 	else
-		vga_io_w(VGA_ATT_IW, xoffset & 7);
-	vga_io_r(VGA_IS1_RC);
-	vga_io_w(VGA_ATT_IW, 0x20);
+		vga_w(NULL, VGA_ATT_IW, xoffset & 7);
+	vga_r(NULL, VGA_IS1_RC);
+	vga_w(NULL, VGA_ATT_IW, 0x20);
 }
 
 #define FAIL(X) return -EINVAL
@@ -277,18 +277,18 @@ static void ega16_setpalette(int regno, unsigned red, unsigned green, unsigned b
 	if (regno >= 16)
 		return;
 	val = map[red>>14] | ((map[green>>14]) << 1) | ((map[blue>>14]) << 2);
-	vga_io_r(VGA_IS1_RC);   /* ! 0x3BA */
-	vga_io_wattr(regno, val);
-	vga_io_r(VGA_IS1_RC);   /* some clones need it */
-	vga_io_w(VGA_ATT_IW, 0x20); /* unblank screen */
+	vga_r(NULL, VGA_IS1_RC);   /* ! 0x3BA */
+	vga_wattr(NULL, regno, val);
+	vga_r(NULL, VGA_IS1_RC);   /* some clones need it */
+	vga_w(NULL, VGA_ATT_IW, 0x20); /* unblank screen */
 }
 
 static void vga16_setpalette(int regno, unsigned red, unsigned green, unsigned blue)
 {
-	vga_io_w(VGA_PEL_IW, regno);
-	vga_io_w(VGA_PEL_D, red   >> 10);
-	vga_io_w(VGA_PEL_D, green >> 10);
-	vga_io_w(VGA_PEL_D, blue  >> 10);
+	vga_w(NULL, VGA_PEL_IW, regno);
+	vga_w(NULL, VGA_PEL_D, red   >> 10);
+	vga_w(NULL, VGA_PEL_D, green >> 10);
+	vga_w(NULL, VGA_PEL_D, blue  >> 10);
 }
 
 static int vga16fb_setcolreg(unsigned regno, unsigned red, unsigned green,
