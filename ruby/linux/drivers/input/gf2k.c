@@ -62,14 +62,14 @@ static char gf2k_hat_to_axis[][2] = {{ 0, 0}, { 0,-1}, { 1,-1}, { 1, 0}, { 1, 1}
 
 static char *gf2k_names[] = {"", "Genius G09", "Genius F30D", "Genius F30", "Genius F31D",
 				"Genius F30-5", "Genius F23 Pro", "Genius F31"};
-static char gf2k_hats[] = { 0, 0, 0, 0, 0, 0, 2, 0 };
-static char gf2k_axes[] = { 0, 0, 0, 0, 0, 0, 4, 0 };
-static char gf2k_joys[] = { 0, 0, 0, 0, 0, 0, 8, 0 };
-static char gf2k_pads[] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+static unsigned char gf2k_hats[] = { 0, 0, 0, 0, 0, 0, 2, 0 };
+static unsigned char gf2k_axes[] = { 0, 0, 0, 0, 0, 0, 4, 0 };
+static unsigned char gf2k_joys[] = { 0, 0, 0, 0, 0, 0, 8, 0 };
+static unsigned char gf2k_pads[] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
-static char gf2k_abs[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_RUDDER, ABS_TL, ABS_TR };
-static char gf2k_btn_joy[] = { BTN_TRIGGER, BTN_THUMB, BTN_TOP, BTN_TOP2, BTN_BASE, BTN_BASE2, BTN_BASE3, BTN_BASE4 };
-static char gf2k_btn_pad[] = { BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_TL, BTN_TR, BTN_TL2, BTN_TR2, BTN_START, BTN_SELECT };
+static unsigned char gf2k_abs[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_RUDDER, ABS_TL, ABS_TR };
+static short gf2k_btn_joy[] = { BTN_TRIGGER, BTN_THUMB, BTN_TOP, BTN_TOP2, BTN_BASE, BTN_BASE2, BTN_BASE3, BTN_BASE4 };
+static short gf2k_btn_pad[] = { BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_TL, BTN_TR, BTN_TL2, BTN_TR2, BTN_START, BTN_SELECT };
 
 
 static short gf2k_seq_reset[] = { 240, 340, 0 };
@@ -79,6 +79,9 @@ struct gf2k {
 	struct gameport *gameport;
 	struct timer_list timer;
 	struct input_dev dev;
+	int reads;
+	int bads;
+	int used;
 	unsigned char id;
 };
 
@@ -86,7 +89,7 @@ struct gf2k {
  * gf2k_read_packet() reads a Genius Flight2000 packet.
  */
 
-static int gf2k_read_packet(struct gameport *gameport int length, char *data)
+static int gf2k_read_packet(struct gameport *gameport, int length, char *data)
 {
 	unsigned char u, v;
 	int i;
@@ -123,7 +126,7 @@ static int gf2k_read_packet(struct gameport *gameport int length, char *data)
  * into digital mode.
  */
 
-static void gf2k_trigger_seq(struct gameport *gameport, int *seq)
+static void gf2k_trigger_seq(struct gameport *gameport, short *seq)
 {
 
 	unsigned long flags;
@@ -136,7 +139,7 @@ static void gf2k_trigger_seq(struct gameport *gameport, int *seq)
         do {
 		gameport_trigger(gameport);
 		t = gameport_time(gameport, GF2K_TIMEOUT * 1000);
-		while ((inb(io) & 1) && t) t--;
+		while ((gameport_read(gameport) & 1) && t) t--;
                 udelay(seq[i]);
         } while (seq[++i]);
 
@@ -195,7 +198,7 @@ static void gf2k_timer(unsigned long private)
 
 	gf2k->reads++;
 
-	if (gf2k_read_packet(gf2k->io, gf2k_length[gf2k->id], data) < gf2k_length[gf2k->id]) {
+	if (gf2k_read_packet(gf2k->gameport, gf2k_length[gf2k->id], data) < gf2k_length[gf2k->id]) {
 		gf2k->bads++;
 	} else {
 
@@ -212,11 +215,11 @@ static void gf2k_timer(unsigned long private)
 
 		t = GB(44,2,0) | GB(32,8,2) | GB(78,2,10);
 
-		for (i = 0;  i < gf2k_joys[gf2k->id]; i++)
-			input_report_key(dev, gf2k_btn_joy[i], (t >> i) & 1)
+		for (i = 0; i < gf2k_joys[gf2k->id]; i++)
+			input_report_key(dev, gf2k_btn_joy[i], (t >> i) & 1);
 
 		for (i = 0; i < gf2k_pads[gf2k->id]; i++)
-			input_report_key(dev, gf2k_btn_pad[i], (t >> i) & 1)
+			input_report_key(dev, gf2k_btn_pad[i], (t >> i) & 1);
 	}
 
 	mod_timer(&gf2k->timer, jiffies + GF2K_REFRESH);
@@ -258,7 +261,7 @@ static void gf2k_connect(struct gameport *gameport, struct gameport_dev *dev)
 	gf2k->timer.data = (long) gf2k;
 	gf2k->timer.function = gf2k_timer;
 
-	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW));
+	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW))
 		goto fail1;
 
 	gf2k_trigger_seq(gameport, gf2k_seq_reset);
@@ -269,7 +272,7 @@ static void gf2k_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 	wait_ms(80);
 
-	i = gf2k_read_packet(io, GF2K_LENGTH, data);
+	i = gf2k_read_packet(gameport, GF2K_LENGTH, data);
 	gf2k_print_packet("ID", i*3, data);
 
 	gf2k->id = GB(7,2,0) | GB(3,3,2) | GB(0,3,5);
@@ -319,7 +322,7 @@ static void gf2k_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 	input_register_device(&gf2k->dev);
 	printk(KERN_INFO "input%d: %s on gameport%d.%d [id: %d]\n",
-		gf2k->dev.number, gf2k->name, gameport->number, 0, gf2k->id);
+		gf2k->dev.number, gf2k_names[gf2k->id], gameport->number, 0, gf2k->id);
 
 	return;
 fail2:	gameport_close(gameport);
