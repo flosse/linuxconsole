@@ -1394,9 +1394,9 @@ static void con_unthrottle(struct tty_struct *tty)
 
 void vt_console_print(struct console *co, const char * b, unsigned count)
 {
-	struct vc_data *vc = find_vc(co->index);
         static unsigned long printing = 0;
         const ushort *start;
+	struct vc_data *vc;
         unsigned char c;
 	ushort cnt = 0;
         ushort myx;
@@ -1406,6 +1406,10 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
                 return;
 
         /* pm_access(pm_con); */
+
+        if (kmsg_redirect && find_vc(kmsg_redirect-1))
+                co->index = kmsg_redirect-1;
+	vc = find_vc(co->index);	
 
         /* read `x' only after setting co->index properly (otherwise
            the `x' macro will read the x of the foreground console). */
@@ -1465,6 +1469,7 @@ void vt_console_print(struct console *co, const char * b, unsigned count)
                         need_wrap = 1;
                 }
         }
+	/* I think this is wrong. Only should happen when visiable? */
         set_cursor(vc);
         poke_blanked_console(vc->display_fg);
 quit:
@@ -1475,12 +1480,8 @@ static kdev_t vt_console_device(struct console *c)
 {
 	struct vc_data *vc = vc = find_vc(c->index);
 
-	c->index = vc->display_fg->fg_console->vc_num;
-	if (kmsg_redirect && find_vc(kmsg_redirect-1)) 
-                c->index = kmsg_redirect-1;
-        else
-        	c->index = vc->display_fg->fg_console->vc_num;
 	admin_vt = vc->display_fg;
+	c->index = admin_vt->fg_console->vc_num;
         return MKDEV(TTY_MAJOR, c->index);
 }
 
