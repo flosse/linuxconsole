@@ -46,7 +46,7 @@
 
 #define SPACEORB_MAX_LENGTH	64
 
-static int spaceorb_buttons[] = { BTN_0, BTN_1, BTN_2, BTN_3, BTN_4, BTN_5, BTN_6, BTN_7, BTN_8};
+static int spaceorb_buttons[] = { BTN_TL, BTN_TR, BTN_Y, BTN_X, BTN_B, BTN_A, BTN_MODE};
 static int spaceorb_axes[] = { ABS_X, ABS_Y, ABS_Z, ABS_RX, ABS_RY, ABS_RZ};
 
 /*
@@ -82,7 +82,7 @@ static void spaceorb_process_packet(struct spaceorb *spaceorb)
 	for (i = 0; i < spaceorb->idx; i++) c ^= data[i];
 	if (c) return;
 
-	switch (spaceorb->data[0]) {
+	switch (data[0]) {
 
 		case 'R':				/* Reset packet */
 			spaceorb->data[spaceorb->idx - 1] = 0;
@@ -101,14 +101,14 @@ static void spaceorb_process_packet(struct spaceorb *spaceorb)
 			axes[4] = ((data[7] & 0x03) << 8) | (data[ 8] << 1) | (data[7] >> 6);
 			axes[5] = ((data[9] & 0x3f) << 4) | (data[10] >> 3);
 			for (i = 0; i < 6; i++)
-				input_report_abs(dev, spaceorb_axes[i], axes[i] - ((axes[i] & 0x200) ? 0 : 1024));
+				input_report_abs(dev, spaceorb_axes[i], axes[i] - ((axes[i] & 0x200) ? 1024 : 0));
 			for (i = 0; i < 8; i++)
 				input_report_key(dev, spaceorb_buttons[i], (data[1] >> i) & 1);
 			break;
 
 		case 'K':				/* Button data */
 			if (spaceorb->idx != 5) return;
-			for (i = 0; i < 8; i++)
+			for (i = 0; i < 7; i++)
 				input_report_key(dev, spaceorb_buttons[i], (data[2] >> i) & 1);
 
 			break;
@@ -166,16 +166,16 @@ static void spaceorb_connect(struct serio *serio, struct serio_dev *dev)
 
 	spaceorb->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);	
 
-	for (i = 0; i < 8; i++)
+	for (i = 0; i < 7; i++)
 		set_bit(spaceorb_buttons[i], &spaceorb->dev.keybit);
 
 	for (i = 0; i < 6; i++) {
 		t = spaceorb_axes[i];
 		set_bit(t, spaceorb->dev.absbit);
-		spaceorb->dev.absmin[t] = -512;
-		spaceorb->dev.absmax[t] =  511;
+		spaceorb->dev.absmin[t] = -508;
+		spaceorb->dev.absmax[t] =  508;
 		spaceorb->dev.absflat[t] = 0;
-		spaceorb->dev.absfuzz[t] = 2;
+		spaceorb->dev.absfuzz[t] = 4;
 	}
 
 	spaceorb->serio = serio;
