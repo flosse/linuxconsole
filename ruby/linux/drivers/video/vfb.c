@@ -388,8 +388,9 @@ int __init vfb_setup(char *options)
     if (!options || !*options)
 	return 1;
 
-    for (this_opt = strtok(options, ","); this_opt;
-	 this_opt = strtok(NULL, ",")) {
+    while (this_opt = strsep(&options, ",")) {
+    	if (!*this_opt)
+	    continue;
 	if (!strncmp(this_opt, "disable", 7))
 	    vfb_enable = 0;	    
     }
