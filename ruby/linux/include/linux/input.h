@@ -65,6 +65,7 @@ struct input_event {
 #define EVIOCSKEYCODE		_IOW('E', 0x04, int[2])			/* set keycode */
 #define EVIOCGKEY		_IOR('E', 0x05, int[2])			/* get key value */
 #define EVIOCGNAME(len)		_IOC(_IOC_READ, 'E', 0x06, len)		/* get device name */
+#define EVIOCGBUS		_IOR('E', 0x07, short[4])		/* get bus address */
 
 #define EVIOCGBIT(ev,len)	_IOC(_IOC_READ, 'E', 0x20 + ev, len)	/* get event bits */
 #define EVIOCGABS(abs)		_IOR('E', 0x40 + abs, int[5])		/* get abs value/limits */ 
