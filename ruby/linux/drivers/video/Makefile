@@ -22,6 +22,7 @@ obj-$(CONFIG_VGA_CONSOLE)         += vgacon.o vga.o
 obj-$(CONFIG_MDA_CONSOLE)         += mdacon.o
 obj-$(CONFIG_NVIDIA_CONSOLE)	  += nvvgacon.o
 obj-$(CONFIG_FRAMEBUFFER_CONSOLE) += fbcon.o
+obj-$(CONFIG_DUMMY_CONSOLE)	  += dummycon.o
 
 subdir-$(CONFIG_FONTS)            += fonts 
 ifeq ($(CONFIG_FONTS),y)
