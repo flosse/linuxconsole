@@ -1,5 +1,5 @@
 /*
- *  amimouse.c  Version 0.1
+ * $Id$
  *
  *  Copyright (c) 2000 Vojtech Pavlik
  *
@@ -51,6 +51,8 @@
 static int amimouse_used = 0;
 static int amimouse_lastx, amimouse_lasty;
 static struct input_dev amimouse_dev;
+
+static char *amimouse_name = "Amiga mouse";
 
 static void amimouse_interrupt(int irq, void *dummy, struct pt_regs *fp)
 {
@@ -121,9 +123,15 @@ static int __init amimouse_init(void)
 	amimouse_dev.open = amimouse_open;
 	amimouse_dev.close = amimouse_close;
 
+	amimouse_dev.name = amimouse_name;
+	amimouse_dev.idbus = BUS_AMIGA;
+	amimouse_dev.idvendor = 0x0001;
+	amimouse_dev.idproduct = 0x0002;
+	amimouse_dev.version = 0x0100;
+        
 	input_register_device(&amimouse_dev);
 
-        printk(KERN_INFO "input%d: Amiga mouse at joy0dat\n", amimouse_dev.number);
+        printk(KERN_INFO "input%d: %s at joy0dat\n", amimouse_dev.number, amimouse_name);
 }
 
 static void __exit amimouse_exit(void)

@@ -47,6 +47,7 @@
 
 #define JS_SBALL_MAX_LENGTH	128
 static int spaceball_axes[] = { ABS_X, ABS_Y, ABS_Z, ABS_RX, ABS_RY, ABS_RZ };
+static chat spaceball_name = "SpaceTec SpaceBall 4000 FLX"; 
 
 /*
  * Per-Ball data.
@@ -78,8 +79,8 @@ static void spaceball_process_packet(struct spaceball* spaceball)
 		case '@':					/* Reset packet */
 			spaceball->data[spaceball->idx - 1] = 0;
 			for (i = 1; i < spaceball->idx && spaceball->data[i] == ' '; i++);
-			printk(KERN_INFO "input%d: SpaceBall 4000FLX [%s] on serio%d\n",
-				spaceball->dev.number, spaceball->data + i, spaceball->serio->number);
+			printk(KERN_INFO "input%d: %s [%s] on serio%d\n",
+				spaceball->dev.number, spaceball_name, spaceball->data + i, spaceball->serio->number);
 			break;
 
 		case 'D':					/* Ball data */
@@ -184,6 +185,12 @@ static void spaceball_connect(struct serio *serio, struct serio_dev *dev)
 
 	spaceball->serio = serio;
 	spaceball->dev.private = spaceball;
+
+	spaceball->dev.name = spaceball_name;
+	spaceball->dev.idbus = BUS_SERIO;
+	spaceball->dev.idvendor = SERIO_SPACEBALL;
+	spaceball->dev.idproduct = 0x0001;
+	spaceball->dev.version = 0x0100;
 	
 	serio->private = spaceball;
 

@@ -53,7 +53,7 @@
 #define ADI_MIN_LENGTH		8
 #define ADI_MIN_LEN_LENGTH	10
 #define ADI_MIN_ID_LENGTH	66
-#define ADI_MAX_NAME_LENGTH	32
+#define ADI_MAX_NAME_LENGTH	48
 #define ADI_MAX_CNAME_LENGTH	16
 
 #define ADI_FLAG_HAT		0x04
@@ -399,12 +399,19 @@ static void adi_init_input(struct adi *adi, struct adi_port *port)
 	t = adi->id < ADI_ID_MAX ? adi->id : ADI_ID_MAX;
 
 	sprintf(adi->name, adi_names[t], adi->id);
+	sprintf(adi->name, "Logitech %s", adi->name);
 
 	adi->abs = adi_abs[t];
 	adi->key = adi_key[t];
 
 	adi->dev.open = adi_open;
 	adi->dev.close = adi_close;
+
+	a3d->dev.name = adi->name;
+	a3d->dev.idbus = BUS_GAMEPORT;
+	a3d->dev.idvendor = GAMEPORT_ID_VENDOR_LOGITECH;
+	a3d->dev.idproduct = adi->id;
+	a3d->dev.version = 0x0100;
 
 	adi->dev.private = port;
 	adi->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);

@@ -44,6 +44,8 @@
 
 #define	GUNZE_MAX_LENGTH	10
 
+static char *gunze_name = "Gunze AHL-51S TouchScreen";
+
 /*
  * Per-touchscreen data.
  */
@@ -122,9 +124,14 @@ static void gunze_connect(struct serio *serio, struct serio_dev *dev)
 	gunze->dev.absmax[ABS_X] = 4000; gunze->dev.absmax[ABS_Y] = 3000;
 
 	gunze->serio = serio;
-	gunze->dev.private = gunze;
-	
 	serio->private = gunze;
+
+	gunze->dev.private = gunze;
+	gunze->dev.name = gunze_name;
+	gunze->dev.idbus = BUS_RS232;
+	gunze->dev.idvendor = SERIO_GUNZE;
+	gunze->dev.idproduct = 0x0051;
+	gunze->dev.version = 0x0100;
 
 	if (serio_open(serio, dev)) {
 		kfree(gunze);
@@ -133,7 +140,7 @@ static void gunze_connect(struct serio *serio, struct serio_dev *dev)
 
 	input_register_device(&gunze->dev);
 
-	printk(KERN_INFO "input%d: Gunze AHL-51S on serio%d\n", gunze->dev.number, serio->number);
+	printk(KERN_INFO "input%d: %s on serio%d\n", gunze->dev.number, gunze_name, serio->number);
 }
 
 /*

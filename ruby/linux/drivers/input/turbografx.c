@@ -62,6 +62,7 @@ static int tgfx_2[] __initdata = { -1, 0, 0, 0, 0, 0, 0, 0 };
 static int tgfx_3[] __initdata = { -1, 0, 0, 0, 0, 0, 0, 0 };
 
 static int tgfx_buttons[] = { BTN_TRIGGER, BTN_THUMB, BTN_THUMB2, BTN_TOP, BTN_TOP2 };
+static char *tgfx_name = "TurboGraFX Multisystem joystick";
 
 struct tgfx {
 	struct pardevice *pd;
@@ -171,6 +172,12 @@ static struct tgfx __init *tgfx_probe(int *config)
 			tgfx->dev[i].private = tgfx;
 			tgfx->dev[i].open = tgfx_open;
 			tgfx->dev[i].close = tgfx_close;
+
+			tgfx->dev.name = tgfx_name;
+			tgfx->dev.idbus = BUS_PARPORT;
+			tgfx->dev.idvendor = 0x0003;
+			tgfx->dev.idproduct = config[i+1];
+			tgfx->dev.version = 0x0100;
 
 			tgfx->dev[i].evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 			tgfx->dev[i].absbit[0] = BIT(ABS_X) | BIT(ABS_Y);

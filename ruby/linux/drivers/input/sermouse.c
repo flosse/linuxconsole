@@ -35,8 +35,9 @@
 #include <linux/serio.h>
 #include <linux/init.h>
 
-static char *sermouse_protocols[] = { "None", "Mouse Systems", "Sun", "Microsoft", "Logitech M+",
-						"Microsoft MZ", "Logitech MZ+", "Logitech MZ++"};
+static char *sermouse_protocols[] = { "None", "Mouse Systems Mouse", "Sun Mouse", "Microsoft Mouse",
+					"Logitech M+ Mouse", "Microsoft MZ Mouse", "Logitech MZ+ Mouse",
+					"Logitech MZ++ Mouse"};
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
 
@@ -241,14 +242,20 @@ static void sermouse_connect(struct serio *serio, struct serio_dev *dev)
 
 	serio->private = sermouse;
 
-	sermouse->type = serio->type & 0xff;
-	c = (serio->type >> 16) & 0xff;
+	sermouse->type = serio->type & SERIO_PROTO;
+	c = (serio->type & SERIO_EXTRA) >> 16;
 
 	if (c & 0x01) set_bit(BTN_MIDDLE, &sermouse->dev.keybit);
 	if (c & 0x02) set_bit(BTN_SIDE, &sermouse->dev.keybit);
 	if (c & 0x04) set_bit(BTN_EXTRA, &sermouse->dev.keybit);
 	if (c & 0x10) set_bit(REL_WHEEL, &sermouse->dev.relbit);
 	if (c & 0x20) set_bit(REL_HWHEEL, &sermouse->dev.relbit);
+
+	sermouse->dev.name = sermouse_protocols[sermouse->type];
+	sermouse->dev.idbus = BUS_RS232;
+	sermouse->dev.idvendor = sermouse->type;
+	sermouse->dev.idproduct = c;
+	sermouse->dev.version = 0x0100;
 
 	if (serio_open(serio, dev)) {
 		kfree(sermouse);
@@ -257,7 +264,7 @@ static void sermouse_connect(struct serio *serio, struct serio_dev *dev)
 
 	input_register_device(&sermouse->dev);
 	
-	printk(KERN_INFO "input%d: %s mouse on serio%d\n", sermouse->dev.number,
+	printk(KERN_INFO "input%d: %s on serio%d\n", sermouse->dev.number,
 		sermouse_protocols[sermouse->type], serio->number);
 }
 

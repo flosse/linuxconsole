@@ -1,5 +1,5 @@
 /*
- *  amikbd.c  Version 0.1
+ * $Id$
  *
  *  Copyright (c) 2000 Vojtech Pavlik
  *
@@ -62,7 +62,9 @@ static char *amikbd_messages[] = {
 	KERN_WARNING "amikbd: keyboard interrupt\n"
 };
 
-struct input_dev amikbd_dev;
+static struct input_dev amikbd_dev;
+
+static char *amikbd_name = "Amiga keyboard";
 
 static void amikbd_interrupt(int irq, void *dummy, struct pt_regs *fp)
 {
@@ -111,7 +113,15 @@ static int __init amikbd_init(void)
 	ciaa.cra &= ~0x41;	 /* serial data in, turn off TA */
 	request_irq(IRQ_AMIGA_CIAA_SP, amikbd_interrupt, 0, "amikbd", NULL);
 
+	amikbd_dev.name = amikbd_name;
+	amikbd_dev.idbus = BUS_AMIGA;
+	amikbd_dev.idvendor = 0x0001;
+	amikbd_dev.idproduct = 0x0001;
+	amikbd_dev.version = 0x0100;
+
 	input_register_device(&amikbd_dev);
+
+	printk(KERN_INFO "input%d: %s\n", amikbd_dev.number, amikbd_name);
 
 	return 0;
 }

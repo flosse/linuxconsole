@@ -414,6 +414,12 @@ static void analog_init_device(struct analog_port *port, struct analog *analog, 
 
 	analog->buttons = (analog->mask & ANALOG_GAMEPAD) ? analog_pad_btn : analog_joy_btn;
 
+	analog->dev.name = analog->name;
+	analog->dev.idbus = BUS_GAMEPORT;
+	analog->dev.idvendor = GAMEPORT_ID_VENDOR_ANALOG;
+	analog->dev.idproduct = analog->mask >> 4;
+	analog->dev.version = 0x0100;
+
 	analog->dev.open = analog_open;
 	analog->dev.close = analog_close;
 	analog->dev.private = port;

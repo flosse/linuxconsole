@@ -1,5 +1,5 @@
 /*
- *  rpcmouse.c  Version 0.1
+ * $Id$
  *
  *  Copyright (c) 2000 Vojtech Pavlik
  *
@@ -48,11 +48,17 @@
 #define IOMD_MOUSEBTN	0x800C4000
 
 static short rpcmouse_lastx, rpcmouse_lasty;
+static char rpcmouse_name = "RiscPC Mouse";
 
 static struct input_dev rpcmouse_dev = {
-        evbit:  {BIT(EV_KEY) | BIT(EV_REL)},
-        keybit: {BIT(BTN_LEFT) | BIT(BTN_MIDDLE) | BIT(BTN_RIGHT)},
-        relbit: {BIT(REL_X) | BIT(REL_Y)},
+	evbit:		{ BIT(EV_KEY) | BIT(EV_REL) },
+	keybit: 	{ [LONG(BTN_LEFT)] = BIT(BTN_LEFT) | BIT(BTN_MIDDLE) | BIT(BTN_RIGHT) },
+	relbit:		{ BIT(REL_X) | BIT(REL_Y) },
+	name:		rpcmouse_name,
+	idbus:		BUS_ISA,
+	idvendor:	0x0005,
+	idproduct:	0x0001,
+	version:	0x0100,
 };
 
 static void rpcmouse_irq(int irq, void *dev_id, struct pt_regs *regs)

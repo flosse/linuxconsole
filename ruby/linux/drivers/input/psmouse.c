@@ -1,7 +1,9 @@
 /*
- *  psmouse.c  Version 0.1
+ * $Id$
  *
- *  Copyright (c) 1999 Vojtech Pavlik
+ *  Copyright (c) 1999-2000 Vojtech Pavlik
+ *
+ *  Sponsored by SuSE
  */
 
 /*
@@ -63,6 +65,7 @@ struct psmouse {
 	char acking;
 	char ack;
 	char error;
+	char devname[64];
 };
 
 #define PSMOUSE_PS2	1
@@ -563,11 +566,19 @@ static void psmouse_connect(struct serio *serio, struct serio_dev *dev)
 		kfree(psmouse);
 		return;
 	}
+	
+	sprintf(psmouse->devname, "%s %s %s",
+		psmouse_protocols[psmouse->type], psmouse->vendor, psmouse->name);
+
+	psmouse->dev.name = psmouse->devname;
+	psmouse->dev.idbus = BUS_I8042;
+	psmouse->dev.idvendor = psmouse->type;
+	psmouse->dev.idproduct = 0x0002;
+	psmouse->dev.version = 0x0100;
 
 	input_register_device(&psmouse->dev);
 	
-	printk(KERN_INFO "input%d: %s %s %s on serio%d\n", psmouse->dev.number,
-		psmouse_protocols[psmouse->type], psmouse->vendor, psmouse->name, serio->number);
+	printk(KERN_INFO "input%d: %s on serio%d\n", psmouse->dev.number, psmouse->devname, serio->number);
 
 	psmouse_initialize(psmouse);
 }

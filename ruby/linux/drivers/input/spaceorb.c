@@ -48,6 +48,7 @@
 
 static int spaceorb_buttons[] = { BTN_TL, BTN_TR, BTN_Y, BTN_X, BTN_B, BTN_A, BTN_MODE};
 static int spaceorb_axes[] = { ABS_X, ABS_Y, ABS_Z, ABS_RX, ABS_RY, ABS_RZ};
+static char *spaceorb_name = "SpaceTec SpaceOrb 360";
 
 /*
  * Per-Orb data.
@@ -87,8 +88,8 @@ static void spaceorb_process_packet(struct spaceorb *spaceorb)
 		case 'R':				/* Reset packet */
 			spaceorb->data[spaceorb->idx - 1] = 0;
 			for (i = 1; i < spaceorb->idx && spaceorb->data[i] == ' '; i++);
-			printk(KERN_INFO "input%d: SpaceOrb 360 [%s] on serio%d\n",
-				 spaceorb->dev.number, spaceorb->data + i, spaceorb->serio->number);
+			printk(KERN_INFO "input%d: %s [%s] on serio%d\n",
+				 spaceorb->dev.number, spaceorb_name, spaceorb->data + i, spaceorb->serio->number);
 			break;
 
 		case 'D':				/* Ball + button data */
@@ -178,6 +179,12 @@ static void spaceorb_connect(struct serio *serio, struct serio_dev *dev)
 
 	spaceorb->serio = serio;
 	spaceorb->dev.private = spaceorb;
+
+	spaceorb->dev.name = spaceorb_name;
+	spaceorb->dev.idbus = BUS_RS232;
+	spaceorb->dev.idvendor = SERIO_SPACEORB;
+	spaceorb->dev.idproduct = 0x0001;
+	spaceorb->dev.version = 0x0100;
 	
 	serio->private = spaceorb;
 

@@ -689,10 +689,15 @@ static void sw_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 		sw->dev[i].private = sw;
 
-		sw->dev[i].name = sw_name[sw->type];
 		sw->dev[i].open = sw_open;
 		sw->dev[i].close = sw_close;
-	
+
+		sw->dev[i].name = sw_name[sw->type];
+		sw->dev[i].idbus = BUS_GAMEPORT;
+		sw->dev[i].idvendor = GAMEPORT_ID_VENDOR_MICROSOFT;
+		sw->dev[i].idproduct = sw->type;
+		sw->dev[i].version = 0x0100;
+
 		sw->dev[i].evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 
 		for (j = 0; (bits = sw_bit[sw->type][j]); j++) {

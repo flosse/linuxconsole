@@ -43,6 +43,7 @@
 
 #define WARRIOR_MAX_LENGTH	16
 static char warrior_lengths[] = { 0, 4, 12, 3, 4, 4, 0, 0 }; 
+static char *warrior_name = "Logitech WingMan Warrior";
 
 /*
  * Per-Warrior data.
@@ -149,6 +150,12 @@ static void warrior_connect(struct serio *serio, struct serio_dev *dev)
 	warrior->dev.keybit[LONG(BTN_TRIGGER)] = BIT(BTN_TRIGGER) | BIT(BTN_THUMB) | BIT(BTN_TOP) | BIT(BTN_TOP2);
 	warrior->dev.relbit[0] = BIT(REL_DIAL);
 	warrior->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y) | BIT(ABS_THROTTLE) | BIT(ABS_HAT0X) | BIT(ABS_HAT0Y);
+
+	warrior->dev.name = warrior_name;
+	warrior->dev.idbus = BUS_RS232;
+	warrior->dev.idvendor = SERIO_WARRIOR;
+	warrior->dev.idproduct = 0x0001;
+	warrior->dev.version = 0x0100;
 
 	for (i = 0; i < 2; i++) {
 		warrior->dev.absmax[ABS_X+i] = -64;	

@@ -1,5 +1,5 @@
 /*
- *  amijoy.c  Version 1.3
+ * $Id$
  *
  *  Copyright (c) 1998-2000 Vojtech Pavlik
  *
@@ -45,7 +45,9 @@ MODULE_PARM(amijoy, "1-2i");
 
 static int amijoy[2] = { 0, 1 };
 static int amijoy_used[2] = { 0, 0 };
-struct input_dev amijoy_dev[2];
+static struct input_dev amijoy_dev[2];
+
+static char *amijoy_name = "Amiga joystick";
 
 static void amijoy_interrupt(int irq, void *dummy, struct pt_regs *fp)
 {
@@ -103,7 +105,7 @@ __setup("amijoy=", amijoy_setup);
 
 static int __init amijoy_init(void)
 {
-	int i;
+	int i, j;
 
 	init_timer(amijoy_timer);
 	port->timer.function = amijoy_timer;
@@ -116,10 +118,21 @@ static int __init amijoy_init(void)
 			amijoy_dev[i].evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 			amijoy_dev[i].absbit[0] = BIT(ABS_X) | BIT(ABS_Y);
 			amijoy_dev[i].keybit[LONG(BTN_LEFT)] = BIT(BTN_LEFT) | BIT(BTN_MIDDLE) | BIT(BTN_RIGHT);
+			for (j = 0; j < 2; j++)
+				amijoy_dev[i].absmin[ABS_X + j] = -1;
+				amijoy_dev[i].absmax[ABS_X + j] = 1;
+			}
+
+			amijoy->dev[i].name = amijoy_name;
+			amijoy->dev[i].idbus = BUS_AMIGA;
+			amijoy->dev[i].idvendor = 0x0001;
+			amijoy->dev[i].idproduct = 0x0003;
+			amijoy->dev[i].version = 0x0100;
+
 			amijoy_dev[i].private = amijoy_used + i;
 
 			input_register_device(amijoy_dev + i);
-			printk(KERN_INFO "input%d: Amiga joystick at joy%ddat\n", amijoy_dev[i].number, i);
+			printk(KERN_INFO "input%d: %s at joy%ddat\n", amijoy_dev[i].number, amijoy_name, i);
 		}
 }
 

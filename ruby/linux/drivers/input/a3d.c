@@ -338,9 +338,14 @@ static void a3d_connect(struct gameport *gameport, struct gameport_dev *dev)
 	}
 
 	a3d->dev.private = a3d;
-	a3d->dev.name = a3d_names[a3d->mode];
 	a3d->dev.open = a3d_open;
 	a3d->dev.close = a3d_close;
+
+	a3d->dev.name = a3d_names[a3d->mode];
+	a3d->dev.idbus = BUS_GAMEPORT;
+	a3d->dev.idvendor = GAMEPORT_ID_VENDOR_MADCATZ;
+	a3d->dev.idproduct = a3d->mode;
+	a3d->dev.version = 0x0100;
 
 	input_register_device(&a3d->dev);
 	printk(KERN_INFO "input%d: %s on gameport%d.0\n",

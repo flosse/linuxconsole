@@ -286,10 +286,15 @@ static void gf2k_connect(struct gameport *gameport, struct gameport_dev *dev)
 	gf2k->length = gf2k_lens[gf2k->id];
 
 	gf2k->dev.private = gf2k;
-	gf2k->dev.name = gf2k_names[gf2k->id];
 	gf2k->dev.open = gf2k_open;
 	gf2k->dev.close = gf2k_close;
 	gf2k->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
+
+	gf2k->dev.name = gf2k_names[gf2k->id];
+	gf2k->dev.idbus = BUS_GAMEPORT;
+	gf2k->dev.idvendor = GAMEPORT_ID_VENDOR_GENIUS;
+	gf2k->dev.idproduct = gf2k->id;
+	gf2k->dev.version = 0x0100;
 
 	for (i = 0; i < gf2k_axes[gf2k->id]; i++)
 		set_bit(gf2k_abs[i], gf2k->dev.absbit);

@@ -41,7 +41,7 @@
 #define COBRA_REFRESH_TIME	HZ/50	/* 20 ms between reads */
 #define COBRA_LENGTH		36
 
-static char* cobra_name = "Blaster GamePad Cobra";
+static char* cobra_name = "Creative Labs Blaster GamePad Cobra";
 
 static int cobra_btn[] = { BTN_START, BTN_SELECT, BTN_TL, BTN_TR, BTN_X, BTN_Y, BTN_Z, BTN_A, BTN_B, BTN_C, BTN_TL2, BTN_TR2, 0 };
 
@@ -190,10 +190,14 @@ static void cobra_connect(struct gameport *gameport, struct gameport_dev *dev)
 		if ((cobra->exists >> i) & 1) {
 
 			cobra->dev[i].private = cobra;
-
-			cobra->dev[i].name = cobra_name;
 			cobra->dev[i].open = cobra_open;
 			cobra->dev[i].close = cobra_close;
+
+			cobra->dev.name = cobra_name;
+			cobra->dev.idbus = BUS_GAMEPORT;
+			cobra->dev.idvendor = GAMEPORT_ID_VENDOR_CREATIVE;
+			cobra->dev.idproduct = 0x0008;
+			cobra->dev.version = 0x0100;
 		
 			cobra->dev[i].evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 			cobra->dev[i].absbit[0] = BIT(ABS_X) | BIT(ABS_Y);
@@ -205,8 +209,8 @@ static void cobra_connect(struct gameport *gameport, struct gameport_dev *dev)
 			cobra->dev[i].absmin[ABS_Y] = -1; cobra->dev[i].absmax[ABS_Y] = 1;
 
 			input_register_device(cobra->dev + i);
-			printk(KERN_INFO "input%d: Blaster GamePad Cobra on gameport%d.%d\n",
-				cobra->dev[i].number, gameport->number, i);
+			printk(KERN_INFO "input%d: %s on gameport%d.%d\n",
+				cobra_name, cobra->dev[i].number, gameport->number, i);
 		}
 
 

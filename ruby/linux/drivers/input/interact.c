@@ -246,6 +246,13 @@ static void interact_connect(struct gameport *gameport, struct gameport_dev *dev
 	interact->dev.private = interact;
 	interact->dev.open = interact_open;
 	interact->dev.close = interact_close;
+
+	interact->dev.name = interact_type[i].name;
+	interact->dev.idbus = BUS_GAMEPORT;
+	interact->dev.idvendor = GAMEPORT_ID_VENDOR_INTERACT;
+	interact->dev.idproduct = interact_type[i].id;
+	interact->dev.version = 0x0100;
+
 	interact->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 
 	for (i = 0; (t = interact_type[interact->type].abs[i]) >= 0; i++) {

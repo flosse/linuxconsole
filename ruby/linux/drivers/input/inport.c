@@ -60,6 +60,7 @@
 
 #ifdef CONFIG_INPUT_ATIXL
 #define INPORT_NAME		"ATI XL"
+#define INPORT_VENDOR		0x0002
 #define INPORT_SPEED_30HZ	0x01
 #define INPORT_SPEED_50HZ	0x02
 #define INPORT_SPEED_100HZ	0x03
@@ -68,6 +69,7 @@
 #define INPORT_MODE_IRQ		0x08
 #else
 #define INPORT_NAME		"Microsoft"
+#define INPORT_VENDOR		0x0001
 #define INPORT_MODE_BASE	0x10
 #define INPORT_MODE_IRQ		0x01
 #endif
@@ -79,6 +81,8 @@ MODULE_PARM(inport_irq, "i");
 
 static int inport_irq = INPORT_IRQ;
 static int inport_used = 0;
+
+static char *inport_name = INPORT_NAME "InPort mouse";
 
 static void inport_interrupt(int irq, void *dev_id, struct pt_regs *regs);
 
@@ -104,11 +108,16 @@ static void inport_close(struct input_dev *dev)
 }
 
 static struct input_dev inport_dev = {
-	evbit:	{BIT(EV_KEY) | BIT(EV_REL)},
-	keybit: {BIT(BTN_LEFT) | BIT(BTN_MIDDLE) | BIT(BTN_RIGHT)},
-	relbit:	{BIT(REL_X) | BIT(REL_Y)},
-	open:	inport_open,
-	close:	inport_close
+	evbit:		{ BIT(EV_KEY) | BIT(EV_REL) },
+	keybit: 	{ [LONG(BTN_LEFT)] = BIT(BTN_LEFT) | BIT(BTN_MIDDLE) | BIT(BTN_RIGHT) },
+	relbit:		{ BIT(REL_X) | BIT(REL_Y) },
+	open:		inport_open,
+	close:		inport_close
+	name:		inport_name,
+	idbus:		BUS_ISA,
+	idvendor:	INPORT_VENDOR,
+	idproduct:	0x0001,
+	version:	0x0100,
 };
 
 static void inport_interrupt(int irq, void *dev_id, struct pt_regs *regs)
@@ -167,8 +176,8 @@ static int __init inport_init(void)
 
 	input_register_device(&inport_dev);
 
-	printk(KERN_INFO "input%d: " INPORT_NAME " Inport mouse at %#x irq %d\n",
-		inport_dev.number, INPORT_BASE, inport_irq);
+	printk(KERN_INFO "input%d: %s at %#x irq %d\n",
+		inport_dev.number, inport_name, INPORT_BASE, inport_irq);
 
 	return 0;
 }

@@ -257,6 +257,12 @@ static void sunkbd_connect(struct serio *serio, struct serio_dev *dev)
 		set_bit(sunkbd->keycode[i], sunkbd->dev.keybit);
 	clear_bit(0, sunkbd->dev.keybit);
 
+	sunkbd->dev.name = sunkbd->name;
+	sunkbd->dev.idbus = BUS_RS232;
+	sunkbd->dev.idvendor = SERIO_SUNKBD;
+	sunkbd->dev.idproduct = sunkbd->type;
+	sunkbd->dev.version = 0x0100;
+
 	input_register_device(&sunkbd->dev);
 
 	printk(KERN_INFO "input%d: %s on serio%d\n", sunkbd->dev.number, sunkbd->name, serio->number);
