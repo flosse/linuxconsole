@@ -49,7 +49,7 @@ MODULE_LICENSE("GPL");
 
 static inline void q40kbd_write(unsigned char val)
 {
-	/* FIXME! We need a way how to write to the keyboard! */
+	/* No way to write to the keyboard! */
 }
 
 static struct serio q40kbd_port =
@@ -79,7 +79,7 @@ void __init q40kbd_init(void)
 	request_region(0x60, 16, "q40kbd");
 
 	/* allocate the IRQ */
-	request_irq(Q40_IRQ_KEYBOARD, keyboard_interrupt, 0, "q40kbd", NULL);
+	request_irq(Q40_IRQ_KEYBOARD, q40kbd_interrupt, 0, "q40kbd", NULL);
 
 	/* flush any pending input. */
 	while (maxread-- && (IRQ_KEYB_MASK & master_inb(INTERRUPT_REG)))
