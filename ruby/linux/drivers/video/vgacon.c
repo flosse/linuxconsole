@@ -817,8 +817,8 @@ vgacon_do_font_op(char *arg, int set, int ch512)
 	if ((set)&&(ch512!=vga_512_chars)) {	/* attribute controller */
 		int i;
 		for(i=0; i<MAX_NR_CONSOLES; i++) {
-			struct vc_data *c = vc_cons[i].d;
-			if (c && c->vc_sw == &vga_con)
+			struct vc_data *c = vc_cons[i];
+			if (c && c->display_fg->sw == &vga_con)
 				c->vc_hi_font_mask = ch512 ? 0x0800 : 0;
 		}
 		vga_512_chars=ch512;
