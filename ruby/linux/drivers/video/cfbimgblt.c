@@ -41,10 +41,11 @@
 
 void cfb_imageblit(struct fb_info *p, struct fb_image *image)
 {
-  unsigned long end_index, end_mask, mask, tmp, fgx, bgx, eorx;
+  unsigned long end_index, end_mask, mask, fgx, bgx, eorx;
   int ppw, shift, shift_right, shift_left, x2, y2, n, i, j, k;
   int linesize = p->fix.line_length;
   unsigned long *dst, *src = NULL;
+  long tmp = -1 >> (BITS_PER_LONG - p->var.bits_per_pixel);
   u8 *dst1, *src1;
   
   /* We could use hardware clipping but on many cards you get around hardware
@@ -79,7 +80,6 @@ void cfb_imageblit(struct fb_info *p, struct fb_image *image)
     bgx |= image->bg_color;
   }
   eorx = fgx ^ bgx;
-  tmp = (1 << p->var.bits_per_pixel) - 1;
 
   for (i = 0; i < image->height; i++) {
 	dst = (unsigned long *) dst1; 
