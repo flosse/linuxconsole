@@ -7,29 +7,17 @@
 #
 FONTMAPFILE = cp437.uni
 
-obj-y	 += mem.o tty_io.o n_tty.o tty_ioctl.o raw.o pty.o misc.o random.o
+obj-y	 += mem.o tty_io.o n_tty.o tty_ioctl.o pty.o misc.o random.o
 
 # All of the (potential) objects that export symbols.
 # This list comes from 'grep -l EXPORT_SYMBOL *.[hc]'.
 
-export-objs     :=	vt.o keyboard.o sysrq.o \
-			misc.o pty.o random.o selection.o serial.o \
-			sonypi.o tty_io.o tty_ioctl.o generic_serial.o rtc.o \
-			ip2main.o
+export-objs     :=	vt.o generic_serial.o ip2main.o \
+			ite_gpio.o keyboard.o misc.o nvram.o random.o rtc.o \
+			selection.o sonypi.o sysrq.o tty_io.o tty_ioctl.o
 
-ifeq ($(CONFIG_DECSTATION),y)
-  SERIAL   = decserial.o
-endif
-
-ifeq ($(CONFIG_QTRONIX_KEYBOARD),y)
-  KEYBD    = qtronix.o
-  KEYMAP   = qtronixmap.o
-endif
-
-obj-$(CONFIG_VT) += vt.o vt_ioctl.o decvte.o vc_screen.o consolemap.o consolemap_deftbl.o selection.o keyboard.o defkeymap.o
-obj-$(CONFIG_SERIAL) += $(SERIAL)
-obj-$(CONFIG_SERIAL_ACPI) += acpi_serial.o
-
+obj-$(CONFIG_VT) += vt_ioctl.o decvte.o vc_screen.o consolemap.o consolemap_deftbl.o selection.o keyboard.o
+obj-$(CONFIG_HW_CONSOLE) += vt.o defkeymap.o
 obj-$(CONFIG_MAGIC_SYSRQ) += sysrq.o
 obj-$(CONFIG_ATARI_DSP56K) += dsp56k.o
 obj-$(CONFIG_ROCKETPORT) += rocket.o
@@ -59,13 +47,18 @@ obj-$(CONFIG_MVME162_SCC) += generic_serial.o vme_scc.o
 obj-$(CONFIG_BVME6000_SCC) += generic_serial.o vme_scc.o
 obj-$(CONFIG_SERIAL_TX3912) += generic_serial.o serial_tx3912.o
 obj-$(CONFIG_HVC_CONSOLE) += hvc_console.o
+obj-$(CONFIG_RAW_DRIVER) += raw.o
 
 obj-$(CONFIG_PRINTER) += lp.o
+obj-$(CONFIG_TIPAR) += tipar.o
+
 obj-$(CONFIG_DTLK) += dtlk.o
 obj-$(CONFIG_R3964) += n_r3964.o
 obj-$(CONFIG_APPLICOM) += applicom.o
 obj-$(CONFIG_SONYPI) += sonypi.o
+obj-$(CONFIG_ATARIMOUSE) += atarimouse.o
 obj-$(CONFIG_RTC) += rtc.o
+obj-$(CONFIG_GEN_RTC) += genrtc.o
 obj-$(CONFIG_EFI_RTC) += efirtc.o
 ifeq ($(CONFIG_PPC),)
   obj-$(CONFIG_NVRAM) += nvram.o
@@ -74,6 +67,7 @@ obj-$(CONFIG_TOSHIBA) += toshiba.o
 obj-$(CONFIG_I8K) += i8k.o
 obj-$(CONFIG_DS1620) += ds1620.o
 obj-$(CONFIG_INTEL_RNG) += i810_rng.o
+obj-$(CONFIG_AMD_RNG) += amd768_rng.o
 obj-$(CONFIG_QIC02_TAPE) += tpqic02.o
 obj-$(CONFIG_FTAPE) += ftape/
 obj-$(CONFIG_H8) += h8.o
@@ -81,6 +75,7 @@ obj-$(CONFIG_PPDEV) += ppdev.o
 obj-$(CONFIG_DZ) += dz.o
 obj-$(CONFIG_NWBUTTON) += nwbutton.o
 obj-$(CONFIG_NWFLASH) += nwflash.o
+obj-$(CONFIG_SCx200_GPIO) += scx200_gpio.o
 
 # Only one watchdog can succeed. We probe the hardware watchdog
 # drivers first, then the softdog driver.  This means if your hardware
@@ -92,6 +87,7 @@ obj-$(CONFIG_ACQUIRE_WDT) += acquirewdt.o
 obj-$(CONFIG_ADVANTECH_WDT) += advantechwdt.o
 obj-$(CONFIG_IB700_WDT) += ib700wdt.o
 obj-$(CONFIG_MIXCOMWD) += mixcomwd.o
+obj-$(CONFIG_SCx200_WDT) += scx200_wdt.o
 obj-$(CONFIG_60XX_WDT) += sbc60xxwdt.o
 obj-$(CONFIG_WDT) += wdt.o
 obj-$(CONFIG_WDTPCI) += wdt_pci.o
@@ -107,27 +103,13 @@ obj-$(CONFIG_AGP) += agp/
 obj-$(CONFIG_DRM) += drm/
 obj-$(CONFIG_PCMCIA) += pcmcia/
 
-host-progs := conmakehash
+# Files generated that shall be removed upon make clean
+clean-files := consolemap_deftbl.c defkeymap.c
 
 include $(TOPDIR)/Rules.make
 
-$(obj)/consolemap_deftbl.c: $(src)/$(FONTMAPFILE) $(obj)/conmakehash
-	$(obj)/conmakehash $< > $@
+$(obj)/consolemap_deftbl.c: $(src)/$(FONTMAPFILE)
+	$(call do_cmd,CONMK  $@,$(objtree)/scripts/conmakehash $< > $@)
 
 $(obj)/defkeymap.o:  $(obj)/defkeymap.c
 
-$(obj)/qtronixmap.o: $(obj)/qtronixmap.c
-
-# Uncomment if you're changing the keymap and have an appropriate
-# loadkeys version for the map. By default, we'll use the shipped
-# versions.
-# GENERATE_KEYMAP := 1
-
-ifdef GENERATE_KEYMAP
-
-$(obj)/defkeymap.c $(obj)/qtronixmap.c: $(obj)/%.c: $(src)/%.map
-	loadkeys --mktable $< > $@.tmp
-	sed -e 's/^static *//' $@.tmp > $@
-	rm $@.tmp
-
-endif
