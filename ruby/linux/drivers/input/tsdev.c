@@ -27,8 +27,8 @@
  * e-mail - mail your message to <jsimmons@transvirtual.com>.
  */
 
-#define TSDEV_MINOR_BASE 	32
-#define TSDEV_MINORS		32
+#define TSDEV_MINOR_BASE 	16	
+#define TSDEV_MINORS		16	
 #define TSDEV_BUFFER_SIZE	64
 
 #include <linux/slab.h>
@@ -42,10 +42,10 @@
 #include <linux/time.h>
 
 #ifndef CONFIG_INPUT_TSDEV_SCREEN_X
-#define CONFIG_INPUT_TSDEV_SCREEN_X	1024
+#define CONFIG_INPUT_TSDEV_SCREEN_X	240	
 #endif
 #ifndef CONFIG_INPUT_TSDEV_SCREEN_Y
-#define CONFIG_INPUT_TSDEV_SCREEN_Y	768
+#define CONFIG_INPUT_TSDEV_SCREEN_Y	320	
 #endif
 
 struct tsdev {
@@ -61,10 +61,10 @@ struct tsdev {
 
 /* From Compaq's Touch Screen Specification version 0.2 (draft) */
 typedef struct {
-    short pressure;
-    short x;
-    short y;
-    short millisecs;
+	short pressure;
+	short x;
+	short y;
+	short millisecs;
 } TS_EVENT;
 
 struct tsdev_list {
@@ -92,7 +92,7 @@ static int tsdev_fasync(int fd, struct file *file, int on)
 	return retval < 0 ? retval : 0;
 }
 
-static int tsdev_open(struct inode * inode, struct file * file)
+static int tsdev_open(struct inode *inode, struct file *file)
 {
 	int i = minor(inode->i_rdev) - TSDEV_MINOR_BASE;
 	struct tsdev_list *list;
@@ -110,12 +110,12 @@ static int tsdev_open(struct inode * inode, struct file * file)
 	file->private_data = list;
 
 	if (!list->tsdev->open++)
-		if (list->tsdev->exist)	
+		if (list->tsdev->exist)
 			input_open_device(&list->tsdev->handle);
 	return 0;
 }
 
-static int tsdev_release(struct inode * inode, struct file * file)
+static int tsdev_release(struct inode *inode, struct file *file)
 {
 	struct tsdev_list *list = file->private_data;
 	struct tsdev_list **listptr;
@@ -140,7 +140,8 @@ static int tsdev_release(struct inode * inode, struct file * file)
 	return 0;
 }
 
-static ssize_t tsdev_read(struct file * file, char * buffer, size_t count, loff_t *ppos)
+static ssize_t tsdev_read(struct file *file, char *buffer, size_t count,
+			  loff_t * ppos)
 {
 	DECLARE_WAITQUEUE(wait, current);
 	struct tsdev_list *list = file->private_data;
@@ -152,9 +153,9 @@ static ssize_t tsdev_read(struct file * file, char * buffer, size_t count, loff_
 
 		while (list->head == list->tail) {
 			if (!list->tsdev->exist) {
-                                retval = -ENODEV;
-                                break;
-                        }
+				retval = -ENODEV;
+				break;
+			}
 			if (file->f_flags & O_NONBLOCK) {
 				retval = -EAGAIN;
 				break;
@@ -172,28 +173,31 @@ static ssize_t tsdev_read(struct file * file, char * buffer, size_t count, loff_
 	if (retval)
 		return retval;
 
-	while (list->head != list->tail && retval+sizeof(TS_EVENT) <= count) {
-        	if (copy_to_user(buffer + retval, list->event + list->tail,
-                         sizeof(TS_EVENT))) return -EFAULT;
-                list->tail = (list->tail + 1) & (TSDEV_BUFFER_SIZE - 1);
-                retval += sizeof(TS_EVENT);
-        }
-	return retval;	
+	while (list->head != list->tail
+	       && retval + sizeof(TS_EVENT) <= count) {
+		if (copy_to_user
+		    (buffer + retval, list->event + list->tail,
+		     sizeof(TS_EVENT)))
+			return -EFAULT;
+		list->tail = (list->tail + 1) & (TSDEV_BUFFER_SIZE - 1);
+		retval += sizeof(TS_EVENT);
+	}
+	return retval;
 }
 
 /* No kernel lock - fine */
-static unsigned int tsdev_poll(struct file *file, poll_table *wait)
+static unsigned int tsdev_poll(struct file *file, poll_table * wait)
 {
 	struct tsdev_list *list = file->private_data;
-	
+
 	poll_wait(file, &list->tsdev->wait, wait);
 	if (list->head != list->tail)
 		return POLLIN | POLLRDNORM;
 	return 0;
 }
 
-static int tsdev_ioctl(struct inode *inode, struct file *file,unsigned int cmd,
-			unsigned long arg)
+static int tsdev_ioctl(struct inode *inode, struct file *file,
+		       unsigned int cmd, unsigned long arg)
 {
 /*
 	struct tsdev_list *list = file->private_data;
@@ -220,10 +224,11 @@ struct file_operations tsdev_fops = {
 	read:		tsdev_read,
 	poll:		tsdev_poll,
 	fasync:		tsdev_fasync,
-	ioctl:		tsdev_ioctl,	
+	ioctl:		tsdev_ioctl,
 };
 
-static void tsdev_event(struct input_handle *handle, unsigned int type, unsigned int code, int value)
+static void tsdev_event(struct input_handle *handle, unsigned int type,
+			unsigned int code, int value)
 {
 	struct tsdev *tsdev = handle->private;
 	struct tsdev_list *list = tsdev->list;
@@ -232,66 +237,92 @@ static void tsdev_event(struct input_handle *handle, unsigned int type, unsigned
 
 	while (list) {
 		switch (type) {
-			case EV_ABS:
-				switch (code) {
-					case ABS_X:	
-						size = handle->dev->absmax[ABS_X] - handle->dev->absmin[ABS_X];
-						if(size > 0)
-							list->oldx = ((value - handle->dev->absmin[ABS_X]) * xres / size);
-						else
-							list->oldx = ((value - handle->dev->absmin[ABS_X]));
-						break;
-					case ABS_Y:
-						size = handle->dev->absmax[ABS_Y] - handle->dev->absmin[ABS_Y];
-						if(size > 0)
-							list->oldy = ((value - handle->dev->absmin[ABS_Y]) * yres / size);
-						else
-							list->oldy = ((value - handle->dev->absmin[ABS_Y]));
-						break;
-					case ABS_PRESSURE:
-						list->pendown = ((value > handle->dev->absmin[ABS_PRESSURE])) ?
-							value - handle->dev->absmin[ABS_PRESSURE] : 0;
-						break;
-				}
-				break;
+		case EV_ABS:
+			switch (code) {
+			case ABS_X:
+				if (!list->pendown)     return;
 
-			case EV_REL:
-				switch (code) {
-					case REL_X:
-						list->oldx += value;
-						if(list->oldx < 0)
-							list->oldx = 0;
-						else if(list->oldx > xres)
-							list->oldx = xres;
-						break;
-					case REL_Y:
-						list->oldy += value;
-						if(list->oldy < 0)
-							list->oldy = 0;
-						else if(list->oldy > xres)
-							list->oldy = xres;
-						break;
-				}
+				size =
+				    handle->dev->absmax[ABS_X] -
+				    handle->dev->absmin[ABS_X];
+				if (size > 0)
+					list->oldx =
+					    ((value -
+					      handle->dev->absmin[ABS_X]) *
+					     xres / size);
+				else
+					list->oldx =
+					    ((value -
+					      handle->dev->absmin[ABS_X]));
 				break;
+			case ABS_Y:
+				if (!list->pendown)     return;		
 
-			case EV_KEY:
-				if (code == BTN_TOUCH || code == BTN_MOUSE) {
-					switch (value) {
-						case 0:
-							list->pendown = 0;
-							break;
-						case 1:
-							if(!list->pendown) list->pendown = 1;
-							break;
-						case 2: 
-							return;
-					}
-				} else 
+				size =
+				    handle->dev->absmax[ABS_Y] -
+				    handle->dev->absmin[ABS_Y];
+				if (size > 0)
+					list->oldy =
+					    ((value -
+					      handle->dev->absmin[ABS_Y]) *
+					     yres / size);
+				else
+					list->oldy =
+					    ((value -
+					      handle->dev->absmin[ABS_Y]));
+				break;
+			case ABS_PRESSURE:
+				list->pendown =
+				    ((value >
+				      handle->dev->
+				      absmin[ABS_PRESSURE])) ? value -
+				    handle->dev->absmin[ABS_PRESSURE] : 0;
+				break;
+			}
+			break;
+
+		case EV_REL:
+			switch (code) {
+			case REL_X:
+				if (!list->pendown)     return;
+
+				list->oldx += value;
+				if (list->oldx < 0)
+					list->oldx = 0;
+				else if (list->oldx > xres)
+					list->oldx = xres;
+				break;
+			case REL_Y:
+				if (!list->pendown)     return;
+
+				list->oldy += value;
+				if (list->oldy < 0)
+					list->oldy = 0;
+				else if (list->oldy > xres)
+					list->oldy = xres;
+				break;
+			}
+			break;
+
+		case EV_KEY:
+			if (code == BTN_TOUCH || code == BTN_MOUSE) {
+				switch (value) {
+				case 0:
+					list->pendown = 0;
+					break;
+				case 1:
+					if (!list->pendown)
+						list->pendown = 1;
+					break;
+				case 2:
 					return;
-				break;
+				}
+			} else
+				return;
+			break;
 		}
 		get_fast_time(&time);
-		list->event[list->head].millisecs = time.tv_usec/100;		
+		list->event[list->head].millisecs = time.tv_usec / 100;
 		list->event[list->head].pressure = list->pendown;
 		list->event[list->head].x = list->oldx;
 		list->event[list->head].y = list->oldy;
@@ -302,16 +333,20 @@ static void tsdev_event(struct input_handle *handle, unsigned int type, unsigned
 	wake_up_interruptible(&tsdev->wait);
 }
 
-static struct input_handle *tsdev_connect(struct input_handler *handler, struct input_dev *dev, struct input_device_id *id)
+static struct input_handle *tsdev_connect(struct input_handler *handler,
+					  struct input_dev *dev,
+					  struct input_device_id *id)
 {
 	struct tsdev *tsdev;
 	int minor;
 
-	for (minor = 0; minor < TSDEV_MINORS && tsdev_table[minor]; minor++);
-        if (minor == TSDEV_MINORS) {
-                printk(KERN_ERR "tsdev: You have way too many touchscreens\n");
-                return NULL;
-        }
+	for (minor = 0; minor < TSDEV_MINORS && tsdev_table[minor];
+	     minor++);
+	if (minor == TSDEV_MINORS) {
+		printk(KERN_ERR
+		       "tsdev: You have way too many touchscreens\n");
+		return NULL;
+	}
 
 	if (!(tsdev = kmalloc(sizeof(struct tsdev), GFP_KERNEL)))
 		return NULL;
@@ -320,14 +355,15 @@ static struct input_handle *tsdev_connect(struct input_handler *handler, struct 
 
 	tsdev->minor = minor;
 	tsdev_table[minor] = tsdev;
-	sprintf(tsdev->name, "ts%d", minor); 
+	sprintf(tsdev->name, "ts%d", minor);
 
 	tsdev->handle.dev = dev;
 	tsdev->handle.name = tsdev->name;
 	tsdev->handle.handler = handler;
 	tsdev->handle.private = tsdev;
 
-	tsdev->devfs = input_register_minor("ts%d", minor, TSDEV_MINOR_BASE);
+	tsdev->devfs =
+	    input_register_minor("ts%d", minor, TSDEV_MINOR_BASE);
 
 	tsdev->exist = 1;
 
@@ -352,24 +388,26 @@ static void tsdev_disconnect(struct input_handle *handle)
 
 static struct input_device_id tsdev_ids[] = {
 	{
-		flags: INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT | INPUT_DEVICE_ID_MATCH_RELBIT,
-		evbit: { BIT(EV_KEY) | BIT(EV_REL) },
-		keybit: { [LONG(BTN_LEFT)] = BIT(BTN_LEFT) },
-		relbit: { BIT(REL_X) | BIT(REL_Y) },
-	},	/* A mouse like device, at least one button, two relative axes */
+	      flags:INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT |
+	 INPUT_DEVICE_ID_MATCH_RELBIT,
+	      evbit:{BIT(EV_KEY) | BIT(EV_REL)},
+	      keybit:{[LONG(BTN_LEFT)] = BIT(BTN_LEFT)},
+	      relbit:{BIT(REL_X) | BIT(REL_Y)},
+	 },			/* A mouse like device, at least one button, two relative axes */
 
 	{
-		flags: INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT | INPUT_DEVICE_ID_MATCH_ABSBIT,
-		evbit: { BIT(EV_KEY) | BIT(EV_ABS) },
-		keybit: { [LONG(BTN_TOUCH)] = BIT(BTN_TOUCH) },
-		absbit: { BIT(ABS_X) | BIT(ABS_Y) },
-	},	/* A tablet like device, at least touch detection, two absolute axes */
+	      flags:INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT |
+	 INPUT_DEVICE_ID_MATCH_ABSBIT,
+	      evbit:{BIT(EV_KEY) | BIT(EV_ABS)},
+	      keybit:{[LONG(BTN_TOUCH)] = BIT(BTN_TOUCH)},
+	      absbit:{BIT(ABS_X) | BIT(ABS_Y)},
+	 },			/* A tablet like device, at least touch detection, two absolute axes */
 
-	{ }, 	/* Terminating entry */
+	{},			/* Terminating entry */
 };
 
 MODULE_DEVICE_TABLE(input, tsdev_ids);
-	
+
 static struct input_handler tsdev_handler = {
 	event:		tsdev_event,
 	connect:	tsdev_connect,

@@ -49,7 +49,7 @@ MODULE_SUPPORTED_DEVICE("input/js");
 MODULE_LICENSE("GPL");
 
 #define JOYDEV_MINOR_BASE	0
-#define JOYDEV_MINORS		32
+#define JOYDEV_MINORS		16	
 #define JOYDEV_BUFFER_SIZE	64
 
 #define MSECS(t)	(1000 * ((t) / HZ) + 1000 * ((t) % HZ) / HZ)
