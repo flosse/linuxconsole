@@ -1,0 +1,7 @@
+#
+# Mouse driver configuration
+#
+
+bool 'Touchscreens' CONFIG_INPUT_TS
+
+dep_tristate '  Gunze AHL-51S touchscreen' CONFIG_MOUSE_GUNZE $CONFIG_INPUT $CONFIG_INPUT_TS $CONFIG_SERIO
