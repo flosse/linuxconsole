@@ -163,8 +163,8 @@ struct uart_info {
 	struct uart_port	*port;
 	struct uart_ops		*ops;
 	struct uart_state	*state;
-	struct tty_struct	*tty;
 	struct circ_buf		xmit;
+	void 			*par;
 	u_int			flags;
 
 	u_int			event;
@@ -256,6 +256,8 @@ __uart_handle_sysrq_char(struct uart_info *info, unsigned int ch,
  */
 static inline int __uart_handle_break(struct uart_info *info, struct console *con)
 {
+	struct tty_struct *tty = info->par;
+
 #ifdef SUPPORT_SYSRQ
 	if (info->port->line == con->index) {
 		if (!info->sysrq) {
@@ -266,7 +268,7 @@ static inline int __uart_handle_break(struct uart_info *info, struct console *co
 	}
 #endif
 	if (info->flags & ASYNC_SAK)
-		do_SAK(info->tty);
+		do_SAK(tty);
 	return 0;
 }
 
@@ -287,6 +289,7 @@ static inline void
 uart_handle_dcd_change(struct uart_info *info, unsigned int status)
 {
 	struct uart_port *port = info->port;
+	struct tty_struct *tty = info->par;
 
 	port->icount.dcd++;
 
@@ -300,8 +303,8 @@ uart_handle_dcd_change(struct uart_info *info, unsigned int status)
 			wake_up_interruptible(&info->open_wait);
 		else if (!((info->flags & ASYNC_CALLOUT_ACTIVE) &&
 			   (info->flags & ASYNC_CALLOUT_NOHUP))) {
-			if (info->tty)
-				tty_hangup(info->tty);
+			if (tty)
+				tty_hangup(tty);
 		}
 	}
 }
@@ -315,19 +318,20 @@ static inline void
 uart_handle_cts_change(struct uart_info *info, unsigned int status)
 {
 	struct uart_port *port = info->port;
+	struct tty_struct *tty = info->par;
 
 	port->icount.cts++;
 
 	if (info->flags & ASYNC_CTS_FLOW) {
-		if (info->tty->hw_stopped) {
+		if (tty->hw_stopped) {
 			if (status) {
-				info->tty->hw_stopped = 0;
+				tty->hw_stopped = 0;
 				info->ops->start_tx(port, 1, 0);
 				uart_event(info, EVT_WRITE_WAKEUP);
 			}
 		} else {
 			if (!status) {
-				info->tty->hw_stopped = 1;
+				tty->hw_stopped = 1;
 				info->ops->stop_tx(port, 0);
 			}
 		}

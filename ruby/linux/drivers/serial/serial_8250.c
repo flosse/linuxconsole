@@ -638,7 +638,7 @@ static void serial8250_enable_ms(struct uart_port *port)
 static _INLINE_ void
 receive_chars(struct uart_info *info, int *status, struct pt_regs *regs)
 {
-	struct tty_struct *tty = info->tty;
+	struct tty_struct *tty = info->par;
 	struct uart_port *port = info->port;
 	unsigned char ch;
 	int max_count = 256;
@@ -726,6 +726,7 @@ receive_chars(struct uart_info *info, int *status, struct pt_regs *regs)
 static _INLINE_ void transmit_chars(struct uart_info *info, int *intr_done)
 {
 	struct uart_port *port = info->port;
+	struct tty_struct *tty = info->par;
 	int count;
 
 	if (port->x_char) {
@@ -737,8 +738,8 @@ static _INLINE_ void transmit_chars(struct uart_info *info, int *intr_done)
 		return;
 	}
 	if (info->xmit.head == info->xmit.tail
-	    || info->tty->stopped
-	    || info->tty->hw_stopped) {
+	    || tty->stopped
+	    || tty->hw_stopped) {
 		serial8250_stop_tx(port, 0);
 		return;
 	}
@@ -811,6 +812,7 @@ serial8250_handle_port(struct uart_info *info, struct pt_regs *regs)
 static void rs_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 {
 	struct uart_info *info, *end_mark = NULL;
+	struct tty_struct *tty;
 	int pass_counter = 0;
 #ifdef CONFIG_SERIAL_MULTIPORT
 	int first_multi = 0;
@@ -825,13 +827,17 @@ static void rs_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 	if (!info)
 		return;
 
+	tty = info->par;
+	if (!tty)
+		return;
+
 #ifdef CONFIG_SERIAL_MULTIPORT
 	if (port_monitor)
 		first_multi = inb(port_monitor);
 #endif
 
 	do {
-		if (!info->tty ||
+		if (!tty ||
 		    (serial_in(info->port, UART_IIR) & UART_IIR_NO_INT)) {
 		    	if (!end_mark)
 		    		end_mark = info;
@@ -873,6 +879,7 @@ static void rs_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 static void rs_interrupt_single(int irq, void *dev_id, struct pt_regs *regs)
 {
 	struct uart_info *info;
+	struct tty_struct *tty;
 	int pass_counter = 0;
 #ifdef CONFIG_SERIAL_MULTIPORT
 	int first_multi = 0;
@@ -884,7 +891,8 @@ static void rs_interrupt_single(int irq, void *dev_id, struct pt_regs *regs)
 #endif
 
 	info = *(struct uart_info **)dev_id;
-	if (!info || !info->tty)
+	tty = info->par;
+	if (!info || !tty)
 		return;
 
 #ifdef CONFIG_SERIAL_MULTIPORT

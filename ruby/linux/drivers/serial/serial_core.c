@@ -121,9 +121,8 @@ static void uart_start(struct tty_struct *tty)
 static void uart_tasklet_action(unsigned long data)
 {
 	struct uart_info *info = (struct uart_info *)data;
-	struct tty_struct *tty;
+	struct tty_struct *tty = info->par;
 
-	tty = info->tty;
 	if (!tty || !test_and_clear_bit(EVT_WRITE_WAKEUP, &info->event))
 		return;
 
@@ -135,18 +134,21 @@ static void uart_tasklet_action(unsigned long data)
 
 static inline void uart_update_altspeed(struct uart_info *info)
 {
+	struct tty_struct *tty = info->par;
+
 	if ((info->flags & ASYNC_SPD_MASK) == ASYNC_SPD_HI)
-		info->tty->alt_speed = 57600;
+		tty->alt_speed = 57600;
 	if ((info->flags & ASYNC_SPD_MASK) == ASYNC_SPD_VHI)
-		info->tty->alt_speed = 115200;
+		tty->alt_speed = 115200;
 	if ((info->flags & ASYNC_SPD_MASK) == ASYNC_SPD_SHI)
-		info->tty->alt_speed = 230400;
+		tty->alt_speed = 230400;
 	if ((info->flags & ASYNC_SPD_MASK) == ASYNC_SPD_WARP)
-		info->tty->alt_speed = 460800;
+		tty->alt_speed = 460800;
 }
 
 static int uart_startup(struct uart_info *info)
 {
+	struct tty_struct *tty = info->par;
 	unsigned long flags;
 	unsigned long page;
 	int retval = 0;
@@ -163,8 +165,8 @@ static int uart_startup(struct uart_info *info)
 	}
 
 	if (info->port->type == PORT_UNKNOWN) {
-		if (info->tty)
-			set_bit(TTY_IO_ERROR, &info->tty->flags);
+		if (tty)
+			set_bit(TTY_IO_ERROR, &tty->flags);
 		free_page(page);
 		goto errout;
 	}
@@ -179,21 +181,21 @@ static int uart_startup(struct uart_info *info)
 	retval = info->ops->startup(info->port, info);
 	if (retval) {
 		if (capable(CAP_SYS_ADMIN)) {
-			if (info->tty)
-				set_bit(TTY_IO_ERROR, &info->tty->flags);
+			if (tty)
+				set_bit(TTY_IO_ERROR, &tty->flags);
 			retval = 0;
 		}
 		goto errout;
 	}
 
-	if (info->tty)
-		clear_bit(TTY_IO_ERROR, &info->tty->flags);
+	if (tty)
+		clear_bit(TTY_IO_ERROR, &tty->flags);
 	info->xmit.head = info->xmit.tail = 0;
 
 	/*
 	 * Set up the tty->alt_speed kludge
 	 */
-	if (info->tty)
+	if (tty)
 		uart_update_altspeed(info);
 
 	/*
@@ -205,7 +207,7 @@ static int uart_startup(struct uart_info *info)
 	 * Setup the RTS and DTR signals once the port
 	 * is open and ready to respond.
 	 */
-	if (info->tty->termios->c_cflag & CBAUD)
+	if (tty->termios->c_cflag & CBAUD)
 		info->mctrl = TIOCM_RTS | TIOCM_DTR;
 	info->ops->set_mctrl(info->port, info->mctrl);
 
@@ -223,6 +225,7 @@ errout:
  */
 static void uart_shutdown(struct uart_info *info)
 {
+	struct tty_struct *tty = info->par;
 	unsigned long flags;
 
 	if (!(info->flags & ASYNC_INITIALIZED))
@@ -247,14 +250,14 @@ static void uart_shutdown(struct uart_info *info)
 		free_page(pg);
 	}
 
-	if (!info->tty || (info->tty->termios->c_cflag & HUPCL))
+	if (!tty || (tty->termios->c_cflag & HUPCL))
 		info->mctrl &= ~(TIOCM_DTR|TIOCM_RTS);
 	info->ops->set_mctrl(info->port, info->mctrl);
 
 	/* kill off our tasklet */
 	tasklet_kill(&info->tlet);
-	if (info->tty)
-		set_bit(TTY_IO_ERROR, &info->tty->flags);
+	if (tty)
+		set_bit(TTY_IO_ERROR, &tty->flags);
 
 	info->flags &= ~ASYNC_INITIALIZED;
 	restore_flags(flags);
@@ -280,6 +283,7 @@ static inline u_int uart_calculate_quot(struct uart_info *info, u_int baud)
 
 static void uart_change_speed(struct uart_info *info, struct termios *old_termios)
 {
+	struct tty_struct *tty = info->par;
 	struct uart_port *port = info->port;
 	u_int quot, baud, cflag, bits, try;
 
@@ -287,11 +291,10 @@ static void uart_change_speed(struct uart_info *info, struct termios *old_termio
 	 * If we have no tty, termios, or the port does not exist,
 	 * then we can't set the parameters for this port.
 	 */
-	if (!info->tty || !info->tty->termios ||
-	    info->port->type == PORT_UNKNOWN)
+	if (!tty || !tty->termios || info->port->type == PORT_UNKNOWN)
 		return;
 
-	cflag = info->tty->termios->c_cflag;
+	cflag = tty->termios->c_cflag;
 
 	/* byte size and parity */
 	switch (cflag & CSIZE) {
@@ -308,7 +311,7 @@ static void uart_change_speed(struct uart_info *info, struct termios *old_termio
 
 	for (try = 0; try < 2; try ++) {
 		/* Determine divisor based on baud rate */
-		baud = tty_get_baud_rate(info->tty);
+		baud = tty_get_baud_rate(tty);
 		quot = uart_calculate_quot(info, baud);
 		if (quot)
 			break;
@@ -317,9 +320,9 @@ static void uart_change_speed(struct uart_info *info, struct termios *old_termio
 		 * Oops, the quotient was zero.  Try again with
 		 * the old baud rate if possible.
 		 */
-		info->tty->termios->c_cflag &= ~CBAUD;
+		tty->termios->c_cflag &= ~CBAUD;
 		if (old_termios) {
-			info->tty->termios->c_cflag |=
+			tty->termios->c_cflag |=
 				 (old_termios->c_cflag & CBAUD);
 			old_termios = NULL;
 			continue;
@@ -329,7 +332,7 @@ static void uart_change_speed(struct uart_info *info, struct termios *old_termio
 		 * As a last resort, if the quotient is zero,
 		 * default to 9600 bps
 		 */
-		info->tty->termios->c_cflag |= B9600;
+		tty->termios->c_cflag |= B9600;
 	}
 
 	info->timeout = (port->fifosize * HZ * bits * quot) /
@@ -352,7 +355,7 @@ static void uart_change_speed(struct uart_info *info, struct termios *old_termio
 
 	pm_access(info->state->pm);
 
-	info->ops->change_speed(port, cflag, info->tty->termios->c_iflag, quot);
+	info->ops->change_speed(port, cflag, tty->termios->c_iflag, quot);
 }
 
 static void uart_put_char(struct tty_struct *tty, u_char ch)
@@ -578,6 +581,7 @@ static int uart_set_info(struct uart_info *info,
 	struct serial_struct new_serial;
 	struct uart_state *state = info->state;
 	struct uart_port *port = info->port;
+	struct tty_struct *tty = info->par;
 	unsigned long new_port;
 	unsigned int change_irq, change_port, old_flags;
 	unsigned int old_custom_divisor;
@@ -730,7 +734,7 @@ static int uart_set_info(struct uart_info *info,
 	state->custom_divisor = new_serial.custom_divisor;
 	state->close_delay = new_serial.close_delay * HZ / 100;
 	state->closing_wait = new_serial.closing_wait * HZ / 100;
-	info->tty->low_latency = (info->flags & ASYNC_LOW_LATENCY) ? 1 : 0;
+	tty->low_latency = (info->flags & ASYNC_LOW_LATENCY) ? 1 : 0;
 	port->fifosize = new_serial.xmit_fifo_size;
 
 check_and_exit:
@@ -757,8 +761,9 @@ exit:
  */
 static int uart_get_lsr_info(struct uart_info *info, unsigned int *value)
 {
-	u_int result;
+	struct tty_struct *tty = info->par;
 	unsigned long flags;
+	u_int result;
 
 	save_flags(flags); cli();
 	result = info->ops->tx_empty(info->port);
@@ -773,7 +778,7 @@ static int uart_get_lsr_info(struct uart_info *info, unsigned int *value)
 	if (info->port->x_char ||
 	    ((CIRC_CNT(info->xmit.head, info->xmit.tail,
 		       UART_XMIT_SIZE) > 0) &&
-	     !info->tty->stopped && !info->tty->hw_stopped))
+	     !tty->stopped && !tty->hw_stopped))
 		result &= TIOCSER_TEMT;
 	
 	return put_user(result, value);
@@ -1131,7 +1136,7 @@ static void uart_close(struct tty_struct *tty, struct file *filp)
 		tty->ldisc.flush_buffer(tty);
 	tty->closing = 0;
 	info->event = 0;
-	info->tty = NULL;
+	info->par = NULL;
 	if (info->blocked_open) {
 		if (info->state->close_delay) {
 			set_current_state(TASK_INTERRUPTIBLE);
@@ -1224,7 +1229,7 @@ static void uart_hangup(struct tty_struct *tty)
 	info->event = 0;
 	state->count = 0;
 	info->flags &= ~(ASYNC_NORMAL_ACTIVE|ASYNC_CALLOUT_ACTIVE);
-	info->tty = NULL;
+	info->par = NULL;
 	wake_up_interruptible(&info->open_wait);
 }
 
@@ -1405,8 +1410,8 @@ static int uart_open(struct tty_struct *tty, struct file *filp)
 		goto out;
 
 	tty->driver_data = info;
-	info->tty = tty;
-	info->tty->low_latency = (info->flags & ASYNC_LOW_LATENCY) ? 1 : 0;
+	tty->low_latency = (info->flags & ASYNC_LOW_LATENCY) ? 1 : 0;
+	info->par = tty;
 
 	/*
 	 * Make sure we have the temporary buffer allocated.  Note
@@ -1800,15 +1805,15 @@ uart_setup_port(struct uart_driver *drv, struct uart_state *state)
 	if (port->flags & ASYNC_BOOT_AUTOCONF)
 		port->ops->config_port(port, flags);
 
-	/*
-	 * Only register this port if it is detected.
-	 */
-	if (port->type != PORT_UNKNOWN) {
-		tty_register_devfs(drv->normal_driver, 0, drv->minor +
-					state->port->line);
-		tty_register_devfs(drv->callout_driver, 0, drv->minor +
-					state->port->line);
-	}
+       	/*
+         * Only register this port if it is detected.
+       	if (port->type != PORT_UNKNOWN) {
+               	tty_register_devfs(drv->normal_driver, 0, drv->minor +
+                                       	port->line);
+               	tty_register_devfs(drv->callout_driver, 0, drv->minor +
+                                       	port->line);
+       	}
+	*/
 }
 
 /*
@@ -1851,7 +1856,7 @@ int uart_register_driver(struct uart_driver *drv)
 	normal->subtype		= SERIAL_TYPE_NORMAL;
 	normal->init_termios	= tty_std_termios;
 	normal->init_termios.c_cflag = B38400 | CS8 | CREAD | HUPCL | CLOCAL;
-	normal->flags		= TTY_DRIVER_REAL_RAW | TTY_DRIVER_NO_DEVFS;
+	normal->flags		= TTY_DRIVER_REAL_RAW;
 	normal->refcount	= (int *)(drv->state + drv->nr);
 	normal->table		= drv->table;
 	normal->termios		= drv->termios;
@@ -1892,6 +1897,14 @@ int uart_register_driver(struct uart_driver *drv)
 	callout->read_proc	= NULL;
 	callout->proc_entry	= NULL;
 
+	retval = tty_register_driver(normal);
+	if (retval)
+		goto out;
+
+	retval = tty_register_driver(callout);
+	if (retval)
+		tty_unregister_driver(normal);
+
 	for (i = 0; i < drv->nr; i++) {
 		struct uart_state *state = drv->state + i;
 
@@ -1902,15 +1915,6 @@ int uart_register_driver(struct uart_driver *drv)
 
 		uart_setup_port(drv, state);
 	}
-
-	retval = tty_register_driver(normal);
-	if (retval)
-		goto out;
-
-	retval = tty_register_driver(callout);
-	if (retval)
-		tty_unregister_driver(normal);
-
 out:
 	if (retval && drv->state)
 		kfree(drv->state);
@@ -1923,9 +1927,10 @@ void uart_unregister_driver(struct uart_driver *drv)
 
 	for (i = 0; i < drv->nr; i++) {
 		struct uart_state *state = drv->state + i;
+		struct tty_struct *tty = state->info->par;
 
-		if (state->info && state->info->tty)
-			tty_hangup(state->info->tty);
+		if (state->info && tty)
+			tty_hangup(tty);
 
 		pm_unregister(state->pm);
 
@@ -2082,6 +2087,7 @@ int uart_register_port(struct uart_driver *drv, struct uart_port *port)
 void uart_unregister_port(struct uart_driver *drv, int line)
 {
 	struct uart_state *state;
+	struct tty_struct *tty;
 
 	if (line < 0 || line >= drv->nr) {
 		printk(KERN_ERR "Attempt to unregister %s%d\n",
@@ -2090,14 +2096,15 @@ void uart_unregister_port(struct uart_driver *drv, int line)
 	}
 
 	state = drv->state + line;
+	tty = state->info->par;
 
 	down(&state->count_sem);
 	/*
 	 * The port has already gone.  We have to hang up the line
 	 * to kill all usage of this port.
 	 */
-	if (state->info && state->info->tty)
-		tty_hangup(state->info->tty);
+	if (state->info && tty)
+		tty_hangup(tty);
 
 	/*
 	 * Free the ports resources, if any.
