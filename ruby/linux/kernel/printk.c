@@ -286,36 +286,30 @@ asmlinkage long sys_syslog(int type, char * buf, int len)
 /*
  * Call the console drivers on a range of log_buf
  */
-static void __call_console_drivers(unsigned long start, unsigned long end)
+static void __call_console_drivers(struct console *con, unsigned long start, unsigned long end)
 {
-	struct console *con;
+	/* Make sure that we print immediately */
+	if (oops_in_progress)
+		init_MUTEX(&con->driver->tty_lock);
 
-       	for (con = console_drivers; con; con = con->next) {
-               	if ((con->flags & CON_ENABLED) && con->write) {
-			/* Make sure that we print immediately */
-			if (oops_in_progress)
-				init_MUTEX(&con->driver->tty_lock);
-
-			down(&con->driver->tty_lock);
-                       	con->write(con, &LOG_BUF(start), end - start);
-			up(&con->driver->tty_lock);
-		}
-	}
+	down(&con->driver->tty_lock);
+	con->write(con, &LOG_BUF(start), end - start);
+	up(&con->driver->tty_lock);
 }
 
 /*
  * Write out chars from start to end - 1 inclusive
  */
-static void _call_console_drivers(unsigned long start, unsigned long end, 
-				  int msg_log_level)
+static void _call_console_drivers(struct console *con, unsigned long start,
+				  unsigned long end, int msg_log_level)
 {
-	if (msg_log_level<console_loglevel && console_drivers && start != end){
+	if (msg_log_level<console_loglevel && con && start != end){
 		if ((start & LOG_BUF_MASK) > (end & LOG_BUF_MASK)) {
                        	/* wrapped write */
-                       	__call_console_drivers(start&LOG_BUF_MASK, LOG_BUF_LEN);
-                       	__call_console_drivers(0, end & LOG_BUF_MASK);
+                       	__call_console_drivers(con, start & LOG_BUF_MASK, LOG_BUF_LEN);
+                       	__call_console_drivers(con, 0, end & LOG_BUF_MASK);
                	} else {
-                       	__call_console_drivers(start, end);
+                       	__call_console_drivers(con, start, end);
                	}
        	}
 }
@@ -325,7 +319,8 @@ static void _call_console_drivers(unsigned long start, unsigned long end,
  * log_buf[start] to log_buf[end - 1].
  * The console_sem must be held.
  */
-static void call_console_drivers(unsigned long start, unsigned long end)
+static void call_console_drivers(struct console *con, unsigned long start,
+ 				 unsigned long end)
 {
 	unsigned long cur_index, start_print;
        	static int msg_level = -1;
@@ -362,15 +357,15 @@ static void call_console_drivers(unsigned long start, unsigned long end)
                                          */
                                        	msg_level = default_message_loglevel;
                                	}
-                        	_call_console_drivers(start_print, cur_index, 
-							msg_level);
+                        	_call_console_drivers(con, start_print, 
+						      cur_index, msg_level); 
                                	msg_level = -1;
                                	start_print = cur_index;
                                	break;
                        	}
 		}
 	}
-	_call_console_drivers(start_print, end, msg_level);
+	_call_console_drivers(con, start_print, end, msg_level);
 }
 
 static void emit_log_char(char c)
@@ -394,7 +389,8 @@ asmlinkage int printk(const char *fmt, ...)
 	static int log_level_unknown = 1;
 	unsigned long sr_copy;
 	unsigned long flags;
-        int printed_len;
+	struct console *con;
+	int printed_len;
 	va_list args;
         char *p;
 
@@ -435,13 +431,17 @@ asmlinkage int printk(const char *fmt, ...)
 	}
 	spin_unlock_irqrestore(&logbuf_lock, flags);
 
-	if (con_start != log_end) {
-		unsigned long _con_start, _log_end;		
+        for (con = console_drivers; con; con = con->next) {
+                if ((con->flags & CON_ENABLED) && con->write) {
+			if (con_start != log_end) {
+				unsigned long _con_start, _log_end;		
 
-		_con_start = con_start;
-                _log_end = log_end;
-                con_start = log_end;            /* Flush */
-		call_console_drivers(_con_start, _log_end);
+				_con_start = con_start;
+                		_log_end = log_end;
+                		con_start = log_end;            /* Flush */
+				call_console_drivers(con, _con_start, _log_end);
+			}
+		}
 	}
 	if (!oops_in_progress)
 		wake_up_interruptible(&log_wait);
@@ -459,7 +459,7 @@ EXPORT_SYMBOL(console_print);
  * acquire_console_sem - lock the console system for exclusive use.
  *
  * Acquires a semaphore which guarantees that the caller has
- * exclusive access to the console system and the console_drivers list.
+ * exclusive access to the console display being drawn to. 
  *
  * Can sleep, returns nothing.
  */
@@ -491,23 +491,32 @@ void release_console_sem(struct tty_driver *device)
 	unsigned long _con_start, _log_end;
         unsigned long must_wake_klogd = 0;
 	unsigned long flags;
-       	
-	for ( ; ; ) {
-        	spin_lock_irqsave(&logbuf_lock, flags);
-               	must_wake_klogd |= log_start - log_end;
-               	if (con_start == log_end)
-                       	break;                  /* Nothing to print */
-               	_con_start = con_start;
-             	_log_end = log_end;
-               	con_start = log_end;            /* Flush */
-               	spin_unlock_irqrestore(&logbuf_lock, flags);
-               	call_console_drivers(_con_start, _log_end);
-       	}
+	struct console *con;
+
+	if (device->flags & TTY_DRIVER_CONSOLE) {
+		/* Look for new messages */      
+		for (con = console_drivers; con; con = con->next) {
+			if (con->driver == device)
+				break;
+		}		 	
+	
+		for ( ; ; ) {
+       			spin_lock_irqsave(&logbuf_lock, flags);
+            		must_wake_klogd |= log_start - log_end;
+               		if (con_start == log_end)
+                       		break;	/* Nothing to print */
+               		_con_start = con_start;
+             		_log_end = log_end;
+               		con_start = log_end;	/* Flush */
+               		spin_unlock_irqrestore(&logbuf_lock, flags);
+               		call_console_drivers(con, _con_start, _log_end);
+		}
+       		spin_unlock_irqrestore(&logbuf_lock, flags);
+       		if (must_wake_klogd && !oops_in_progress)
+        		wake_up_interruptible(&log_wait);
+	}
        	//console_may_schedule = 0;
        	up(&device->tty_lock);
-       	spin_unlock_irqrestore(&logbuf_lock, flags);
-       	if (must_wake_klogd && !oops_in_progress)
-        	wake_up_interruptible(&log_wait);
 }
 
 /*
@@ -516,7 +525,7 @@ void release_console_sem(struct tty_driver *device)
  * print any messages that were printed by the kernel before the
  * console driver was initialized.
  */
-void register_console(struct console * console)
+void register_console(struct console *console)
 {
 	unsigned long flags;
 	int i;
@@ -588,7 +597,7 @@ void register_console(struct console * console)
                 	_con_start = con_start;
                 	_log_end = log_end;
                 	con_start = log_end;            /* Flush */
-                	call_console_drivers(_con_start, _log_end);
+                	call_console_drivers(console, _con_start, _log_end);
         	}
 		spin_unlock_irqrestore(&logbuf_lock, flags);
 	}
