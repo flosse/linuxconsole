@@ -62,36 +62,9 @@ struct sa1100fb_lcd_reg {
 #define NR_RGB	2
 
 struct sa1100_par {
-	u_int	max_bpp;
-	u_int	max_xres;
-	u_int	max_yres;
-
-	struct sa1100fb_rgb	*rgb[NR_RGB];
-
-	/*
-         * These are the addresses we mapped
-         * the framebuffer memory region to.
-         */
-        dma_addr_t              map_dma;
-        u_char *                map_cpu;
-        u_int                   map_size;
-
-	u_char *                screen_cpu;
-        dma_addr_t              screen_dma;
-        u16 *                   palette_cpu;
-        dma_addr_t              palette_dma;
-        u_int                   palette_size;
-
-	dma_addr_t		dbar1;
-	dma_addr_t		dbar2;
-
-	u_int			reg_lccr0;
-	u_int			reg_lccr1;
-	u_int			reg_lccr2;
-	u_int			reg_lccr3;
-
-	volatile u_char		state;
-	volatile u_char		task_state;
+	u_int			max_bpp;
+	u_int			max_xres;
+	u_int			max_yres;
 
 	u_int			lccr0;
 	u_int			lccr3;
@@ -99,11 +72,42 @@ struct sa1100_par {
 				cmap_static:1,
 				unused:30;
 
+        u_int                   reg_lccr0;
+        u_int                   reg_lccr1;
+        u_int                   reg_lccr2;
+        u_int                   reg_lccr3;
+
+	volatile u_char		state;
+	volatile u_char		task_state;
 	struct semaphore	ctrlr_sem;
 	wait_queue_head_t	ctrlr_wait;
 	struct tq_struct	task;
+};
+
+struct sa1100fb_info {
+	struct fb_info		fb;
+
+	struct sa1100fb_rgb	*rgb[NR_RGB];
+
+	/*
+	 * These are the addresses we mapped
+	 * the framebuffer memory region to.
+	 */
+	dma_addr_t		map_dma;
+	u_char *		map_cpu;
+	u_int			map_size;
+
+	u_char *		screen_cpu;
+	dma_addr_t		screen_dma;
+	u16 *			palette_cpu;
+	dma_addr_t		palette_dma;
+	u_int			palette_size;
+
+	dma_addr_t		dbar1;
+	dma_addr_t		dbar2;
+
 #ifdef CONFIG_PM
-        struct pm_dev *pm;
+	struct pm_dev		*pm;
 #endif
 #ifdef CONFIG_CPU_FREQ
 	struct notifier_block	clockchg;
