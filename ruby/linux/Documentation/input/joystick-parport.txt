@@ -158,7 +158,7 @@ joysticks are called "Multisystem".
        |   +----> Button
        +--------> Ground
 
-  However, as time passed, extension to this standard developed, and these
+  However, as time passed, extensions to this standard developed, and these
 were not compatible with each other:
 
 
@@ -198,23 +198,23 @@ were not compatible with each other:
        +--------> Ground                  | +--------> Ground
 					  +----------> Analog X
 
-	Sinclair Spectrum +2A/+3
-
-    +-----------> Up
-    | +---------> Fire
-    | | 
-    | |   +-----> Ground
-    | |   | 
-    | |   |       
-  _____________
-5 \ o o x o x / 1
-   \ o o o o /
-  9 `~~~~~~~' 6
-     | | | |       
-     | | | +----> Right
-     | | +------> Left
-     | +--------> Ground
-     +----------> Down  
+	Sinclair Spectrum +2A/+3           Amiga 1200
+                                     
+    +-----------> Up                     +-----------> Button 3
+    | +---------> Fire                   | +---------> Right
+    | |                                  | | +-------> Left
+    | |   +-----> Ground                 | | | +-----> Down
+    | |   |                              | | | | +---> Up
+    | |   |                              | | | | |
+  _____________                        _____________
+5 \ o o x o x / 1                    5 \ o o o o o / 1
+   \ o o o o /                          \ o o o o /
+  9 `~~~~~~~' 6                        9 `~~~~~~~' 6
+     | | | |                              | | | |
+     | | | +----> Right                   | | | +----> Button 1
+     | | +------> Left                    | | +------> Power
+     | +--------> Ground                  | +--------> Ground
+     +----------> Down                    +----------> Button 2
 
   And there were many others.
 
