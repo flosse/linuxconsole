@@ -1124,17 +1124,12 @@ static void hid_irq(struct urb *urb)
 }
 
 /*
- * hid_read_report() s intended to read the hid devices values even
- * before the input device is registered, so that the userland interface
- * modules start with real values. This is especially important for joydev.c
- * automagic calibration. Doesn't work yet, though. Don't know why, the control
- * request just times out on most devices I have and returns nonsense on others.
+ * hid_read_report() reads in report values without waiting for an irq urb
  */
 
 static void hid_read_report(struct hid_device *hid, struct hid_report *report)
 {
-#if 0
-	int rlen = ((report->size - 1) >> 3) + 1;
+	int rlen = ((report->size - 1) >> 3) + 1 + hid->report_enum[report->type].numbered;
 	char rdata[rlen];
 	struct urb urb;
 	int read, j;
@@ -1150,16 +1145,10 @@ static void hid_read_report(struct hid_device *hid, struct hid_report *report)
 
 	if ((read = usb_get_report(hid->dev, hid->ifnum, report->type + 1, report->id, rdata, rlen)) != rlen) {
 		dbg("reading report failed rlen %d read %d", rlen, read);
-#ifdef DEBUG
-		printk(KERN_DEBUG __FILE__ ": report = ");
-		for (j = 0; j < rlen; j++) printk(" %02x", rdata[j]);
-		printk("\n");
-#endif
 		return;
 	}
 
 	hid_irq(&urb);
-#endif
 }
 
 /*
