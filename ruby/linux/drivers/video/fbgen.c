@@ -27,7 +27,7 @@
 
 int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
 {
-    int err, oldbpp;
+    int oldbpp, err;
 	
     if (memcmp(&info->var, var, sizeof(var))) {	
 	if ((err = info->fbops->fb_check_var(var, info)))
@@ -35,11 +35,14 @@ int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
 
     	if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
 		oldbpp = info->var.bits_per_pixel;
-	    	info->fbops->fb_set_par(info); 
+
+	    	if (info->fbops->fb_set_par) 
+			info->fbops->fb_set_par(info); 
  
 	    	if (oldbpp != var->bits_per_pixel) {
-			if ((err = fb_set_cmap(&info->cmap, 1, info)))
+			if ((err = fb_alloc_cmap(&info->cmap, 0, 0)))
             			return err;
+			fb_set_cmap(&info->cmap, 1, info);
       	    	}
 	}
 	var->activate = 0;
