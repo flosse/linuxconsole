@@ -921,6 +921,10 @@ static int iforce_init_device(struct iforce *iforce)
 			iforce->dev.name = iforce_name_wheel;
 			break;
 	}
+	/* Supported effects: no idea how to auto-detect those */
+	iforce->dev.ffbit[0] |= BIT(FF_PERIODIC) | BIT(FF_CONSTANT) | BIT(FF_SPRING) | BIT(FF_FRICTION);
+	/* Number of effects that can be played at the same time */
+	iforce->dev.ffbit[0] |= iforce->n_effects_max<<FF_N_EFFECTS_0;
 
 	for (i = ABS_X; i <= ABS_Y; i++) {
 		iforce->dev.absmax[i] =  1920;
