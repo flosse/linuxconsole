@@ -1423,7 +1423,7 @@ quit:
 
 static kdev_t vt_console_device(struct console *c)
 {
-        return mk_dev(TTY_MAJOR, c->index ? c->index : admin_vt->fg_console->vc_num);
+        return mk_kdev(TTY_MAJOR, c->index ? c->index : admin_vt->fg_console->vc_num);
 }
 
 struct console vt_console_driver = {
