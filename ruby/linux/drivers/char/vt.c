@@ -225,15 +225,15 @@ void reset_palette(struct vc_data *vc)
  */
 void scroll_up(struct vc_data *vc, int lines)
 {
-	unsigned short *d, *s;
+	unsigned short *s = screenbuf + video_num_columns*lines;
+	unsigned short *d = screenbuf;
 
 	if (!lines)
 		return;
 
-	d = (unsigned short *) (origin + video_size_row*top);
-        s = (unsigned short *) (origin + video_size_row*(top+lines));
-        scr_memcpyw(d, s, (bottom-lines) * video_size_row);
-        scr_memsetw(d + (bottom-lines) * video_num_columns, video_erase_char, video_size_row*lines);
+        scr_memcpyw(d, s, screenbuf_size - video_size_row*lines);
+        d = (unsigned short *) (scr_end - video_size_row*lines);
+	scr_memsetw(d, video_erase_char, video_size_row*lines);
        	if (IS_VISIBLE)
 		do_update_region(vc, origin, screensize);
 //               sw->con_scroll(vc, -lines);
@@ -268,8 +268,7 @@ void scroll_region_up(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
         scr_memcpyw(d, s, (b-t-nr) * video_size_row);
         scr_memsetw(d + (b-t-nr) * video_num_columns, video_erase_char, video_size_row*nr);
 	if (IS_VISIBLE)
-		do_update_region(vc, origin, screensize);
-//		sw->con_scroll_region(vc, t, b, SM_UP, nr);
+		sw->con_scroll_region(vc, t, b, SM_UP, nr);
 }
 
 void scroll_region_down(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
@@ -286,8 +285,7 @@ void scroll_region_down(struct vc_data *vc,unsigned int t,unsigned int b,int nr)
         scr_memmovew(s + step, s, (b-t-nr)*video_size_row);
         scr_memsetw(s, video_erase_char, 2*step);
 	if (IS_VISIBLE)
-		do_update_region(vc, origin, screensize);
-//		sw->con_scroll_region(vc, t, b, SM_DOWN, nr);
+		sw->con_scroll_region(vc, t, b, SM_DOWN, nr);
 }
 
 /*
