@@ -221,7 +221,7 @@ int fb_get_cmap(struct fb_cmap *cmap, int kspc, struct fb_info *info)
     blue = cmap->blue;
     transp = cmap->transp;
     start = cmap->start;
-    if (start < 0 || !info->fbops->fb_getcolreg)
+    if (start < 0)
 	return -EINVAL;
     for (i = 0; i < cmap->len; i++) {
 	if (!&info->cmap)
@@ -244,8 +244,6 @@ int fb_get_cmap(struct fb_cmap *cmap, int kspc, struct fb_info *info)
 	blue++;
 	if (transp)
 	    transp++;
-	if (info->fbops->fb_getcolreg(start++,red,green,blue,transp,info))
-	    return 0;
     }
     return 0;
 }
