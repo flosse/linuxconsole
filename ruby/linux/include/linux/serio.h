@@ -42,6 +42,7 @@ struct serio {
 	void *driver;
 	char *name;
 	char *phys;
+	int number;
 
 	unsigned short idbus;
 	unsigned short idvendor;
@@ -49,6 +50,7 @@ struct serio {
 	unsigned short idversion;
 
 	unsigned long type;
+	unsigned long event;
 
 	int (*write)(struct serio *, unsigned char);
 	int (*open)(struct serio *);
@@ -87,9 +89,14 @@ static __inline__ int serio_write(struct serio *serio, unsigned char data)
 
 static __inline__ void serio_dev_write_wakeup(struct serio *serio)
 {
-	if (serio->dev && serio->dev->write_wakeup) {
+	if (serio->dev && serio->dev->write_wakeup)
 		serio->dev->write_wakeup(serio);
-	}
+}
+
+static __inline__ void serio_interrupt(struct serio *serio, unsigned char data, unsigned int flags)
+{
+	if (serio->dev && serio->dev->interrupt) 
+		serio->dev->interrupt(serio, data, flags);
 }
 
 #define SERIO_TIMEOUT	1
@@ -122,7 +129,7 @@ static __inline__ void serio_dev_write_wakeup(struct serio *serio)
 #define SERIO_H3600	0x21
 #define SERIO_PS2SER	0x22
 #define SERIO_TWIDKBD	0x23
-#define SERIO_TWIDJOY   0x24
+#define SERIO_TWIDJOY	0x24
 #define SERIO_HIL	0x25
 
 #define SERIO_ID	0xff00UL
