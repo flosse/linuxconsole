@@ -1,5 +1,5 @@
 /*
- *  adi.c  Version 1.2
+ * $Id$
  *
  *  Copyright (c) 1998-2000 Vojtech Pavlik
  *
@@ -443,7 +443,7 @@ static void adi_init_center(struct adi *adi)
 		if (i < adi->axes10 + adi->axes8) {
 			adi->dev.absmax[t] = x * 2 - 48;
 			adi->dev.absmin[t] = 48;
-			adi->dev.absflat[t] = 8;
+			adi->dev.absflat[t] = 16;
 			continue;
 		}
 
