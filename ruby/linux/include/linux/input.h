@@ -516,7 +516,7 @@ struct input_event {
  *
  * Ranges:
  *  0 <= __u16 <= 65535
- *  -32767 <= __s16 <= +32767     ! Not -32768 for lower bound !
+ *  -32768 <= __s16 <= +32767
  */
 
 struct ff_replay {
@@ -529,7 +529,7 @@ struct ff_trigger {
 	__u16 interval;		/* Time to wait before an effect can be re-triggered (ms) */
 };
 
-struct ff_shape {
+struct ff_envelope {
 	__u16 attack_length;	/* Duration of attack (ms) */
 	__u16 attack_level;	/* Level at beginning of attack */
 	__u16 fade_length;	/* Duration of fade (ms) */
@@ -539,27 +539,27 @@ struct ff_shape {
 /* FF_CONSTANT */
 struct ff_constant_effect {
 	__s16 level;		/* Strength of effect. Negative values are OK */
-	struct ff_shape shape;
+	struct ff_envelope envelope;
 };
 
 /* FF_RAMP */
 struct ff_ramp_effect {
 	__s16 start_level;
 	__s16 end_level;
-	struct ff_shape shape;
+	struct ff_envelope envelope;
 };
 
 /* FF_SPRING of FF_FRICTION */
-struct ff_interactive_effect {
-	__u16 right_saturation[2]; /* Max level when joystick is on the right */
-	__u16 left_saturation[2];  /* Max level when joystick in on the left */
+struct ff_condition_effect {
+	__u16 right_saturation; /* Max level when joystick is on the right */
+	__u16 left_saturation;  /* Max level when joystick in on the left */
 
-	__s16 right_coeff[2];	/* Indicates how fast the force grows when the
+	__s16 right_coeff;	/* Indicates how fast the force grows when the
 				   joystick moves to the right */
-	__s16 left_coeff[2];	/* Same for left side */
+	__s16 left_coeff;	/* Same for left side */
 
-	__u16 deadband[2];	/* Size of area where no force is produced */
-	__s16 center[2];	/* Position of dead zone */
+	__u16 deadband;		/* Size of area where no force is produced */
+	__s16 center;		/* Position of dead zone */
 
 };
 
@@ -571,7 +571,7 @@ struct ff_periodic_effect {
 	__s16 offset;		/* Mean value of wave (roughly) */
 	__u16 phase;		/* 'Horizontal' shift */
 
-	struct ff_shape shape;
+	struct ff_envelope envelope;
 
 /* Only used if waveform == FF_CUSTOM */
 	__u32 custom_len;	/* Number of samples  */	
@@ -604,24 +604,9 @@ struct ff_effect {
 		struct ff_constant_effect constant;
 		struct ff_ramp_effect ramp;
 		struct ff_periodic_effect periodic;
-		struct ff_interactive_effect interactive;
+		struct ff_condition_effect condition[2];	/* One for each axis */
 	} u;
 };
-
-/*
- * Buttons that can trigger effects. Use for example FF_BTN(BTN_TRIGGER) to
- * access the bitmap.
- */
-
-#define FF_BTN(x)	((x) - BTN_MISC + FF_BTN_OFFSET)
-#define FF_BTN_OFFSET	0x00
-
-/*
- * Force feedback axis mappings. Use FF_ABS() to access the bitmap.
- */
-
-#define FF_ABS(x)	((x) + FF_ABS_OFFSET)
-#define FF_ABS_OFFSET	0x40
 
 /*
  * Force feedback effect types
