@@ -367,6 +367,7 @@ static ssize_t hung_up_tty_write(struct file * file, const char * buf,
 	return -EIO;
 }
 
+/* No kernel lock held - none needed ;) */
 static unsigned int hung_up_tty_poll(struct file * filp, poll_table * wait)
 {
 	return POLLIN | POLLOUT | POLLERR | POLLHUP | POLLRDNORM | POLLWRNORM;
@@ -1410,6 +1411,7 @@ static int tty_release(struct inode * inode, struct file * filp)
 	return 0;
 }
 
+/* No kernel lock held - fine */
 static unsigned int tty_poll(struct file * filp, poll_table * wait)
 {
 	struct tty_struct * tty;
@@ -2015,6 +2017,8 @@ void tty_register_devfs (struct tty_driver *driver, unsigned int flags,
 			mode |= S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
 			break;
 		default:
+			if (driver->major == PTY_MASTER_MAJOR)
+                                flags |= DEVFS_FL_AUTO_OWNER;
 			break;
 	}
 	if ( (minor <  driver->minor_start) || 
