@@ -79,5 +79,6 @@ rm -fv include/linux/adb_mouse.h
 rm -fv include/linux/kbd_ll.h
 rm -fv include/linux/logibusmouse.h
 rm -fv include/linux/pc_keyb.h
+rm -fv include/linux/console_struct.h
 rm -fv include/linux/sisfb.h
 rmdir drivers/char/joystick
