@@ -1,0 +1,56 @@
+#
+# Input layer configuration
+#
+
+mainmenu_option next_comment
+comment 'Input device support'
+
+bool 'Input device support' CONFIG_INPUT
+
+if [ "$CONFIG_INPUT" != "n" ]; then
+
+   comment 'Ports'
+
+   tristate '  i8042 keyboard controller support' CONFIG_INPUT_I8042
+   tristate '  C&T 82c710 mouse port support' CONFIG_INPUT_CT82C710
+   if [ "CONFIG_PARPORT" != "n" ]; then
+      tristate '  PS/2 on parport support' CONFIG_INPUT_PARKBD
+   fi
+   tristate '  Serial port support' CONFIG_INPUT_SERPORT
+
+   comment 'Keyboards'
+
+   tristate '  AT keyboard support' CONFIG_INPUT_ATKBD
+   tristate '  XT keyboard support' CONFIG_INPUT_XTKBD
+   tristate '  Sun keyboard support' CONFIG_INPUT_SUNKBD
+
+   comment 'Mice'
+
+   tristate '  Serial mouse support' CONFIG_INPUT_SERMOUSE
+   tristate '  PS/2 mouse support' CONFIG_INPUT_PSMOUSE
+
+   tristate '  Inport mouse support' CONFIG_INPUT_INPORT
+   if [ "$CONFIG_INPUT_INPORT" != "n" ]; then
+      bool '    ATI XL variant' CONFIG_INPUT_INPORT_ATIXL
+   fi
+   tristate '  Logitech busmouse support' CONFIG_INPUT_LOGIBM
+
+   comment '6DOF devices'
+
+   tristate '  Magellan and Space Mouse support' CONFIG_INPUT_MAGELLAN
+
+   comment 'Joysticks'
+
+   tristate '  Logitech WingMan Warrior support' CONFIG_INPUT_WARRIOR
+
+   comment 'Userland interfaces'
+
+   tristate '  /dev/inputX generic input devices' CONFIG_INPUT_EVDEV
+   tristate '  /dev/mouseX PS/2-like devices' CONFIG_INPUT_MOUSEDEV
+   if [ ! "$CONFIG_INPUT_MOUSEDEV" = "n" ]; then
+      bool '    Mix all mice into one device' CONFIG_INPUT_MOUSEDEV_MIX
+   fi
+   tristate '  /dev/jsX joystick devices' CONFIG_INPUT_JOYDEV
+fi
+
+endmenu
