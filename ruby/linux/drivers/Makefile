@@ -8,7 +8,7 @@
 
 mod-subdirs :=	dio mtd sbus macintosh usb input telephony sgi ide \
 		message/i2o message/fusion scsi md ieee1394 pnp isdn atm \
-		fc4 net/hamradio i2c acpi bluetooth serial # l3
+		fc4 net/hamradio i2c l3 acpi bluetooth serial
 
 subdir-y :=	parport char block net sound misc media cdrom video # hotplug
 subdir-m :=	$(subdir-y)
