@@ -183,9 +183,6 @@ struct tdfx_par {
   } hwcursor; 
 
   spinlock_t DAClock;
-#ifdef CONFIG_MTRR
-  int mtrr_idx;
-#endif
 };
 #endif /* __KERNEL__ */
 
