@@ -319,6 +319,11 @@ int dump_init(int fd, long *id, long *extra)
 {
 	unsigned char c, o = 0;
 
+	c = 0x80;
+
+	if (write(fd, &c, 1) != 1)         /* Enable command */
+                return -1;
+
 	while (1)
 		if (!readchar(fd, &c, 1)) {
 			printf("%02x (%c) ", c, ((c > 32) && (c < 127)) ? c : 'x');
@@ -364,7 +369,7 @@ struct input_types input_types[] = {
 { "--ps2serkbd",	"-ps2ser",	B1200, CS8,			SERIO_PS2SER,	0x00,	1,	NULL },
 { "--twiddler",		"-twid",	B2400, CS8,			SERIO_TWIDKBD,	0x00,	0,	twiddler_init },
 { "--twiddler-joy",	"-twidjoy",	B2400, CS8,			SERIO_TWIDJOY,	0x00,	0,	twiddler_init },
-{ "--dump",		"-dump",	B1200, CS7, 			0,		0x00,	0,	dump_init },
+{ "--dump",		"-dump",	B2400, CS8, 			0,		0x00,	0,	dump_init },
 { "", "", 0, 0 }
 
 };
