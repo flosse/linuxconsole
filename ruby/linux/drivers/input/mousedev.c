@@ -325,9 +325,9 @@ static ssize_t mousedev_write(struct file * file, const char * buffer, size_t co
 
 			case 0xf2: /* Get ID */
 				switch (list->mode) {
-					case 0: list->ps2[1] = 0;
-					case 1: list->ps2[1] = 3;
-					case 2: list->ps2[1] = 4;
+					case 0: list->ps2[1] = 0; break;
+					case 1: list->ps2[1] = 3; break;
+					case 2: list->ps2[1] = 4; break;
 				}
 				list->bufsiz = 2;
 				break;
