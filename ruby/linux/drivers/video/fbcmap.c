@@ -295,7 +295,7 @@ int fb_set_cmap(struct fb_cmap *cmap, int kspc, struct fb_info *info)
 	blue++;
 	if (transp)
 	    transp++;
-	if (info->fbops->fb_setcolreg(start++,hred,hgreen,hblue,htransp,info))
+	if (info->fbops->fb_setcolreg(start++, hred, hgreen, hblue, htransp, info))
 	    return 0;
     }
     return 0;
