@@ -1719,7 +1719,8 @@ static int do_unimap_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg,
 	switch (cmd) {
 	case PIO_UNIMAP:
 		if (!perm) return -EPERM;
-		return con_set_unimap(vc, tmp.entry_ct, compat_ptr(tmp.entries))	case GIO_UNIMAP:
+		return con_set_unimap(vc, tmp.entry_ct, compat_ptr(tmp.entries));
+	case GIO_UNIMAP:
 		return con_get_unimap(vc, tmp.entry_ct, &(user_ud->entry_ct), compat_ptr(tmp.entries));
 	}
 	return 0;
