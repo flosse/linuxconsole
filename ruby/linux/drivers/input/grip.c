@@ -65,7 +65,7 @@ static int grip_btn_xt[] = { BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_TRIGG
 static int grip_btn_bd[] = { BTN_THUMB, BTN_THUMB2, BTN_TRIGGER, BTN_TOP, BTN_BASE, -1 };
 
 static int grip_abs_gpp[] = { ABS_X, ABS_Y, -1 };
-static int grip_abs_xt[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_TL, ABS_TR, ABS_HAT0X, ABS_HAT0Y, ABS_HAT1X, ABS_HAT0Y, -1 };
+static int grip_abs_xt[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_TL, ABS_TR, ABS_HAT0X, ABS_HAT0Y, ABS_HAT1X, ABS_HAT1Y, -1 };
 static int grip_abs_bd[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, -1 };
 
 static char *grip_name[] = { [1] = "Gravis GamePad Pro", [2] = "Gravis Blackhawk Digital", [9] = "Gravis Xterminator" };
