@@ -39,7 +39,7 @@
 #include <linux/init.h>
 #include <linux/sched.h>
 #include <linux/gameport.h>
-#include <linux/malloc.h>
+#include <linux/slab.h>
 #include <linux/isapnp.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");

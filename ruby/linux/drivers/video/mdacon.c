@@ -30,7 +30,7 @@
 #include <linux/module.h>
 #include <linux/tty.h>
 #include <linux/string.h>
-#include <linux/malloc.h>
+#include <linux/slab.h>
 #include <linux/vt_kern.h>
 #include <linux/vt_buffer.h>
 #include <linux/spinlock.h>

@@ -13,7 +13,7 @@
 #include <linux/config.h>
 #include <linux/init.h>
 #include <linux/gameport.h>
-#include <linux/malloc.h>
+#include <linux/slab.h>
 #include <linux/pci.h>
 
 MODULE_AUTHOR("Victor Krapivin <vik@belcaf.minsk.by>");

@@ -15,6 +15,7 @@
  */
 
 #include <linux/mm.h>
+#include <linux/tty.h>
 #include <linux/tty_driver.h>
 #include <linux/smp_lock.h>
 #include <linux/console.h>
@@ -125,9 +126,8 @@ int do_syslog(int type, char * buf, int len)
 	unsigned long i, j, limit, count;
 	int do_clear = 0;
 	char c;
-	int error = -EPERM;
+	int error = 0;
 
-	error = 0;
 	switch (type) {
 	case 0:		/* Close log */
 		break;

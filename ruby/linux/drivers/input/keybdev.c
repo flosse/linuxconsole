@@ -31,7 +31,7 @@
 #include <linux/config.h>
 #include <linux/kbd_ll.h>
 #include <linux/input.h>
-#include <linux/malloc.h>
+#include <linux/slab.h>
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/kbd_kern.h>

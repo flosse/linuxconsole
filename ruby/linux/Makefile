@@ -1,6 +1,6 @@
 VERSION = 2
 PATCHLEVEL = 4
-SUBLEVEL = 1
+SUBLEVEL = 2
 EXTRAVERSION = -ruby
 
 KERNELRELEASE=$(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
@@ -110,7 +110,7 @@ export ROOT_DEV = CURRENT
 export SVGA_MODE = -DSVGA_MODE=NORMAL_VGA
 
 #
-# if you want the RAM disk device, define this to be the size in blocks.
+# If you want the RAM disk device, define this to be the size in blocks.
 # This is i386 specific.
 #
 
@@ -138,9 +138,9 @@ DRIVERS-$(CONFIG_NUBUS) += drivers/nubus/nubus.a
 DRIVERS-$(CONFIG_ISDN) += drivers/isdn/isdn.a
 DRIVERS-$(CONFIG_NET_FC) += drivers/net/fc/fc.o
 DRIVERS-$(CONFIG_APPLETALK) += drivers/net/appletalk/appletalk.o
-DRIVERS-$(CONFIG_TR) += drivers/net/tokenring/tr.a
+DRIVERS-$(CONFIG_TR) += drivers/net/tokenring/tr.o
 DRIVERS-$(CONFIG_WAN) += drivers/net/wan/wan.o
-DRIVERS-$(CONFIG_ARCNET) += drivers/net/arcnet/arcnet.a
+DRIVERS-$(CONFIG_ARCNET) += drivers/net/arcnet/arcnetdrv.o
 DRIVERS-$(CONFIG_ATM) += drivers/atm/atm.o
 DRIVERS-$(CONFIG_IDE) += drivers/ide/idedriver.o
 DRIVERS-$(CONFIG_SCSI) += drivers/scsi/scsidrv.o

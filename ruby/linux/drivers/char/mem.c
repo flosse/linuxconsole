@@ -13,12 +13,13 @@
 #include <linux/miscdevice.h>
 #include <linux/tpqic02.h>
 #include <linux/ftape.h>
-#include <linux/malloc.h>
+#include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <linux/mman.h>
 #include <linux/random.h>
 #include <linux/init.h>
 #include <linux/raw.h>
+#include <linux/tty.h>
 #include <linux/capability.h>
 
 #include <asm/uaccess.h>
@@ -27,9 +28,6 @@
 
 #ifdef CONFIG_I2C
 extern int i2c_init_all(void);
-#endif
-#ifdef CONFIG_ISDN
-int isdn_init(void);
 #endif
 #ifdef CONFIG_VIDEO_DEV
 extern int videodev_init(void);
@@ -151,9 +149,6 @@ static inline pgprot_t pgprot_noncached(pgprot_t _prot)
 		prot = (prot & _CACHEMASK040) | _PAGE_NOCACHE_S;
 #elif defined(__mips__)
 	prot = (prot & ~_CACHE_MASK) | _CACHE_UNCACHED;
-#elif defined(__arm__) && defined(CONFIG_CPU_32)
-	/* Turn off caching for all I/O areas */
-	prot &= ~(L_PTE_CACHEABLE | L_PTE_BUFFERABLE);
 #endif
 
 	return __pgprot(prot);
@@ -631,9 +626,6 @@ int __init chr_dev_init(void)
 	misc_init();
 #if CONFIG_QIC02_TAPE
 	qic02_tape_init();
-#endif
-#if CONFIG_ISDN
-	isdn_init();
 #endif
 #ifdef CONFIG_FTAPE
 	ftape_init();

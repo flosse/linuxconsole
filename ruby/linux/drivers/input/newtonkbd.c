@@ -30,7 +30,7 @@
  * Justin Cormack, 68 Dartmouth Park Road, London NW5 1SN, UK.
  */
 
-#include <linux/malloc.h>
+#include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/input.h>
 #include <linux/init.h>

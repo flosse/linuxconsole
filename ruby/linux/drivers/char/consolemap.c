@@ -17,8 +17,9 @@
 #include <linux/kd.h>
 #include <linux/errno.h>
 #include <linux/mm.h>
-#include <linux/malloc.h>
+#include <linux/slab.h>
 #include <linux/init.h>
+#include <linux/tty.h>
 #include <asm/uaccess.h>
 #include <linux/consolemap.h>
 #include <linux/vt_kern.h>

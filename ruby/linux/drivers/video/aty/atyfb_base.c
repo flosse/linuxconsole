@@ -51,15 +51,11 @@
 #include <linux/errno.h>
 #include <linux/string.h>
 #include <linux/mm.h>
-#include <linux/malloc.h>
-#include <linux/vmalloc.h>
+#include <linux/slab.h>
 #include <linux/delay.h>
-#include <linux/selection.h>
-#include <linux/console.h>
 #include <linux/fb.h>
 #include <linux/init.h>
 #include <linux/pci.h>
-#include <linux/vt_kern.h>
 
 #include <asm/io.h>
 #include <asm/uaccess.h>

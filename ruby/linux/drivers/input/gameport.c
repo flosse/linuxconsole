@@ -34,7 +34,7 @@
 #include <linux/ioport.h>
 #include <linux/init.h>
 #include <linux/sched.h>
-#include <linux/malloc.h>
+#include <linux/slab.h>
 #include <linux/isapnp.h>
 #include <linux/stddef.h>
 #include <linux/module.h>
