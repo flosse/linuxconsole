@@ -257,24 +257,22 @@ static int analog_button_read(struct analog_port *port, char saitek, char chf)
 {
 	unsigned char u;
 	int t = 1, i = 0;
+	int strobe = gameport_time(port->gameport, ANALOG_MAX_TIME * 1000);
 
-	u = (~gameport_read(port->gameport) >> 4) & 0xf;
+	u = gameport_read(port->gameport);
 
 	if (!chf) { 
-		port->buttons = u;
+		port->buttons = (~u >> 4) & 0xf;
 		return 0;
 	}
 
-	port->buttons = u ? (1 << analog_chf[u]) : 0;
-
-	while (saitek && u && t && i < 16) {
-		t = gameport_time(port->gameport, ANALOG_MAX_TIME * 1000);
-		while (t && (gameport_read(port->gameport) & port->mask)) t--;
-		udelay(ANALOG_SAITEK_DELAY1);
+	while ((~u & 0xf0) && (i < 16) && t) {
+		port->buttons |= 1 << analog_chf[(~u >> 4) & 0xf];
+		if (!saitek) return;
+		udelay(ANALOG_SAITEK_DELAY);
+		t = strobe;
 		gameport_trigger(port->gameport);
-		udelay(ANALOG_SAITEK_DELAY2);
-		u = (~gameport_read(port->gameport) >> 4) & 0xf;
-		port->buttons |= 1 << analog_chf[u];
+		while ((u = gameport_read(port->gameport)) & port->mask) && t) t--;
 		i++;
 	}
 
