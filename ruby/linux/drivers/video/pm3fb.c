@@ -1891,7 +1891,7 @@ static int pm3fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 	xres = (var->xres + 31) & ~31;
 	if ((xres + var->xoffset) > 2048) {
 		DPRINTK(1, "virtual width not supported: %u\n",
-			temp_p.width);
+			xres + var->xoffset);
 		return (-EINVAL);
 	}
 	if ((var->yres + var->yoffset) > 4096) {
