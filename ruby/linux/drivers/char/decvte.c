@@ -113,7 +113,7 @@ static void vte_ri(struct vc_data *vc)
          * if above scrolling region
          */
         if (y == top)
-                scroll_down(vc, 1);
+                scroll_region_down(vc, top, bottom, 1);
         else if (y > 0) {
                 y--;
                 pos -= video_size_row;
