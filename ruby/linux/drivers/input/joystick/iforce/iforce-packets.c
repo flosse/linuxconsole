@@ -243,7 +243,7 @@ int iforce_get_id_packet(struct iforce *iforce, char *packet)
 			set_current_state(TASK_INTERRUPTIBLE);
 			add_wait_queue(&iforce->wait, &wait);
 
-			if (usb_submit_urb(&iforce->ctrl)) {
+			if (usb_submit_urb(&iforce->ctrl, GFP_KERNEL)) {
 				set_current_state(TASK_RUNNING);
 				remove_wait_queue(&iforce->wait, &wait);
 				return -1;

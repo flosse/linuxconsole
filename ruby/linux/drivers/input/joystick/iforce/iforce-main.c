@@ -227,14 +227,11 @@ static int iforce_open(struct input_dev *dev)
 {
 	struct iforce *iforce = dev->private;
 
-printk(KERN_DEBUG "In iforce_open\n");
-
 	switch (iforce->bus) {
 #ifdef IFORCE_USB
 		case IFORCE_USB:
-printk(KERN_DEBUG "Submitting irq URB\n");
 			iforce->irq.dev = iforce->usbdev;
-			if (usb_submit_urb(&iforce->irq))
+			if (usb_submit_urb(&iforce->irq, GFP_KERNEL))
 				return -EIO;
 			break;
 #endif
@@ -274,15 +271,12 @@ static void iforce_release(struct input_dev *dev)
 {
 	struct iforce *iforce = dev->private;
 
-	printk(KERN_DEBUG "iforce.c: in iforce_release\n");
-
 	/* Disable force feedback playback */
 	iforce_send_packet(iforce, FF_CMD_ENABLE, "\001");
 
 	switch (iforce->bus) {
 #ifdef IFORCE_USB
 		case IFORCE_USB:
-printk(KERN_DEBUG "Unlinking irq URB\n");
 			usb_unlink_urb(&iforce->irq);
 
 			/* The device was unplugged before the file
@@ -412,6 +406,8 @@ int iforce_init_device(struct iforce *iforce)
 	for (i = 0; iforce->type->btn[i] >= 0; i++) {
 		signed short t = iforce->type->btn[i];
 		set_bit(t, iforce->dev.keybit);
+		if (t != BTN_DEAD)
+			set_bit(t, iforce->dev.ffbit);
 	}
 
 	for (i = 0; iforce->type->abs[i] >= 0; i++) {
