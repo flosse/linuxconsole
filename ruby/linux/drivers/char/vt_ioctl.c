@@ -66,10 +66,6 @@ unsigned char keyboard_type = KB_101;
 asmlinkage long sys_ioperm(unsigned long from, unsigned long num, int on);
 #endif
 
-unsigned int video_font_height;
-unsigned int default_font_height;
-unsigned int video_scan_lines;
-
 /*
  * these are the valid i/o ports we're allowed to change. they map all the
  * video ports
@@ -1091,7 +1087,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		get_user(clin, &vtconsize->v_clin);
 		get_user(vcol, &vtconsize->v_vcol);
 		get_user(ccol, &vtconsize->v_ccol);
-		vlin = vlin ? vlin : video_scan_lines;
+		vlin = vlin ? vlin : vc->vc_scan_lines;
 		if (clin) {
 		    if (ll) {
 			if ( ll != vlin/clin )
@@ -1111,9 +1107,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		  return -EINVAL;
 		    
 		if ( vlin )
-		  video_scan_lines = vlin;
+		  vc->vc_scan_lines = vlin;
 		if ( clin )
-		  video_font_height = clin;
+		  vc->vc_font->height = clin;
 	
 		for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
                         struct vc_data *tmp = vc->display_fg->vcs.vc_cons[i];

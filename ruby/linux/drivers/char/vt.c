@@ -1680,8 +1680,6 @@ EXPORT_SYMBOL(color_table);
 EXPORT_SYMBOL(default_red);
 EXPORT_SYMBOL(default_grn);
 EXPORT_SYMBOL(default_blu);
-EXPORT_SYMBOL(video_font_height);
-EXPORT_SYMBOL(video_scan_lines);
 EXPORT_SYMBOL(create_vt);
 EXPORT_SYMBOL(vc_resize);
 EXPORT_SYMBOL(vc_allocate);
