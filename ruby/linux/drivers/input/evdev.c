@@ -238,17 +238,25 @@ static int evdev_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 		case EVIOCSFF:
 			if (dev->upload_effect) {
 				struct ff_effect effect;
+				int err;
+
 				if (copy_from_user((void*)(&effect), (void*)arg, sizeof(effect))) {
 					return -EINVAL;
 				}
-				dev->upload_effect(dev, &effect);
+				err = dev->upload_effect(dev, &effect);
 				if (put_user(effect.id, &(((struct ff_effect*)arg)->id))) {
 					return -EINVAL;
 				}
-				return 0;
+				return err;
 			}
 			else return -ENOSYS;
 			
+		case EVIOCRMFF:
+			if (dev->erase_effect) {
+				return dev->erase_effect(dev, (int)arg);
+			}
+			else return -ENOSYS;
+
 		default:
 
 			if (_IOC_TYPE(cmd) != 'E' || _IOC_DIR(cmd) != _IOC_READ)
