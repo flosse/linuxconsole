@@ -165,7 +165,7 @@ int main(int argc, char** argv)
 	}
 
 	/* download an condition damper effect */
-	effects[3].type = FF_SPRING;
+	effects[3].type = FF_DAMPER;
 	effects[3].id = -1;
 	effects[3].u.condition[0].right_saturation = 0x7fff;
 	effects[3].u.condition[0].left_saturation = 0x7fff;
