@@ -90,7 +90,7 @@ int main(int argc, char** argv)
 		if (features & BIT(FF_RUMBLE)) printf("Rumble ");
 	}
 	printf("\nNumber of simultaneous effects: ");
-	printf("%d\n", (features>>FF_N_EFFECTS_0) & 0xff);
+	printf("%ld\n", (features>>FF_N_EFFECTS_0) & 0xff);
 
 	/* download a constant effect */
 	effects[1].type = FF_CONSTANT;
