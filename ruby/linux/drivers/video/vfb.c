@@ -54,13 +54,6 @@
 #include <linux/fb.h>
 #include <linux/init.h>
 
-#include <video/fbcon-mfb.h>
-#include <video/fbcon-cfb2.h>
-#include <video/fbcon-cfb4.h>
-#include <video/fbcon-cfb8.h>
-#include <video/fbcon-cfb16.h>
-#include <video/fbcon-cfb24.h>
-#include <video/fbcon-cfb32.h>
 #include "fbcon.h"
 
 #define arraysize(x)	(sizeof(x)/sizeof(*(x)))
@@ -180,7 +173,6 @@ static int vfb_release(struct fb_info *info, int user)
 static int vfb_check_var(struct fb_var_screeninfo *var, void *vfb_par,
                          struct fb_info *info)
 {
-    int err, activate = var->activate;
     u_long line_length;
 
     /*
@@ -302,10 +294,8 @@ static int tdfxfb_set_par(void *vfb_par, struct fb_info *info)
 	/* It's in here where alter info->fix. For this driver it
 	 * doesn't do much besides this. 
 	 */ 
-	u_long line_length;
-
-	info->fix.line_length = get_line_length(var->xres_virtual,
-                                                var->bits_per_pixel);
+	info->fix.line_length = get_line_length(info->var.xres_virtual,
+                                                info->var.bits_per_pixel);
 	return 0;
 }
 	
@@ -467,7 +457,6 @@ int __init vfb_init(void)
  
     fb_info.screen_base = videomemory;
     strcpy(fb_info.modename, vfb_fix.id);
-    fb_info.changevar = NULL;
     fb_info.node = -1;
     fb_info.fbops = &vfb_ops;
 
@@ -517,7 +506,7 @@ static int vfbcon_switch(int con, struct fb_info *info)
     memcpy(&info->var, &fb_display[con].var, 
     	    	        sizeof(struct fb_var_screeninfo));
     vfbcon_updatevar(con, info);	
-    vfb_set_var(&info->var, info);
+    fb_set_var(&info->var, info);
     return 0;
 }
 
