@@ -230,6 +230,7 @@ static struct pci_driver ns558_pci_driver;
 /*
  * PnP IDs:
  *
+ * @P@0001 - ALS 100 (no comp. ID)
  * CTL00c1 - SB AWE32 PnP
  * CTL00c3 - SB AWE64 PnP
  * CTL00f0 - SB16 PnP / Vibra 16x
@@ -243,6 +244,7 @@ static struct pci_driver ns558_pci_driver;
  */
 
 static struct isapnp_device_id pnp_devids[] = {
+	{ ISAPNP_ANY_ID, ISAPNP_ANY_ID, ISAPNP_VENDOR('@','P','@'), ISAPNP_DEVICE(0x0001), 0 },
 	{ ISAPNP_ANY_ID, ISAPNP_ANY_ID, ISAPNP_VENDOR('C','T','L'), ISAPNP_DEVICE(0x7001), 0 },
 	{ ISAPNP_ANY_ID, ISAPNP_ANY_ID, ISAPNP_VENDOR('C','T','L'), ISAPNP_DEVICE(0x7002), 0 },
 	{ ISAPNP_ANY_ID, ISAPNP_ANY_ID, ISAPNP_VENDOR('C','S','C'), ISAPNP_DEVICE(0x0b35), 0 },
