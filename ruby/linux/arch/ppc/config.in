@@ -83,13 +83,12 @@ mainmenu_option next_comment
 comment 'General setup'
 
 define_bool CONFIG_ISA n
-define_bool CONFIG_SBUS n
 
 if [ "$CONFIG_APUS" = "y" -o "$CONFIG_4xx" = "y" -o \
      "$CONFIG_82xx" = "y" ]; then
    define_bool CONFIG_PCI n
 else
-   if [ "$CONFIG_6xx" = "y" -o "$CONFIG_PPC64" = "y" ]; then
+   if [ "$CONFIG_6xx" = "y" -o CONFIG_PPC64 ]; then
       define_bool CONFIG_PCI y
    else
    # CONFIG_8xx
@@ -116,8 +115,6 @@ bool 'Support for hot-pluggable devices' CONFIG_HOTPLUG
 
 if [ "$CONFIG_HOTPLUG" = "y" ]; then
    source drivers/pcmcia/Config.in
-else
-   define_bool CONFIG_PCMCIA n
 fi
 
 source drivers/parport/Config.in
@@ -250,6 +247,8 @@ source drivers/video/Config.in
 endmenu
 
 source drivers/char/Config.in
+source drivers/usb/Config.in
+source drivers/input/Config.in
 source fs/Config.in
 
 mainmenu_option next_comment
@@ -265,9 +264,6 @@ endmenu
 if [ "$CONFIG_8xx" = "y" ]; then
 source arch/ppc/8xx_io/Config.in
 fi
-
-source drivers/usb/Config.in
-source drivers/input/Config.in
 
 mainmenu_option next_comment
 comment 'Kernel hacking'

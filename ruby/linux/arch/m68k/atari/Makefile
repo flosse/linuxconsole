@@ -8,8 +8,7 @@
 # Note 2! The CFLAGS definitions are now in the main makefile...
 
 O_TARGET := atari.o
-O_OBJS	 := config.o time.o debug.o stram.o ataints.o stdma.o atasound.o \
-            joystick.o 
+O_OBJS	 := config.o time.o debug.o ataints.o stdma.o atasound.o stram.o
 OX_OBJS  := atari_ksyms.o
 
 ifdef CONFIG_PCI
