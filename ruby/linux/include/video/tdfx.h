@@ -176,14 +176,10 @@ struct tdfx_par {
   u32 baseline;
 
   struct {
-     int type;
-     int state;
      int w,u,d;
-     int x,y,redraw;
      unsigned long enable,disable;
-     unsigned long cursorimage;
      struct timer_list timer;
-  } cursor; 
+  } hwcursor; 
 
   spinlock_t DAClock;
 #ifdef CONFIG_MTRR
