@@ -2081,8 +2081,10 @@ int tty_register_driver(struct tty_driver *driver)
 	driver->next = tty_drivers;
 	if (tty_drivers) tty_drivers->prev = driver;
 	tty_drivers = driver;
+
+	spin_lock_init(driver->tty_lock);
 	
-	if ( !(driver->flags & TTY_DRIVER_NO_DEVFS) ) {
+	if (!(driver->flags & TTY_DRIVER_NO_DEVFS) ) {
 		for(i = 0; i < driver->num; i++)
 		    tty_register_devfs(driver, 0, driver->minor_start + i);
 	}
