@@ -46,7 +46,7 @@ main(int argc, char **argv)
 	struct fb_fillrect fbfr;
 	struct fb_copyarea fbca;
 	
-	while ((opnu = getopt(argc, argv, "f:x:y:w:h:c:")) != EOF)
+	while ((opnu = getopt(argc, argv, "f:x:y:w:h:c:"h)) != EOF)
 	{
 		switch(opnu)
 		{
@@ -73,8 +73,11 @@ main(int argc, char **argv)
 		case 'c':
 			color = atoi(optarg);
 			break;
+		case 'h':
+			printf("Usage: %s [-f <fb_device>] [-x <initial_X>] [-y <initial_Y>] [-w <width>] [-h <height>] [-c <colour>]", argv[0]);
+			break;
 		default:
-			fprintf(stderr, "Warning: Unknown option \"%c\"\n", opnu);
+			fprintf(stderr, "Warning: Unknown option \"%c\", try %s -h\n", opnu, argv[0]);
 		}
 	}
 
