@@ -289,11 +289,11 @@ static int evdev_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 				int err;
 
 				if (copy_from_user((void*)(&effect), (void*)arg, sizeof(effect))) {
-					return -EINVAL;
+					return -EFAULT;
 				}
 				err = dev->upload_effect(dev, &effect);
 				if (put_user(effect.id, &(((struct ff_effect*)arg)->id))) {
-					return -EINVAL;
+					return -EFAULT;
 				}
 				return err;
 			}
@@ -306,7 +306,8 @@ static int evdev_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 			else return -ENOSYS;
 
 		case EVIOCGEFFECTS:
-			put_user(dev->ff_effects_max, (int*) arg);
+			if (retval = put_user(dev->ff_effects_max, (int*) arg))
+				return retval;
 			return 0;
 
 		default:
