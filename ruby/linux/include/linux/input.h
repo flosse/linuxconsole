@@ -454,9 +454,9 @@ struct input_dev {
 	unsigned long ledbit[NBITS(LED_MAX)];
 	unsigned long sndbit[NBITS(SND_MAX)];
 
-	unsigned void *keycode;
 	unsigned int keycodemax;
 	unsigned int keycodesize;
+	void *keycode;
 
 	unsigned int repeat_key;
 	struct timer_list timer;
