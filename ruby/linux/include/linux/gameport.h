@@ -36,7 +36,6 @@ struct gameport;
 struct gameport {
 
 	void *private;
-	void *driver;
 
 	int number;
 
@@ -44,8 +43,6 @@ struct gameport {
 	int size;
 	int speed;
 	int fuzz;
-	int type;
-	struct pci_dev *pci;
 
 	void (*trigger)(struct gameport *);
 	unsigned char (*read)(struct gameport *);
@@ -55,7 +52,6 @@ struct gameport {
 	void (*close)(struct gameport *);
 
 	struct gameport_dev *dev;
-
 	struct gameport *next;
 };
 
@@ -73,18 +69,20 @@ int gameport_open(struct gameport *gameport, struct gameport_dev *dev, int mode)
 void gameport_close(struct gameport *gameport);
 void gameport_rescan(struct gameport *gameport);
 
+#ifdef CONFIG_JOYSTICK
 void gameport_register_port(struct gameport *gameport);
 void gameport_unregister_port(struct gameport *gameport);
+#else
+void __inline__ gameport_register_port(struct gameport *gameport) { return; }
+void __inline__ gameport_unregister_port(struct gameport *gameport) { return; }
+#endif
+
 void gameport_register_device(struct gameport_dev *dev);
 void gameport_unregister_device(struct gameport_dev *dev);
 
 #define GAMEPORT_MODE_DISABLED		0
 #define GAMEPORT_MODE_RAW		1
 #define GAMEPORT_MODE_COOKED		2
-
-#define GAMEPORT_ISA       0
-#define GAMEPORT_PNP       1
-#define GAMEPORT_EXT       2
 
 #define GAMEPORT_ID_VENDOR_ANALOG	0x0001
 #define GAMEPORT_ID_VENDOR_MADCATZ	0x0002
