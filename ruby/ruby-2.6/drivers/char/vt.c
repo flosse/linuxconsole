@@ -909,12 +909,7 @@ static void visual_init(struct vc_data *vc, int init)
 	vc->vc_uni_pagedir = 0;
 	hi_font_mask = 0;
 	complement_mask = 0;
-	can_do_color = default_mode->vc_can_do_color;
-	video_num_columns = default_mode->vc_cols;
-	video_num_lines = default_mode->vc_rows;
-	video_scan_lines = default_mode->vc_scan_lines;
-	screensize = video_num_columns * video_num_lines;
-	vc->vc_font = vc->display_fg->default_mode->vc_font;
+	can_do_color = 0;
 	sw->con_init(vc, init);
 	if (!complement_mask)
 		complement_mask = can_do_color ? 0x7700 : 0x0800;
@@ -1892,8 +1887,6 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
 			cons_num = vt->first_vc + i;
 			visual_init(vc, 0);
 			update_attr(vc);
-			vc_resize(vc, vt->default_mode->vc_cols,
-				  vt->default_mode->vc_rows);
 			
 			/* If the console changed between mono <-> color, then
 			 * the attributes in the screenbuf will be wrong.  The
