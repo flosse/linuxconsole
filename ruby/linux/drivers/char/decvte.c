@@ -847,8 +847,8 @@ static void setterm_command(struct vc_data *vc)
                                 bell_duration = DEFAULT_BELL_DURATION;
                         break;
                 case 12: /* bring specified console to the front */
-                        if (par[1] >= 1 && vc_cons_allocated(par[1]-1))
-                                set_console(vc->display_fg->vcs.vc_cons[(par[1] - 1)]);
+                        if (par[1] >= 1 && find_vc(par[1]))
+                                set_console(find_vc(par[1]));
                         break;
                 case 13: /* unblank the screen */
                         poke_blanked_console(vc->display_fg);
