@@ -14,7 +14,7 @@
 #include <linux/fs.h>
 #include <linux/config.h>
 
-#define GFXFS_SUPER_MAGIC	0x8048494	/* "gfxfs" */
+#define GFXFS_SUPER_MAGIC	0x66786667	/* "gfxfs" */
 
 #ifdef CONFIG_GFXFS_FS_DEBUG
   #define gfxfs_debug(x...)	printk(KERN_DEBUG "gfxfs: " \
