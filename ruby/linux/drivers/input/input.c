@@ -40,15 +40,7 @@
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
 MODULE_DESCRIPTION("Input core");
-
-/*
- * only in 2.4.10+, not in 2.4.8
- *
-
 MODULE_LICENSE("GPL");
- *
-
- */
 
 EXPORT_SYMBOL(input_register_device);
 EXPORT_SYMBOL(input_unregister_device);
