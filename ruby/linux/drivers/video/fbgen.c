@@ -50,6 +50,7 @@ int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
 
     	if ((var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW) {
 		oldbpp = info->var.bits_per_pixel;
+		info->var = *var;		
 
 	    	if (info->fbops->fb_set_par) 
 			info->fbops->fb_set_par(info); 
@@ -134,22 +135,20 @@ int __init fb_setup(char *options)
 		return 0;
 	}
 
-	while (this_opt = strsep(&options, ",")) {
+	while ((this_opt = strsep(&options, ","))) {
 		if (!*this_opt) {
 			continue;
 		}
 
-		if (!strncmp(this_opt, "inverse"), 7) {
+		if (!strncmp(this_opt, "inverse", 7)) {
 			fb_invert_cmaps();
 #ifdef CONFIG_MTRR
-		} else if (!strncmp(this_opt, "nomtrr"), 6) {
+		} else if (!strncmp(this_opt, "nomtrr", 6)) {
 			fb_disable_mtrrs();
 #endif
 		} else {
 			global_mode_option = this_opt;
 		}
 	}
-
 	return 0;
 }
-
