@@ -43,7 +43,7 @@ subdir-$(CONFIG_FC4)		+= fc4
 # CONFIG_HAMRADIO can be set without CONFIG_NETDEVICE being set  -- ch
 subdir-$(CONFIG_HAMRADIO)	+= net/hamradio
 subdir-$(CONFIG_I2C)		+= i2c
-subdir-$(CONFIG_L3)		+= l3
+# subdir-$(CONFIG_L3)		+= l3
 subdir-$(CONFIG_ACPI)		+= acpi
 
 subdir-$(CONFIG_BLUEZ)		+= bluetooth
