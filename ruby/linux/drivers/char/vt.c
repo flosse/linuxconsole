@@ -1310,7 +1310,7 @@ static int con_write(struct tty_struct * tty, int from_user,
 {
         int     retval;
 
-        pm_access(pm_con);
+        /* pm_access(pm_con); */
         retval = do_con_write(tty, from_user, buf, count);
         con_flush_chars(tty);
 
