@@ -92,6 +92,7 @@ struct iforce_core_effect {
 #define FF_CMD_GAIN		0x4301
 
 #define FF_CMD_QUERY		0xff01
+#define FF_CMD_RESPONSE		0xffff
 
 struct iforce {
 	struct input_dev dev;		/* Input device interface */
@@ -110,7 +111,8 @@ struct iforce {
 #endif
 #ifdef IFORCE_USB
         struct usb_device *usbdev;	/* USB transfer */
-        struct urb irq, out;
+        struct urb irq, out, ctrl;
+	devrequest dr;
 #endif
 					/* Force Feedback */
 	wait_queue_head_t wait;
@@ -709,8 +711,7 @@ static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char 
 {
 	struct input_dev *dev = &iforce->dev;
 
-
-	if (HI(iforce->expect_packet) == HI(cmd) || LO(iforce->expect_packet) == 0xff) {
+	if (HI(iforce->expect_packet) == HI(cmd) || LO(iforce->expect_packet) == HI(cmd)) {
 		iforce->expect_packet = 0;
 		iforce->ecmd = cmd;
 		memcpy(iforce->edata, data, IFORCE_MAX_LENGTH);
@@ -794,10 +795,53 @@ static void iforce_close(struct input_dev *dev)
 
 static int get_ff_packet(struct iforce *iforce, char *packet)
 {
-	expect_packet(iforce, FF_CMD_QUERY);
-	send_packet(iforce, FF_CMD_QUERY, packet);
-	if (wait_packet(iforce, HZ/4))
-		return -1;
+	switch (iforce->dev.idbus) {
+
+#ifdef IFORCE_USB
+		case BUS_USB: {
+
+			DECLARE_WAITQUEUE(wait, current);
+			int status, timeout = HZ; /* 1 second */
+
+			iforce->dr.request = packet[0];	
+			iforce->ctrl.dev = iforce->usbdev;
+
+			set_current_state(TASK_INTERRUPTIBLE);
+			add_wait_queue(&iforce->wait, &wait);
+
+			if ((status = usb_submit_urb(&iforce->ctrl))) {
+				set_current_state(TASK_RUNNING);
+				remove_wait_queue(&iforce->wait, &wait);
+				printk(KERN_WARNING "iforce.c: Failed to submit control urb. (%d)\n", status);
+				return -1;
+			}
+
+			while (timeout && iforce->ctrl.status == -EINPROGRESS)
+				timeout = schedule_timeout(timeout);
+
+			set_current_state(TASK_RUNNING);
+			remove_wait_queue(&iforce->wait, &wait);
+
+			if (!timeout) {
+				printk(KERN_WARNING "iforce.c: Control urb: timeout\n");
+				usb_unlink_urb(&iforce->ctrl);
+				return -1;
+			}
+
+			break;
+		}
+#endif
+#ifdef IFORCE_232
+		case BUS_RS232: {
+			expect_packet(iforce, FF_CMD_RESPONSE);
+			send_packet(iforce, FF_CMD_QUERY, packet);
+			if (wait_packet(iforce, HZ/4))
+				return -1;
+			break;
+		}
+#endif
+	}
+
 	return -(iforce->edata[0] != packet[0]);
 }
 
@@ -833,12 +877,6 @@ static int iforce_init_device(struct iforce *iforce)
 	iforce->device_memory.parent = NULL;
 	iforce->device_memory.child = NULL;
 	iforce->device_memory.sibling = NULL;
-
-/*
- * Open so that we get USB IRQs.
- */
-
-	iforce_open(&iforce->dev);
 
 /*
  * Wait until device ready - until it sends its first response.
@@ -883,19 +921,17 @@ static int iforce_init_device(struct iforce *iforce)
 	send_packet(iforce, FF_CMD_ENABLE, "\004");
 
 /*
- * Detect if the device is a wheel or a joystick. Spend at most four
- * seconds doing it.
+ * Detect if the device is a wheel or a joystick.
  */
 
-	for (i = 0; i < 40 && !iforce->type; i++) { 
-		expect_packet(iforce, 0x00ff);
-		wait_packet(iforce, HZ/10);
+	iforce_open(&iforce->dev);
+	expect_packet(iforce, 0x0103);
+	if (wait_packet(iforce, HZ * 4)) {
+		printk(KERN_WARNING "iforce.c: Couldn't detect whether the device is a wheel or a joystick.\n");
+		printk(KERN_WARNING "iforce.c: Assuming joystick.\n");
+		iforce->ecmd = 0x0100;
 	}
-
-/*
- * Close again.
- */
-
+	iforce->type = HI(iforce->ecmd);
 	iforce_close(&iforce->dev);
 
 /*
@@ -973,6 +1009,19 @@ static void iforce_usb_out(struct urb *urb)
 		wake_up(&iforce->wait);
 }
 
+static void iforce_usb_ctrl(struct urb *urb)
+{
+	 struct iforce *iforce = urb->context;
+
+	if (urb->status)
+		printk(KERN_WARNING "iforce.c: nonzero ctrl urb status %d\n", urb->status);
+
+	iforce->ecmd = 0xff00 | urb->actual_length; 
+
+	if (waitqueue_active(&iforce->wait))
+		wake_up(&iforce->wait);
+}
+
 static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 			      const struct usb_device_id *id)
 {
@@ -990,6 +1039,10 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	iforce->dev.idproduct = dev->descriptor.idProduct;
 	iforce->dev.idversion = dev->descriptor.bcdDevice;
 
+	iforce->dr.requesttype = USB_TYPE_VENDOR | USB_DIR_IN | USB_RECIP_INTERFACE;
+        iforce->dr.index = 0;
+        iforce->dr.length = 16;
+
 	iforce->usbdev = dev;
 
 	FILL_INT_URB(&iforce->irq, dev, usb_rcvintpipe(dev, epirq->bEndpointAddress),
@@ -997,6 +1050,9 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 
 	FILL_BULK_URB(&iforce->out, dev, usb_sndbulkpipe(dev, epout->bEndpointAddress),
                         iforce + 1, 32, iforce_usb_out, iforce);
+
+	FILL_CONTROL_URB(&iforce->ctrl, dev, usb_rcvctrlpipe(dev, 0),
+			(void*) &iforce->dr, iforce->edata, 16, iforce_usb_ctrl, iforce);
 
 	if (iforce_init_device(iforce)) {
 		kfree(iforce);
