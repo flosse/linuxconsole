@@ -75,12 +75,14 @@ void handle_sysrq(int key, struct pt_regs *pt_regs,
 		}
 		break;
 #ifdef CONFIG_VT
-	case 'k': 					    /* K -- SAK */
+	case 'k': 		{			    /* K -- SAK */
+		struct vc_data *vc = (struct vc_data *) tty->driver_data;
 		printk("SAK\n");
 		if (tty)
 			do_SAK(tty);
-		reset_vc(vc_cons[fg_console]);
+		reset_vc(vc);
 		break;
+	}
 #endif
 	case 'b':					    /* B -- boot immediately */
 		printk("Resetting\n");
