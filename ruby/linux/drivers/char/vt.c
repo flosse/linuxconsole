@@ -708,9 +708,9 @@ const char *create_vt(struct vt_struct *vt, int init)
         vt->blank_interval = 10*60*HZ;
         vt->off_interval = 0;
 	init_MUTEX(&vt->lock);
-	vt->vcs.vc_cons[0]->display_fg = vt;
+	vt->default_mode->display_fg = vt;
+	memcpy(vt->vcs.vc_cons[0], vt->default_mode, sizeof(struct vc_data));
 	visual_init(vt->vcs.vc_cons[0]);
-	vt->default_mode = vt->vcs.vc_cons[0];
 	vt->vcs.first_vc = vt->vcs.vc_cons[0]->vc_num = current_vc;
 	vt->fg_console = vt->last_console = vt->vcs.vc_cons[0];
 	vt->vcs.next = NULL;
@@ -1564,21 +1564,23 @@ void __init vt_console_init(void)
          * kmalloc is not running yet - we use the bootmem allocator.
          */
 	vt = (struct vt_struct *) alloc_bootmem(sizeof(struct vt_struct));
-	vt->kmalloced = 0;
+	vt->default_mode = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
+        vt->vcs.vc_cons[0] = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
 #if defined(CONFIG_VGA_CONSOLE)
 	vt->vt_sw = &vga_con;
 #elif defined(CONFIG_DUMMY_CONSOLE)
 	vt->vt_sw = &dummy_con;
 #endif
-	vc = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
-	vt->vcs.vc_cons[0] = vc;
+	vt->kmalloced = 0;
 	display_desc = create_vt(vt, 1);
 	if (!display_desc) { 
 		free_bootmem((unsigned long) vt, sizeof(struct vt_struct));
-		free_bootmem((unsigned long) vc, sizeof(struct vc_data));
+		free_bootmem((unsigned long) vt->default_mode, sizeof(struct vc_data));
+		free_bootmem((unsigned long) vt->vcs.vc_cons[0], sizeof(struct vc_data));
 		return;
 	}
         admin_vt = vt;
+	vc = vt->vcs.vc_cons[0];
         screenbuf = (unsigned short *) alloc_bootmem(screenbuf_size);
         vc_init(vc, !sw->con_save_screen); 
         
