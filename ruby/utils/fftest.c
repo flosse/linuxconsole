@@ -113,7 +113,7 @@ int main(int argc, char** argv)
 	effects[1].u.constant.envelope.fade_level = 0;
 	effects[1].trigger.button = 0;
 	effects[1].trigger.interval = 0;
-	effects[1].replay.length = 0x1400;  /* 20 seconds */
+	effects[1].replay.length = 20000;  /* 20 seconds */
 	effects[1].replay.delay = 0;
 
 	if (ioctl(fd, EVIOCSFF, &effects[1]) == -1) {
@@ -136,7 +136,7 @@ int main(int argc, char** argv)
 	effects[0].u.periodic.envelope.fade_level = 0;
 	effects[0].trigger.button = 0;
 	effects[0].trigger.interval = 0;
-	effects[0].replay.length = 0x1400;  /* 20 seconds */
+	effects[0].replay.length = 20000;  /* 20 seconds */
 	effects[0].replay.delay = 0;
 
 	if (ioctl(fd, EVIOCSFF, &effects[0]) == -1) {
@@ -156,7 +156,7 @@ int main(int argc, char** argv)
 	effects[2].u.condition[1] = effects[2].u.condition[0];
 	effects[2].trigger.button = 0;
 	effects[2].trigger.interval = 0;
-	effects[2].replay.length = 0x1400;  /* 20 seconds */
+	effects[2].replay.length = 20000;  /* 20 seconds */
 	effects[2].replay.delay = 0;
 
 	if (ioctl(fd, EVIOCSFF, &effects[2]) == -1) {
@@ -176,7 +176,7 @@ int main(int argc, char** argv)
 	effects[3].u.condition[1] = effects[3].u.condition[0];
 	effects[3].trigger.button = 0;
 	effects[3].trigger.interval = 0;
-	effects[3].replay.length = 0x1400;  /* 20 seconds */
+	effects[3].replay.length = 20000;  /* 20 seconds */
 	effects[3].replay.delay = 0;
 
 	if (ioctl(fd, EVIOCSFF, &effects[3]) == -1) {
