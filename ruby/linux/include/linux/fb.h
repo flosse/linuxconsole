@@ -9,24 +9,32 @@
 #define FB_MAJOR		29
 #define FB_MAX			32	/* sufficient for now */
 
-/* ioctls
-   0x46 is 'F'								*/
-#define FBIOGET_VSCREENINFO	0x4600
-#define FBIOPUT_VSCREENINFO	0x4601
-#define FBIOGET_FSCREENINFO	0x4602
-#define FBIOGETCMAP		0x4604
-#define FBIOPUTCMAP		0x4605
-#define FBIOPAN_DISPLAY		0x4606
-/* 0x4607-0x460B are defined below */
-/* #define FBIOGET_MONITORSPEC	0x460C */
-/* #define FBIOPUT_MONITORSPEC	0x460D */
-/* #define FBIOSWITCH_MONIBIT	0x460E */
-#define FBIOGET_CON2FBMAP	0x460F
-#define FBIOPUT_CON2FBMAP	0x4610
-#define FBIOBLANK		0x4611		/* arg: 0 or vesa level + 1 */
-#define FBIOGET_VBLANK		_IOR('F', 0x12, struct fb_vblank)
-#define FBIO_ALLOC              0x4613
-#define FBIO_FREE               0x4614
+/* ioctls */
+#define FB_IOC_MAGIC 'F'
+#define FB_IOC_MAXNR 255
+
+#define FBIOGET_VSCREENINFO     _IOWR(FB_IOC_MAGIC, 0, fb_var_screeninfo)
+#define FBIOPUT_VSCREENINFO     _IOWR(FB_IOC_MAGIC, 1, fb_var_screeninfo)
+#define FBIOGET_FSCREENINFO     _IOR(FB_IOC_MAGIC, 2, fb_fix_screeninfo)
+#define FBIOGETCMAP             _IOR(FB_IOC_MAGIC, 4, fb_cmap)
+#define FBIOPUTCMAP             _IOW(FB_IOC_MAGIC, 5, fb_cmap)
+#define FBIOPAN_DISPLAY         _IOWR(FB_IOC_MAGIC, 6, fb_var_screeninfo)
+/* Could be changed in the future */
+#define FBIOGET_FCURSORINFO     _IOR(FB_IOC_MAGIC, 7, fb_fix_cursorinfo)
+#define FBIOGET_VCURSORINFO     _IOR(FB_IOC_MAGIC, 8, fb_var_cursorinfo)
+#define FBIOPUT_VCURSORINFO     _IOW(FB_IOC_MAGIC, 9, fb_var_cursorinfo)
+#define FBIOGET_CURSORSTATE     _IOR(FB_IOC_MAGIC, 10, fb_cursorstate)
+#define FBIOPUT_CURSORSTATE     _IOW(FB_IOC_MAGIC, 11, fb_cursorstate)
+#define FBIOGET_MONITORSPEC     _IOR(FB_IOC_MAGIC, 12, fb_monspecs)
+#define FBIOPUT_MONITORSPEC     _IOW(FB_IOC_MAGIC, 13, fb_monspecs)
+#define FBIOSWITCH_MONIBIT      _IOW(FB_IOC_MAGIC, 14, int)
+
+#define FBIOGET_CON2FBMAP       _IOWR(FB_IOC_MAGIC, 15, con2fb)
+#define FBIOPUT_CON2FBMAP       _IOW(FB_IOC_MAGIC, 16, con2fb)
+#define FBIOBLANK               _IOW(FB_IOC_MAGIC, 17, int)     /* arg: 0 or vesa level + 1 */
+#define FBIOGET_VBLANK		_IOR(FB_IOC_MAGIC, 18, struct fb_vblank)
+#define FBIO_ALLOC              _IOW(FB_IOC_MAGIC, 19)
+#define FBIO_FREE               _IOW(FB_IOC_MAGIC, 20)
 
 #define FB_TYPE_PACKED_PIXELS		0	/* Packed Pixels	*/
 #define FB_TYPE_PLANES			1	/* Non interleaved planes */
@@ -457,13 +465,6 @@ extern int __init fb_find_mode(struct fb_var_screeninfo *var,
    /*
     *    Hardware Cursor
     */
-
-#define FBIOGET_FCURSORINFO     0x4607
-#define FBIOGET_VCURSORINFO     0x4608
-#define FBIOPUT_VCURSORINFO     0x4609
-#define FBIOGET_CURSORSTATE     0x460A
-#define FBIOPUT_CURSORSTATE     0x460B
-
 
 struct fb_fix_cursorinfo {
 	__u16 crsr_width;		/* width and height of the cursor in */
