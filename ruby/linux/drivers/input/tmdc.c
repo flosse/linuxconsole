@@ -1,14 +1,17 @@
 /*
- *  joy-thrustmaster.c  Version 1.2
+ * $Id$
  *
  *  Copyright (c) 1998-1999 Vojtech Pavlik
  *
  *  Sponsored by SuSE
+ *
+ *   Based on the work of:
+ *	Trystan Larey-Williams 
+ *
  */
 
 /*
- * This is a module for the Linux joystick driver, supporting
- * ThrustMaster DirectConnect (BSP) joystick family.
+ * ThrustMaster DirectConnect (BSP) joystick family driver for Linux
  */
 
 /*
@@ -31,64 +34,83 @@
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
  */
 
-#include <asm/io.h>
-#include <asm/system.h>
 #include <linux/delay.h>
-#include <linux/errno.h>
-#include <linux/ioport.h>
-#include <linux/joystick.h>
 #include <linux/kernel.h>
+#include <linux/malloc.h>
 #include <linux/module.h>
-#include <linux/string.h>
 #include <linux/init.h>
+#include <linux/gameport.h>
+#include <linux/input.h>
 
-#define JS_TM_MAX_START		400
-#define JS_TM_MAX_STROBE	45
-#define JS_TM_MAX_LENGTH	13
+#define TMDC_MAX_START		400	/* 400 us */
+#define TMDC_MAX_STROBE		45	/* 45 us */
+#define TMDC_MAX_LENGTH		13
+#define TMDC_REFRESH_TIME	HZ/50	/* 20 ms */
 
-#define JS_TM_MODE_M3DI		1
-#define JS_TM_MODE_3DRP		3
-#define JS_TM_MODE_FGP		163
+#define TMDC_MODE_M3DI		1
+#define TMDC_MODE_3DRP		3
+#define TMDC_MODE_FGP		163
 
-#define JS_TM_BYTE_ID		10
-#define JS_TM_BYTE_REV		11
-#define JS_TM_BYTE_DEF		12
+#define TMDC_BYTE_ID		10
+#define TMDC_BYTE_REV		11
+#define TMDC_BYTE_DEF		12
 
-static int js_tm_port_list[] __initdata = {0x201, 0};
-static struct js_port* js_tm_port __initdata = NULL;
+#define TMDC_ABS		7	
+#define TMDC_ABS_HAT		4
+#define TMDC_BTN_PAD		10
+#define TMDC_BTN_JOY		16
 
-static unsigned char js_tm_byte_a[16] = { 0, 1, 3, 4, 6, 7 };
-static unsigned char js_tm_byte_d[16] = { 2, 5, 8, 9 };
+static unsigned char tmdc_byte_a[16] = { 0, 1, 3, 4, 6, 7 };
+static unsigned char tmdc_byte_d[16] = { 2, 5, 8, 9 };
 
-struct js_tm_info {
-	int io;
-	unsigned char mode;
+static unsigned char tmdc_abs[TMDC_ABS] =
+	{ ABS_X, ABS_Y, ABS_RUDDER, ABS_THROTTLE, ABS_RX, ABS_RY, ABS_RZ };
+static unsigned char tmdc_abs_hat[TMDC_ABS_HAT] =
+	{ ABS_HAT0X, ABS_HAT0Y, ABS_HAT1X, ABS_HAT1Y };
+static unsigned short tmdc_btn_pad[TMDC_BTN_PAD] =
+	{ BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_START, BTN_SELECT, BTN_TL, BTN_TR };
+static unsigned short tmdc_btn_joy[TMDC_BTN_JOY] =
+	{ BTN_TRIGGER, BTN_THUMB, BTN_TOP, BTN_TOP2, BTN_BASE, BTN_BASE2, BTN_THUMB2, BTN_PINKIE,
+ 	  BTN_BASE3, BTN_BASE4, BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z };
+
+struct tmdc {
+	struct gameport *gameport;
+	struct timer_list timer;
+	struct input_dev dev;
+	char name[64];
+	int mode;
+	int used;
+	int reads;
+	int bads;	
 };
 
 /*
- * js_tm_read_packet() reads a ThrustMaster packet.
+ * tmdc_read_packet() reads a ThrustMaster packet.
  */
 
-static int js_tm_read_packet(int io, unsigned char *data)
+static int tmdc_read_packet(struct gameport *gameport, unsigned char *data)
 {
 	unsigned int t, p;
 	unsigned char u, v, error;
 	int i, j;
 	unsigned long flags;
 
+	t = gameport_time(gameport, TMDC_MAX_START);
+	p = gameport_time(gameport, TMDC_MAX_STROBE);
+
 	error = 0;
 	i = j = 0;
-	p = t = JS_TM_MAX_START;
+	t = p;
 
 	__save_flags(flags);
 	__cli();
-	outb(0xff,io);
+	gameport_trigger(gameport);
 	
-	v = inb(io) >> 4;
+	v = gameport_read(gameport) >> 4;
 
 	do {
 		t--;
-		u = v; v = inb(io) >> 4;
+		u = v; v = gameport_read(gameport) >> 4;
 		if (~v & u & 2) {
 			if (j) {
 				if (j < 9) {				/* Data bit */
@@ -104,197 +126,201 @@ static int js_tm_read_packet(int io, unsigned char *data)
 				error |= ~v & 1;
 				j++;
 			}
-			p = t = (p - t) << 1;
+			t = p;
 		}
-	} while (!error && i < JS_TM_MAX_LENGTH && t > 0);
+	} while (!error && i < TMDC_MAX_LENGTH && t > 0);
 
 	__restore_flags(flags);
 
-	return -(i != JS_TM_MAX_LENGTH);
+	return -(i != TMDC_MAX_LENGTH);
 }
 
 /*
- * js_tm_read() reads and analyzes ThrustMaster joystick data.
+ * tmdc_read() reads and analyzes ThrustMaster joystick data.
  */
 
-static int js_tm_read(void *xinfo, int **axes, int **buttons)
+static void tmdc_timer(unsigned long private)
 {
-	struct js_tm_info *info = xinfo;
-	unsigned char data[JS_TM_MAX_LENGTH];
+	struct tmdc *tmdc = (void *) private;
+	struct input_dev *dev = &tmdc->dev;
+	unsigned char data[TMDC_MAX_LENGTH];
 	int i;
 
-	if (js_tm_read_packet(info->io, data)) return -1;
-	if (data[JS_TM_BYTE_ID] != info->mode) return -1;
+	tmdc->reads++;
 
-	for (i = 0; i < data[JS_TM_BYTE_DEF] >> 4; i++) axes[0][i] = data[js_tm_byte_a[i]];
+	if (tmdc_read_packet(tmdc->gameport, data) || data[TMDC_BYTE_ID] != tmdc->mode) {
+		tmdc->bads++;
+	} else {
 
-	switch (info->mode) {
+		for (i = 0; i < data[TMDC_BYTE_DEF] >> 4; i++)
+			input_report_abs(dev, tmdc_abs[i], data[tmdc_byte_a[i]]);
 
-		case JS_TM_MODE_M3DI:
+		switch (tmdc->mode) {
 
-			axes[0][4] = ((data[js_tm_byte_d[0]] >> 3) & 1) - ((data[js_tm_byte_d[0]] >> 1) & 1);
-			axes[0][5] = ((data[js_tm_byte_d[0]] >> 2) & 1) - ( data[js_tm_byte_d[0]]       & 1);
+			case TMDC_MODE_M3DI:
 
-			buttons[0][0] = ((data[js_tm_byte_d[0]] >> 6) & 0x01) | ((data[js_tm_byte_d[0]] >> 3) & 0x06)
-				      | ((data[js_tm_byte_d[0]] >> 4) & 0x08) | ((data[js_tm_byte_d[1]] >> 2) & 0x30);
+				i = tmdc_byte_d[0];
 
-			return 0;
+				input_report_abs(dev, ABS_HAT0X, ((data[i] >> 3) & 1) - ((data[i] >> 1) & 1));
+				input_report_abs(dev, ABS_HAT0Y, ((data[i] >> 2) & 1) - ( data[i]       & 1));
 
-		case JS_TM_MODE_3DRP:
-		case JS_TM_MODE_FGP:
+				for (i = 0; i < 4; i++)
+					input_report_key(dev, tmdc_btn_joy[i],
+						(data[tmdc_byte_d[0]] >> (i + 4)) & 1);
+				for (i = 0; i < 2; i++)
+					input_report_key(dev, tmdc_btn_joy[i + 4],
+						(data[tmdc_byte_d[1]] >> (i + 6)) & 1);
 
-			buttons[0][0] = (data[js_tm_byte_d[0]] & 0x3f) | ((data[js_tm_byte_d[1]] << 6) & 0xc0)
-				      | (( ((int) data[js_tm_byte_d[0]]) << 2) & 0x300);
+				break;
 
-			return 0;
+			case TMDC_MODE_3DRP:
+			case TMDC_MODE_FGP:
 
-		default:
+				for (i = 0; i < 10; i++)
+					input_report_key(dev, tmdc_btn_pad[i],
+						(data[tmdc_byte_d[i >> 3]] >> (i & 7)) & 1);
 
-			buttons[0][0] = 0;
+				break;
 
-			for (i = 0; i < (data[JS_TM_BYTE_DEF] & 0xf); i++)
-				buttons[0][0] |= ((int) data[js_tm_byte_d[i]]) << (i << 3);
+			default:
 
-			return 0;
+				for (i = 0; i < ((data[TMDC_BYTE_DEF] & 0xf) << 3) && i < TMDC_BTN_JOY; i++)
+					input_report_key(dev, tmdc_btn_joy[i],
+						(data[tmdc_byte_d[i >> 3]] >> (i & 7)) & 1);
 
+				break;
+
+		}
 	}
 
-	return -1;
+	mod_timer(&tmdc->timer, jiffies + TMDC_REFRESH_TIME);
 }
 
-/*
- * js_tm_open() is a callback from the file open routine.
- */
-
-static int js_tm_open(struct js_dev *jd)
+static int tmdc_open(struct input_dev *dev)
 {
-	MOD_INC_USE_COUNT;
+	struct tmdc *tmdc = dev->private;
+	if (!tmdc->used++)
+		mod_timer(&tmdc->timer, jiffies + TMDC_REFRESH_TIME);	
 	return 0;
 }
 
-/*
- * js_tm_close() is a callback from the file release routine.
- */
-
-static int js_tm_close(struct js_dev *jd)
+static void tmdc_close(struct input_dev *dev)
 {
-	MOD_DEC_USE_COUNT;
-	return 0;
+	struct tmdc *tmdc = dev->private;
+	if (!--tmdc->used)
+		del_timer(&tmdc->timer);
 }
 
 /*
- * js_tm_init_corr() initializes the correction values for
- * ThrustMaster joysticks.
+ * tmdc_probe() probes for ThrustMaster type joysticks.
  */
 
-static void __init js_tm_init_corr(int num_axes, int mode, int **axes, struct js_corr **corr)
+static void tmdc_connect(struct gameport *gameport, struct gameport_dev *dev)
 {
-	int j = 0;
-
-	for (; j < num_axes; j++) {
-		corr[0][j].type = JS_CORR_BROKEN;
-		corr[0][j].prec = 0;
-		corr[0][j].coef[0] = 127 - 2;
-		corr[0][j].coef[1] = 128 + 2;
-		corr[0][j].coef[2] = (1 << 29) / (127 - 4);
-		corr[0][j].coef[3] = (1 << 29) / (127 - 4);
-	}
-
-	switch (mode) {
-		case JS_TM_MODE_M3DI: j = 4; break;
-		default: break;
-	}
-
-	for (; j < num_axes; j++) {
-		corr[0][j].type = JS_CORR_BROKEN;
-		corr[0][j].prec = 0;
-		corr[0][j].coef[0] = 0;
-		corr[0][j].coef[1] = 0;
-		corr[0][j].coef[2] = (1 << 29);
-		corr[0][j].coef[3] = (1 << 29);
-	}
-
-}
-
-/*
- * js_tm_probe() probes for ThrustMaster type joysticks.
- */
-
-static struct js_port __init *js_tm_probe(int io, struct js_port *port)
-{
-	struct js_tm_info info;
-	struct js_rm_models {
+	struct tmdc *tmdc;
+	struct js_tm_models {
 		unsigned char id;
 		char *name;
-		char axes;
-		char buttons;
-	} models[] = {	{   1, "ThrustMaster Millenium 3D Inceptor", 6, 6 },
-			{   3, "ThrustMaster Rage 3D Gamepad", 2, 10 },
-			{ 163, "Thrustmaster Fusion GamePad", 2, 10 },
-			{   0, NULL, 0, 0 }};
-	char name[64];
-	unsigned char data[JS_TM_MAX_LENGTH];
-	unsigned char a, b;
-	int i;
+		char abs;
+		char hats;
+		char joybtn;
+		char padbtn;
+	} models[] = {	{   1, "ThrustMaster Millenium 3D Inceptor",	  6, 0, 6,  0 },
+			{   3, "ThrustMaster Rage 3D Gamepad",		  2, 0, 0, 10 },
+			{ 163, "Thrustmaster Fusion GamePad",		  2, 0, 0, 10 },
+			{   0, "Unknown %d-axis, %d-button TM device %d", 0, 0, 0,  0 }};
+	unsigned char data[TMDC_MAX_LENGTH];
+	int i, m;
 
-	if (check_region(io, 1)) return port;
+	if (!(tmdc = kmalloc(sizeof(struct tmdc), GFP_KERNEL)))
+		return;
+	memset(tmdc, 0, sizeof(struct tmdc));
 
-	if (js_tm_read_packet(io, data)) return port;
+	gameport->private = tmdc;
 
-	info.io = io;
-	info.mode = data[JS_TM_BYTE_ID];
+	tmdc->gameport = gameport;
+	init_timer(&tmdc->timer);
+	tmdc->timer.data = (long) tmdc;
+	tmdc->timer.function = tmdc_timer;
 
-	if (!info.mode) return port;
+	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW));
+		goto fail1;
 
-	for (i = 0; models[i].id && models[i].id != info.mode; i++);
+	if (tmdc_read_packet(gameport, data))
+		goto fail2;
 
-	if (models[i].id != info.mode) {
-		a = data[JS_TM_BYTE_DEF] >> 4;
-		b = (data[JS_TM_BYTE_DEF] & 0xf) << 3;
-		sprintf(name, "Unknown %d-axis, %d-button TM device %d", a, b, info.mode);
-	} else {
-		sprintf(name, models[i].name);
-		a = models[i].axes;
-		b = models[i].buttons;
+	tmdc->mode = data[TMDC_BYTE_ID];
+
+	if (!tmdc->mode)
+		goto fail2;
+
+	for (m = 0; models[m].id && models[m].id != tmdc->mode; m++);
+
+	if (!models[m].id) {
+		models[m].abs = data[TMDC_BYTE_DEF] >> 4;
+		models[m].joybtn = (data[TMDC_BYTE_DEF] & 0xf) << 3;
 	}
 
-	request_region(io, 1, "joystick (thrustmaster)");
-	port = js_register_port(port, &info, 1, sizeof(struct js_tm_info), js_tm_read);
-	printk(KERN_INFO "js%d: %s revision %d at %#x\n",
-		js_register_device(port, 0, a, b, name, js_tm_open, js_tm_close), name, data[JS_TM_BYTE_REV], io);
-	js_tm_init_corr(a, info.mode, port->axes, port->corr);
+	sprintf(tmdc->name, models[i].name, models[i].abs, models[i].joybtn, tmdc->mode);
 
-	return port;
-}
+	tmdc->dev.private = tmdc;
+	tmdc->dev.name = tmdc->name;
+	tmdc->dev.open = tmdc_open;
+	tmdc->dev.close = tmdc_close;
+	tmdc->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 
-#ifdef MODULE
-int init_module(void)
-#else
-int __init js_tm_init(void)
-#endif
-{
-	int *p;
-
-	for (p = js_tm_port_list; *p; p++) js_tm_port = js_tm_probe(*p, js_tm_port);
-	if (js_tm_port) return 0;
-
-#ifdef MODULE
-	printk(KERN_WARNING "joy-thrustmaster: no joysticks found\n");
-#endif
-
-	return -ENODEV;
-}
-
-#ifdef MODULE
-void cleanup_module(void)
-{
-	struct js_tm_info *info;
-
-	while (js_tm_port) {
-		js_unregister_device(js_tm_port->devs[0]);
-		info = js_tm_port->info;
-		release_region(info->io, 1);
-		js_tm_port = js_unregister_port(js_tm_port);
+	for (i = 0; i < models[m].abs && i < TMDC_ABS; i++) {
+		set_bit(tmdc_abs[i], tmdc->dev.absbit);
+		tmdc->dev.absmin[tmdc_abs[i]] = 248;
+		tmdc->dev.absmax[tmdc_abs[i]] = 8;
+		tmdc->dev.absfuzz[tmdc_abs[i]] = 2;
+		tmdc->dev.absflat[tmdc_abs[i]] = 4;
 	}
+
+	for (i = 0; i < models[m].hats && i < TMDC_ABS_HAT; i++) {
+		set_bit(tmdc_abs_hat[i], tmdc->dev.absbit);
+		tmdc->dev.absmin[tmdc_abs_hat[i]] = -1;
+		tmdc->dev.absmax[tmdc_abs_hat[i]] = 1;
+	}
+
+	for (i = 0; tmdc_btn_joy[i] && i < TMDC_BTN_JOY; i++)
+		set_bit(tmdc_btn_joy[i], tmdc->dev.keybit);
+
+	for (i = 0; tmdc_btn_pad[i] && i < TMDC_BTN_PAD; i++)
+		set_bit(tmdc_btn_pad[i], tmdc->dev.keybit);
+
+	input_register_device(&tmdc->dev);
+	printk(KERN_INFO "input%d: %s on gameport%d.%d\n",
+		tmdc->dev.number, tmdc->name, gameport->number, 0);
+
+	return;
+fail2:	gameport_close(gameport);
+fail1:	kfree(tmdc);
 }
-#endif
+
+static void tmdc_disconnect(struct gameport *gameport)
+{
+	struct tmdc *tmdc = gameport->private;
+	input_unregister_device(&tmdc->dev);
+	gameport_close(gameport);
+	kfree(tmdc);
+}
+
+static struct gameport_dev tmdc_dev = {
+	connect:	tmdc_connect,
+	disconnect:	tmdc_disconnect,
+};
+
+int __init tmdc_init(void)
+{
+	gameport_register_device(&tmdc_dev);
+	return 0;
+}
+
+void __exit tmdc_exit(void)
+{
+	gameport_unregister_device(&tmdc_dev);
+}
+
+module_init(tmdc_init);
+module_exit(tmdc_exit);

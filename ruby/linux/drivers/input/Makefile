@@ -64,7 +64,7 @@ obj-$(CONFIG_INPUT_COBRA)	+= cobra.o gameport.o
 #obj-$(CONFIG_INPUT_GF2K)	+= gf2k.o gameport.o
 obj-$(CONFIG_INPUT_GRIP)	+= grip.o gameport.o
 #obj-$(CONFIG_INPUT_INTERACT)	+= interact.o gameport.o
-#obj-$(CONFIG_INPUT_TMDC)	+= tmdc.o gameport.o
+obj-$(CONFIG_INPUT_TMDC)	+= tmdc.o gameport.o
 obj-$(CONFIG_INPUT_SIDEWINDER)	+= sidewinder.o gameport.o
 
 #obj-$(CONFIG_INPUT_DB9)	+= db9.o
