@@ -2,7 +2,7 @@
  *
  * linux/drivers/video/g364fb.c -- Mips Magnum frame buffer device
  *
- * (C) 1998 Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+ * (C) 1998 Thomas Bogendoerfer
  *
  *  This driver is based on tgafb.c
  *
@@ -72,20 +72,33 @@
 #define MON_ID_REG 	0xe4100000 	/* unused */
 #define RESET_REG 	0xe4180000  	/* Write only */
 
-#define arraysize(x)	(sizeof(x)/sizeof(*(x)))
-
 static struct fb_info fb_info;
 
-static struct fb_fix_screeninfo fb_fix __initdata = { 
-    "G364 8plane", 0x40000000 /* physical address */, 0, FB_TYPE_PACKED_PIXELS,
-    0, FB_VISUAL_PSEUDOCOLOR, 0, 1, 0, 0, (unsigned long)NULL, 0, FB_ACCEL_NONE
+static struct fb_fix_screeninfo fb_fix __initdata = {
+	id:		"G364 8plane",
+	smem_start:	0x40000000,	/* physical address */
+	type:		FB_TYPE_PACKED_PIXELS,
+	visual:		FB_VISUAL_PSEUDOCOLOR,
+	ypanstep:	1,
+	accel:		FB_ACCEL_NONE,
 };
 
-static struct fb_var_screeninfo fb_var __initdata = { 
-    0, 0, 0, 0, 0, 0, 8, 0, 
-    {0, 8, 0}, {0, 8, 0}, {0, 8, 0}, {0, 0, 0},
-    0, FB_ACTIVATE_NOW, -1, -1, 0, 39722, 40, 24, 32, 11, 96, 2,
-    0, FB_VMODE_NONINTERLACED	 			 
+static struct fb_var_screeninfo fb_var __initdata = {
+	bits_per_pixel:		8,
+	red:			{0, 8, 0},
+	green:			{0, 8, 0},
+	blue:			{0, 8, 0},
+	activate:		FB_ACTIVATE_NOW,
+	height:			-1,
+	width:			-1,
+	pixclock:		39722,
+	left_margin:		40,
+	right_margin:		24,
+	upper_margin:		32,
+	lower_margin:		11,
+	hsync_len:		96,
+	vsync_len:		2,
+	vmode:			FB_VMODE_NONINTERLACED,
 };
 
 /*
@@ -93,81 +106,30 @@ static struct fb_var_screeninfo fb_var __initdata = {
  */
 int g364fb_init(void);
 
-static int g364fb_check_var(struct fb_var_screeninfo *var,
-			    struct fb_info *info); 
-static int g364fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-                            u_int transp, struct fb_info *info);
-static int g364fb_blank(int blank, struct fb_info *info);
 static int g364fb_pan_display(struct fb_var_screeninfo *var, int con,
 			      struct fb_info *info);
+static int g364fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+			    u_int transp, struct fb_info *info);
+static int g364fb_blank(int blank, struct fb_info *info);
 
 static struct fb_ops g364fb_ops = {
-   	owner:          THIS_MODULE,
-    	fb_check_var:	g364fb_check_var, 
-    	//fb_cursor:    g364fb_cursor,
-    	fb_setcolreg:   g364fb_setcolreg,
-    	fb_blank:       g364fb_blank,
-    	fb_pan_display:	g364fb_pan_display, 
-   	fb_fillrect:    cfb_fillrect,
-        fb_copyarea:    cfb_copyarea,
-        fb_imageblit:   cfb_imageblit,
+	owner:		THIS_MODULE,
+	//fb_cursor:	g364fb_cursor,
+	fb_setcolreg:	g364fb_setcolreg,
+	fb_pan_display:	g364fb_pan_display,
+	fb_blank:	g364fb_blank,
+	fb_fillrect:	cfb_fillrect,
+	fb_copyarea:	cfb_copyarea,
+	fb_imageblit:	cfb_imageblit,
 };
 
-void g364fb_cursor(struct fb_info *info, struct fbcursor *cursor)
+void g364fb_cursor(struct fb_info *info, struct fb_cursor *cursor)
 {
-   if (info->cursor.enable) {	 
-	*(unsigned int *) CTLA_REG &= ~CURS_TOGGLE;
-	*(unsigned int *) CURS_POS_REG = (cursor->size.x << 12) | ((y * cursor->size.y) - info->var.yoffset);
-   } else {	
-	*(unsigned int *) CTLA_REG |= CURS_TOGGLE;
-   }
-}
-
-/*
- *  Set the User Defined Part of the Display
- */
-static int g364fb_set_var(struct fb_var_screeninfo *var, int con,
-			  struct fb_info *info)
-{
-    if (var->xres > info->var.xres || var->yres > info->var.yres ||
-	var->xres_virtual > info->var.xres_virtual ||
-	var->yres_virtual > info->var.yres_virtual ||
-	var->bits_per_pixel > info->var.bits_per_pixel ||
-	var->nonstd ||
-	(var->vmode & FB_VMODE_MASK) != FB_VMODE_NONINTERLACED)
-	return -EINVAL;
-    return 0;
-}
-
-/*
- *  Blank the display.
- */
-static int g364fb_blank(int blank, struct fb_info *info)
-{
-    if (blank)
-	*(unsigned int *) CTLA_REG |= FORCE_BLANK;	
-    else
-	*(unsigned int *) CTLA_REG &= ~FORCE_BLANK;	
-    return 0;	
-}
-
-/*
- *  Set a single color register. Return != 0 for invalid regno.
- */
-static int g364fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-			    u_int transp, struct fb_info *info)
-{
-    volatile unsigned int *ptr = (volatile unsigned int *) CLR_PAL_REG;
-
-    if (regno > 255)
-	return 1;
-
-    red >>= 8;
-    green >>= 8;
-    blue >>=8;
-    
-    ptr[regno << 1] = (red << 16) | (green << 8) | blue;
-    return 0;	
+	if (info->cursor.enable) { 
+		*(unsigned int *) CTLA_REG &= ~CURS_TOGGLE;
+		*(unsigned int *) CURS_POS_REG = ((x * fontwidth(p)) << 12) | ((y * fontheight(p))-p->var.yoffset);
+	} else
+		*(unsigned int *) CTLA_REG |= CURS_TOGGLE;
 }
 
 /*
@@ -178,11 +140,42 @@ static int g364fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 static int g364fb_pan_display(struct fb_var_screeninfo *var, int con,
 			      struct fb_info *info)
 {
-    if (var->xoffset || var->yoffset+var->yres > var->yres_virtual)
-	return -EINVAL;
+	if (var->xoffset || var->yoffset+var->yres > var->yres_virtual)
+		return -EINVAL;
     
-    *(unsigned int *)TOP_REG = var->yoffset * var->xres;
-    return 0;
+	*(unsigned int *)TOP_REG = var->yoffset * var->xres;
+	return 0;
+}
+
+/*
+ *  Blank the display.
+ */
+static int g364fb_blank(int blank, struct fb_info *info)
+{
+	if (blank)
+		*(unsigned int *) CTLA_REG |= FORCE_BLANK;	
+	else
+		*(unsigned int *) CTLA_REG &= ~FORCE_BLANK;	
+	return 0;	
+}
+
+/*
+ *  Set a single color register. Return != 0 for invalid regno.
+ */
+static int g364fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
+			    u_int transp, struct fb_info *info)
+{
+	volatile unsigned int *ptr = (volatile unsigned int *) CLR_PAL_REG;
+
+	if (regno > 255)
+		return 1;
+
+	red >>= 8;
+	green >>= 8;
+	blue >>=8;
+    
+	ptr[regno << 1] = (red << 16) | (green << 8) | blue;
+	return 0;
 }
 
 /*
@@ -190,59 +183,65 @@ static int g364fb_pan_display(struct fb_var_screeninfo *var, int con,
  */
 int __init g364fb_init(void)
 {
-    volatile unsigned int *curs_pal_ptr = (volatile unsigned int *)CURS_PAL_REG;
-    unsigned int xres, yres;
-    int mem, i;
+	volatile unsigned int *curs_pal_ptr = (volatile unsigned int *) CURS_PAL_REG;
+	volatile unsigned int *pal_ptr = (volatile unsigned int *) CLR_PAL_REG;
+	int mem, i, j;
 
-    /* TBD: G364 detection */
+	/* TBD: G364 detection */
     
-    /* get the resolution set by ARC console */
-    *(volatile unsigned int *)CTLA_REG &= ~ENABLE_VTG;
-    xres = (*((volatile unsigned int*)DISPLAY_REG) & 0x00ffffff) * 4;
-    yres = (*((volatile unsigned int*)VDISPLAY_REG) & 0x00ffffff) / 2;
-    *(volatile unsigned int *)CTLA_REG |= ENABLE_VTG;    
+	/* get the resolution set by ARC console */
+	*(volatile unsigned int *)CTLA_REG &= ~ENABLE_VTG;
+	fb_var.xres = (*((volatile unsigned int*)DISPLAY_REG) & 0x00ffffff) * 4;
+	fb_var.yres = (*((volatile unsigned int*)VDISPLAY_REG) & 0x00ffffff)/2;
+	*(volatile unsigned int *)CTLA_REG |= ENABLE_VTG;
 
-    /* setup cursor */
-    curs_pal_ptr[0] |= 0x00ffffff;
-    curs_pal_ptr[2] |= 0x00ffffff;
-    curs_pal_ptr[4] |= 0x00ffffff;
+	/* setup cursor */
+	curs_pal_ptr[0] |= 0x00ffffff;
+	curs_pal_ptr[2] |= 0x00ffffff;
+	curs_pal_ptr[4] |= 0x00ffffff;
 
-    /*
-     * first set the whole cursor to transparent
-     */
-    for (i = 0; i < 512; i++)
-	*(unsigned short *)(CURS_PAT_REG+i*8) = 0;
+	/*
+	* first set the whole cursor to transparent
+	*/
+	for (i = 0; i < 512; i++)
+		*(unsigned short *)(CURS_PAT_REG+i*8) = 0;
 
-    /*
-     * switch the last two lines to cursor palette 3
-     * we assume here, that FONTSIZE_X is 8
-     */
-    *(unsigned short *)(CURS_PAT_REG + 14*64) = 0xffff;
-    *(unsigned short *)(CURS_PAT_REG + 15*64) = 0xffff;			    
-    
-    fb_var.xres = fb_var.xres_virtual = xres;
-    fb_var.yres = yres;
+	/*
+	 * switch the last two lines to cursor palette 3
+	 * we assume here, that FONTSIZE_X is 8
+	 */
+	*(unsigned short *)(CURS_PAT_REG + 14*64) = 0xffff;
+	*(unsigned short *)(CURS_PAT_REG + 15*64) = 0xffff;			    
+	fb_var.xres_virtual = fbvar.xres;
+	fb_fix.line_length = (fb_var.xres / 8) * fb_var.bits_per_pixel;
+	/* get size of video memory; this is special for the JAZZ hardware */
+	mem = (r4030_read_reg32(JAZZ_R4030_CONFIG) >> 8) & 3;
+	fb_fix.smem_len = (1 << (mem*2)) * 512 * 1024;
+	fb_var.yres_virtual = fb_fix.smem_len / fb_var.xres;
 
-    /* get size of video memory; this is special for the JAZZ hardware */
-    mem = (r4030_read_reg32(JAZZ_R4030_CONFIG) >> 8) & 3;
-    fb_fix.smem_len = (1 << (mem*2)) * 512 * 1024;
-    fb_fix.line_length = (xres / 8) * fb_var.bits_per_pixel;	   
- 
-    fb_var.yres_virtual = fb_fix.smem_len / xres;
+	strcpy(fb_info.modename, fb_fix.id);
+	fb_info.node = NODEV;
+	fb_info.screen_base = (char *)G364_MEM_BASE;/* virtual kernel address */
+	fb_info.fbops = &g364fb_ops;
+	fb_info.currcon = -1;
+	fb_info.var = fb_var;
+	fb_info.fix = fb_fix;	
+	fb_info.disp = &disp;
+	fb_info.fontname[0] = '\0';
+	fb_info.changevar = NULL;
+	fb_info.switch_con = gen_switch;
+	fb_info.updatevar = gen_update_var;
+	fb_info.flags = FBINFO_FLAG_DEFAULT;
 
-    fb_info.screen_base = (char *)G364_MEM_BASE; /* virtual kernel address */
+	fb_alloc_cmap(&fb_info.cmap, 255, 0);
+	gen_set_disp(-1, &fb_info);
 
-    strcpy(fb_info.modename, fb_fix.id);
-    fb_info.node = -1;
-    fb_info.fbops = &g364fb_ops;
-    fb_info.var = fb_var;
-    fb_info.fix = fb_fix;
-    fb_info.flags = FBINFO_FLAG_DEFAULT;
+	if (register_framebuffer(&fb_info) < 0)
+		return -EINVAL;
 
-    if (register_framebuffer(&fb_info) < 0)
-	return -EINVAL;
-
-    printk("fb%d: %s frame buffer device\n", GET_FB_IDX(fb_info.node),
-	   fb_fix.id);
-    return 0;
+	printk("fb%d: %s frame buffer device\n", GET_FB_IDX(fb_info.node),
+		fb_info.fix.id);
+	return 0;
 }
+
+MODULE_LICENSE("GPL");
