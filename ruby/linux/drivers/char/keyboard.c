@@ -492,7 +492,7 @@ static void fn_boot_it(struct vc_data *vc)
 {
 	struct input_handle *handle;
 
-	if (!vc || (vc->display_fg == admin_vt)) {
+	if (vc && (vc->display_fg == admin_vt)) {
 		/* Stop other key events from coming */
 		for (handle = kbd_handler.handle; handle; 
 		     handle = handle->hnext) {		 
