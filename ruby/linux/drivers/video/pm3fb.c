@@ -1957,7 +1957,7 @@ static int pm3fb_pan_display(struct fb_var_screeninfo *var,
 
 static int pm3fb_blank(int blank_mode, struct fb_info *info)
 {
-	struct pm3fb_info *l_fb_info = ((struct pm3fb_par*)info->par)->l_fb_infoo;
+	struct pm3fb_info *l_fb_info = ((struct pm3fb_par*)info->par)->l_fb_info;
 	u32 video;
 
 	DTRACE;
