@@ -621,8 +621,10 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 	if (off >= len) {
 		/* memory mapped io */
 		off -= len;
-		if (info->var.accel_flags)
+		if (info->var.accel_flags) {
+			unlock_kernel();
 			return -EINVAL;
+		}
 		start = info->fix.mmio_start;
 		len = PAGE_ALIGN((start & ~PAGE_MASK)+info->fix.mmio_len);
 	}
