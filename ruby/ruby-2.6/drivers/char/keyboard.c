@@ -976,9 +976,8 @@ static int emulate_raw(struct vc_data *vc, unsigned int keycode, unsigned char u
 }
 #endif
 
-static void kbd_rawcode(struct vt_struct *vt, unsigned char data)
+static void kbd_rawcode(struct vc_data *vc, unsigned char data)
 {
-	struct vc_data *vc = vt->fg_console;
 	if (vc->kbd_table.kbdmode == VC_RAW)
 		put_queue(vc, data);
 }
@@ -1117,7 +1116,7 @@ static void kbd_event(struct input_handle *handle, unsigned int event_type,
 	if (!vt)
 		return;
 	if (event_type == EV_MSC && event_code == MSC_RAW && HW_RAW(handle->dev))
-		kbd_rawcode(vt, value);
+		kbd_rawcode(vt->fg_console, value);
 	if (event_type == EV_KEY)
 		kbd_keycode(vt, event_code, value, HW_RAW(handle->dev));
 	tasklet_schedule(&keyboard_tasklet);
@@ -1167,7 +1166,7 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 	 * have one.
 	 */
 	if (i != BTN_MISC) {
-		list_for_each_entry (vt, &vt_list, node) {
+		list_for_each_entry(vt, &vt_list, node) {
 			if (!vt->keyboard) {
 				vt->keyboard = handle;
 				handle->private = vt;

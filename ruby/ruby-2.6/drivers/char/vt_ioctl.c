@@ -349,17 +349,16 @@ int con_font_get(struct vc_data *vc, struct console_font_op *op)
 		goto out;
 
 	c = (font.width+7)/8 * 32 * font.charcount;
-	
+
 	if (op->data && font.charcount > op->charcount)
 		rc = -ENOSPC;
 	if (!(op->flags & KD_FONT_FLAG_OLD)) {
-		if (font.width > op->width || font.height > op->height) 
+		if (font.width > op->width || font.height > op->height)
 			rc = -ENOSPC;
 	} else {
 		if (font.width != 8)
 			rc = -EIO;
-		else if ((op->height && font.height > op->height) ||
-			 font.height > 32)
+		else if ((op->height && font.height > op->height) || font.height > 32)
 			rc = -ENOSPC;
 	}
 	if (rc)
@@ -393,7 +392,7 @@ int con_font_set(struct vc_data *vc, struct console_font_op *op)
 		int h, i;
 		u8 __user *charmap = op->data;
 		u8 tmp;
-		
+
 		/* If from KDFONTOP ioctl, don't allow things which can be done in userland,
 		   so that we can get rid of this soon */
 		if (!(op->flags & KD_FONT_FLAG_OLD))
@@ -406,7 +405,7 @@ int con_font_set(struct vc_data *vc, struct console_font_op *op)
 					goto nonzero;
 			}
 		return -EINVAL;
-	nonzero:
+nonzero:
 		op->height = h;
 	}
 	if (op->width <= 0 || op->width > 32 || op->height > 32)
@@ -547,7 +546,7 @@ do_unimap_ioctl(struct vc_data *vc, int cmd, struct unimapdesc __user *user_ud, 
 	if (copy_from_user(&tmp, user_ud, sizeof tmp))
 		return -EFAULT;
 	if (tmp.entries)
-		if (!access_ok(VERIFY_WRITE, tmp.entries, 
+		if (!access_ok(VERIFY_WRITE, tmp.entries,
 				tmp.entry_ct*sizeof(struct unipair)))
 			return -EFAULT;
 	switch (cmd) {
@@ -778,8 +777,8 @@ void complete_change_console(struct vc_data *new_vc, struct vc_data *old_vc)
 int vt_ioctl(struct tty_struct *tty, struct file * file,
 	     unsigned int cmd, unsigned long arg)
 {
-	struct vc_data *vc = (struct vc_data *)tty->driver_data;
-	void __user *up = (void __user *)arg;
+	struct vc_data *vc = (struct vc_data *) tty->driver_data;
+	void __user *up = (void __user *) arg;
 	struct console_font_op op;	/* used in multiple places */
 	unsigned char ucval;
 	int i, perm;
@@ -877,9 +876,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		 * currently, setting the mode from KD_TEXT to KD_GRAPHICS
 		 * doesn't do a whole lot. i'm not sure if it should do any
 		 * restoration of modes or what...
-                 *
-                 * XXX It should at least call into the driver, fbdev's definitely
-                 * need to restore their engine state. --BenH
+		 *
+		 * XXX It should at least call into the driver, fbdev's definitely
+		 * need to restore their engine state. --BenH
 		 */
 		if (!perm)
 			return -EPERM;
@@ -971,7 +970,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	case KDGKBMETA:
 		ucval = (get_kbd_mode(&vc->kbd_table, VC_META) ? K_ESCPREFIX : K_METABIT);
 	setint:
-		return put_user(ucval, (int __user *)arg); 
+		return put_user(ucval, (int __user *) arg); 
 
 	case KDGETKEYCODE:
 	case KDSETKEYCODE:
@@ -1079,7 +1078,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		vc->vt_mode.frsig = 0;
 		vc->vt_pid = current->pid;
 		/* no switch is required -- saw@shade.msu.ru */
-		vc->vt_newvt = -1; 
+		vc->vt_newvt = -1;
 		release_console_sem();
 		return 0;
 	}
@@ -1209,7 +1208,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 				struct vc_data *tmp = find_vc(vc->vt_newvt); 
 								
 				acquire_console_sem();
-				if (!tmp) {	
+				if (!tmp) {
 					tmp = vc_allocate(vc->vt_newvt);
 					if (!tmp) {
 						i = vc->vt_newvt;
