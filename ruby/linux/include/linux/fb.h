@@ -277,6 +277,11 @@ struct fb_ops {
     /* set colormap */
     int (*fb_set_cmap)(struct fb_cmap *cmap, int kspc, int con,
 		       struct fb_info *info);
+    /* set color register */	
+    int (*fb_setcolreg)(unsigned regno, unsigned red, unsigned green,
+                        unsigned blue, unsigned transp, struct fb_info *info);
+    /* blank display */
+    int (*fb_blank)(int blank, struct fb_info *info);
     /* pan display */
     int (*fb_pan_display)(struct fb_var_screeninfo *var, int con,
 			  struct fb_info *info);
@@ -339,33 +344,27 @@ struct fb_info {
 struct fbgen_hwswitch {
     void (*detect)(void);
     int (*encode_fix)(struct fb_fix_screeninfo *fix, const void *par,
-		      struct fb_info_gen *info);
+		      struct fb_info *info);
     int (*decode_var)(const struct fb_var_screeninfo *var, void *par,
-		      struct fb_info_gen *info);
+		      struct fb_info *info);
+    int (*fb_check_var)(const struct fb_var_screeninfo *var, void *par,
+                     struct fb_info *info);
     int (*encode_var)(struct fb_var_screeninfo *var, const void *par,
-		      struct fb_info_gen *info);
-    void (*get_par)(void *par, struct fb_info_gen *info);
-    void (*set_par)(const void *par, struct fb_info_gen *info);
+		      struct fb_info *info);
+    void (*get_par)(void *par, struct fb_info *info);
+    void (*set_par)(const void *par, struct fb_info *info);
     int (*getcolreg)(unsigned regno, unsigned *red, unsigned *green,
 		     unsigned *blue, unsigned *transp, struct fb_info *info);
-    int (*setcolreg)(unsigned regno, unsigned red, unsigned green,
-		     unsigned blue, unsigned transp, struct fb_info *info);
     int (*pan_display)(const struct fb_var_screeninfo *var,
-		       struct fb_info_gen *info);
-    int (*blank)(int blank_mode, struct fb_info_gen *info);
+		       struct fb_info *info);
     void (*set_disp)(const void *par, struct display *disp,
-		     struct fb_info_gen *info);
+		     struct fb_info *info);
 };
 
-struct fb_info_gen {
-    struct fb_info info;
-
-    /* Entries for a generic frame buffer device */
-    /* Yes, this starts looking like C++ */
+struct fbgen_par {
     u_int parsize;
     struct fbgen_hwswitch *fbhw;
-
-   /* From here on everything is device dependent */
+    void *par;
 };
 
     /*
@@ -382,24 +381,20 @@ extern int fbgen_get_cmap(struct fb_cmap *cmap, int kspc, int con,
 			  struct fb_info *info);
 extern int fbgen_set_cmap(struct fb_cmap *cmap, int kspc, int con,
 			  struct fb_info *info);
+extern int fbgen_blank(int blank, struct fb_info *info);
 extern int fbgen_pan_display(struct fb_var_screeninfo *var, int con,
 			     struct fb_info *info);
-extern int fbgen_ioctl(struct inode *inode, struct file *file,
-		       unsigned int cmd, unsigned long arg, int con,
-		       struct fb_info *info);
 
     /*
      *  Helper functions
      */
 
 extern int fbgen_do_set_var(struct fb_var_screeninfo *var, int isactive,
-			    struct fb_info_gen *info);
-extern void fbgen_set_disp(int con, struct fb_info_gen *info);
-extern void fbgen_install_cmap(int con, struct fb_info_gen *info);
+			    struct fb_info *info);
+extern void fbgen_set_disp(int con, struct fb_info *info);
+extern void fbgen_install_cmap(int con, struct fb_info *info);
 extern int fbgen_update_var(int con, struct fb_info *info);
 extern int fbgen_switch(int con, struct fb_info *info);
-extern void fbgen_blank(int blank, struct fb_info *info);
-
 
 /* drivers/video/fbmem.c */
 extern int register_framebuffer(struct fb_info *fb_info);
@@ -421,10 +416,7 @@ extern int fb_get_cmap(struct fb_cmap *cmap, int kspc,
 		       int (*getcolreg)(u_int, u_int *, u_int *, u_int *,
 					u_int *, struct fb_info *),
 		       struct fb_info *fb_info);
-extern int fb_set_cmap(struct fb_cmap *cmap, int kspc,
-		       int (*setcolreg)(u_int, u_int, u_int, u_int, u_int,
-					struct fb_info *),
-		       struct fb_info *fb_info);
+extern int fb_set_cmap(struct fb_cmap *cmap, int kspc, struct fb_info *info);
 extern struct fb_cmap *fb_default_cmap(int len);
 extern void fb_invert_cmaps(void);
 
