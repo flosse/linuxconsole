@@ -176,7 +176,7 @@ struct hiddev_usage_ref {
  * In-kernel definitions.
  */
 
-#if defined(CONFIG_USB_HIDDEV) || defined(CONFIG_USB_HIDDEV_MODULE)
+#ifdef CONFIG_INPUT_HIDDEV
 int hiddev_connect(struct hid_device *);
 void hiddev_disconnect(void *);
 void hiddev_hid_event(void *private, unsigned int usage, int value);

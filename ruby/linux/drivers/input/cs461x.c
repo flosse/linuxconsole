@@ -21,10 +21,11 @@ MODULE_AUTHOR("Victor Krapivin <vik@belcaf.minsk.by>");
 /*
 	These options are experimental
 
-#define COOKED_MODE
 #define CS461X_FULL_MAP
-
 */
+
+#define COOKED_MODE
+
 
 #ifndef PCI_VENDOR_ID_CIRRUS
 #define PCI_VENDOR_ID_CIRRUS            0x1013

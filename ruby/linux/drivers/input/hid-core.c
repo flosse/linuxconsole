@@ -1165,18 +1165,19 @@ static void* hid_probe(struct usb_device *dev, unsigned int ifnum,
 	hid_init_reports(hid);
 	hid_dump_device(hid);
 
+	if (!hidinput_connect(hid))
+		hid->claimed |= HID_CLAIMED_INPUT;
+	if (!hiddev_connect(hid))
+		hid->claimed |= HID_CLAIMED_HIDDEV;
+
 	printk(KERN_INFO);
 
-	if (!hidinput_connect(hid)) {
-		hid->claimed |= HID_CLAIMED_INPUT;
+	if (hid->claimed & HID_CLAIMED_INPUT)
 		printk("input%d", hid->input.number);
-	}
-
-	if (!hiddev_connect(hid)) {
-		hid->claimed |= HID_CLAIMED_HIDDEV;
-		printk("%shiddev%d",
-			(hid->claimed & HID_CLAIMED_INPUT) ? "," : "", hid->hiddev.minor);
-	}
+	if (hid->claimed == (HID_CLAIMED_INPUT | HID_CLAIMED_HIDDEV))
+		printk(",");
+	if (hid->claimed & HID_CLAIMED_HIDDEV)
+		printk("hiddev%d", hid->hiddev.minor);
 
 	c = "Device";
 	for (i = 0; i < hid->maxapplication; i++)
