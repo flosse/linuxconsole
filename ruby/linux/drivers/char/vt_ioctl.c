@@ -143,7 +143,6 @@ _kd_mksound(unsigned int hz, unsigned int ticks)
 
 void (*kd_mksound)(unsigned int hz, unsigned int ticks) = _kd_mksound;
 
-
 #define i (tmp.kb_index)
 #define s (tmp.kb_table)
 #define v (tmp.kb_value)
@@ -551,7 +550,7 @@ int con_get_cmap(unsigned char *arg)
         return 0;
 }
               
-void do_blank_screen()
+void do_blank_screen(void)
 {
         struct vc_data *vc = vt_cons->vcs.vc_cons[fg_console];
 
@@ -905,7 +904,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		i = vc_allocate(arg);
 		if (i)
 			return i;
-		set_console(arg);
+		set_console(vc->display_fg->vcs.vc_cons[arg]);
 		return 0;
 	}
 	/*
@@ -1402,7 +1401,7 @@ void complete_change_console(struct vc_data *new_vc, struct vc_data *old_vc)
 {
 	unsigned char old_vc_mode;
 
-	old_vc->display_fg->last_console = old_vc->vc_num;
+	old_vc->display_fg->last_console = old_vc;
 
 	/*
 	 * If we're switching, we could be going from KD_GRAPHICS to
