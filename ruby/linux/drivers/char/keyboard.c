@@ -1052,8 +1052,8 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 	struct vt_struct *vt = vt_cons;
 	int i;
 
-	if (!test_bit(EV_KEY, dev->evbit)) return NULL;
-	for (i = KEY_RESERVED; i < BTN_MISC; i++) if (test_bit(i, dev->keybit)) break;
+	for (i = KEY_RESERVED; i < BTN_MISC; i++)
+		if (test_bit(i, dev->keybit)) break;
 	if (i == BTN_MISC) return NULL;
 
 	if (!(handle = kmalloc(sizeof(struct input_handle), GFP_KERNEL))) return NULL;
@@ -1063,15 +1063,16 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
                 if (!vt->keyboard) {
                         vt->keyboard = handle;
 			handle->private = vt;
-			printk(KERN_INFO "Keyboard attaching to VT\n");
+			printk(KERN_INFO "Keyboard input%d attaching to VT\n", dev->number);
 			break;
 		} else 
 			vt = vt->next;
 	}	
+
 	handle->dev = dev;
 	handle->handler = handler;
 	input_open_device(handle);
-	printk(KERN_INFO "keyboard.c: Adding keyboard: input%d\n", dev->number);
+
 	return handle;
 }
 
@@ -1079,13 +1080,11 @@ static void kbd_disconnect(struct input_handle *handle)
 {
 	struct vt_struct *vt = handle->private;
 
-	printk(KERN_INFO "keyboard.c: Removing keyboard: input%d\n", 
-	       handle->dev->number);
-
 	if (vt && vt->keyboard == handle) { 
 		vt->keyboard = NULL;
 		handle->private = NULL;
 	}
+
 	input_close_device(handle);
 	kfree(handle);
 }
