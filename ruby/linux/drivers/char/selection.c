@@ -47,13 +47,13 @@ static char *sel_buffer = NULL;
 /* set reverse video on characters s-e of console with selection. */
 inline static void
 highlight(const int s, const int e) {
-	invert_screen(vc_cons[sel_cons].d, s, e-s+2, 1);
+	invert_screen(vc_cons[sel_cons], s, e-s+2, 1);
 }
 
 /* use complementary color to show the pointer */
 inline static void
 highlight_pointer(const int where) {
-	complement_pos(vc_cons[sel_cons].d, where);
+	complement_pos(vc_cons[sel_cons], where);
 }
 
 /* used by selection */
@@ -68,7 +68,7 @@ u16 screen_glyph(struct vc_data *vc, int offset)
 
 static unsigned char sel_pos(int n)
 {
-	return inverse_translate(vc_cons[sel_cons].d, screen_glyph(vc_cons[sel_cons].d, n));
+	return inverse_translate(vc_cons[sel_cons], screen_glyph(vc_cons[sel_cons], n));
 }
 
 /* remove the current selection highlight, if any,
@@ -302,12 +302,12 @@ int set_selection(const unsigned long arg, struct tty_struct *tty, int user)
  */
 int paste_selection(struct tty_struct *tty)
 {
-	struct vt_struct *vt = (struct vt_struct *) tty->driver_data;
+	struct vc_data *vc = (struct vc_data *) tty->driver_data;
 	int	pasted = 0, count;
 	DECLARE_WAITQUEUE(wait, current);
 
 	poke_blanked_console();
-	add_wait_queue(&vt->paste_wait, &wait);
+	add_wait_queue(&vc->paste_wait, &wait);
 	while (sel_buffer && sel_buffer_lth > pasted) {
 		set_current_state(TASK_INTERRUPTIBLE);
 		if (test_bit(TTY_THROTTLED, &tty->flags)) {
@@ -319,7 +319,7 @@ int paste_selection(struct tty_struct *tty)
 		tty->ldisc.receive_buf(tty, sel_buffer + pasted, 0, count);
 		pasted += count;
 	}
-	remove_wait_queue(&vt->paste_wait, &wait);
+	remove_wait_queue(&vc->paste_wait, &wait);
 	current->state = TASK_RUNNING;
 	return 0;
 }

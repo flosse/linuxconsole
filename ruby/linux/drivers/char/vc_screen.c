@@ -92,7 +92,7 @@ vcs_size(struct inode *inode)
 	if (!vc_cons_allocated(currcons))
 		return -ENXIO;
 
-	vc = vc_cons[currcons].d;	
+	vc = vc_cons[currcons];	
 	
 	size = video_num_lines * video_num_columns;
 
@@ -162,7 +162,7 @@ vcs_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 	if (!vc_cons_allocated(currcons))
 		goto unlock_out;
 
-	vc = vc_cons[currcons].d;
+	vc = vc_cons[currcons];
 
 	ret = -EINVAL;
 	if (pos < 0)
@@ -333,7 +333,7 @@ vcs_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 	if (!vc_cons_allocated(currcons))
 		goto unlock_out;
 
-	vc = vc_cons[currcons].d;
+	vc = vc_cons[currcons];
 
 	size = vcs_size(inode);
 	ret = -EINVAL;
