@@ -57,26 +57,26 @@ Introduction</A>
 </H1>
 
 <P>
-Ten years when Linus started Linux the machine it was written on was a intel 
-machine with basic VGA support. Linux like other UNIX based operation systems 
+Ten years ago when Linus started Linux the machine it was written on was an Intel 
+machine with basic VGA support. Linux, like other UNIX based operation systems, 
 developed a concept of a virtual terminal. In the old mainframe days the only 
 way to access the mainframe was via a TTY (terminal teletype) device. They
-basically where a monochrome, stylish green, display and a keyboard together
-that connected to the mainframe by a serial line. With todays PC we still have 
+basically were a monochrome, stylish green, display and a keyboard together
+that connected to the mainframe by a serial line. With today's PC we still have 
 a monitor and a keyboard attached. So Linux simulates these type of TTYs. The
-flexiablity of POSIX TTYs allows it to be applied to other types of hardware 
+flexibility of POSIX TTYs allows it to be applied to other types of hardware 
 such as modems. 
 
 <P>
 As you can see the TTY layer covers many types of pieces of hardware. Because 
 it does cover so many types this presents very difficult issues. What we have
 seen is no clear boundaries between the various types of devices. You see 
-things pieces of tty/console code sprinckled through out various low level
+things like pieces of tty/console code sprinckled throughout various low level
 drivers. This makes driver writing more complex than it needs to be. 
 
 <P>
-The second issue is the new types of hardware Linux has encountered. For 
-example is the Compaq iPAQ. It has a framebuffer display but no permenant
+The second issue is the new types of hardware Linux has encountered. An 
+example is the Compaq iPAQ. It has a framebuffer display but no permanent
 keyboard. Having a built in VT makes no sense in this case. Having console
 code inside the framebuffer driver makes no sense. Have a pseudo keyboard 
 make even less sense. 
@@ -84,33 +84,33 @@ make even less sense.
 <P>
 So the first step is to rework the lower device layers. Also in the process 
 we form a uniform api for these layers. For various input devices we find we
-are lacking a standard api. So for one part of the project we begain the 
+are lacking a standard api. So for one part of the project we began the 
 task of porting every human input device over to a universal api. The api 
 choosen was the input api implemented for the USB layer. This migrates the
 VT code for keyboard handling from a PC centeric keyboard design to a more 
-device indepedent format. 
+device independent format. 
  
 <P>
 The second layer to rework is the framebuffer layer. The basic goal was to 
-removal all the console code out of the lower level drivers and make the
-framebuffer layer be able to stand on it own to handle PDA type devices.
+remove all the console code from the lower level drivers and make the
+framebuffer layer be able to stand on its own to handle PDA type devices.
 
 <P>
 The final layer is the serial layer. The final goal is to model this layer 
-after the parport layer. Here we with have device interface independent layer
+after the parport layer. Here we have a device interface independent layer
 and have device interfaces register with the core code. The reason for this
-apporach is to deal with serial based input devices. Some platforms have serial
-keyboards and it is unacceptable to have to run a unserland application just to
-be able to use it via the tty layer. Again their is great code redundecy.
+approach is to deal with serial based input devices. Some platforms have serial
+keyboards and it is unacceptable to have to run a userland application just to
+be able to use it via the tty layer. Again there is great code redundancy.
 
 <P>
 The final change was to the console layer itself. The main goal was to move away
-from the VGA text mode centric design. Also another goal was to allow the console
-and tty system more flexiable as I will point out later in this paper.
+from the VGA text mode centric design. Also another goal was to make the console
+and tty system more flexible as I will point out later in this paper.
 
 <P>
 This paper will examine designing and implementing a new tty layer that
-is smaller, lighter weight and much more flexiable than the current system.
+is smaller, lighter weight and much more flexible than the current system.
 
 <P>
 <HR>
