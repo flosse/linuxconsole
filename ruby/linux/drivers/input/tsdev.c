@@ -120,7 +120,6 @@ static int tsdev_release(struct inode * inode, struct file * file)
 	struct tsdev_list *list = file->private_data;
 	struct tsdev_list **listptr;
 
-	lock_kernel();
 	listptr = &list->tsdev->list;
 	tsdev_fasync(-1, file, 0);
 
@@ -138,7 +137,6 @@ static int tsdev_release(struct inode * inode, struct file * file)
 		}
 	}
 	kfree(list);
-	unlock_kernel();
 	return 0;
 }
 

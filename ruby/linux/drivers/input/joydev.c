@@ -166,7 +166,6 @@ static int joydev_release(struct inode * inode, struct file * file)
 	struct joydev_list *list = file->private_data;
 	struct joydev_list **listptr;
 
-	lock_kernel();
 	listptr = &list->joydev->list;
 	joydev_fasync(-1, file, 0);
 
@@ -185,7 +184,6 @@ static int joydev_release(struct inode * inode, struct file * file)
 	}
 
 	kfree(list);
-	unlock_kernel();
 
 	return 0;
 }

@@ -108,7 +108,9 @@ APISOURCES :=	$(TOPDIR)/drivers/media/video/videodev.c \
 		$(TOPDIR)/drivers/video/modedb.c \
 		$(TOPDIR)/fs/devfs/base.c \
 		$(TOPDIR)/fs/locks.c \
+		$(TOPDIR)/fs/bio.c \
 		$(TOPDIR)/include/asm-i386/bitops.h \
+		$(TOPDIR)/include/linux/usb.h \
 		$(TOPDIR)/kernel/pm.c \
 		$(TOPDIR)/kernel/ksyms.c \
 		$(TOPDIR)/kernel/kmod.c \

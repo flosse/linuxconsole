@@ -11,6 +11,7 @@
 #include <linux/linkage.h>
 #include <linux/stddef.h>
 #include <linux/types.h>
+#include <linux/compiler.h>
 
 /* Optimization barrier */
 /* The "volatile" is due to gcc bugs */
@@ -51,7 +52,7 @@ struct completion;
 extern struct notifier_block *panic_notifier_list;
 NORET_TYPE void panic(const char * fmt, ...)
 	__attribute__ ((NORET_AND format (printf, 1, 2)));
-NORET_TYPE void do_exit(long error_code)
+asmlinkage NORET_TYPE void do_exit(long error_code)
 	ATTRIB_NORET;
 NORET_TYPE void complete_and_exit(struct completion *, long)
 	ATTRIB_NORET;
@@ -60,9 +61,11 @@ extern unsigned long simple_strtoul(const char *,char **,unsigned int);
 extern long simple_strtol(const char *,char **,unsigned int);
 extern unsigned long long simple_strtoull(const char *,char **,unsigned int);
 extern long long simple_strtoll(const char *,char **,unsigned int);
-extern int sprintf(char * buf, const char * fmt, ...);
+extern int sprintf(char * buf, const char * fmt, ...)
+	__attribute__ ((format (printf, 2, 3)));
 extern int vsprintf(char *buf, const char *, va_list);
-extern int snprintf(char * buf, size_t size, const char *fmt, ...);
+extern int snprintf(char * buf, size_t size, const char * fmt, ...)
+	__attribute__ ((format (printf, 3, 4)));
 extern int vsnprintf(char *buf, size_t size, const char *fmt, va_list args);
 
 extern int sscanf(const char *, const char *, ...)
@@ -96,14 +99,14 @@ static inline void console_verbose(void)
 extern void bust_spinlocks(int yes);
 extern int oops_in_progress;		/* If set, an oops, panic(), BUG() or die() is in progress */
 
-extern int tainted;
-extern const char *print_tainted(void);
-
 static inline void do_BUG(const char *file, int line)
 {
-       bust_spinlocks(1);
-       printk("kernel BUG at %s:%d!\n", file, line);
+	bust_spinlocks(1);
+	printk("kernel BUG at %s:%d!\n", file, line);
 }
+
+extern int tainted;
+extern const char *print_tainted(void);
 
 #if DEBUG
 #define pr_debug(fmt,arg...) \
@@ -180,4 +183,5 @@ struct sysinfo {
 	char _f[20-2*sizeof(long)-sizeof(int)];	/* Padding: libc5 uses this.. */
 };
 
+#define BUG_ON(condition) do { if (unlikely((condition)!=0)) BUG(); } while(0)
 #endif

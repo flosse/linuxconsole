@@ -1,6 +1,6 @@
 VERSION = 2
-PATCHLEVEL = 5 
-SUBLEVEL = 0 
+PATCHLEVEL = 5
+SUBLEVEL = 1
 EXTRAVERSION = -ruby
 
 KERNELRELEASE=$(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
@@ -160,7 +160,7 @@ endif
 
 DRIVERS-$(CONFIG_SSI) += drivers/ssi/ssi.o
 DRIVERS-$(CONFIG_L3) += drivers/l3/l3.o
-DRIVERS-$(CONFIG_UART) += drivers/serial/uart.o 
+DRIVERS-$(CONFIG_UART) += drivers/serial/uart.o
 DRIVERS-$(CONFIG_SOUND) += drivers/sound/sounddrivers.o
 DRIVERS-$(CONFIG_PCI) += drivers/pci/driver.o
 DRIVERS-$(CONFIG_MTD) += drivers/mtd/mtdlink.o
@@ -260,8 +260,8 @@ Version: dummy
 boot: vmlinux
 	@$(MAKE) CFLAGS="$(CFLAGS) $(CFLAGS_KERNEL)" -C arch/$(ARCH)/boot
 
-vmlinux: include/linux/version.h $(CONFIGURATION) init/main.o init/version.o linuxsubdirs
-	$(LD) $(LINKFLAGS) $(HEAD) init/main.o init/version.o \
+vmlinux: include/linux/version.h $(CONFIGURATION) init/main.o init/version.o init/do_mounts.o linuxsubdirs
+	$(LD) $(LINKFLAGS) $(HEAD) init/main.o init/version.o init/do_mounts.o \
 		--start-group \
 		$(CORE_FILES) \
 		$(DRIVERS) \
@@ -336,6 +336,9 @@ init/version.o: init/version.c include/linux/compile.h include/config/MARKER
 	$(CC) $(CFLAGS) $(CFLAGS_KERNEL) -DUTS_MACHINE='"$(ARCH)"' -c -o init/version.o init/version.c
 
 init/main.o: init/main.c include/config/MARKER
+	$(CC) $(CFLAGS) $(CFLAGS_KERNEL) $(PROFILING) -c -o $*.o $<
+
+init/do_mounts.o: init/do_mounts.c include/config/MARKER
 	$(CC) $(CFLAGS) $(CFLAGS_KERNEL) $(PROFILING) -c -o $*.o $<
 
 fs lib mm ipc kernel drivers net: dummy
