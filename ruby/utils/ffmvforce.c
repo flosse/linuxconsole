@@ -52,14 +52,13 @@ static void generate_force(int x, int y)
 	static int first = 1;
 	double nx, ny;
 	double angle;
-	struct ff_effect effect;
+	static struct ff_effect effect;
 
 	nx = 2*(x-WIN_W/2.0)/WIN_W;
 	ny = 2*(y-WIN_H/2.0)/WIN_H;
 	angle = atan2(nx, -ny);
 printf("mouse: %d %d n: %4.2f %4.2f angle: %4.2f\n", x, y, nx, ny, angle);
 	effect.type = FF_CONSTANT;
-        effect.id = 0;
         effect.u.constant.level = 0x7fff * max(fabs(nx), fabs(ny));
         effect.u.constant.direction = 0x8000 * (angle + M_PI)/M_PI;
 printf("level: %04x direction: %04x\n", (unsigned int)effect.u.constant.level, (unsigned int)effect.u.constant.direction);
@@ -72,8 +71,14 @@ printf("level: %04x direction: %04x\n", (unsigned int)effect.u.constant.level, (
         effect.replay.length = 0xffff;
         effect.replay.delay = 0;
 
-/* BUG: This will fill the memory of the device very quickly */
-        if (ioctl(ff_fd, EVIOCSFF, &effect) == -1) {
+	if (!first) {
+		if (ioctl(ff_fd, EVIOCRMFF, effect.id) < 0) {
+			perror("Erase effect");
+			exit(1);
+		}
+	}
+
+        if (ioctl(ff_fd, EVIOCSFF, &effect) < 0) {
                 perror("Upload effect");
                 exit(1);
         }
@@ -83,7 +88,7 @@ printf("level: %04x direction: %04x\n", (unsigned int)effect.u.constant.level, (
 		struct input_event play;
 		first = 0;
 		play.type = EV_FF;
-		play.code = FF_PLAY;
+		play.code = FF_PLAY | effect.id;
 		play.value = 1;
 
 		if (write(ff_fd, (const void*) &play, sizeof(play)) == -1) {
