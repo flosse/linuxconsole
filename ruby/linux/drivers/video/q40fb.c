@@ -30,7 +30,7 @@
 
 #define Q40_PHYS_SCREEN_ADDR 0xFE800000
 
-static u16 pseudo_palette[17];
+static u32 pseudo_palette[17];
 static struct fb_info fb_info;
 
 static struct fb_fix_screeninfo q40fb_fix __initdata = {
@@ -82,9 +82,9 @@ static int q40fb_setcolreg(unsigned regno, unsigned red, unsigned green,
      *  Return != 0 for invalid regno.
      */
   
-    red>>=11;
-    green>>=11;
-    blue>>=10;
+    red >>=11;
+    green >>=11;
+    blue >>=10;
 
     if (regno < 16) {
 	info->pseudo_palette[regno] = ((red & 31) <<6) |
@@ -110,8 +110,6 @@ int q40fb_init(void)
 	fb_info.pseudo_palette = pseudo_palette;	
    	fb_info.screen_base = (char *) q40fb_fix.smem_start;
 
-	fb_alloc_cmap(&fb_info.cmap, 16, 0);
-	
 	master_outb(3, DISPLAY_CONTROL_REG);
 
 	if (register_framebuffer(&fb_info) < 0) {

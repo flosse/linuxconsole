@@ -24,8 +24,6 @@
 #include <linux/fb.h>
 #include <linux/init.h>
 
-#include <linux/fbcon.h>
-
     /*
      *  RAM we reserve for the frame buffer. This defines the maximum screen
      *  size
@@ -334,7 +332,7 @@ static int vfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 		case 8:
 			break;
 		case 16:
-			((u16 *) (info->pseudo_palette))[regno] = v;
+			((u32 *) (info->pseudo_palette))[regno] = v;
 			break;
 		case 24:
 		case 32:
@@ -428,7 +426,7 @@ int __init vfb_init(void)
 	memset(videomemory, 0, videomemorysize);
 
 	fb_info.screen_base = videomemory;
-	fb_info.node = -1;
+	fb_info.node = NODEV;
 	fb_info.fbops = &vfb_ops;
 
 	retval = fb_find_mode(&fb_info.var, &fb_info, mode_option,

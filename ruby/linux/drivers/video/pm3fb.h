@@ -92,6 +92,7 @@
 #define PM3MemBypassWriteMask					0x1008
 #define PM3MemScratch						0x1010
 #define PM3LocalMemCaps						0x1018
+        #define PM3LocalMemCaps_NoWriteMask                     (1 << 28)
 #define PM3LocalMemTimings					0x1020
 #define PM3LocalMemControl					0x1028
 #define PM3LocalMemRefresh					0x1030
@@ -1118,10 +1119,41 @@
 /* ***** pm3fb useful define and macro ***** */
 /* ***************************************** */
 
+/* kernel -specific definitions */
+/* what kernel is this ? */
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)))
+#define KERNEL_2_5
+#endif
+
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)))
+#define KERNEL_2_4
+#endif
+
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(2,2,0)) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,3,0))) 
+#define KERNEL_2_2
+/* pci_resource_start, available in 2.2.18 */
+#include <linux/kcomp.h>
+#ifdef CONFIG_FB_OF
+#define SUPPORT_FB_OF
+#endif
+#endif
+
+#if (!defined(KERNEL_2_2)) && (!defined(KERNEL_2_4)) && (!defined(KERNEL_2_5))
+#error "Only kernel 2.2.x, kernel 2.4.y and kernel 2.5.z might work"
+#endif
+
+/* not sure if/why it's needed. doesn't work without on my PowerMac... */
+#ifdef __BIG_ENDIAN
+#define MUST_BYTESWAP
+#endif
+
+/* for compatibility between 2.5, 2.4 and 2.2 */
+#ifndef B_FREE
+#define B_FREE   -1
+#endif
+
 /* permedia3 -specific definitions */
 #define PM3_SCALE_TO_CLOCK(pr, fe, po) ((2 * PM3_REF_CLOCK * fe) / (pr * (1 << (po))))
-#define PICOS2KHZ(a) (1000000000UL/(a))
-#define KHZ2PICOS(a) (1000000000UL/(a))
 
 /* in case it's not in linux/pci.h */
 #ifndef PCI_DEVICE_ID_3DLABS_PERMEDIA3
@@ -1176,9 +1208,20 @@
 /* ******************************************** */
 /* ***** A bunch of register-access macro ***** */
 /* ******************************************** */
-/* we're in 2.4.x or more */
+#ifdef KERNEL_2_2
+#ifdef MUST_BYTESWAP /* we are writing big_endian to big_endian through a little_endian macro */
+#define PM3_READ_REG(r) __swab32(readl((l_fb_info->vIOBase + r)))
+#define PM3_WRITE_REG(r, v) writel(__swab32(v), (l_fb_info->vIOBase + r))
+#else /* MUST_BYTESWAP */
+#define PM3_WRITE_REG(r, v) writel(v, (l_fb_info->vIOBase + r))
+#define PM3_READ_REG(r) readl((l_fb_info->vIOBase + r))
+#endif /* MUST_BYTESWAP */
+#endif /* KERNEL_2_2 */
+#if (defined KERNEL_2_4) || (defined KERNEL_2_5) /* native-endian access */
 #define PM3_WRITE_REG(r, v) fb_writel(v, (l_fb_info->vIOBase + r))
 #define PM3_READ_REG(r) fb_readl((l_fb_info->vIOBase + r))
+#endif /* KERNEL_2_4 or KERNEL_2_5 */
+
 
 #define depth2bpp(d) ((d + 7L) & ~7L)
 #define depth2ByPP(d) (depth2bpp(d) / 8)

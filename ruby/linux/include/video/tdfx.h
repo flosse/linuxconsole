@@ -184,6 +184,7 @@ struct tdfx_par {
 
   spinlock_t DAClock;
 };
+
 #endif /* __KERNEL__ */
 
 #endif /* _TDFX_H */

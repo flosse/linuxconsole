@@ -195,6 +195,8 @@ int __init vesafb_setup(char *options)
 			pmi_setpal=0;
 		else if (! strcmp(this_opt, "pmipal"))
 			pmi_setpal=1;
+		else if (! strcmp(this_opt, "mtrr"))
+			mtrr=1;
 	}
 	return 0;
 }
@@ -344,13 +346,11 @@ int __init vesafb_init(void)
 	fb_info.pseudo_palette = pseudo_palette;
 	fb_info.flags = FBINFO_FLAG_DEFAULT;
 
-	fb_alloc_cmap(&fb_info.cmap, video_cmap_len, 0);
-
 	if (register_framebuffer(&fb_info)<0)
 		return -EINVAL;
 
 	printk(KERN_INFO "fb%d: %s frame buffer device\n",
-	       minor(fb_info.node), fb_info.fix.id);
+	       GET_FB_IDX(fb_info.node), fb_info.fix.id);
 	return 0;
 }
 

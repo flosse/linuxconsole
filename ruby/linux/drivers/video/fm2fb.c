@@ -127,8 +127,6 @@
 
 static volatile unsigned char *fm2fb_reg;
 
-#define arraysize(x)	(sizeof(x)/sizeof(*(x)))
-
 static struct fb_info fb_info;
 static u32 pseudo_palette[17];
 
@@ -257,7 +255,6 @@ int __init fm2fb_init(void)
 		if (fm2fb_mode == -1)
 			fm2fb_mode = FM2FB_MODE_PAL;
 
-		strcpy(fb_info.modename, fb_fix.id);
 		fb_info.node = NODEV;
 		fb_info.fbops = &fm2fb_ops;
 		fb_info.var = fb_var_modes[fm2fb_mode];
@@ -265,8 +262,6 @@ int __init fm2fb_init(void)
 		fb_info.pseudo_palette = pseudo_palette;
 		fb_info.fix = fb_fix;
 		fb_info.flags = FBINFO_FLAG_DEFAULT;
-
-		fb_alloc_cmap(&fb_info.cmap, 16, 0);
 
 		if (register_framebuffer(&fb_info) < 0)
 			return -EINVAL;

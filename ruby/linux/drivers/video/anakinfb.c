@@ -20,7 +20,7 @@
 
 #include <asm/io.h>
 
-static u16 colreg[16];
+static u32 colreg[16];
 static struct fb_info fb_info;
 
 static struct fb_var_screeninfo anakinfb_var = {
@@ -73,20 +73,21 @@ anakinfb_init(void)
 {
 	memset(&fb_info, 0, sizeof(struct fb_info));
 
-	fb_info.node = -1;
+	fb_info.node = NODEV;
 	fb_info.flags = FBINFO_FLAG_DEFAULT;
 	fb_info.fbops = &anakinfb_ops;
 	fb_info.var = anakinfb_var;
 	fb_info.fix = anakinfb_fix;
-
+	
 	if (!(request_mem_region(VGA_START, VGA_SIZE, "vga")))
 		return -ENOMEM;
-	if (!(fb_info.screen_base = ioremap(VGA_START, VGA_SIZE))) {
+	if (fb_info.screen_base = ioremap(VGA_START, VGA_SIZE)) {
 		release_mem_region(VGA_START, VGA_SIZE);
 		return -EIO;
 	}
+
 	if (register_framebuffer(&fb_info) < 0) {
-		iounmap(fb_info.screen_base);
+		iounmap(display.screen_base);
 		release_mem_region(VGA_START, VGA_SIZE);
 		return -EINVAL;
 	}

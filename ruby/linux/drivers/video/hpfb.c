@@ -156,8 +156,6 @@ int __init hpfb_init_one(unsigned long base)
 	fb_info.fix   = hpfb_fix;
 	fb_info.screen_base = hpfb_fix.smem_start;
 
-	fb_alloc_cmap(&fb_info.cmap, 256, 0);
-
 	if (register_framebuffer(&fb_info) < 0)
 		return 1;
 	return 0;

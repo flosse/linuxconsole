@@ -80,8 +80,13 @@ struct xxx_par;
  * to get a fb_var_screeninfo. Otherwise define a default var as well. 
  */
 static struct fb_fix_screeninfo xxxfb_fix __initdata = {
-    "FB's name", (unsigned long) NULL, 0, FB_TYPE_PACKED_PIXELS, 0,
-    FB_VISUAL_PSEUDOCOLOR, 1, 1, 1, 0, (unsigned long) NULL, 0, FB_ACCEL_NONE
+	id:		"FB's name", 
+	type:		FB_TYPE_PACKED_PIXELS,
+	visual:		FB_VISUAL_PSEUDOCOLOR,
+	xpanstep:	1,
+	ypanstep:	1,
+	ywrapstep:	1, 
+	accel:		FB_ACCEL_NONE,
 };
 
     /*
@@ -119,9 +124,6 @@ static struct fb_info info;
      * just one hardware state. These here represent the default state(s). 
      */
 static struct xxx_par __initdata current_par;
-
-    /* To go away in the near future */ 
-static struct display disp;
 
 int xxxfb_init(void);
 int xxxfb_setup(char*);
@@ -164,10 +166,11 @@ static int xxxfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
  *	xxxfb_check_var is always called before xxxfb_set_par to ensure this.
  *
  */
-static void xxxfb_set_par(struct fb_info *info)
+static int xxxfb_set_par(struct fb_info *info)
 {
     struct xxx_par *par = (struct xxx_par *) info->par;
     /* ... */
+    return 0;	
 }
 
 /**
@@ -399,7 +402,7 @@ void xxxfb_imageblit(struct fb_info *p, struct fb_image *image)
 
 int __init xxxfb_init(void)
 {
-    int retval;	
+    int cmap_len, retval;	
    
     /* 
      * Here we set the screen_base to the vitrual memory address
@@ -408,12 +411,17 @@ int __init xxxfb_init(void)
      * space via ioremap. Consult ioport.h. 
      */
     info.screen_base = framebuffer_virtual_memory;	
-    info.node = -1;
+    info.node = NODEV;
     info.fbops = &xxxfb_ops;
     info.fix = xxxfb_fix;
-    info.par = current_par;
+    info.pseudo_palette = pseudo_palette;
     info.flags = FBINFO_FLAG_DEFAULT;
-    /* This should give a reasonable default video mode */
+    info.par = current_par;
+
+    /*
+     * This should give a reasonable default video mode. The following is
+     * done when we can set a video mode. 
+     */
     if (!mode_option)
 	mode_option = "640x480@60";	 	
 
@@ -422,7 +430,11 @@ int __init xxxfb_init(void)
     if (!retval || retval == 4)
 	return -EINVAL;			
 
-    info.cmap = fb_default_cmap(1<<info.var.bits_per_pixel);	
+    /* 
+     * The following is done in the case of having hardware with a static 
+     * mode. If we are setting the mode ourselves we don't call this. 
+     */	
+    info.var = xxxfb_var;
 	
     if (register_framebuffer(&info) < 0)
 	return -EINVAL;
@@ -483,11 +495,11 @@ static struct fb_ops xxxfb_ops = {
 	fb_open:	xxxfb_open,    /* only if you need it to do something */
 	fb_release:	xxxfb_release, /* only if you need it to do something */
 	/* Stuff to go away. Use generic functions for now */
-	fb_get_fix:	fbgen_get_fix,
-	fb_get_var:	fbgen_get_var,
-	fb_set_var:	fbgen_set_var,	
-	fb_get_cmap:	fbgen_get_cmap,
-	fb_set_cmap:	fbgen_set_cmap,
+	fb_get_fix:	gen_get_fix,
+	fb_get_var:	gen_get_var,
+	fb_set_var:	gen_set_var,	
+	fb_get_cmap:	gen_get_cmap,
+	fb_set_cmap:	gen_set_cmap,
 
 	fb_check_var:	xxxfb_check_var,
 	fb_set_par:	xxxfb_set_par,	   /* optional */	

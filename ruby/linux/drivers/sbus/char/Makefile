@@ -7,8 +7,6 @@
 # Rewritten to use lists instead of if-statements.
 #
 
-O_TARGET := sunchar.o
-
 export-objs := su.o bbc_i2c.o
 obj-y := sunserial.o zs.o
 

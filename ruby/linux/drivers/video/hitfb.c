@@ -162,11 +162,6 @@ int __init hitfb_init(void)
 	fb_info.flags 		= FBINFO_FLAG_DEFAULT;
 	fb_info.screen_base = (void *) hitfb_fix.smem_start;
 
-	size = (fb_info.var.bits_per_pixel == 8) ? 256 : 16;
-	fb_alloc_cmap(&fb_info.cmap, size, 0); 	
-
-	gen_get_var(&fb_info.var, -1, &fb_info);
-    
 	if (register_framebuffer(&fb_info) < 0)
 		return -EINVAL;
     
