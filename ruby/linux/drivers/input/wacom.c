@@ -117,6 +117,7 @@ struct wacom {
 	struct urb irq;
 	struct wacom_features *features;
 	int tool;
+	int open;
 };
 
 static void wacom_graphire_irq(struct urb *urb)
@@ -235,7 +236,7 @@ static int wacom_open(struct input_dev *dev)
 	if (wacom->open++)
 		return 0;
 
-	if (usb_submit_urb(&wacom->irq)
+	if (usb_submit_urb(&wacom->irq))
 		return -EIO;
 
 	return 0;
