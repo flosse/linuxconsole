@@ -99,9 +99,9 @@ void hpfb_copyarea(struct fb_info *info, struct fb_copyarea *area)
 
 static struct fb_ops hpfb_ops = {
 	owner:		THIS_MODULE,
-        fb_setcolreg:   hpfb_setcolreg,
-	fb_fillrect:	cfb_fillrect,
-        fb_copyarea:    hpfb_copyarea,
+	fb_setcolreg:	hpfb_setcolreg,
+	fb_fillrect:	cfb_fillrect,	
+	fb_copyarea:	hpfb_copyarea,
 	fb_imageblit:	cfb_imageblit,
 };
 
@@ -186,27 +186,26 @@ int __init hpfb_init(void)
 	 */
 #define INTFBADDR 0xf0560000
 
-	if (hwreg_present((void *)INTFBADDR) && (DIO_ID(INTFBADDR) == DIO_ID_FBUFFER)
-		&& topcat_sid_ok(sid = DIO_SECID(INTFBADDR)))
-	{
+	if (hwreg_present((void *)INTFBADDR) && 
+	   (DIO_ID(INTFBADDR) == DIO_ID_FBUFFER) &&
+	    topcat_sid_ok(sid = DIO_SECID(INTFBADDR))) {
 		printk("Internal Topcat found (secondary id %02x)\n", sid); 
 		hpfb_init_one(INTFBADDR);
-	}
-	else
-	{
+	} else {
 		int sc = dio_find(DIO_ID_FBUFFER);
-		if (sc)
-		{
+
+		if (sc) {
 			unsigned long addr = (unsigned long)dio_scodetoviraddr(sc);
 			unsigned int sid = DIO_SECID(addr);
 
-			if (topcat_sid_ok(sid))
-			{
+			if (topcat_sid_ok(sid)) {
 				printk("Topcat found at DIO select code %02x "
-				       "(secondary id %02x)\n", sc, sid);
+					"(secondary id %02x)\n", sc, sid);
 				hpfb_init_one(addr);
 			}
 		}
 	}
 	return 0;
 }
+
+MODULE_LICENSE("GPL");

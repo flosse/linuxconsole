@@ -114,7 +114,6 @@
  *
  */
 
-
 /*
  *	definitions
  */
@@ -135,7 +134,7 @@ static struct fb_info fb_info;
 static u32 pseudo_palette[17];
 
 static struct fb_fix_screeninfo fb_fix __initdata = {
-    "", (unsigned long) NULL, FRAMEMASTER_REG, FB_TYPE_PACKED_PIXELS, 0,
+    NULL, (unsigned long) NULL, FRAMEMASTER_REG, FB_TYPE_PACKED_PIXELS, 0,
     FB_VISUAL_TRUECOLOR, 0, 0, 0, 768<<2, (unsigned long)NULL, 8, FB_ACCEL_NONE
 };
 
@@ -165,48 +164,29 @@ static struct fb_var_screeninfo fb_var_modes[] __initdata = {
      */
 int fm2fb_init(void);
 
-static int fm2fb_check_var(struct fb_var_screeninfo *var,struct fb_info *info);
 static int fm2fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                            u_int transp, struct fb_info *info);
 static int fm2fb_blank(int blank, struct fb_info *info);
-static int fm2fb_pan_display(struct fb_var_screeninfo *var,
-			     struct fb_info *info); 
 
 static struct fb_ops fm2fb_ops = {
-    owner:          	THIS_MODULE,
-    fb_check_var:	fm2fb_check_var, 
-    fb_setcolreg:	fm2fb_setcolreg,
-    fb_blank:		fm2fb_blank,	
-    fb_pan_display:	fm2fb_pan_display, 
+	owner:		THIS_MODULE,
+	fb_setcolreg:	fm2fb_setcolreg,
+	fb_blank:	fm2fb_blank,	
+	fb_fillrect:	cfb_fillrect,
+	fb_copyarea:	cfb_copyarea,
+	fb_imageblit:	cfb_imageblit,
 };
 
     /*
-     *  Set the User Defined Part of the Display
-     */
-
-static int fm2fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info) 
-{
-    if (var->xres > info->var.xres || var->yres > info->var.yres ||
-	var->xres_virtual > info->var.xres_virtual ||
-	var->yres_virtual > info->var.yres_virtual ||
-	var->bits_per_pixel > info->var.bits_per_pixel ||
-	var->nonstd ||
-	(var->vmode & FB_VMODE_MASK) != FB_VMODE_NONINTERLACED)
-	return -EINVAL;
-    return 0;
-}
-    
-    /*
      *  Blank the display.
      */
-
-static void fm2fb_blank(int blank, struct fb_info *info)
+static int fm2fb_blank(int blank, struct fb_info *info)
 {
-    unsigned char t = FRAMEMASTER_ROM;
+	unsigned char t = FRAMEMASTER_ROM;
 
-    if (!blank)
-	t |= FRAMEMASTER_ENABLE | FRAMEMASTER_NOLACE;
-    fm2fb_reg[0] = t;
+	if (!blank)
+		t |= FRAMEMASTER_ENABLE | FRAMEMASTER_NOLACE;
+	fm2fb_reg[0] = t;
 }
     
     /*
@@ -214,32 +194,16 @@ static void fm2fb_blank(int blank, struct fb_info *info)
      *  rounded down to the hardware's capabilities (according to the
      *  entries in the var structure). Return != 0 for invalid regno.
      */
-
 static int fm2fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                          u_int transp, struct fb_info *info)
 {
-    if (regno > 15)
-	return 1;
-    red >>= 8;
-    green >>= 8;
-    blue >>= 8;
+	if (regno > 15)
+		return 1;
+	red >>= 8;
+	green >>= 8;
+	blue >>= 8;
 
-    ((u32*)(info->pseudo_palette))[regno] = (red << 16) | (green << 8) | blue;
-    return 0;
-}
-
-    /*
-     *  Pan or Wrap the Display
-     *
-     *  This call looks only at xoffset, yoffset and the FB_VMODE_YWRAP flag
-     */
-
-static int fm2fb_pan_display(struct fb_var_screeninfo *var, int con,
-			     struct fb_info *info)
-{
-    if (var->xoffset || var->yoffset)
-	return -EINVAL;
-    else
+	((u32*)(info->pseudo_palette))[regno] = (red << 16) | (green << 8) | blue;
 	return 0;
 }
 
@@ -249,109 +213,79 @@ static int fm2fb_pan_display(struct fb_var_screeninfo *var, int con,
 
 int __init fm2fb_init(void)
 {
-    int is_fm;
-    struct zorro_dev *z = NULL;
-    unsigned long *ptr;
-    int x, y;
+	struct zorro_dev *z = NULL;
+	unsigned long *ptr;
+	int is_fm;
+	int x, y;
 
-    while ((z = zorro_find_device(ZORRO_WILDCARD, z))) {
-	if (z->id == ZORRO_PROD_BSC_FRAMEMASTER_II)
-	    is_fm = 1;
-	else if (z->id == ZORRO_PROD_HELFRICH_RAINBOW_II)
-	    is_fm = 0;
-	else
-	    continue;
-	if (!request_mem_region(z->resource.start, FRAMEMASTER_SIZE, "fm2fb"))
-	    continue;
+	while ((z = zorro_find_device(ZORRO_WILDCARD, z))) {
+		if (z->id == ZORRO_PROD_BSC_FRAMEMASTER_II)
+			is_fm = 1;
+		else if (z->id == ZORRO_PROD_HELFRICH_RAINBOW_II)
+			is_fm = 0;
+		else
+			continue;
+		
+		if (!request_mem_region(z->resource.start, FRAMEMASTER_SIZE, "fm2fb"))
+			continue;
 
-	/* assigning memory to kernel space */
-	fb_fix.smem_start = z->resource.start;
-	fb_info.screen_base = ioremap(fb_fix.smem_start, FRAMEMASTER_SIZE);
-	fb_fix.mmio_start = fb_fix.smem_start + FRAMEMASTER_REG;
-	fm2fb_reg  = (unsigned char *)(fb_info.screen_base+FRAMEMASTER_REG);
+		/* assigning memory to kernel space */
+		fb_fix.smem_start = z->resource.start;
+		fb_info.screen_base = ioremap(fb_fix.smem_start, FRAMEMASTER_SIZE);
+		fb_fix.mmio_start = fb_fix.smem_start + FRAMEMASTER_REG;
+		fm2fb_reg  = (unsigned char *)(fb_info.screen_base+FRAMEMASTER_REG);
 	
-	strcpy(fb_fix.id, is_fm ? "FrameMaster II" : "Rainbow II");
+		strcpy(fb_fix.id, is_fm ? "FrameMaster II" : "Rainbow II");
 
-	/* make EBU color bars on display */
-	ptr = (unsigned long *)fb_fix.smem_start;
-	for (y = 0; y < 576; y++) {
-	    for (x = 0; x < 96; x++) *ptr++ = 0xffffff;	/* white */
-	    for (x = 0; x < 96; x++) *ptr++ = 0xffff00;	/* yellow */
-	    for (x = 0; x < 96; x++) *ptr++ = 0x00ffff;	/* cyan */
-	    for (x = 0; x < 96; x++) *ptr++ = 0x00ff00;	/* green */
-	    for (x = 0; x < 96; x++) *ptr++ = 0xff00ff;	/* magenta */
-	    for (x = 0; x < 96; x++) *ptr++ = 0xff0000;	/* red */
-	    for (x = 0; x < 96; x++) *ptr++ = 0x0000ff;	/* blue */
-	    for (x = 0; x < 96; x++) *ptr++ = 0x000000;	/* black */
+		/* make EBU color bars on display */
+		ptr = (unsigned long *)fb_fix.smem_start;
+		for (y = 0; y < 576; y++) {
+			for (x = 0; x < 96; x++) *ptr++ = 0xffffff;/* white */
+			for (x = 0; x < 96; x++) *ptr++ = 0xffff00;/* yellow */
+			for (x = 0; x < 96; x++) *ptr++ = 0x00ffff;/* cyan */
+			for (x = 0; x < 96; x++) *ptr++ = 0x00ff00;/* green */
+			for (x = 0; x < 96; x++) *ptr++ = 0xff00ff;/* magenta */
+			for (x = 0; x < 96; x++) *ptr++ = 0xff0000;/* red */
+			for (x = 0; x < 96; x++) *ptr++ = 0x0000ff;/* blue */
+			for (x = 0; x < 96; x++) *ptr++ = 0x000000;/* black */
+		}
+		fm2fb_blank(0, NULL);
+
+		if (fm2fb_mode == -1)
+			fm2fb_mode = FM2FB_MODE_PAL;
+
+		strcpy(fb_info.modename, fb_fix.id);
+		fb_info.node = NODEV;
+		fb_info.fbops = &fm2fb_ops;
+		fb_info.var = fb_var_modes[fm2fb_mode];
+		fb_info.screen_base = (char *)fb_fix.smem_start;
+		fb_info.pseudo_palette = pseudo_palette;
+		fb_info.fix = fb_fix;
+		fb_info.flags = FBINFO_FLAG_DEFAULT;
+
+		if (register_framebuffer(&fb_info) < 0)
+			return -EINVAL;
+
+		printk("fb%d: %s frame buffer device\n", GET_FB_IDX(fb_info.node), fb_fix.id);
+		return 0;
 	}
-	fm2fb_blank(0, NULL);
-
-	if (fm2fb_mode == -1)
-	    fm2fb_mode = FM2FB_MODE_PAL;
-
-	strcpy(fb_info.modename, fb_fix.id);
-	fb_info.node = -1;
-	fb_info.fbops = &fm2fb_ops;
-	fb_info.var = fb_var_modes[fm2fb_mode];
-	fb_info.screen_base = (char *)fb_fix.smem_start;
-	fb_info.pseudo_palette = pseudo_palette;
-	fb_info.fix = fb_fix;
-	fb_info.flags = FBINFO_FLAG_DEFAULT;
-
-	if (register_framebuffer(&fb_info) < 0)
-	    return -EINVAL;
-
-	printk("fb%d: %s frame buffer device\n", GET_FB_IDX(fb_info.node),
-	       fb_fix.id);
-	return 0;
-    }
-    return -ENXIO;
+	return -ENXIO;
 }
 
 int __init fm2fb_setup(char *options)
 {
-    char *this_opt;
+	char *this_opt;
 
-    if (!options || !*options)
+	if (!options || !*options)
+		return 0;
+
+	while ((this_opt = strsep(&options, ",")) != NULL) {	
+		if (!strncmp(this_opt, "pal", 3))
+			fm2fb_mode = FM2FB_MODE_PAL;
+		else if (!strncmp(this_opt, "ntsc", 4))
+			fm2fb_mode = FM2FB_MODE_NTSC;
+	}
 	return 0;
-
-    while ((this_opt = strsep(&options, ",")) != NULL) {	
-	if (!strncmp(this_opt, "pal", 3))
-	    fm2fb_mode = FM2FB_MODE_PAL;
-	else if (!strncmp(this_opt, "ntsc", 4))
-	    fm2fb_mode = FM2FB_MODE_NTSC;
-    }
-    return 0;
 }
 
-    /*
-     *  Blank the display.
-     */
-
-static void fm2fb_blank(int blank, struct fb_info *info)
-{
-    unsigned char t = FRAMEMASTER_ROM;
-
-    if (!blank)
-	t |= FRAMEMASTER_ENABLE | FRAMEMASTER_NOLACE;
-    fm2fb_reg[0] = t;
-}
-    
-    /*
-     *  Set a single color register. The values supplied are already
-     *  rounded down to the hardware's capabilities (according to the
-     *  entries in the var structure). Return != 0 for invalid regno.
-     */
-
-static int fm2fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
-                         u_int transp, struct fb_info *info)
-{
-    if (regno > 15)
-	return 1;
-    red >>= 8;
-    green >>= 8;
-    blue >>= 8;
-
-    ((u32*)(info->pseudo_palette))[regno] = (red << 16) | (green << 8) | blue;
-    return 0;
-}
+MODULE_LICENSE("GPL");
