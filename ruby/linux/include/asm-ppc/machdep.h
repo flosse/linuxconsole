@@ -44,6 +44,8 @@ struct machdep_calls {
 	unsigned long	heartbeat_count;
 
 	unsigned long	(*find_end_of_memory)(void);
+	void		(*setup_io_mappings)(void);
+
   	void		(*progress)(char *, unsigned short);
 
 	unsigned char 	(*nvram_read_val)(int addr);
@@ -56,6 +58,10 @@ struct machdep_calls {
 	/* Called after scanning the bus, before allocating resources */
 	void (*pcibios_fixup)(void);
 
+	/* Called after PPC generic resource fixup to perform
+	   machine specific fixups */
+	void (*pcibios_fixup_resources)(struct pci_dev *);
+
 	/* Called for each PCI bus in the system when it's probed */
 	void (*pcibios_fixup_bus)(struct pci_bus *);
 
@@ -64,11 +70,23 @@ struct machdep_calls {
 	 * Returns 0 to allow assignment/enabling of the device. */
 	int  (*pcibios_enable_device_hook)(struct pci_dev *, int initial);
 
+	/* For interrupt routing */
+	unsigned char (*pci_swizzle)(struct pci_dev *, unsigned char *);
+	int (*pci_map_irq)(struct pci_dev *, unsigned char, unsigned char);
+
+	/* Called in indirect_* to avoid touching devices */
+	int (*pci_exclude_device)(unsigned char, unsigned char);
+
 	/* Called at then very end of pcibios_init() */
 	void (*pcibios_after_init)(void);
 
 	/* this is for modules, since _machine can be a define -- Cort */
 	int ppc_machine;
+
+#ifdef CONFIG_SMP
+	/* functions for dealing with other cpus */
+	struct smp_ops_t *smp_ops;
+#endif /* CONFIG_SMP */
 };
 
 extern struct machdep_calls ppc_md;
@@ -87,6 +105,15 @@ typedef enum sys_ctrler_kind {
 } sys_ctrler_t;
 
 extern sys_ctrler_t sys_ctrler;
+
+#ifdef CONFIG_SMP
+struct smp_ops_t {
+	void  (*message_pass)(int target, int msg, unsigned long data, int wait);
+	int   (*probe)(void);
+	void  (*kick_cpu)(int nr);
+	void  (*setup_cpu)(int nr);
+};
+#endif /* CONFIG_SMP */
 
 #endif /* _PPC_MACHDEP_H */
 #endif /* __KERNEL__ */
