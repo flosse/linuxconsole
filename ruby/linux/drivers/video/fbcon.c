@@ -148,8 +148,7 @@ static char __initdata fontname[40] = { 0 };
 static const char *fbcon_startup(struct vt_struct *vt, int init);
 static void fbcon_init(struct vc_data *vc);
 static void fbcon_deinit(struct vc_data *vc);
-static void fbcon_clear(struct vc_data *vc, int sy, int sx, int height,
-		       int width);
+static void fbcon_clear(struct vc_data *vc,int sy,int sx,int width,int height);
 static void fbcon_putc(struct vc_data *vc, int c, int ypos, int xpos);
 static void fbcon_putcs(struct vc_data *vc,const unsigned short *s, int count,
 			int ypos, int xpos);
@@ -302,8 +301,7 @@ static void fbcon_deinit(struct vc_data *vc)
 */
 }
 
-static void fbcon_clear(struct vc_data *vc, int sy, int sx, int height,
-			int width)
+static void fbcon_clear(struct vc_data *vc,int sy,int sx, int width,int height)
 {
     struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
     unsigned long color;
@@ -316,7 +314,6 @@ static void fbcon_clear(struct vc_data *vc, int sy, int sx, int height,
 	else
 		color = ((u16*)info->pseudo_palette)[attr_bgcol_ec(vc)];
     }
-    height++;	
     sx *= vc->vc_font.width;
     sy *= vc->vc_font.height;
     width *= vc->vc_font.width;
@@ -479,33 +476,20 @@ static int fbcon_scroll_region(struct vc_data *vc, int t, int b, int dir,
 {
     struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
     unsigned int height = (b-t-count) * vc->vc_font.height;
-    unsigned int sy, dy, y;	 	
-    unsigned long color;	
-
-    if (info->fix.visual == FB_VISUAL_PSEUDOCOLOR) 
-	color = attr_bgcol_ec(vc);
-    else {
-	if (info->var.bits_per_pixel > 16)
-		color = ((u32*)info->pseudo_palette)[attr_bgcol_ec(vc)];
-	else
-		color = ((u16*)info->pseudo_palette)[attr_bgcol_ec(vc)];
-    }
+    unsigned int sy, dy;	 	
 
     switch (dir) {
 	case SM_UP:
 		sy = (t + count) * vc->vc_font.height;
 		dy = t * vc->vc_font.height;
-		y = (b - count) * vc->vc_font.height;	
 		break;
 	case SM_DOWN:
-		y = sy = t * vc->vc_font.height; 
+		sy = t * vc->vc_font.height; 
 		dy = (t + count) * vc->vc_font.height;
 		break;
     }		
 
     info->fbops->fb_copyarea(info, 0, sy, info->var.xres, height, 0, dy);
-    info->fbops->fb_fillrect(info, 0, y, info->var.xres, 
-			     count * vc->vc_font.height, color, ROP_COPY); 
     return 0;
 }
 
