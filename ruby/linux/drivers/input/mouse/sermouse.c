@@ -200,7 +200,7 @@ static void sermouse_interrupt(struct serio *serio, unsigned char data, unsigned
 {
 	struct sermouse *sermouse = serio->private;
 
-	if (jiffies - sermouse->last > 2) sermouse->count = 0;
+	if (time_after(jiffies, sermouse->last + HZ/20)) sermouse->count = 0;
 	sermouse->last = jiffies;
 
 	if (sermouse->type > SERIO_SUN)
