@@ -1,6 +1,7 @@
 #!/bin/sh
 
 rm -fv Documentation/usb/hid.txt
+rm -fv arch/arm/lib/kbd.o
 rm -fv arch/m68k/atari/atakeyb.c
 rm -fv arch/m68k/atari/joystick.c
 rm -fv arch/m68k/hp300/hil.c
@@ -30,9 +31,13 @@ rm -fv drivers/char/msbusmouse.c
 rm -fv drivers/char/pc110pad.c
 rm -fv drivers/char/pc110pad.h
 rm -fv drivers/char/pc_keyb.c
+rm -fv drivers/char/ec3104_keyb.c
 rm -fv drivers/char/q40_keyb.c
 rm -fv drivers/char/qpmouse.c
 rm -fv drivers/macintosh/mac_keyb.c
+rm -fv drivers/tc/lk201.c
+rm -fv drivers/tc/lk201-remap.c
+rm -rf drivers/tc/lk201-map.map
 rm -fv drivers/sbus/char/pcikbd.c
 rm -fv drivers/sbus/char/pcikbd.h
 rm -fv drivers/sbus/char/sunkbd.c

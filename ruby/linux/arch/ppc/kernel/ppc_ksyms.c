@@ -10,7 +10,6 @@
 #include <linux/string.h>
 #include <linux/interrupt.h>
 #include <linux/tty.h>
-#include <linux/vt_kern.h>
 #include <linux/nvram.h>
 #include <linux/console.h>
 #include <linux/irq.h>
@@ -273,9 +272,6 @@ EXPORT_SYMBOL(btext_update_display);
 #endif
 #if defined(CONFIG_SCSI) && defined(CONFIG_ALL_PPC)
 EXPORT_SYMBOL(note_scsi_host);
-#endif
-#ifdef CONFIG_VT
-EXPORT_SYMBOL(kd_mksound);
 #endif
 #ifdef CONFIG_NVRAM
 EXPORT_SYMBOL(nvram_read_byte);

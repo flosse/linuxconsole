@@ -275,29 +275,7 @@ void __init sgi_setup(void)
 #endif
  
 	sgi_volume_set(simple_strtoul(ArcGetEnvironmentVariable("volume"), NULL, 10));
-
-#ifdef CONFIG_VT
-#ifdef CONFIG_SGI_NEWPORT_CONSOLE
-	conswitchp = &newport_con;
-
-	screen_info = (struct screen_info) {
-		0, 0,		/* orig-x, orig-y */
-		0,		/* unused */
-		0,		/* orig_video_page */
-		0,		/* orig_video_mode */
-		160,		/* orig_video_cols */
-		0, 0, 0,	/* unused, ega_bx, unused */
-		64,		/* orig_video_lines */
-		0,		/* orig_video_isVGA */
-		16		/* orig_video_points */
-	};
-#else
-	conswitchp = &dummy_con;
-#endif
-#endif
-
 	rtc_ops = &indy_rtc_ops;
-	kbd_ops = &sgi_kbd_ops;
 #ifdef CONFIG_VIDEO_VINO
 	init_vino();
 #endif
