@@ -276,22 +276,24 @@ static void put_8bit(struct vc_data *vc, u8 c)
  */
 void compute_shiftstate(void)
 {
-	int i, j, sym, val;
+	int i, j, k, sym, val;
 
 	shift_state = 0;
 	memset(shift_down, 0, sizeof(shift_down));
 
 	for(i = 0; i < SIZE(key_down); i += BITS_PER_LONG) {
 
-		if (!key_down[i / BITS_PER_LONG])
+		if (!key_down[i])
 			continue;
 
-		for(j = 0; j < BITS_PER_LONG; j++) {
+		k = i*BITS_PER_LONG;
 
-			if (!test_bit(i + j, key_down))
+		for(j = 0; j < BITS_PER_LONG; j++, k++) {
+
+			if (!test_bit(k, key_down))
 				continue;
 
-			sym = U(key_maps[0][i + j]);
+			sym = U(key_maps[0][k]);
 			if (KTYP(sym) != KT_SHIFT && KTYP(sym) != KT_SLOCK)
 				continue;
 			
