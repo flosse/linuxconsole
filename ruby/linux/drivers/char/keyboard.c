@@ -1045,6 +1045,8 @@ static void kbd_event(struct input_handle *handle, unsigned int event_type,
 	tasklet_schedule(&keyboard_tasklet);
 }
 
+static char kbd_name[] = "kbd";
+
 /*
  * When a keyboard (or other input device) is found, the kbd_connect
  * function is called. The function then looks at the device, and if it
@@ -1070,7 +1072,6 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
                 if (!vt->keyboard) {
                         vt->keyboard = handle;
 			handle->private = vt;
-			printk(KERN_INFO "Keyboard input%d attaching to VT\n", dev->number);
 			break;
 		} else 
 			vt = vt->next;
@@ -1078,6 +1079,7 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
 
 	handle->dev = dev;
 	handle->handler = handler;
+	handle->name = kbd_name; /* FIXME, should be vt0, vt1, etc, or similar */
 	input_open_device(handle);
 
 	return handle;
