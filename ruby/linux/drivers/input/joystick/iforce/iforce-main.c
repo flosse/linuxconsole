@@ -44,7 +44,7 @@ static signed short btn_avb_wheel[] =    { BTN_GEAR_DOWN, BTN_GEAR_UP, BTN_BASE,
 static signed short abs_joystick[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, -1 };
 static signed short abs_joystick2[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_RUDDER, ABS_HAT0X, ABS_HAT0Y, -1 };
 static signed short abs_wheel[] =    { ABS_WHEEL, ABS_GAS, ABS_BRAKE, ABS_HAT0X, ABS_HAT0Y, -1 };
-static signed short ff_iforce[] =    { FF_PERIODIC, FF_CONSTANT, FF_SPRING, FF_FRICTION,
+static signed short ff_iforce[] =    { FF_PERIODIC, FF_CONSTANT, FF_SPRING, FF_DAMPER,
 	FF_SQUARE, FF_TRIANGLE, FF_SINE, FF_SAW_UP, FF_SAW_DOWN, FF_GAIN, FF_AUTOCENTER, -1 };
 
 static struct iforce_device iforce_device[] = {
@@ -122,6 +122,10 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 	int ret;
 	int is_update;
 
+/* Check this effect type is supported by this device */
+	if (!test_bit(effect->type, iforce->dev.ffbit))
+		return -EINVAL;
+
 /*
  * If we want to create a new effect, get a free id
  */
@@ -169,7 +173,7 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 			break;
 
 		case FF_SPRING:
-		case FF_FRICTION:
+		case FF_DAMPER:
 			ret = iforce_upload_condition(iforce, effect, is_update);
 			break;
 
@@ -280,7 +284,6 @@ static void iforce_release(struct input_dev *dev)
 		case IFORCE_USB:
 printk(KERN_DEBUG "Unlinking irq URB\n");
 			usb_unlink_urb(&iforce->irq);
-			usb_unlink_urb(&iforce->out);
 
 			/* The device was unplugged before the file
 			 * was released */
