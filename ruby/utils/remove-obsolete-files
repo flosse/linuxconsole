@@ -95,5 +95,6 @@ rm -fv include/video/fbcon-mac.h
 rm -fv include/video/fbcon-vga-planes.h
 rm -fv include/video/fbcon-vga.h
 rm -fv include/video/fbcon.h
+rm -fv include/video/font.h
 rm -fv include/video/sbusfb.h
 rmdir drivers/char/joystick
