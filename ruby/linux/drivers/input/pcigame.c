@@ -1,5 +1,5 @@
 /*
- *  pcigame.c  Version 0.5
+ * $Id$
  *
  *  Copyright (c) 2000 Vojtech Pavlik
  *
@@ -44,66 +44,44 @@
 #include <linux/init.h>
 #include <linux/gameport.h>
 
-struct pcigame;
+#define PCI_VENDOR_ID_AUREAL	0x12eb
+
+#define PCIGAME_4DWAVE		0
+#define PCIGAME_VORTEX		1
+#define PCIGAME_VORTEX2		2
 
 struct pcigame_data {
-	int size;	/* Memory / IO region size */
-	int lcr;	/* Aureal Legacy Control Register */
 	int gcr;	/* Gameport control register */
-	int buttons;	/* Buttons location */
+	int legacy;	/* Legacy port location */
 	int axes;	/* Axes start */
 	int axsize;	/* Axis field size */
 	int axmax;	/* Axis field max value */
-	void (*init)(struct pcigame *);	
-	void (*cleanup)(struct pcigame *);	
+	int adcmode;	/* Value to enable ADC mode in GCR */
 };
+
+static struct pcigame_data pcigame_data[] __devinitdata =
+{{ 0x00030, 0x00031, 0x00034, 2, 0xffff, 0x80 },
+ { 0x1100c, 0x11008, 0x11010, 4, 0x1fff, 0x40 },
+ { 0x2880c, 0x28808, 0x28810, 4, 0x1fff, 0x40 },
+ { 0 }};
 
 struct pcigame {
 	struct gameport gameport;
-	struct pcigame_data *data;
 	struct pci_dev *dev;
         unsigned char *base;
-	__u32 lcr;
+	struct pcigame_data *data;
 };
 
-static void pcigame_4dwave_init(struct pcigame *pcigame)
-{
-	pcigame->base = ioremap(BASE_ADDRESS(pcigame->dev, 1), pcigame->data->size);
-	pci_read_config_word(pcigame->dev, pcigame->data->lcr, (unsigned short *)&pcigame->lcr);
-	pci_write_config_word(pcigame->dev, pcigame->data->lcr, pcigame->lcr & ~0x20);
-	writeb(0x80, pcigame->base + pcigame->data->gcr);
-}
-
-static void pcigame_vortex_init(struct pcigame *pcigame)
-{
-	pcigame->base = ioremap(BASE_ADDRESS(pcigame->dev, 0), pcigame->data->size);
-	pcigame->lcr = readl(pcigame->base + pcigame->data->lcr);
-	writel(pcigame->lcr & ~0x8, pcigame->base + pcigame->data->lcr);
-	writel(0x40, pcigame->base + pcigame->data->gcr);
-}
-
-static void pcigame_4dwave_cleanup(struct pcigame *pcigame)
-{
-	pci_write_config_word(pcigame->dev, pcigame->data->lcr, pcigame->lcr);
-	writeb(0x00, pcigame->base + pcigame->data->gcr);
-	iounmap(pcigame->base);
-}
-
-static void pcigame_vortex_cleanup(struct pcigame *pcigame)
-{
-	writel(pcigame->lcr, pcigame->base + pcigame->data->lcr);
-	writel(0x00, pcigame->base + pcigame->data->gcr);
-	iounmap(pcigame->base);
-}
-
-static int pcigame_open(struct gameport *gameport, int mode)
+static unsigned char pcigame_read(struct gameport *gameport)
 {
 	struct pcigame *pcigame = gameport->driver;
+	return readb(pcigame->base + pcigame->data->legacy);
+}
 
-	if (mode != GAMEPORT_MODE_COOKED)
-		return -1;
-
-	return 0;
+static void pcigame_trigger(struct gameport *gameport)
+{
+	struct pcigame *pcigame = gameport->driver;
+	writeb(0xff, pcigame->base + pcigame->data->legacy);
 }
 
 static int pcigame_cooked_read(struct gameport *gameport, int *axes, int *buttons)
@@ -111,20 +89,46 @@ static int pcigame_cooked_read(struct gameport *gameport, int *axes, int *button
         struct pcigame *pcigame = gameport->driver;
 	int i;
 
-	*buttons = ~readb(pcigame->base + pcigame->data->buttons) >> 4;
-	for (i = 0; i < 4; i++)
+	*buttons = ~readb(pcigame->base + pcigame->data->legacy) >> 4;
+
+	for (i = 0; i < 4; i++) {
 		axes[i] = readw(pcigame->base + pcigame->data->axes + i * pcigame->data->axsize);
+		if (axes[i] == pcigame->data->axmax) axes[i] = -1;
+	}
         
         return 0;
 }
 
+static int pcigame_open(struct gameport *gameport, int mode)
+{
+	struct pcigame *pcigame = gameport->driver;
+
+	switch (mode) {
+		case GAMEPORT_MODE_COOKED:
+			writeb(pcigame->data->adcmode, pcigame->base + pcigame->data->gcr);
+			udelay(10);
+			return 0;
+		case GAMEPORT_MODE_RAW:
+			writeb(0, pcigame->base + pcigame->data->gcr);
+			return 0;
+		default:
+			return -1;
+	}
+
+	return 0;
+}
+
 static int __devinit pcigame_probe(struct pci_dev *dev, const struct pci_device_id *id)
 {
+	struct pcigame *pcigame;
+	int i;
+
 	if (!(pcigame = kmalloc(sizeof(struct pcigame), GFP_KERNEL)))
 		return -1;
         memset(pcigame, 0, sizeof(struct pcigame));
 
-	pcigame->data = (void *) id->driver_data;
+
+	pcigame->data = pcigame_data + id->driver_data;
 
 	pcigame->dev = dev;
 	dev->driver_data = pcigame;
@@ -133,46 +137,48 @@ static int __devinit pcigame_probe(struct pci_dev *dev, const struct pci_device_
 	pcigame->gameport.type = GAMEPORT_EXT;
 	pcigame->gameport.pci = dev;
 	
+	pcigame->gameport.read = pcigame_read;
+	pcigame->gameport.trigger = pcigame_trigger;
 	pcigame->gameport.cooked_read = pcigame_cooked_read;
 	pcigame->gameport.open = pcigame_open;
 
-	data->init(pcigame);
+	for (i = 0; i < 6; i++)
+		if (~pci_resource_flags(dev, i) & IORESOURCE_IO)
+			break;
 
-	sleep_ms(10);
+	pci_enable_device(dev);
 
-	register_gameport(&pcigame.gameport);
+	pcigame->base = ioremap(pci_resource_start(pcigame->dev, i),
+				pci_resource_len(pcigame->dev, i));
+
+	gameport_register_port(&pcigame->gameport);
 	
 	printk(KERN_INFO "gameport%d: %s at pci%02x.%x\n",
-		gameport.number, data->name, PCI_SLOT(dev->devfn), PCI_FUNC(dev->devfn));
+		pcigame->gameport.number, dev->name, PCI_SLOT(dev->devfn), PCI_FUNC(dev->devfn));
 
+	return 0;
 }
 
 static void __devexit pcigame_remove(struct pci_dev *dev)
 {
-	stryct pcigame *pcigame = dev->driver_data;
-	pcigame->data->cleanup(pcigame);
+	struct pcigame *pcigame = dev->driver_data;
+	gameport_unregister_port(&pcigame->gameport);
+	iounmap(pcigame->base);
+	kfree(pcigame);
 }
 
-static struct pcigame_data pcigame_data[] __devinitdata =
-{{ 0x10000, 0x00044 ,0x00030, 0x00031, 0x00034, 2, 0xffff, pcigame_4dwave_init, pcigame_4dwave_exit },
- { 0x40000, 0x1280c, 0x1100c, 0x11008, 0x11010, 4, 0x1fff, pcigame_vortex_init, pcigame_vortex_exit },
- { 0x40000, 0x2a00c, 0x2880c, 0x28808, 0x28810, 4, 0x1fff, pcigame_vortex_init, pcigame_vortex_exit },
- { 0 }};
-
 static struct pci_device_id pcigame_id_table[] __devinitdata =
-{{ PCI_VENDOR_ID_TRIDENT, 0x2000, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (long)(pcigame_data + 0) },
- { PCI_VENDOR_ID_TRIDENT, 0x2001, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (long)(pcigame_data + 0) },
- { PCI_VENDOR_ID_AUREAL,  0x0001, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (long)(pcigame_data + 1) },
- { PCI_VENDOR_ID_AUREAL,  0x0002, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (long)(pcigame_data + 2) },
+{{ PCI_VENDOR_ID_TRIDENT, 0x2000, PCI_ANY_ID, PCI_ANY_ID, 0, 0, PCIGAME_4DWAVE  },
+ { PCI_VENDOR_ID_TRIDENT, 0x2001, PCI_ANY_ID, PCI_ANY_ID, 0, 0, PCIGAME_4DWAVE  },
+ { PCI_VENDOR_ID_AUREAL,  0x0001, PCI_ANY_ID, PCI_ANY_ID, 0, 0, PCIGAME_VORTEX  },
+ { PCI_VENDOR_ID_AUREAL,  0x0002, PCI_ANY_ID, PCI_ANY_ID, 0, 0, PCIGAME_VORTEX2 },
  { 0 }};
 
-static struct pci_driver tulip_driver = {
+static struct pci_driver pcigame_driver = {
 	name:		"pcigame",
 	id_table:	pcigame_id_table,
 	probe:		pcigame_probe,
 	remove:		pcigame_remove,
-	suspend:	pcigame_suspend,
-	resume:		pcigame_resume,
 };
 
 int __init pcigame_init(void)

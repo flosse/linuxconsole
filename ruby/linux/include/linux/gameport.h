@@ -85,22 +85,18 @@ void gameport_unregister_device(struct gameport_dev *dev);
 
 static __inline__ void gameport_trigger(struct gameport *gameport)
 {
-#ifdef CONFIG_GAMEPORT_OTHER
 	if (gameport->trigger)
 		gameport->trigger(gameport);
 	else
-#endif
-	outb(0xff, gameport->io);
+		outb(0xff, gameport->io);
 }
 
 static __inline__ unsigned char gameport_read(struct gameport *gameport)
 {
-#ifdef CONFIG_GAMEPORT_OTHER
 	if (gameport->read)
-		gameport->read(gameport);
+		return gameport->read(gameport);
 	else
-#endif
-	return inb(gameport->io);
+		return inb(gameport->io);
 }
 
 static __inline__ int gameport_cooked_read(struct gameport *gameport, int *axes, int *buttons)

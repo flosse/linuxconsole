@@ -22,7 +22,7 @@ if [ "$CONFIG_INPUT" != "n" ]; then
    comment 'Game port support'
       tristate '  ns558 gameports' CONFIG_INPUT_NS558
       tristate '  PDPI Lightning 4 gamecard' CONFIG_INPUT_LIGHTNING
-      tristate ' *Aureal Vortex and Trident 4DWave gameports' CONFIG_INPUT_PCIGAME
+      tristate '  Aureal Vortex and Trident 4DWave gameports' CONFIG_INPUT_PCIGAME
    
    comment 'PS/2 port input devices'
       tristate '  XT keyboard' CONFIG_INPUT_XTKBD
