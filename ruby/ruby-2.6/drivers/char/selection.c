@@ -12,6 +12,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/console.h>
 #include <linux/tty.h>
 #include <linux/sched.h>
 #include <linux/mm.h>

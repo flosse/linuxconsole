@@ -290,9 +290,10 @@ __setup("fbcon=", fb_console_setup);
  *	Maps a virtual console @unit to a frame buffer device
  *	@newidx.
  */
-int set_con2fb_map(int vt_num, int newidx)
+int set_con2fb_map(int vc_num, int newidx)
 {
         /*FIXME*/
+	con2fb_map[vc_num] = newidx;
 	return 0;
 }
 

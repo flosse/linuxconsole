@@ -1208,7 +1208,7 @@ int mouse_reporting(struct vc_data *vc)
 #define CON_BUF_SIZE	PAGE_SIZE
 DECLARE_MUTEX(con_buf_sem);
 
-static int do_con_write(struct tty_struct * tty, int from_user,
+static int do_con_write(struct tty_struct *tty, int from_user,
 			const unsigned char *buf, int count)
 {
 #ifdef VT_BUF_VRAM_ONLY
@@ -1219,7 +1219,7 @@ static int do_con_write(struct tty_struct * tty, int from_user,
 	draw_x = -1; \
 	}
 #endif
-	struct vc_data *vc = (struct vc_data *)tty->driver_data;
+	struct vc_data *vc = tty->driver_data;
 	unsigned long draw_from = 0, draw_to = 0;
 	const unsigned char *orig_buf = NULL;
 	int c, tc, ok, n = 0, draw_x = -1;
@@ -1404,13 +1404,13 @@ out:
 }
 
 /*
- *	/dev/ttyN handling
+ * /dev/ttyN handling
  */
 
 /* Allocate the console screen memory. */
-static int vt_open(struct tty_struct *tty, struct file * filp)
+static int vt_open(struct tty_struct *tty, struct file *filp)
 {
-	struct vc_data *vc = (struct vc_data *) tty->driver_data;
+	struct vc_data *vc = tty->driver_data;
 	unsigned int index = tty->index;
 
 	if (!vc) {
@@ -1445,7 +1445,7 @@ static void vt_close(struct tty_struct *tty, struct file * filp)
 	        return;
 	}
 
-	vc = (struct vc_data *)tty->driver_data;
+	vc = tty->driver_data;
 	if (vc) {
 		vcs_remove_devfs(tty);
 		vc->vc_tty = NULL;
@@ -1457,7 +1457,7 @@ static void vt_close(struct tty_struct *tty, struct file * filp)
 static int vt_write(struct tty_struct * tty, int from_user,
 		     const unsigned char *buf, int count)
 {
-        struct vc_data *vc = (struct vc_data *) tty->driver_data;
+        struct vc_data *vc = tty->driver_data;
 	int	retval;
 
 	pm_access(vc->display_fg->pm_con);
@@ -1469,10 +1469,10 @@ static int vt_write(struct tty_struct * tty, int from_user,
 
 static void vt_put_char(struct tty_struct *tty, unsigned char ch)
 {
-        struct vc_data *vc = (struct vc_data *) tty->driver_data;
+        struct vc_data *vc = tty->driver_data;
 
 	if (in_interrupt())
-		return;		/* n_r3964 calls put_char() from interrupt context */
+		return;	/* n_r3964 calls put_char() from interrupt context */
 	pm_access(vc->display_fg->pm_con);
 	do_con_write(tty, 0, &ch, 1);
 }
@@ -1486,7 +1486,7 @@ static int vt_write_room(struct tty_struct *tty)
 
 static void vt_flush_chars(struct tty_struct *tty)
 {
-        struct vc_data *vc = (struct vc_data *) tty->driver_data;
+        struct vc_data *vc = tty->driver_data;
 
 	if (in_interrupt())	/* from flush_to_ldisc */
 		return;
@@ -1516,7 +1516,7 @@ static void vt_stop(struct tty_struct *tty)
 	if (!tty)
 		return;
 	
-	vc = (struct vc_data *)tty->driver_data;
+	vc = tty->driver_data;
 	if (!vc)
 		return;
 	set_kbd_led(&vc->kbd_table, VC_SCROLLOCK);
@@ -1532,7 +1532,7 @@ static void vt_start(struct tty_struct *tty)
 	
 	if (!tty)
 		return;
-	vc = (struct vc_data *)tty->driver_data;
+	vc = tty->driver_data;
 	
 	if (!vc) 	
 		return;
@@ -1551,7 +1551,7 @@ static void vt_throttle(struct tty_struct *tty)
 
 static void vt_unthrottle(struct tty_struct *tty)
 {
-	struct vc_data *vc = (struct vc_data *) tty->driver_data;
+	struct vc_data *vc = tty->driver_data;
 
 	wake_up_interruptible(&vc->paste_wait);
 }
@@ -1564,7 +1564,7 @@ static void vt_unthrottle(struct tty_struct *tty)
  * The console must be locked when we get here.
  */
 
-void vt_console_print(struct console *co, const char * b, unsigned count)
+void vt_console_print(struct console *co, const char *b, unsigned count)
 {
 	struct vc_data *vc = find_vc(kmsg_redirect);
 	static unsigned long printing;
@@ -1682,13 +1682,13 @@ struct console vt_console_driver = {
 
 int tioclinux(struct tty_struct *tty, unsigned long arg)
 {
-	struct vc_data *vc = (struct vc_data *) tty->driver_data;
+	struct vc_data *vc = tty->driver_data;
 	char type, data;
 	int lines, ret;
 
 	if (tty->driver->type != TTY_DRIVER_TYPE_CONSOLE)
 		return -EINVAL;
-	if (current->tty != tty && !capable(CAP_SYS_ADMIN))
+	if (current->signal->tty != tty && !capable(CAP_SYS_ADMIN))
 		return -EPERM;
 	if (get_user(type, (char *)arg))
 		return -EFAULT;
@@ -1872,6 +1872,8 @@ int __init vty_init(void)
 	if (list_empty(&vt_list))
 		return -ENXIO;
 	
+	vcs_init();
+
 	console_driver = alloc_tty_driver(MAX_NR_CONSOLES);
 	if (!console_driver)
 		panic("Couldn't allocate VT console driver\n");
@@ -1900,7 +1902,6 @@ int __init vty_init(void)
 #endif
 	kbd_init();
 	console_map_init();
-	vcs_init();
 	return 0;
 }
 
