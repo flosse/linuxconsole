@@ -41,8 +41,16 @@
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 
-MODULE_PARM(js, "2-24i");
-static int js[24] = { -1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0 };
+/*
+ * Option parsing.
+ */
+
+MODULE_PARM(js,"1-16s");
+
+#define ANALOG_PORTS		16
+
+static char *js[ANALOG_PORTS];
+static int analog_options[ANALOG_PORTS];
 
 /*
  * Times, feature definitions.
@@ -51,7 +59,7 @@ static int js[24] = { -1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0 };
 #define ANALOG_RUDDER		0x04
 #define ANALOG_THROTTLE		0x08
 #define ANALOG_AXES_STD		0x0f
-#define ANALOG_BUTTONS_STD	0xf0
+#define ANALOG_BTNS_STD		0xf0
 
 #define ANALOG_BTNS_CHF		0x0100
 #define ANALOG_HAT1_CHF		0x0200
@@ -68,6 +76,9 @@ static int js[24] = { -1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0 };
 #define ANALOG_BTNS_GAMEPAD	0xf000
 #define ANALOG_EXTENSIONS	0xff00
 
+#define ANALOG_GAMEPAD_FLAG0	0x01000000
+#define ANALOG_GAMEPAD_FLAG1	0x10000000
+
 #define ANALOG_MAX_TIME		3	/* 3 ms */
 #define ANALOG_LOOP_TIME	2000	/* 2 * loop */
 #define ANALOG_REFRESH_TIME	HZ/100	/* 10 ms */
@@ -80,10 +91,6 @@ static struct {
 	int x;
 	int y;
 } analog_hat_to_axis[] = {{ 0, 0}, { 0,-1}, { 1, 0}, { 0, 1}, {-1, 0}};
-
-#define ANALOG_BUTTONS 	0
-#define ANALOG_AXES	0
-#define ANALOG_HATS	4
 
 static int analog_axes[] = { ABS_X, ABS_Y, ABS_RUDDER, ABS_THROTTLE };
 static int analog_hats[] = { ABS_HAT0X, ABS_HAT0Y, ABS_HAT1X, ABS_HAT1Y, ABS_HAT2X, ABS_HAT2Y };
@@ -355,25 +362,19 @@ static void analog_calibrate_timer(struct analog_port *port)
 
 static void analog_name(struct analog *analog)
 {
-
-	sprintf(analog->name, "Analog %#x %d-axis %d-button", analog->mask,
-		hweight8(analog->mask & 0x0f),
-		hweight8(analog->mask & 0xf0) + !!(analog->mask & ANALOG_BTNS_CHF) * 2 +
-		       hweight16(analog->mask & ANALOG_BTNS_GAMEPAD));
+	sprintf(analog->name, "Analog %d-axis %d-button", 
+		hweight8(analog->mask & ANALOG_AXES_STD),
+		hweight8(analog->mask & ANALOG_BTNS_STD) + !!(analog->mask & ANALOG_BTNS_CHF) * 2 +
+		hweight16(analog->mask & ANALOG_BTNS_GAMEPAD));
 
 	if (analog->mask & ANALOG_HATS_ALL)
 		sprintf(analog->name, "%s %d-hat",
 			analog->name, hweight16(analog->mask & ANALOG_HATS_ALL));
 
+	if (analog->mask & ANALOG_HAT_FCS) strcat(analog->name, " FCS");
+	if (analog->mask & ANALOG_ANY_CHF) strcat(analog->name, " CHF");
+	
 	strcat(analog->name, (analog->buttons == analog_joy_btn) ? " joystick" : " gamepad");
-
-	if (analog->mask & ANALOG_EXTENSIONS)
-		sprintf(analog->name, "%s with%s%s%s extensions",
-			analog->name,
-			analog->mask & ANALOG_ANY_CHF ? " CHF" : "",
-			analog->mask & ANALOG_HAT_FCS ? " FCS" : "",
-			analog->mask & ANALOG_BTNS_TLR ? (
-			analog->mask & ANALOG_BTNS_TLR2 ? " 8Btn" : " 6Btn" ) : "");
 }
 
 /*
@@ -455,8 +456,7 @@ static void analog_init_device(struct analog_port *port, struct analog *analog)
 
 static int analog_init_masks(struct analog_port *port)
 {
-	int i, j;
-	int mask = port->mask;
+	int i;
 	struct analog *analog = port->analog;
 
 	if (!port->mask)
@@ -464,22 +464,14 @@ static int analog_init_masks(struct analog_port *port)
 
 	if ((port->mask & 3) != 3 && port->mask != 0xc) {
 		printk(KERN_WARNING "analog: Unknown joystick device found  "
-			"(data=%#x), probably not analog joystick.\n", mask);
+			"(data=%#x), probably not analog joystick.\n", port->mask);
 		return -1;
 	}
 
-	analog[0].mask = 0xff;
-	analog[0].buttons = analog_joy_btn;
+	i = port->gameport->number < ANALOG_PORTS ? analog_options[port->gameport->number] : 0xff;
 
-	for (i = 0; i < 24; i += 3)
-		if (js[i] == port->gameport->number) {
-			for (j = 0; j < 2; j++) {
-				analog[j].mask = js[i + j + 1];
-				analog[j].buttons = (analog[j].mask & ANALOG_BTNS_GAMEPAD)
-						  ? analog_pad_btn : analog_joy_btn;
-			}
-			break;
-		}
+	analog[0].mask = i & 0xffff;
+	analog[0].buttons = (i & ANALOG_GAMEPAD_FLAG0) ? analog_pad_btn : analog_joy_btn;
 
 	analog[0].mask &= ~(ANALOG_AXES_STD | ANALOG_HAT_FCS | ANALOG_BTNS_GAMEPAD)
 			| port->mask | ((port->mask << 8) & ANALOG_HAT_FCS)
@@ -494,8 +486,11 @@ static int analog_init_masks(struct analog_port *port)
 			| (((~analog[0].mask & ANALOG_BTNS_TLR ) >> 10)
 			&  ((~analog[0].mask & ANALOG_BTNS_TLR2) >> 12));
 
+	analog[1].mask = (i >> 16) & 0xff;
+	analog[1].buttons = (i & ANALOG_GAMEPAD_FLAG1) ? analog_pad_btn : analog_joy_btn;
+
 	analog[1].mask &= (analog[0].mask & ANALOG_EXTENSIONS) ? 0 
-			: ((ANALOG_BUTTONS_STD | mask) & ~analog[0].mask);
+			: ((ANALOG_BTNS_STD | port->mask) & ~analog[0].mask);
 
 	for (i = 0; i < 4; i++) 
 		port->initial[i] = port->axes[i];
@@ -564,6 +559,56 @@ static void analog_disconnect(struct gameport *gameport)
 	kfree(port);
 }
 
+struct analog_types {
+	char *name;
+	int value;
+};
+
+struct analog_types analog_types[] = {
+	{ "none",	0x00000000 },
+	{ "auto",	0x000000ff },
+	{ "2btn",	0x0000003f },
+	{ "4btn",	0x000000ff },
+	{ "twojoy",	0x00cc0033 },
+	{ "twopad",	0x11cc0033 },
+	{ "fcs",	0x000008f7 },
+	{ "chf",	0x000002ff },
+	{ "fullchf",	0x000007ff },
+	{ "gamepad",	0x010030f3 },
+	{ "gamepad8",	0x0100f0f3 },
+	{ NULL, 0 }
+};
+
+static void analog_parse_options(void)
+{
+	int i, j;
+	char *end;
+
+	for (i = 0; i < ANALOG_PORTS && js[i]; i++) {
+
+		for (j = 0; analog_types[j].name; j++)
+			if (!strcmp(analog_types[j].name, js[i])) {
+				analog_options[i] = analog_types[j].value;
+				break;
+			} 
+		if (analog_types[j].name) continue;
+
+		analog_options[i] = simple_strtoul(js[i], &end, 0);
+		if (end != js[i]) continue;
+
+		analog_options[i] = 0xff;
+		if (!strlen(js[i])) continue;
+
+		printk(KERN_WARNING "analog: Bad config for port %d - \"%s\"\n", i, js[i]);
+	}
+
+	for (; i < ANALOG_PORTS; i++)
+		analog_options[i] = 0xff;
+
+	for (i = 0; i < ANALOG_PORTS; i++)
+		printk("%d -> %#x\n", i, analog_options[i]);
+}
+
 /*
  * The gameport device structure.
  */
@@ -573,18 +618,27 @@ static struct gameport_dev analog_dev = {
 	disconnect:	analog_disconnect,
 };
 
+#ifndef MODULE
 static int __init analog_setup(char *str)
 {
-	int i;
-	int ints[25];
-	str = get_options(str, ARRAY_SIZE(ints), ints);
-	for (i = 0; i <= ints[0] && i < 24; i++) js[i] = ints[i+1];
+	char *s = str;
+	int i = 0;
+
+	if (!str || !*str) return 0;
+
+	while ((str = s) && (i < ANALOG_PORTS)) {
+		if ((s = strchr(str,',')) *s++ = 0;
+		js[i++] = str;
+	}
+
 	return 1;
 }
 __setup("js=", analog_setup);
+#endif
 
 int __init analog_init(void)
 {
+	analog_parse_options();
 	gameport_register_device(&analog_dev);
 	return 0;
 }
