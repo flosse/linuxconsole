@@ -293,6 +293,9 @@ static void a3d_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 		/* Fill the input structures */
 
+		a3d->dev.open = a3d_open;
+		a3d->dev.close = a3d_close;
+
 	} else {
 		a3d->length = 29;
 
@@ -301,6 +304,9 @@ static void a3d_connect(struct gameport *gameport, struct gameport_dev *dev)
 		a3d->adc.open = a3d_adc_open;
 		a3d->adc.close = a3d_adc_close;
 		a3d->adc.cooked_read = a3d_adc_cooked_read;
+	
+		a3d->dev.open = a3d_open;
+		a3d->dev.close = a3d_close;
 
 		gameport_register_port(&a3d->adc);
 		printk(KERN_INFO "gameport%d: %s ADC gameport on gameport%d\n",

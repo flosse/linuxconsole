@@ -341,7 +341,7 @@ static void analog_calibrate_timer(struct analog_port *port)
 		if ((t = DELTA(t2,t1) - DELTA(t3,t2)) < tx) tx = t;
 	}
 
-        port->loop = (ANALOG_LOOP_TIME * t) / 50000;
+        port->loop = (ANALOG_LOOP_TIME * tx) / 50000;
 	port->timeout = (ANALOG_MAX_TIME * port->speed) / 1000;
 }
 

@@ -161,23 +161,6 @@ static unsigned char handle_diacr(unsigned char);
 
 /* kbd_pt_regs - set by keyboard_interrupt(), used by show_ptregs() */
 struct pt_regs * kbd_pt_regs;
-
-#ifdef CONFIG_MAGIC_SYSRQ
-
-unsigned char kbd_sysrq_xlate[KEY_MAX] =
-	"\000\0331234567890-=\177\t"                    /* 0x00 - 0x0f */
-	"qwertyuiop[]\r\000as"                          /* 0x10 - 0x1f */
-	"dfghjkl;'`\000\\zxcv"                          /* 0x20 - 0x2f */
-	"bnm,./\000*\000 \000\201\202\203\204\205"      /* 0x30 - 0x3f */
-	"\206\207\210\211\212\000\000789-456+1"         /* 0x40 - 0x4f */
-	"230\177\000\000\213\214\000\000\000\000\000\000\000\000\000\000" /* 0x50 - 0x5f */
-	"\r\000/";                                      /* 0x60 - 0x6f */
-
-static int sysrq_pressed = 0;
-int sysrq_enabled = 1;
-
-#endif
-
 static struct pm_dev *pm_kbd = NULL;
 
 /*
@@ -203,51 +186,64 @@ void to_utf8(ushort c) {
 
 #ifdef CONFIG_INPUT
 
-static int sysrq_alt = 0;
 
-#if defined(CONFIG_X86) || defined(CONFIG_IA64) || defined(CONFIG_ALPHA)
+#if defined(CONFIG_X86) || defined(CONFIG_IA64) || defined(CONFIG_ALPHA) || defined(CONFIG_MIPS)
 
-static unsigned char x86_e0s[] = 
-	{ 0x1c, 0x1d, 0x35, 0x2a, 0x38, 0x39, 0x47, 0x48,
-	  0x49, 0x4b, 0x4d, 0x4f, 0x50, 0x51, 0x52, 0x53,
-	  0x26, 0x25, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x00,
-	  0x23, 0x24, 0x25, 0x26, 0x27 };
+static int x86_sysrq_alt = 0;
 
+static unsigned short x86_keycodes[256] =
+	{ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+	 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+	 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+	 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
+	 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79,
+	 80, 81, 82, 83, 89, 85, 86, 87, 88,115,119,120,121,375,123, 90,
+	284,285,309,298,312, 91,327,328,329,331,333,335,336,337,338,339,
+	367,294,293,286,350, 92,334,512,116,377,109,111,373,347,348,349,
+	360, 93, 94, 95, 98,376,100,101,357,316,354,304,289,102,351,355,
+	103,104,105,275,281,272,306,106,274,107,288,364,358,363,362,361,
+	291,108,381,290,287,292,279,305,280, 99,112,257,258,113,270,114,
+	118,117,125,374,379,259,260,261,262,263,264,265,266,267,268,269,
+	271,273,276,277,278,282,283,295,296,297,299,300,301,302,303,307,
+	308,310,313,314,315,317,318,319,320,321,322,323,324,325,326,330,
+	332,340,341,342,343,344,345,346,356,359,365,368,369,370,371,372 };
 
-void emulate_raw(unsigned int keycode, unsigned char upflag)
+static int emulate_raw(unsigned int keycode, unsigned char upflag)
 {
-	if (keycode >= 189) {
-  		printk(KERN_WARNING "keyboard.c: can't emulate keycode %d\n", keycode);
-		return; 
-	} else if (keycode >= 162) {
-		put_queue(0xe0);
-		put_queue((keycode - 161) | upflag);
-	} else if (keycode >= 125) {
-		put_queue(0xe0);
-		put_queue((keycode - 34) | upflag);
-	} else if (keycode == 119) {
+	if (keycode > 255 || !x86_keycodes[keycode])
+		return -1; 
+
+	if (keycode == KEY_PAUSE) {
 		put_queue(0xe1);
 		put_queue(0x1d | upflag);
 		put_queue(0x45 | upflag);
-	} else if (keycode >= 96) {
-		if (keycode == 99 && sysrq_alt) {
-			 put_queue(84 | upflag);
-		} else {
-			put_queue(0xe0);
-			put_queue(x86_e0s[keycode - 96] | upflag);
-			if (keycode == 99) {
-				put_queue(0xe0);
-				put_queue(0x37 | upflag);
-			}
-		}
-	} else if (keycode == 84) {
-		put_queue(43 | upflag);
-	} else put_queue(keycode | upflag);
+		return 0;
+	} 
+
+	if (keycode == KEY_SYSRQ && x86_sysrq_alt) {
+		put_queue(0x54 | upflag);
+		return 0;
+	}
+
+	if (x86_keycodes[keycode] & 0x100)
+		put_queue(0xe0);
+
+	put_queue((x86_keycodes[keycode] & 0x7f) | upflag);
+
+	if (keycode == KEY_SYSRQ) {
+		put_queue(0xe0);
+		put_queue(0x37 | upflag);
+	}
+
+	if (keycode == KEY_LEFTALT || keycode == KEY_RIGHTALT)
+		x86_sysrq_alt = !upflag;
+
+	return 0;
 }
 
-#elif CONFIG_ADB_KEYBOARD
+#elif defined(CONFIG_ADB_KEYBOARD)
 
-static unsigned char mac_keycodes[256] =
+static unsigned char mac_keycodes[128] =
 	{ 0, 53, 18, 19, 20, 21, 23, 22, 26, 28, 25, 29, 27, 24, 51, 48,
 	 12, 13, 14, 15, 17, 16, 32, 34, 31, 35, 33, 30, 36, 54,128,  1,
 	  2,  3,  5,  4, 38, 40, 37, 41, 39, 50, 56, 42,  6,  7,  8,  9,
@@ -257,25 +253,37 @@ static unsigned char mac_keycodes[256] =
 	 76,125, 75,105,124,  0,115, 62,116, 59, 60,119, 61,121,114,117,
 	  0,  0,  0,  0,127, 81,  0,113,  0,  0,  0,  0,  0, 55, 55 };
 
-void emulate_raw(unsigned int code, unsigned char upflag)
+static int emulate_raw(unsigned int code, unsigned char upflag)
 {
-	if (keycode < 128 && mac_keycodes[keycode]) 
-		put_queue((mac_keycodes[keycode] & 0x7f) | upflag);
-	else
-		printk(KERN_WARNING "keyboard.c: can't emulate keycode %d\n", keycode);
+	if (keycode > 127 || !mac_keycodes[keycode])
+		return -1;
+
+	put_queue((mac_keycodes[keycode] & 0x7f) | upflag);
+	return 0;
 }
 
 #else
-#error "Cannot generate rawmode keyboard for your architecture yet."
+
+#warning "Cannot generate rawmode keyboard for your architecture yet."
+
+void emulate_raw(unsigned int code, unsigned char upflag)
+{
+	if (keycode > 127)
+		return -1;
+
+	put_queue(keycode | upflag);
+	return 0;
+}
+
 #endif
 
 void kbd_event(struct input_handle *handle, unsigned int event_type, unsigned int keycode, int down)
 {
-	char up_flag = !down << 7;
-	char raw_mode;
+	unsigned short keysym, *key_map;
+	unsigned char type, raw_mode;
+	int shift_final;
 
 	if (event_type != EV_KEY) return;
-	if (keycode == KEY_LEFTALT || keycode == KEY_RIGHTALT) sysrq_alt = down;
 
 	pm_access(pm_kbd);
 
@@ -283,7 +291,8 @@ void kbd_event(struct input_handle *handle, unsigned int event_type, unsigned in
 	tasklet_schedule(&console_tasklet);
 	add_keyboard_randomness(keycode ^ (down << 7));
 
-	tty = ttytab? ttytab[fg_console]: NULL;
+	tty = ttytab ? ttytab[fg_console] : NULL;
+
 	if (tty && (!tty->driver_data)) {
 		/*
 		 * We touch the tty structure via the the ttytab array
@@ -294,24 +303,12 @@ void kbd_event(struct input_handle *handle, unsigned int event_type, unsigned in
 		 */
 		tty = NULL;
 	}
+
 	kbd = kbd_table + fg_console;
 
 	if ((raw_mode = (kbd->kbdmode == VC_RAW)))
-		emulate_raw(keycode, !down << 7);
-
-	rep = (down == 2);
-
-#ifdef CONFIG_MAGIC_SYSRQ		/* Handle the SysRq Hack */
-	if (sysrq_enabled && keycode == KEY_SYSRQ && sysrq_alt) {
-		sysrq_pressed = down;
-		return;
-	} 
-	if (sysrq_pressed && down) {
-		if (keycode < 128)
-			handle_sysrq(kbd_sysrq_xlate[keycode], kbd_pt_regs, kbd, tty);
-		return;
-	}
-#endif
+		if (emulate_raw(keycode, !down << 7))
+			printk(KERN_WARNING "keyboard.c: can't emulate rawmode for keycode %d\n", keycode);
 
 	if (kbd->kbdmode == VC_MEDIUMRAW) {
 		/*
@@ -333,52 +330,56 @@ void kbd_event(struct input_handle *handle, unsigned int event_type, unsigned in
 		raw_mode = 1;	/* Most key classes will be ignored */
 	}
 
-	/*
-	 *  Repeat a key only if the input buffers are empty or the
-	 *  characters get echoed locally. This makes key repeat usable
-	 *  with slow applications and under heavy loads.
-	 */
-	if (!rep || (vc_kbd_mode(kbd,VC_REPEAT) && tty &&
-	     (L_ECHO(tty) || (tty->driver.chars_in_buffer(tty) == 0)))) {
-		u_short keysym;
-		u_char type;
+	rep = (down == 2);
 
-		/* the XOR below used to be an OR */
-		int shift_final = (shift_state | kbd->slockstate) ^
-		    kbd->lockstate;
-		ushort *key_map = key_maps[shift_final];
+	if (rep && (!vc_kbd_mode(kbd, VC_REPEAT) || !tty || 
+		(!L_ECHO(tty) && tty->driver.chars_in_buffer(tty)))) {
+		/*
+		 *  Don't repeat a key if the input buffers are not empty and the
+		 *  characters get aren't echoed locally. This makes key repeat usable
+		 *  with slow applications and under heavy loads.
+		 */
+		return;
+	}
 
-		if (key_map != NULL) {
-			keysym = key_map[keycode];
-			type = KTYP(keysym);
+	shift_final = (shift_state | kbd->slockstate) ^ kbd->lockstate;
+	key_map = key_maps[shift_final];
 
-			if (type >= 0xf0) {
-			    type -= 0xf0;
-			    if (raw_mode && ! (TYPES_ALLOWED_IN_RAW_MODE & (1 << type)))
-				return;
-			    if (type == KT_LETTER) {
-				type = KT_LATIN;
-				if (vc_kbd_led(kbd, VC_CAPSLOCK)) {
-				    key_map = key_maps[shift_final ^ (1<<KG_SHIFT)];
-				    if (key_map)
-				      keysym = key_map[keycode];
-				}
-			    }
-			    (*key_handler[type])(keysym & 0xff, !(down << 7));
-			    if (type != KT_SLOCK)
-			      kbd->slockstate = 0;
-			} else {
-			    /* maybe only if (kbd->kbdmode == VC_UNICODE) ? */
-			    if (!up_flag && !raw_mode)
-			      to_utf8(keysym);
-			}
-		} else {
-			/* maybe beep? */
-			/* we have at least to update shift_state */
-			compute_shiftstate();
-			kbd->slockstate = 0; /* play it safe */
+	if (!key_map) {
+		/*
+		 * no keymap for this shift_state
+		 * we have at least to update shift_state
+		 */
+		compute_shiftstate();
+		kbd->slockstate = 0; /* play it safe */
+		return;
+	}
+
+	keysym = key_map[keycode];
+	type = KTYP(keysym);
+
+	if (type < 0xf0) {
+		if (down && !raw_mode) to_utf8(keysym);
+		return;
+	}
+
+    	type -= 0xf0;
+
+	if (raw_mode && !(TYPES_ALLOWED_IN_RAW_MODE & (1 << type)))
+		return;
+
+	if (type == KT_LETTER) {
+		type = KT_LATIN;
+		if (vc_kbd_led(kbd, VC_CAPSLOCK)) {
+			key_map = key_maps[shift_final ^ (1 << KG_SHIFT)];
+			if (key_map)
+				keysym = key_map[keycode];
 		}
 	}
+
+	(*key_handler[type])(keysym & 0xff, !(down << 7));
+	if (type != KT_SLOCK)
+		kbd->slockstate = 0;
 }
 
 #endif
@@ -937,14 +938,14 @@ static inline unsigned char getleds(void){
 
 #ifdef CONFIG_INPUT
 
-static int kbd_connect(struct input_handler *handler, struct input_dev *dev)
+static struct input_handle *kbd_connect(struct input_handler *handler, struct input_dev *dev)
 {
 	struct input_handle *handle;
 	int i;
 
-	if (!test_bit(EV_KEY, dev->evbit)) return -1;
+	if (!test_bit(EV_KEY, dev->evbit)) return NULL;
 	for (i = KEY_RESERVED; i < BTN_MISC; i++) if (test_bit(i, dev->keybit)) break;
-	if (i == BTN_MISC) return -1;
+	if (i == BTN_MISC) return NULL;
 
 	if (!(handle = kmalloc(sizeof(struct input_handle), GFP_KERNEL))) return -1;
 	memset(handle, 0, sizeof(struct input_handle));
@@ -953,7 +954,7 @@ static int kbd_connect(struct input_handler *handler, struct input_dev *dev)
 	handle->handler = handler;
 	input_open_device(handle);
 	printk("keyboard.c: Adding keyboard: input%d\n", dev->number);
-	return 0;
+	return handle;
 }
 
 static void kbd_disconnect(struct input_handle *handle)

@@ -32,8 +32,6 @@
 #include <linux/input.h>
 #include <linux/serio.h>
 
-#include "atkbd.h"
-
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
 MODULE_PARM(atkbd_set, "1i");
 
@@ -89,6 +87,24 @@ static unsigned char atkbd_set3_keycode[512] = {
 	252,253,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
 	254,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255
 };
+
+#define ATKBD_CMD_SETLEDS	0x10ed
+#define ATKBD_CMD_GSCANSET	0x11f0
+#define ATKBD_CMD_SSCANSET	0x10f0
+#define ATKBD_CMD_GETID		0x02f2
+#define ATKBD_CMD_ENABLE	0x00f4
+#define ATKBD_CMD_RESET_DIS	0x00f5
+#define ATKBD_CMD_SETALL_MB	0x00f8
+
+#define ATKBD_RET_ACK		0xfa
+#define ATKBD_RET_NAK		0xfe
+
+#define ATKBD_KEY_UNKNOWN	  0
+#define ATKBD_KEY_BAT		251
+#define ATKBD_KEY_EMUL0		252
+#define ATKBD_KEY_EMUL1		253
+#define ATKBD_KEY_RELEASE	254
+#define ATKBD_KEY_NULL		255
 
 /*
  * The atkbd control structure

@@ -32,9 +32,21 @@
 #include <linux/serio.h>
 #include <linux/init.h>
 
-#include "psmouse.h"
-
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+
+#define PSMOUSE_CMD_SETSCALE11	0x00e6
+#define PSMOUSE_CMD_SETRES	0x10e8
+#define PSMOUSE_CMD_GETINFO	0x03e9
+#define PSMOUSE_CMD_SETSTREAM	0x00ea
+#define PSMOUSE_CMD_POLL	0x03eb	
+#define PSMOUSE_CMD_GETID	0x01f2
+#define PSMOUSE_CMD_SETRATE	0x10f3
+#define PSMOUSE_CMD_ENABLE	0x00f4
+#define PSMOUSE_CMD_RESET_DIS	0x00f6
+
+#define PSMOUSE_RET_BAT		0xaa
+#define PSMOUSE_RET_ACK		0xfa
+#define PSMOUSE_RET_NAK		0xfe
 
 struct psmouse {
 	struct input_dev dev;
@@ -183,7 +195,7 @@ static void psmouse_interrupt(struct serio *serio, unsigned char data, unsigned 
 		return;
 	}
 
-	if (psmouse->pktcnt == 1 && psmouse->packet[0] == 0xaa) {
+	if (psmouse->pktcnt == 1 && psmouse->packet[0] == PSMOUSE_RET_BAT) {
 		queue_task(&psmouse->tq, &tq_immediate);
 		mark_bh(IMMEDIATE_BH);
 		return;
@@ -426,7 +438,7 @@ static int psmouse_probe(struct psmouse *psmouse)
  * in case of an IntelliMouse in 4-byte mode.
  */
 
-	param[0] = param[1] = 0xaa;
+	param[0] = param[1] = 0xa5;
 
 	if (psmouse_command(psmouse, param, PSMOUSE_CMD_GETID))
 		return -1;
@@ -507,7 +519,7 @@ static void psmouse_powerup(void *data)
 {
         struct psmouse *psmouse = data;
 
-	if (psmouse->packet[0] == 0xaa && (psmouse->pktcnt == 1 ||
+	if (psmouse->packet[0] == PSMOUSE_RET_BAT && (psmouse->pktcnt == 1 ||
 	   (psmouse->pktcnt == 2 && psmouse->packet[1] == 0x00))) {
 		serio_rescan(psmouse->serio);
 	}

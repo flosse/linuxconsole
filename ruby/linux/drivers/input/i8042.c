@@ -350,10 +350,6 @@ static void i8042_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 
 	spin_lock_irqsave(&i8042_lock, flags);
 
-#ifdef CONFIG_VT
-	kbd_pt_regs = regs;
-#endif
-
 	while ((str = inb(I8042_STATUS_REG)) & I8042_STR_OBF) {
 
 		data = inb(I8042_DATA_REG);
@@ -383,10 +379,6 @@ static void i8042_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 			}
 		}
 	}
-
-#ifdef CONFIG_VT
-	kbd_pt_regs = NULL;
-#endif
 
 	spin_unlock_irqrestore(&i8042_lock, flags);
 }

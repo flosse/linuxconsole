@@ -42,7 +42,7 @@ obj-	:=
 
 ifeq ($(CONFIG_USB_SERIAL),y)
 	SUB_DIRS += serial
-	obj-y += serial/usb-serial.o
+	obj-y += serial/serial.o
 else
 	ifeq ($(CONFIG_USB_SERIAL),m)
 		MOD_IN_SUB_DIRS += serial
@@ -61,9 +61,10 @@ obj-$(CONFIG_USB_SCANNER)	+= scanner.o
 obj-$(CONFIG_USB_ACM)		+= acm.o
 obj-$(CONFIG_USB_PRINTER)	+= printer.o
 obj-$(CONFIG_USB_AUDIO)		+= audio.o
+obj-$(CONFIG_USB_CPIA)		+= cpia.o
 obj-$(CONFIG_USB_IBMCAM)	+= ibmcam.o
 obj-$(CONFIG_USB_DC2XX)		+= dc2xx.o
-obj-$(CONFIG_USB_MDC800)	+= mdc800.o
+obj-$(CONFIG_USB_MDC800)   += mdc800.o
 obj-$(CONFIG_USB_STORAGE)	+= usb-storage.o
 obj-$(CONFIG_USB_USS720)	+= uss720.o
 obj-$(CONFIG_USB_DABUSB)	+= dabusb.o

@@ -32,8 +32,6 @@
 #include <linux/input.h>
 #include <linux/serio.h>
 
-#include "sunkbd.h"
-
 static unsigned char sunkbd_keycode[128] = {
 	  0,128,114,129,115, 59, 60, 68, 61, 87, 62, 88, 63,100, 64,  0,
 	 65, 66, 67, 56,103,119, 99, 70,105,130,131,108,106,  1,  2,  3,
@@ -44,6 +42,22 @@ static unsigned char sunkbd_keycode[128] = {
 	104,137, 69, 42, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54,101,
 	 79, 80, 81,  0,  0,  0,138, 58,125, 57,126,109,  0, 78
 };
+
+#define SUNKBD_CMD_RESET	0x1
+#define SUNKBD_CMD_BELLON	0x2
+#define SUNKBD_CMD_BELLOFF	0x3
+#define SUNKBD_CMD_CLICK	0xa
+#define SUNKBD_CMD_NOCLICK	0xb
+#define SUNKBD_CMD_SETLED	0xe
+#define SUNKBD_CMD_LAYOUT	0xf
+
+#define SUNKBD_RET_RESET	0xff
+#define SUNKBD_RET_ALLUP	0x7f
+#define SUNKBD_RET_LAYOUT	0xfe
+
+#define SUNKBD_LAYOUT_5_MASK	0x20
+#define SUNKBD_RELEASE		0x80
+#define SUNKBD_KEY		0x7f
 
 /*
  * Per-keyboard data.

@@ -73,7 +73,7 @@ if [ "$CONFIG_INPUT" != "n" ]; then
          bool '  ATI XL variant' CONFIG_INPUT_ATIXL
       fi
       tristate '  Logitech busmouse' CONFIG_INPUT_LOGIBM
-      tristate '  IBM PC110 touchpad' CONFIG_INPUT_PC100PAD
+      tristate '  IBM PC110 touchpad' CONFIG_INPUT_PC110PAD
       tristate '  Amiga keyboard' CONFIG_INPUT_AMIKBD
       tristate '  Amiga mouse' CONFIG_INPUT_AMIMOUSE
       tristate '  Amiga joystick' CONFIG_INPUT_AMIJOY
@@ -83,17 +83,10 @@ if [ "$CONFIG_INPUT" != "n" ]; then
       tristate '  Acorn RiscPC mouse' CONFIG_INPUT_RPCMOUSE
       tristate ' *Acorn A5000 keyboard' CONFIG_INPUT_ARCKBD
       
-   
    comment 'Userland interfaces'
       tristate '  Mouse interface' CONFIG_INPUT_MOUSEDEV
-      if [ "$CONFIG_INPUT_MOUSEDEV" != "n" ]; then
-         bool '    Mix all mice into one device' CONFIG_INPUT_MOUSEDEV_MIX
-         bool '    Support for digitizers' CONFIG_INPUT_MOUSEDEV_DIGITIZER
-         if [ "$CONFIG_INPUT_MOUSEDEV_DIGITIZER" != "n" ]; then
-            int '     Horizontal screen resolution' CONFIG_INPUT_MOUSEDEV_SCREEN_X 1024
-            int '     Vertical screen resolution' CONFIG_INPUT_MOUSEDEV_SCREEN_Y  768
-         fi
-      fi
+         int '   Horizontal screen resolution' CONFIG_INPUT_MOUSEDEV_SCREEN_X 1024
+         int '   Vertical screen resolution' CONFIG_INPUT_MOUSEDEV_SCREEN_Y  768
       tristate '  Joystick interface' CONFIG_INPUT_JOYDEV
       tristate '  Event interface' CONFIG_INPUT_EVDEV
       tristate '  Event logging' CONFIG_INPUT_EVBUG

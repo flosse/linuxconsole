@@ -46,12 +46,14 @@ EXPORT_SYMBOL(input_close_device);
 EXPORT_SYMBOL(input_event);
 
 #define INPUT_MAJOR	13
+#define INPUT_DEVICES	256
 
 static struct input_dev *input_dev = NULL;
 static struct input_handler *input_handler = NULL;
 static struct input_handler *input_table[8] = { NULL, /* ... */ };
 static devfs_handle_t input_devfs_handle = NULL;
 static int input_number = 0;
+static long input_devices[NBITS(INPUT_DEVICES)] = { 0, /* ... */ };
 
 void input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {
@@ -145,7 +147,8 @@ void input_event(struct input_dev *dev, unsigned int type, unsigned int code, in
  */
 
 	while (handle) {
-		handle->handler->event(handle, type, code, value);
+		if (handle->open)
+			handle->handler->event(handle, type, code, value);
 		handle = handle->dnext;
 	}
 }
@@ -157,9 +160,50 @@ static void input_repeat_key(unsigned long data)
 	mod_timer(&dev->timer, jiffies + dev->rep[REP_PERIOD]);
 }
 
+int input_open_device(struct input_handle *handle)
+{
+	printk("opening dev: %d\n", handle->dev->number);
+	handle->open++;
+	if (handle->dev->open)
+		return handle->dev->open(handle->dev);
+	return 0;
+}
+
+void input_close_device(struct input_handle *handle)
+{
+	printk("closing dev: %d\n", handle->dev->number);
+	if (handle->dev->close)
+		handle->dev->close(handle->dev);
+	handle->open--;
+}
+
+static void input_link_handle(struct input_handle *handle)
+{
+	handle->dnext = handle->dev->handle;
+	handle->hnext = handle->handler->handle;
+	handle->dev->handle = handle;
+	handle->handler->handle = handle;
+}
+
+static void input_unlink_handle(struct input_handle *handle)
+{
+	struct input_handle **handleptr;
+
+	handleptr = &handle->dev->handle;
+	while (*handleptr && (*handleptr != handle))
+		handleptr = &((*handleptr)->dnext);
+	*handleptr = (*handleptr)->dnext;
+
+	handleptr = &handle->handler->handle;
+	while (*handleptr && (*handleptr != handle))
+		handleptr = &((*handleptr)->hnext);
+	*handleptr = (*handleptr)->hnext;
+}
+
 void input_register_device(struct input_dev *dev)
 {
 	struct input_handler *handler = input_handler;
+	struct input_handle *handle;
 
 /*
  * Initialize repeat timer to default values.
@@ -175,17 +219,25 @@ void input_register_device(struct input_dev *dev)
  * Add the device.
  */
 
-	MOD_INC_USE_COUNT;
-	dev->number = input_number++;
+	if (input_number >= INPUT_DEVICES) {
+		printk(KERN_WARNING "input: ran out of input device numbers!\n");
+		dev->number = input_number;
+	} else {
+		dev->number = find_first_zero_bit(input_devices, INPUT_DEVICES);
+		set_bit(dev->number, input_devices);
+	}
+		
 	dev->next = input_dev;	
 	input_dev = dev;
+	input_number++;
 
 /*
  * Notify handlers.
  */
 
 	while (handler) {
-		handler->connect(handler, dev);
+		if ((handle = handler->connect(handler, dev)))
+			input_link_handle(handle);
 		handler = handler->next;
 	}
 }
@@ -206,6 +258,7 @@ void input_unregister_device(struct input_dev *dev)
  */
 
 	while (handle) {
+		input_unlink_handle(handle);
 		handle->handler->disconnect(handle);
 		handle = handle->dnext;
 	}
@@ -219,12 +272,15 @@ void input_unregister_device(struct input_dev *dev)
 	*devptr = (*devptr)->next;
 
 	input_number--;
-	MOD_DEC_USE_COUNT;
+
+	if (dev->number < INPUT_DEVICES)
+		clear_bit(dev->number, input_devices);
 }
 
 void input_register_handler(struct input_handler *handler)
 {
 	struct input_dev *dev = input_dev;
+	struct input_handle *handle;
 
 /*
  * Add minors if needed.
@@ -245,7 +301,8 @@ void input_register_handler(struct input_handler *handler)
  */
 
 	while (dev) {
-		handler->connect(handler, dev);
+		if ((handle = handler->connect(handler, dev)))
+			input_link_handle(handle);
 		dev = dev->next;
 	}
 }
@@ -260,6 +317,7 @@ void input_unregister_handler(struct input_handler *handler)
  */
 
 	while (handle) {
+		input_unlink_handle(handle);
 		handler->disconnect(handle);
 		handle = handle->hnext;
 	}
@@ -279,44 +337,6 @@ void input_unregister_handler(struct input_handler *handler)
 
 	if (handler->fops != NULL)
 		input_table[handler->minor >> 5] = NULL;
-}
-
-void input_open_device(struct input_handle *handle)
-{
-	handle->dnext = handle->dev->handle;
-	handle->hnext = handle->handler->handle;
-	handle->dev->handle = handle;
-	handle->handler->handle = handle;
-
-	if (handle->dev->open)
-		handle->dev->open(handle->dev);
-}
-
-void input_close_device(struct input_handle *handle)
-{
-	struct input_handle **handleptr;
-
-	if (handle->dev->close)
-		handle->dev->close(handle->dev);
-/*
- * Remove from device list of handles.
- */
-
-	handleptr = &handle->dev->handle;
-
-	while (*handleptr && (*handleptr != handle))
-		handleptr = &((*handleptr)->dnext);
-	*handleptr = (*handleptr)->dnext;
-
-/*
- * Remove from handler list of handles.
- */
-
-	handleptr = &handle->handler->handle;
-
-	while (*handleptr && (*handleptr != handle))
-		handleptr = &((*handleptr)->hnext);
-	*handleptr = (*handleptr)->hnext;
 }
 
 static int input_open_file(struct inode *inode, struct file *file)
