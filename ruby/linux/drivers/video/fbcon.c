@@ -242,11 +242,12 @@ static const char *fbcon_startup(struct vt_struct *vt, int init)
     /* We trust the driver supplied us with a vaild resolution */	
     if (info->fbops->fb_set_par)
 	info->fbops->fb_set_par(info);	
-    
-    if ((fb_alloc_cmap(&info->cmap, 0, 0)))
-	return NULL;
-    fb_set_cmap(&info->cmap, 1, info);	
 
+    /* clear out the cmap so we don't have dangling pointers */
+    info->cmap.red = info->cmap.green = NULL;
+    info->cmap.blue = info->cmap.transp = NULL;
+    info->cmap.len = 0;
+ 
     /* Create the default cursor 	
     info->cursor.set = FB_CUR_SETALL;
     info->cursor.enable = 1;
@@ -598,34 +599,28 @@ static int fbcon_resize(struct vc_data *vc,unsigned int rows,unsigned int cols)
 static int fbcon_set_palette(struct vc_data *vc, unsigned char *table)
 {
     struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;	
-    struct fb_cmap palette_cmap;	
     int size, i, j, k;
     u8 val;
 
     if (info->var.bits_per_pixel <= 4)
-    	palette_cmap.len = 1<<info->var.bits_per_pixel;
+    	size = 1<<info->var.bits_per_pixel;
     else
-        palette_cmap.len = 16;
-    size = palette_cmap.len * sizeof(u16);
-    palette_cmap.start = 0;
-    if (!(palette_cmap.red = kmalloc(size, GFP_ATOMIC)))
-    	return -1;
-    if (!(palette_cmap.green = kmalloc(size, GFP_ATOMIC)))
-        return -1;
-    if (!(palette_cmap.blue = kmalloc(size, GFP_ATOMIC)))
-        return -1;
-    palette_cmap.transp = NULL;
-	
-    for (i = j = 0; i < palette_cmap.len; i++) {
+        size = 16;
+     
+    if (fb_alloc_cmap(&info->cmap, size, 0))
+	return -1;  
+
+    for (i = j = 0; i < info->cmap.len; i++) {
     	k = table[i];
 	val = vc->vc_palette[j++];
-	palette_cmap.red[k] = (val<<8)|val;
+	info->cmap.red[k] = (val<<8)|val;
 	val = vc->vc_palette[j++];
-	palette_cmap.green[k] = (val<<8)|val;
+	info->cmap.green[k] = (val<<8)|val;
 	val = vc->vc_palette[j++];
-	palette_cmap.blue[k] = (val<<8)|val;
+	info->cmap.blue[k] = (val<<8)|val;
     }
-    return fb_set_cmap(&palette_cmap, 1, info);
+    info->cmap.transp = NULL;
+    return fb_set_cmap(&info->cmap, 1, info);
 }
 
 static int fbcon_scroll(struct vc_data *vc, int lines)
