@@ -404,6 +404,22 @@ static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char 
 		case 0x02:	/* status report */
 
 			input_report_key(dev, BTN_DEAD, data[0] & 0x02);
+
+			/* Check if an effect was just started or stopped */
+			i = data[1] & 0x7f;
+			if (data[1] & 0x80) {
+				if (!test_and_set_bit(FF_CORE_IS_PLAYED, iforce->core_effects[i].flags)) {
+				/* Report play event */
+printk(KERN_DEBUG "iforce.c: effect %d started to play\n", i);
+				}
+			}
+			else {
+				if (test_and_clear_bit(FF_CORE_IS_PLAYED, iforce->core_effects[i].flags)) {
+				/* Report stop event */
+printk(KERN_DEBUG "iforce.c: effect %d stopped to play\n", i);
+				}
+			}
+
 			break;
 	}
 }
