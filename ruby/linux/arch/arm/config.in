@@ -414,6 +414,11 @@ if [ "$CONFIG_ISDN" != "n" ]; then
 fi
 endmenu
 
+#
+# input before char - char depends on it.
+#
+source drivers/usb/Config.in
+source drivers/input/Config.in
 source drivers/char/Config.in
 source fs/Config.in
 
@@ -432,8 +437,7 @@ if [ "$CONFIG_ARCH_ACORN" = "y" -o \
    endmenu
 fi
 
-source drivers/usb/Config.in
-source drivers/input/Config.in
+source drivers/media/Config.in
 source drivers/video/Config.in   
 
 mainmenu_option next_comment
