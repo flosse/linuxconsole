@@ -57,6 +57,11 @@
      *  Even less warranty that it actually works :-)
      */
 
+/*
+ *  If your driver supports multiple boards, you should make the  
+ *  below data types arrays, or allocate them dynamically (using kmalloc()). 
+ */ 
+
 /* 
  * This structure defines the hardware state of the graphics card. Normally
  * you place this in a header file in linux/include/video. This file usually
@@ -110,7 +115,7 @@ int xxxfb_init(void);
 int xxxfb_setup(char*);
 
 /**
- *      xxxfb_check_var - REQUIRED function. Validates a var passed in. 
+ *      xxxfb_check_var - Optional function. Validates a var passed in. 
  *      @var: frame buffer variable screen structure
  *      @info: frame buffer structure that represents a single frame buffer 
  *
@@ -122,7 +127,8 @@ int xxxfb_setup(char*);
  *	modedb.c is a example of this. If the var passed in is slightly 
  *	off by what the hardware can support then we alter the var PASSED in
  *	to what we can do. If the hardware doesn't support mode change 
- * 	just return a -EINVAL;
+ * 	a -EINVAL will be returned by the upper layers. You don't need to 
+ *	implement this function then.
  *
  *	Returns negative errno on error, or zero on success.
  */
@@ -134,7 +140,7 @@ static int xxxfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 }
 
 /**
- *      xxxfb_set_par - NOT a required function. Alters the hardware state.
+ *      xxxfb_set_par - Optional function. Alters the hardware state.
  *      @info: frame buffer structure that represents a single frame buffer
  *
  *	Using the fb_var_screeninfo in fb_info we set the resolution of the
@@ -152,7 +158,7 @@ static void xxxfb_set_par(struct fb_info *info)
 }
 
 /**
- *  	xxxfb_setcolreg - REQUIRED function. Sets a color register.
+ *  	xxxfb_setcolreg - Optional function. Sets a color register.
  *      @regno: boolean, 0 copy local, 1 get_user() function
  *      @red: frame buffer colormap structure
  *	@green: The green value which can be up to 16 bits wide 
@@ -168,7 +174,8 @@ static void xxxfb_set_par(struct fb_info *info)
  *	which we store the value in pseudo_palette in struct fb_info. For
  *	pseudocolor mode we have a limited color palette. To deal with this
  *	we can program what color is displayed for a particular pixel value.
- *	DirectColor is similar in that we can program each color field. 
+ *	DirectColor is similar in that we can program each color field. If
+ *	we have a static colormap we don't need to implement this function. 
  * 
  *	Returns negative errno on error, or zero on success.
  */
@@ -193,7 +200,7 @@ static int xxxfb_setcolreg(unsigned regno, unsigned red, unsigned green,
      *   var->{color}.length contains length of bitfield
      *   {hardwarespecific} contains width of DAC
      *   cmap[X] is programmed to (X << red.offset) | (X << green.offset) | (X << blue.offset)
-     *   DAC[X] is programmed to (red, green, blue)
+     *   RAMDAC[X] is programmed to (red, green, blue)
      *
      * Pseudocolor:
      *    uses offset = 0 && length = DAC register width.
@@ -202,12 +209,12 @@ static int xxxfb_setcolreg(unsigned regno, unsigned red, unsigned green,
      *    cmap is not used
      *    DAC[X] is programmed to (red, green, blue)
      * Truecolor:
-     *    does not use DAC.
+     *    does not use RAMDAC (usually has 3 of them).
      *    var->{color}.offset contains start of bitfield
      *    var->{color}.length contains length of bitfield
      *    cmap is programmed to (red << red.offset) | (green << green.offset) |
      *                      (blue << blue.offset) | (transp << transp.offset)
-     *    DAC does not exist
+     *    RAMDAC does not exist
      */
 #define CNVT_TOHW(val,width) ((((val)<<(width))+0x7FFF-(val))>>16)
     switch (info->fix.visual) {
@@ -240,10 +247,20 @@ static int xxxfb_setcolreg(unsigned regno, unsigned red, unsigned green,
            (green << info->var.green.offset) |
            (blue << info->var.blue.offset) |
            (transp << info->var.transp.offset);
-       if (info->var.bits_per_pixel == 16)
-           ((u16*)(info->pseudo_palette))[regno] = v;
-       else
-           ((u32*)(info->pseudo_palette))[regno] = v;
+
+       switch (info->var.bits_per_pixel) {
+		case 8:
+			/* Yes some hand held devices have this. */ 
+           		((u8*)(info->pseudo_palette))[regno] = v;
+			break;	
+   		case 16:
+           		((u16*)(info->pseudo_palette))[regno] = v;
+			break;
+		case 24:
+		case 32:	
+           		((u32*)(info->pseudo_palette))[regno] = v;
+			break;
+       }
        return 0;
     }
     /* ... */
