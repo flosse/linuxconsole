@@ -602,7 +602,7 @@ static int tdfxfb_set_par(struct fb_info *info)
   }
 
   hd  = wd = (hdispend >> 3) - 1;
-  hs  = (hsynsta >> 3) - 1;
+  hs  = (hsyncsta >> 3) - 1;
   he  = (hsyncend >> 3) - 1;
   ht  = (htotal >> 3) - 1;
   hbs = hd;
@@ -611,7 +611,7 @@ static int tdfxfb_set_par(struct fb_info *info)
   vbs = vd = info->var.yres - 1;
   vs  = vd + info->var.lower_margin;
   ve  = vs + info->var.vsync_len;
-  vbe = vt  = ve + info->var.upper_margin - 1;
+  vbe = vt = ve + info->var.upper_margin - 1;
   
   /* this is all pretty standard VGA register stuffing */
   reg.misc[0x00] = 
