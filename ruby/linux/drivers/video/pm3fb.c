@@ -1024,6 +1024,8 @@ static void pm3fb_detect(void)
 /* common initialisation */
 static void pm3fb_common_init(struct pm3fb_info *l_fb_info)
 {
+	struct fb_cmap *cmap;
+
 	DTRACE;
 
 	DPRINTK(2, "Initializing board #%ld @ %lx\n", l_fb_info->board_num,
@@ -1067,7 +1069,10 @@ static void pm3fb_common_init(struct pm3fb_info *l_fb_info)
 		l_fb_info->current_par->f_fb_info->var.bits_per_pixel = depth2bpp(depth[l_fb_info->board_num]);
 	}
 
-	fb_copy_cmap(fb_default_cmap(16),&(l_fb_info->current_par->f_fb_info->cmap), 0);
+	cmap = &(l_fb_info->current_par->f_fb_info->cmap);
+	cmap->red = cmap->green = cmap->blue = cmap->transp = NULL;
+	cmap->len = 0; cmap->start = 0;
+	fb_alloc_cmap(cmap, 16, 0);
 	
 	pm3fb_set_par((struct fb_info*)l_fb_info);
 
