@@ -376,19 +376,15 @@ static void vga16fb_fillrect(struct fb_info *info, int x1, int y1,
 	char *where;
         int x;
 
-	vga_wgfx(regs, VGA_GFX_MODE, 0);	
+	vga_wgfx(regs, VGA_GFX_MODE, 2);	
 	vga_wgfx(regs, VGA_GFX_DATA_ROTATE, 0);
-	vga_wgfx(regs, VGA_GFX_SR_ENABLE, 0xf);
-	vga_wgfx(regs, VGA_GFX_SR_VALUE, color);
 	vga_wgfx(regs, VGA_GFX_BIT_MASK, 0xff);
 
         where = info->screen_base + x1 + y1 * info->fix.line_length;
-        
+       
+	wmb(); 
 	while (height--) {
-                for (x = 0; x < width; x++) {
-                        fb_writeb(0, where);
-                        where++;
-                }
+		fb_memset(where, color, width);
                 where += line_ofs;
         }
 	return;
