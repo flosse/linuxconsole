@@ -134,8 +134,8 @@ main(int argc, char **argv)
 		return(0);
 	}	
 	nsx = sx; nsy = sy;
-	fbca.width = width + 1;
-	fbca.height = height + 1;
+	fbca.width = wi + 1;
+	fbca.height = he + 1;
 	while (((nsx + wi) < fb_var.xres) ||
 	       ((nsy + he) < fb_var.yres))
 	{
