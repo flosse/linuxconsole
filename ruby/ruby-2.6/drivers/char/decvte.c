@@ -1019,7 +1019,6 @@ void vte_ris(struct vc_data *vc, int do_clear)
 	    vc->kbd_table.default_ledflagstate = KBD_DEFLEDS;
 	vc->kbd_table.modeflags = KBD_DEFMODE;
 	vc->kbd_table.kbdmode = VC_XLATE;
-	set_leds();
 
 	cursor_type = CUR_DEFAULT;
 	complement_mask = s_complement_mask;
