@@ -1,4 +1,6 @@
 /*
+ * $id$
+ *
  * Tests the force feedback driver
  * Copyright 2001-2002 Johann Deneux <deneux@ifrance.com>
  */
@@ -37,7 +39,16 @@
 #define LONG(x) ((x)/BITS_PER_LONG)
 #define test_bit(bit, array)    ((array[LONG(bit)] >> OFF(bit)) & 1)
 
-#define N_EFFECTS 5
+#define N_EFFECTS 6
+
+char* effect_names[] = {
+	"Sine vibration",
+	"Constant Force",
+	"Spring Condition",
+	"Damping Condition",
+	"Strong Rumble",
+	"Weak Rumble"
+};
 
 int main(int argc, char** argv)
 {
@@ -101,24 +112,6 @@ int main(int argc, char** argv)
 
 	printf("%d\n", n_effects);
 
-	/* download a constant effect */
-	effects[1].type = FF_CONSTANT;
-	effects[1].id = -1;
-	effects[1].u.constant.level = 0x2000;	/* Strength : 25 % */
-	effects[1].direction = 0x6000;	/* 135 degrees */
-	effects[1].u.constant.envelope.attack_length = 0x100;
-	effects[1].u.constant.envelope.attack_level = 0;
-	effects[1].u.constant.envelope.fade_length = 0x100;
-	effects[1].u.constant.envelope.fade_level = 0;
-	effects[1].trigger.button = 0;
-	effects[1].trigger.interval = 0;
-	effects[1].replay.length = 20000;  /* 20 seconds */
-	effects[1].replay.delay = 0;
-
-	if (ioctl(fd, EVIOCSFF, &effects[1]) == -1) {
-		perror("Upload effects[1]");
-	}
-
 	/* download a periodic sinusoidal effect */
 	effects[0].type = FF_PERIODIC;
 	effects[0].id = -1;
@@ -139,6 +132,24 @@ int main(int argc, char** argv)
 
 	if (ioctl(fd, EVIOCSFF, &effects[0]) == -1) {
 		perror("Upload effects[0]");
+	}
+	
+	/* download a constant effect */
+	effects[1].type = FF_CONSTANT;
+	effects[1].id = -1;
+	effects[1].u.constant.level = 0x2000;	/* Strength : 25 % */
+	effects[1].direction = 0x6000;	/* 135 degrees */
+	effects[1].u.constant.envelope.attack_length = 0x100;
+	effects[1].u.constant.envelope.attack_level = 0;
+	effects[1].u.constant.envelope.fade_length = 0x100;
+	effects[1].u.constant.envelope.fade_level = 0;
+	effects[1].trigger.button = 0;
+	effects[1].trigger.interval = 0;
+	effects[1].replay.length = 20000;  /* 20 seconds */
+	effects[1].replay.delay = 0;
+
+	if (ioctl(fd, EVIOCSFF, &effects[1]) == -1) {
+		perror("Upload effects[1]");
 	}
 
 	/* download an condition spring effect */
@@ -179,11 +190,26 @@ int main(int argc, char** argv)
 		perror("Upload effects[3]");
 	}
 
+	/* a strong rumbling effect */
 	effects[4].type = FF_RUMBLE;
-	
+	effects[4].id = -1;
+	effects[4].u.rumble.strong_magnitude = 0x8000;
+	effects[4].u.rumble.weak_magnitude = 0;
+
 	if (ioctl(fd, EVIOCSFF, &effects[4]) == -1) {
 		perror("Upload effects[4]");
 	}
+
+	/* a weak rumbling effect */
+	effects[5].type = FF_RUMBLE;
+	effects[5].id = -1;
+	effects[5].u.rumble.strong_magnitude = 0;
+	effects[5].u.rumble.weak_magnitude = 0xc000;
+
+	if (ioctl(fd, EVIOCSFF, &effects[5]) == -1) {
+		perror("Upload effects[5]");
+	}
+
 
 	/* Ask user what effects to play */
 	do {
@@ -198,6 +224,8 @@ int main(int argc, char** argv)
 				perror("Play effect");
 				exit(1);
 			}
+
+			printf("Now Playing: %s\n", effect_names[i]);
 		}
 		else {
 			printf("No such effect\n");
