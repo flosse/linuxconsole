@@ -17,8 +17,6 @@ export-objs     :=	vt.o keyboard.o sysrq.o \
 			sonypi.o tty_io.o tty_ioctl.o generic_serial.o rtc.o \
 			ip2main.o
 
-mod-subdirs	:=	ftape drm pcmcia
-
 ifeq ($(CONFIG_DECSTATION),y)
   SERIAL   = decserial.o
 endif

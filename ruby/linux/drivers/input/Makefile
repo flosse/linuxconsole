@@ -4,7 +4,6 @@
 
 # Objects that export symbols.
 
-mod-subdirs	:= joystick keyboard mouse touchscreen 
 export-objs	:= input.o
 
 # Each configuration option enables a list of files.

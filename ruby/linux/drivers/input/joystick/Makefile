@@ -2,8 +2,6 @@
 # Makefile for the input core drivers.
 #
 
-mod-subdirs	:= iforce
-
 # Each configuration option enables a list of files.
 
 obj-$(CONFIG_JOYSTICK_A3D)		+= a3d.o

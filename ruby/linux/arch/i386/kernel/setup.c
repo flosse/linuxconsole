@@ -31,6 +31,7 @@
 #endif
 #include <linux/bootmem.h>
 #include <linux/seq_file.h>
+#include <linux/root_dev.h>
 #include <linux/highmem.h>
 #include <asm/e820.h>
 #include <asm/mpspec.h>
@@ -599,7 +600,7 @@ void __init setup_arch(char **cmdline_p)
 	visws_get_board_type_and_rev();
 #endif
 
- 	ROOT_DEV = to_kdev_t(ORIG_ROOT_DEV);
+ 	ROOT_DEV = ORIG_ROOT_DEV;
  	drive_info = DRIVE_INFO;
  	screen_info = SCREEN_INFO;
 	apm_info.bios = APM_BIOS_INFO;
@@ -882,7 +883,6 @@ void __init setup_arch(char **cmdline_p)
 	low_mem_size = ((max_low_pfn << PAGE_SHIFT) + 0xfffff) & ~0xfffff;
 	if (low_mem_size > pci_mem_start)
 		pci_mem_start = low_mem_size;
-
 	dmi_scan_machine();
 }
 

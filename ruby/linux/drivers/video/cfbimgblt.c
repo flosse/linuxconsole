@@ -98,7 +98,7 @@ void cfb_imageblit(struct fb_info *p, struct fb_image *image)
 				end_mask = 0;
 		
 				for (k = ppw; k > 0; k--) {	
-					if (test_bit(l, src))
+					if (test_bit(l, (unsigned long *) src))
 						end_mask |= (tmp >> (p->var.bits_per_pixel*(k-1)));
 					l--;
 					if (l < 0) { l = 7; src++; }
@@ -110,7 +110,7 @@ void cfb_imageblit(struct fb_info *p, struct fb_image *image)
 			if (n) {
 				end_mask = 0;	
 				for (j = n; j > 0; j--) {
-					if (test_bit(l, src))
+					if (test_bit(l, (unsigned long *) src))
 						end_mask |= (tmp >> (p->var.bits_per_pixel*(j-1)));
 					l--;
 					if (l < 0) { l = 7; src++; }

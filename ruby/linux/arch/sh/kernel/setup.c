@@ -31,6 +31,7 @@
 #include <linux/bootmem.h>
 #include <linux/ctype.h>
 #include <linux/seq_file.h>
+#include <linux/root_dev.h>
 #include <asm/processor.h>
 #include <asm/page.h>
 #include <asm/pgtable.h>
@@ -273,7 +274,7 @@ void __init setup_arch(char **cmdline_p)
 	sh_console_init();
 #endif
 	
-	ROOT_DEV = to_kdev_t(ORIG_ROOT_DEV);
+	ROOT_DEV = ORIG_ROOT_DEV;
 
 #ifdef CONFIG_BLK_DEV_RAM
 	rd_image_start = RAMDISK_FLAGS & RAMDISK_IMAGE_START_MASK;
