@@ -2,9 +2,11 @@
 #define _GAMEPORT_H
 
 /*
- * gameport.h  Version 0.1
+ * $Id$
  *
- * Copyright (C) 1999 Vojtech Pavlik
+ *  Copyright (c) 1999-2000 Vojtech Pavlik
+ *
+ *  Sponsored by SuSE
  */
 
 /*
@@ -83,6 +85,15 @@ void gameport_unregister_device(struct gameport_dev *dev);
 #define GAMEPORT_ISA       0
 #define GAMEPORT_PNP       1
 #define GAMEPORT_EXT       2
+
+#define GAMEPORT_ID_VENDOR_ANALOG	0x0001
+#define GAMEPORT_ID_VENDOR_MADCATZ	0x0002
+#define GAMEPORT_ID_VENDOR_LOGITECH	0x0003
+#define GAMEPORT_ID_VENDOR_CREATIVE	0x0004
+#define GAMEPORT_ID_VENDOR_GENIUS	0x0005
+#define GAMEPORT_ID_VENDOR_INTERACT	0x0006
+#define GAMEPORT_ID_VENDOR_MICROSOFT	0x0007
+#define GAMEPORT_ID_VENDOR_THRUSTMASTER	0x0008
 
 static __inline__ void gameport_trigger(struct gameport *gameport)
 {

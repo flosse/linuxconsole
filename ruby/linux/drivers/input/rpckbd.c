@@ -1,5 +1,5 @@
 /*
- *  rpckbd.c  Version 0.1
+ * $Id$
  *
  *  Copyright (c) 2000 Vojtech Pavlik
  *
@@ -10,7 +10,7 @@
  */
 
 /*
- * Acorn RiscPC PS/2 keyboard controller driber for Linux/ARM
+ * Acorn RiscPC PS/2 keyboard controller driver for Linux/ARM
  */
 
 /*

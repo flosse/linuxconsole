@@ -2,9 +2,11 @@
 #define _SERIO_H
 
 /*
- * serio.h  Version 0.1
+ * $Id$
  *
  * Copyright (C) 1999 Vojtech Pavlik
+ *
+ * Sponsored by SuSE
  */
 
 /*

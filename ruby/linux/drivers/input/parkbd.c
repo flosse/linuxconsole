@@ -1,9 +1,13 @@
 /*
- *  parkbd.c  Version 0.1
+ * $Id$
  *
- *  Copyright (c) 1999 Vojtech Pavlik
+ *  Copyright (c) 1999-2000 Vojtech Pavlik
  *
- *  Parallel port to Keyboard port adapter driver
+ *  Sponsored by SuSE
+ */
+
+/*
+ *  Parallel port to Keyboard port adapter driver for Linux
  */
 
 /*

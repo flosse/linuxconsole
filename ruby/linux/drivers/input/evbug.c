@@ -1,9 +1,13 @@
 /*
- *  evbug.c  Version 0.1
+ * $Id$
  *
- *  Copyright (c) 1999 Vojtech Pavlik
+ *  Copyright (c) 1999-2000 Vojtech Pavlik
  * 
- *  Input driver event debug module - dumps all events into syslog.
+ *  Sponsored by SuSE
+ */
+
+/*
+ *  Input driver event debug module - dumps all events into syslog
  */
 
 /*

@@ -2,9 +2,11 @@
 #define _I8042_H
 
 /*
- * i8042.h  Version 0.1
+ * $Id$
  *
- * Copyright (C) 1999 Vojtech Pavlik
+ *  Copyright (c) 1999-2000 Vojtech Pavlik
+ *
+ *  Sponsored by SuSE
  */
 
 /*

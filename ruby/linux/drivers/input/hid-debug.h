@@ -1,5 +1,5 @@
 /*
- *  driver/usb/hid-debug.h
+ * $Id$
  *
  *  (c) 1999 Andreas Gal	<gal@cs.uni-magdeburg.de>
  *  (c) 2000 Vojtech Pavlik	<vojtech@suse.cz>

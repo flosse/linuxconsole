@@ -2,11 +2,11 @@
 #define _LINUX_JOYSTICK_H
 
 /*
- * /usr/include/linux/joystick.h  Version 2.0
+ * $Id$
  *
- * Copyright (C) 1996-1999 Vojtech Pavlik
+ *  Copyright (C) 1996-2000 Vojtech Pavlik
  *
- * Sponsored by SuSE
+ *  Sponsored by SuSE
  */
 
 /*

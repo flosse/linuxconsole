@@ -1,9 +1,13 @@
 /*
- *  i8042.c  Version 0.1
+ * $Id$
  *
- *  Copyright (c) 1999 Vojtech Pavlik
+ *  Copyright (c) 1999-2000 Vojtech Pavlik
  *
- *  Driver for the i8042 keyboard and mouse controller
+ *  Sponsored by SuSE
+ */
+
+/*
+ *  8042 keyboard and mouse controller driver for Linux
  */
 
 /*

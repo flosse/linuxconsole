@@ -419,8 +419,10 @@ struct input_event {
 #define BUS_ISA			0x10
 #define BUS_I8042		0x11
 #define BUS_XTKBD		0x12
-#define BUS_SERIAL		0x13
+#define BUS_RS232		0x13
 #define BUS_GAMEPORT		0x14
+#define BUS_PARPORT		0x15
+#define BUS_AMIGA		0x16
 
 #ifdef __KERNEL__
 

@@ -1,9 +1,13 @@
 /*
- *  ct82c710.c  Version 0.1
+ * $Id$
  *
- *  Copyright (c) 1999 Vojtech Pavlik
+ *  Copyright (c) 1999-2000 Vojtech Pavlik
  *
- *  Driver for the 82C710 C&T mouse port chip
+ *  Sponsored by SuSE
+ */
+
+/*
+ *  82C710 C&T mouse port chip driver for Linux
  */
 
 /*
