@@ -130,7 +130,7 @@ if [ "$CONFIG_FB" = "y" ]; then
       tristate '  ATI Rage 128 display support (EXPERIMENTAL)' CONFIG_FB_ATY128
       tristate '  3Dfx acceleration support' CONFIG_FB_TDFX 
       if [ "$CONFIG_FB_TDFX" != "n" ]; then		
-      	 bool '  Voodoo 1 display support (EXPERIMENTAL)' CONFIG_FB_SSTB	
+      	 bool '  Voodoo 1 display support (EXPERIMENTAL)' CONFIG_FB_SST	
          bool '  3Dfx Banshee/Voodoo3 display support (EXPERIMENTAL)' CONFIG_FB_3DFX
       fi	
       tristate '  SIS 630/540 display support (EXPERIMENTAL)' CONFIG_FB_SIS
@@ -227,7 +227,7 @@ comment 'Console drivers'
       bool 'Video mode selection support' CONFIG_VIDEO_SELECT
       tristate 'MDA text console (EXPERIMENTAL)' CONFIG_MDA_CONSOLE
    fi
-   bool 'Dummy console support' CONFIG_DUMMY_CONSOLE	
+   #bool 'Dummy console support' CONFIG_DUMMY_CONSOLE	
    if [ "$CONFIG_PCI" = "y" ]; then
       tristate 'NVIDIA hardware text console' CONFIG_NVIDIA_CONSOLE
    fi
