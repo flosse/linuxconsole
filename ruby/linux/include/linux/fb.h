@@ -237,16 +237,14 @@ struct fb_vblank {
 
 #ifdef __KERNEL__
 
-#if 1 /* to go away in 2.5.0 */
-extern int GET_FB_IDX(kdev_t rdev);
-#else
 #define GET_FB_IDX(node)	(MINOR(node))
-#endif
 
 #include <linux/fs.h>
 #include <linux/init.h>
 #include <linux/devfs_fs_kernel.h>
 
+#define ROP_COPY 0
+#define ROP_XOR  1
 
 struct fb_info;
 struct vm_area_struct;
@@ -292,7 +290,6 @@ struct fb_ops {
 };
 
 struct fb_info {
-   char modename[40];			/* default video mode */
    kdev_t node;
    int flags;
    int open;                            /* Has this been open already ? */
@@ -303,7 +300,6 @@ struct fb_info {
    struct fb_cmap cmap;                 /* Current cmap */
    struct fb_ops *fbops;
    char *screen_base;                   /* Virtual address */
-   char fontname[40];			/* default font name */
    devfs_handle_t devfs_handle;         /* Devfs handle for new name         */
    devfs_handle_t devfs_lhandle;        /* Devfs handle for compat. symlink  */
    void *pseudo_palette;                /* Fake palette of 16 colors and 
@@ -317,6 +313,42 @@ struct fb_info {
 #define FBINFO_FLAG_DEFAULT	FBINFO_FLAG_MODULE
 #else
 #define FBINFO_FLAG_DEFAULT	0
+#endif
+
+#if defined(__sparc__)
+
+/* We map all of our framebuffers such that big-endian accesses
+ * are what we want, so the following is sufficient.
+ */
+
+#define fb_readb sbus_readb
+#define fb_readw sbus_readw
+#define fb_readl sbus_readl
+#define fb_writeb sbus_writeb
+#define fb_writew sbus_writew
+#define fb_writel sbus_writel
+#define fb_memset sbus_memset_io
+
+#elif defined(__i386__) || defined(__alpha__)
+
+#define fb_readb __raw_readb
+#define fb_readw __raw_readw
+#define fb_readl __raw_readl
+#define fb_writeb __raw_writeb
+#define fb_writew __raw_writew
+#define fb_writel __raw_writel
+#define fb_memset memset_io
+
+#else
+
+#define fb_readb(addr) (*(volatile u8 *) (addr))
+#define fb_readw(addr) (*(volatile u16 *) (addr))
+#define fb_readl(addr) (*(volatile u32 *) (addr))
+#define fb_writeb(b,addr) (*(volatile u8 *) (addr) = (b))
+#define fb_writew(b,addr) (*(volatile u16 *) (addr) = (b))
+#define fb_writel(b,addr) (*(volatile u32 *) (addr) = (b))
+#define fb_memset memset
+
 #endif
 
     /*
