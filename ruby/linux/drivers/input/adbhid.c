@@ -28,8 +28,7 @@
  *
  * To do:
  *
- * Improve Kensignton support, add MacX support as a dynamic
- * option (not a compile-time option).
+ * Improve Kensington support.
  */
 
 #include <linux/config.h>
@@ -42,7 +41,9 @@
 #include <linux/adb.h>
 #include <linux/cuda.h>
 #include <linux/pmu.h>
+#ifdef CONFIG_PMAC_BACKLIGHT
 #include <asm/backlight.h>
+#endif
 
 MODULE_AUTHOR("Franz Sirl <Franz.Sirl-kernel@lauterbach.com>");
 
@@ -53,8 +54,6 @@ MODULE_AUTHOR("Franz Sirl <Franz.Sirl-kernel@lauterbach.com>");
 static int adb_message_handler(struct notifier_block *, unsigned long, void *);
 static struct notifier_block adbhid_adb_notifier = {
 	notifier_call:	adb_message_handler,
-	next:		NULL,
-	priority:	0
 };
 
 unsigned char adb_to_linux_keycodes[128] = {
@@ -83,7 +82,7 @@ static struct adbhid *adbhid[16] = { 0 };
 
 static void adbhid_probe(void);
 
-static inline void input_keycode(int, int, int);
+static void adbhid_input_keycode(int, int, int);
 static void leds_done(struct adb_request *);
 
 static void init_trackpad(int id);
@@ -115,21 +114,27 @@ static struct adb_ids buttons_ids;
 #define ADBMOUSE_MACALLY2	9	/* MacAlly 2-button mouse */
 
 static void
-keyboard_input(unsigned char *data, int nb, struct pt_regs *regs, int apoll)
+adbhid_keyboard_input(unsigned char *data, int nb, struct pt_regs *regs, int apoll)
 {
 	int id = (data[0] >> 4) & 0x0f;
+
+	if (!adbhid[id]) {
+		printk(KERN_ERR "ADB HID on ID %d not yet registered, packet %#02x, %#02x, %#02x, %#02x\n",
+		       id, data[0], data[1], data[2], data[3]);
+		return;
+	}
 
 	/* first check this is from register 0 */
 	if (nb != 3 || (data[0] & 3) != KEYB_KEYREG)
 		return;		/* ignore it */
 	kbd_pt_regs = regs;
-	input_keycode(id, data[1], 0);
+	adbhid_input_keycode(id, data[1], 0);
 	if (!(data[2] == 0xff || (data[2] == 0x7f && data[1] == 0x7f)))
-		input_keycode(id, data[2], 0);
+		adbhid_input_keycode(id, data[2], 0);
 }
 
-static inline void
-input_keycode(int id, int keycode, int repeat)
+static void
+adbhid_input_keycode(int id, int keycode, int repeat)
 {
 	int up_flag;
 
@@ -137,7 +142,7 @@ input_keycode(int id, int keycode, int repeat)
 	keycode &= 0x7f;
 
 	switch (keycode) {
-	case 0x39: /* Generate down/up events for everytime. */
+	case 0x39: /* Generate down/up events for CapsLock everytime. */
 		input_report_key(&adbhid[id]->input, KEY_CAPSLOCK, 1);
 		input_report_key(&adbhid[id]->input, KEY_CAPSLOCK, 0);
 		return;
@@ -154,9 +159,14 @@ input_keycode(int id, int keycode, int repeat)
 }
 
 static void
-mouse_input(unsigned char *data, int nb, struct pt_regs *regs, int autopoll)
+adbhid_mouse_input(unsigned char *data, int nb, struct pt_regs *regs, int autopoll)
 {
 	int id = (data[0] >> 4) & 0x0f;
+
+	if (!adbhid[id]) {
+		printk(KERN_ERR "ADB HID on ID %d not yet registered\n", id);
+		return;
+	}
 
   /*
     Handler 1 -- 100cpi original Apple mouse protocol.
@@ -245,9 +255,14 @@ mouse_input(unsigned char *data, int nb, struct pt_regs *regs, int autopoll)
 }
 
 static void
-buttons_input(unsigned char *data, int nb, struct pt_regs *regs, int autopoll)
+adbhid_buttons_input(unsigned char *data, int nb, struct pt_regs *regs, int autopoll)
 {
 	int id = (data[0] >> 4) & 0x0f;
+
+	if (!adbhid[id]) {
+		printk(KERN_ERR "ADB HID on ID %d not yet registered\n", id);
+		return;
+	}
 
 	switch (adbhid[id]->original_handler_id) {
 	default:
@@ -257,7 +272,7 @@ buttons_input(unsigned char *data, int nb, struct pt_regs *regs, int autopoll)
 		break;
 	case 0x1f: /* Powerbook button device */
 	  {
-#ifdef CONFIG_ADB_PMU
+#ifdef CONFIG_PMAC_BACKLIGHT
 		int backlight = get_backlight_level();
 
 		/*
@@ -265,51 +280,35 @@ buttons_input(unsigned char *data, int nb, struct pt_regs *regs, int autopoll)
 		 *  -- Cort
 		 */
 
-		switch (data[1]&0xf ) {
-		/* mute */
-		case 0x8:
-			/* down event */
-			if ( data[1] == (data[1]&0xf) ) {
-			}
+		switch (data[1]) {
+		case 0x8:	/* mute */
 			break;
-		/* contrast decrease */
-		case 0x7:
-			/* down event */
-			if ( data[1] == (data[1]&0xf) ) {
-			}
+
+		case 0x7:	/* contrast decrease */
 			break;
-		/* contrast increase */
-		case 0x6:
-			/* down event */
-			if ( data[1] == (data[1]&0xf) ) {
-			}
+
+		case 0x6:	/* contrast increase */
 			break;
-		/* brightness decrease */
-		case 0xa:
+
+		case 0xa:	/* brightness decrease */
 			if (backlight < 0)
 				break;
-			/* down event */
-			if ( data[1] == (data[1]&0xf) ) {
-				if (backlight > BACKLIGHT_OFF)
-					set_backlight_level(backlight-1);
-				else
-					set_backlight_level(BACKLIGHT_OFF);
-			}
+			if (backlight > BACKLIGHT_OFF)
+				set_backlight_level(backlight-1);
+			else
+				set_backlight_level(BACKLIGHT_OFF);
 			break;
-		/* brightness increase */
-		case 0x9:
+
+		case 0x9:	/* brightness increase */
 			if (backlight < 0)
 				break;
-			/* down event */
-			if ( data[1] == (data[1]&0xf) ) {
-				if (backlight < BACKLIGHT_MAX)
-					set_backlight_level(backlight+1);
-				else 
-					set_backlight_level(BACKLIGHT_MAX);
-			}
+			if (backlight < BACKLIGHT_MAX)
+				set_backlight_level(backlight+1);
+			else 
+				set_backlight_level(BACKLIGHT_MAX);
 			break;
 		}
-#endif
+#endif /* CONFIG_PMAC_BACKLIGHT */
 	  }
 	  break;
 	}
@@ -553,9 +552,9 @@ adbhid_probe(void)
 			adbhid_input_unregister(i);
 	}
 
-	adb_register(ADB_MOUSE, 0, &mouse_ids, mouse_input);
-	adb_register(ADB_KEYBOARD, 0, &keyboard_ids, keyboard_input);
-	adb_register(ADB_MISC, 0, &buttons_ids, buttons_input);
+	adb_register(ADB_MOUSE, 0, &mouse_ids, adbhid_mouse_input);
+	adb_register(ADB_KEYBOARD, 0, &keyboard_ids, adbhid_keyboard_input);
+	adb_register(ADB_MISC, 0, &buttons_ids, adbhid_buttons_input);
 
 	for (i = 0; i < keyboard_ids.nids; i++) {
 		int id = keyboard_ids.id[i];

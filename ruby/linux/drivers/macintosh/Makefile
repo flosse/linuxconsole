@@ -15,7 +15,7 @@ O_TARGET	:= macintosh.o
 
 # Objects that export symbols.
 
-export-objs	:= adb.o rtc.o mac_hid.o
+export-objs	:= adb.o rtc.o
 
 # Object file lists.
 
@@ -26,10 +26,9 @@ obj-	:=
 
 # Each configuration option enables a list of files.
 
-obj-$(CONFIG_PMAC_PBOOK) 	+= mediabay.o
+obj-$(CONFIG_PMAC_PBOOK)	+= mediabay.o
 obj-$(CONFIG_MAC_SERIAL)	+= macserial.o
 obj-$(CONFIG_NVRAM)		+= nvram.o
-obj-$(CONFIG_MAC_HID)		+= mac_hid.o
 obj-$(CONFIG_PPC_RTC)		+= rtc.o
 
 obj-$(CONFIG_ADB_PMU)		+= via-pmu.o
@@ -45,3 +44,4 @@ obj-$(CONFIG_ADB_MACIO)		+= macio-adb.o
 # The global Rules.make.
 
 include $(TOPDIR)/Rules.make
+
