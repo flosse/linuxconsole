@@ -49,6 +49,9 @@ int main(int argc, char** argv)
 	int n_effects;	/* Number of effects the device can play at the same time */
 	int i;
 
+	printf("Force feedback test program.\n");
+	printf("HOLD FIRMLY YOUR WHEEL OR JOYSTICK TO PREVENT DAMAGES\n\n");
+
 	strncpy(device_file_name, "/dev/input/event0", 64);
 
 	for (i=1; i<argc; ++i) {

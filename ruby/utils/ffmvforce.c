@@ -45,26 +45,24 @@
 /* File descriptor of the force feedback /dev entry */
 static int ff_fd;
 static struct ff_effect effect;
-static struct ff_effect dummy;
 
-static void init_dummy()
+static void welcome()
 {
-	dummy.type = FF_PERIODIC;
-	dummy.id = -1;
-	dummy.trigger.button = 0;
-	dummy.trigger.interval = 0;
-	dummy.replay.length = 0xFFFF;
-	dummy.replay.delay = 0;
-	dummy.u.periodic.waveform = FF_TRIANGLE;
-	dummy.u.periodic.period = 200;
-	dummy.u.periodic.magnitude = 0x7FFF;
-	dummy.u.periodic.offset = 0;
-	dummy.u.periodic.phase = 0;
-	dummy.u.periodic.direction = 0x4000;
-	dummy.u.periodic.shape.attack_length = 2000;
-	dummy.u.periodic.shape.attack_level = 0;
-	dummy.u.periodic.shape.fade_length = 2000;
-	dummy.u.periodic.shape.fade_level = 0;
+	const char* txt[] = {
+"ffmvforce: test orientation of forces",
+"Click in the window to generate a force whose direction will be the position",
+"of your mouse relatively to the center of the window",
+"USE WITH CARE !!! HOLD STRONGLY YOUR WHEEL OR JOYSTICK TO PREVENT DAMAGES",
+"To run this program, run it with at least one argument.",
+"",
+NULL };
+
+	const char** p = txt;
+
+	while (*p) {
+		printf("%s\n", *p);
+		p++;
+	}
 }
 
 static void generate_force(int x, int y)
@@ -121,20 +119,23 @@ int main(int argc, char** argv)
 	int i;
 	Uint32 ticks, period = 200;
 
+	welcome();
+	if (argc <= 1) return 0;
+
 	/* Parse parameters */
 	strcpy(dev_name, "/dev/input/event0");
 	for (i=1; i<argc; ++i) {
 		if (strcmp(argv[i], "--help") == 0) {
-			printf("Usage: %s /dev/input/eventXX [-p period in ms]\n", argv[0]);
+			printf("Usage: %s /dev/input/eventXX [-u update frequency in HZ]\n", argv[0]);
 			printf("Generates constant force effects depending on the position of the mouse\n");
 			exit(1);
 		}
-		else if (strcmp(argv[i], "-p") == 0) {
+		else if (strcmp(argv[i], "-u") == 0) {
 			if (++i >= argc) {
-				fprintf(stderr, "Missing period\n");
+				fprintf(stderr, "Missing update frequency\n");
 				exit(1);
 			}
-			period = atoi(argv[i]);
+			period = 1000.0/atof(argv[i]);
 		}
 		else {
 			strncpy(dev_name, argv[i], STR_LEN);
@@ -159,24 +160,6 @@ int main(int argc, char** argv)
                 perror("Open device file");
 		exit(1);
 	}
-
-/*	init_dummy();
-        if (ioctl(ff_fd, EVIOCSFF, &dummy) < 0) {
-                perror("Upload dummy");
-                exit(1);
-        }
-
-	{
-		struct input_event play;
-		play.type = EV_FF;
-		play.code = dummy.id;
-		play.value = 1;
-
-		if (write(ff_fd, (const void*) &play, sizeof(play)) == -1) {
-			perror("Play effect");
-			exit(1);
-		}
-	}*/
 
 	ticks = SDL_GetTicks();
 	/* Main loop */
