@@ -39,8 +39,8 @@
 
 extern struct tty_driver console_driver;
 
-#define VT_IS_IN_USE(i)	(console_driver.table[i] && console_driver.table[i]->count)
-#define VT_BUSY(i)	(VT_IS_IN_USE(i) || i == sel_cons)
+#define VT_IS_IN_USE(vc) (vc->vc_tty && vc->vc_tty->count)
+#define VT_BUSY(vc)	(VT_IS_IN_USE(vc) ||vc->vc_num == sel_cons)
 
 /*
  * Console (vt and kd) routines, as defined by USL SVR4 manual, and by
@@ -915,22 +915,25 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 
 	/*
          * Returns global vt state. Note that /dev/tty is always open, since
-         * it's an alias for the current VT, and people can't use it here.
-         * We cannot return state for more than 16 VTs, since v_state is short.
+         * it's an alias for the current VC, and people can't use it here.
+         * We cannot return state for more than 16 VCs, since v_state is short.
 	 */
 	case VT_GETSTATE:
 	{
 		struct vt_stat *vtstat = (struct vt_stat *)arg;
 		unsigned short state, mask;
+		struct vc_data *tmp;
 
 		i = verify_area(VERIFY_WRITE,(void *)vtstat, sizeof(struct vt_stat));
 		if (i)
 			return i;
 		put_user(vc->display_fg->fg_console->vc_num, &vtstat->v_active);
 		state = 1;	/* /dev/tty is always open */
-		for (i = 0, mask = 2; i < MAX_NR_USER_CONSOLES && mask; ++i, mask <<= 1)
-			if (VT_IS_IN_USE(i))
+		for (i = 0, mask = 2; i < MAX_NR_USER_CONSOLES && mask; ++i, mask <<= 1) {
+			tmp = find_vc(i + vc->display_fg->vcs.first_vc);
+			if (tmp && VT_IS_IN_USE(tmp))
 				state |= mask;
+		}
 		return put_user(state, &vtstat->v_state);
 	}
 
@@ -940,9 +943,11 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	case VT_OPENQRY:
 	{
 		int j = vc->display_fg->vcs.first_vc;	
+		struct vc_data *tmp;
 
 		for (i = 0; i < MAX_NR_USER_CONSOLES; ++i,j++) {
-			if (!VT_IS_IN_USE(j))
+			tmp = find_vc(j);	
+			if (!tmp)
 				break;
 		} 
 		ucval = i < MAX_NR_USER_CONSOLES ? (j) : -1;
@@ -1054,23 +1059,30 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	  * Disallocate memory associated to VCs (but leave all VTs)
 	  */
 	 case VT_DISALLOCATE:
+	 {	
+		int displayed_vc = vc->display_fg->fg_console->vc_num;
+		struct vc_data *tmp;
+	
 		if (arg > MAX_NR_CONSOLES)
 			return -ENXIO;
-		if (arg == vc->display_fg->fg_console->vc_num) {
+		if (arg == displayed_vc) {
 		    /* disallocate all unused consoles for a VT, 
-		       but leave the active VC */
-		    for (i=1; i < MAX_NR_USER_CONSOLES; i++)
-		      if (i == vc->display_fg->fg_console->vc_num ||
-				!VT_BUSY(i)) 
-			vc_disallocate(i);
+		       but leave the foreground VC */
+		    for (i=0; i < MAX_NR_USER_CONSOLES; i++) {
+		      tmp = find_vc(i + vc->display_fg->vcs.first_vc); 	
+		      if ((displayed_vc != tmp->vc_num) || !VT_BUSY(tmp))
+			vc_disallocate(tmp->vc_num);
+		    }	
 		} else {
 		    /* disallocate a single console, if possible */
-		    if (VT_BUSY(arg))
+		    tmp = find_vc(arg);
+		    if (!tmp || VT_BUSY(tmp))
 		      return -EBUSY;
-		    if (arg)			      /* leave displayed VC */
+		    if (arg)			  /* leave displayed VC */
 		      vc_disallocate(arg);
 		}
 		return 0;
+	}
 	case VT_RESIZE:
 	{
 		struct vt_sizes *vtsizes = (struct vt_sizes *) arg;
