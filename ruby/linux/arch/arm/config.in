@@ -347,6 +347,7 @@ if [ "$CONFIG_CPU_32" = "y" -a "$CONFIG_ARCH_EBSA110" != "y" ]; then
 fi
 endmenu
 
+source drivers/serial/Config.in
 source drivers/parport/Config.in
 source drivers/mtd/Config.in
 source drivers/pnp/Config.in

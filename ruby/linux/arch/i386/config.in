@@ -264,6 +264,8 @@ source drivers/mtd/Config.in
 
 source drivers/parport/Config.in
 
+source drivers/serial/Config.in
+
 source drivers/pnp/Config.in
 
 source drivers/block/Config.in
