@@ -57,7 +57,7 @@ obj-$(CONFIG_INPUT_MAGELLAN)	+= magellan.o serio.o
 obj-$(CONFIG_INPUT_SPACEORB)	+= spaceorb.o serio.o
 obj-$(CONFIG_INPUT_SPACEBALL)	+= spaceball.o serio.o
 obj-$(CONFIG_INPUT_GUNZE)	+= gunze.o serio.o
-obj-$(CONFIG_INPUT_IFORCE)	+= iforce.o serio.o
+obj-$(CONFIG_INPUT_IFORCE_232)	+= iforce.o serio.o
 
 obj-$(CONFIG_INPUT_ANALOG)	+= analog.o gameport.o
 obj-$(CONFIG_INPUT_A3D)		+= a3d.o gameport.o
@@ -77,7 +77,7 @@ obj-$(CONFIG_INPUT_HID)		+= hid.o
 obj-$(CONFIG_INPUT_USBMOUSE)	+= usbmouse.o
 obj-$(CONFIG_INPUT_USBKBD)	+= usbkbd.o
 obj-$(CONFIG_INPUT_WACOMUSB)	+= wacom.o
-obj-$(CONFIG_INPUT_WMFORCEUSB)	+= wmforce.o
+obj-$(CONFIG_INPUT_IFORCE_USB)	+= iforce.o
 
 #obj-$(CONFIG_INPUT_ADBMOUSE)	+= adbmouse.o
 #obj-$(CONFIG_INPUT_ADBKBD)	+= adbkbd.o

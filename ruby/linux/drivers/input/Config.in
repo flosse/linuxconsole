@@ -39,7 +39,7 @@ if [ "$CONFIG_INPUT" != "n" ]; then
       tristate '  SpaceTec SpaceOrb/Avenger 6dof controller' CONFIG_INPUT_SPACEORB
       tristate '  SpaceTec SpaceBall 4000 FLX 6dof controller' CONFIG_INPUT_SPACEBALL
       tristate '  Gunze AHL-51S touchscreen' CONFIG_INPUT_GUNZE
-      tristate '  I-Force devices' CONFIG_INPUT_IFORCE
+      tristate '  I-Force joysticks/wheels' CONFIG_INPUT_IFORCE_232
    
    comment 'Gameport devices'
       tristate '  Analog joysticks and gamepads' CONFIG_INPUT_ANALOG
@@ -58,13 +58,13 @@ if [ "$CONFIG_INPUT" != "n" ]; then
       tristate '  Multisystem joysticks via TurboGraFX device' CONFIG_INPUT_TURBOGRAFX
    
    comment 'USB devices'
-      tristate '  USB Human Interface Device (HID)' CONFIG_INPUT_HID
+      dep_tristate '  USB Human Interface Device (HID)' CONFIG_INPUT_HID $CONFIG_USB
       if [ "$CONFIG_INPUT_HID" != "y" ]; then
-         tristate '  USB HIDBP keyboard' CONFIG_INPUT_USBKBD
-         tristate '  USB HIDBP mouse' CONFIG_INPUT_USBMOUSE
+         dep_tristate '  USB HIDBP keyboard' CONFIG_INPUT_USBKBD $CONFIG_USB
+         dep_tristate '  USB HIDBP mouse' CONFIG_INPUT_USBMOUSE $CONFIG_USB
       fi
-      tristate '  Wacom Intuos/Graphire tablet' CONFIG_INPUT_WACOMUSB
-      tristate '  Logitech WingMan Force joystick' CONFIG_INPUT_WMFORCEUSB
+      dep_tristate '  Wacom Intuos/Graphire tablet' CONFIG_INPUT_WACOMUSB $CONFIG_USB
+      dep_tristate '  I-Force joysticks/wheels' CONFIG_INPUT_IFORCE_USB $CONFIG_USB
 
    comment 'ADB devices'
       tristate ' #Mac keyboard' CONFIG_INPUT_ADBKBD

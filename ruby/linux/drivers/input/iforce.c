@@ -41,7 +41,7 @@ MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 #define USB_VENDOR_ID_LOGITECH		0x046d
 #define USB_DEVICE_ID_LOGITECH_WMFORCE	0xc281
 
-#define IFORCE_MAX_LENGTH	16
+#define IFORCE_MAX_LENGTH		16
 
 struct iforce {
 	signed char data[IFORCE_MAX_LENGTH];
@@ -56,7 +56,7 @@ static struct {
         __s32 y;
 } iforce_hat_to_axis[16] = {{ 0,-1}, { 1,-1}, { 1, 0}, { 1, 1}, { 0, 1}, {-1, 1}, {-1, 0}, {-1,-1}};
 
-static char *iforce_name = "I-Force device";
+static char *iforce_name = "I-Force joystick/wheel";
 
 static void iforce_process_packet(struct input_dev *dev, unsigned char id, int idx, unsigned char *data)
 {
@@ -96,58 +96,6 @@ static void iforce_process_packet(struct input_dev *dev, unsigned char id, int i
 	}
 }
 
-static void iforce_usb_irq(struct urb *urb)
-{
-	struct iforce *iforce = urb->context;
-	if (urb->status) return;
-	iforce_process_packet(&iforce->dev, iforce->data[0], 8, iforce->data + 1);
-}
-
-static void iforce_serio_irq(struct serio *serio, unsigned char data, unsigned int flags)
-{
-        struct iforce* iforce = serio->private;
-
-	if (!iforce->pkt) {
-		if (data != 0x2b) {
-			return;
-		}
-		iforce->pkt = 1;
-		return;
-	}
-
-        if (!iforce->id) {
-		if (data > 3) {
-			iforce->pkt = 0;
-			return;
-		}
-                iforce->id = data;
-		return;
-        }
-
-	if (!iforce->len) {
-		if (data > IFORCE_MAX_LENGTH) {
-			iforce->pkt = 0;
-			iforce->id = 0;
-			return;
-		}
-		iforce->len = data + 1;
-		return;
-	}
-
-        if (iforce->idx < iforce->len) {
-                iforce->csum += iforce->data[iforce->idx++] = data;
-		return;
-	}
-
-        if (iforce->idx == iforce->len) {
-		iforce_process_packet(&iforce->dev, iforce->id, iforce->idx, iforce->data);
-		iforce->pkt = 0;
-		iforce->id  = 0;
-                iforce->len = 0;
-                iforce->idx = 0;
-		iforce->csum = 0;
-        }
-}
 
 static int iforce_open(struct input_dev *dev)
 {
@@ -202,6 +150,15 @@ static void iforce_input_setup(struct iforce *iforce)
 	input_register_device(&iforce->dev);
 }
 
+#ifdef CONFIG_INPUT_IFORCE_USB
+
+static void iforce_usb_irq(struct urb *urb)
+{
+	struct iforce *iforce = urb->context;
+	if (urb->status) return;
+	iforce_process_packet(&iforce->dev, iforce->data[0], 8, iforce->data + 1);
+}
+
 static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum)
 {
 	struct usb_endpoint_descriptor *endpoint;
@@ -247,6 +204,56 @@ static struct usb_driver iforce_usb_driver = {
 	disconnect:	iforce_usb_disconnect,
 };
 
+#endif
+
+#ifdef CONFIG_INPUT_IFORCE_232
+
+static void iforce_serio_irq(struct serio *serio, unsigned char data, unsigned int flags)
+{
+        struct iforce* iforce = serio->private;
+
+	if (!iforce->pkt) {
+		if (data != 0x2b) {
+			return;
+		}
+		iforce->pkt = 1;
+		return;
+	}
+
+        if (!iforce->id) {
+		if (data > 3) {
+			iforce->pkt = 0;
+			return;
+		}
+                iforce->id = data;
+		return;
+        }
+
+	if (!iforce->len) {
+		if (data > IFORCE_MAX_LENGTH) {
+			iforce->pkt = 0;
+			iforce->id = 0;
+			return;
+		}
+		iforce->len = data + 1;
+		return;
+	}
+
+        if (iforce->idx < iforce->len) {
+                iforce->csum += iforce->data[iforce->idx++] = data;
+		return;
+	}
+
+        if (iforce->idx == iforce->len) {
+		iforce_process_packet(&iforce->dev, iforce->id, iforce->idx, iforce->data);
+		iforce->pkt = 0;
+		iforce->id  = 0;
+                iforce->len = 0;
+                iforce->idx = 0;
+		iforce->csum = 0;
+        }
+}
+
 static void iforce_serio_connect(struct serio *serio, struct serio_dev *dev)
 {
 	struct iforce *iforce;
@@ -290,17 +297,27 @@ static struct serio_dev iforce_serio_dev = {
 	disconnect:	iforce_serio_disconnect,
 };
 
+#endif
+
 static int __init iforce_init(void)
 {
+#ifdef CONFIG_INPUT_IFORCE_USB
 	usb_register(&iforce_usb_driver);
+#endif
+#ifdef CONFIG_INPUT_IFORCE_232
 	serio_register_device(&iforce_serio_dev);
+#endif
 	return 0;
 }
 
 static void __exit iforce_exit(void)
 {
+#ifdef CONFIG_INPUT_IFORCE_USB
 	usb_deregister(&iforce_usb_driver);
+#endif
+#ifdef CONFIG_INPUT_IFORCE_232
 	serio_unregister_device(&iforce_serio_dev);
+#endif
 }
 
 module_init(iforce_init);
