@@ -66,6 +66,7 @@ struct joydev {
 	__u16 keypam[KEY_MAX - BTN_MISC];
 	__u8 absmap[ABS_MAX];
 	__u8 abspam[ABS_MAX];
+	__s16 abs[ABS_MAX];
 };
 
 struct joydev_list {
@@ -121,7 +122,9 @@ static void joydev_event(struct input_handle *handle, unsigned int type, unsigne
 		case EV_ABS:
 			event.type = JS_EVENT_AXIS;
 			event.number = joydev->absmap[code];
-			event.value = joydev_correct(value, &joydev->corr[event.number]);
+			event.value = joydev_correct(value, joydev->corr + event.number);
+			if (event.value == joydev->abs[event.number]) return;
+			joydev->abs[event.number] = event.value;
 			break;
 
 		default:
@@ -233,8 +236,8 @@ static ssize_t joydev_read(struct file *file, char *buf, size_t count, loff_t *p
 
 		data.buttons =  ((joydev->nkey > 0 && test_bit(joydev->keypam[0], input->key)) ? 1 : 0) |
 				((joydev->nkey > 1 && test_bit(joydev->keypam[1], input->key)) ? 2 : 0);
-		data.x = ((joydev_correct(input->abs[ABS_X], &joydev->corr[0]) / 256) + 128) >> joydev->glue.JS_CORR.x;
-		data.y = ((joydev_correct(input->abs[ABS_Y], &joydev->corr[1]) / 256) + 128) >> joydev->glue.JS_CORR.y;
+		data.x = (joydev->abs[0] / 256 + 128) >> joydev->glue.JS_CORR.x;
+		data.y = (joydev->abs[1] / 256 + 128) >> joydev->glue.JS_CORR.y;
 
 		if (copy_to_user(buf, &data, sizeof(struct JS_DATA_TYPE)))
 			return -EFAULT;
@@ -284,7 +287,7 @@ static ssize_t joydev_read(struct file *file, char *buf, size_t count, loff_t *p
 		} else {
 			event.type = JS_EVENT_AXIS | JS_EVENT_INIT;
 			event.number = list->startup - joydev->nkey;
-			event.value = joydev_correct(input->abs[joydev->abspam[event.number]], &joydev->corr[event.number]);
+			event.value = joydev->abs[event.number];
 		}
 
 		if (copy_to_user(buf + retval, &event, sizeof(struct js_event)))
@@ -445,6 +448,8 @@ static struct input_handle *joydev_connect(struct input_handler *handler, struct
 		joydev->corr[i].coef[1] = (dev->absmax[j] + dev->absmin[j]) / 2 + dev->absflat[j];
 		joydev->corr[i].coef[2] = (1 << 29) / ((dev->absmax[j] - dev->absmin[j]) / 2 - 2 * dev->absflat[j]);
 		joydev->corr[i].coef[3] = (1 << 29) / ((dev->absmax[j] - dev->absmin[j]) / 2 - 2 * dev->absflat[j]);
+
+		joydev->abs[i] = joydev_correct(dev->abs[j], joydev->corr + i);
 	}
 
 	joydev->devfs = input_register_minor("js%d", minor, JOYDEV_MINOR_BASE);
