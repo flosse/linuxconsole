@@ -1,0 +1,166 @@
+** Introduction
+This document describes what I managed to discover about the protocole used to specify force effects to I-Force 2.0 devices.
+None of this information comes from Immerse. That's why you should not trust what is written in this document. This document is intended to help undertstanding the protocole.
+This is not a reference. Comments and corrections are welcome. I made all these tests on my Boeder I-Force ForceFeedback Wheel. Please note I haven't made any test on joysticks.
+To contact me, send email to: deneux@ifrance.com
+
+** WARNING **
+I may not be held responsible for any dammage or harm caused if you try to send data to your I-Force device based on what you read in this document.
+
+** Preliminary Notes:
+All values are hexadecimal with big-endian encoding (msb on the left). Beware, values inside packets are encoded using little-endian.
+Bytes whose roles are unknown are marked ???
+Information that needs deeper inspection is marked (?)
+
+** Force effect **
+OP=  01
+LEN= 0e
+00 Channel (when playing several effects at the same time, each must be assigned a channel)
+01 Wave form
+	Val 00 Constant
+	Val 20 Square
+	Val 21 Triangle
+	Val 22 Sine
+	Val 23 Sawtooth up
+	Val 24 Sawtooth down
+	Val 40 Spring (Force = f(pos))
+	Val 41 Friction (Force = f(velocity)) and Inertia (Force = f(acceleration)) (Hum, I thought that accel = d(velocity)/dt...)
+
+	
+02 Map Y to X and trigger
+	Bits 4-7: Val 2 = No mapping (Joystick) | See 05
+	          Val 4 = Mapping (Wheel)       |
+	Bits 0-3: Val 0 = No trigger
+	          Val x+1 = Button x triggers the effect
+	When the whole byte is 0, cancel the previously set trigger
+
+03-04 Duration of effect (little endian encoding). 1s = 03e8
+
+05 Direction of effect. If axis Y isn't mapped to X, Val 00 corresponds to 0 degrees (points forward), Val 40 corresponds to 90 degres (right).
+   Else, if Y is mapped to X (See byte 02 above)m value must be 5a.
+
+06-07 Related to the use of a trigger. If a trigger is declared or canceled, value is ffff, 0000 else. I guess it can be the interval of time between two consecutive replaying.
+
+08-09 Periodicity or magnitude modifier id.
+0a-0b Attack and fade modifier id, or ffff if none.
+*or*
+08-09 Modifier id of position based modifier for X-axis
+0a-0b Modifier id of position based modifier for Y-axis, or ffff if not applicable
+
+0c-0d Delay before execution of effect (little endian encoding). 1s = 03e8
+
+
+** Time based modifiers **
+
+*** Attack and fade modifier ***
+OP=  02
+LEN= 08
+00-01 Modifier id.
+02-03 Duration of attack (little endian encoding). 1s = 03e8
+04 Level at end of attack. Signed byte.
+05-06 Duration of fade.
+07 Level at end of fade.
+
+*** Magnitude modifier ***
+OP=  03
+LEN= 03
+00-01 Modifier id.
+02 Level. Signed byte.
+
+*** Periodicity modifier ***
+OP=  04
+LEN= 07
+00-01 Modifier id
+02 Magnitude. Signed byte.
+03 Offset. Signed byte.
+04 Phase. Val 00 = 0 deg, Val 40 = 90 degs.
+05-06 Period (little endian encoding). 1s = 03e8
+
+** Position based modifier **
+
+OP=  05
+LEN= 0a
+00-01 Modifier id.
+02 Positive Coeff
+03 Negative Coeff (Val 14 = 2000 (decimal))
+04 Offset (Val 64 = 2000 (decimal))
+05 ??? Val = 00
+06+07 Dead band (Val 01F4 = 5000 (decimal))
+08 Positive saturation (Val 0a = 1000 (decimal) Val 64 = 10000 (decimal))
+09 Negative saturation
+
+** Controls **
+OP=  41
+LEN= 03
+00 Channel
+01 Start/Stop
+	Val 00: Stop
+	Val 01: Start and play once.
+	Val 41: Start and play n times (See byte 02 below)
+02 Number of iterations n.
+
+** Init **
+This is the trickiest part. I haven't been able to understand how all these commands work. But who cares ? I know a few working sequences, and that suffices.
+
+OP=  ff
+???
+
+OP=  40
+???
+
+OP=  42
+???
+
+OP=  43
+???
+
+** Modifier ids **
+Modifiers seems to be produced by the following algorithm:
+
+int next_id = 0;
+
+procedure make_modifier(modifier_type)
+{
+	/* next_id is used for the modifier being created */
+	modifier mod;
+	mod.id = next_id;
+	...
+	sendModifierToDevice(mod);
+
+	/* Update next_id, depending on the current modifier type */
+	switch (modifier_type) {
+		PERIODIC: next_type += 0x0c; break;
+		MAGNITUDE: next_type += 0x02; break;
+		SHAPE: next_type += 0x0e; break;
+		FRICTION:
+		SPRING: ??? /* I don't know yet */
+	}
+}
+
+This looks quite uselessly complex to me, but there must be a good reason for
+Immerse to design such a twisted system. I have been stuck on this allocation
+scheme for quite a long time, but this solution is the one that worked best
+for me until now.
+As for any information contained in this document, but especially for those
+ones, you should keep in your mind that I may be completely wrong...
+		
+** Appendix: How to study the protocole ? **
+
+1. Generate effects using the force editor provided with the DirectX SDK, or use Immersion Studio (freely available at their web site in the developer section: www.immersion.com)
+2. Start a soft spying RS232 or USB (depending on where you connected your joystick/wheel). I used ComPortSpy from fCoder (alpha version!)
+3. Play the effect, and watch what happens on the spy screen.
+
+A few words about ComPortSpy:
+At first glance, this soft seems, hum, well... buggy. In fact, data appear with a few seconds latency. Personnaly, I restart it every time I play an effect.
+Remember it's free (as in free beer) and alpha!
+
+** URLS **
+Well, I don't have them at hand (unluckyly, I do not have internet at home).
+Check www.immerse.com for Immersion Studio, and www.fcoder.com for ComPortSpy.
+
+** Author of this document **
+Johann Deneux <deneux@ifrance.com>
+Home page at http://www.esil.univ-mrs.fr/~jdeneux/projects/ff/
+
+
+I-Force is trademark of Immersion Corp.
