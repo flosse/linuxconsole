@@ -425,7 +425,7 @@ static void adi_init_input(struct adi *adi, struct adi_port *port, int half)
 	adi->dev.private = port;
 	adi->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 
-	for (i = 0; i < adi->axes10 + adi->axes8 + (adi->hats + (adi->pad > 0)) * 2; i++)
+	for (i = 0; i < adi->axes10 + adi->axes8 + (adi->hats + (adi->pad != -1)) * 2; i++)
 		set_bit(adi->abs[i], &adi->dev.absbit);
 
 	for (i = 0; i < adi->buttons; i++)
@@ -438,7 +438,7 @@ static void adi_init_center(struct adi *adi)
 
 	if (!adi->length) return;
 
-	for (i = 0; i < adi->axes10 + adi->axes8 + (adi->hats + (adi->pad > 0)) * 2; i++) {
+	for (i = 0; i < adi->axes10 + adi->axes8 + (adi->hats + (adi->pad != -1)) * 2; i++) {
 
 		t = adi->abs[i];
 		x = adi->dev.abs[t];
