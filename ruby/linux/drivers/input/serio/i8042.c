@@ -37,6 +37,7 @@
 #include <linux/reboot.h>
 #include <linux/init.h>
 #include <linux/serio.h>
+#include <linux/sched.h>	/* request/free_irq */
 
 #include "i8042.h"
 
@@ -198,6 +199,9 @@ static int i8042_command(unsigned char *param, int command)
 
 /*
  * i8042_kbd_write() sends a byte out through the keyboard interface.
+ * It also automatically refreshes the CTR value, since some i8042's
+ * trash their CTR after attempting to send data to an nonexistent
+ * device.
  */
 
 static int i8042_kbd_write(struct serio *port, unsigned char c)
