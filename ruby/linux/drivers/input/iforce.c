@@ -35,7 +35,6 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/spinlock.h>
-#include <asm/semaphore.h>
 #include <linux/usb.h>
 #include <linux/serio.h>
 #include <linux/config.h>
@@ -71,12 +70,10 @@ MODULE_DESCRIPTION("USB/RS232 I-Force joysticks and wheels driver");
  * associated to at most to effect modifiers
  */
 #define FF_MOD1_IS_USED		0
-#define FF_MOD1_IS_STORED	1
-#define FF_MOD2_IS_USED		2
-#define FF_MOD2_IS_STORED	3
-#define FF_CORE_IS_USED		4
-#define FF_CORE_IS_PLAYED	5
-#define FF_MODCORE_MAX		5
+#define FF_MOD2_IS_USED		1
+#define FF_CORE_IS_USED		2
+#define FF_CORE_IS_PLAYED	3
+#define FF_MODCORE_MAX		3
 
 struct iforce_core_effect {
 	/* Information about where modifiers are stored in the device's memory */
@@ -99,6 +96,12 @@ struct iforce_core_effect {
 
 #define FF_CMD_INIT_F		0xff01
 
+/* For iforce->init_done: Tells what parts of the init process are completed */
+#define FF_INIT_RAMSIZE		1
+#define FF_INIT_N_EFFECTS	2
+#define FF_INIT_DEV_TYPE	4
+#define FF_INIT_ALL_MASK	7
+
 struct iforce {
 	struct input_dev dev;		/* Input device interface */
         int open;
@@ -115,9 +118,11 @@ struct iforce {
         struct urb irq, out;
 	wait_queue_head_t wait;
 #endif
-#ifdef IFORCE_FF
-	struct semaphore ff_mutex;	/* Force Feedback */
-	struct resource device_memory;
+#ifdef IFORCE_FF			/* I-Force Feedback */
+	struct semaphore wait_init_done;
+	unsigned long init_done;
+	struct resource device_memory;  
+	int n_effects_max;
 	struct iforce_core_effect core_effects[FF_EFFECTS_MAX];
 #endif
 };
@@ -295,9 +300,7 @@ static int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned
         data[1] = (value > 0) ? ((value > 1) ? 0x41 : 0x01) : 0;
         data[2] = LO(value);
  
-	down_interruptible(&(iforce->ff_mutex));
         send_packet(iforce, FF_CMD_PLAY, data);
-	up(&(iforce->ff_mutex));
 
 	return 0;
 }
@@ -489,7 +492,6 @@ static int iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effec
 		effect->u.periodic.period, effect->u.periodic.phase);
 	if (err) return err;
 	set_bit(FF_MOD1_IS_USED, core_effect->flags);
-	set_bit(FF_MOD1_IS_STORED, core_effect->flags);
  
         err = make_shape_modifier(iforce, mod2_chunk,
                 effect->u.periodic.shape.attack_length,
@@ -498,7 +500,6 @@ static int iforce_upload_periodic(struct iforce* iforce, struct ff_effect* effec
 		effect->u.periodic.shape.fade_level);
 	if (err) return err;
 	set_bit(FF_MOD2_IS_USED, core_effect->flags);
-	set_bit(FF_MOD2_IS_STORED, core_effect->flags);
  
 	switch (effect->u.periodic.waveform) {
 		case FF_SQUARE:		wave_code = 0x20; break;
@@ -539,7 +540,6 @@ static int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effec
 	err = make_magnitude_modifier(iforce, mod1_chunk, effect->u.constant.level);
 	if (err) return err;
 	set_bit(FF_MOD1_IS_USED, core_effect->flags);
-	set_bit(FF_MOD1_IS_STORED, core_effect->flags);
  
 	err = make_shape_modifier(iforce, mod2_chunk,
 		effect->u.constant.shape.attack_length,
@@ -548,7 +548,6 @@ static int iforce_upload_constant(struct iforce* iforce, struct ff_effect* effec
 		effect->u.constant.shape.fade_level);
 	if (err) return err;
 	set_bit(FF_MOD2_IS_USED, core_effect->flags);
-	set_bit(FF_MOD2_IS_STORED, core_effect->flags);
  
 	err = make_core(iforce, effect->id,
 		mod1_chunk->start,
@@ -593,7 +592,6 @@ static int iforce_upload_interactive(struct iforce* iforce, struct ff_effect* ef
 		effect->u.interactive.center);
 	if (err) return err;
 	set_bit(FF_MOD1_IS_USED, core_effect->flags);
-	set_bit(FF_MOD1_IS_STORED, core_effect->flags);
 
 	/* Only X axis */
 	if (effect->u.interactive.axis == BIT(FF_X)) {
@@ -650,8 +648,6 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 
 	printk(KERN_DEBUG "iforce ff: upload effect\n");
 
-	down_interruptible(&(iforce->ff_mutex));
-
 	/* 
 	 * Get a free id
 	 */
@@ -660,7 +656,7 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 		for (id=0; id < FF_EFFECTS_MAX; ++id) {
 			if (!test_bit(FF_CORE_IS_USED, iforce->core_effects[id].flags)) break;
 		}
-		if ( id == FF_EFFECTS_MAX ) {
+		if ( id == FF_EFFECTS_MAX || id >= iforce->n_effects_max ) {
 			err = -ENOMEM;
 			goto leave;
 		}
@@ -684,7 +680,6 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 	};
 
 leave:
-	up(&(iforce->ff_mutex));
 	return err;
 }
 
@@ -700,32 +695,46 @@ static int iforce_erase_effect(struct input_dev *dev, int effect_id)
 		return -EINVAL;
 	}
 
-	down_interruptible(&(iforce->ff_mutex));
 	core_effect = iforce->core_effects + effect_id;
 
-	if (test_bit(FF_MOD1_IS_STORED, core_effect->flags)) {
+	if (test_bit(FF_MOD1_IS_USED, core_effect->flags)) {
 		err = release_resource(&(iforce->core_effects[effect_id].mod1_chunk));
 	}
-	if (!err && test_bit(FF_MOD2_IS_STORED, core_effect->flags)) {
+	if (!err && test_bit(FF_MOD2_IS_USED, core_effect->flags)) {
 		err = release_resource(&(iforce->core_effects[effect_id].mod2_chunk));
 	}
 	/*TODO: remember to change that if more FF_MOD* bits are added */
 	core_effect->flags[0] = 0;
 
-	up(&(iforce->ff_mutex));
 	return err;
 }
 #endif /* IFORCE_FF */
 
-static void iforce_process_packet(struct input_dev *dev, u16 cmd, unsigned char *data)
+static void iforce_process_packet(struct input_dev *dev, u16 cmd, unsigned char *data, struct iforce *iforce)
 {
 	int i;
-
 
 	switch (HI(cmd)) {
 
 		case 1:	/* joystick position data */
 		case 3: /* wheel position data */
+
+			/* Check if we are in the init phase */
+			if (!(iforce->init_done & FF_INIT_DEV_TYPE)) {
+
+				if (HI(cmd) == 1) { /* Joystick */
+					printk(KERN_INFO "iforce.c: device is a joystick\n");
+					dev->ffbit[0] = BIT(FF_X) | BIT(FF_Y);
+				} else {           /* Wheel */
+					printk(KERN_INFO "iforce.c: device is a wheel\n");
+					dev->ffbit[0] = BIT(FF_X);
+				}
+				
+				iforce->init_done |= FF_INIT_DEV_TYPE;
+				if (iforce->init_done == FF_INIT_ALL_MASK)
+					up(&iforce->wait_init_done);
+					
+			}
 
 			if (HI(cmd) == 1) {
 				input_report_abs(dev, ABS_X, (__s16) (((__s16)data[1] << 8) | data[0]));
@@ -756,7 +765,6 @@ static void iforce_process_packet(struct input_dev *dev, u16 cmd, unsigned char 
 
 
 		case 2: /* status report */
-
 		/*
 		Offset Size Meaning
 		  0      1  Device Status Flags:
@@ -774,7 +782,37 @@ static void iforce_process_packet(struct input_dev *dev, u16 cmd, unsigned char 
 			    changed since last update. This is meant to be used to detect transmission
 			    errors.
 		*/
+			if (!(iforce->init_done & FF_INIT_N_EFFECTS)) {
+				if ((i = 1 + (data[1] & 127)) > iforce->n_effects_max) {
+					iforce->n_effects_max = i;
+				}
+				else {	/* The cycle is over */
+					printk(KERN_INFO "iforce.c: device can play %d effects\n", iforce->n_effects_max);
+					iforce->init_done |= FF_INIT_N_EFFECTS;
+
+					if (iforce->init_done == FF_INIT_ALL_MASK)
+						up(&iforce->wait_init_done);
+				}
+			}
 			break;
+
+#ifdef IFORCE_FF
+		case 0xff:
+			/* Size of ram dedicated to effect parameters */
+			if ((iforce->init_done & FF_INIT_RAMSIZE) == 0 && data[0] == 0x42) {
+				int ramsize = (data[2] << 8) | data[1];
+
+				printk(KERN_INFO "iforce.c: device has %d bytes of RAM\n", ramsize);
+
+				iforce->device_memory.end = ramsize;
+
+				iforce->init_done |= FF_INIT_RAMSIZE;
+
+				if (iforce->init_done == FF_INIT_ALL_MASK)
+					up(&iforce->wait_init_done);
+			}
+			break;
+#endif
 
 		default:
 			printk(KERN_DEBUG "iforce.c: process_packet( cmd = %04x, data = ", cmd);
@@ -812,12 +850,6 @@ static void iforce_close(struct input_dev *dev)
 static void iforce_input_setup(struct iforce *iforce)
 {
 	int i;
-#ifdef IFORCE_FF
-	/*
-	 * HACK: this mutex is only used to initialize iforce->ff_mutex
-	 */
-	static DECLARE_MUTEX(ff_mutex_initializer);
-#endif
 
 	iforce->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 	iforce->dev.keybit[LONG(BTN_JOYSTICK)] |= BIT(BTN_TRIGGER) | BIT(BTN_TOP) | BIT(BTN_THUMB) | BIT(BTN_TOP2) |
@@ -827,9 +859,7 @@ static void iforce_input_setup(struct iforce *iforce)
 				| BIT(ABS_WHEEL) | BIT(ABS_GAS) | BIT(ABS_BRAKE);
 
 #ifdef IFORCE_FF
-	/* TODO: auto detect, or use option */
 	iforce->dev.evbit[0] |= BIT(EV_FF);
-	iforce->dev.ffbit[0] = BIT(FF_X) | BIT(FF_Y);
 #endif
 
 	for (i = ABS_X; i <= ABS_Y; i++) {
@@ -864,15 +894,10 @@ static void iforce_input_setup(struct iforce *iforce)
 	iforce->dev.erase_effect = iforce_erase_effect;
 	printk(KERN_DEBUG "iforce ff: iforce functions registered \n");
 
-	/* initialize semaphore protecting write access to the device */
-	iforce->ff_mutex = ff_mutex_initializer;
-	printk(KERN_DEBUG "iforce ff: mutex initialized \n");
-
 	/* memory avalaible on the device */
 	iforce->device_memory.name = "I-Force device effect memory";
 	iforce->device_memory.start = 0;
-	/*TODO: Get this value from device (the protocol certainly allows that) */
-	iforce->device_memory.end = 0x100;
+	/* iforce->device_memory.end = set by process_packet */
 	iforce->device_memory.flags = IORESOURCE_MEM;
 	iforce->device_memory.parent = NULL;
 	iforce->device_memory.child = NULL;
@@ -891,7 +916,7 @@ static void iforce_usb_irq(struct urb *urb)
 	if (urb->status) return;
 	iforce_process_packet(&iforce->dev,
 		(iforce->data[0] << 8) | (urb->actual_length - 1),
-		iforce->data + 1);
+		iforce->data + 1, iforce);
 }
 
 static void iforce_usb_out(struct urb *urb)
@@ -981,7 +1006,7 @@ static void iforce_serio_irq(struct serio *serio, unsigned char data, unsigned i
 	}
 
         if (!iforce->id) {
-		if (data > 3) {
+		if (data > 3 && data != 0xff) {
 			iforce->pkt = 0;
 			return;
 		}
@@ -1005,7 +1030,7 @@ static void iforce_serio_irq(struct serio *serio, unsigned char data, unsigned i
 	}
 
         if (iforce->idx == iforce->len) {
-		iforce_process_packet(&iforce->dev, (iforce->id << 8) | iforce->idx, iforce->data);
+		iforce_process_packet(&iforce->dev, (iforce->id << 8) | iforce->idx, iforce->data, iforce);
 		iforce->pkt = 0;
 		iforce->id  = 0;
                 iforce->len = 0;
@@ -1034,12 +1059,29 @@ static void iforce_serio_connect(struct serio *serio, struct serio_dev *dev)
 
 	serio->private = iforce;
 
+	/* This semaphore is set to 0. process_packet() will increase it
+	 * to wake us up so that iforce_input_setup is called only once
+	 * we have autodetected the characteristics of the device
+	 */
+	sema_init(&iforce->wait_init_done, 0);
+
 	if (serio_open(serio, dev)) {
 		kfree(iforce);
 		return;
 	}
 
+	/* Initialise the device */
+printk(KERN_DEBUG "iforce.c: before init_ff\n");
 	iforce_init_ff(iforce);
+printk(KERN_DEBUG "iforce.c: init_ff done\n");
+
+	/* Wait until the device is initialised */
+printk(KERN_DEBUG "iforce.c: wait until init is done\n");
+	/*TODO: timeout -> use default values for capabilities of device */
+	down(&iforce->wait_init_done);
+printk(KERN_DEBUG "iforce.c: init is done, let's go !!!\n");
+
+	/* Now we can safely go on */
 	iforce_input_setup(iforce);
 
 	printk(KERN_INFO "input%d: %s on serio%d\n",
