@@ -257,7 +257,6 @@ static int num_pref_init_funcs __initdata = 0;
 
 struct fb_info *registered_fb[FB_MAX];
 int num_registered_fb = 0;
-extern int fbcon_softback_size; 
 
 static int fbmem_read_proc(char *buf, char **start, off_t offset,
 			   int len, int *eof, void *private)
@@ -715,21 +714,6 @@ int __init video_setup(char *options)
     if (!options || !*options)
 	    return 0;
 	    
-    if (!strncmp(options, "scrollback:", 11)) {
-	    options += 11;
-	    if (*options) {
-		fbcon_softback_size = simple_strtoul(options, &options, 0);
-		if (*options == 'k' || *options == 'K') {
-			fbcon_softback_size *= 1024;
-			options++;
-		}
-		if (*options != ',')
-			return 0;
-		options++;
-	    } else
-	        return 0;
-    }
-
     if (num_pref_init_funcs == FB_MAX)
 	    return 0;
 

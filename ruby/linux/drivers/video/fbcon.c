@@ -131,7 +131,7 @@ static char fontname[40] __initdata = { 0 };     /* default font name */
 
 #define CM_SOFTBACK	(8)
 
-#define advance_row(p, delta) (unsigned short *)((unsigned long)(p) + (delta) * conp->vc_size_row)
+#define advance_row(p, delta) (unsigned short *)((unsigned long)(p) + (delta) * vc->vc_size_row)
 
 static void fbcon_free_font(struct display *);
 static int fbcon_set_origin(struct vc_data *);
@@ -172,24 +172,24 @@ static inline void cursor_undrawn(void)
  */
 
 static const char *fbcon_startup(void);
-static void fbcon_init(struct vc_data *conp, int init);
-static void fbcon_deinit(struct vc_data *conp);
-static void fbcon_clear(struct vc_data *conp, int sy, int sx, int height,
+static void fbcon_init(struct vc_data *vc, int init);
+static void fbcon_deinit(struct vc_data *vc);
+static void fbcon_clear(struct vc_data *vc, int sy, int sx, int height,
 		       int width);
-static void fbcon_putc(struct vc_data *conp, int c, int ypos, int xpos);
-static void fbcon_putcs(struct vc_data *conp,const unsigned short *s, int count,
+static void fbcon_putc(struct vc_data *vc, int c, int ypos, int xpos);
+static void fbcon_putcs(struct vc_data *vc,const unsigned short *s, int count,
 			int ypos, int xpos);
-static void fbcon_cursor(struct vc_data *conp, int mode);
-static int fbcon_scroll(struct vc_data *conp, int t, int b, int dir,
+static void fbcon_cursor(struct vc_data *vc, int mode);
+static int fbcon_scroll(struct vc_data *vc, int t, int b, int dir,
 			 int count);
-static void fbcon_bmove(struct vc_data *conp, int sy, int sx, int dy, int dx,
+static void fbcon_bmove(struct vc_data *vc, int sy, int sx, int dy, int dx,
 			int height, int width);
-static int fbcon_switch(struct vc_data *conp);
-static int fbcon_blank(struct vc_data *conp, int blank);
-static int fbcon_font_op(struct vc_data *conp, struct console_font_op *op);
+static int fbcon_switch(struct vc_data *vc);
+static int fbcon_blank(struct vc_data *vc, int blank);
+static int fbcon_font_op(struct vc_data *vc, struct console_font_op *op);
 static int fbcon_resize(struct vc_data *vc,unsigned int rows,unsigned int cols);
-static int fbcon_set_palette(struct vc_data *conp, unsigned char *table);
-static int fbcon_scrolldelta(struct vc_data *conp, int lines);
+static int fbcon_set_palette(struct vc_data *vc, unsigned char *table);
+static int fbcon_scrolldelta(struct vc_data *vc, int lines);
 
 /*
  *  Internal routines
@@ -269,7 +269,7 @@ int set_all_vcs(int fbidx, struct fb_ops *fb, struct fb_var_screeninfo *var,
     if (err)
             return err;
     for (unit = 0; unit < MAX_NR_USER_CONSOLES; unit++)
-            if (fb_display[unit].conp)
+            if (fb_display[unit].vc)
                     fb->fb_set_var(var, unit, info);
     return 0;
 }
@@ -409,7 +409,7 @@ static void fbcon_init(struct vc_data *vc, int init)
     DPRINTK("res:    %dx%d-%d\n",fb_display[unit].var.xres,
 	                     fb_display[unit].var.yres,
 	                     fb_display[unit].var.bits_per_pixel);
-    fb_display[unit].conp = vc;
+    fb_display[unit].vc = vc;
     fb_display[unit].fb_info = info;
     /* clear out the cmap so we don't have dangling pointers */
     fb_display[unit].cmap.len = 0;
@@ -426,12 +426,12 @@ static void fbcon_deinit(struct vc_data *vc)
 
     fbcon_free_font(p);
     p->dispsw = &fbcon_dummy;
-    p->conp = 0;
+    p->vc = 0;
 }
 
 int fbcon_changevar(int con)
 {
-    if (fb_display[con].conp)
+    if (fb_display[con].vc)
 	    fbcon_set_disp(con, 0, 0);
     return 0;
 }
@@ -473,7 +473,7 @@ static void fbcon_font_widths(struct display *p)
 static void fbcon_set_disp(int con, int init, int logo)
 {
     struct display *p = &fb_display[con];
-    struct vc_data *vc = p->conp;
+    struct vc_data *vc = p->vc;
     int nr_rows, nr_cols;
     int old_rows, old_cols;
     unsigned short *save = NULL, *r, *q;
@@ -508,7 +508,7 @@ static void fbcon_set_disp(int con, int init, int logo)
     
     for (i = 0; i < MAX_NR_USER_CONSOLES; i++)
     	if (i != con && fb_display[i].fb_info == p->fb_info &&
-    	    fb_display[i].conp && fb_display[i].fontdata)
+    	    fb_display[i].vc && fb_display[i].fontdata)
     		break;
 
     fbcon_free_font(p);    
@@ -785,33 +785,32 @@ static void fbcon_putcs(struct vc_data *vc, const unsigned short *s,
 	    vbl_cursor_cnt = CURSOR_DRAW_DELAY;
 }
 
-static void fbcon_cursor(struct vc_data *conp, int mode)
+static void fbcon_cursor(struct vc_data *vc, int mode)
 {
-    int unit = conp->vc_num;
-    struct display *p = &fb_display[unit];
-    int y = conp->vc_y;
+    struct display *p = &fb_display[vc->vc_num];
+    int y = vc->vc_y;
     
     if (mode & CM_SOFTBACK) {
     	mode &= ~CM_SOFTBACK;
     	if (softback_lines) {
-    	    if (y + softback_lines >= conp->vc_rows)
+    	    if (y + softback_lines >= vc->vc_rows)
     		mode = CM_ERASE;
     	    else
     	        y += softback_lines;
     	}
     } else if (softback_lines)
-        fbcon_set_origin(conp);
+        fbcon_set_origin(vc);
 
     /* do we have a hardware cursor ? */
     if (p->dispsw->cursor) {
-	p->cursor_x = conp->vc_x;
+	p->cursor_x = vc->vc_x;
 	p->cursor_y = y;
 	p->dispsw->cursor(p, mode, p->cursor_x, real_y(p, p->cursor_y));
 	return;
     }
 
     /* Avoid flickering if there's no real change. */
-    if (p->cursor_x == conp->vc_x && p->cursor_y == y &&
+    if (p->cursor_x == vc->vc_x && p->cursor_y == y &&
 	(mode == CM_ERASE) == !cursor_on)
 	return;
 
@@ -819,7 +818,7 @@ static void fbcon_cursor(struct vc_data *conp, int mode)
     if (cursor_drawn)
         p->dispsw->revc(p, p->cursor_x, real_y(p, p->cursor_y));
 
-    p->cursor_x = conp->vc_x;
+    p->cursor_x = vc->vc_x;
     p->cursor_y = y;
 
     switch (mode) {
@@ -1016,11 +1015,11 @@ static void fbcon_redraw_softback(struct vc_data *vc, struct display *p,
     }
 }
 
-static void fbcon_redraw(struct vc_data *conp, struct display *p, 
+static void fbcon_redraw(struct vc_data *vc, struct display *p, 
 			 int line, int count, int offset)
 {
     unsigned short *d = (unsigned short *)
-	(conp->vc_origin + conp->vc_size_row * line);
+	(vc->vc_origin + vc->vc_size_row * line);
     unsigned short *s = d + offset;
 
     while (count--) {
@@ -1035,7 +1034,7 @@ static void fbcon_redraw(struct vc_data *conp, struct display *p,
 	    if (attr != (c & 0xff00)) {
 		attr = c & 0xff00;
 		if (s > start) {
-		    p->dispsw->putcs(conp, p, start, s - start,
+		    p->dispsw->putcs(vc, p, start, s - start,
 				     real_y(p, line), x);
 		    x += s - start;
 		    start = s;
@@ -1043,7 +1042,7 @@ static void fbcon_redraw(struct vc_data *conp, struct display *p,
 	    }
 	    if (c == scr_readw(d)) {
 	    	if (s > start) {
-	    	    p->dispsw->putcs(conp, p, start, s - start,
+	    	    p->dispsw->putcs(vc, p, start, s - start,
 				     real_y(p, line), x);
 		    x += s - start + 1;
 		    start = s + 1;
@@ -1057,25 +1056,25 @@ static void fbcon_redraw(struct vc_data *conp, struct display *p,
 	    d++;
 	} while (s < le);
 	if (s > start)
-	    p->dispsw->putcs(conp, p, start, s - start, real_y(p, line), x);
+	    p->dispsw->putcs(vc, p, start, s - start, real_y(p, line), x);
 	if (offset > 0)
 		line++;
 	else {
 		line--;
 		/* NOTE: We subtract two lines from these pointers */
-		s -= conp->vc_size_row;
-		d -= conp->vc_size_row;
+		s -= vc->vc_size_row;
+		d -= vc->vc_size_row;
 	}
     }
 }
 
-void fbcon_redraw_clear(struct vc_data *conp, struct display *p, int sy, int sx,
+void fbcon_redraw_clear(struct vc_data *vc, struct display *p, int sy, int sx,
 		     int height, int width)
 {
     int x, y;
     for (y=0; y<height; y++)
 	for (x=0; x<width; x++)
-	    fbcon_putc(conp, ' ', sy+y, sx+x);
+	    fbcon_putc(vc, ' ', sy+y, sx+x);
 }
 
 /* This cannot be used together with ypan or ywrap */
@@ -1086,9 +1085,9 @@ void fbcon_redraw_bmove(struct display *p, int sy, int sx, int dy, int dx, int h
     /* h will be always 1, but it does not matter if we are more generic */
 
     while (h-- > 0) {
-	struct vc_data *conp = p->conp;
+	struct vc_data *vc = p->vc;
 	unsigned short *d = (unsigned short *)
-		(conp->vc_origin + conp->vc_size_row * dy + dx * 2);
+		(vc->vc_origin + vc->vc_size_row * dy + dx * 2);
 	unsigned short *s = d + (dx - sx);
 	unsigned short *start = d;
 	unsigned short *ls = d;
@@ -1102,14 +1101,14 @@ void fbcon_redraw_bmove(struct display *p, int sy, int sx, int dy, int dx, int h
 	    if (attr != (c & 0xff00)) {
 		attr = c & 0xff00;
 		if (d > start) {
-		    p->dispsw->putcs(conp, p, start, d - start, dy, x);
+		    p->dispsw->putcs(vc, p, start, d - start, dy, x);
 		    x += d - start;
 		    start = d;
 		}
 	    }
 	    if (s >= ls && s < le && c == scr_readw(s)) {
 		if (d > start) {
-		    p->dispsw->putcs(conp, p, start, d - start, dy, x);
+		    p->dispsw->putcs(vc, p, start, d - start, dy, x);
 		    x += d - start + 1;
 		    start = d + 1;
 		} else {
@@ -1121,7 +1120,7 @@ void fbcon_redraw_bmove(struct display *p, int sy, int sx, int dy, int dx, int h
 	    d++;
 	} while (d < le);
 	if (d > start)
-	    p->dispsw->putcs(conp, p, start, d - start, dy, x);
+	    p->dispsw->putcs(vc, p, start, d - start, dy, x);
 	sy++;
 	dy++;
     }
@@ -1357,10 +1356,10 @@ static int fbcon_switch(struct vc_data *vc)
 	}
     }
     if (logo_shown >= 0) {
-    	struct vc_data *conp2 = vc_cons[logo_shown].d;
+    	struct vc_data *vc2 = vc_cons[logo_shown].d;
     	
-    	if (conp2->vc_top == logo_lines && conp2->vc_bottom == conp2->vc_rows)
-    		conp2->vc_top = 0;
+    	if (vc2->vc_top == logo_lines && vc2->vc_bottom == vc2->vc_rows)
+    		vc2->vc_top = 0;
     	logo_shown = -1;
     }
     p->var.yoffset = p->yscroll = 0;
@@ -1386,7 +1385,8 @@ static int fbcon_switch(struct vc_data *vc)
 	p->dispsw->clear_margins(vc, p, 0);
     if (logo_shown == -2) {
 	logo_shown = vc->display_fg->fg_console->vc_num;
-	fbcon_show_logo(vc); /* This is protected above by initmem_freed */
+	/* This is protected above by initmem_freed */
+	fbcon_show_logo(vc->display_fg->fg_console); 
 	update_region(vc->display_fg->fg_console,
 		      vc->vc_origin + vc->vc_size_row * vc->vc_top,
 		      vc->vc_size_row * (vc->vc_bottom - vc->vc_top) / 2);
@@ -1396,15 +1396,15 @@ static int fbcon_switch(struct vc_data *vc)
 }
 
 
-static int fbcon_blank(struct vc_data *conp, int blank)
+static int fbcon_blank(struct vc_data *vc, int blank)
 {
-    struct display *p = &fb_display[conp->vc_num];
+    struct display *p = &fb_display[vc->vc_num];
     struct fb_info *info = p->fb_info;
 
     if (blank < 0)	/* Entering graphics mode */
 	return 0;
 
-    fbcon_cursor(p->conp, blank ? CM_ERASE : CM_DRAW);
+    fbcon_cursor(p->vc, blank ? CM_ERASE : CM_DRAW);
 
     if (!p->can_soft_blank) {
 	if (blank) {
@@ -1418,16 +1418,16 @@ static int fbcon_blank(struct vc_data *conp, int blank)
 	    	u_int height;
 	    	u_int y_break;
 
-	    	oldc = conp->vc_video_erase_char;
-	    	conp->vc_video_erase_char &= p->charmask;
-	    	height = conp->vc_rows;
+	    	oldc = vc->vc_video_erase_char;
+	    	vc->vc_video_erase_char &= p->charmask;
+	    	height = vc->vc_rows;
 		y_break = p->vrows-p->yscroll;
 		if (height > y_break) {
-			p->dispsw->clear(conp, p, real_y(p, 0), 0, y_break, conp->vc_cols);
-			p->dispsw->clear(conp, p, real_y(p, y_break), 0, height-y_break, conp->vc_cols);
+			p->dispsw->clear(vc, p, real_y(p, 0), 0, y_break, vc->vc_cols);
+			p->dispsw->clear(vc, p, real_y(p, y_break), 0, height-y_break, vc->vc_cols);
 		} else
-			p->dispsw->clear(conp, p, real_y(p, 0), 0, height, conp->vc_cols);
-		conp->vc_video_erase_char = oldc;
+			p->dispsw->clear(vc, p, real_y(p, 0), 0, height, vc->vc_cols);
+		vc->vc_video_erase_char = oldc;
 	    }
 	    return 0;
 	} else {
@@ -1854,12 +1854,12 @@ static unsigned long fbcon_getxy(struct vc_data *vc, unsigned long pos, int *px,
 
 /* As we might be inside of softback, we may work with non-contiguous buffer,
    that's why we have to use a separate routine. */
-static void fbcon_invert_region(struct vc_data *conp, u16 *p, int cnt)
+static void fbcon_invert_region(struct vc_data *vc, u16 *p, int cnt)
 {
     while (cnt--) {
-	if (!conp->vc_can_do_color)
+	if (!vc->vc_can_do_color)
 	    *p++ ^= 0x0800;
-	else if (conp->vc_hi_font_mask == 0x100) {
+	else if (vc->vc_hi_font_mask == 0x100) {
 	    u16 a = *p;
 	    a = ((a) & 0x11ff) | (((a) & 0xe000) >> 4) | (((a) & 0x0e00) << 4);
 	    *p++ = a;
@@ -1871,7 +1871,7 @@ static void fbcon_invert_region(struct vc_data *conp, u16 *p, int cnt)
 	if (p == (u16 *)softback_end)
 	    p = (u16 *)softback_buf;
 	if (p == (u16 *)softback_in)
-	    p = (u16 *)conp->vc_origin;
+	    p = (u16 *)vc->vc_origin;
     }
 }
 
@@ -1888,10 +1888,10 @@ static int fbcon_scrolldelta(struct vc_data *vc, int lines)
     	if (vc->display_fg->vc_mode != KD_TEXT || !lines)
     	    return 0;
     	if (logo_shown >= 0) {
-		struct vc_data *conp2 = vc_cons[logo_shown].d;
+		struct vc_data *vc2 = vc_cons[logo_shown].d;
     	
-		if (conp2->vc_top == logo_lines && conp2->vc_bottom == conp2->vc_rows)
-    		    conp2->vc_top = 0;
+		if (vc2->vc_top == logo_lines && vc2->vc_bottom == vc2->vc_rows)
+    		    vc2->vc_top = 0;
     		if (logo_shown == unit) {
     		    unsigned long p, q;
     		    int i;
