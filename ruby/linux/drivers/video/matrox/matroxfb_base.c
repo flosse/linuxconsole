@@ -4,14 +4,14 @@
  *
  * (c) 1998,1999,2000 Petr Vandrovec <vandrove@vc.cvut.cz>
  *
- * Version: 1.21 1999/01/09
+ * Version: 1.50 2000/08/10
  *
  * MTRR stuff: 1998 Tom Rini <trini@kernel.crashing.org>
  *
  * Contributors: "menion?" <menion@mindless.com>
  *                     Betatesting, fixes, ideas
  *
- *               "Kurt Garloff" <garloff@kg1.ping.de>
+ *               "Kurt Garloff" <garloff@suse.de>
  *                     Betatesting, fixes, ideas, videomodes, videomodes timmings
  *
  *               "Tom Rini" <trini@kernel.crashing.org>
@@ -68,6 +68,9 @@
  *
  *               "Anton Altaparmakov" <AntonA@bigfoot.com>
  *                     G400 MAX/non-MAX distinction
+ *
+ *               "Ken Aaker" <kdaaker@rchland.vnet.ibm.com>
+ *                     memtype extension (needed for GXT130P RS/6000 adapter)
  *
  * (following author is not in any relation with this code, but his code
  *  is included in this driver)
@@ -648,6 +651,40 @@ static int matroxfb_setcolreg(unsigned regno, unsigned red, unsigned green,
 	return 0;
 }
 
+/* 0 unblank, 1 blank, 2 no vsync, 3 no hsync, 4 off */
+
+static void matroxfb_blank(int blank, struct fb_info *info)
+{
+#define minfo ((struct matrox_fb_info*)info)
+	int seq;
+	int crtc;
+	CRITFLAGS
+
+	DBG("matroxfb_blank")
+
+	if (ACCESS_FBINFO(dead))
+		return;
+
+	switch (blank) {
+		case 1:  seq = 0x20; crtc = 0x00; break; /* works ??? */
+		case 2:  seq = 0x20; crtc = 0x10; break;
+		case 3:  seq = 0x20; crtc = 0x20; break;
+		case 4:  seq = 0x20; crtc = 0x30; break;
+		default: seq = 0x00; crtc = 0x00; break;
+	}
+
+	CRITBEGIN
+
+	mga_outb(M_SEQ_INDEX, 1);
+	mga_outb(M_SEQ_DATA, (mga_inb(M_SEQ_DATA) & ~0x20) | seq);
+	mga_outb(M_EXTVGA_INDEX, 1);
+	mga_outb(M_EXTVGA_DATA, (mga_inb(M_EXTVGA_DATA) & ~0x30) | crtc);
+
+	CRITEND
+
+#undef minfo
+}
+
 static void do_install_cmap(WPMINFO struct display* dsp)
 {
 	DBG("do_install_cmap")
@@ -926,40 +963,6 @@ static int matrox_getcolreg(unsigned regno, unsigned *red, unsigned *green,
 	return 0;
 #undef minfo
 }
-
-/* 0 unblank, 1 blank, 2 no vsync, 3 no hsync, 4 off */
-
-static void matroxfb_blank(int blank, struct fb_info *info)
-{
-#define minfo ((struct matrox_fb_info*)info)
-	int seq;
-	int crtc;
-	CRITFLAGS
-
-	DBG("matroxfb_blank")
-
-	if (ACCESS_FBINFO(dead))
-		return;
-
-	switch (blank) {
-		case 1:  seq = 0x20; crtc = 0x00; break; /* works ??? */
-		case 2:  seq = 0x20; crtc = 0x10; break;
-		case 3:  seq = 0x20; crtc = 0x20; break;
-		case 4:  seq = 0x20; crtc = 0x30; break;
-		default: seq = 0x00; crtc = 0x00; break;
-	}
-
-	CRITBEGIN
-
-	mga_outb(M_SEQ_INDEX, 1);
-	mga_outb(M_SEQ_DATA, (mga_inb(M_SEQ_DATA) & ~0x20) | seq);
-	mga_outb(M_EXTVGA_INDEX, 1);
-	mga_outb(M_EXTVGA_DATA, (mga_inb(M_EXTVGA_DATA) & ~0x30) | crtc);
-
-	CRITEND
-
-#undef minfo
-} 
 
 static int matroxfb_switch(int con, struct fb_info *info);
 
@@ -1257,6 +1260,7 @@ static unsigned int fv = 0;		/* "matrox:fv:xxxxx" */
 static unsigned int fh = 0;		/* "matrox:fh:xxxxxk" */
 static unsigned int maxclk = 0;		/* "matrox:maxclk:xxxxM" */
 static int dfp = 0;			/* "matrox:dfp */
+static int memtype = -1;		/* "matrox:memtype:xxx" */
 static char fontname[64];		/* "matrox:font:xxxxx" */
 
 #ifndef MODULE
@@ -1980,6 +1984,9 @@ static int matroxfb_probe(struct pci_dev* pdev, const struct pci_device_id* dumm
 	memcpy(ACCESS_FBINFO(fbcon.fontname), fontname, sizeof(ACCESS_FBINFO(fbcon.fontname)));
 	/* DEVFLAGS */
 	ACCESS_FBINFO(devflags.inverse) = inverse;
+	ACCESS_FBINFO(devflags.memtype) = memtype;
+	if (memtype != -1)
+		noinit = 0;
 	if (cmd & PCI_COMMAND_MEMORY) {
 		ACCESS_FBINFO(devflags.novga) = novga;
 		ACCESS_FBINFO(devflags.nobios) = nobios;
@@ -1993,6 +2000,7 @@ static int matroxfb_probe(struct pci_dev* pdev, const struct pci_device_id* dumm
 		ACCESS_FBINFO(devflags.nobios) = 1;
 		ACCESS_FBINFO(devflags.noinit) = 0;
 	}
+
 	ACCESS_FBINFO(devflags.nopciretry) = no_pci_retry;
 	ACCESS_FBINFO(devflags.mga_24bpp_fix) = inv24;
 	ACCESS_FBINFO(devflags.precise_width) = option_precise_width;
@@ -2037,10 +2045,42 @@ static void pci_remove_matrox(struct pci_dev* pdev) {
 	matroxfb_remove(PMINFO 1);
 }
 
+static struct pci_device_id matroxfb_devices[] __devinitdata = {
+#ifdef CONFIG_FB_MATROX_MILLENIUM
+	{PCI_VENDOR_ID_MATROX,	PCI_DEVICE_ID_MATROX_MIL,
+		PCI_ANY_ID,	PCI_ANY_ID,	0, 0, 0},
+	{PCI_VENDOR_ID_MATROX,	PCI_DEVICE_ID_MATROX_MIL_2,
+		PCI_ANY_ID,	PCI_ANY_ID,	0, 0, 0},
+	{PCI_VENDOR_ID_MATROX,	PCI_DEVICE_ID_MATROX_MIL_2_AGP,
+		PCI_ANY_ID,	PCI_ANY_ID,	0, 0, 0},
+#endif
+#ifdef CONFIG_FB_MATROX_MYSTIQUE
+	{PCI_VENDOR_ID_MATROX,	PCI_DEVICE_ID_MATROX_MYS,
+		PCI_ANY_ID,	PCI_ANY_ID,	0, 0, 0},
+#endif
+#ifdef CONFIG_FB_MATROX_G100
+	{PCI_VENDOR_ID_MATROX,	PCI_DEVICE_ID_MATROX_G100,
+		PCI_ANY_ID,	PCI_ANY_ID,	0, 0, 0},
+	{PCI_VENDOR_ID_MATROX,	PCI_DEVICE_ID_MATROX_G100_AGP,
+		PCI_ANY_ID,	PCI_ANY_ID,	0, 0, 0},
+	{PCI_VENDOR_ID_MATROX,	PCI_DEVICE_ID_MATROX_G200_PCI,
+		PCI_ANY_ID,	PCI_ANY_ID,	0, 0, 0},
+	{PCI_VENDOR_ID_MATROX,	PCI_DEVICE_ID_MATROX_G200_AGP,
+		PCI_ANY_ID,	PCI_ANY_ID,	0, 0, 0},
+	{PCI_VENDOR_ID_MATROX,	PCI_DEVICE_ID_MATROX_G400_AGP,
+		PCI_ANY_ID,	PCI_ANY_ID,	0, 0, 0},
+#endif
+	{0,			0,
+		0,		0,		0, 0, 0}
+};
+
+MODULE_DEVICE_TABLE(pci, matroxfb_devices);
+
 static struct pci_driver matroxfb_driver = {
-	name:	"matroxfb",
-	probe:	matroxfb_probe,
-	remove:	pci_remove_matrox,
+	name:		"matroxfb",
+	id_table:	matroxfb_devices,
+	probe:		matroxfb_probe,
+	remove:		pci_remove_matrox,
 };
 
 /* **************************** init-time only **************************** */
@@ -2321,6 +2361,8 @@ int __init matroxfb_setup(char *options) {
 			sgram = 1;
 		else if (!strcmp(this_opt, "sdram"))
 			sgram = 0;
+		else if (!strncmp(this_opt, "memtype:", 8))
+			memtype = simple_strtoul(this_opt+8, NULL, 0);
 		else {
 			int value = 1;
 
@@ -2404,6 +2446,8 @@ MODULE_PARM(nobios, "i");
 MODULE_PARM_DESC(nobios, "Disables ROM BIOS (0 or 1=disabled) (default=do not change BIOS state)");
 MODULE_PARM(noinit, "i");
 MODULE_PARM_DESC(noinit, "Disables W/SG/SD-RAM and bus interface initialization (0 or 1=do not initialize) (default=0)");
+MODULE_PARM(memtype, "i");
+MODULE_PARM_DESC(memtype, "Memory type for G200/G400 (see Documentation/fb/matroxfb.txt for explanation) (default=3 for G200, 0 for G400)");
 MODULE_PARM(mtrr, "i");
 MODULE_PARM_DESC(mtrr, "This speeds up video memory accesses (0=disabled or 1) (default=1)");
 MODULE_PARM(sgram, "i");
