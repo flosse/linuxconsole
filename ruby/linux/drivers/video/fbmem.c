@@ -20,7 +20,6 @@
 #include <linux/malloc.h>
 #include <linux/mman.h>
 #include <linux/tty.h>
-#include <linux/console.h>
 #include <linux/init.h>
 #include <linux/proc_fs.h>
 #ifdef CONFIG_KMOD
