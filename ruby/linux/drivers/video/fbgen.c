@@ -75,18 +75,3 @@ int fbgen_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 	info->var.vmode &= ~FB_VMODE_YWRAP;
     return 0;
 }
-
-    /*
-     *  Update the `var' structure (called by fbcon.c)
-     */
-
-int fbgen_update_var(struct fb_info *info)
-{
-    int err;
-
-    if (info->fbops->fb_pan_display) {
-        if ((err = info->fbops->fb_pan_display(&info->var, info)))
-            return err;
-    }
-    return 0;
-}
