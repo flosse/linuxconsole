@@ -367,7 +367,6 @@ static void fbcon_putcs(struct vc_data *vc, const unsigned short *s,
 		image.bg_color = ((u16*)info->pseudo_palette)[attr_bgcol(vc,*s)];
     	}
    }
-
    image.x = xpos * vc->vc_font.width;
    image.y = ypos * vc->vc_font.height;		 
    image.width = vc->vc_font.width;
@@ -384,6 +383,70 @@ static void fbcon_putcs(struct vc_data *vc, const unsigned short *s,
 
 static void fbcon_cursor(struct vc_data *vc, int mode)
 {
+    struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
+    struct fbcursor cursor;	
+ 
+    fbcon_set_origin(vc);
+
+    cursor.pos.x = vc->vc_x * vc->vc_font.width;
+    cursor.pos.y = vc->vc_y * vc->vc_font.height;
+
+    /* Avoid flickering if there's no real change. */
+    if (info->cursor.pos.x == cursor->pos.x && 
+	info->cursor.pos.y == cursor->pox.y &&
+        (mode == CM_ERASE) == !cursor.enable)
+        return;
+
+    cursor.size.x = vc->vc_font.width;
+    cursor.size.y = vc->vc_font.height;	
+	
+    switch (mode) {
+        case CM_ERASE:
+	    	if (info->cursor.enable) {
+			info->cursor.enable = 0;
+			info->cursor.set = FB_CUR_SETCUR;
+			info->fbops->fb_cursor(info, info->cursor);
+	    	}
+            	break;
+        case CM_MOVE:
+        case CM_DRAW:
+		info->cursor.set = FB_CUR_SETALL;
+		info->cursor.enable = 1;
+		info->cursor.size.x = vc->vc_font.width;
+		info->cursor.size.y = vc->vc_font.height;
+		info->cursor.pos.x = vc->vc_x * vc->vc_font.width;
+		info->cursor.pos.y = vc->vc_y * vc->vc_font.height;
+		info->fbops->fb_cursor(info, info->cursor); 
+		break;
+	case CM_CHANGE: {
+		int top_scanline, bottom_scanline = vc->vc_font.height;
+
+		if (bottom_scanline >= 10) bottom_scanline--;
+		switch (vc->vc_cursor_type & CUR_HWMASK) {
+			case CUR_NONE:
+				top_scanline = bottom_scanline;
+				break;
+			case CUR_BLOCK:
+				top_scanline = 0;
+				bottom_scanline = vc->vc_font.height;
+				break;
+			case CUR_TWO_THIRDS:
+				top_scanline = bottom_scanline/3;
+				break;
+			case CUR_LOWER_THIRD:
+				top_scanline = (bottom_scanline*2)/3;
+				break;
+			case CUR_LOWER_HALF:
+				top_scanline = bottom_scanline/2;
+				break;
+                	case CUR_UNDERLINE:
+			default:
+				top_scanline = bottom_scanline - 2;
+				break;
+		}
+            break;
+        }
+    }
 }
 
 static int fbcon_scroll_region(struct vc_data *vc, int t, int b, int dir, 
@@ -538,7 +601,7 @@ const struct consw fb_con = {
     con_clear: 		fbcon_clear,
     con_putc: 		fbcon_putc,
     con_putcs: 		fbcon_putcs,
-    con_cursor: 	fbcon_cursor,
+    //con_cursor: 	fbcon_cursor,
     con_scroll_region: 	fbcon_scroll_region,
     con_bmove: 		fbcon_bmove,
     con_blank: 		fbcon_blank,
