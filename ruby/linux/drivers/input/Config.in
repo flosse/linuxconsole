@@ -43,9 +43,6 @@ if [ "$CONFIG_INPUT" != "n" ]; then
       tristate '  SpaceTec SpaceBall 2003/3003/4000 FLX 6dof controllers' CONFIG_INPUT_SPACEBALL
       tristate '  Gravis Stinger gamepad' CONFIG_INPUT_STINGER
       tristate '  I-Force joysticks/wheels' CONFIG_INPUT_IFORCE_232
-      if [ "$CONFIG_INPUT_IFORCE_232" != "n" ]; then
-         bool '    I-Force force feedback (EXPERIMENTAL)' CONFIG_INPUT_IFORCE_FF
-      fi
       tristate '  Gunze AHL-51S touchscreen' CONFIG_INPUT_GUNZE
       tristate '  Newton keyboard' CONFIG_INPUT_NEWTON
       if [ "$CONFIG_SA1100_BITSY" = "y" ]; then
@@ -96,9 +93,6 @@ if [ "$CONFIG_INPUT" != "n" ]; then
          fi
          tristate '  Wacom Intuos/Graphire tablet' CONFIG_INPUT_WACOMUSB
          tristate '  I-Force joysticks/wheels' CONFIG_INPUT_IFORCE_USB
-         if [ "$CONFIG_INPUT_IFORCE_USB" != "n" ]; then
-            bool '    I-Force force feedback (EXPERIMENTAL)' CONFIG_INPUT_IFORCE_FF
-         fi
    fi
 
    if [ "$CONFIG_ADB" = "y" ]; then	
