@@ -227,10 +227,6 @@ printk(KERN_DEBUG "iforce.c: leaving iforce_usb_xmit: nothing to send\n");
 	}
 	XMIT_INC(iforce->xmit.tail, n);
 
-	dump_packet("usb_xmit",  (((char *)iforce->out.transfer_buffer)[0] << 8) |
-		n,
-		iforce->out.transfer_buffer + 1);
-
 	spin_unlock(&iforce->xmit_lock);
 
 	if (n=usb_submit_urb(&iforce->out)) {
@@ -242,7 +238,7 @@ printk(KERN_DEBUG "iforce.c: leaving iforce_usb_xmit: nothing to send\n");
 #ifdef IFORCE_232
 static void iforce_serial_xmit(struct iforce *iforce)
 {
-	unsigned char cs = 0x2b;
+	unsigned char cs;
 	int i;
 
 	if (test_and_set_bit(IFORCE_XMIT_RUNNING, iforce->xmit_flags)) {
@@ -254,21 +250,31 @@ static void iforce_serial_xmit(struct iforce *iforce)
 
 again:
 	if (iforce->xmit.head == iforce->xmit.tail) {
+		clear_bit(IFORCE_XMIT_RUNNING, iforce->xmit_flags);
 		spin_unlock(&iforce->xmit_lock);
 		return;
 	}
 
+	cs = 0x2b;
+
+	serio_write(iforce->serio, 0x2b);
+
 	serio_write(iforce->serio, iforce->xmit.buf[iforce->xmit.tail]);
+	cs ^= iforce->xmit.buf[iforce->xmit.tail];
 	XMIT_INC(iforce->xmit.tail, 1);
 
-	for (i=iforce->xmit.buf[iforce->xmit.tail]; i > 0; ++i) {
+	for (i=iforce->xmit.buf[iforce->xmit.tail]; i >= 0; --i) {
 		serio_write(iforce->serio, iforce->xmit.buf[iforce->xmit.tail]);
 		cs ^= iforce->xmit.buf[iforce->xmit.tail];
 		XMIT_INC(iforce->xmit.tail, 1);
 	}
 	
+	serio_write(iforce->serio, cs);
+
 	if (test_and_clear_bit(IFORCE_XMIT_AGAIN, iforce->xmit_flags))
 		goto again;
+
+	clear_bit(IFORCE_XMIT_RUNNING, iforce->xmit_flags);
 
 	spin_unlock(&iforce->xmit_lock);
 }
@@ -291,6 +297,8 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 	int empty;
 			
 	spin_lock(&iforce->xmit_lock);
+
+	dump_packet("send_packet", cmd, data);
 
 	empty = iforce->xmit.head == iforce->xmit.tail;
 	/* Store head of paquet first */
@@ -319,18 +327,20 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 	switch (iforce->bus) {
 
 #ifdef IFORCE_232
-		case IFORCE_232: {
-			serio_write(iforce->serio, 0x2b);
-		}
+		case IFORCE_232:
+		if (empty)
+//serio_write(iforce->serio, 0x2b);
+			iforce_serial_xmit(iforce);
+		break;
 #endif
 #ifdef IFORCE_USB
-		case IFORCE_USB: {
+		case IFORCE_USB: 
 
-			if (empty & !iforce->out.status) {
+		if (empty & !iforce->out.status) {
 printk(KERN_DEBUG "iforce.c: send_packet: call iforce_usb_xmit needed\n");
-				iforce_usb_xmit(iforce);
-			}
+			iforce_usb_xmit(iforce);
 		}
+		break;
 #endif
 	}
 }
