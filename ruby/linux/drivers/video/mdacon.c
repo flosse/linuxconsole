@@ -334,9 +334,6 @@ static const char __init *mdacon_startup(struct vt_struct *vt, int init)
 static void mdacon_init(struct vc_data *vc)
 {
 	vc->vc_complement_mask = 0x0800;	 /* reverse video */
-
-	vc->vc_cols = vc->display_fg->default_mode->vc_cols;
-	vc->vc_rows = vc->display_fg->default_mode->vc_rows;
 }
 
 static void mdacon_deinit(struct vc_data *vc)
