@@ -386,12 +386,16 @@ static void fn_send_intr(struct tty_struct *tty)
 
 static void fn_scroll_forw(struct tty_struct *tty)
 {
-	scrollfront(0);
+	struct vc_data *vc = (struct vc_data *) tty->driver_data;
+
+	scrollfront(vc, 0);
 }
 
 static void fn_scroll_back(struct tty_struct *tty)
 {
-	scrollback(0);
+	struct vc_data *vc = (struct vc_data *) tty->driver_data;
+
+	scrollback(vc, 0);
 }
 
 static void fn_compose(struct tty_struct *tty)
@@ -412,7 +416,7 @@ static void fn_SAK(struct tty_struct *tty)
 	struct vc_data *vc = (struct vc_data *) tty->driver_data;
 
 	do_SAK(tty);
-	reset_vc(vc->vc_num);
+	reset_vc(vc);
 }
 
 static void fn_show_mem(struct tty_struct *tty)
