@@ -55,3 +55,12 @@ CONFIG_KEYBOARD_MAPLE
   The module will be called maple_keyb.o. If you want to compile it as a
   module, say M here and read <file:Documentation/modules.txt>.
 
+CONFIG_KEYBOARD_AMIGA
+  Say Y here if you are running Linux on a m68k amiga and have a keyboard
+  attached.	
+
+  This driver is also available as a module ( = code which can be
+  inserted in and removed from the running kernel whenever you want).
+  The module will be called maple_keyb.o. If you want to compile it as a
+  module, say M here and read <file:Documentation/modules.txt>.
+
