@@ -126,9 +126,6 @@ void add_softcursor(struct vc_data *vc)
 
 void hide_cursor(struct vc_data *vc)
 {
-	unsigned long flags;	
-
-	spin_lock_irqsave(&vc->vc_tty->driver.tty_lock, flags);
 /*
 	if (visible_origin != origin) {
 		set_origin(vc);
@@ -145,16 +142,12 @@ void hide_cursor(struct vc_data *vc)
         }
 	if (sw->con_cursor)
 		sw->con_cursor(vc, CM_ERASE);
-	spin_unlock_irqrestore(&vc->vc_tty->driver.tty_lock, flags);
 }
 
 void set_cursor(struct vc_data *vc)
 {
-	unsigned long flags; 	
-
     	if (!IS_VISIBLE || vc->display_fg->vt_blanked || vcmode == KD_GRAPHICS)
         	return;
-	spin_lock_irqsave(&vc->vc_tty->driver.tty_lock, flags);
 	if (dectcem) {
         	if (cons_num == sel_cons)
                 	clear_selection();
@@ -168,24 +161,19 @@ void set_cursor(struct vc_data *vc)
 		}
     	} else
         	hide_cursor(vc);
-	spin_unlock_irqrestore(&vc->vc_tty->driver.tty_lock, flags);
 }
 
 void update_cursor_attr(struct vc_data *vc)
 {
-	unsigned long flags;
-
 	if (!IS_VISIBLE || vc->display_fg->vt_blanked || vcmode == KD_GRAPHICS)
                 return;
 
-    	spin_lock_irqsave(&vc->vc_tty->driver.tty_lock, flags);
 	if (dectcem) {
         	if (cons_num == sel_cons)
                 	clear_selection();
 		if (((cursor_type & 0x0f) != 1) && sw->con_cursor)
 			sw->con_cursor(vc, CM_CHANGE);
         }	
-	spin_unlock_irqrestore(&vc->vc_tty->driver.tty_lock, flags);
 }
 
 /*
@@ -716,15 +704,15 @@ static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
 }
 
 /*
- * This is the console switching tasklet.
+ * This is the console switching callback.
  *
- * Doing console switching in a tasklet allows
+ * Doing console switching in a process context allows
  * us to do the switches asynchronously (needed when we want
  * to switch due to a keyboard interrupt).  Synchronization
  * with other console code and prevention of re-entrancy is
- * ensured with console_lock.
+ * ensured with console semaphore.
  */
-static void console_softint(unsigned long private)
+static void vt_callback(void *private)
 {
         struct vt_struct *vt = (struct vt_struct *) private;
         if  (!vt->want_vc) return;
@@ -781,11 +769,10 @@ static void visual_init(struct vc_data *vc)
 
 const char *create_vt(struct vt_struct *vt, int init)
 {
-	DECLARE_TASKLET_DISABLED(console_tasklet, console_softint, (long) vt);
 	const char *display_desc = vt->vt_sw->con_startup(vt, init);
 
 	if (!display_desc) return NULL;	
-	vt->vt_tasklet = console_tasklet;
+	INIT_TQUEUE(&vt->vt_tq, vt_callback, vt);
 	vt->next = vt_cons;
 	vt_cons = vt;
 	vt->vt_dont_switch = 0;
@@ -1282,7 +1269,6 @@ static int vt_write(struct tty_struct * tty, int from_user,
         pm_access(vc->display_fg->pm_con);
         retval = do_con_write(tty, from_user, buf, count);
         vt_flush_chars(tty);
-
         return retval;
 }
 
@@ -1304,9 +1290,12 @@ static int vt_write_room(struct tty_struct *tty)
 static void vt_flush_chars(struct tty_struct *tty)
 {
         struct vc_data *vc = (struct vc_data *)tty->driver_data;
+	unsigned long flags;
 
         pm_access(vc->display_fg->pm_con);
+	spin_lock_irqsave(&vc->vc_tty->driver.tty_lock, flags);
         set_cursor(vc);
+	spin_unlock_irqrestore(&vc->vc_tty->driver.tty_lock, flags);
 }
 
 static int vt_chars_in_buffer(struct tty_struct *tty)
@@ -1608,8 +1597,6 @@ void __init vt_console_init(void)
         printk("Console: %s %s %dx%d\n",
                 can_do_color ? "colour" : "mono",
                 display_desc, video_num_columns, video_num_lines);
-        tasklet_enable(&vt->vt_tasklet);
-        tasklet_schedule(&vt->vt_tasklet);
 }
 
 static void clear_buffer_attributes(struct vc_data *vc)

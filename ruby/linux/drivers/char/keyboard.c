@@ -974,7 +974,7 @@ void kbd_keycode(void  *private, unsigned int keycode, int down)
 
 	/* If the console is blanked unblank it */
 	vt->want_vc = vc;
-        tasklet_schedule(&vt->vt_tasklet);
+        schedule_task(&vt->vt_tq);
 
 	if ((raw_mode = (vc->kbd_table.kbdmode == VC_RAW)))
 		if (emulate_raw(vc, keycode, !down << 7))
