@@ -357,6 +357,7 @@ do_kdgkb_ioctl(int cmd, struct kbsentry *user_kdgkb, int perm)
  *  structure so we wont have to convert the fontdata all the time.
  *  /Jes
  */
+
 #define max_font_size 65536
 
 int con_font_op(struct vc_data *vc, struct console_font_op *op)
@@ -568,10 +569,10 @@ do_unimap_ioctl(struct vc_data *vc, int cmd, struct unimapdesc *user_ud,
 	case PIO_UNIMAP:
 		if (!perm)
 			return -EPERM;
-		return con_set_unimap(vc->display_fg->fg_console,
+		return con_set_unimap(vc,
 				      tmp.entry_ct, tmp.entries);
 	case GIO_UNIMAP:
-		return con_get_unimap(vc->display_fg->fg_console,
+		return con_get_unimap(vc,
 				      tmp.entry_ct, &(user_ud->entry_ct),
 				      tmp.entries);
 	}

@@ -68,7 +68,7 @@ static void sysrq_handle_SAK(int key, struct pt_regs *pt_regs,
 
 	if (tty)
 		do_SAK(tty);
-	if ((tty->driver.subtype == SYSTEM_TYPE_CONSOLE) && vc)
+	if ((tty->driver.type == TTY_DRIVER_TYPE_CONSOLE) && vc)
 		reset_vc(vc->display_fg->fg_console);
 }
 static struct sysrq_key_op sysrq_SAK_op = {
@@ -85,7 +85,7 @@ static void sysrq_handle_unraw(int key, struct pt_regs *pt_regs,
 {
 	struct vc_data *vc = (struct vc_data *) tty->driver_data;
 	
-	if ((tty->driver.subtype == SYSTEM_TYPE_CONSOLE) && vc)
+	if ((tty->driver.type == TTY_DRIVER_TYPE_CONSOLE) && vc)
 		vc->kbd_table.kbdmode = VC_XLATE;
 }
 static struct sysrq_key_op sysrq_unraw_op = {

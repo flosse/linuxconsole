@@ -58,8 +58,6 @@
 static void kbd_disconnect(struct input_handle *handle);
 extern void ctrl_alt_del(void);
 
-#define SIZE(x)	(sizeof(x)/sizeof((x)[0]))
-
 /*
  * Exported functions/variables
  */
@@ -99,11 +97,11 @@ static fn_handler_fn *fn_handler[] = { FN_HANDLERS };
 
 /* maximum values each key_handler can handle */
 const int max_vals[] = {
-	255, SIZE(func_table) - 1, SIZE(fn_handler) - 1, NR_PAD - 1,
+	255, ARRAY_SIZE(func_table) - 1, ARRAY_SIZE(fn_handler) - 1, NR_PAD - 1,
 	NR_DEAD - 1, 255, 3, NR_SHIFT - 1, 255, NR_ASCII - 1, NR_LOCK - 1,
 	255, 2*NR_LOCK - 1, 255
 };
-const int NR_TYPES = SIZE(max_vals);
+const int NR_TYPES = ARRAY_SIZE(max_vals);
 
 int spawnpid, spawnsig;
 
@@ -278,7 +276,7 @@ void compute_shiftstate(void)
 	shift_state = 0;
 	memset(shift_down, 0, sizeof(shift_down));
 	
-	for (i = 0; i < SIZE(key_down); i++) {
+	for (i = 0; i < ARRAY_SIZE(key_down); i++) {
 
 		if (!key_down[i])
 			continue;
@@ -528,7 +526,7 @@ static void k_spec(struct vc_data *vc, unsigned char value, char up_flag)
 {
 	if (up_flag)
 		return;
-	if (value >= SIZE(fn_handler))
+	if (value >= ARRAY_SIZE(fn_handler))
 		return;
 	if ((vc->kbd_table.kbdmode == VC_RAW || 
 	     vc->kbd_table.kbdmode == VC_MEDIUMRAW) && 
@@ -593,7 +591,7 @@ static void k_fn(struct vc_data *vc, unsigned char value, char up_flag)
 {
 	if (up_flag)
 		return;
-	if (value < SIZE(func_table)) {
+	if (value < ARRAY_SIZE(func_table)) {
 		if (func_table[value])
 			puts_queue(vc, func_table[value]);
 	} else
