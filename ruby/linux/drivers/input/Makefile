@@ -19,6 +19,7 @@ MOD_LIST_NAME	:= INPUT_MODULES
 # Objects that export symbols.
 
 export-objs	:= input.o serio.o gameport.o
+common-objs	:= input.o serio.o gameport.o
 
 # Object file lists.
 
@@ -105,6 +106,11 @@ obj-$(CONFIG_INPUT_RPCMOUSE)	+= rpcmouse.o
 #obj-$(CONFIG_INPUT_APOLLOKBD)	+= apollokbd.o
 #obj-$(CONFIG_INPUT_HPHIL)	+= hphil.o
 
+# Remove duplicates.
+  
+common-y	:= $(filter $(obj-y),$(common-obj))
+obj-y		:= $(filter-out $(common-y), $(obj-y)) $(common-y)
+
 # Files that are both resident and modular: remove from modular.
 
 obj-m		:= $(filter-out $(obj-y), $(obj-m))
@@ -112,8 +118,8 @@ int-m		:= $(filter-out $(int-y), $(int-m))
 
 # Translate to Rules.make lists.
 
-O_OBJS		:= $(sort $(filter-out $(export-objs), $(obj-y)))
-OX_OBJS		:= $(sort $(filter     $(export-objs), $(obj-y)))
+O_OBJS		:= $(filter-out $(export-objs), $(obj-y))
+OX_OBJS		:= $(filter     $(export-objs), $(obj-y))
 M_OBJS		:= $(sort $(filter-out $(export-objs), $(obj-m)))
 MX_OBJS		:= $(sort $(filter     $(export-objs), $(obj-m)))
 
