@@ -131,7 +131,7 @@ struct tty_driver {
 	int	flags;		/* tty driver flags */
 	int 	may_schedule;	/* when we can schedule */
 	int	*refcount;	/* for loadable tty drivers */
-	struct semaphore tty_lock;/* access control for printk and tty layer */
+	struct semaphore *tty_lock;/* access control for printk and tty layer */
 	struct proc_dir_entry *proc_entry; /* /proc fs entry */
 	struct tty_driver *other; /* only used for the PTY driver */
 
