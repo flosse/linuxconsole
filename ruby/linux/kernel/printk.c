@@ -561,7 +561,7 @@ void release_console_sem(kdev_t device)
  */
 void console_conditional_schedule(struct tty_driver *driver)
 {
-	if (driver->may_schedule && current->need_resched) {
+	if (driver->may_schedule && need_resched()) {
 		set_current_state(TASK_RUNNING);
 		schedule();
 	}
