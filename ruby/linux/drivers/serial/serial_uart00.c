@@ -530,6 +530,11 @@ static void uart00_shutdown(struct uart_port *port, struct uart_info *info)
 	UART_PUT_MCR(port, UART_GET_MCR(port) &~UART_MCR_BR_MSK);
 }
 
+static const char *uart00_type(struct uart_port *port)
+{
+	return port->type == PORT_UART00 ? "UART00" : NULL;
+}
+
 /*
  * Release the memory region(s) being used by 'port'
  */
@@ -585,6 +590,7 @@ static struct uart_ops uart00_pops = {
 	startup:	uart00_startup,
 	shutdown:	uart00_shutdown,
 	change_speed:	uart00_change_speed,
+	type:		uart00_type,
 	release_port:	uart00_release_port,
 	request_port:	uart00_request_port,
 	config_port:	uart00_config_port,

@@ -271,6 +271,7 @@ static void sa1100_int(int irq, void *dev_id, struct pt_regs *regs)
 	unsigned int status, pass_counter = 0;
 
 	status = UART_GET_UTSR0(port);
+	status &= (SM_TO_UTSR0(port->read_status_mask) | ~UTSR0_TFS);
 	do {
 		if (status & (UTSR0_RFS | UTSR0_RID)) {
 			/* Clear the receiver idle bit, if set */
@@ -294,12 +295,12 @@ static void sa1100_int(int irq, void *dev_id, struct pt_regs *regs)
 			}
 #endif
 		}
-		status &= SM_TO_UTSR0(port->read_status_mask);
 		if (status & UTSR0_TFS)
 			sa1100_tx_chars(info);
 		if (pass_counter++ > SA1100_ISR_PASS_LIMIT)
 			break;
 		status = UART_GET_UTSR0(port);
+		status &= (SM_TO_UTSR0(port->read_status_mask) | ~UTSR0_TFS);
 	} while (status & (UTSR0_TFS | UTSR0_RFS | UTSR0_RID));
 }
 
@@ -451,6 +452,11 @@ static void sa1100_change_speed(struct uart_port *port, u_int cflag, u_int iflag
 	UART_PUT_UTCR3(port, old_utcr3);
 }
 
+static const char *sa1100_type(struct uart_port *port)
+{
+	return port->type == PORT_SA1100 ? "SA1100" : NULL;
+}
+
 /*
  * Release the memory region(s) being used by 'port'.
  */
@@ -514,6 +520,7 @@ static struct uart_ops sa1100_pops = {
 	startup:	sa1100_startup,
 	shutdown:	sa1100_shutdown,
 	change_speed:	sa1100_change_speed,
+	type:		sa1100_type,
 	release_port:	sa1100_release_port,
 	request_port:	sa1100_request_port,
 	config_port:	sa1100_config_port,
@@ -565,9 +572,10 @@ void __init sa1100_register_uart_fns(struct sa1100_port_fns *fns)
 		sa1100_pops.get_mctrl = fns->get_mctrl;
 	if (fns->set_mctrl)
 		sa1100_pops.set_mctrl = fns->set_mctrl;
-	sa1100_open    = fns->open;
-	sa1100_close   = fns->close;
-	sa1100_pops.pm = fns->pm;
+	sa1100_open          = fns->open;
+	sa1100_close         = fns->close;
+	sa1100_pops.pm       = fns->pm;
+	sa1100_pops.set_wake = fns->set_wake;
 }
 
 void __init sa1100_register_uart(int idx, int port)

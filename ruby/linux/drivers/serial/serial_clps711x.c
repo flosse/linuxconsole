@@ -406,6 +406,11 @@ static void clps711xuart_change_speed(struct uart_port *port, u_int cflag, u_int
 	restore_flags(flags);
 }
 
+static const char *clps711xuart_type(struct uart_port *port)
+{
+	return port->type == PORT_CLPS711X ? "CLPS711x" : NULL;
+}
+
 /*
  * Configure/autoconfigure the port.
  */
@@ -436,6 +441,7 @@ static struct uart_ops clps711x_pops = {
 	startup:	clps711xuart_startup,
 	shutdown:	clps711xuart_shutdown,
 	change_speed:	clps711xuart_change_speed,
+	type:		clps711xuart_type,
 	config_port:	clps711xuart_config_port,
 	release_port:	clps711xuart_release_port,
 	request_port:	clps711xuart_request_port,

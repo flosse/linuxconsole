@@ -23,6 +23,7 @@
 #include <linux/slab.h>
 #include <linux/init.h>
 #include <linux/console.h>
+#include <linux/serial_core.h>
 
 #include <asm/io.h>
 #include <asm/irq.h>
@@ -40,202 +41,240 @@
 #define SERIAL_21285_AUXMAJOR	205
 #define SERIAL_21285_AUXMINOR	4
 
-#ifdef CONFIG_SERIAL_21285_OLD
-#include <asm/mach-types.h>
+#define RXSTAT_DUMMY_READ	0x80000000
+#define RXSTAT_FRAME		(1 << 0)
+#define RXSTAT_PARITY		(1 << 1)
+#define RXSTAT_OVERRUN		(1 << 2)
+#define RXSTAT_ANYERR		(RXSTAT_FRAME|RXSTAT_PARITY|RXSTAT_OVERRUN)
+
+#define H_UBRLCR_BREAK		(1 << 0)
+#define H_UBRLCR_PARENB		(1 << 1)
+#define H_UBRLCR_PAREVN		(1 << 2)
+#define H_UBRLCR_STOPB		(1 << 3)
+#define H_UBRLCR_FIFO		(1 << 4)
+
+static struct tty_driver normal, callout;
+static struct tty_struct *serial21285_table[1];
+static struct termios *serial21285_termios[1];
+static struct termios *serial21285_termios_locked[1];
+static const char serial21285_name[] = "Footbridge UART";
+
 /*
- * Compatability with a mistake made a long time ago.
- * Note - the use of "ttyI", "/dev/ttyS0" and major/minor 5,64
- * is HIGHLY DEPRECIATED, and will be removed in the 2.5
- * kernel series.
- *					-- rmk 15/04/2000 
+ * The documented expression for selecting the divisor is:
+ *  BAUD_BASE / baud - 1
+ * However, typically BAUD_BASE is not divisible by baud, so
+ * we want to select the divisor that gives us the minimum
+ * error.  Therefore, we want:
+ *  int(BAUD_BASE / baud - 0.5) ->
+ *  int(BAUD_BASE / baud - (baud >> 1) / baud) ->
+ *  int((BAUD_BASE - (baud >> 1)) / baud)
  */
-#define SERIAL_21285_OLD_NAME	"ttyI"
-#define SERIAL_21285_OLD_MAJOR	TTY_MAJOR
-#define SERIAL_21285_OLD_MINOR	64
 
-static struct tty_driver rs285_old_driver;
-#endif
-
-static struct tty_driver rs285_driver, callout_driver;
-static int rs285_refcount;
-static struct tty_struct *rs285_table[1];
-
-static struct termios *rs285_termios[1];
-static struct termios *rs285_termios_locked[1];
-
-static char wbuf[1000], *putp = wbuf, *getp = wbuf, x_char;
-static struct tty_struct *rs285_tty;
-static int rs285_use_count;
-
-static int rs285_write_room(struct tty_struct *tty)
-{
-	return putp >= getp ? (sizeof(wbuf) - (long) putp + (long) getp) : ((long) getp - (long) putp - 1);
-}
-
-static void rs285_rx_int(int irq, void *dev_id, struct pt_regs *regs)
-{
-	if (!rs285_tty) {
-		disable_irq(IRQ_CONRX);
-		return;
-	}
-	while (!(*CSR_UARTFLG & 0x10)) {
-		int ch, flag;
-		ch = *CSR_UARTDR;
-		flag = *CSR_RXSTAT;
-		if (flag & 4)
-			tty_insert_flip_char(rs285_tty, 0, TTY_OVERRUN);
-		if (flag & 2)
-			flag = TTY_PARITY;
-		else if (flag & 1)
-			flag = TTY_FRAME;
-		tty_insert_flip_char(rs285_tty, ch, flag);
-	}
-	tty_flip_buffer_push(rs285_tty);
-}
-
-static void rs285_send_xchar(struct tty_struct *tty, char ch)
-{
-	x_char = ch;
-	enable_irq(IRQ_CONTX);
-}
-
-static void rs285_throttle(struct tty_struct *tty)
-{
-	if (I_IXOFF(tty))
-		rs285_send_xchar(tty, STOP_CHAR(tty));
-}
-
-static void rs285_unthrottle(struct tty_struct *tty)
-{
-	if (I_IXOFF(tty)) {
-		if (x_char)
-			x_char = 0;
-		else
-			rs285_send_xchar(tty, START_CHAR(tty));
-	}
-}
-
-static void rs285_tx_int(int irq, void *dev_id, struct pt_regs *regs)
-{
-	while (!(*CSR_UARTFLG & 0x20)) {
-		if (x_char) {
-			*CSR_UARTDR = x_char;
-			x_char = 0;
-			continue;
-		}
-		if (putp == getp) {
-			disable_irq(IRQ_CONTX);
-			break;
-		}
-		*CSR_UARTDR = *getp;
-		if (++getp >= wbuf + sizeof(wbuf))
-			getp = wbuf;
-	}
-	if (rs285_tty)
-		wake_up_interruptible(&rs285_tty->write_wait);
-}
-
-static inline int rs285_xmit(int ch)
-{
-	if (putp + 1 == getp || (putp + 1 == wbuf + sizeof(wbuf) && getp == wbuf))
-		return 0;
-	*putp = ch;
-	if (++putp >= wbuf + sizeof(wbuf))
-		putp = wbuf;
-	enable_irq(IRQ_CONTX);
-	return 1;
-}
-
-static int rs285_write(struct tty_struct *tty, int from_user,
-		       const u_char * buf, int count)
-{
-	int i;
-
-	if (from_user && verify_area(VERIFY_READ, buf, count))
-		return -EINVAL;
-
-	for (i = 0; i < count; i++) {
-		char ch;
-		if (from_user)
-			__get_user(ch, buf + i);
-		else
-			ch = buf[i];
-		if (!rs285_xmit(ch))
-			break;
-	}
-	return i;
-}
-
-static void rs285_put_char(struct tty_struct *tty, u_char ch)
-{
-	rs285_xmit(ch);
-}
-
-static int rs285_chars_in_buffer(struct tty_struct *tty)
-{
-	return sizeof(wbuf) - rs285_write_room(tty);
-}
-
-static void rs285_flush_buffer(struct tty_struct *tty)
+static void serial21285_stop_tx(struct uart_port *port, u_int from_tty)
 {
 	disable_irq(IRQ_CONTX);
-	putp = getp = wbuf;
-	if (x_char)
+}
+
+static void serial21285_start_tx(struct uart_port *port, u_int nonempty, u_int from_tty)
+{
+	if (nonempty)
 		enable_irq(IRQ_CONTX);
 }
 
-static inline void rs285_set_cflag(int cflag)
+static void serial21285_stop_rx(struct uart_port *port)
 {
-	int h_lcr, baud, quot;
+	disable_irq(IRQ_CONRX);
+}
+
+static void serial21285_enable_ms(struct uart_port *port)
+{
+}
+
+static void serial21285_rx_chars(int irq, void *dev_id, struct pt_regs *regs)
+{
+	struct uart_info *info = dev_id;
+	struct uart_port *port = info->port;
+	struct tty_struct *tty = info->tty;
+	unsigned int status, ch, rxs, max_count = 256;
+
+	status = *CSR_UARTFLG;
+	while (status & 0x10 && max_count--) {
+		if (tty->flip.count >= TTY_FLIPBUF_SIZE) {
+			tty->flip.tqueue.routine((void *)tty);
+			if (tty->flip.count >= TTY_FLIPBUF_SIZE) {
+				printk(KERN_WARNING "TTY_DONT_FLIP set\n");
+				return;
+			}
+		}
+
+		ch = *CSR_UARTDR;
+
+		*tty->flip.char_buf_ptr = ch;
+		*tty->flip.flag_buf_ptr = TTY_NORMAL;
+		port->icount.rx++;
+
+		rxs = *CSR_RXSTAT | RXSTAT_DUMMY_READ;
+		if (rxs & RXSTAT_ANYERR) {
+			if (rxs & RXSTAT_PARITY)
+				port->icount.parity++;
+			else if (rxs & RXSTAT_FRAME)
+				port->icount.frame++;
+			if (rxs & RXSTAT_OVERRUN)
+				port->icount.overrun++;
+
+			rxs &= port->read_status_mask;
+
+			if (rxs & RXSTAT_PARITY)
+				*tty->flip.flag_buf_ptr = TTY_PARITY;
+			else if (rxs & RXSTAT_FRAME)
+				*tty->flip.flag_buf_ptr = TTY_FRAME;
+		}
+
+		if ((rxs & port->ignore_status_mask) == 0) {
+			tty->flip.flag_buf_ptr++;
+			tty->flip.char_buf_ptr++;
+			tty->flip.count++;
+		}
+		if ((rxs & RXSTAT_OVERRUN) &&
+		    tty->flip.count < TTY_FLIPBUF_SIZE) {
+			/*
+			 * Overrun is special, since it's reported
+			 * immediately, and doesn't affect the current
+			 * character.
+			 */
+			*tty->flip.char_buf_ptr++ = 0;
+			*tty->flip.flag_buf_ptr++ = TTY_OVERRUN;
+			tty->flip.count++;
+		}
+		status = *CSR_UARTFLG;
+	}
+	tty_flip_buffer_push(tty);
+}
+
+static void serial21285_tx_chars(int irq, void *dev_id, struct pt_regs *regs)
+{
+	struct uart_info *info = dev_id;
+	struct uart_port *port = info->port;
+	int count = 256;
+
+	if (port->x_char) {
+		*CSR_UARTDR = port->x_char;
+		port->icount.tx++;
+		port->x_char = 0;
+		return;
+	}
+	if (info->xmit.head == info->xmit.tail
+	    || info->tty->stopped
+	    || info->tty->hw_stopped) {
+		serial21285_stop_tx(port, 0);
+		return;
+	}
+
+	do {
+		*CSR_UARTDR = info->xmit.buf[info->xmit.tail];
+		info->xmit.tail = (info->xmit.tail + 1) & (UART_XMIT_SIZE - 1);
+		port->icount.tx++;
+		if (info->xmit.head == info->xmit.tail)
+			break;
+	} while (--count > 0 && !(*CSR_UARTFLG & 0x20));
+
+	if (CIRC_CNT(info->xmit.head, info->xmit.tail, UART_XMIT_SIZE) <
+			WAKEUP_CHARS)
+		uart_event(info, EVT_WRITE_WAKEUP);
+
+	if (info->xmit.head == info->xmit.tail)
+		serial21285_stop_tx(port, 0);
+}
+
+static u_int serial21285_tx_empty(struct uart_port *port)
+{
+	return (*CSR_UARTFLG & 8) ? 0 : TIOCSER_TEMT;
+}
+
+/* no modem control lines */
+static u_int serial21285_get_mctrl(struct uart_port *port)
+{
+	return TIOCM_CAR | TIOCM_DSR | TIOCM_CTS;
+}
+
+static void serial21285_set_mctrl(struct uart_port *port, u_int mctrl)
+{
+}
+
+static void serial21285_break_ctl(struct uart_port *port, int break_state)
+{
+	u_int h_lcr;
+
+	h_lcr = *CSR_H_UBRLCR;
+	if (break_state)
+		h_lcr |= H_UBRLCR_BREAK;
+	else
+		h_lcr &= ~H_UBRLCR_BREAK;
+	*CSR_H_UBRLCR = h_lcr;
+}
+
+static int serial21285_startup(struct uart_port *port, struct uart_info *info)
+{
+	int ret;
+
+	ret = request_irq(IRQ_CONRX, serial21285_rx_chars, 0,
+			  serial21285_name, info);
+	if (ret == 0) {
+		ret = request_irq(IRQ_CONTX, serial21285_tx_chars, 0,
+				  serial21285_name, info);
+		if (ret)
+			free_irq(IRQ_CONRX, info);
+	}
+	return ret;
+}
+
+static void serial21285_shutdown(struct uart_port *port, struct uart_info *info)
+{
+	free_irq(IRQ_CONTX, info);
+	free_irq(IRQ_CONRX, info);
+}
+
+static void
+serial21285_change_speed(struct uart_port *port, u_int cflag, u_int iflag, u_int quot)
+{
+	u_int h_lcr;
 
 	switch (cflag & CSIZE) {
-	case CS5:
-		h_lcr = 0x10;
-		break;
-	case CS6:
-		h_lcr = 0x30;
-		break;
-	case CS7:
-		h_lcr = 0x50;
-		break;
-	default: /* CS8 */
-		h_lcr = 0x70;
-		break;
-
+	case CS5:		h_lcr = 0x00;	break;
+	case CS6:		h_lcr = 0x20;	break;
+	case CS7:		h_lcr = 0x40;	break;
+	default: /* CS8 */	h_lcr = 0x60;	break;
 	}
+
 	if (cflag & CSTOPB)
-		h_lcr |= 0x08;
-	if (cflag & PARENB)
-		h_lcr |= 0x02;
-	if (!(cflag & PARODD))
-		h_lcr |= 0x04;
-
-	switch (cflag & CBAUD) {
-	case B200:	baud = 200;		break;
-	case B300:	baud = 300;		break;
-	case B1200:	baud = 1200;		break;
-	case B1800:	baud = 1800;		break;
-	case B2400:	baud = 2400;		break;
-	case B4800:	baud = 4800;		break;
-	default:
-	case B9600:	baud = 9600;		break;
-	case B19200:	baud = 19200;		break;
-	case B38400:	baud = 38400;		break;
-	case B57600:	baud = 57600;		break;
-	case B115200:	baud = 115200;		break;
+		h_lcr |= H_UBRLCR_STOPB;
+	if (cflag & PARENB) {
+		h_lcr |= H_UBRLCR_PARENB;
+		if (!(cflag & PARODD))
+			h_lcr |= H_UBRLCR_PAREVN;
 	}
+
+	if (port->fifosize)
+		h_lcr |= H_UBRLCR_FIFO;
+
+	port->read_status_mask = RXSTAT_OVERRUN;
+	if (iflag & INPCK)
+		port->read_status_mask |= RXSTAT_FRAME | RXSTAT_PARITY;
 
 	/*
-	 * The documented expression for selecting the divisor is:
-	 *  BAUD_BASE / baud - 1
-	 * However, typically BAUD_BASE is not divisible by baud, so
-	 * we want to select the divisor that gives us the minimum
-	 * error.  Therefore, we want:
-	 *  int(BAUD_BASE / baud - 0.5) ->
-	 *  int(BAUD_BASE / baud - (baud >> 1) / baud) ->
-	 *  int((BAUD_BASE - (baud >> 1)) / baud)
+	 * Characters to ignore
 	 */
-	quot = (BAUD_BASE - (baud >> 1)) / baud;
+	port->ignore_status_mask = 0;
+	if (iflag & IGNPAR)
+		port->ignore_status_mask |= RXSTAT_FRAME | RXSTAT_PARITY;
+	if (iflag & IGNBRK && iflag & IGNPAR)
+		port->ignore_status_mask |= RXSTAT_OVERRUN;
+
+	/*
+	 * Ignore all characters if CREAD is not set.
+	 */
+	if ((cflag & CREAD) == 0)
+		port->ignore_status_mask |= RXSTAT_DUMMY_READ;
 
 	*CSR_UARTCON = 0;
 	*CSR_L_UBRLCR = quot & 0xff;
@@ -244,173 +283,82 @@ static inline void rs285_set_cflag(int cflag)
 	*CSR_UARTCON = 1;
 }
 
-static void rs285_set_termios(struct tty_struct *tty, struct termios *old)
+static const char *serial21285_type(struct uart_port *port)
 {
-	if (old && tty->termios->c_cflag == old->c_cflag)
-		return;
-	rs285_set_cflag(tty->termios->c_cflag);
+	return port->type == PORT_21285 ? "DC21285" : NULL;
 }
 
-
-static void rs285_stop(struct tty_struct *tty)
+static void serial21285_release_port(struct uart_port *port)
 {
-	disable_irq(IRQ_CONTX);
+	release_mem_region(port->mapbase, 32);
 }
 
-static void rs285_start(struct tty_struct *tty)
+static int serial21285_request_port(struct uart_port *port)
 {
-	enable_irq(IRQ_CONTX);
+	return request_mem_region(port->mapbase, 32, serial21285_name)
+			 != NULL ? 0 : -EBUSY;
 }
 
-static void rs285_wait_until_sent(struct tty_struct *tty, int timeout)
+static void serial21285_config_port(struct uart_port *port, int flags)
 {
-	int orig_jiffies = jiffies;
-	while (*CSR_UARTFLG & 8) {
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(1);
-		if (signal_pending(current))
-			break;
-		if (timeout && time_after(jiffies, orig_jiffies + timeout))
-			break;
-	}
-	set_current_state(TASK_RUNNING);
+	if (flags & UART_CONFIG_TYPE && serial21285_request_port(port) == 0)
+		port->type = PORT_21285;
 }
 
-static int rs285_open(struct tty_struct *tty, struct file *filp)
+/*
+ * verify the new serial_struct (for TIOCSSERIAL).
+ */
+static int serial21285_verify_port(struct uart_port *port, struct serial_struct *ser)
 {
-	int line;
-
-	MOD_INC_USE_COUNT;
-	line = MINOR(tty->device) - tty->driver.minor_start;
-	if (line) {
-		MOD_DEC_USE_COUNT;
-		return -ENODEV;
-	}
-
-	tty->driver_data = NULL;
-	if (!rs285_tty)
-		rs285_tty = tty;
-
-	enable_irq(IRQ_CONRX);
-	rs285_use_count++;
-	return 0;
+	int ret = 0;
+	if (ser->type != PORT_UNKNOWN && ser->type != PORT_21285)
+		ret = -EINVAL;
+	if (ser->irq != NO_IRQ)
+		ret = -EINVAL;
+	if (ser->baud_base != port->uartclk / 16)
+		ret = -EINVAL;
+	return ret;
 }
 
-static void rs285_close(struct tty_struct *tty, struct file *filp)
+static struct uart_ops serial21285_ops = {
+	tx_empty:	serial21285_tx_empty,
+	get_mctrl:	serial21285_get_mctrl,
+	set_mctrl:	serial21285_set_mctrl,
+	stop_tx:	serial21285_stop_tx,
+	start_tx:	serial21285_start_tx,
+	stop_rx:	serial21285_stop_rx,
+	enable_ms:	serial21285_enable_ms,
+	break_ctl:	serial21285_break_ctl,
+	startup:	serial21285_startup,
+	shutdown:	serial21285_shutdown,
+	change_speed:	serial21285_change_speed,
+	type:		serial21285_type,
+	release_port:	serial21285_release_port,
+	request_port:	serial21285_request_port,
+	config_port:	serial21285_config_port,
+	verify_port:	serial21285_verify_port,
+};
+
+static struct uart_port serial21285_port = {
+	membase:	0,
+	mapbase:	0x42000160,
+	iotype:		SERIAL_IO_MEM,
+	irq:		NO_IRQ,
+	uartclk:	0,
+	fifosize:	16,
+	ops:		&serial21285_ops,
+	flags:		ASYNC_BOOT_AUTOCONF,
+};
+
+static void serial21285_setup_ports(void)
 {
-	if (!--rs285_use_count) {
-		rs285_wait_until_sent(tty, 0);
-		disable_irq(IRQ_CONRX);
-		disable_irq(IRQ_CONTX);
-		rs285_tty = NULL;
-	}
-	MOD_DEC_USE_COUNT;
+	serial21285_port.uartclk = mem_fclk_21285 / 16;
 }
-
-static int __init rs285_init(void)
-{
-	int baud = B9600;
-
-	if (machine_is_personal_server())
-		baud = B57600;
-
-	rs285_driver.magic = TTY_DRIVER_MAGIC;
-	rs285_driver.driver_name = "serial_21285";
-	rs285_driver.name = SERIAL_21285_NAME;
-	rs285_driver.major = SERIAL_21285_MAJOR;
-	rs285_driver.minor_start = SERIAL_21285_MINOR;
-	rs285_driver.num = 1;
-	rs285_driver.type = TTY_DRIVER_TYPE_SERIAL;
-	rs285_driver.subtype = SERIAL_TYPE_NORMAL;
-	rs285_driver.init_termios = tty_std_termios;
-	rs285_driver.init_termios.c_cflag = baud | CS8 | CREAD | HUPCL | CLOCAL;
-	rs285_driver.flags = TTY_DRIVER_REAL_RAW;
-	rs285_driver.refcount = &rs285_refcount;
-	rs285_driver.table = rs285_table;
-	rs285_driver.termios = rs285_termios;
-	rs285_driver.termios_locked = rs285_termios_locked;
-
-	rs285_driver.open = rs285_open;
-	rs285_driver.close = rs285_close;
-	rs285_driver.write = rs285_write;
-	rs285_driver.put_char = rs285_put_char;
-	rs285_driver.write_room = rs285_write_room;
-	rs285_driver.chars_in_buffer = rs285_chars_in_buffer;
-	rs285_driver.flush_buffer = rs285_flush_buffer;
-	rs285_driver.throttle = rs285_throttle;
-	rs285_driver.unthrottle = rs285_unthrottle;
-	rs285_driver.send_xchar = rs285_send_xchar;
-	rs285_driver.set_termios = rs285_set_termios;
-	rs285_driver.stop = rs285_stop;
-	rs285_driver.start = rs285_start;
-	rs285_driver.wait_until_sent = rs285_wait_until_sent;
-
-	callout_driver = rs285_driver;
-	callout_driver.name = SERIAL_21285_AUXNAME;
-	callout_driver.major = SERIAL_21285_AUXMAJOR;
-	callout_driver.subtype = SERIAL_TYPE_CALLOUT;
-
-	if (request_irq(IRQ_CONRX, rs285_rx_int, 0, "rs285", NULL))
-		panic("Couldn't get rx irq for rs285");
-
-	if (request_irq(IRQ_CONTX, rs285_tx_int, 0, "rs285", NULL))
-		panic("Couldn't get tx irq for rs285");
-
-#ifdef CONFIG_SERIAL_21285_OLD
-	if (!machine_is_ebsa285() && !machine_is_netwinder()) {
-		rs285_old_driver = rs285_driver;
-		rs285_old_driver.name = SERIAL_21285_OLD_NAME;
-		rs285_old_driver.major = SERIAL_21285_OLD_MAJOR;
-		rs285_old_driver.minor_start = SERIAL_21285_OLD_MINOR;
-
-		if (tty_register_driver(&rs285_old_driver))
-			printk(KERN_ERR "Couldn't register old 21285 serial driver\n");
-	}
-#endif
-
-	if (tty_register_driver(&rs285_driver))
-		printk(KERN_ERR "Couldn't register 21285 serial driver\n");
-	if (tty_register_driver(&callout_driver))
-		printk(KERN_ERR "Couldn't register 21285 callout driver\n");
-
-	return 0;
-}
-
-static void __exit rs285_fini(void)
-{
-	unsigned long flags;
-	int ret;
-
-	save_flags(flags);
-	cli();
-	ret = tty_unregister_driver(&callout_driver);
-	if (ret)
-		printk(KERN_ERR "Unable to unregister 21285 callout driver "
-			"(%d)\n", ret);
-	ret = tty_unregister_driver(&rs285_driver);
-	if (ret)
-		printk(KERN_ERR "Unable to unregister 21285 driver (%d)\n",
-			ret);
-#ifdef CONFIG_SERIAL_21285_OLD
-	if (!machine_is_ebsa285() && !machine_is_netwinder()) {
-		ret = tty_unregister_driver(&rs285_old_driver);
-		if (ret)
-			printk(KERN_ERR "Unable to unregister old 21285 "
-				"driver (%d)\n", ret);
-	}
-#endif
-	free_irq(IRQ_CONTX, NULL);
-	free_irq(IRQ_CONRX, NULL);
-	restore_flags(flags);
-}
-
-module_init(rs285_init);
-module_exit(rs285_fini);
 
 #ifdef CONFIG_SERIAL_21285_CONSOLE
 /************** console driver *****************/
 
-static void rs285_console_write(struct console *co, const char *s, u_int count)
+static void serial21285_console_write(struct console *co, const char *s, u_int count)
 {
 	int i;
 
@@ -426,7 +374,12 @@ static void rs285_console_write(struct console *co, const char *s, u_int count)
 	enable_irq(IRQ_CONTX);
 }
 
-static int rs285_console_wait_key(struct console *co)
+static kdev_t serial21285_console_device(struct console *c)
+{
+	return MKDEV(SERIAL_21285_MAJOR, SERIAL_21285_MINOR);
+}
+
+static int serial21285_console_wait_key(struct console *co)
 {
 	int c;
 
@@ -437,104 +390,45 @@ static int rs285_console_wait_key(struct console *co)
 	return c;
 }
 
-static kdev_t rs285_console_device(struct console *c)
+static void __init
+serial21285_get_options(struct uart_port *port, int *baud, int *parity, int *bits)
 {
-	return MKDEV(SERIAL_21285_MAJOR, SERIAL_21285_MINOR);
 }
 
-static int __init rs285_console_setup(struct console *co, char *options)
+static int __init serial21285_console_setup(struct console *co, char *options)
 {
+	struct uart_port *port = &serial21285_port;
 	int baud = 9600;
 	int bits = 8;
 	int parity = 'n';
-	int cflag = CREAD | HUPCL | CLOCAL;
+	int flow = 'n';
 
 	if (machine_is_personal_server())
 		baud = 57600;
 
-	if (options) {
-		char *s = options;
-		baud = simple_strtoul(options, NULL, 10);
-		while (*s >= '0' && *s <= '9')
-			s++;
-		if (*s)
-			parity = *s++;
-		if (*s)
-			bits = *s - '0';
-	}
-
 	/*
-	 *    Now construct a cflag setting.
+	 * Check whether an invalid uart number has been specified, and
+	 * if so, search for the first available port that does have
+	 * console support.
 	 */
-	switch (baud) {
-	case 1200:
-		cflag |= B1200;
-		break;
-	case 2400:
-		cflag |= B2400;
-		break;
-	case 4800:
-		cflag |= B4800;
-		break;
-	case 9600:
-		cflag |= B9600;
-		break;
-	case 19200:
-		cflag |= B19200;
-		break;
-	case 38400:
-		cflag |= B38400;
-		break;
-	case 57600:
-		cflag |= B57600;
-		break;
-	case 115200:
-		cflag |= B115200;
-		break;
-	default:
-		cflag |= B9600;
-		break;
-	}
-	switch (bits) {
-	case 7:
-		cflag |= CS7;
-		break;
-	default:
-		cflag |= CS8;
-		break;
-	}
-	switch (parity) {
-	case 'o':
-	case 'O':
-		cflag |= PARODD;
-		break;
-	case 'e':
-	case 'E':
-		cflag |= PARENB;
-		break;
-	}
-	co->cflag = cflag;
-	rs285_set_cflag(cflag);
-	rs285_console_write(NULL, "\e[2J\e[Hboot ", 12);
 	if (options)
-		rs285_console_write(NULL, options, strlen(options));
+		uart_parse_options(options, &baud, &parity, &bits, &flow);
 	else
-		rs285_console_write(NULL, "no options", 10);
-	rs285_console_write(NULL, "\n", 1);
+		serial21285_get_options(port, &baud, &parity, &bits);
 
-	return 0;
+	return uart_set_options(port, co, baud, parity, bits, flow);
 }
 
 #ifdef CONFIG_SERIAL_21285_OLD
-static struct console rs285_old_cons =
+static struct console serial21285_old_cons =
 {
 	SERIAL_21285_OLD_NAME,
-	rs285_console_write,
+	serial21285_console_write,
 	NULL,
-	rs285_console_device,
-	rs285_console_wait_key,
+	serial21285_console_device,
+	serial21285_console_wait_key,
 	NULL,
-	rs285_console_setup,
+	serial21285_console_setup,
 	CON_PRINTBUFFER,
 	-1,
 	0,
@@ -542,27 +436,63 @@ static struct console rs285_old_cons =
 };
 #endif
 
-static struct console rs285_cons =
+static struct console serial21285_console =
 {
 	name:		SERIAL_21285_NAME,
-	write:		rs285_console_write,
-	device:		rs285_console_device,
-	wait_key:	rs285_console_wait_key,
-	setup:		rs285_console_setup,
+	write:		serial21285_console_write,
+	device:		serial21285_console_device,
+	wait_key:	serial21285_console_wait_key,
+	setup:		serial21285_console_setup,
 	flags:		CON_PRINTBUFFER,
 	index:		-1,
 };
 
 void __init rs285_console_init(void)
 {
-#ifdef CONFIG_SERIAL_21285_OLD
-	if (!machine_is_ebsa285() && !machine_is_netwinder())
-		register_console(&rs285_old_cons);
-#endif
-	register_console(&rs285_cons);
+	serial21285_setup_ports();
+	register_console(&serial21285_console);
 }
 
-#endif /* CONFIG_SERIAL_21285_CONSOLE */
+#define SERIAL_21285_CONSOLE	&serial21285_console
+#else
+#define SERIAL_21285_CONSOLE	NULL
+#endif
+
+static struct uart_driver serial21285_reg = {
+	owner:			THIS_MODULE,
+	normal_major:		SERIAL_21285_MAJOR,
+#ifdef CONFIG_DEVFS_FS
+	normal_name:		"ttyFB%d",
+	callout_name:		"cuafb%d",
+#else
+	normal_name:		"ttyFB",
+	callout_name:		"cuafb",
+#endif
+	normal_driver:		&normal,
+	callout_major:		SERIAL_21285_AUXMAJOR,
+	callout_driver:		&callout,
+	table:			serial21285_table,
+	termios:		serial21285_termios,
+	termios_locked:		serial21285_termios_locked,
+	minor:			SERIAL_21285_MINOR,
+	nr:			1,
+	port:			&serial21285_port,
+	cons:			SERIAL_21285_CONSOLE,
+};
+
+static int __init serial21285_init(void)
+{
+	serial21285_setup_ports();
+	return uart_register_driver(&serial21285_reg);
+}
+
+static void __exit serial21285_exit(void)
+{
+	uart_unregister_driver(&serial21285_reg);
+}
+
+module_init(serial21285_init);
+module_exit(serial21285_exit);
 
 EXPORT_NO_SYMBOLS;
 

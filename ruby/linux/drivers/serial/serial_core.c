@@ -1506,7 +1506,15 @@ fail:
 
 static const char *uart_type(struct uart_port *port)
 {
-	return "";
+	const char *str = NULL;
+
+	if (port->ops->type)
+		str = port->ops->type(port);
+
+	if (!str)
+		str = "unknown";
+
+	return str;
 }
 
 static int uart_line_info(char *buf, struct uart_driver *drv, int i)
@@ -1705,6 +1713,7 @@ extern void clps711xuart_console_init(void);
 extern void rs285_console_init(void);
 extern void sa1100_rs_console_init(void);
 extern void serial8250_console_init(void);
+extern void uart00_console_init(void);
 
 /*
  * Central "initialise all serial consoles" container.  Needs to be killed.
@@ -1745,59 +1754,104 @@ void __init uart_console_init(void)
  * We don't actually save any state; the serial driver has enough
  * state held internally to re-setup the port when we come out of D3.
  */
-static int uart_pm(struct pm_dev *dev, pm_request_t rqst, void *data)
+static int uart_pm_set_state(struct uart_state *state, int pm_state, int oldstate)
 {
-	if (rqst == PM_SUSPEND || rqst == PM_RESUME) {
-		struct uart_state *state = dev->data;
-		struct uart_port *port = state->port;
-		struct uart_ops *ops = port->ops;
-		int pm_state = (int)data;
-		int running = state->info &&
-			      state->info->flags & ASYNC_INITIALIZED;
+	struct uart_port *port = state->port;
+	struct uart_ops *ops = port->ops;
+	int running = state->info &&
+		      state->info->flags & ASYNC_INITIALIZED;
 
-		if (port->type == PORT_UNKNOWN)
-			return 0;
+	if (port->type == PORT_UNKNOWN)
+		return 0;
 
 //printk("pm: %08x: %d -> %d, %srunning\n", port->iobase, dev->state, pm_state, running ? "" : "not ");
-		if (pm_state == 0) {
-			if (ops->pm)
-				ops->pm(port, pm_state, dev->state);
-			if (running) {
-				ops->set_mctrl(port, 0);
-				ops->startup(port, state->info);
-				uart_change_speed(state->info, NULL);
-				ops->set_mctrl(port, state->info->mctrl);
-				ops->start_tx(port, 1, 0);
-			}
-
-			/*
-			 * Re-enable the console device after suspending.
-			 */
-			if (state->cons && state->cons->index == port->line)
-				state->cons->flags |= CON_ENABLED;
-		} else if (pm_state == 1) {
-			if (ops->pm)
-				ops->pm(port, pm_state, dev->state);
-		} else {
-			/*
-			 * Disable the console device before suspending.
-			 */
-			if (state->cons && state->cons->index == port->line)
-				state->cons->flags &= ~CON_ENABLED;
-
-			if (running) {
-				ops->stop_tx(port, 0);
-				ops->set_mctrl(port, 0);
-				ops->stop_rx(port);
-				ops->shutdown(port, state->info);
-			}
-			if (ops->pm)
-				ops->pm(port, pm_state, dev->state);
+	if (pm_state == 0) {
+		if (ops->pm)
+			ops->pm(port, pm_state, oldstate);
+		if (running) {
+			ops->set_mctrl(port, 0);
+			ops->startup(port, state->info);
+			uart_change_speed(state->info, NULL);
+			ops->set_mctrl(port, state->info->mctrl);
+			ops->start_tx(port, 1, 0);
 		}
+
+		/*
+		 * Re-enable the console device after suspending.
+		 */
+		if (state->cons && state->cons->index == port->line)
+			state->cons->flags |= CON_ENABLED;
+	} else if (pm_state == 1) {
+		if (ops->pm)
+			ops->pm(port, pm_state, oldstate);
+	} else {
+		/*
+		 * Disable the console device before suspending.
+		 */
+		if (state->cons && state->cons->index == port->line)
+			state->cons->flags &= ~CON_ENABLED;
+
+		if (running) {
+			ops->stop_tx(port, 0);
+			ops->set_mctrl(port, 0);
+			ops->stop_rx(port);
+			ops->shutdown(port, state->info);
+		}
+		if (ops->pm)
+			ops->pm(port, pm_state, oldstate);
 	}
 	return 0;
 }
+
+/*
+ *  Wakeup support.
+ */
+static int uart_pm_set_wakeup(struct uart_state *state, int data)
+{
+	int err = 0;
+
+	if (state->port->ops->set_wake)
+		err = state->port->ops->set_wake(state->port, data);
+
+	return err;
+}
+
+static int uart_pm(struct pm_dev *dev, pm_request_t rqst, void *data)
+{
+	struct uart_state *state = dev->data;
+	int err = 0;
+
+	switch (rqst) {
+	case PM_SUSPEND:
+	case PM_RESUME:
+		err = uart_pm_set_state(state, (int)data, dev->state);
+		break;
+
+	case PM_SET_WAKEUP:
+		err = uart_pm_set_wakeup(state, (int)data);
+		break;
+	}
+	return err;
+}
 #endif
+
+static inline void
+uart_report_port(struct uart_driver *drv, struct uart_port *port)
+{
+	printk("%s%d at ", drv->normal_name, port->line);
+	switch (port->iotype) {
+	case SERIAL_IO_PORT:
+		printk("I/O 0x%x", port->iobase);
+		break;
+	case SERIAL_IO_HUB6:
+		printk("I/O 0x%x offset 0x%x", port->iobase, port->hub6);
+		break;
+	case SERIAL_IO_MEM:
+		printk("MEM 0x%x", port->mapbase);
+		break;
+	}
+	printk(" (irq = %d) is a %s\n", port->irq, uart_type(port));
+}
 
 static void
 uart_setup_port(struct uart_driver *drv, struct uart_state *state)
@@ -1842,6 +1896,7 @@ uart_setup_port(struct uart_driver *drv, struct uart_state *state)
 					state->port->line);
 		tty_register_devfs(drv->callout_driver, 0, drv->minor +
 					state->port->line);
+		uart_report_port(drv, port);
 	}
 
 #ifdef CONFIG_PM
@@ -2091,7 +2146,7 @@ int uart_register_port(struct uart_driver *drv, struct uart_port *port)
 
 #if 0 //def CONFIG_PM
 	/* we have already registered the power management handlers */
-	state->pm = pm_register(PM_SYS_DEV, PM_SYS_CON, uart_pm);
+	state->pm = pm_register(PM_SYS_DEV, PM_SYS_COM, uart_pm);
 	if (state->pm) {
 		state->pm->data = state;
 
@@ -2113,6 +2168,9 @@ int uart_register_port(struct uart_driver *drv, struct uart_port *port)
 					state->port->line);
 	tty_register_devfs(drv->callout_driver, 0, drv->minor +
 					state->port->line);
+
+	uart_report_port(drv, state->port);
+
 	up(&state->count_sem);
 	return i;
 }

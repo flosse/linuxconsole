@@ -337,6 +337,11 @@ anakin_change_speed(struct uart_port *port, u_int cflag, u_int iflag, u_int quot
 	restore_flags(flags);
 }
 
+static const char *anakin_type(struct port *port)
+{
+	return port->type == PORT_ANAKIN ? "ANAKIN" : NULL;
+}
+
 static struct uart_ops anakin_pops = {
 	tx_empty:	anakin_tx_empty,
 	set_mctrl:	anakin_set_mctrl,
@@ -349,6 +354,7 @@ static struct uart_ops anakin_pops = {
 	startup:	anakin_startup,
 	shutdown:	anakin_shutdown,
 	change_speed:	anakin_change_speed,
+	type:		anakin_type,
 };
 
 static struct uart_port anakin_ports[UART_NR] = {

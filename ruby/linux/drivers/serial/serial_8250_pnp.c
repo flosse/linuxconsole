@@ -549,5 +549,5 @@ EXPORT_NO_SYMBOLS;
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Generic 8250/16x50 PNPBIOS serial probe module");
-//MODULE_GENERIC_TABLE(pnp, pnp_dev_table);
+MODULE_GENERIC_TABLE(pnp, pnp_dev_table);
 

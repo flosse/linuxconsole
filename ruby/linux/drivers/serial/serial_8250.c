@@ -102,7 +102,7 @@ MODULE_PARM_DESC(force_rsa, "Force I/O ports for RSA");
 /*
  * Here we define the default xmit fifo size used for each type of UART.
  */
-static struct serial_uart_config uart_config[PORT_MAX_8250+1] = {
+static const struct serial_uart_config uart_config[PORT_MAX_8250+1] = {
 	{ "unknown",	1,	0 },
 	{ "8250",	1,	0 },
 	{ "16450",	1,	0 },
@@ -857,6 +857,8 @@ static void rs_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 #endif
 
 	do {
+		spin_lock(&info->lock);
+
 		if (!info->tty ||
 		    (serial_in(info->port, UART_IIR) & UART_IIR_NO_INT)) {
 		    	if (!end_mark)
@@ -871,6 +873,8 @@ static void rs_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 		serial8250_handle_port(info, regs);
 
 	next:
+		spin_unlock(&info->lock);
+
 		info = info->next_info;
 		if (info)
 			continue;
@@ -918,6 +922,8 @@ static void rs_interrupt_single(int irq, void *dev_id, struct pt_regs *regs)
 		first_multi = inb(port_monitor);
 #endif
 
+	spin_lock(&info->lock);
+
 	do {
 		serial8250_handle_port(info, regs);
 		if (pass_counter++ > RS_ISR_PASS_LIMIT) {
@@ -930,6 +936,9 @@ static void rs_interrupt_single(int irq, void *dev_id, struct pt_regs *regs)
 		printk("IIR = %x...", serial_in(info->port, UART_IIR));
 #endif
 	} while (!(serial_in(info->port, UART_IIR) & UART_IIR_NO_INT));
+
+	spin_unlock(&info->lock);
+
 #ifdef CONFIG_SERIAL_8250_MULTIPORT
 	if (port_monitor)
 		printk("rs port monitor (single) irq %d: 0x%x, 0x%x\n",
@@ -968,6 +977,7 @@ static void rs_interrupt_multi(int irq, void *dev_id, struct pt_regs *regs)
 		first_multi = inb(multi->port_monitor);
 
 	while (1) {
+		spin_lock(info->lock);
 		if (!info->tty ||
 		    (serial_in(info->port, UART_IIR) & UART_IIR_NO_INT))
 			goto next;
@@ -975,6 +985,7 @@ static void rs_interrupt_multi(int irq, void *dev_id, struct pt_regs *regs)
 		serial8250_handle_port(info, regs);
 
 	next:
+		spin_unlock(info->lock);
 		info = info->next;
 		if (info)
 			continue;
@@ -1613,6 +1624,16 @@ serial8250_verify_port(struct uart_port *port, struct serial_struct *ser)
 	return 0;
 }
 
+static const char *
+serial8250_type(struct uart_port *port)
+{
+	int type = port->type;
+
+	if (type >= PORT_MAX_8250)
+		type = 0;
+	return uart_config[type].name;
+}
+
 static struct uart_ops serial8250_pops = {
 	tx_empty:	serial8250_tx_empty,
 	set_mctrl:	serial8250_set_mctrl,
@@ -1626,6 +1647,7 @@ static struct uart_ops serial8250_pops = {
 	shutdown:	serial8250_shutdown,
 	change_speed:	serial8250_change_speed,
 	pm:		serial8250_pm,
+	type:		serial8250_type,
 	release_port:	serial8250_release_port,
 	request_port:	serial8250_request_port,
 	config_port:	serial8250_config_port,

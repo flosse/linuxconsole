@@ -511,6 +511,11 @@ static void ambauart_change_speed(struct uart_port *port, u_int cflag, u_int ifl
 	restore_flags(flags);
 }
 
+static const char *ambauart_type(struct uart_port *port)
+{
+	return port->type == PORT_AMBA ? "AMBA" : NULL;
+}
+
 /*
  * Release the memory region(s) being used by 'port'
  */
@@ -566,6 +571,7 @@ static struct uart_ops amba_pops = {
 	startup:	ambauart_startup,
 	shutdown:	ambauart_shutdown,
 	change_speed:	ambauart_change_speed,
+	type:		ambauart_type,
 	release_port:	ambauart_release_port,
 	request_port:	ambauart_request_port,
 	config_port:	ambauart_config_port,

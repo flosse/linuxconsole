@@ -46,7 +46,8 @@
 #define PORT_AMBA	32
 #define PORT_CLPS711X	33
 #define PORT_SA1100	34
-#define PORT_UART00    35
+#define PORT_UART00	35
+#define PORT_21285	37
 
 #ifdef __KERNEL__
 
@@ -76,6 +77,12 @@ struct uart_ops {
 	void	(*shutdown)(struct uart_port *, struct uart_info *);
 	void	(*change_speed)(struct uart_port *, u_int cflag, u_int iflag, u_int quot);
 	void	(*pm)(struct uart_port *, u_int state, u_int oldstate);
+	int	(*set_wake)(struct uart_port *, u_int state);
+
+	/*
+	 * Return a string describing the type of the port
+	 */
+	const char *(*type)(struct uart_port *);
 
 	/*
 	 * Release IO and memory resources used by the port.
