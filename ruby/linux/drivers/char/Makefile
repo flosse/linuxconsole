@@ -38,7 +38,7 @@ obj-y	 += tty_io.o n_tty.o tty_ioctl.o mem.o raw.o pty.o misc.o random.o
 
 export-objs     :=	console.o i2c-old.o keyboard.o sysrq.o \
 			misc.o pty.o random.o selection.o serial.o videodev.o \
-			tty_io.o bttv.o
+			tty_io.o bttv.o cpia.o
 
 KEYMAP   =defkeymap.o
 CONSOLE  =console.o
@@ -77,12 +77,13 @@ ifneq ($(CONFIG_SUN_SERIAL),)
   SERIAL   =
 endif
 
+
 obj-$(CONFIG_VT) += vt.o vc_screen.o consolemap.o consolemap_deftbl.o $(CONSOLE) selection.o
 obj-$(CONFIG_SERIAL) += $(SERIAL)
 obj-$(CONFIG_SERIAL_21285) += serial_21285.o
 
 ifndef CONFIG_SUN_KEYBOARD
-  obj-$(CONFIG_VT) += keyboard.o $(KEYMAP)
+  obj-$(CONFIG_VT) += keyboard.o $(KEYMAP) 
 else
   obj-$(CONFIG_PCI) += keyboard.o $(KEYMAP)
 endif
@@ -122,7 +123,6 @@ else
 endif
 
 obj-$(CONFIG_PRINTER) += lp.o
-
 obj-$(CONFIG_DTLK) += dtlk.o
 obj-$(CONFIG_R3964) += n_r3964.o
 obj-$(CONFIG_APPLICOM) += applicom.o
@@ -131,6 +131,7 @@ obj-$(CONFIG_PCWATCHDOG) += pcwd.o
 obj-$(CONFIG_ACQUIRE_WDT) += acquirewdt.o
 obj-$(CONFIG_MIXCOMWD) += mixcomwd.o
 obj-$(CONFIG_WDT) += wdt.o
+obj-$(CONFIG_WDTPCI) += wdt_pci.o
 obj-$(CONFIG_RTC) += rtc.o
 obj-$(CONFIG_EFI_RTC) += efirtc.o
 ifeq ($(CONFIG_PPC),)
@@ -139,7 +140,7 @@ endif
 
 obj-$(CONFIG_VIDEO_DEV) += videodev.o
 
-obj-$(CONFIG_21825_WATCHDOG) += wdt285.o
+obj-$(CONFIG_21285_WATCHDOG) += wdt285.o
 obj-$(CONFIG_977_WATCHDOG) += wdt977.o
 obj-$(CONFIG_DS1620) += ds1620.o
 
@@ -212,6 +213,9 @@ obj-$(CONFIG_VIDEO_PMS) += pms.o
 obj-$(CONFIG_VIDEO_PLANB) += planb.o
 obj-$(CONFIG_VIDEO_VINO) += vino.o
 obj-$(CONFIG_VIDEO_STRADIS) += stradis.o
+obj-$(CONFIG_VIDEO_CPIA) += cpia.o
+obj-$(CONFIG_VIDEO_CPIA_PP) += cpia_pp.o
+obj-$(CONFIG_VIDEO_CPIA_USB) += cpia_usb.o
 obj-$(CONFIG_RADIO_AZTECH) += radio-aztech.o
 obj-$(CONFIG_RADIO_RTRACK2) += radio-rtrack2.o
 obj-$(CONFIG_RADIO_SF16FMI) += radio-sf16fmi.o
