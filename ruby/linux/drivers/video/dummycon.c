@@ -8,7 +8,6 @@
 #include <linux/types.h>
 #include <linux/kdev_t.h>
 #include <linux/tty.h>
-#include <linux/console.h>
 #include <linux/vt_kern.h>
 #include <linux/init.h>
 
@@ -24,19 +23,19 @@
 #define DUMMY_ROWS	25
 #endif
 
-static const char *dummycon_startup(void)
+static const char *dummycon_startup(struct vt_struct *vt)
 {
     return "dummy device";
 }
 
-static void dummycon_init(struct vc_data *conp, int init)
+static void dummycon_init(struct vc_data *vc, int init)
 {
-    conp->vc_can_do_color = 1;
+    vc->vc_can_do_color = 1;
     if (init) {
-	conp->vc_cols = DUMMY_COLUMNS;
-	conp->vc_rows = DUMMY_ROWS;
+	vc->vc_cols = DUMMY_COLUMNS;
+	vc->vc_rows = DUMMY_ROWS;
     } else
-	vc_resize_con(DUMMY_ROWS, DUMMY_COLUMNS, conp->vc_num);
+	vc_resize(vc, DUMMY_ROWS, DUMMY_COLUMNS);
 }
 
 static int dummycon_dummy(void)
