@@ -13,6 +13,10 @@
  */
 
 /*
+ * Keyboard input for VT's
+ */
+
+/*
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -120,29 +124,36 @@ int setkeycode(unsigned int scancode, unsigned int keycode)
 int shift_state = 0;
 DECLARE_WAIT_QUEUE_HEAD(keypress_wait);
 
-int keyboard_wait_for_keypress(struct console *co)
+int keyboard_wait_for_keypress(struct console *console)
 {
 	sleep_on(&keypress_wait);
 	return 0;
 }
 
 /*
- * global state includes the following, and various static variables
- * in this module: prev_scancode, shift_state, diacr, npadch, dead_key_next.
- * (last_console is now a global variable)
+ * Internal data.
  */
 
-static unsigned char k_down[NR_SHIFT];			/* shift state counters.. */
-static unsigned long key_down[NBITS(KEY_MAX)];		/* keyboard key bitmap */
-
-static int dead_key_next = 0;
-static int npadch = -1;					/* -1 or number assembled on pad */
-static unsigned char diacr = 0;
-static char rep = 0;					/* flag telling character repeat */
 static struct tty_struct **ttytab;
+
+static unsigned long key_down[256/BITS_PER_LONG];
+static unsigned char shift_down[NR_SHIFT];	/* shift state counters.. */
+static int dead_key_next;
+static int npadch = -1;				/* -1 or number assembled on pad */
+static unsigned char diacr;
+static char rep;				/* flag telling character repeat */
 static struct kbd_struct *kbd = kbd_table;
-static struct tty_struct *tty = NULL;
-static struct pm_dev *pm_kbd = NULL;
+static struct tty_struct *tty;
+static struct pm_dev *pm_kbd;
+
+static unsigned char ledstate = 0xff;		/* undefined */
+static unsigned char ledioctl;
+
+static struct ledptr {
+	unsigned int *addr;
+	unsigned int mask;
+	unsigned char valid:1;
+} ledptrs[3];
 
 /*
  * Helper functions
@@ -162,11 +173,8 @@ static void puts_queue(char *cp)
 	wake_up(&keypress_wait);
 	if (!tty)
 		return;
-
-	while (*cp) {
-		tty_insert_flip_char(tty, *cp, 0);
-		cp++;
-	}
+	while (*cp)
+		tty_insert_flip_char(tty, *cp++, 0);
 	con_schedule_flip(tty);
 }
 
@@ -183,24 +191,60 @@ static void applkey(int key, char mode)
  * Many other routines do put_queue, but I think either
  * they produce ASCII, or they produce some user-assigned
  * string, and in both cases we might assume that it is
- * in utf-8 already.
+ * in utf-8 already. UTF-8 is defined for words of up to 31 bits,
+ * but we need only 16 bits here
  */
-void to_utf8(ushort c) {
-    if (c < 0x80)
-	put_queue(c);			/*  0*******  */
-    else if (c < 0x800) {
-	put_queue(0xc0 | (c >> 6)); 	/*  110***** 10******  */
-	put_queue(0x80 | (c & 0x3f));
-    } else {
-	put_queue(0xe0 | (c >> 12)); 	/*  1110**** 10****** 10******  */
-	put_queue(0x80 | ((c >> 6) & 0x3f));
-	put_queue(0x80 | (c & 0x3f));
-    }
-    /* UTF-8 is defined for words of up to 31 bits,
-       but we need only 16 bits here */
+
+void to_utf8(ushort c)
+{
+	if (c < 0x80)
+		put_queue(c);				/* 0*******  */
+	else if (c < 0x800) {
+		put_queue(0xc0 | (c >> 6)); 		/* 110***** 10****** */
+		put_queue(0x80 | (c & 0x3f));
+	} else {
+		put_queue(0xe0 | (c >> 12));		/* 1110**** 10****** 10****** */
+		put_queue(0x80 | ((c >> 6) & 0x3f));
+		put_queue(0x80 | (c & 0x3f));
+	}
 }
 
+/*
+ * called after returning from RAW mode or when changing consoles -
+ * recompute shift_down[] and shift_state from key_down[] 
+ * maybe called when keymap is undefined, so that shiftkey release is seen 
+ */
 
+void compute_shiftstate(void)
+{
+	int i, j, sym, val;
+
+	shift_state = 0;
+	memset(shift_down, 0, sizeof(shift_down));
+
+	for(i = 0; i < SIZE(key_down); i += BITS_PER_LONG) {
+
+		if (!key_down[i / BITS_PER_LONG])
+			continue;
+
+		for(j = 0; j < BITS_PER_LONG; j++) {
+
+			if (!test_bit(i + j, key_down))
+				continue;
+
+			sym = U(plain_map[i + j]);
+			if (KTYP(sym) != KT_SHIFT && KTYP(sym) != KT_SLOCK)
+				continue;
+			
+			val = KVAL(sym);
+			if (val == KVAL(K_CAPSSHIFT))
+				val = KVAL(K_SHIFT);
+
+			shift_down[val]++;
+			shift_state |= (1 << val);
+		}
+	}
+}
 
 /*
  * We have a combining character DIACR here, followed by the character CH.
@@ -272,6 +316,7 @@ static void fn_hold(void)
 	 * these routines are also activated by ^S/^Q.
 	 * (And SCROLLOCK can also be set by the ioctl KDSKBLED.)
 	 */
+
 	if (tty->stopped)
 		start_tty(tty);
 	else
@@ -344,11 +389,6 @@ static void fn_scroll_back(void)
 	scrollback(0);
 }
 
-static void boot_it(void)
-{
-	ctrl_alt_del();
-}
-
 static void fn_compose(void)
 {
 	dead_key_next = 1;
@@ -357,8 +397,8 @@ static void fn_compose(void)
 static void fn_spawn_con(void)
 {
         if (spawnpid)
-	   if(kill_proc(spawnpid, spawnsig, 1))
-	     spawnpid = 0;
+		if (kill_proc(spawnpid, spawnsig, 1))
+			spawnpid = 0;
 }
 
 static void fn_SAK(void)
@@ -379,7 +419,7 @@ static void fn_show_state(void)
 
 static void fn_boot_it(void)
 {
-	boot_it();
+	ctrl_alt_del();
 }
 
 static void fn_null(void)
@@ -402,7 +442,7 @@ static void k_spec(unsigned char value, char up_flag)
 	if (value >= SIZE(fn_handler))
 		return;
 	if ((kbd->kbdmode == VC_RAW || kbd->kbdmode == VC_MEDIUMRAW) && value != K_SAK)
-		return;				/* SAK is allowed even in raw mode */
+		return;		/* SAK is allowed even in raw mode */
 	fn_handler[value]();
 }
 
@@ -487,7 +527,7 @@ static void k_pad(unsigned char value, char up_flag)
 		return;		/* no action, if this is a key release */
 
 	/* kludge... shift forces cursor/number keys */
-	if (vc_kbd_mode(kbd,VC_APPLIC) && !k_down[KG_SHIFT]) {
+	if (vc_kbd_mode(kbd,VC_APPLIC) && !shift_down[KG_SHIFT]) {
 		applkey(app_map[value], 1);
 		return;
 	}
@@ -536,16 +576,17 @@ static void k_pad(unsigned char value, char up_flag)
 }
 
 
-
 static void k_shift(unsigned char value, char up_flag)
 {
 	int old_state = shift_state;
 
 	if (rep)
 		return;
+	/*
+	 * Mimic typewriter:
+	 * a CapsShift key acts like Shift but undoes CapsLock
+	 */
 
-	/* Mimic typewriter:
-	   a CapsShift key acts like Shift but undoes CapsLock */
 	if (value == KVAL(K_CAPSSHIFT)) {
 		value = KVAL(K_SHIFT);
 		if (!up_flag)
@@ -553,54 +594,28 @@ static void k_shift(unsigned char value, char up_flag)
 	}
 
 	if (up_flag) {
-		/* handle the case that two shift or control
-		   keys are depressed simultaneously */
-		if (k_down[value])
-			k_down[value]--;
+		/*
+		 * handle the case that two shift or control
+		 * keys are depressed simultaneously
+		 */
+		if (shift_down[value])
+			shift_down[value]--;
 	} else
-		k_down[value]++;
+		shift_down[value]++;
 
-	if (k_down[value])
+	if (shift_down[value])
 		shift_state |= (1 << value);
 	else
-		shift_state &= ~ (1 << value);
+		shift_state &= ~(1 << value);
 
 	/* kludge */
 	if (up_flag && shift_state != old_state && npadch != -1) {
 		if (kbd->kbdmode == VC_UNICODE)
-		  to_utf8(npadch & 0xffff);
+			to_utf8(npadch & 0xffff);
 		else
-		  put_queue(npadch & 0xff);
+			put_queue(npadch & 0xff);
 		npadch = -1;
 	}
-}
-
-/* called after returning from RAW mode or when changing consoles -
-   recompute k_down[] and shift_state from key_down[] */
-/* maybe called when keymap is undefined, so that shiftkey release is seen */
-void compute_shiftstate(void)
-{
-	int i, j, k, sym, val;
-
-	shift_state = 0;
-	for(i=0; i < SIZE(k_down); i++)
-	  k_down[i] = 0;
-
-	for(i=0; i < SIZE(key_down); i++)
-	  if(key_down[i]) {	/* skip this word if not a single bit on */
-	    k = i*BITS_PER_LONG;
-	    for(j=0; j<BITS_PER_LONG; j++,k++)
-	      if(test_bit(k, key_down)) {
-		sym = U(plain_map[k]);
-		if(KTYP(sym) == KT_SHIFT || KTYP(sym) == KT_SLOCK) {
-		  val = KVAL(sym);
-		  if (val == KVAL(K_CAPSSHIFT))
-		    val = KVAL(K_SHIFT);
-		  k_down[val]++;
-		  shift_state |= (1<<val);
-		}
-	      }
-	  }
 }
 
 static void k_meta(unsigned char value, char up_flag)
@@ -623,16 +638,16 @@ static void k_ascii(unsigned char value, char up_flag)
 		return;
 
 	if (value < 10)    /* decimal input of code, while Alt depressed */
-	    base = 10;
+		base = 10;
 	else {       /* hexadecimal input of code, while AltGr depressed */
-	    value -= 10;
-	    base = 16;
+		value -= 10;
+		base = 16;
 	}
 
 	if (npadch == -1)
-	  npadch = value;
+		npadch = value;
 	else
-	  npadch = npadch * base + value;
+		npadch = npadch * base + value;
 }
 
 static void k_lock(unsigned char value, char up_flag)
@@ -661,68 +676,55 @@ static void k_slock(unsigned char value, char up_flag)
  * or (iii) specified bits of specified words in kernel memory.
  */
 
-static unsigned char ledstate = 0xff; /* undefined */
-static unsigned char ledioctl;
-
 unsigned char getledstate(void) {
-    return ledstate;
+	return ledstate;
 }
 
-void setledstate(struct kbd_struct *kbd, unsigned int led) {
-    if (!(led & ~7)) {
-	ledioctl = led;
-	kbd->ledmode = LED_SHOW_IOCTL;
-    } else
-	kbd->ledmode = LED_SHOW_FLAGS;
-    set_leds();
+void setledstate(struct kbd_struct *kbd, unsigned int led)
+{
+	if (!(led & ~7)) {
+		ledioctl = led;
+		kbd->ledmode = LED_SHOW_IOCTL;
+	} else
+		kbd->ledmode = LED_SHOW_FLAGS;
+	set_leds();
 }
 
-static struct ledptr {
-    unsigned int *addr;
-    unsigned int mask;
-    unsigned char valid:1;
-} ledptrs[3];
+void register_leds(int console, unsigned int led, unsigned int *addr, unsigned int mask)
+{
+	struct kbd_struct *kbd = kbd_table + console;
 
-void register_leds(int console, unsigned int led,
-		   unsigned int *addr, unsigned int mask) {
-    struct kbd_struct *kbd = kbd_table + console;
-    if (led < 3) {
-	ledptrs[led].addr = addr;
-	ledptrs[led].mask = mask;
-	ledptrs[led].valid = 1;
-	kbd->ledmode = LED_SHOW_MEM;
-    } else
-	kbd->ledmode = LED_SHOW_FLAGS;
+	if (led < 3) {
+		ledptrs[led].addr = addr;
+		ledptrs[led].mask = mask;
+		ledptrs[led].valid = 1;
+		kbd->ledmode = LED_SHOW_MEM;
+	} else
+		kbd->ledmode = LED_SHOW_FLAGS;
 }
 
-static inline unsigned char getleds(void){
-    struct kbd_struct *kbd = kbd_table + fg_console;
-    unsigned char leds;
+static inline unsigned char getleds(void)
+{
+	struct kbd_struct *kbd = kbd_table + fg_console;
+	unsigned char leds;
+	int i;
 
-    if (kbd->ledmode == LED_SHOW_IOCTL)
-      return ledioctl;
-    leds = kbd->ledflagstate;
-    if (kbd->ledmode == LED_SHOW_MEM) {
-	if (ledptrs[0].valid) {
-	    if (*ledptrs[0].addr & ledptrs[0].mask)
-	      leds |= 1;
-	    else
-	      leds &= ~1;
+	if (kbd->ledmode == LED_SHOW_IOCTL)
+		return ledioctl;
+
+	leds = kbd->ledflagstate;
+
+	if (kbd->ledmode == LED_SHOW_MEM) {
+		for (i = 0; i < 3; i++)
+			if (ledptrs[i].valid) {
+				if (*ledptrs[i].addr & ledptrs[i].mask)
+					leds |= (1 << i);
+				else
+					leds &= ~(1 << i);
+			}
 	}
-	if (ledptrs[1].valid) {
-	    if (*ledptrs[1].addr & ledptrs[1].mask)
-	      leds |= 2;
-	    else
-	      leds &= ~2;
-	}
-	if (ledptrs[2].valid) {
-	    if (*ledptrs[2].addr & ledptrs[2].mask)
-	      leds |= 4;
-	    else
-	      leds &= ~4;
-	}
-    }
-    return leds;
+
+	return leds;
 }
 
 static struct input_handler kbd_handler;
@@ -783,35 +785,35 @@ static unsigned short x86_keycodes[256] =
 	308,310,313,314,315,317,318,319,320,321,322,323,324,325,326,330,
 	332,340,341,342,343,344,345,346,356,359,365,368,369,370,371,372 };
 
-static int emulate_raw(unsigned int keycode, unsigned char upflag)
+static int emulate_raw(unsigned int keycode, unsigned char up_flag)
 {
 	if (keycode > 255 || !x86_keycodes[keycode])
 		return -1; 
 
 	if (keycode == KEY_PAUSE) {
 		put_queue(0xe1);
-		put_queue(0x1d | upflag);
-		put_queue(0x45 | upflag);
+		put_queue(0x1d | up_flag);
+		put_queue(0x45 | up_flag);
 		return 0;
 	} 
 
 	if (keycode == KEY_SYSRQ && x86_sysrq_alt) {
-		put_queue(0x54 | upflag);
+		put_queue(0x54 | up_flag);
 		return 0;
 	}
 
 	if (x86_keycodes[keycode] & 0x100)
 		put_queue(0xe0);
 
-	put_queue((x86_keycodes[keycode] & 0x7f) | upflag);
+	put_queue((x86_keycodes[keycode] & 0x7f) | up_flag);
 
 	if (keycode == KEY_SYSRQ) {
 		put_queue(0xe0);
-		put_queue(0x37 | upflag);
+		put_queue(0x37 | up_flag);
 	}
 
 	if (keycode == KEY_LEFTALT || keycode == KEY_RIGHTALT)
-		x86_sysrq_alt = !upflag;
+		x86_sysrq_alt = !up_flag;
 
 	return 0;
 }
@@ -828,12 +830,12 @@ static unsigned char mac_keycodes[128] =
 	 76,125, 75,105,124,  0,115, 62,116, 59, 60,119, 61,121,114,117,
 	  0,  0,  0,  0,127, 81,  0,113,  0,  0,  0,  0,  0, 55, 55 };
 
-static int emulate_raw(unsigned int code, unsigned char upflag)
+static int emulate_raw(unsigned int code, unsigned char up_flag)
 {
 	if (keycode > 127 || !mac_keycodes[keycode])
 		return -1;
 
-	put_queue((mac_keycodes[keycode] & 0x7f) | upflag);
+	put_queue((mac_keycodes[keycode] & 0x7f) | up_flag);
 	return 0;
 }
 
@@ -841,12 +843,12 @@ static int emulate_raw(unsigned int code, unsigned char upflag)
 
 #warning "Cannot generate rawmode keyboard for your architecture yet."
 
-void emulate_raw(unsigned int code, unsigned char upflag)
+void emulate_raw(unsigned int code, unsigned char up_flag)
 {
 	if (keycode > 127)
 		return -1;
 
-	put_queue(keycode | upflag);
+	put_queue(keycode | up_flag);
 	return 0;
 }
 
