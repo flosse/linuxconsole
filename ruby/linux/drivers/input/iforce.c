@@ -106,6 +106,7 @@ static struct iforce_device {
 	signed short *ff;
 } iforce_device[] = {
 	{ 0x046d, 0xc281, "Logitech WingMan Force",			btn_joystick, abs_joystick, ff_iforce },
+	{ 0x046d, 0xc283, "Logitech Wingman Force 3D",			btn_joystick, abs_joystick, ff_iforce },
 	{ 0x046d, 0xc291, "Logitech WingMan Formula Force",		btn_wheel, abs_wheel, ff_iforce },
 	{ 0x05ef, 0x020a, "AVB Top Shot Pegasus",			btn_joystick, abs_joystick, ff_iforce },
 	{ 0x05ef, 0x8884, "AVB Mag Turbo Force",			btn_wheel, abs_wheel, ff_iforce },
@@ -1061,6 +1062,7 @@ static void iforce_usb_disconnect(struct usb_device *dev, void *ptr)
 
 static struct usb_device_id iforce_usb_ids [] = {
 	{ USB_DEVICE(0x046d, 0xc281) },		/* Logitech WingMan Force */
+	{ USB_DEVICE(0x046d, 0xc283) },		/* Logitech WingMan Force 3D */
 	{ USB_DEVICE(0x046d, 0xc291) },		/* Logitech WingMan Formula Force */
 	{ USB_DEVICE(0x05ef, 0x020a) },		/* AVB Top Shot Pegasus */
 	{ USB_DEVICE(0x05ef, 0x8884) },		/* AVB Mag Turbo Force */
