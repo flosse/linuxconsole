@@ -433,6 +433,7 @@ int hidinput_connect(struct hid_device *hid)
 
 	hid->input.name = hid->name;
 	hid->input.phys = hid->phys;
+	hid->input.uniq = hid->uniq;
 	hid->input.idbus = BUS_USB;
 	hid->input.idvendor = dev->descriptor.idVendor;
 	hid->input.idproduct = dev->descriptor.idProduct;

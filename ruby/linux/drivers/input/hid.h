@@ -322,7 +322,8 @@ struct hid_device {							/* device report descriptor */
 
 	int open;							/* is the device open by anyone? */
 	char name[128];							/* Device name */
-	char phys[128];							/* Device name */
+	char phys[64];							/* Device physical location */
+	char uniq[64];							/* Device unique identifier (serial #) */
 };
 
 #define HID_GLOBAL_STACK_SIZE 4

@@ -39,6 +39,7 @@
 #include <linux/init.h>
 #include <linux/input.h>
 #include <linux/gameport.h>
+#include <asm/timex.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 MODULE_DESCRIPTION("Analog joystick and gamepad driver for Linux");
@@ -93,6 +94,7 @@ MODULE_PARM_DESC(js, "Analog joystick options");
 #define ANALOG_FUZZ_MAGIC	36	/* 36 u*ms/loop */
 
 #define ANALOG_MAX_NAME_LENGTH  128
+#define ANALOG_MAX_PHYS_LENGTH	32
 
 static short analog_axes[] = { ABS_X, ABS_Y, ABS_RUDDER, ABS_THROTTLE };
 static short analog_hats[] = { ABS_HAT0X, ABS_HAT0Y, ABS_HAT1X, ABS_HAT1Y, ABS_HAT2X, ABS_HAT2Y };
@@ -109,6 +111,7 @@ struct analog {
 	int mask;
 	short *buttons;
 	char name[ANALOG_MAX_NAME_LENGTH];
+	char phys[ANALOG_MAX_PHYS_LENGTH];
 };
 
 struct analog_port {
@@ -135,27 +138,25 @@ struct analog_port {
  */
 
 #ifdef __i386__
-#ifdef CONFIG_X86_TSC
-#define GET_TIME(x)	__asm__ __volatile__ ( "rdtsc" : "=a" (x) : : "dx" )
+#define TSC_PRESENT	(test_bit(X86_FEATURE_TSC, &boot_cpu_data.x86_capability))
+#define GET_TIME(x)	do { if (TSC_PRESENT) rdtscl(x); else outb(0, 0x43); x = inb(0x40); x |= inb(0x40) << 8; } while (0)
+#define DELTA(x,y)	(TSC_PRESENT?((y)-(x)):((x)-(y)+((x)<(y)?1193180L/HZ:0)))
+#define TIME_NAME	(TSC_PRESENT?"TSC":"PIT");
+#elif __x86_64__
+#define GET_TIME(x)	rdtscl(x)
 #define DELTA(x,y)	((y)-(x))
-#define TIME_NAME "TSC"
-#else
-#define GET_TIME(x)	do { outb(0, 0x43); x = inb(0x40); x |= inb(0x40) << 8; } while (0)
-#define DELTA(x,y)	((x)-(y)+((x)<(y)?1193180L/HZ:0))
-#define TIME_NAME "PIT"
-#endif
+#define TIME_NAME	"TSC"
 #elif __alpha__
-#define GET_TIME(x)	__asm__ __volatile__ ( "rpcc %0" : "=r" (x) )
+#define GET_TIME(x)	get_cycles(x)
 #define DELTA(x,y)	((y)-(x))
-#define TIME_NAME "PCC"
-#endif
-
-#ifndef GET_TIME
+#define TIME_NAME	"PCC"
+#else
 #define FAKE_TIME
 static unsigned long analog_faketime = 0;
 #define GET_TIME(x)     do { x = analog_faketime++; } while(0)
 #define DELTA(x,y)	((y)-(x))
-#define TIME_NAME "Unreliable"
+#define TIME_NAME	"Unreliable"
+#warning Precise timer not defined for this architecture.
 #endif
 
 /*
@@ -418,10 +419,12 @@ static void analog_init_device(struct analog_port *port, struct analog *analog, 
 	int i, j, t, v, w, x, y, z;
 
 	analog_name(analog);
+	sprintf(analog->phys, "gameport%d.%d", port->gameport->number, index);
 
 	analog->buttons = (analog->mask & ANALOG_GAMEPAD) ? analog_pad_btn : analog_joy_btn;
 
 	analog->dev.name = analog->name;
+	analog->dev.phys = analog->phys;
 	analog->dev.idbus = BUS_GAMEPORT;
 	analog->dev.idvendor = GAMEPORT_ID_VENDOR_ANALOG;
 	analog->dev.idproduct = analog->mask >> 4;
@@ -491,8 +494,8 @@ static void analog_init_device(struct analog_port *port, struct analog *analog, 
 
 	input_register_device(&analog->dev);
 
-	printk(KERN_INFO "input%d: %s at gameport%d.%d",
-		analog->dev.number, analog->name, port->gameport->number, index);
+	printk(KERN_INFO "input%d: %s at %s",
+		analog->dev.number, analog->name, analog->phys);
 
 	if (port->cooked)
 		printk(" [ADC port]\n");
