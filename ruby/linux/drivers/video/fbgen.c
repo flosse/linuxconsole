@@ -40,11 +40,12 @@ int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
 {
     int oldbpp, err;
 
-    /* If we didn't define one, assume resolutions can't be changed */
-    if (!info->fbops->fb_check_var)
-    	return -EINVAL;
-	
     if (memcmp(&info->var, var, sizeof(var))) {	
+	if (!info->fbops->fb_check_var) {
+		*var = info->var;	
+        	return 0;
+	}
+
 	if ((err = info->fbops->fb_check_var(var, info)))
 		return err;
 
@@ -60,11 +61,9 @@ int fb_set_var(struct fb_var_screeninfo *var, struct fb_info *info)
 			info->fbops->fb_cursor(info, &info->cursor);
 		}
  
-	    	if (oldbpp != var->bits_per_pixel) {
-			if ((err = fb_alloc_cmap(&info->cmap, 0, 0)))
-            			return err;
-			fb_set_cmap(&info->cmap, 1, info);
-      	    	}
+		if ((err = fb_alloc_cmap(&info->cmap, 0, 0)))
+            		return err;
+		fb_set_cmap(&info->cmap, 1, info);
 	}
 	var->activate = 0;
     }
