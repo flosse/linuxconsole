@@ -31,18 +31,19 @@ endmenu
 mainmenu_option next_comment
 comment 'System Type'
 
-choice 'ARM system type'	\
-	"Archimedes/A5000	CONFIG_ARCH_ARCA5K \
+choice 'ARM system type' \
+	"Anakin			CONFIG_ARCH_ANAKIN \
+	 Archimedes/A5000	CONFIG_ARCH_ARCA5K \
 	 Cirrus-CL-PS7500FE     CONFIG_ARCH_CLPS7500 \
+ 	 CLPS711x/EP721x-based	CONFIG_ARCH_CLPS711X \
 	 Co-EBSA285		CONFIG_ARCH_CO285 \
 	 EBSA-110		CONFIG_ARCH_EBSA110 \
-	 LinkUp-L7200		CONFIG_ARCH_L7200 \
 	 FootBridge		CONFIG_ARCH_FOOTBRIDGE \
 	 Integrator		CONFIG_ARCH_INTEGRATOR \
+	 LinkUp-L7200		CONFIG_ARCH_L7200 \
 	 RiscPC			CONFIG_ARCH_RPC \
- 	 SA1100-based		CONFIG_ARCH_SA1100 \
- 	 CLPS711x/EP721x-based	CONFIG_ARCH_CLPS711X \
-	 Anakin			CONFIG_ARCH_ANAKIN" RiscPC
+ 	 SA1100-based		CONFIG_ARCH_SA1100
+	 Shark			CONFIG_ARCH_SHARK" RiscPC
 
 mainmenu_option next_comment
 comment 'Archimedes/A5000 Implementations'
@@ -286,7 +287,8 @@ fi
 if [ "$CONFIG_FOOTBRIDGE_HOST" = "y" -o \
      "$CONFIG_ARCH_SHARK" = "y" -o \
      "$CONFIG_ARCH_CLPS7500" = "y" -o \
-     "$CONFIG_ARCH_EBSA110" = "y" ]; then
+     "$CONFIG_ARCH_EBSA110" = "y" -o \
+     "$CONFIG_ARCH_SA1100" = "y" ]; then
    define_bool CONFIG_ISA y
 else
    define_bool CONFIG_ISA n
