@@ -90,7 +90,14 @@ struct iforce_core_effect {
 #define FF_CMD_MAGNITUDE	0x0303
 #define FF_CMD_PERIOD		0x0407
 #define FF_CMD_INTERACT		0x050a
+
+#define FF_CMD_INIT_0_A		0x4002
+#define FF_CMD_INIT_0_B		0x4003
 #define FF_CMD_PLAY		0x4103
+#define FF_CMD_INIT_2		0x4201
+#define FF_CMD_INIT_3		0x4301
+
+#define FF_CMD_INIT_F		0xff01
 
 struct iforce {
 	struct input_dev dev;		/* Input device interface */
@@ -122,7 +129,7 @@ static struct {
 
 static char *iforce_name = "I-Force joystick/wheel";
 
-/* FF: various macros */
+
 /* Get hi and low bytes of a 16-bits int */
 #define HI(a)	((unsigned char)((a) >> 8))
 #define LO(a)	((unsigned char)((a) & 0xff))
@@ -137,6 +144,11 @@ static char *iforce_name = "I-Force joystick/wheel";
  */
 static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 {
+	int i;
+
+	printk(KERN_DEBUG "iforce.c: send_packet( cmd = %04x, data = ", cmd);
+	for (i = 0; i < LO(cmd); i++) printk("%02x ", data[i]);
+	printk(")\n");
 
 	switch (iforce->dev.idbus) {
 
@@ -146,7 +158,7 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 				unsigned char i;
 				unsigned char csum = 0;
 			 
-				printk(KERN_DEBUG "iforce.c: ff msg: 0x2b");
+				printk(KERN_DEBUG "iforce.c: serio_data: 2b ");
 				serio_write(iforce->serio, 0x2b);
 				printk("%02x ", HI(cmd));
 				serio_write(iforce->serio, HI(cmd));
@@ -171,7 +183,7 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 		case BUS_USB: {
 
 				DECLARE_WAITQUEUE(wait, current);
-				int timeout = 1000;
+				int status, timeout = 1000;
 
 				memcpy(iforce->out.transfer_buffer + 1, data, LO(cmd));
 				((char*)iforce->out.transfer_buffer)[0] = HI(cmd);
@@ -182,10 +194,10 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 				current->state = TASK_INTERRUPTIBLE;
 				add_wait_queue(&iforce->wait, &wait);
 
-				if (usb_submit_urb(&iforce->out)) {
+				if ((status = usb_submit_urb(&iforce->out))) {
 					current->state = TASK_RUNNING;
 					remove_wait_queue(&iforce->wait, &wait);
-					printk(KERN_WARNING "iforce.c: Failed to submit output urb.\n");
+					printk(KERN_WARNING "iforce.c: Failed to submit output urb. (%d)\n", status);
 					return;
 				}
 
@@ -205,6 +217,63 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 #endif
 	}
 } 
+
+static struct ff_init_data {
+	u16 cmd;
+	u8 data[4];
+} ff_init_data[] =  {
+	{ FF_CMD_INIT_F,   { 0x4F, 0x9A } },
+	{ FF_CMD_INIT_F,   { 0x56, 0x83 } },
+	{ FF_CMD_INIT_F,   { 0x4E, 0x9B } },
+	{ FF_CMD_INIT_F,   { 0x42, 0x97 } },
+	{ FF_CMD_INIT_F,   { 0x4D, 0x98 } },
+	{ FF_CMD_INIT_F,   { 0x50, 0x85 } },
+
+	{ FF_CMD_INIT_0_B, { 0x06, 0xF4, 0x01, 0x9B } },
+	{ FF_CMD_INIT_3,   { 0x80, 0xE9 } },
+	{ FF_CMD_INIT_2,   { 0x04, 0x6C } },
+	{ FF_CMD_INIT_2,   { 0x04, 0x6C } },
+	{ FF_CMD_INIT_2,   { 0x05, 0x6D } },
+	{ FF_CMD_INIT_0_A, { 0x04, 0x00, 0x6D } },
+	{ FF_CMD_INIT_2,   { 0x05, 0x6D } },
+	{ FF_CMD_INIT_0_A, { 0x04, 0x00, 0x6D } },
+	{ FF_CMD_INIT_3,   { 0x80, 0xE9 } },
+	{ FF_CMD_INIT_2,   { 0x05, 0x6D } },
+	{ FF_CMD_INIT_0_A, { 0x04, 0x00, 0x6D } },
+	{ FF_CMD_INIT_2,   { 0x01, 0x69 } },
+	{ FF_CMD_INIT_2,   { 0x00, 0x68 } },
+
+#if 1
+	{ FF_CMD_INIT_F,   { 0x4F, 0x9A } },
+	{ FF_CMD_INIT_F,   { 0x56, 0x83 } },
+	{ FF_CMD_INIT_F,   { 0x4E, 0x9B } },
+	{ FF_CMD_INIT_F,   { 0x42, 0x97 } },
+	{ FF_CMD_INIT_F,   { 0x4D, 0x98 } },
+	{ FF_CMD_INIT_F,   { 0x50, 0x85 } },
+
+	{ FF_CMD_INIT_0_B, { 0x06, 0xF4, 0x01, 0x9B } },
+	{ FF_CMD_INIT_3,   { 0x80, 0xE9 } },
+	{ FF_CMD_INIT_2,   { 0x04, 0x6C } },
+	{ FF_CMD_INIT_2,   { 0x04, 0x6C } },
+	{ FF_CMD_INIT_2,   { 0x05, 0x6D } },
+	{ FF_CMD_INIT_2,   { 0x04, 0x6C } },
+	{ FF_CMD_INIT_0_A, { 0x04, 0x00, 0x6D } },
+	{ FF_CMD_INIT_2,   { 0x05, 0x6D } },
+	{ FF_CMD_INIT_0_A, { 0x04, 0x00, 0x6D } },
+	{ FF_CMD_INIT_3,   { 0x80, 0xE9 } },
+#endif
+	{ 0, }
+ };
+
+static void iforce_init_ff(struct iforce *iforce)
+{
+	int i;
+	
+	down_interruptible(&(iforce->ff_mutex));
+	for (i = 0; ff_init_data[i].cmd; i++)
+		send_packet(iforce, ff_init_data[i].cmd, ff_init_data[i].data);
+	up(&(iforce->ff_mutex));
+}
 
 /*
  * Start or stop playing an effect
@@ -840,6 +909,8 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
 	iforce->dev.idproduct = dev->descriptor.idProduct;
 	iforce->dev.idversion = dev->descriptor.bcdDevice;
 
+	iforce->usbdev = dev;
+
 	init_waitqueue_head(&iforce->wait);
 
 	FILL_INT_URB(&iforce->irq, dev, usb_rcvintpipe(dev, epirq->bEndpointAddress),
@@ -849,6 +920,8 @@ static void *iforce_usb_probe(struct usb_device *dev, unsigned int ifnum,
                         iforce + 1, 32, iforce_usb_out, iforce);
 
 	iforce_input_setup(iforce);
+
+	iforce_init_ff(iforce);
 
 	printk(KERN_INFO "input%d: %s on usb%d:%d.%d\n",
 		 iforce->dev.number, iforce_name, dev->bus->busnum, dev->devnum, ifnum);
