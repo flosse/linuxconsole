@@ -20,6 +20,8 @@
 #include <linux/smp_lock.h>
 #include <linux/console.h>
 #include <linux/init.h>
+#include <linux/module.h>
+#include <linux/interrupt.h>			/* For in_interrupt() */
 
 #include <asm/uaccess.h>
 
@@ -45,14 +47,16 @@ int minimum_console_loglevel = MINIMUM_CONSOLE_LOGLEVEL;
 int default_console_loglevel = DEFAULT_CONSOLE_LOGLEVEL;
 
 spinlock_t console_lock = SPIN_LOCK_UNLOCKED;
+int oops_in_progress;
 
 struct console *console_drivers;
 static char log_buf[LOG_BUF_LEN];
+#define LOG_BUF(idx) (log_buf[(idx) & LOG_BUF_MASK])
+
 static unsigned long log_start;
 static unsigned long logged_chars;
 struct console_cmdline console_cmdline[MAX_CMDLINECONSOLES];
 static int preferred_console = -1;
-int oops_in_progress;
 
 /*
  *	Setup a list of consoles. Called from init/main.c
@@ -151,7 +155,7 @@ int do_syslog(int type, char * buf, int len)
 		i = 0;
 		spin_lock_irq(&console_lock);
 		while (log_size && i < len) {
-			c = log_buf[log_start & LOG_BUF_MASK];
+			c = LOG_BUF(log_start);
 			log_start++;
 			log_size--;
 			spin_unlock_irq(&console_lock);
@@ -195,7 +199,7 @@ int do_syslog(int type, char * buf, int len)
 			j = limit-1-i;
 			if (j+LOG_BUF_LEN < log_start+log_size)
 				break;
-			c = log_buf[ j  & LOG_BUF_MASK ];
+			c = LOG_BUF(j);
 			spin_unlock_irq(&console_lock);
 			__put_user(c,&buf[count-1-i]);
 			spin_lock_irq(&console_lock);
@@ -292,7 +296,7 @@ asmlinkage int printk(const char *fmt, ...)
 		}
 		line_feed = 0;
 		for (; p < buf_end; p++) {
-			log_buf[(log_start+log_size) & LOG_BUF_MASK] = *p;
+			LOG_BUF(log_start+log_size) = *p;
 			if (log_size < LOG_BUF_LEN)
 				log_size++;
 			else
@@ -320,6 +324,7 @@ asmlinkage int printk(const char *fmt, ...)
 		wake_up_interruptible(&log_wait);
 	return i;
 }
+EXPORT_SYMBOL(printk);
 
 void console_print(const char *s)
 {
@@ -336,6 +341,7 @@ void console_print(const char *s)
 	}
 	spin_unlock_irqrestore(&console_lock, flags);
 }
+EXPORT_SYMBOL(console_print);
 
 void unblank_console(void)
 {
@@ -456,7 +462,7 @@ void register_console(struct console * console)
 done:
 	spin_unlock_irqrestore(&console_lock, flags);
 }
-
+EXPORT_SYMBOL(register_console);
 
 int unregister_console(struct console * console)
 {
@@ -491,6 +497,7 @@ int unregister_console(struct console * console)
 	spin_unlock_irqrestore(&console_lock, flags);
 	return res;
 }
+EXPORT_SYMBOL(unregister_console);
 	
 /*
  * Write a message to a certain tty, not just the console. This is used for
