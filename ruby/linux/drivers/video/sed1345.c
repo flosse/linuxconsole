@@ -159,6 +159,16 @@ int __init sed1345_init(void)
 	
 	set_recommended_lut_values();
 
+	switch (fb_info.var.bits_per_pixel) {
+	    case 1:
+	    	fb_info.fix.visual = FB_VISUAL_MONO01;
+		break;
+	    case 2:
+	    case 4:
+	    	fb_info.fix.visual = FB_VISUAL_PSEUDOCOLOR;
+		break;
+	}
+
 	if (register_framebuffer(&fb_info) < 0) {
 		return -EINVAL;
 	}
