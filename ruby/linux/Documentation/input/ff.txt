@@ -1,6 +1,7 @@
 Force feedback for Linux.
 By Johann Deneux <deneux@ifrance.com> on 2001/04/22.
-
+You can redistribute this file, provided you include shape.fig and
+interactive.fig.
 ----------------------------------------------------------------------------
 
 0. Introduction
@@ -118,7 +119,9 @@ to the unique id assigned by the driver. This data is required for performing
 some operations (removing an effect, controlling the playback).
 This if field must be set to -1 by the user in order to tell the driver to
 allocate a new effect.
-See <linux/input.h> for a description of the ff_effect stuct.
+See <linux/input.h> for a description of the ff_effect stuct. You should also
+find help in a few sketches, contained in files shape.fig and interactive.fig.
+You need xfig to visualize these files.
 
 3.3 Removing an effect from the device
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -195,9 +198,11 @@ A value of 0 means "no auto-center".
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Proceed as if you wanted to upload a new effect, except that instead of
 setting the id field to -1, you set it to the wanted effect id.
-If you update very often, some device may stop playing effects. The driver
-checks that, and re-start the updated effect if necessary. However, this
-prevents effects from being palyed smoothly.
+Normally, the effect is not stopped and restarted. However, depending on the
+type of device, not all paramaters can be dynamically updated. For example,
+the direction of an effect cannot be updated with iforce devices. In this
+case, the driver stops the effect, up-load it, and restart it.
+
 
 3.8 Information about the status of effects
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
