@@ -14,6 +14,7 @@
 #include <linux/console_struct.h>
 #include <linux/sched.h>
 
+#include "fbcon.h"
 
 #undef DEBUG
 
@@ -255,7 +256,7 @@ static int __init my_atoi(const char *name)
 }
 
 int __fb_try_mode(struct fb_var_screeninfo *var, struct fb_info *info,
-			   const struct fb_videomode *mode, unsigned int bpp)
+		  const struct fb_videomode *mode, unsigned int bpp)
 {
     int err;
 
@@ -278,7 +279,7 @@ int __fb_try_mode(struct fb_var_screeninfo *var, struct fb_info *info,
     var->vsync_len = mode->vsync_len;
     var->sync = mode->sync;
     var->vmode = mode->vmode;
-    err = fb_set_var(var, info);
+    err = info->fbops->fb_set_var(var, PROC_CONSOLE(info), info);
     var->activate &= ~FB_ACTIVATE_TEST;
     return !err;
 }

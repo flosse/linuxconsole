@@ -158,11 +158,61 @@ void fb_copy_cmap(struct fb_cmap *from, struct fb_cmap *to, int fsfromto)
     }
 }
 
+
+    /*
+     *  Get the colormap for a screen
+     */
+
+int fb_get_cmap(struct fb_cmap *cmap, int kspc,
+    	    	int (*getcolreg)(u_int, u_int *, u_int *, u_int *, u_int *,
+				 struct fb_info *),
+		struct fb_info *info)
+{
+    int i, start;
+    u16 *red, *green, *blue, *transp;
+    u_int hred, hgreen, hblue, htransp;
+
+    red = cmap->red;
+    green = cmap->green;
+    blue = cmap->blue;
+    transp = cmap->transp;
+    start = cmap->start;
+    if (start < 0)
+	return -EINVAL;
+    for (i = 0; i < cmap->len; i++) {
+	if (getcolreg(start++, &hred, &hgreen, &hblue, &htransp, info))
+	    return 0;
+	if (kspc) {
+	    *red = hred;
+	    *green = hgreen;
+	    *blue = hblue;
+	    if (transp)
+		*transp = htransp;
+	} else {
+	    put_user(hred, red);
+	    put_user(hgreen, green);
+	    put_user(hblue, blue);
+	    if (transp)
+		put_user(htransp, transp);
+	}
+	red++;
+	green++;
+	blue++;
+	if (transp)
+	    transp++;
+    }
+    return 0;
+}
+
+
     /*
      *  Set the colormap for a screen
      */
 
-int fb_set_cmap(struct fb_cmap *cmap, int kspc, struct fb_info *info)
+int fb_set_cmap(struct fb_cmap *cmap, int kspc,
+    	    	int (*setcolreg)(u_int, u_int, u_int, u_int, u_int,
+				 struct fb_info *),
+		struct fb_info *info)
 {
     int i, start;
     u16 *red, *green, *blue, *transp;
@@ -196,8 +246,7 @@ int fb_set_cmap(struct fb_cmap *cmap, int kspc, struct fb_info *info)
 	blue++;
 	if (transp)
 	    transp++;
-	if (info->fbops->fb_setcolreg(start++, hred, hgreen, hblue, htransp, 
-				      info))
+	if (setcolreg(start++, hred, hgreen, hblue, htransp, info))
 	    return 0;
     }
     return 0;
@@ -257,6 +306,7 @@ void fb_invert_cmaps(void)
 
 EXPORT_SYMBOL(fb_alloc_cmap);
 EXPORT_SYMBOL(fb_copy_cmap);
+EXPORT_SYMBOL(fb_get_cmap);
 EXPORT_SYMBOL(fb_set_cmap);
 EXPORT_SYMBOL(fb_default_cmap);
 EXPORT_SYMBOL(fb_invert_cmaps);
