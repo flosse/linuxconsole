@@ -24,7 +24,7 @@ LEN= 0e
 	Val 23 Sawtooth up
 	Val 24 Sawtooth down
 	Val 40 Spring (Force = f(pos))
-	Val 41 Friction (Force = f(velocity)) and Inertia (Force = f(acceleration)) (Hum, I thought that accel = d(velocity)/dt...)
+	Val 41 Friction (Force = f(velocity)) and Inertia (Force = f(acceleration))
 
 	
 02 Axes affected and trigger
@@ -36,7 +36,7 @@ LEN= 0e
 	          Val x+1 = Button x triggers the effect
 	When the whole byte is 0, cancel the previously set trigger
 
-03-04 Duration of effect (little endian encoding). 1s = 03e8
+03-04 Duration of effect (little endian encoding, in ms)
 
 05 Direction of effect, if applicable. Else, see 02 for value to assign.
 
@@ -50,7 +50,7 @@ applicable
 0a-0b Address of interactive parameters for Y-axis, or ffff if not
 applicable
 
-0c-0d Delay before execution of effect (little endian encoding). 1s = 03e8
+0c-0d Delay before execution of effect (little endian encoding, in ms)
 
 
 ** Time based parameters **
@@ -59,7 +59,7 @@ applicable
 OP=  02
 LEN= 08
 00-01 Address where to store the parameteres
-02-03 Duration of attack (little endian encoding). 1s = 03e8
+02-03 Duration of attack (little endian encoding, in ms)
 04 Level at end of attack. Signed byte.
 05-06 Duration of fade.
 07 Level at end of fade.
@@ -77,7 +77,7 @@ LEN= 07
 02 Magnitude. Signed byte.
 03 Offset. Signed byte.
 04 Phase. Val 00 = 0 deg, Val 40 = 90 degs.
-05-06 Period (little endian encoding). 1s = 03e8
+05-06 Period (little endian encoding, in ms)
 
 ** Interactive parameters **
 
