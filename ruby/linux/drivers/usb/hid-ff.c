@@ -27,10 +27,6 @@
  * e-mail - mail your message to <deneux@ifrance.com>
  */
 
-#if 0
-#include <linux/timer.h>
-#endif
-
 #include <linux/input.h>
 #include <linux/sched.h>
 
@@ -87,9 +83,20 @@ int hid_ff_init(struct hid_device* hid)
 
 
 
+
+/* **************************************************************************/
 /* Implements the protocol used by the Logitech WingMan Cordless rumble pad */
+/* **************************************************************************/
 
 #ifdef CONFIG_LOGITECH_RUMBLE
+
+#define LGFF_CHECK_OWNERSHIP(i, l) \
+        (i>=0 && i<LGFF_EFFECTS \
+        && test_bit(EFFECT_USED, l->effects[i].flags) \
+        && CHECK_OWNERSHIP(l->effects[i]))
+
+#define LGFF_BUFFER_SIZE 8
+#define LGFF_EFFECTS 8
 
 struct lgff_effect {
 	pid_t owner;
@@ -97,43 +104,35 @@ struct lgff_effect {
 	unsigned char right;       /* Magnitude of vibration for right motor */
 	struct ff_replay replay;
 	unsigned long flags[1];
-#if 0
-	struct timer_list timer;
-#endif
 };
 
-#define LGFF_CHECK_OWNERSHIP(i, l) \
-        (i>=0 && i<LGFF_EFFECTS && \
-        test_bit(EFFECT_USED, l->effects[i].flags) && CHECK_OWNERSHIP(l->effects[i]))
-
-#define LGFF_BUFFER_SIZE 8
-#define LGFF_EFFECTS 8
-
 struct hid_ff_logitech {
-	struct urb* urbffout;             /* Output URB used to send ff commands */
-	struct usb_ctrlrequest ffcr;      /* ff commands are sent using control URBs */
+	struct urb* urbffout;        /* Output URB used to send ff commands */
+	struct usb_ctrlrequest ffcr; /* ff commands use control URBs */
 	char buf[LGFF_BUFFER_SIZE];
 	struct lgff_effect effects[LGFF_EFFECTS];
 };
+
 
 static void hid_lgff_ctrl_out(struct urb *urb);
 static void hid_lgff_exit(struct hid_device* hid);
 static int hid_lgff_event(struct hid_device *hid, struct input_dev* input,
 			  unsigned int type, unsigned int code, int value);
 static void hid_lgff_make_rumble(struct hid_device* hid);
-static void hid_lgff_timer(unsigned long id);
 
 static int hid_lgff_flush(struct input_dev *input, struct file *file);
-static int hid_lgff_upload_effect(struct input_dev* input, struct ff_effect* effect);
+static int hid_lgff_upload_effect(struct input_dev* input,
+				  struct ff_effect* effect);
 static int hid_lgff_erase(struct input_dev *input, int id);
+
 
 static int hid_lgff_init(struct hid_device* hid)
 {
 	struct hid_ff_logitech *private;
-	int i;
 
 	/* Private data */
-	private = hid->ff_private = kmalloc(sizeof(struct hid_ff_logitech), GFP_KERNEL);
+	hid->ff_private = kmalloc(sizeof(struct hid_ff_logitech), GFP_KERNEL);
+	private = hid->ff_private;
 	if (!private) return -1;
 
 	memset(private, 0, sizeof(struct hid_ff_logitech));
@@ -150,7 +149,9 @@ static int hid_lgff_init(struct hid_device* hid)
 		return -1;
 	}
 
-	usb_fill_control_urb(private->urbffout, hid->dev, 0, (void*) &private->ffcr, private->buf, 8, hid_lgff_ctrl_out, hid);
+	usb_fill_control_urb(private->urbffout, hid->dev, 0,
+			     (void*) &private->ffcr, private->buf, 8,
+			     hid_lgff_ctrl_out, hid);
 	dbg("Created ff output control urb");
 
 	/* Input init */
@@ -159,16 +160,6 @@ static int hid_lgff_init(struct hid_device* hid)
 	set_bit(FF_RUMBLE, hid->input.ffbit);
 	set_bit(EV_FF, hid->input.evbit);
 	hid->input.ff_effects_max = LGFF_EFFECTS;
-
-	/* Initialize array of effects */
-	memset(private->effects, 0, LGFF_EFFECTS * sizeof(struct lgff_effect));
-	for (i=0; i<LGFF_EFFECTS; ++i) {
-#if 0
-		init_timer(&lgff_effects[i].timer);
-		private->effects[i].timer.data = i;
-		private->effects[i].timer.function = hid_lgff_timer;
-#endif
-	}
 
 	printk(KERN_INFO "Force feedback for Logitech rumble devices by Johann Deneux <deneux@ifrance.com>\n");
 
@@ -185,64 +176,28 @@ static void hid_lgff_exit(struct hid_device* hid)
 	}
 }
 
-#if 0
-static void hid_lgff_timer(unsigned long id)
-{
-	struct lgff_effect *effect = lgff_effects + id;
-
-	if (test_bit(EFFECT_STARTED, effect->flags)) {
-		clear_bit(EFFECT_STARTED, effect->flags);
-		if (effect->replay.length != 0) {
-			set_bit(EFFECT_PLAYING, effect->flags);
-			hid_lgff_make_rumble(hid);
-			mod_timer(&effect->timer, RUN_AT(effect->replay.length * HZ / 1000));
-		}
-	} else if (test_bit(EFFECT_PLAYING, effect->flags)) {
-	} else {
-		/* BUG */
-	}
-
-}
-#endif
-
 static int hid_lgff_event(struct hid_device *hid, struct input_dev* input,
 			  unsigned int type, unsigned int code, int value)
 {
 	struct hid_ff_logitech *lgff = hid->ff_private;
+	struct lgff_effect *effect = lgff->effects + code;
 
-	if (type == EV_FF) {
+	if (type != EV_FF) return -EINVAL;
+	
+	if (!LGFF_CHECK_OWNERSHIP(code, lgff)) return -EACCES;
 
-		if (LGFF_CHECK_OWNERSHIP(code, lgff)) {
-			struct lgff_effect *effect = lgff->effects + code;
-			struct timer_list* timer;
+	if (value < 0) return -EINVAL;
 
-			if (value > 0) {
-#if 0
-				if (effect->replay.delay != 0) {
-					set_bit(EFFECT_STARTED, effect->flags);
-					clear_bit(EFFECT_PLAYING, effect->flags);
-					
-					mod_timer(&effect->timer, RUN_AT(effect->replay.delay * HZ / 1000));
-				} else if (effect->replay.length != 0) {
-					clear_bit(EFFECT_STARTED, effect->flags);
-					set_bit(EFFECT_PLAYING, effect->flags);
-					
-					hid_lgff_make_rumble(hid);
-					mod_timer(&effect->timer, RUN_AT(effect->replay.length * HZ / 1000));
-				}
-#else
-				set_bit(EFFECT_PLAYING, effect->flags);
-				hid_lgff_make_rumble(hid);
-			} else if (value == 0) {
-				clear_bit(EFFECT_PLAYING, effect->flags);
-				hid_lgff_make_rumble(hid);		
-			}
-
-#endif
-			return 0;
-		} else return -EACCES;
+	if (value > 0) {
+		set_bit(EFFECT_PLAYING, effect->flags);
+		hid_lgff_make_rumble(hid);
+	} else /* value == 0*/ {
+		clear_bit(EFFECT_PLAYING, effect->flags);
+		hid_lgff_make_rumble(hid);		
 	}
-	else return -EINVAL;
+
+	return 0;
+
 }
 
 static void hid_lgff_make_rumble(struct hid_device* hid)
@@ -268,12 +223,14 @@ static void hid_lgff_make_rumble(struct hid_device* hid)
 	lgff->buf[3] = left > 0x7f ? 0x7f : left;
 	lgff->buf[4] = right > 0x7f ? 0x7f : right;
 
-	/*FIXME: may need a queue. I should at least check if the urb is available */
+	/*FIXME: needs a queue. I should at least check if the urb is
+	  available */
 	lgff->urbffout->pipe = usb_sndctrlpipe(hid->dev, 0);
 	lgff->ffcr.bRequestType = USB_TYPE_CLASS | USB_DIR_OUT | USB_RECIP_INTERFACE;
 	lgff->urbffout->transfer_buffer_length = lgff->ffcr.wLength = 8;
 	lgff->ffcr.bRequest = 9;
-	lgff->ffcr.wValue = 0x0203;    /*NOTE: Potential problem with little/big endian */
+	lgff->ffcr.wValue = 0x0203;    /*NOTE: Potential problem with 
+					 little/big endian */
 	lgff->ffcr.wIndex = 0;
 	
 	lgff->urbffout->dev = hid->dev;
@@ -299,12 +256,12 @@ static int hid_lgff_flush(struct input_dev *dev, struct file *file)
 			input_report_ff(dev, i, 0);
 
 			/* Free ressources assigned to effect */
-			if (hid_lgff_erase(dev, i)) {
+			if (hid_lgff_erase(dev, i))
 				warn("erase effect %d failed\n", i);
-			}
 		}
 
 	}
+
 	return 0;
 }
 
@@ -313,15 +270,12 @@ static int hid_lgff_erase(struct input_dev *dev, int id)
 	struct hid_device *hid = dev->private;
 	struct hid_ff_logitech *lgff = hid->ff_private;
 
-	if (LGFF_CHECK_OWNERSHIP(id, lgff)) {
+	if (!LGFF_CHECK_OWNERSHIP(id, lgff)) return -EACCES;
 
-		input_report_ff(dev, id, 0);   /* Stop effect */
-		lgff->effects[id].flags[0] = 0;
+	input_report_ff(dev, id, 0);   /* Stop effect */
+	lgff->effects[id].flags[0] = 0;
 
-		return 0;
-	} else {
-		return -EACCES;
-	}
+	return 0;
 }
 
 static void hid_lgff_ctrl_out(struct urb *urb)
@@ -343,38 +297,37 @@ static int hid_lgff_upload_effect(struct input_dev* input, struct ff_effect* eff
 
 	if (!test_bit(effect->type, input->ffbit)) return -EINVAL;
 
+	if (effect->type != FF_RUMBLE) return -EINVAL;
+
 	if (effect->id == -1) {
 		int i;
+
 		for (i=0; i<LGFF_EFFECTS && test_bit(EFFECT_USED, lgff->effects[i].flags); ++i);
 		if (i >= LGFF_EFFECTS) return -ENOSPC;
+
 		effect->id = i;
 		lgff->effects[i].owner = current->pid;
 		set_bit(EFFECT_USED, lgff->effects[i].flags);
-	} else {
-		if (!LGFF_CHECK_OWNERSHIP(effect->id, lgff)) return -EACCES;
 	}
+	else if (!LGFF_CHECK_OWNERSHIP(effect->id, lgff)) return -EACCES;
+
 	id = effect->id;
 	new = lgff->effects[id];
 
-	switch (effect->type) {
-	case FF_RUMBLE:
-		new.right = effect->u.rumble.strong_magnitude >> 9;
-		new.left = effect->u.rumble.weak_magnitude >> 9;
-		new.replay = effect->replay;
-		break;
+	new.right = effect->u.rumble.strong_magnitude >> 9;
+	new.left = effect->u.rumble.weak_magnitude >> 9;
+	new.replay = effect->replay;
 
-	default:
-		return -EINVAL;
-	}
-
-	/* If we updated an effect that was being played, we need to remake the rumble effect */
+	/* If we updated an effect that was being played, we need to remake
+	   the rumble effect */
 	if (test_bit(EFFECT_STARTED, lgff->effects[id].flags)
 	    || test_bit(EFFECT_STARTED, lgff->effects[id].flags)) {
 
-		/* Changing replay parameters is not allowed (for the time being) */
+		/* Changing replay parameters is not allowed (for the time
+		   being) */
 		if (new.replay.delay != lgff->effects[id].replay.delay
 		    || new.replay.length != lgff->effects[id].replay.length)
-			return -EPERM;
+			return -ENOSYS;
 
 		lgff->effects[id] = new;
 		hid_lgff_make_rumble(hid);
