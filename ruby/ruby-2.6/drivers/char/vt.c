@@ -41,6 +41,7 @@
  *     - David Carter <carter@cs.bris.ac.uk>
  * 
  *   Note that the abstract console driver allows all consoles to be of
+
  *   potentially different sizes, so the following variables depend on the
  *   current console (currcons):
  *
@@ -138,7 +139,12 @@ struct vt_struct *admin_vt;		/* Administrative VT */
 LIST_HEAD(vt_list);		/* Head to link list of VTs */
 
 static void vt_flush_chars(struct tty_struct *tty);
-static void unblank_screen_t(unsigned long dummy);
+static void blank_screen_t(unsigned long dummy);
+enum {
+        blank_off = 0,
+        blank_normal_wait,
+        blank_vesa_wait,
+};
 
 #ifdef CONFIG_VT_CONSOLE
 static int kmsg_redirect = 0;	/* kmsg_redirect is the VC for printk */
@@ -282,6 +288,8 @@ inline void gotoxay(struct vc_data *vc, int new_x, int new_y)
  */
 void set_palette(struct vc_data *vc)
 {
+	WARN_CONSOLE_UNLOCKED();
+
 	if (IS_VISIBLE && sw->con_set_palette && vcmode != KD_GRAPHICS)
 		sw->con_set_palette(vc, color_table);
 }
@@ -492,6 +500,8 @@ void delete_line(struct vc_data *vc, unsigned int nr)
  */
 void set_origin(struct vc_data *vc)
 {
+	WARN_CONSOLE_UNLOCKED();
+
 	if (!IS_VISIBLE ||
 	    !sw->con_set_origin ||
 	    !sw->con_set_origin(vc))
@@ -510,6 +520,8 @@ inline void clear_region(struct vc_data *vc, int sx, int sy, int width, int heig
 
 inline void save_screen(struct vc_data *vc)
 {
+	WARN_CONSOLE_UNLOCKED();
+
 	if (sw->con_save_screen)
 		sw->con_save_screen(vc);
 }
@@ -562,6 +574,8 @@ void do_update_region(struct vc_data *vc, unsigned long start, int count)
 
 void update_region(struct vc_data *vc, unsigned long start, int count)
 {
+	WARN_CONSOLE_UNLOCKED();
+
 	if (DO_UPDATE) {
 		hide_cursor(vc);
 		do_update_region(vc, start, count);
@@ -601,6 +615,8 @@ inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed)
 void invert_screen(struct vc_data *vc, int offset, int count, int viewed)
 {
 	unsigned short *p;
+
+	WARN_CONSOLE_UNLOCKED();
 
 	count /= 2;
 	p = screenpos(vc, offset, viewed);
@@ -656,6 +672,8 @@ void complement_pos(struct vc_data *vc, int offset)
 	static unsigned short oldx, oldy, old;
 	static unsigned short *p;
 
+	WARN_CONSOLE_UNLOCKED();
+
 	if (p) {
 		scr_writew(old, p);
 		if (DO_UPDATE)
@@ -695,8 +713,6 @@ static void powerdown_screen(unsigned long private)
 	struct vt_struct *vt = (struct vt_struct *) private;
 	struct vc_data *vc = vt->fg_console;
 
-        vc->display_fg->timer.data = (long) vt;
-	vc->display_fg->timer.function = unblank_screen_t;
 	switch (vc->display_fg->blank_mode) {
 	case VESA_NO_BLANKING:
 		sw->con_blank(vc, VESA_VSYNC_SUSPEND+1);
@@ -708,13 +724,23 @@ static void powerdown_screen(unsigned long private)
 	}
 }
 
-static void timer_do_blank_screen(struct vt_struct *vt, int entering_gfx, int from_timer_handler)
+void do_blank_screen(struct vt_struct *vt, int entering_gfx)
 {
 	struct vc_data *vc = vt->fg_console;
 	int i;
 
-	if (vc->display_fg->vt_blanked)
+	WARN_CONSOLE_UNLOCKED();
+
+	if (vc->display_fg->vt_blanked) {
+		if (vc->display_fg->blank_state == blank_vesa_wait) {
+			vc->display_fg->blank_state = blank_off;
+			powerdown_screen((unsigned long)vt);
+		}
 		return;
+	}
+	if (vc->display_fg->blank_state != blank_normal_wait)
+		return;
+	vc->display_fg->blank_state = blank_off;
 
 	/* entering graphics mode? */
 	if (entering_gfx) {
@@ -733,10 +759,8 @@ static void timer_do_blank_screen(struct vt_struct *vt, int entering_gfx, int fr
 	}
 
 	hide_cursor(vc);
-	if (!from_timer_handler)
-		del_timer_sync(&vc->display_fg->timer);
-        vc->display_fg->timer.data = (long) vc->display_fg;
-	vc->display_fg->timer.function = unblank_screen_t;
+	del_timer_sync(&vc->display_fg->timer);
+	vc->display_fg->blank_timer_expired = 0;
 
 	save_screen(vc);
 	/* In case we need to reset origin, blanking hook returns 1 */
@@ -748,33 +772,24 @@ static void timer_do_blank_screen(struct vt_struct *vt, int entering_gfx, int fr
 	if (console_blank_hook && console_blank_hook(1))
 		return;
 	if (vc->display_fg->off_interval) {
-	        vc->display_fg->timer.data = (long) vc->display_fg;
-		vc->display_fg->timer.function = powerdown_screen;
+		vc->display_fg->blank_state = blank_vesa_wait;
 		mod_timer(&vc->display_fg->timer, jiffies + vc->display_fg->off_interval);
 	}
 	if (vc->display_fg->blank_mode)
 		sw->con_blank(vc, vc->display_fg->blank_mode + 1);
 }
 
-void do_blank_screen(struct vt_struct *vt, int entering_gfx)
-{
-	timer_do_blank_screen(vt, entering_gfx, 0);
-}
-
 /*
- * This is a timer handler
+ * We defer the timer blanking to work queue so it can take the console semaphore
+ * (console operations can still happen at irq time, but only from printk which
+ * has the console semaphore. Not perfect yet, but better than no locking
  */
-static void unblank_screen_t(unsigned long dummy)
+static void blank_screen_t(unsigned long dummy)
 {
-	unblank_vt((struct vt_struct *) dummy);
-}
+	struct vt_struct *vt = (struct vt_struct*) dummy;
 
-/*
- * This is both a user-level callable and a timer handler
- */
-static void blank_screen(unsigned long dummy)
-{
-	timer_do_blank_screen((struct vt_struct *) dummy, 0, 1);
+	vt->blank_timer_expired = 1;
+	schedule_work(&vt->vt_work);
 }
 
 /*
@@ -795,10 +810,9 @@ void unblank_vt(struct vt_struct *vt)
 	if (vcmode != KD_TEXT)
 		return; /* but leave vc->vc_display_fg->vt_blanked != 0 */
 
-	vc->display_fg->timer.data = (long) vt;
-	vc->display_fg->timer.function = blank_screen;
 	if (vc->display_fg->blank_interval) {
 		mod_timer(&vc->display_fg->timer, jiffies + vc->display_fg->blank_interval);
+		vc->display_fg->blank_state = blank_normal_wait;
 	}
 
 	vc->display_fg->vt_blanked = 0;
@@ -827,14 +841,18 @@ void poke_blanked_console(struct vt_struct *vt)
 {
 	struct vc_data *vc = vt->fg_console;
 
+	WARN_CONSOLE_UNLOCKED();
+
 	del_timer(&vt->timer);
+	vt->blank_timer_expired = 0;
 	if (ignore_poke || !vc || vcmode == KD_GRAPHICS)
 		return;
 	if (vt->vt_blanked) {
-		vt->timer.function = unblank_screen_t;
-		mod_timer(&vt->timer, jiffies);	/* Now */
-	} else if (vt->blank_interval) 
+		unblank_vt(vt);
+	} else if (vt->blank_interval) {
 		mod_timer(&vt->timer, jiffies + vt->blank_interval);
+		vt->blank_state = blank_normal_wait;
+	}
 }
 
 /*
@@ -842,20 +860,24 @@ void poke_blanked_console(struct vt_struct *vt)
  */
 static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
 {
-        struct vt_struct *vt = admin_vt; /*FIXME*/
+	struct vt_struct *vt = admin_vt; /*FIXME*/
 
-        if (vt) {
-                switch (rqst)
-                {
-                case PM_RESUME:
-                        unblank_vt(vt);
-                        break;
-                case PM_SUSPEND:
-                        do_blank_screen(vt, 0);
-                        break;
-                }
-        }
-        return 0;
+	if (vt) {
+		switch (rqst)
+		{
+		case PM_RESUME:
+			acquire_console_sem();
+			unblank_vt(vt);
+			release_console_sem();
+			break;
+		case PM_SUSPEND:
+			acquire_console_sem();
+			do_blank_screen(vt, 0);
+			release_console_sem();
+			break;
+		}
+	}
+	return 0;
 }
 /*
  * This is the console switching callback.
@@ -893,6 +915,11 @@ static void vt_callback(void *private)
 			sw->con_scroll(vc, vt->scrollback_delta);
 		vt->scrollback_delta = 0;
 	}
+        if (vt->blank_timer_expired) {
+                do_blank_screen(vt, 0);
+                vt->blank_timer_expired = 0;
+        }
+
 	release_console_sem();
 }
 
@@ -951,6 +978,8 @@ struct vc_data *vc_allocate(unsigned int currcons)
 {
 	struct vc_data *vc = NULL;
 	struct vt_struct *vt;
+
+	WARN_CONSOLE_UNLOCKED();
 
 	if (currcons >= MAX_NR_CONSOLES) {
 		currcons = -ENXIO;
@@ -1024,7 +1053,8 @@ int vc_disallocate(struct vc_data *vc)
 {
 	struct vt_struct *vt = vc->display_fg;
 
-	acquire_console_sem();
+	WARN_CONSOLE_UNLOCKED();
+
 	if (vc && vc->vc_num > MIN_NR_CONSOLES) {
 		sw->con_deinit(vc);
 		vt->vc_cons[cons_num - vt->first_vc] = NULL;
@@ -1032,7 +1062,6 @@ int vc_disallocate(struct vc_data *vc)
 			kfree(screenbuf);
 		kfree(vc);
 	}
-	release_console_sem();
 	return 0;
 }
 
@@ -1062,6 +1091,8 @@ int vc_resize(struct vc_data *vc, unsigned int cols, unsigned int lines)
 	unsigned long ol, nl, nlend, rlth, rrem;
 	unsigned int new_cols, new_rows, ss, new_row_size, err = 0;
 	unsigned short *newscreen;
+
+	WARN_CONSOLE_UNLOCKED();
 
 	if (!vc)
 		return 0;
@@ -1383,7 +1414,9 @@ static int vt_open(struct tty_struct *tty, struct file * filp)
 	if (!vc) {
 		vc = find_vc(index);
 		if (!vc) {
+			acquire_console_sem();
 			vc = vc_allocate(index);
+			release_console_sem();
 			if (!vc)
 				return -ENODEV;
 		}	
@@ -1750,9 +1783,10 @@ const char *vt_map_display(struct vt_struct *vt, int init, int vc_count)
 	vt->vt_blanked = 0;
 	vt->blank_interval = 10 * 60 * HZ;
 	vt->off_interval = 0;
+	vt->blank_state = blank_normal_wait;
 	init_timer(&vt->timer);
 	vt->timer.data = (long) vt;
-	vt->timer.function = blank_screen;
+	vt->timer.function = blank_screen_t;
 	mod_timer(&vt->timer, jiffies + vt->blank_interval);
 	if (vt->pm_con)
 		vt->pm_con->data = vt;
@@ -1873,6 +1907,8 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
 	const char *desc;
 	int i;
 
+	acquire_console_sem();
+
 	/* First shutdown old console driver */
 	hide_cursor(vc);
 
@@ -1887,6 +1923,7 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
 	if (!desc) {
 		/* Make sure the original driver state is restored to normal */
 		vt->vt_sw->con_startup(vt, 1);
+		release_console_sem();
 		return;
 	}
 	vt->vt_sw = csw;
@@ -1918,6 +1955,8 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
 			vc->vc_can_do_color ? "colour" : "mono",
 			desc, vc->vc_cols, vc->vc_rows,
 			vt->first_vc + 1, vt->first_vc + vt->vc_count);
+
+	release_console_sem();
 }
 
 /*

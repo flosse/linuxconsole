@@ -103,10 +103,10 @@ extern int hgafb_setup(char*);
 extern int matroxfb_init(void);
 extern int matroxfb_setup(char*);
 extern int hpfb_init(void);
+extern int platinumfb_init(void);
+extern int platinumfb_setup(char*);
 extern int control_init(void);
 extern int control_setup(char*);
-extern int platinum_init(void);
-extern int platinum_setup(char*);
 extern int valkyriefb_init(void);
 extern int valkyriefb_setup(char*);
 extern int chips_init(void);
@@ -223,11 +223,14 @@ static struct {
 #ifdef CONFIG_FB_RADEON
 	{ "radeonfb", radeonfb_init, radeonfb_setup },
 #endif
+#ifdef CONFIG_FB_RADEON_OLD
+	{ "radeonfb_old", radeonfb_old_init, radeonfb_old_setup },
+#endif
 #ifdef CONFIG_FB_CONTROL
 	{ "controlfb", control_init, control_setup },
 #endif
 #ifdef CONFIG_FB_PLATINUM
-	{ "platinumfb", platinum_init, platinum_setup },
+	{ "platinumfb", platinumfb_init, platinumfb_setup },
 #endif
 #ifdef CONFIG_FB_VALKYRIE
 	{ "valkyriefb", valkyriefb_init, valkyriefb_setup },
@@ -395,6 +398,7 @@ extern const char *global_mode_option;
 
 static initcall_t pref_init_funcs[FB_MAX];
 static int num_pref_init_funcs __initdata = 0;
+static struct notifier_block *fb_notifier_list;
 struct fb_info *registered_fb[FB_MAX];
 int num_registered_fb;
 
@@ -463,23 +467,32 @@ void move_buf_unaligned(struct fb_info *info, u8 *dst, u8 *src, u32 d_pitch,
  */
 u32 fb_get_buffer_offset(struct fb_info *info, u32 size)
 {
-	u32 align = info->pixmap.buf_align - 1;
-	u32 offset, count = 1000;
+	struct fb_pixmap *buf = &info->pixmap;
+	u32 align = buf->buf_align - 1, offset;
 
-	spin_lock(&info->pixmap.lock);
-	offset = info->pixmap.offset + align;
+	/* If IO mapped, we need to sync before access, no sharing of
+	 * the pixmap is done
+	 */
+	if (buf->flags & FB_PIXMAP_IO) {
+		if (info->fbops->fb_sync && (buf->flags & FB_PIXMAP_SYNC))
+			info->fbops->fb_sync(info);
+		return 0;
+	}
+
+	/* See if we fit in the remaining pixmap space */
+	offset = buf->offset + align;
 	offset &= ~align;
-	if (offset + size > info->pixmap.size) {
-		while (atomic_read(&info->pixmap.count) && count--);
-		if (info->fbops->fb_sync && 
-		    info->pixmap.flags & FB_PIXMAP_SYNC)
+	if (offset + size > buf->size) {
+		/* We do not fit. In order to be able to re-use the buffer,
+		 * we must ensure no asynchronous DMA'ing or whatever operation
+		 * is in progress, we sync for that.
+		 */
+		if (info->fbops->fb_sync && (buf->flags & FB_PIXMAP_SYNC))
 			info->fbops->fb_sync(info);
 		offset = 0;
 	}
-	info->pixmap.offset = offset + size;
-	atomic_inc(&info->pixmap.count);	
-	smp_mb__after_atomic_inc();
-	spin_unlock(&info->pixmap.lock);
+	buf->offset = offset + size;
+
 	return offset;
 }
 
@@ -685,8 +698,8 @@ int fb_show_logo(struct fb_info *info)
 	struct fb_image image;
 	int x;
 
-	/* Return if the frame buffer is not mapped */
-	if (fb_logo.logo == NULL)
+	/* Return if the frame buffer is not mapped or suspended */
+	if (fb_logo.logo == NULL || info->state != FBINFO_STATE_RUNNING)
 		return 0;
 
 	image.depth = fb_logo.depth;
@@ -732,8 +745,6 @@ int fb_show_logo(struct fb_info *info)
 	     x <= info->var.xres-fb_logo.logo->width; x += (fb_logo.logo->width + 8)) {
 		image.dx = x;
 		info->fbops->fb_imageblit(info, &image);
-		//atomic_dec(&info->pixmap.count);
-		//smp_mb__after_atomic_dec();
 	}
 	
 	if (palette != NULL)
@@ -780,6 +791,9 @@ fb_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 	if (!info || ! info->screen_base)
 		return -ENODEV;
 
+	if (info->state != FBINFO_STATE_RUNNING)
+		return -EPERM;
+
 	if (info->fbops->fb_read)
 		return info->fbops->fb_read(file, buf, count, ppos);
 	
@@ -814,6 +828,9 @@ fb_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 
 	if (!info || !info->screen_base)
 		return -ENODEV;
+
+	if (info->state != FBINFO_STATE_RUNNING)
+		return -EPERM;
 
 	if (info->fbops->fb_write)
 		return info->fbops->fb_write(file, buf, count, ppos);
@@ -941,6 +958,8 @@ fb_set_var(struct fb_info *info, struct fb_var_screeninfo *var)
 			fb_pan_display(info, &info->var);
 
 			fb_set_cmap(&info->cmap, 1, info);
+
+			notifier_call_chain(&fb_notifier_list, FB_EVENT_MODE_CHANGE, info);
 		}
 	}
 	return 0;
@@ -966,9 +985,6 @@ fb_blank(struct fb_info *info, int blank)
 	return fb_set_cmap(&cmap, 1, info);
 }
 
-int fbcon_in_use;
-DECLARE_MUTEX(fbcon_sem);
-
 int
 fb_resize_vt(struct fb_info *info)
 {
@@ -976,8 +992,7 @@ fb_resize_vt(struct fb_info *info)
 	struct vc_data *vc;
 	int i;
 	
-	down(&fbcon_sem);
-	if(!fbcon_in_use || !vt)
+	if(!vt)
 		return -ENODEV;
 
 	vc = vt->default_mode;
@@ -985,16 +1000,7 @@ fb_resize_vt(struct fb_info *info)
 	vc->vc_rows = info->var.yres/vc->vc_font.height;
 	for(i = 0; i < vt->vc_count; i++)
 		vc_resize(vt->vc_cons[i], vc->vc_cols, vc->vc_rows);
-	up(&fbcon_sem);
 	return 0;
-}
-
-void
-fb_console_active(int active)
-{
-	down(&fbcon_sem);
-	fbcon_in_use = active;
-	up(&fbcon_sem);
 }
 
 static int 
@@ -1021,7 +1027,9 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 	case FBIOPUT_VSCREENINFO:
 		if (copy_from_user(&var, (void *) arg, sizeof(var)))
 			return -EFAULT;
+		acquire_console_sem();
 		i = fb_set_var(info, &var);
+		release_console_sem();
 		if (i) return i;
 		fb_resize_vt(info);
 		if (copy_to_user((void *) arg, &var, sizeof(var)))
@@ -1041,13 +1049,19 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 	case FBIOPAN_DISPLAY:
 		if (copy_from_user(&var, (void *) arg, sizeof(var)))
 			return -EFAULT;
-		if ((i = fb_pan_display(info, &var)))
+		acquire_console_sem();
+		i = fb_pan_display(info, &var);
+		release_console_sem();
+		if (i)
 			return i;
 		if (copy_to_user((void *) arg, &var, sizeof(var)))
 			return -EFAULT;
 		return 0;
 	case FBIO_CURSOR:
-		return (fb_cursor(info, (struct fb_cursor *) arg));
+		acquire_console_sem();
+		i = fb_cursor(info, (struct fb_cursor *) arg);
+		release_console_sem();
+		return i;
 #ifdef CONFIG_FRAMEBUFFER_CONSOLE
 	case FBIOGET_CON2FBMAP:
 		if (copy_from_user(&con2fb, (void *)arg, sizeof(con2fb)))
@@ -1077,7 +1091,10 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 		return 0;
 #endif	/* CONFIG_FRAMEBUFFER_CONSOLE */
 	case FBIOBLANK:
-		return fb_blank(info, arg);
+		acquire_console_sem();
+		i = fb_blank(info, arg);
+		release_console_sem();
+		return i;
 	default:
 		if (fb->fb_ioctl == NULL)
 			return -EINVAL;
@@ -1274,15 +1291,12 @@ register_framebuffer(struct fb_info *fb_info)
 		fb_info->pixmap.outbuf = sys_outbuf;
 	if (fb_info->pixmap.inbuf == NULL)
 		fb_info->pixmap.inbuf = sys_inbuf;
-	spin_lock_init(&fb_info->pixmap.lock);
 
 	registered_fb[i] = fb_info;
 
 	devfs_mk_cdev(MKDEV(FB_MAJOR, i),
 			S_IFCHR | S_IRUGO | S_IWUGO, "fb/%d", i);
-#ifdef CONFIG_FRAMEBUFFER_CONSOLE
-	fbcon_add(i, vt2fb[i]);
-#endif
+	notifier_call_chain(&fb_notifier_list, FB_EVENT_ADD_CONSOLE, fb_info);
 	return 0;
 }
 
@@ -1305,6 +1319,7 @@ unregister_framebuffer(struct fb_info *fb_info)
 	i = fb_info->node;
 	if (!registered_fb[i])
 		return -EINVAL;
+	notifier_call_chain(&fb_notifier_list, FB_EVENT_DELETE_CONSOLE, fb_info);
 	devfs_remove("fb/%d", i);
 
 	if (fb_info->pixmap.addr)
@@ -1314,6 +1329,43 @@ unregister_framebuffer(struct fb_info *fb_info)
 	return 0;
 }
 
+/**
+ *	fb_register_client - register a client notifier
+ *	@nb: notifier block to callback on events
+ */
+int fb_register_client(struct notifier_block *nb)
+{
+	return notifier_chain_register(&fb_notifier_list, nb);
+}
+
+/**
+ *	fb_unregister_client - unregister a client notifier
+ *	@nb: notifier block to callback on events
+ */
+int fb_unregister_client(struct notifier_block *nb)
+{
+	return notifier_chain_unregister(&fb_notifier_list, nb);
+}
+
+/**
+ *	fb_set_suspend - low level driver signals suspend
+ *	@info: framebuffer affected
+ *	@state: 0 = resuming, !=0 = suspending
+ *
+ *	This is meant to be used by low level drivers to
+ * 	signal suspend/resume to the core & clients.
+ *	It must be called with the console semaphore held
+ */
+void fb_set_suspend(struct fb_info *info, int state)
+{
+	if (state) {
+		notifier_call_chain(&fb_notifier_list, FB_EVENT_SUSPEND, info);
+		info->state = FBINFO_STATE_SUSPENDED;
+	} else {
+		info->state = FBINFO_STATE_RUNNING;
+		notifier_call_chain(&fb_notifier_list, FB_EVENT_RESUME, info);
+	}
+}
 
 /**
  *	fbmem_init - init frame buffer subsystem
@@ -1428,6 +1480,8 @@ EXPORT_SYMBOL(fb_pan_display);
 EXPORT_SYMBOL(fb_get_buffer_offset);
 EXPORT_SYMBOL(move_buf_unaligned);
 EXPORT_SYMBOL(move_buf_aligned);
-EXPORT_SYMBOL(fb_console_active);
+EXPORT_SYMBOL(fb_set_suspend);
+EXPORT_SYMBOL(fb_register_client);
+EXPORT_SYMBOL(fb_unregister_client);
 
 MODULE_LICENSE("GPL");

@@ -54,6 +54,7 @@
 #define BROKEN_GRAPHICS_PROGRAMS 1
 #endif
 
+extern int is_console_locked(void);
 extern unsigned char color_table[];
 extern int default_red[];
 extern int default_grn[];
@@ -221,6 +222,8 @@ struct vt_struct {
 	int blank_mode;		/* 0:none 1:suspendV 2:suspendH 3:powerdown */
 	int blank_interval;	/* How long before blanking */
 	int off_interval;
+	int blank_state;
+	int blank_timer_expired;
 	struct timer_list timer;	/* Timer for VT blanking */
 	struct timer_list beep;	/* Timer for adjusting console beeping */
 	struct pm_dev *pm_con;		/* power management */
@@ -264,6 +267,13 @@ void vte_decsc(struct vc_data *vc);
 void terminal_emulation(struct tty_struct *tty, int c);
 
 /* vt.c */
+/* Some debug stub to catch some of the obvious races in the VT code */
+#if 0
+#define WARN_CONSOLE_UNLOCKED() WARN_ON(!is_console_locked() && !oops_in_progress)
+#else
+#define WARN_CONSOLE_UNLOCKED()
+#endif
+
 const char *vt_map_display(struct vt_struct *vt, int init, int vc_count);
 void vt_map_input(struct vt_struct *vt);
 struct vc_data *find_vc(int currcons);

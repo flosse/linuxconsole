@@ -1490,8 +1490,14 @@ static int tiocswinsz(struct tty_struct *tty, struct tty_struct *real_tty,
 #ifdef CONFIG_VT
 	if (tty->driver->type == TTY_DRIVER_TYPE_CONSOLE) {
 		struct vc_data *vc = (struct vc_data *) tty->driver_data;
-		
-		if (!vc || vc_resize(vc, tmp_ws.ws_col, tmp_ws.ws_row))
+		int rc = 0;
+
+		if (!vc) {
+			acquire_console_sem();
+			rc = vc_resize(vc, tmp_ws.ws_col, tmp_ws.ws_row);
+			release_console_sem();
+		}
+		if (rc)
 			return -ENXIO;
 	}
 #endif
@@ -2266,7 +2272,6 @@ int tty_unregister_driver(struct tty_driver *driver)
 	if (driver->refcount)
 		return -EBUSY;
 
-	cdev_unmap(MKDEV(driver->major, driver->minor_start), driver->num);
 	unregister_chrdev_region(MKDEV(driver->major, driver->minor_start),
 				driver->num);
 

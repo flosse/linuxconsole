@@ -1,10 +1,7 @@
 #ifndef _LINUX_FB_H
 #define _LINUX_FB_H
 
-#include <linux/tty.h>
-#include <linux/workqueue.h>
 #include <asm/types.h>
-#include <asm/io.h>
 
 /* Definitions of frame buffers						*/
 
@@ -326,32 +323,67 @@ struct fb_cursor {
 	struct fb_image	image;	/* Cursor image */
 };
 
+#ifdef __KERNEL__
+
+#include <linux/fs.h>
+#include <linux/init.h>
+#include <linux/tty.h>
+#include <linux/device.h>
+#include <linux/workqueue.h>
+#include <linux/devfs_fs_kernel.h>
+#include <linux/notifier.h>
+#include <asm/io.h>
+
+struct vm_area_struct;
+struct fb_info;
+struct device;
+struct file;
+
+/*
+ * Register/unregister for framebuffer events
+ */
+
+/*	The resolution of the passed in fb_info about to change */ 
+#define FB_EVENT_MODE_CHANGE		0x01
+/*	The display on this fb_info is beeing suspended, no access to the
+ *	framebuffer is allowed any more after that call returns
+ */
+#define FB_EVENT_SUSPEND		0x02
+/*	The display on this fb_info was resumed, you can restore the display
+ *	if you own it
+ */
+#define FB_EVENT_RESUME			0x03
+#define FB_EVENT_ADD_CONSOLE		0x04
+#define FB_EVENT_DELETE_CONSOLE		0x05
+
+extern int fb_register_client(struct notifier_block *nb);
+extern int fb_unregister_client(struct notifier_block *nb);
+
+/*
+ * Pixmap structure definition
+ *
+ * The purpose of this structure is to translate data
+ * from the hardware independent format of fbdev to what
+ * format the hardware needs.
+ */
+
 #define FB_PIXMAP_DEFAULT 1     /* used internally by fbcon */
 #define FB_PIXMAP_SYSTEM  2     /* memory is in system RAM  */
 #define FB_PIXMAP_IO      4     /* memory is iomapped       */
 #define FB_PIXMAP_SYNC    256   /* set if GPU can DMA       */
 
 struct fb_pixmap {
-        __u8  *addr;                      /* pointer to memory             */  
-	__u32 size;                       /* size of buffer in bytes       */
-	__u32 offset;                     /* current offset to buffer      */
-	__u32 buf_align;                  /* byte alignment of each bitmap */
-	__u32 scan_align;                 /* alignment per scanline        */
-	__u32 flags;                      /* see FB_PIXMAP_*               */
+	u8 *addr;		/* pointer to memory                    */
+	u32 size;		/* size of buffer in bytes              */
+	u32 offset;		/* current offset to buffer             */
+	u32 buf_align;		/* byte alignment of each bitmap        */
+	u32 scan_align;		/* alignment per scanline               */
+	u32 access_align;	/* alignment per read/write             */
+	u32 flags;		/* see FB_PIXMAP_*                      */
 					  /* access methods                */
 	void (*outbuf)(u8 *dst, u8 *addr, unsigned int size); 
 	u8   (*inbuf) (u8 *addr);
-	spinlock_t lock;                  /* spinlock                      */
-	atomic_t count;
 };
-#ifdef __KERNEL__
-
-#include <linux/fs.h>
-#include <linux/init.h>
-
-struct fb_info;
-struct vm_area_struct;
-struct file;
 
     /*
      *  Frame buffer operations
@@ -362,58 +394,84 @@ struct fb_ops {
     struct module *owner;
     int (*fb_open)(struct fb_info *info, int user);
     int (*fb_release)(struct fb_info *info, int user);
+
     /* For framebuffers with strange non linear layouts */	
-    ssize_t (*fb_read)(struct file *file, char *buf, size_t count, loff_t *ppos);
-    ssize_t (*fb_write)(struct file *file, const char *buf, size_t count, loff_t *ppos);	
-    /* checks var and creates a par based on it */
-    int (*fb_check_var)(struct fb_var_screeninfo *var, struct fb_info *info);
-    /* set the video mode according to par */
+	ssize_t(*fb_read) (struct file * file, char *buf, size_t count,
+			   loff_t * ppos);
+	ssize_t(*fb_write) (struct file * file, const char *buf,
+			    size_t count, loff_t * ppos);
+
+	/* checks var and eventually tweaks it to something supported,
+	 * DO NOT MODIFY PAR */
+	int (*fb_check_var) (struct fb_var_screeninfo * var,
+			     struct fb_info * info);
+	/* set the video mode according to info->var */
     int (*fb_set_par)(struct fb_info *info);
+
     /* set color register */
     int (*fb_setcolreg)(unsigned regno, unsigned red, unsigned green,
-                        unsigned blue, unsigned transp, struct fb_info *info);
+			     unsigned blue, unsigned transp,
+			     struct fb_info * info);
+
     /* blank display */
     int (*fb_blank)(int blank, struct fb_info *info);
+
     /* pan display */
-    int (*fb_pan_display)(struct fb_var_screeninfo *var, struct fb_info *info);
+	int (*fb_pan_display) (struct fb_var_screeninfo * var,
+			       struct fb_info * info);
+
     /* draws a rectangle */
-    void (*fb_fillrect)(struct fb_info *info, const struct fb_fillrect *rect); 
+	void (*fb_fillrect) (struct fb_info * info,
+			     const struct fb_fillrect * rect);
     /* Copy data from area to another */
-    void (*fb_copyarea)(struct fb_info *info,const struct fb_copyarea *region); 
+	void (*fb_copyarea) (struct fb_info * info,
+			     const struct fb_copyarea * region);
     /* Draws a image to the display */
-    void (*fb_imageblit)(struct fb_info *info, const struct fb_image *image);
+	void (*fb_imageblit) (struct fb_info * info,
+			      const struct fb_image * image);
+
     /* Draws cursor */
-    int (*fb_cursor)(struct fb_info *info, struct fb_cursor *cursor);
+	int (*fb_cursor) (struct fb_info * info,
+			  struct fb_cursor * cursor);
+
     /* Rotates the display */
     void (*fb_rotate)(struct fb_info *info, int angle);
+
     /* wait for blit idle, optional */
     int (*fb_sync)(struct fb_info *info);		
+
     /* perform fb specific ioctl (optional) */
-    int (*fb_ioctl)(struct inode *inode, struct file *file, unsigned int cmd,
-		    unsigned long arg, struct fb_info *info);
+	int (*fb_ioctl) (struct inode * inode, struct file * file,
+			 unsigned int cmd, unsigned long arg,
+			 struct fb_info * info);
+
     /* perform fb specific mmap */
-    int (*fb_mmap)(struct fb_info *info, struct file *file, struct vm_area_struct *vma);
+	int (*fb_mmap) (struct fb_info * info, struct file * file,
+			struct vm_area_struct * vma);
 };
 
 struct fb_info {
-   int node;
-   int flags;
-   int open;                            /* Has this been open already ? */
+	int node;
+	int flags;
+	int open;			/* Has this been open already ? */
 #define FBINFO_FLAG_MODULE	1	/* Low-level driver is a module */
-   struct fb_var_screeninfo var;        /* Current var */
-   struct fb_fix_screeninfo fix;        /* Current fix */
-   struct fb_monspecs monspecs;         /* Current Monitor specs */
-   struct fb_cursor cursor;		/* Current cursor */	
-   struct work_struct queue;		/* Framebuffer event queue */
-   struct fb_pixmap pixmap;	        /* Current pixmap */
-   struct fb_cmap cmap;                 /* Current cmap */
-   struct fb_ops *fbops;
-   char *screen_base;                   /* Virtual address */
-   struct vt_struct *display_fg;	/* Attached VT on this display */
-   int currcon;				/* Current VC. */	
-   void *pseudo_palette;                /* Fake palette of 16 colors */ 
-   /* From here on everything is device dependent */
-   void *par;	
+	struct fb_var_screeninfo var;	/* Current var */
+	struct fb_fix_screeninfo fix;	/* Current fix */
+	struct fb_monspecs monspecs;	/* Current Monitor specs */
+	struct fb_cursor cursor;	/* Current cursor */	
+	struct work_struct queue;	/* Framebuffer event queue */
+	struct fb_pixmap pixmap;	/* Image Hardware Mapper */
+	struct fb_cmap cmap;		/* Current cmap */
+	struct fb_ops *fbops;
+	char *screen_base;		/* Virtual address */
+	struct vt_struct *display_fg;	/* Console visible on this display */
+	int currcon;			/* Current VC. */
+	void *pseudo_palette;		/* Fake palette of 16 colors */ 
+#define FBINFO_STATE_RUNNING	0
+#define FBINFO_STATE_SUSPENDED	1
+	u32 state;			/* Hardware state i.e suspend */
+	/* From here on everything is device dependent */
+	void *par;	
 };
 
 #ifdef MODULE
@@ -438,7 +496,7 @@ struct fb_info {
 #define fb_writeq sbus_writeq
 #define fb_memset sbus_memset_io
 
-#elif defined(__i386__) || defined(__alpha__) || defined(__x86_64__) || defined(__hppa__)
+#elif defined(__i386__) || defined(__alpha__) || defined(__x86_64__) || defined(__hppa__) || defined(__sh__)
 
 #define fb_readb __raw_readb
 #define fb_readw __raw_readw
@@ -482,13 +540,19 @@ extern int unregister_framebuffer(struct fb_info *fb_info);
 extern int fb_prepare_logo(struct fb_info *fb_info);
 extern int fb_show_logo(struct fb_info *fb_info);
 extern u32 fb_get_buffer_offset(struct fb_info *info, u32 size);
-extern void move_buf_unaligned(struct fb_info *info, u8 *dst, u8 *src, u32 d_pitch,
-			     	u32 height, u32 mask, u32 shift_high, u32 shift_low,
-				u32 mod, u32 idx);
-extern void move_buf_aligned(struct fb_info *info, u8 *dst, u8 *src, u32 d_pitch,
-			     u32 s_pitch, u32 height);
+extern void move_buf_unaligned(struct fb_info *info, u8 * dst, u8 * src,
+				u32 d_pitch, u32 height, u32 mask,
+				u32 shift_high, u32 shift_low, u32 mod,
+				u32 idx);
+extern void move_buf_aligned(struct fb_info *info, u8 * dst, u8 * src,
+				u32 d_pitch, u32 s_pitch, u32 height);
+extern void fb_set_suspend(struct fb_info *info, int state);
 extern struct fb_info *registered_fb[FB_MAX];
 extern int num_registered_fb;
+
+/* drivers/video/fbsysfs.c */
+extern struct fb_info *framebuffer_alloc(size_t size, struct device *dev);
+extern void framebuffer_release(struct fb_info *info);
 
 /* drivers/video/fbmon.c */
 #define FB_MAXTIMINGS       0
@@ -517,8 +581,7 @@ extern const struct fb_videomode vesa_modes[];
 /* drivers/video/fbcmap.c */
 extern int fb_alloc_cmap(struct fb_cmap *cmap, int len, int transp);
 extern void fb_dealloc_cmap(struct fb_cmap *cmap);
-extern int fb_copy_cmap(struct fb_cmap *from, struct fb_cmap *to,
-			int fsfromto);
+extern int fb_copy_cmap(struct fb_cmap *from, struct fb_cmap *to, int fsfromto);
 extern int fb_set_cmap(struct fb_cmap *cmap, int kspc, struct fb_info *fb_info);
 extern struct fb_cmap *fb_default_cmap(int len);
 extern void fb_invert_cmaps(void);
@@ -541,7 +604,8 @@ struct fb_videomode {
 
 #ifdef MODULE
 static inline int fb_find_mode(struct fb_var_screeninfo *var,
-			       struct fb_info *info, const char *mode_option,
+			       struct fb_info *info,
+			       const char *mode_option,
 			       const struct fb_videomode *db,
 			       unsigned int dbsize,
 			       const struct fb_videomode *default_mode,
@@ -568,7 +632,8 @@ static inline int fb_find_mode(struct fb_var_screeninfo *var,
 }
 #else
 extern int __init fb_find_mode(struct fb_var_screeninfo *var,
-			       struct fb_info *info, const char *mode_option,
+			       struct fb_info *info,
+			       const char *mode_option,
 			       const struct fb_videomode *db,
 			       unsigned int dbsize,
 			       const struct fb_videomode *default_mode,

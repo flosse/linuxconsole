@@ -49,13 +49,13 @@ unsigned short *screen_pos(struct vc_data *vc, int w_offset, int viewed)
 	return screenpos(vc, 2 * w_offset, viewed);
 }
 
-void getconsxy(struct vc_data *vc, char *p)
+void getconsxy(struct vc_data *vc, unsigned char *p)
 {
 	p[0] = vc->vc_x;
 	p[1] = vc->vc_y;
 }
 
-void putconsxy(struct vc_data *vc, char *p)
+void putconsxy(struct vc_data *vc, unsigned char *p)
 {
 	gotoxy(vc, p[0], p[1]);
 	set_cursor(vc);

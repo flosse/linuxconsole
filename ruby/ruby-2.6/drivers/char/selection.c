@@ -300,7 +300,10 @@ int paste_selection(struct tty_struct *tty)
 	int	pasted = 0, count;
 	DECLARE_WAITQUEUE(wait, current);
 
+        acquire_console_sem();
 	poke_blanked_console(vc->display_fg);
+        release_console_sem();
+
 	add_wait_queue(&vc->paste_wait, &wait);
 	while (sel_buffer && sel_buffer_lth > pasted) {
 		set_current_state(TASK_INTERRUPTIBLE);

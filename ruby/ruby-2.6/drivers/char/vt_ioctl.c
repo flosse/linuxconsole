@@ -786,6 +786,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		 * currently, setting the mode from KD_TEXT to KD_GRAPHICS
 		 * doesn't do a whole lot. i'm not sure if it should do any
 		 * restoration of modes or what...
+                 *
+                 * XXX It should at least call into the driver, fbdev's definitely
+                 * need to restore their engine state. --BenH
 		 */
 		if (!perm)
 			return -EPERM;
@@ -808,10 +811,12 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		/*
 		 * explicitly blank/unblank the screen if switching modes
 		 */
+		acquire_console_sem();
 		if (arg == KD_TEXT)
 			unblank_vt(vc->display_fg);
 		else
 			do_blank_screen(vc->display_fg, 1);
+		release_console_sem();
 		return 0;
 
 	case KDGETMODE:
@@ -981,17 +986,29 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 			return -EFAULT;
 		if (tmp.mode != VT_AUTO && tmp.mode != VT_PROCESS)
 			return -EINVAL;
+		acquire_console_sem();
 		vc->vt_mode = tmp;
 		/* the frsig is ignored, so we set it to 0 */
 		vc->vt_mode.frsig = 0;
 		vc->vt_pid = current->pid;
 		/* no switch is required -- saw@shade.msu.ru */
 		vc->vt_newvt = -1; 
+		release_console_sem();
 		return 0;
 	}
 
 	case VT_GETMODE:
-		return copy_to_user((void*)arg, &(vc->vt_mode), sizeof(struct vt_mode)) ? -EFAULT : 0;
+	{
+		struct vt_mode tmp;
+		int rc;
+
+		acquire_console_sem();
+		memcpy(&tmp, &(vc->vt_mode), sizeof(struct vt_mode));
+		release_console_sem();
+
+		rc = copy_to_user((void*)arg, &tmp, sizeof(struct vt_mode));
+		return rc ? -EFAULT : 0;
+	}
 
 	/*
 	 * Returns global vt state. Note that VT 0 is always open, since
@@ -1047,7 +1064,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		arg--;
 		tmp = find_vc(arg);
 		if (!tmp) {
+			acquire_console_sem();
 			tmp = vc_allocate(arg);
+			release_console_sem();
 			if (!tmp)
 				return arg;
 		}
@@ -1105,11 +1124,13 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 				 */
 				struct vc_data *tmp = find_vc(vc->vt_newvt); 
 								
+				acquire_console_sem();
 				if (!tmp) {	
 					tmp = vc_allocate(vc->vt_newvt);
 					if (!tmp) {
 						i = vc->vt_newvt;
 						vc->vt_newvt = -1;
+						release_console_sem();
 						return i;
 					}
 				}
@@ -1119,7 +1140,6 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 				 * make sure we are atomic with respect to
 				 * other console switches..
 				 */
-				acquire_console_sem();
 				complete_change_console(tmp, vc->display_fg->fg_console);
 				release_console_sem();
 			}
@@ -1144,18 +1164,22 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 			return -ENXIO;
 		if (arg == 0) {
 			/* disallocate all unused consoles, but leave visible VC */
+			acquire_console_sem();
 			for (i = 1; i < vt->vc_count; i++) {
 				tmp = find_vc(i + vt->first_vc);
 		
 				if (tmp && !VT_BUSY(tmp)) 
 					vc_disallocate(tmp);
 			}
+			release_console_sem();
 		} else {
 			/* disallocate a single console, if possible */
 			tmp = find_vc(arg-1);
 			if (!tmp || VT_BUSY(tmp))
 				return -EBUSY;
+			acquire_console_sem();
 			vc_disallocate(tmp);
+			release_console_sem();
 		}
 		return 0;
 	}
@@ -1171,7 +1195,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		for (i = 0; i < vc->display_fg->vc_count; i++) {
 			struct vc_data *tmp = vc->display_fg->vc_cons[i];
 
+			acquire_console_sem();
 			vc_resize(tmp, cc, ll);
+			release_console_sem();
 		}
 		return 0;
 	}
@@ -1214,11 +1240,13 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		for (i = 0; i < vc->display_fg->vc_count; i++) {
 			struct vc_data *tmp = vc->display_fg->vc_cons[i];
 
+			acquire_console_sem();
 			if (vlin)
 				tmp->vc_scan_lines = vlin;
 			if (clin)
 				tmp->vc_font.height = clin;
 			vc_resize(tmp, cc, ll);
+			release_console_sem();
 		}
 		return 0;
 	}
