@@ -85,8 +85,6 @@ static struct fb_var_screeninfo fb_var __initdata = {
 int s3triofb_init(void);
 int s3triofb_setup(char*);
 
-static int s3trio_open(struct fb_info *info, int user);
-static int s3trio_release(struct fb_info *info, int user);
 static int s3trio_set_var(struct fb_var_screeninfo *var, int con,
 			  struct fb_info *info);
 static int s3trio_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
@@ -117,8 +115,7 @@ static void Trio_MoveCursor(u_short x, u_short y);
 
 
 static struct fb_ops s3trio_ops = {
-    fb_open:		s3trio_open, 
-    fb_release:		s3trio_release, 
+    owner:              THIS_MODULE,
     fb_get_fix:		fbgen_get_fix, 
     fb_get_var:		fbgen_get_var, 
     fb_set_var:		s3trio_set_var,
@@ -128,26 +125,6 @@ static struct fb_ops s3trio_ops = {
     fb_blank:		s3trio_blank,			
     fb_pan_display:	s3trio_pan_display
 };
-
-    /*
-     *  Open/Release the frame buffer device
-     */
-
-static int s3trio_open(struct fb_info *info, int user)
-{
-    /*
-     *  Nothing, only a usage count for the moment
-     */
-
-    MOD_INC_USE_COUNT;
-    return(0);
-}
-
-static int s3trio_release(struct fb_info *info, int user)
-{
-    MOD_DEC_USE_COUNT;
-    return(0);
-}
 
     /*
      *  Set the User Defined Part of the Display
