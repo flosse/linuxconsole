@@ -38,25 +38,26 @@
 
 #include <linux/config.h>
 #include <linux/module.h>
-#include <linux/init.h>
-#include <linux/slab.h>
 #include <linux/sched.h>
+#include <linux/tty.h>
+#include <linux/tty_flip.h>
 #include <linux/mm.h>
 #include <linux/string.h>
 #include <linux/random.h>
-#include <linux/pm.h>
-#include <linux/tty.h>
-#include <linux/tty_flip.h>
+#include <linux/init.h>
+#include <linux/slab.h>
+
+#include <linux/kbd_diacr.h>
 #include <linux/vt_kern.h>
 #include <linux/consolemap.h>
-#include <linux/kbd_diacr.h>
 #include <linux/sysrq.h>
+#include <linux/pm.h>
 #include <linux/input.h>
 
 static void kbd_disconnect(struct input_handle *handle);
 extern void ctrl_alt_del(void);
 
-#define SIZE(x)		(sizeof(x)/sizeof((x)[0]))
+#define SIZE(x)	(sizeof(x)/sizeof((x)[0]))
 
 /*
  * Exported functions/variables
@@ -66,7 +67,7 @@ struct pt_regs *kbd_pt_regs;
 void compute_shiftstate(void);
 
 /*
- * Handler tables.
+ * Handler Tables.
  */
 
 #define K_HANDLERS\
@@ -126,16 +127,16 @@ int setkeycode(struct input_handle *handle, unsigned int scancode, unsigned int 
 int shift_state = 0;
 
 /*
- * Internal data.
+ * Internal Data.
  */
 
 static struct input_handler kbd_handler;
-static unsigned long key_down[256/BITS_PER_LONG];
+static unsigned long key_down[256/BITS_PER_LONG]; /* keyboard key bitmap */
 static unsigned char shift_down[NR_SHIFT];	/* shift state counters.. */
 static int dead_key_next;
-static int npadch = -1;			/* -1 or number assembled on pad */
+static int npadch = -1;				/* -1 or number assembled on pad */
 static unsigned char diacr;
-static char rep;			/* flag telling character repeat */
+static char rep;				/* flag telling character repeat */
 pm_callback pm_kbd_request_override = NULL;
 typedef void (pm_kbd_func) (void);
 static struct pm_dev *pm_kbd;
@@ -150,7 +151,7 @@ static struct ledptr {
 } ledptrs[3];
 
 /*
- * Helper functions
+ * Helper Functions.
  */
 static void put_queue(struct vc_data *vc, int ch)
 {
@@ -230,7 +231,7 @@ void to_utf8(struct vc_data *vc, ushort c)
 		put_queue(vc, c);
 	else if (c < 0x800) {
 		/* 110***** 10****** */
-		put_queue(vc, 0xc0 | (c >> 6));	
+		put_queue(vc, 0xc0 | (c >> 6));
 		put_queue(vc, 0x80 | (c & 0x3f));
 	} else {
 		/* 1110**** 10****** 10****** */
@@ -242,26 +243,25 @@ void to_utf8(struct vc_data *vc, ushort c)
 
 void put_unicode(struct vc_data *vc, u16 uc)
 {
-	if (vc->kbd_table.kbdmode == VC_UNICODE)
-    		to_utf8(vc, uc);
-  	else if ((uc & ~0x9f) == 0 || uc == 127)
-    		/* Don't translate control chars */
-    		put_queue(vc, uc);
-  	else {
-    		unsigned char c;
-
-    		c = inverse_translate(vc->vc_translate, uc);
-    		if (c) put_queue(vc, c);
-  	}
+  if (vc->kbd_table.kbdmode == VC_UNICODE)
+    to_utf8(vc, uc);
+  else if ((uc & ~0x9f) == 0 || uc == 127)
+    /* Don't translate control chars */
+    put_queue(vc, uc);
+  else {
+    unsigned char c;
+    c = inverse_translate(vc->display_fg->fg_console->vc_translate, uc);
+    if (c) put_queue(vc, c);
+  }
 }
 
 static void put_8bit(struct vc_data *vc, u8 c)
 {
-	/* Don't translate control chars */
-	if (vc->kbd_table.kbdmode != VC_UNICODE || c < 32 || c == 127)
-    		put_queue(vc, c);
-	else
-      		to_utf8(vc, get_acm(vc->vc_translate)[c]);
+  if (vc->kbd_table.kbdmode != VC_UNICODE ||
+      c < 32 || c == 127) /* Don't translate control chars */
+    put_queue(vc, c);
+  else
+      to_utf8(vc, get_acm(vc->display_fg->fg_console->vc_translate)[c]);
 }
 
 /*
@@ -275,7 +275,7 @@ void compute_shiftstate(void)
 
 	shift_state = 0;
 	memset(shift_down, 0, sizeof(shift_down));
-
+	
 	for (i = 0; i < SIZE(key_down); i++) {
 
 		if (!key_down[i])
@@ -291,7 +291,7 @@ void compute_shiftstate(void)
 			sym = U(key_maps[0][k]);
 			if (KTYP(sym) != KT_SHIFT && KTYP(sym) != KT_SLOCK)
 				continue;
-			
+
 			val = KVAL(sym);
 			if (val == KVAL(K_CAPSSHIFT))
 				val = KVAL(K_SHIFT);
@@ -463,28 +463,6 @@ static void fn_scroll_back(struct vc_data *vc)
 	}
 }
 
-static void fn_compose(struct vc_data *vc)
-{
-	/* ???? */
-	dead_key_next = 1;
-}
-
-static void fn_spawn_con(struct vc_data *vc)
-{
-	if (spawnpid)
-		if (kill_proc(spawnpid, spawnsig, 1))
-			spawnpid = 0;
-}
-
-static void fn_SAK(struct vc_data *vc)
-{
-	struct tty_struct *tty = vc->vc_tty;
-
-	if (tty) 
-		do_SAK(tty);
-	reset_vc(vc);
-}
-
 static void fn_show_mem(struct vc_data *vc)
 {
 	show_mem();
@@ -507,6 +485,28 @@ static void fn_boot_it(struct vc_data *vc)
 		}
 		ctrl_alt_del(); 
 	}
+}
+
+static void fn_compose(struct vc_data *vc)
+{
+	/* ???? */
+	dead_key_next = 1;
+}
+
+static void fn_spawn_con(struct vc_data *vc)
+{
+	if (spawnpid)
+		if (kill_proc(spawnpid, spawnsig, 1))
+			spawnpid = 0;
+}
+
+static void fn_SAK(struct vc_data *vc)
+{
+	struct tty_struct *tty = vc->vc_tty;
+
+	if (tty)
+		do_SAK(tty);
+	reset_vc(vc);
 }
 
 static void fn_null(struct vc_data *vc)
@@ -653,7 +653,7 @@ static void k_pad(struct vc_data *vc, unsigned char value, char up_flag)
 				k_fn(vc, KVAL(K_PGUP), 0);
 				return;
 			case KVAL(K_P5):
-				applkey(vc, 'G', vc_kbd_mode(&vc->kbd_table, 
+				applkey(vc,'G', vc_kbd_mode(&vc->kbd_table, 
 					VC_APPLIC));
 				return;
 		}
@@ -673,6 +673,7 @@ static void k_shift(struct vc_data *vc, unsigned char value, char up_flag)
 	 * Mimic typewriter:
 	 * a CapsShift key acts like Shift but undoes CapsLock
 	 */
+
 	if (value == KVAL(K_CAPSSHIFT)) {
 		value = KVAL(K_SHIFT);
 		if (!up_flag)
@@ -708,7 +709,6 @@ static void k_meta(struct vc_data *vc, unsigned char value, char up_flag)
 {
 	if (up_flag)
 		return;
-
 	if (vc_kbd_mode(&vc->kbd_table, VC_META)) {
 		put_queue(vc, '\033');
 		put_queue(vc, value);
@@ -740,34 +740,29 @@ static void k_ascii(struct vc_data *vc, unsigned char value, char up_flag)
 
 static void k_lock(struct vc_data *vc, unsigned char value, char up_flag)
 {
-	struct kbd_struct* kbd = &vc->kbd_table;
-
 	if (up_flag || rep)
 		return;
-
 	if (value >= NR_LOCK) {
                 /* Change the lock state and
                    set the CapsLock LED to the new state */
                 unsigned char mask;
 
                 mask = 1 << (value -= NR_LOCK);
-                if ((kbd->lockstate ^= mask) & mask)
-                        set_vc_kbd_led(kbd, VC_CAPSLOCK);
+                if ((vc->kbd_table.lockstate ^= mask) & mask)
+                        set_vc_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
                 else
-                        clr_vc_kbd_led(kbd, VC_CAPSLOCK);
+                        clr_vc_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
         } else {
                 /* Just change the lock state */
-		chg_vc_kbd_lock(kbd, value);
+		chg_vc_kbd_lock(&vc->kbd_table, value);
 	}
 }
 
 static void k_slock(struct vc_data *vc, unsigned char value, char up_flag)
 {
 	k_shift(vc, value, up_flag);
-
 	if (up_flag || rep)
 		return;
-
 	chg_vc_kbd_slock(&vc->kbd_table, value);
 	/* try to make Alt, oops, AltGr and such work */
 	if (!key_maps[vc->kbd_table.lockstate ^ vc->kbd_table.slockstate]) {
