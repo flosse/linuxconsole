@@ -475,7 +475,7 @@ void acquire_console_sem(kdev_t device)
 	spin_lock(&console_lock);
 	/* Look for new messages */
 	for (con = console_drivers; con; con = con->next) {
-		if (con->device(con) == device)
+		if (kdev_same(con->device(con),device))
 			break;
 	}
 	spin_unlock(&console_lock);
@@ -518,7 +518,7 @@ void release_console_sem(kdev_t device)
 	else {
 		spin_lock(&console_lock);
 		for (con = console_drivers; con; con = con->next) {
-			if (con->device(con) == device)
+			if (kdev_same(con->device(con), device))
 				break;
 		}
 		spin_unlock(&console_lock);
