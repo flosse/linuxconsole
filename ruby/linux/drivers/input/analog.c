@@ -400,7 +400,7 @@ static void analog_init_device(struct analog_port *port, struct analog *analog)
 	
 			set_bit(t, analog->dev.absbit);
 
-			if ((i == 2 || i == 3) && ((j == 2) || (j == 3))
+			if ((i == 2 || i == 3) && (j == 2 || j == 3))
 				x = (port->axes[1] + port->axes[2]) >> 1;
 
 			analog->dev.absmax[t] = (x << 1) - (x >> 3);
@@ -503,7 +503,7 @@ static int analog_init_masks(struct analog_port *port)
 		if ((analog[0].mask & ANALOG_BTN_TR) & !(analog[0].mask & ANALOG_BTN_TR2)) max[3] >>= 1;
 		if ((analog[0].mask & ANALOG_HAT_FCS)) max[3] >>= 1;
 
-		gameport_calibrate(gameport, port->axes, max);
+		gameport_calibrate(port->gameport, port->axes, max);
 	}
 		
 	for (i = 0; i < 4; i++) 

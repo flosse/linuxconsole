@@ -55,7 +55,7 @@ MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 
 struct l4 {
 	struct gameport gameport;
-	unsigned char port
+	unsigned char port;
 } *l4_port[8];
 
 /*
@@ -187,12 +187,14 @@ fail:	outb(L4_SELECT_ANALOG, L4_PORT);
  * that the device's resistance fits into the L4's 8-bit range.
  */
 
-static void l4_calibrate(struct gameport *gameport, int *axes, int *max)
+static int l4_calibrate(struct gameport *gameport, int *axes, int *max)
 {
 	int i, t;
 	int cal[4];
+	struct l4 *l4 = gameport->driver;
 
-	l4_getcal(l4->port, cal);
+	if (l4_getcal(l4->port, cal))
+		return -1;
 
 	for (i = 0; i < 4; i++) {
 		t = (max[i] * cal[i]) / 100;
@@ -202,7 +204,10 @@ static void l4_calibrate(struct gameport *gameport, int *axes, int *max)
 		cal[i] = t;
 	}
 
-	l4_setcal(l4->port, cal);
+	if (l4_setcal(l4->port, cal))
+		return -1;
+
+	return 0;
 }
 	
 int __init l4_init(void)
@@ -249,6 +254,7 @@ int __init l4_init(void)
 			gameport->driver = l4;
 			gameport->open = l4_open;
 			gameport->cooked_read = l4_cooked_read;
+			gameport->calibrate = l4_calibrate;
 			gameport->type = GAMEPORT_EXT;
 
 			if (!i && !j) {
