@@ -10,29 +10,32 @@
  *  The primary goal is to remove the console code from fbdev and place it
  *  into fbcon.c. This reduces the code and makes writing a new fbdev driver
  *  easy since the author doesn't need to worry about console internals. It
- *  also allows the ability to run fbdev without a console system on top of it.
+ *  also allows the ability to run fbdev without a console/tty system on top 
+ *  of it. 
  *
  *  First the roles of struct fb_info and struct display have changed. Struct
- *  display has gone away. The upper framebuffer console layer only depends on
- *  fb_info. For each framebuffer device when used as a VT console is allocate 
+ *  display will gone away. The way the the new framebuffer console code will
+ *  work is that it will act to translate data about the tty/console in 
+ *  struct vc_data to data in a device independent way in struct fb_info. Then
+ *  various functions in struct fb_ops will be called to store the device 
+ *  dependent state in the par field in struct fb_info and to change the 
+ *  hardware to that state. This allows a very clean seperation of the fbdev
+ *  layer from the console layer. It also allows one to use fbdev on its own
+ *  which is a bounus for embedded devices. The reason this approach works is  
+ *  for each framebuffer device when used as a tty/console device is allocated
  *  a set of virtual terminals to it. Only one virtual terminal can be active 
- *  per framebuffer device. So I have struct fb_info represent all the data of
- *  the current hardware state of the framebuffer. Meaning the resolution of  
- *  the active VT (the one you're looking at) and other data is stored in the
- *  fb_info struct. When you VT switch the current video state is translated
- *  to a form to be stored by the the higher level console layer to be stored
- *  for that terminal you just switched away from. Then the current video 
- *  state is set to the data values stored in the upper console layer for the
- *  virtual terminal you are switching to. As you can see doing this makes
- *  the con parameter pretty much useless for the fb_ops functions, as it 
- *  should be. Also having fb_var_screeninfo and other data in fb_info pretty 
- *  much eliminates the need for get_fix and get_var. Once all drivers use the
- *  fix, var, and cmap field fbcon can be written around these fields. This
- *  will also eliminate the need to regenerate fb_var_screeninfo and
- *  fb_fix_screeninfo data every time the get_var and get_fix functions are
- *  called as many drivers do now. The fb_var_screeninfo and
- *  fb_fix_screeninfo field in fb_info can be generated just in set_var and
- *  placed into struct fb_info.
+ *  per framebuffer device. We already have all the data we need in struct 
+ *  vc_data so why store a bunch of colormaps and other fbdev specific data
+ *  per virtual terminal. 
+ *
+ *  As you can see doing this makes the con parameter pretty much useless
+ *  for struct fb_ops functions, as it should be. Also having struct  
+ *  fb_var_screeninfo and other data in fb_info pretty much eliminates the 
+ *  need for get_fix and get_var. Once all drivers use the fix, var, and cmap
+ *  fbcon can be written around these fields. This will also eliminate the
+ *  need to regenerate struct fb_var_screeninfo, struct fb_fix_screeninfo
+ *  struct fb_cmap every time get_var, get_fix, get_cmap functions are called
+ *  as many drivers do now. 
  *
  *  This file is subject to the terms and conditions of the GNU General Public
  *  License. See the file COPYING in the main directory of this archive for
@@ -86,30 +89,39 @@ static struct fb_fix_screeninfo xxxfb_fix __initdata = {
      *  also support multiple monitors where each display can have its  
      *  its own unique data. In this case each display could be  
      *  represented by a seperate framebuffer device thus a seperate 
-     *  struct fb_info. In this case all of the par structures for the
-     *  graphics card would be shared between each struct fb_info. This
-     *  allows when one display changes it video resolution (info->var) 
+     *  struct fb_info. Now the struct xxx_par represents the graphics
+     *  hardware state thus only one exist per card. In this case the 
+     *  struct xxx_par for each graphics card would be shared between 
+     *  every struct fb_info that represents a framebuffer on that card. 
+     *  This allows when one display changes it video resolution (info->var) 
      *  the other displays know instantly. Each display can always be
-     *  aware of the entire hardware state that affects it. The other side 
-     *  of the coin is multiple graphics cards that pass data around until
-     *  it is finally displayed on one monitor. Such examples are the
-     *  voodoo 1 cards and high end NUMA graphics servers. I hope this 
-     *  covers every possible hardware design. If not feel free to send 
-     *  me more design types. 
+     *  aware of the entire hardware state that affects it because they share
+     *  the same xxx_par struct. The other side of the coin is multiple
+     *  graphics cards that pass data around until it is finally displayed
+     *  on one monitor. Such examples are the voodoo 1 cards and high end
+     *  NUMA graphics servers. For this case we have a bunch of pars, each
+     *  one that represents a graphics state, that belong to one struct 
+     *  fb_info. Their you would want to have *par point to a array of device
+     *  states and have each struct fb_ops function deal with all those 
+     *  states. I hope this covers every possible hardware design. If not
+     *  feel free to send your ideas at jsimmons@users.sf.net 
      */
 
     /*
-     *  If your driver supports multiple boards, you should make these  
-     *  arrays, or allocate them dynamically (using kmalloc()). 
+     *  If your driver supports multiple boards or it supports multiple 
+     *  framebuffers, you should make these arrays, or allocate them 
+     *  dynamically (using kmalloc()). 
      */ 
 static struct fb_info info;
+
     /* 
-     * This represents the default state of the hardware. 
+     * Each one represents the a state of the hardware. Most hardware have 
+     * just one hardware state. These here represent the default state(s). 
      */
 static struct xxx_par __initdata current_par;
 
-static u32 xxxfb_pseudo_palette[17];
-static int inverse = 0;
+    /* To go away in the near future */ 
+static struct display disp;
 
 int xxxfb_init(void);
 int xxxfb_setup(char*);
@@ -121,7 +133,8 @@ int xxxfb_setup(char*);
  *
  *	Checks to see if the hardware supports the state requested by
  *	var passed in. This function does not alter the hardware state!!! 
- *	This means the data stored in fb_info, par and var, do not change.
+ *	This means the data stored in struct fb_info and struct xxx_par do 
+ *      not change. This includes the var inside of struct fb_info. 
  *	Do NOT change these. This function can be called on its own if we
  *	intent to only test a mode and not actually set it. The stuff in 
  *	modedb.c is a example of this. If the var passed in is slightly 
@@ -339,8 +352,7 @@ static int xxxfb_blank(int blank_mode, const struct fb_info *info)
  *	depending on the rastering operation with the value of color which
  *	is in the current color depth format.
  */
-void xxxfb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,
-                    unsigned int height, unsigned long color, int rop)
+void xxxfb_fillrect(struct fb_info *p, struct fb_fillrect *region)
 {
 }
 
@@ -359,8 +371,7 @@ void xxxfb_fillrect(struct fb_info *p, int x1, int y1, unsigned int width,
  *      This drawing operation copies a rectangular area from one area of the
  *	screen to another area.
  */
-void xxxfb_copyarea(struct fb_info *p, int sx, int sy, unsigned int width,
-                         unsigned int height, int dx, int dy)
+void xxxfb_copyarea(struct fb_info *p, struct fb_copyarea *area) 
 {
 }
 
@@ -401,7 +412,6 @@ int __init xxxfb_init(void)
     info.fbops = &xxxfb_ops;
     info.fix = xxxfb_fix;
     info.par = current_par;
-    info.pseudo_palette = xxxfb_pseudo_palette;
     info.flags = FBINFO_FLAG_DEFAULT;
     /* This should give a reasonable default video mode */
     if (!mode_option)
@@ -418,9 +428,6 @@ int __init xxxfb_init(void)
 	return -EINVAL;
     printk(KERN_INFO "fb%d: %s frame buffer device\n", GET_FB_IDX(info.node),
 	   info.fix.id);
-
-    /* uncomment this if your driver cannot be unloaded */
-    /* MOD_INC_USE_COUNT; */
     return 0;
 }
 
@@ -475,6 +482,13 @@ static struct fb_ops xxxfb_ops = {
 	owner:		THIS_MODULE,
 	fb_open:	xxxfb_open,    /* only if you need it to do something */
 	fb_release:	xxxfb_release, /* only if you need it to do something */
+	/* Stuff to go away. Use generic functions for now */
+	fb_get_fix:	fbgen_get_fix,
+	fb_get_var:	fbgen_get_var,
+	fb_set_var:	fbgen_set_var,	
+	fb_get_cmap:	fbgen_get_cmap,
+	fb_set_cmap:	fbgen_set_cmap,
+
 	fb_check_var:	xxxfb_check_var,
 	fb_set_par:	xxxfb_set_par,	   /* optional */	
 	fb_setcolreg:	xxxfb_setcolreg,
