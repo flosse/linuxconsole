@@ -50,15 +50,12 @@
 #define L4_ID			0x04
 #define L4_BUSY			0x01
 #define L4_TIMEOUT		80	/* 80 us */
-#define L4_CALTIME		HZ/20	/* 50 ms */
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 
 struct l4 {
-	unsigned char port, rev, cal;
-	int calaxes[4];
-	unsigned long caltime;
 	struct gameport gameport;
+	unsigned char port
 } *l4_port[8];
 
 /*
@@ -104,13 +101,6 @@ static int l4_cooked_read(struct gameport *gameport, int *axes, int *buttons)
 		*buttons = inb(L4_PORT) & 0x0f;
 	}
 
-	if (l4->cal) {
-		if (time_before(jiffies, l4->caltime)) {
-			for (i = 0; i < 4; i++)
-				axes[i] = l4->calaxes[i];
-		} else l4->cal = 0;
-	}
-
 	result = 0;
 
 fail:	outb(L4_SELECT_ANALOG, L4_PORT);	
@@ -153,6 +143,8 @@ static int l4_getcal(int port, int *cal)
 
 	result = 0;
 
+	printk(KERN_INFO "l4: getcal: %d %d %d %d\n", cal[0], cal[1], cal[2], cal[3]);
+
 fail:	outb(L4_SELECT_ANALOG, L4_PORT);
 	return result;
 }
@@ -184,6 +176,8 @@ static int l4_setcal(int port, int *cal)
 
 	result = 0;
 
+	printk(KERN_INFO "l4: setcal: %d %d %d %d\n", cal[0], cal[1], cal[2], cal[3]);
+
 fail:	outb(L4_SELECT_ANALOG, L4_PORT);
 	return result;
 }
@@ -193,46 +187,27 @@ fail:	outb(L4_SELECT_ANALOG, L4_PORT);
  * that the device's resistance fits into the L4's 8-bit range.
  */
 
-static void l4_calibrate(struct l4 *l4)
+static void l4_calibrate(struct gameport *gameport, int *axes, int *max)
 {
-	int i;
-	int cal[4] = {255,255,255,255};
-	int axes[4];
-	int t;
+	int i, t;
+	int cal[4];
 
-	if (l4->rev < 0x29)
-		l4_getcal(l4->port, cal);
-	else
-		l4_setcal(l4->port, cal);
-
-	printk(KERN_INFO "l4: initial calibration: %d %d %d %d\n", cal[0], cal[1], cal[2], cal[3]);
-
-	l4_cooked_read(&l4->gameport, axes, &t);
-
-	/* Fix buttons, hat, throttle & rudder */
+	l4_getcal(l4->port, cal);
 
 	for (i = 0; i < 4; i++) {
-		t = (axes[i] * cal[i]) / 100;
-		if (t > 255) t = 255;
-		if (t < 1) t = 1;
-		l4->calaxes[i] = (axes[i] * cal[i]) / t;
-		if (axes[i] < 0) l4->calaxes[i] = -1;
-		if (l4->calaxes[i] > 252) l4->calaxes[i] = 252;
+		t = (max[i] * cal[i]) / 100;
+		t = (t < 1) ? 1 : ((t > 255) ? 255 : t);
+		axes[i] = (axes[i] < 0) ? -1 : (axes[i] * cal[i]) / t;
+		axes[i] = (axes[i] > 252) ? 252 : axes[i];
 		cal[i] = t;
 	}
 
 	l4_setcal(l4->port, cal);
-
-	printk(KERN_INFO "l4: new calibration: %d %d %d %d\n", cal[0], cal[1], cal[2], cal[3]);
-
-	if (l4->rev < 0x29)  {
-		l4->caltime = jiffies + L4_CALTIME;
-		l4->cal = 1;
-	}
 }
 	
 int __init l4_init(void)
 {
+	int cal[4] = {255,255,255,255};
 	int i, j, rev, cards = 0;
 	struct gameport *gameport;
 	struct l4 *l4;
@@ -268,9 +243,7 @@ int __init l4_init(void)
 		for (j = 0; j < 4; j++) {
 
 			l4 = l4_port[i * 4 + j] = l4_port[i * 4] + j;
-
 			l4->port = i * 4 + j;
-			l4->rev = rev;
 
 			gameport = &l4->gameport;
 			gameport->driver = l4;
@@ -282,6 +255,9 @@ int __init l4_init(void)
 				gameport->io = L4_PORT;
 				gameport->size = 1;
 			}
+
+			if (rev > 0x28)		/* on 2.9+ the setcal command works correctly */
+				l4_setcal(l4->port, cal);
 			
 			gameport_register_port(gameport);
 		}

@@ -80,7 +80,7 @@ static int analog_options[ANALOG_PORTS];
 #define ANALOG_GAMEPAD_FLAG1	0x10000000
 
 #define ANALOG_MAX_TIME		3	/* 3 ms */
-#define ANALOG_LOOP_TIME	2000	/* 2 * loop */
+#define ANALOG_LOOP_TIME	1750	/* 1.75 * loop */
 #define ANALOG_REFRESH_TIME	HZ/100	/* 10 ms */
 #define ANALOG_AXIS_TIME	2	/* 2 * refresh */
 #define ANALOG_RESOLUTION	8	/* 8 bits */
@@ -400,13 +400,13 @@ static void analog_init_device(struct analog_port *port, struct analog *analog)
 	
 			set_bit(t, analog->dev.absbit);
 
-			if ((i == 2 || i == 3) && (t == ABS_THROTTLE || t == ABS_RUDDER))
+			if ((i == 2 || i == 3) && ((j == 2) || (j == 3))
 				x = (port->axes[1] + port->axes[2]) >> 1;
 
-			analog->dev.absmax[t] = x * 2 - 32;
-			analog->dev.absmin[t] = 32;
-			analog->dev.absfuzz[t] = 2;
-			analog->dev.absflat[t] = 8;
+			analog->dev.absmax[t] = (x << 1) - (x >> 3);
+			analog->dev.absmin[t] = (x >> 3);
+			analog->dev.absfuzz[t] = (x >> 6);
+			analog->dev.absflat[t] = (x >> 4);
 
 			j++;
 		}
@@ -415,7 +415,6 @@ static void analog_init_device(struct analog_port *port, struct analog *analog)
 		if (analog->mask & analog_exts[i]) 
 			for (x = 0; x < 2; x++) {
 				t = analog_hats[j++];
-				printk("Adding hat: %d\n", t);
 				set_bit(t, analog->dev.absbit);
 				analog->dev.absmax[t] = 1;
 				analog->dev.absmin[t] = -1;
@@ -458,6 +457,7 @@ static int analog_init_masks(struct analog_port *port)
 {
 	int i;
 	struct analog *analog = port->analog;
+	int max[4];
 
 	if (!port->mask)
 		return -1;
@@ -493,6 +493,19 @@ static int analog_init_masks(struct analog_port *port)
 	analog[1].mask &= (analog[0].mask & ANALOG_EXTENSIONS) ? 0 
 			: ((ANALOG_BTNS_STD | port->mask) & ~analog[0].mask);
 
+	if (port->cooked) {
+
+		for (i = 0; i < 4; i++) max[i] = port->axes[i] << 1;
+
+		if ((analog[0].mask & 0x7) == 0x7) max[2] = (max[0] + max[1]) >> 1;
+		if ((analog[0].mask & 0xb) == 0xb) max[3] = (max[0] + max[1]) >> 1;
+		if ((analog[0].mask & ANALOG_BTN_TL) & !(analog[0].mask & ANALOG_BTN_TL2)) max[2] >>= 1;
+		if ((analog[0].mask & ANALOG_BTN_TR) & !(analog[0].mask & ANALOG_BTN_TR2)) max[3] >>= 1;
+		if ((analog[0].mask & ANALOG_HAT_FCS)) max[3] >>= 1;
+
+		gameport_calibrate(gameport, port->axes, max);
+	}
+		
 	for (i = 0; i < 4; i++) 
 		port->initial[i] = port->axes[i];
 
