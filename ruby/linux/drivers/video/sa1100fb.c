@@ -126,12 +126,6 @@
 #include <asm/mach-types.h>
 #include <asm/uaccess.h>
 
-#include <video/fbcon.h>
-#include <video/fbcon-mfb.h>
-#include <video/fbcon-cfb4.h>
-#include <video/fbcon-cfb8.h>
-#include <video/fbcon-cfb16.h>
-
 /*
  * enable this if your panel appears to have broken
  */
@@ -929,7 +923,7 @@ sa1100fb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 		red = green = blue = (19595 * red + 38470 * green +
 					7471 * blue) >> 16;
 
-	switch (info->disp->visual) {
+	switch (info->fix.visual) {
 	case FB_VISUAL_TRUECOLOR:
 		/*
 		 * 12 or 16-bit True Colour.  We encode the RGB value
@@ -1060,8 +1054,6 @@ static inline void sa1100fb_set_truecolor(u_int is_true_color)
 static int sa1100fb_set_par(struct fb_info *info)
 {
 	struct sa1100_par *par = (struct sa1100_par *) info->par;
-	struct display *display = info->disp;
-	struct fb_cmap *cmap;
 	u_long palette_mem_size;
 
 	par->palette_size = info->var.bits_per_pixel == 8 ? 256 : 16;
@@ -1073,12 +1065,10 @@ static int sa1100fb_set_par(struct fb_info *info)
 	par->palette_cpu = (u16 *)(par->map_cpu + PAGE_SIZE - palette_mem_size);
 	par->palette_dma = par->map_dma + PAGE_SIZE - palette_mem_size;
 
-	if (display->cmap.len)
-		cmap = &display->cmap;
-	else
-		cmap = fb_default_cmap(par->palette_size);
+	if (!info->cmap.len)
+		fb_copy_cmap(fb_default_cmap(par->palette_size),&info->cmap, 0);
 
-	fb_set_cmap(cmap, 1, sa1100fb_setcolreg, info);
+	fb_set_cmap(&info->cmap, 1, info);
 
 	/* Set board control register to handle new color depth */
 	sa1100fb_set_truecolor(info->var.bits_per_pixel >= 16);
@@ -1127,18 +1117,6 @@ static int sa1100fb_set_par(struct fb_info *info)
 	return 0;
 }
 
-static struct fb_ops sa1100fb_ops = {
-	owner:		THIS_MODULE,
-	fb_get_fix:	fbgen_get_fix,
-	fb_get_var:	fbgen_get_var,
-	fb_set_var:	fbgen_set_var,
-	fb_check_var:	sa1100fb_check_var,
-	fb_set_par:	sa1100fb_set_par,
-	fb_setcolreg:	sa1100fb_setcolreg,
-	fb_get_cmap:	fbgen_get_cmap,
-	fb_set_cmap:	fbgen_set_cmap,
-};
-
 /*
  * Formal definition of the VESA spec:
  *  On
@@ -1174,7 +1152,7 @@ static struct fb_ops sa1100fb_ops = {
  * 	12 and 16 bpp modes don't really use the palette, so this will not
  *      blank the display in all modes.  
  */
-static void sa1100fb_blank(int blank, struct fb_info *info)
+static int sa1100fb_blank(int blank, struct fb_info *info)
 {
 	struct sa1100_par *par = (struct sa1100_par *) info->par;
 	int i;
@@ -1200,15 +1178,24 @@ static void sa1100fb_blank(int blank, struct fb_info *info)
 			sa1100fb_blank_helper(blank);
 		if (info->fix.visual == FB_VISUAL_PSEUDOCOLOR ||
 		    info->fix.visual == FB_VISUAL_STATIC_PSEUDOCOLOR)
-			fb_set_cmap(&info->cmap, 1, sa1100fb_setcolreg, info);
+			fb_set_cmap(&info->cmap, 1, info);
 		sa1100fb_schedule_task(par, C_ENABLE);
 	}
+	return 0;
 }
 
+static struct fb_ops sa1100fb_ops = {
+	owner:		THIS_MODULE,
+	fb_check_var:	sa1100fb_check_var,
+	fb_set_par:	sa1100fb_set_par,
+	fb_setcolreg:	sa1100fb_setcolreg,
+	fb_blank:	sa1100fb_blank,
+};
+
 /*
-   +  * Calculate the PCD value from the clock rate (in picoseconds).
-   +  * We take account of the PPCR clock setting.
-   +  */
+ * Calculate the PCD value from the clock rate (in picoseconds).
+ * We take account of the PPCR clock setting.
+ */
 static inline int get_pcd(unsigned int pixclock)
 {
 	u_int pcd;
@@ -1225,10 +1212,10 @@ static inline int get_pcd(unsigned int pixclock)
 }
 
 /*
-   +  * sa1100fb_activate_var():
-   +  *    Configures LCD Controller based on entries in var parameter.  Settings are
-   +  *      only written to the controller if changes were made.
-   +  */
+ * sa1100fb_activate_var():
+ *    Configures LCD Controller based on entries in var parameter.  Settings are
+ *      only written to the controller if changes were made.
+ */
 static int sa1100fb_activate_var(struct fb_var_screeninfo *var, struct fb_info *info)
 {
 	struct sa1100fb_lcd_reg new_regs;
@@ -1798,14 +1785,12 @@ static struct fb_info * __init sa1100fb_init_fbinfo(void)
 	struct sa1100_par *default_par;
 	struct fb_info *info;
 
-	info = kmalloc(sizeof(struct fb_info) + sizeof(struct display) +
-		      sizeof(struct sa1100_par) + sizeof(u16) * 16, GFP_KERNEL);
+	info = kmalloc(sizeof(struct fb_info) + sizeof(struct sa1100_par) +
+		      	sizeof(u16) * 16, GFP_KERNEL);
 	if (!info)
 		return NULL;
 
-	memset(info, 0, sizeof(struct fb_info) + sizeof(struct sa1100_par) 			+ sizeof(struct display));
-
-	info->currcon		= -1;
+	memset(info, 0, sizeof(struct fb_info) + sizeof(struct sa1100_par));
 
 	strcpy(info->fix.id, SA1100_NAME);
 
@@ -1823,21 +1808,12 @@ static struct fb_info * __init sa1100fb_init_fbinfo(void)
 	info->var.accel_flags	= 0;
 	info->var.vmode	= FB_VMODE_NONINTERLACED;
 
-	strcpy(info->modename, SA1100_NAME);
-	strcpy(info->fontname, "Acorn8x8");
-
 	info->fbops		= &sa1100fb_ops;
-	info->changevar		= NULL;
-	info->switch_con	= fbgen_switch;
-	info->updatevar		= fbgen_update_var;
-	info->blank		= sa1100fb_blank;
 	info->flags		= FBINFO_FLAG_DEFAULT;
 	info->node		= -1;
-	info->monspecs	= monspecs;
-	info->disp		= (struct display *)(info + 1);
-	info->pseudo_palette	= (void *)(info->disp + 1);
+	info->monspecs		= monspecs;
+	info->pseudo_palette	= (void *)(info + 1);
 	default_par             = (void *)(info->pseudo_palette + 1);
-	
 
 	default_par->rgb[RGB_8]		= rgb_8;
 	default_par->rgb[RGB_16]	= def_rgb_16;
@@ -1845,21 +1821,21 @@ static struct fb_info * __init sa1100fb_init_fbinfo(void)
 	inf = sa1100fb_get_machine_info(default_par);
 
 	default_par->max_xres		= inf->xres;
-	info->var.xres		= inf->xres;
-	info->var.xres_virtual	= inf->xres;
+	info->var.xres			= inf->xres;
+	info->var.xres_virtual		= inf->xres;
 	default_par->max_yres		= inf->yres;
-	info->var.yres		= inf->yres;
-	info->var.yres_virtual	= inf->yres;
+	info->var.yres			= inf->yres;
+	info->var.yres_virtual		= inf->yres;
 	default_par->max_bpp		= inf->bpp;
 	info->var.bits_per_pixel	= inf->bpp;
 	info->var.pixclock		= inf->pixclock;
 	info->var.hsync_len		= inf->hsync_len;
 	info->var.left_margin		= inf->left_margin;
-	info->var.right_margin	= inf->right_margin;
+	info->var.right_margin		= inf->right_margin;
 	info->var.vsync_len		= inf->vsync_len;
-	info->var.upper_margin	= inf->upper_margin;
-	info->var.lower_margin	= inf->lower_margin;
-	info->var.sync		= inf->sync;
+	info->var.upper_margin		= inf->upper_margin;
+	info->var.lower_margin		= inf->lower_margin;
+	info->var.sync			= inf->sync;
 	info->var.grayscale		= inf->cmap_greyscale;
 	default_par->cmap_inverse	= inf->cmap_inverse;
 	default_par->cmap_static	= inf->cmap_static;
@@ -1912,9 +1888,6 @@ int __init sa1100fb_init(void)
 		mdelay(20);
 	}
 #endif
-
-	fbgen_set_var(&info->var, -1, info);
-
 	ret = register_framebuffer(info);
 	if (ret < 0)
 		goto failed;
