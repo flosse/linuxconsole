@@ -27,6 +27,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
@@ -71,6 +72,7 @@ printf("level: %04x direction: %04x\n", (unsigned int)effect.u.constant.level, (
         effect.replay.length = 0xffff;
         effect.replay.delay = 0;
 
+/* BUG: This will fill the memory of the device very quickly */
         if (ioctl(ff_fd, EVIOCSFF, &effect) == -1) {
                 perror("Upload effect");
                 exit(1);
