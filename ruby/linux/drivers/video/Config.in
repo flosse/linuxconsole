@@ -108,31 +108,33 @@ if [ "$CONFIG_FB" = "y" ]; then
          bool '  CGsix (GX,TurboGX) support' CONFIG_FB_CGSIX
       fi
    fi
-   if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
-      if [ "$CONFIG_PCI" != "n" ]; then
-         tristate '  Matrox acceleration (EXPERIMENTAL)' CONFIG_FB_MATROX
-         if [ "$CONFIG_FB_MATROX" != "n" ]; then
-            bool '    Millennium I/II support' CONFIG_FB_MATROX_MILLENIUM
-            bool '    Mystique support' CONFIG_FB_MATROX_MYSTIQUE
-            bool '    G100/G200/G400/G450 support' CONFIG_FB_MATROX_G100
-            if [ "$CONFIG_I2C" != "n" ]; then
-               dep_tristate '      Matrox I2C support' CONFIG_FB_MATROX_I2C $CONFIG_FB_MATROX $CONFIG_I2C_ALGOBIT
-               if [ "$CONFIG_FB_MATROX_G100" = "y" ]; then
-                  dep_tristate '      G400 second head support' CONFIG_FB_MATROX_MAVEN $CONFIG_FB_MATROX_I2C
-               fi
+   if [ "$CONFIG_PCI" != "n" ]; then
+      tristate '  Matrox acceleration (EXPERIMENTAL)' CONFIG_FB_MATROX
+      if [ "$CONFIG_FB_MATROX" != "n" ]; then
+         bool '    Millennium I/II support' CONFIG_FB_MATROX_MILLENIUM
+         bool '    Mystique support' CONFIG_FB_MATROX_MYSTIQUE
+         bool '    G100/G200/G400/G450 support' CONFIG_FB_MATROX_G100
+         if [ "$CONFIG_I2C" != "n" ]; then
+            dep_tristate '      Matrox I2C support' CONFIG_FB_MATROX_I2C $CONFIG_FB_MATROX $CONFIG_I2C_ALGOBIT
+            if [ "$CONFIG_FB_MATROX_G100" = "y" ]; then
+               dep_tristate '      G400 second head support' CONFIG_FB_MATROX_MAVEN $CONFIG_FB_MATROX_I2C
             fi
-	    dep_tristate '     G450 second head support' CONFIG_FB_MATROX_G450 $CONFIG_FB_MATROX_G100
-            bool '    Multihead support' CONFIG_FB_MATROX_MULTIHEAD
          fi
-         tristate '  ATI Mach64 display support (EXPERIMENTAL)' CONFIG_FB_ATY
-         if [ "$CONFIG_FB_ATY" != "n" ]; then
-            bool '    Mach64 GX support (EXPERIMENTAL)' CONFIG_FB_ATY_GX
-            bool '    Mach64 CT/VT/GT/LT (incl. 3D RAGE) support' CONFIG_FB_ATY_CT
-         fi
-         tristate '  ATI Rage 128 display support (EXPERIMENTAL)' CONFIG_FB_ATY128
-         tristate '  3Dfx Banshee/Voodoo3 display support (EXPERIMENTAL)' CONFIG_FB_3DFX
-         tristate '  SIS 630/540 display support (EXPERIMENTAL)' CONFIG_FB_SIS
+         dep_tristate '     G450 second head support' CONFIG_FB_MATROX_G450 $CONFIG_FB_MATROX_G100
+         bool '    Multihead support' CONFIG_FB_MATROX_MULTIHEAD
       fi
+      tristate '  ATI Mach64 display support (EXPERIMENTAL)' CONFIG_FB_ATY
+      if [ "$CONFIG_FB_ATY" != "n" ]; then
+         bool '    Mach64 GX support (EXPERIMENTAL)' CONFIG_FB_ATY_GX
+         bool '    Mach64 CT/VT/GT/LT (incl. 3D RAGE) support' CONFIG_FB_ATY_CT
+      fi
+      tristate '  ATI Rage 128 display support (EXPERIMENTAL)' CONFIG_FB_ATY128
+      bool '  3Dfx acceleration support' CONFIG_FB_TDFX 
+      if [ "$CONFIG_FB_TDFX" != "n" ]; then		
+      	 tristate '  Voodoo 1 display support (EXPERIMENTAL)' CONFIG_FB_SST	
+         tristate '  3Dfx Banshee/Voodoo3 display support (EXPERIMENTAL)' CONFIG_FB_3DFX
+      fi	
+      tristate '  SIS 630/540 display support (EXPERIMENTAL)' CONFIG_FB_SIS
    fi
    if [ "$ARCH" = "sparc" -o "$ARCH" = "sparc64" ]; then
       bool '  SBUS and UPA framebuffers' CONFIG_FB_SBUS
