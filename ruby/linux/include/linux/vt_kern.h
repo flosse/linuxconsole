@@ -51,12 +51,6 @@
 
 #define IS_VISIBLE (vc->vc_num == vc->display_fg->fg_console->vc_num)
 
-#ifdef VT_BUF_VRAM_ONLY
-#define DO_UPDATE 0
-#else
-#define DO_UPDATE IS_VISIBLE
-#endif
-
 extern unsigned char color_table[];
 extern int default_red[];
 extern int default_grn[];
@@ -305,12 +299,13 @@ void delete_char(struct vc_data *vc, unsigned int nr);
 void insert_line(struct vc_data *vc, unsigned int nr);
 void delete_line(struct vc_data *vc, unsigned int nr);
 void set_origin(struct vc_data *vc);
-inline void save_screen(struct vc_data *vc);
-inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed);
-void invert_screen(struct vc_data *vc, int offset, int count, int viewed);
+inline void clear_region(struct vc_data *vc,int x,int y,int height,int width);
 void do_update_region(struct vc_data *vc, unsigned long start, int count);
 void update_region(struct vc_data *vc, unsigned long start, int count);
+inline void save_screen(struct vc_data *vc);
 void update_screen(struct vc_data *vc);
+inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed);
+void invert_screen(struct vc_data *vc, int offset, int count, int viewed);
 void unblank_screen(struct vt_struct *vt);
 void poke_blanked_console(struct vt_struct *vt);
 
