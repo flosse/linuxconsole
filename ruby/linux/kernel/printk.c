@@ -550,7 +550,6 @@ EXPORT_SYMBOL(register_console);
 int unregister_console(struct console * console)
 {
         struct console *a,*b;
-	unsigned long flags;
 	int res = 1;
 
 	lock_all_consoles();
