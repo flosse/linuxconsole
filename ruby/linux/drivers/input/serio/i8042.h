@@ -66,9 +66,9 @@
  * Register numbers.
  */
 
-#define I8042_COMMAND_REG	CONFIG_I8042_REG_BASE + 4
-#define I8042_STATUS_REG	CONFIG_I8042_REG_BASE + 4
 #define I8042_DATA_REG		CONFIG_I8042_REG_BASE	
+#define I8042_COMMAND_REG	I8042_DATA_REG + 4
+#define I8042_STATUS_REG	I8042_DATA_REG + 4
 
 /*
  * Status register bits.

@@ -58,6 +58,7 @@ spinlock_t i8042_lock = SPIN_LOCK_UNLOCKED;
 
 struct i8042_values {
 	int irq;
+	int ioport;
 	unsigned char disable;
 	unsigned char irqen;
 	unsigned char exists;
@@ -264,7 +265,7 @@ static int i8042_open(struct serio *port)
  * Allocate the interrupt
  */
 
-	if (request_irq(values->irq, i8042_interrupt, 0, "i8042", NULL)) {
+	if (request_irq(values->irq, i8042_interrupt, 0, "i8042", values)) {
 		printk(KERN_ERR "i8042.c: Can't get irq %d for %s\n", values->irq, values->name);
 		return -1;
 	}
@@ -324,6 +325,7 @@ static void i8042_close(struct serio *port)
 
 static struct i8042_values i8042_kbd_values = {
 	irq:		I8042_KBD_IRQ,
+	ioport:		I8042_DATA_REG,
 	irqen:		I8042_CTR_KBDINT,
 	disable:	I8042_CTR_KBDDIS,
 	name:		"KBD",
@@ -343,6 +345,7 @@ static struct serio i8042_kbd_port =
 
 static struct i8042_values i8042_aux_values = {
 	irq:		I8042_AUX_IRQ,
+	ioport:		I8042_DATA_REG,
 	irqen:		I8042_CTR_AUXINT,
 	disable:	I8042_CTR_AUXDIS,
 	name:		"AUX",
@@ -368,12 +371,13 @@ static struct serio i8042_aux_port =
 
 static void i8042_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 {
-	unsigned long flags;
+	struct i8042_values *values = dev_id;
 	unsigned char str, data;
+	unsigned long flags;
 
 	spin_lock_irqsave(&i8042_lock, flags);
 
-	while ((str = inb(I8042_STATUS_REG)) & I8042_STR_OBF) {
+	while ((str = inb(values->ioport + 4)) & I8042_STR_OBF) {
 
 		data = inb(I8042_DATA_REG);
 
@@ -382,11 +386,11 @@ static void i8042_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 			data, (str & I8042_STR_AUXDATA) ? "aux" : "kbd", (int) (jiffies - i8042_start));
 #endif
 
-		if (i8042_aux_values.exists && (str & I8042_STR_AUXDATA)) {
+		if (values->exists && (str & I8042_STR_AUXDATA)) {
 			if (i8042_aux_port.dev)
 				i8042_aux_port.dev->interrupt(&i8042_aux_port, data, 0);
 		} else {
-			if (i8042_kbd_values.exists && i8042_kbd_port.dev) {
+			if (i8042_kbd_port.dev) {
 				if (!i8042_direct) {
 					if (data > 0x7f) {
 						if (test_and_clear_bit(data & 0x7f, i8042_unxlate_seen)) {
@@ -402,7 +406,6 @@ static void i8042_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 			}
 		}
 	}
-
 	spin_unlock_irqrestore(&i8042_lock, flags);
 }
 
@@ -418,7 +421,7 @@ static int __init i8042_controller_init(void)
  * Check the i/o region before we touch it.
  */
 #if !defined(__i386__) && !defined(__sh__) && !defined(__alpha__) 	
-	if (check_region(I8042_DATA_REG, 16)) {
+	if (check_region(i8042_kbd_values.ioport, 16)) {
 		printk(KERN_ERR "i8042.c: %#x port already in use!\n", I8042_DATA_REG);
 		return -1;
 	}
