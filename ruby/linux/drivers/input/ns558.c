@@ -138,7 +138,7 @@ static struct ns558* ns558_isa_probe(int io, struct ns558 *next)
 	
 	port->next = next;
 	port->type = NS558_ISA;
-	port->gameport.io = io;
+	port->gameport.io = io & (-1 << i);
 	port->gameport.size = (1 << i);
 
 	request_region(port->gameport.io, port->gameport.size, "ns558-isa");
