@@ -23,13 +23,11 @@ if [ "$CONFIG_FB" = "y" ]; then
          tristate '  Permedia2 support (EXPERIMENTAL)' CONFIG_FB_PM2
          if [ "$CONFIG_FB_PM2" = "y" ]; then
             if [ "$CONFIG_PCI" = "y" ]; then
-               bool '    enable FIFO disconnect feature' CONFIG_FB_PM2_FIFO_DISC
-ONNECT
+               bool '    enable FIFO disconnect feature' CONFIG_FB_PM2_FIFO_DISCONNECT
                bool '    generic Permedia2 PCI board support' CONFIG_FB_PM2_PCI
             fi
             if [ "$CONFIG_AMIGA" = "y" ]; then
-               bool '    Phase5 CVisionPPC/BVisionPPC support' CONFIG_FB_PM2_CVP
-PC
+               bool '    Phase5 CVisionPPC/BVisionPPC support' CONFIG_FB_PM2_CVPPC
             fi
          fi
       fi
@@ -62,8 +60,7 @@ PC
       if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
          bool '  Amiga CyberVision3D support (EXPERIMENTAL)' CONFIG_FB_VIRGE
          tristate '  Amiga RetinaZ3 support (EXPERIMENTAL)' CONFIG_FB_RETINAZ3
-         bool '  Amiga FrameMaster II/Rainbow II support (EXPERIMENTAL)' CONFIG_
-FB_FM2
+         bool '  Amiga FrameMaster II/Rainbow II support (EXPERIMENTAL)' CONFIG_FB_FM2
       fi
    fi
    if [ "$CONFIG_ATARI" = "y" ]; then
@@ -119,20 +116,16 @@ FB_FM2
             bool '    Mystique support' CONFIG_FB_MATROX_MYSTIQUE
             bool '    G100/G200/G400 support' CONFIG_FB_MATROX_G100
             if [ "$CONFIG_I2C" != "n" ]; then
-               dep_tristate '      Matrox I2C support' CONFIG_FB_MATROX_I2C $CON
-FIG_FB_MATROX $CONFIG_I2C_ALGOBIT
+               dep_tristate '      Matrox I2C support' CONFIG_FB_MATROX_I2C $CONFIG_FB_MATROX $CONFIG_I2C_ALGOBIT
                if [ "$CONFIG_FB_MATROX_G100" = "y" ]; then
-                  dep_tristate '      G400 second head support' CONFIG_FB_MATROX
-_MAVEN $CONFIG_FB_MATROX_I2C
+                  dep_tristate '      G400 second head support' CONFIG_FB_MATROX_MAVEN $CONFIG_FB_MATROX_I2C
                fi
             fi
             bool '    Multihead support' CONFIG_FB_MATROX_MULTIHEAD
          fi
          tristate '  ATI Mach64 display support (EXPERIMENTAL)' CONFIG_FB_ATY
-         tristate '  ATI Rage 128 display support (EXPERIMENTAL)' CONFIG_FB_ATY1
-28
-         tristate '  3Dfx Banshee/Voodoo3 display support (EXPERIMENTAL)' CONFIG_FB_
-3DFX
+         tristate '  ATI Rage 128 display support (EXPERIMENTAL)' CONFIG_FB_ATY128
+         tristate '  3Dfx Banshee/Voodoo3 display support (EXPERIMENTAL)' CONFIG_FB_3DFX
 	 tristate '  SIS 630/540 display support (EXPERIMENTAL)' CONFIG_FB_SIS
       fi
    fi                          
@@ -173,8 +166,7 @@ _MAVEN $CONFIG_FB_MATROX_I2C
       tristate '  HD64461 Frame Buffer support' CONFIG_FB_HIT
    fi
    if [ "$CONFIG_EXPERIMENTAL" = "y" ]; then
-      tristate '  Virtual Frame Buffer support (ONLY FOR TESTING!)' CONFIG_FB_VI
-RTUAL
+      tristate '  Virtual Frame Buffer support (ONLY FOR TESTING!)' CONFIG_FB_VIRTUAL
    fi                                                                  
 
    bool '  Advanced low level driver options' CONFIG_FBCON_ADVANCED
@@ -188,14 +180,10 @@ RTUAL
       tristate '    32 bpp packed pixels support' CONFIG_FBCON_CFB32
       tristate '    Amiga bitplanes support' CONFIG_FBCON_AFB
       tristate '    Amiga interleaved bitplanes support' CONFIG_FBCON_ILBM
-      tristate '    Atari interleaved bitplanes (2 planes) support' CONFIG_FBCON
-_IPLAN2P2
-      tristate '    Atari interleaved bitplanes (4 planes) support' CONFIG_FBCON
-_IPLAN2P4
-      tristate '    Atari interleaved bitplanes (8 planes) support' CONFIG_FBCON
-_IPLAN2P8
-#      tristate '    Atari interleaved bitplanes (16 planes) support' CONFIG_FBC
-ON_IPLAN2P16
+      tristate '    Atari interleaved bitplanes (2 planes) support' CONFIG_FBCON_IPLAN2P2
+      tristate '    Atari interleaved bitplanes (4 planes) support' CONFIG_FBCON_IPLAN2P4
+      tristate '    Atari interleaved bitplanes (8 planes) support' CONFIG_FBCON_IPLAN2P8
+#      tristate '    Atari interleaved bitplanes (16 planes) support' CONFIG_FBCON_IPLAN2P16
       tristate '    Mac variable bpp packed pixels support' CONFIG_FBCON_MAC
       tristate '    VGA 16-color planar support' CONFIG_FBCON_VGA_PLANES
       tristate '    VGA characters/attributes support' CONFIG_FBCON_VGA      
