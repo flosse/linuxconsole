@@ -1,76 +1,11 @@
 /*
- *  linux/drivers/char/console.c
+ * console.c - Built-in console device
+ * Copyright (C) 1991, 1992  Linus Torvalds
+ * Copyright (C) 1999, 2000  Dominik Kubla
  *
- *  Copyright (C) 1991, 1992  Linus Torvalds
- */
-
-/*
- * Hopefully this will be a rather complete VT102 implementation.
+ * $Id$
  *
- * Beeping thanks to John T Kohl.
- *
- * Virtual Consoles, Screen Blanking, Screen Dumping, Color, Graphics
- *   Chars, and VT100 enhancements by Peter MacDonald.
- *
- * Copy and paste function by Andrew Haylett,
- *   some enhancements by Alessandro Rubini.
- *
- * Code to check for different video-cards mostly by Galen Hunt,
- * <g-hunt@ee.utah.edu>
- *
- * Rudimentary ISO 10646/Unicode/UTF-8 character set support by
- * Markus Kuhn, <mskuhn@immd4.informatik.uni-erlangen.de>.
- *
- * Dynamic allocation of consoles, aeb@cwi.nl, May 1994
- * Resizing of consoles, aeb, 940926
- *
- * Code for xterm like mouse click reporting by Peter Orbaek 20-Jul-94
- * <poe@daimi.aau.dk>
- *
- * User-defined bell sound, new setterm control sequences and printk
- * redirection by Martin Mares <mj@k332.feld.cvut.cz> 19-Nov-95
- *
- * APM screenblank bug fixed Takashi Manabe <manabe@roy.dsl.tutics.tut.jp>
- *
- * Merge with the abstract console driver by Geert Uytterhoeven
- * <geert@linux-m68k.org>, Jan 1997.
- *
- *   Original m68k console driver modifications by
- *
- *     - Arno Griffioen <arno@usn.nl>
- *     - David Carter <carter@cs.bris.ac.uk>
- * 
- *   Note that the abstract console driver allows all consoles to be of
- *   potentially different sizes, so the following variables depend on the
- *   current console (currcons):
- *
- *     - video_num_columns
- *     - video_num_lines
- *     - video_size_row
- *     - can_do_color
- *
- *   The abstract console driver provides a generic interface for a text
- *   console. It supports VGA text mode, frame buffer based graphical consoles
- *   and special graphics processors that are only accessible through some
- *   registers (e.g. a TMS340x0 GSP).
- *
- *   The interface to the hardware is specified using a special structure
- *   (struct consw) which contains function pointers to console operations
- *   (see <linux/console.h> for more information).
- *
- * Support for changeable cursor shape
- * by Pavel Machek <pavel@atrey.karlin.mff.cuni.cz>, August 1997
- *
- * Ported to i386 and con_scrolldelta fixed
- * by Emmanuel Marty <core@ggi-project.org>, April 1998
- *
- * Resurrected character buffers in videoram plus lots of other trickery
- * by Martin Mares <mj@atrey.karlin.mff.cuni.cz>, July 1998
- *
- * ECMA-35 (ISO 2022), ECMA-48 (ISO 6429) and missing DEC VT-series functions
- * by Dominik Kubla <kubla@uni-mainz.de>, February 1999
- * Adapted for 2.3.51 and changes conditionalized according to VTE_VERSION
- * by Eric S. Raymond <esr@thyrsus.com>, March 2000.
+ * See README.console for list of contributors.
  */
 
 #include <linux/module.h>
@@ -374,7 +309,7 @@ static u8 build_attr(int currcons, u8 _color, u8 _intensity, u8 _blink, u8 _unde
 static void update_attr(int currcons)
 {
 	attr = build_attr(currcons, color, intensity, blink, underline, reverse ^ decscnm);
-	video_erase_char = (build_attr(currcons, color, intensity, blink, 0, decscnm) << 8) | ' ';
+	video_erase_char = (build_attr(currcons, color, intensity, 0, 0, decscnm) << 8) | ' ';
 }
 
 /* Note: inverting the screen twice should revert to the original state */
@@ -522,7 +457,6 @@ static void set_cursor(int currcons)
 {
     if (!IS_FG || console_blanked || vcmode == KD_GRAPHICS)
 	return;
-
     if (dectcem) {
 	if (currcons == sel_cons)
 		clear_selection();
@@ -597,7 +531,7 @@ void redraw_screen(int new_console, int is_switch)
 	set_cursor(currcons);
 	if (is_switch) {
 		set_leds();
-		compute_shiftstate(kbd_table[currcons].keyb);
+		compute_shiftstate();
 	}
 }
 
@@ -794,41 +728,38 @@ void vc_disallocate(unsigned int currcons)
 }
 
 /*
- *	VT102 emulator
+ * VT102 emulator
  */
-#define set_kbd(x) set_vc_kbd_mode(kbd_table+currcons,x)
-#define clr_kbd(x) clr_vc_kbd_mode(kbd_table+currcons,x)
-#define is_kbd(x) vc_kbd_mode(kbd_table+currcons,x)
-
-#define decarm		VC_REPEAT
-#define decckm		VC_CKMODE
-#define kbdapplic	VC_APPLIC
-#define lnm		VC_CRLF
+#define VTE_VERSION	211
 
 /*
  * Different states of the emulator
  */
-enum { ESinit,
-       /* ESC substates */
-       ESesc, ESacs, ESscf, ESgzd4, ESg1d4, ESg2d4,
-       ESg3d4, ESg1d6, ESg2d6, ESg3d6, ESdocs,
-       /* CSI substates */
-       EScsi, EScsi_getpars, EScsi_gotpars, EScsi_space,
-       EScsi_exclam, EScsi_dquote, EScsi_dollar, EScsi_and,
-       EScsi_squote, EScsi_star, EScsi_plus,
-       /* OSC substates */
-       ESosc, ESpalette,
-       /* Misc. states */
-       ESfunckey, ESignore,
-};               
+enum {	ESinit,
+	/* ESC substates */
+	ESesc, ESacs, ESscf, ESgzd4, ESg1d4, ESg2d4,
+	ESg3d4, ESg1d6, ESg2d6, ESg3d6, ESdocs,
+	/* CSI substates */
+	EScsi, EScsi_getpars, EScsi_gotpars, EScsi_space,
+	EScsi_exclam, EScsi_dquote, EScsi_dollar, EScsi_and,
+	EScsi_squote, EScsi_star, EScsi_plus,
+	/* OSC substates */
+	ESosc, ESpalette,
+	/* Misc. states */
+	ESfunckey, ESignore,
+};
 
 /*
- * this is what the terminal answers to a ESC-Z or csi0c query.
+ * 
  */
-#define __VTE_CSI      (c8bit == 0 ? "\033[" : "\233")
-#define __VTE_DCS      (c8bit == 0 ? "\033P" : "\220")
-#define __VTE_ST       (c8bit == 0 ? "\033\\" : "\234")
-#define __VTE_APC      (c8bit == 0 ? "\033_" : "\237")       
+#define __VTE_CSI	(c8bit == 0 ? "\033[" : "\233")
+#define __VTE_DCS	(c8bit == 0 ? "\033P" : "\220")
+#define __VTE_ST	(c8bit == 0 ? "\033\\" : "\234")
+#define __VTE_APC	(c8bit == 0 ? "\033_" : "\237")
+
+#define set_kbd(x) set_vc_kbd_mode(kbd_table+currcons,x)
+#define clr_kbd(x) clr_vc_kbd_mode(kbd_table+currcons,x)
+#define is_kbd(x) vc_kbd_mode(kbd_table+currcons,x)
 
 unsigned char color_table[] = { 0, 4, 2, 6, 1, 5, 3, 7,
 				       8,12,10,14, 9,13,11,15 };
@@ -1143,7 +1074,7 @@ static void vte_sgr(int currcons)
 				underline = 1;
 				break;
 			case 5:	/* slowly blinking (< 2.5 Hz) */
-#ifdef CONFIG_VT_EXTENDED			
+#ifdef CONFIG_VT_EXTENDED
 			case 6:	/* rapidly blinking (>= 2.5 Hz) */
 #endif /* CONFIG_VT_EXTENDED */
 				blink = 1;
@@ -1168,14 +1099,13 @@ static void vte_sgr(int currcons)
 				disp_ctrl = 1;
 				toggle_meta = 1;
 				break;
-#ifndef CONFIG_VT_EXTENDED 
+#if 1 /* ndef CONFIG_VT_EXTENDED */
 			case 21:	/* normal intensity */
-#endif 
+#endif /* CONFIG_VT_EXTENDED */
 			case 22:	/* normal intensity */
 				intensity = 1;
 				break;
-			case 24:	
-				/* not underlined (neither singly nor doubly) */
+			case 24:	/* not underlined (neither singly nor doubly) */
 				underline = 0;
 				break;
 			case 25:	/* steady (not blinking) */
@@ -1184,8 +1114,7 @@ static void vte_sgr(int currcons)
 			case 27:	/* positive image */
 				reverse = 0;
 				break;
-			case 38:	
-				/* foreground color (ISO 8613-6/ITU T.416) */
+			case 38:	/* foreground color (ISO 8613-6/ITU T.416) */
 				color = (def_color & 0x0f) | background;
 				underline = 1;
 				break;
@@ -1221,10 +1150,10 @@ static void respond_string(const char * p, struct tty_struct * tty)
 /*
  * Fake a DEC DSR for non-implemented features
  */
-static void vte_fake_dec_dsr(struct tty_struct *tty, char *reply)
+static void vte_fake_dec_dsr(int currcons, struct tty_struct *tty, char *reply)
 {
 	char buf[40];
-	sprintf(buf, "\033[?%sn", reply);
+	sprintf(buf, "%s?%sn", __VTE_CSI, reply);
 	respond_string(buf, tty);
 }
 #endif /* CONFIG_VT_EXTENDED */
@@ -1238,34 +1167,34 @@ static void vte_cpr(int currcons, struct tty_struct *tty, int ext)
 	char buf[40];
 
 #ifdef CONFIG_VT_EXTENDED
-      	if (ext) {
-               /*
-                * NOTE:  Since we do not (yet?) implement any form of page
-                * memory, we will always return the cursor position in page 1.
-                */
-                sprintf(buf, "%s?%d;%d;1R", __VTE_CSI,
-			y + (decom ? top + 1 : 1), x+1);
-       	} else {
+	if (ext) {
+		/*
+		 * NOTE:  Since we do not (yet?) implement any form of page
+		 * memory, we will always return the cursor position in page 1.
+		 */
+		sprintf(buf, "%s?%d;%d;1R", __VTE_CSI,
+			       	y + (decom ? top + 1 : 1), x+1);
+	} else {
 		sprintf(buf, "%s%d;%dR", __VTE_CSI,
-                        y + (decom ? top + 1 : 1), x+1);
-       }
-       respond_string(buf, tty);
-#else  /* ndef CONFIG_VT_EXTENDED */
-       sprintf(buf, "\033[%d;%dR", y + (decom ? top + 1 : 1), x+1);
-       respond_string(buf, tty);
-#endif /* ndef CONFIG_VT_EXTENDED */
-}                         
+				y + (decom ? top + 1 : 1), x+1);
+	}
+	respond_string(buf, tty);
+#else	/* ndef CONFIG_VT_EXTENDED */
+	sprintf(buf, "\033[%d;%dR", y + (decom ? top + 1 : 1), x+1);
+	respond_string(buf, tty);
+#endif	/* ndef CONFIG_VT_EXTENDED */
+}
 
 /*
  * DEVICE STATUS REPORT (DSR)
  */
-static inline void vte_dsr(struct tty_struct * tty)
+static inline void vte_dsr(int currcons, struct tty_struct * tty)
 {
 #ifdef CONFIG_VT_EXTENDED
 	char buf[40];
-       	sprintf(buf, "%s0n", __VTE_CSI);
-       	respond_string(buf, tty);
-#else /* ndef CONFIG_VT_EXTENDED */                	
+	sprintf(buf, "%s0n", __VTE_CSI);
+	respond_string(buf, tty);
+#else /* ndef CONFIG_VT_EXTENDED */
 	respond_string("\033[0n", tty); /* Terminal ok */
 #endif
 }
@@ -1279,21 +1208,24 @@ static inline void vte_answerback(struct tty_struct *tty)
 }
 
 /*
- * DEVICE ATTRIBUTE (DA)
+ * DA - DEVICE ATTRIBUTE
  */
-static inline void vte_da(struct tty_struct *tty)
+static inline void vte_da(int currcons, struct tty_struct *tty)
 {
 #ifdef CONFIG_VT_EXTENDED
 
 	char buf[40];
 
 	/* We claim VT220 compatibility... */
-       	sprintf(buf, "%s?62;1;2;6;7;8;9c", __VTE_CSI);
-       	respond_string(buf, tty);
+	sprintf(buf, "%s?62;1;2;6;7;8;9c", __VTE_CSI);
+	respond_string(buf, tty);
+
 #else /* ! CONFIG_VT_EXTENDED */
-       	/* We are a VT102 */
-       	respond_string("\033[?6c", tty);
-#endif /* ! CONFIG_VT_EXTENDED */            	
+
+	/* We are a VT102 */
+	respond_string("\033[?6c", tty);
+
+#endif /* ! CONFIG_VT_EXTENDED */
 }
 
 #ifdef CONFIG_VT_EXTENDED
@@ -1309,9 +1241,9 @@ static void vte_dec_da2(int currcons, struct tty_struct *tty)
 {
 	char buf[40];
 
-       	sprintf(buf, "%s>%d;%d;0c", __VTE_CSI, 1, VTE_VERSION / 10);
-       	respond_string(buf, tty);
-}         
+	sprintf(buf, "%s>%d;%d;0c", __VTE_CSI, 1, VTE_VERSION / 10);
+	respond_string(buf, tty);
+}
 
 /*
  * DA - TERTIARY DEVICE ATTRIBUTE [VT220 and up]
@@ -1324,13 +1256,10 @@ static void vte_dec_da3(int currcons, struct tty_struct *tty)
 
 	sprintf(buf, "%s!|%s%s", __VTE_DCS, "0", __VTE_ST);
 	respond_string(buf, tty);
-}                       
-
+}
+			
 /*
  * DECREPTPARM - DEC REPORT TERMINAL PARAMETERS [VT1xx/VT2xx/VT320]
- *
- * XXX Fixme! Report should reflect actual parameters instead of being hard
- *      coded.  -dbk
  */
 static void vte_decreptparm(int currcons, struct tty_struct *tty)
 {
@@ -1359,43 +1288,41 @@ int mouse_reporting(void)
 }
 
 /*
- * Set mode (SM / DECSM)
- * Reset mode (RM / DECRM)
+ * SM - SET MODE /
+ * RM - RESET MODE
  */
 static void set_mode(int currcons, int on_off)
 {
 	int i;
 
 	for (i=0; i<=npar; i++)
-		if (ques) switch(par[i]) { 
-			/* DEC private modes set/reset */
-			case 1:	/* DECCKM - Cursor keys mode */	   
+		if (priv4) switch(par[i]) {	/* DEC private modes set/reset */
+			case 1: /* DECCKM - Cursor keys mode */
 				if (on_off)
-                                        set_kbd(VC_CKMODE);
+					set_kbd(VC_CKMODE);
 				else
 					clr_kbd(VC_CKMODE);
 				break;
-			case 2: /* DECANM - ANSI mode */
-				break;   
-			case 3:	/* 80/132 mode switch unimplemented */
-				deccolm = on_off;
+			case 2:	/* DECANM - ANSI mode */
+				break;
+			case 3:	/* DECCOLM -  Column mode */
 #if 0
+				deccolm = on_off;
 				(void) vc_resize(video_num_lines, deccolm ? 132 : 80);
 				/* this alone does not suffice; some user mode
 				   utility has to change the hardware regs */
 #endif
 				break;
-			case 4: /* DECSCLM - Scrolling mode */
-                                break;              
+			case 4:	/* DECSCLM - Scrolling mode */
+				break;
 			case 5:	/* DECSCNM - Screen mode */
 				if (decscnm != on_off) {
 					decscnm = on_off;
-					invert_screen(currcons, 0, 
-							screenbuf_size, 0);
+					invert_screen(currcons, 0, screenbuf_size, 0);
 					update_attr(currcons);
 				}
 				break;
-                        case 6: /* DECOM - Origin mode */ 			
+			case 6:	/* DECOM - Origin mode */
 				decom = on_off;
 				gotoxay(currcons,0,0);
 				break;
@@ -1412,37 +1339,36 @@ static void set_mode(int currcons, int on_off)
 			case 9:
 				report_mouse = on_off ? 1 : 0;
 				break;
-			case 25: /* DECTCEM - Text cursor enable mode */
-				deccm = on_off;
+			case 25:	/* DECTCEM - Text cursor enable mode */
+				dectcem = on_off;
 				break;
 #ifdef CONFIG_VT_EXTENDED
-                        case 42: /* DECNCRS - National character set 
-				    replacement mode */
-                                break;
-                        case 60: /* DECHCCM - Horizontal cursor coupling mode */
-                                break;
-                        case 61: /* DECVCCM - Vertical cursor coupling mode */
-                                break;
-                        case 64: /* DECPCCM - Page cursor coupling mode */
-                                break;
-                        case 66: /* DECNKM - Numeric keybad mode */
-                                decnkm = on_off;
-                                if (on_off)
-                                        set_kbd(VC_APPLIC);
-                                else
-                                        clr_kbd(VC_APPLIC);
-                                break;                                
-                        case 67: /* DECBKM - Backarrow key mode */
-                                break;
-                        case 68: /* DECKBUM - Keyboard usage mode */
-                                break;
-                        case 69: /* DECVSSM - Vertical split screen mode */
-                                break;
-                        case 73: /* DECXRLM - Transfer rate limiting mode */
-                                break;
-                        case 81: /* DECKPM - Keyboard position mode */
-                               break;
-#endif /* def CONFIG_VT_EXTENDED */       
+			case 42:	/* DECNCRS - National character set replacement mode */
+				break;
+			case 60:	/* DECHCCM - Horizontal cursor coupling mode */
+				break;
+			case 61:	/* DECVCCM - Vertical cursor coupling mode */
+				break;
+			case 64:	/* DECPCCM - Page cursor coupling mode */
+				break;
+			case 66:	/* DECNKM - Numeric keybad mode */
+				decnkm = on_off;
+				if (on_off)
+					set_kbd(VC_APPLIC);
+				else
+					clr_kbd(VC_APPLIC);
+				break;
+			case 67:	/* DECBKM - Backarrow key mode */
+				break;
+			case 68:	/* DECKBUM - Keyboard usage mode */
+				break;
+			case 69:	/* DECVSSM - Vertical split screen mode */
+				break;
+			case 73:	/* DECXRLM - Transfer rate limiting mode */
+				break;
+			case 81:	/* DECKPM - Keyboard position mode */
+				break;
+#endif /* def CONFIG_VT_EXTENDED */
 			case 1000:
 				report_mouse = on_off ? 2 : 0;
 				break;
@@ -1468,7 +1394,7 @@ static void set_mode(int currcons, int on_off)
  */
 static void vte_deccir(int currcons, struct tty_struct *tty)
 {
-       /* not yet implemented */
+	/* not yet implemented */
 }
 
 /*
@@ -1476,34 +1402,33 @@ static void vte_deccir(int currcons, struct tty_struct *tty)
  */
 static void vte_decmsr(int currcons, struct tty_struct *tty)
 {
-       char buf[40];
+	char buf[40];
 
-       sprintf(buf, "%s%d*{", __VTE_CSI, 0); /* No space left */
-       respond_string(buf, tty);
-}                
+	sprintf(buf, "%s%d*{", __VTE_CSI, 0); /* No space left */
+	respond_string(buf, tty);
+}
 
 /*
  * DECRPM - Report mode
  */
-static void vte_decrpm(int currcons, struct tty_struct *tty, int priv,int mode,
-			int status)
+static void vte_decrpm(int currcons, struct tty_struct *tty, int priv, int mode, int status)
 {
 	char buf[40];
 
-       	if (status == 0) {
-               status = 2;
-       	} else {
-               if (status == 2) {
-		status = 0;
-               }
-       	}
+	if (status == 0) {
+		status = 2;
+	} else {
+		if (status == 2) {
+			status = 0;
+		}
+	}
 
-       	if (priv)
-               sprintf(buf, "%s?%d;%d$y", __VTE_CSI, mode, status);
-       	else
-               sprintf(buf, "%s%d;%d$y", __VTE_CSI, mode, status);
-       	respond_string(buf, tty);
-}                                
+	if (priv)
+		sprintf(buf, "%s?%d;%d$y", __VTE_CSI, mode, status);
+	else
+		sprintf(buf, "%s%d;%d$y", __VTE_CSI, mode, status);
+	respond_string(buf, tty);
+}
 
 /*
  * DECRQM - Request mode
@@ -1517,120 +1442,119 @@ static void vte_decrpm(int currcons, struct tty_struct *tty, int priv,int mode,
  */
 static void vte_decrqm(int currcons, struct tty_struct *tty, int priv)
 {
-       if (priv) {
-               switch (par[0]) {
-                       case 1: /* DECCKM - Cursor keys mode */
-                               vte_decrpm(currcons, tty, priv, par[0], decckm);
-                               break;
-                       case 2: /* DECANM */
-                       case 3: /* DECCOLM */
-                       case 4: /* DECSCLM */
-                               vte_decrpm(currcons, tty, priv, par[0], 4);
-                               break;
-                       case 5: /* DECSCNM */          
-                               vte_decrpm(currcons, tty, priv, par[0],decscnm);
-                               break;
-                       case 6: /* DECOM */
-                               vte_decrpm(currcons, tty, priv, par[0], decom);
-                               break;
-                       case 7: /* DECAWM */
-                               vte_decrpm(currcons, tty, priv, par[0], decawm);
-                               break;
-                       case 8: /* DECARM */
-                               vte_decrpm(currcons, tty, priv, par[0], decarm);
-                               break;
-                       case 25: /* DECTCEM */
-                               vte_decrpm(currcons, tty, priv, par[0],dectcem);
-                               break;
-                       case 42: /* DECNCRM */
-                       case 60: /* DECHCCM */
-                       case 61: /* DECVCCM */
-                       case 64: /* DECPCCM */
-                               vte_decrpm(currcons, tty, priv, par[0], 4);
-                               break;
-                       case 66: /* DECNKM */           
-                               vte_decrpm(currcons, tty, priv, par[0], decnkm);
-                               break;
-                       case 67: /* DECBKM */
-                       case 68: /* DECKBUM */
-                       case 69: /* DECVSSM */
-                       case 73: /* DECXRLM */
-                       case 81: /* DECKPM */
-                               vte_decrpm(currcons, tty, priv, par[0], 4);
-                               break;
-                       default:
-                               vte_decrpm(currcons, tty, priv, par[0], 2);
+	if (priv) {
+		switch (par[0]) {
+			case 1: /* DECCKM - Cursor keys mode */
+				vte_decrpm(currcons, tty, priv, par[0], decckm);
+				break;
+			case 2: /* DECANM */
+			case 3: /* DECCOLM */
+			case 4: /* DECSCLM */
+				vte_decrpm(currcons, tty, priv, par[0], 4);
+				break;
+			case 5: /* DECSCNM */
+				vte_decrpm(currcons, tty, priv, par[0], decscnm);
+				break;
+			case 6: /* DECOM */
+				vte_decrpm(currcons, tty, priv, par[0], decom);
+				break;
+			case 7: /* DECAWM */
+				vte_decrpm(currcons, tty, priv, par[0], decawm);
+				break;
+			case 8: /* DECARM */
+				vte_decrpm(currcons, tty, priv, par[0], decarm);
+				break;
+			case 25: /* DECTCEM */
+				vte_decrpm(currcons, tty, priv, par[0], dectcem);
+				break;
+			case 42: /* DECNCRM */
+			case 60: /* DECHCCM */
+			case 61: /* DECVCCM */
+			case 64: /* DECPCCM */
+				vte_decrpm(currcons, tty, priv, par[0], 4);
+				break;
+			case 66: /* DECNKM */
+				vte_decrpm(currcons, tty, priv, par[0], decnkm);
+				break;
+			case 67: /* DECBKM */
+			case 68: /* DECKBUM */
+			case 69: /* DECVSSM */
+			case 73: /* DECXRLM */
+			case 81: /* DECKPM */
+				vte_decrpm(currcons, tty, priv, par[0], 4);
+				break;
+			default:
+				vte_decrpm(currcons, tty, priv, par[0], 2);
 		}
 	} else {
 		switch (par[0]) {
-			case 1: /* GATM */
-                               vte_decrpm(currcons, tty, priv, par[0], 4);
-                               break;
-                       case 2: /* KAM */
-                               vte_decrpm(currcons, tty, priv, par[0], kam);
-                               break;
-                       case 3: /* CRM */
-                               vte_decrpm(currcons, tty, priv, par[0], 4);
-                               break;                      
-                       case 4: /* IRM */
-                               vte_decrpm(currcons, tty, priv, par[0], irm);
-                               break;
-                       case 5: /* SRTM */
-                       case 6: /* ERM */
-                       case 7: /* VEM */
-                       case 8: /* BDSM */
-                       case 9: /* DCSM */
-                       case 10: /* HEM */
-                       case 11: /* PUM */
-                       case 12: /* SRM */
-                       case 13: /* FEAM */
-                       case 14: /* FETM */
-                       case 15: /* MATM */
-                       case 16: /* TTM */
-                       case 17: /* SATM */
-                       case 18: /* TSM */
-                       case 19: /* EBM */
-                               vte_decrpm(currcons, tty, priv, par[0], 4);
-                               break;
-                       case 20: /* LNM */
-                               vte_decrpm(currcons, tty, priv, par[0], lnm);
-                               break;                  
-                       case 21: /* GRCM */
-                       case 22: /* ZDM */
-                               vte_decrpm(currcons, tty, priv, par[0], 4);
-                               break;
-                       default:
-                               vte_decrpm(currcons, tty, priv, par[0], 2);
-               }
-       }
-}        
+			case 1:	/* GATM */
+				vte_decrpm(currcons, tty, priv, par[0], 4);
+				break;
+			case 2: /* KAM */
+				vte_decrpm(currcons, tty, priv, par[0], kam);
+				break;
+			case 3: /* CRM */
+				vte_decrpm(currcons, tty, priv, par[0], 4);
+				break;
+			case 4: /* IRM */
+				vte_decrpm(currcons, tty, priv, par[0], irm);
+				break;
+			case 5: /* SRTM */
+			case 6: /* ERM */
+			case 7: /* VEM */
+			case 8: /* BDSM */
+			case 9: /* DCSM */
+			case 10: /* HEM */
+			case 11: /* PUM */
+			case 12: /* SRM */
+			case 13: /* FEAM */
+			case 14: /* FETM */
+			case 15: /* MATM */
+			case 16: /* TTM */
+			case 17: /* SATM */
+			case 18: /* TSM */
+			case 19: /* EBM */
+				vte_decrpm(currcons, tty, priv, par[0], 4);
+				break;
+			case 20: /* LNM */
+				vte_decrpm(currcons, tty, priv, par[0], lnm);
+				break;
+			case 21: /* GRCM */
+			case 22: /* ZDM */
+				vte_decrpm(currcons, tty, priv, par[0], 4);
+				break;
+			default:
+				vte_decrpm(currcons, tty, priv, par[0], 2);
+		}
+	}
+}
 
 /*
  * DECSCL - Set operating level
  */
 static void vte_decscl(int currcons)
 {
-       switch (par[0]) {
-               case 61:        /* VT100 mode */
-                       if (npar == 1) {
-                               decscl = 1;
-                               c8bit = 0;
-                       }
-                       break;
-               case 62:        /* VT200 mode */
-               case 63:        /* VT300 mode */
-               case 64:        /* VT400 mode */
-                       if (npar <= 2) {
-                               decscl = 4;
-                               if (par[1] == 1)
-                                       c8bit = 0;
-                               else
-                                       c8bit = 1;
-                       }
-                       break;                         
-
-       }
-       return;
+	switch (par[0]) {
+		case 61:	/* VT100 mode */
+			if (npar == 1) {
+				decscl = 1;
+				c8bit = 0;
+			}
+			break;
+		case 62:	/* VT200 mode */
+		case 63:	/* VT300 mode */
+		case 64:	/* VT400 mode */
+			if (npar <= 2) {
+				decscl = 4;
+				if (par[1] == 1)
+					c8bit = 0;
+				else
+					c8bit = 1;
+			}
+			break;
+	}
+	return;
 }
 
 /*
@@ -1638,7 +1562,7 @@ static void vte_decscl(int currcons)
  */
 void vte_dectabsr(int currcons, struct tty_struct *tty)
 {
-       /* not yet implemented */
+	/* not yet implemented */
 }
 
 /*
@@ -1646,9 +1570,10 @@ void vte_dectabsr(int currcons, struct tty_struct *tty)
  */
 void vte_dectsr(int currcons, struct tty_struct *tty)
 {
-       /* not yet implemented */
+	/* not yet implemented */
 }
-#endif /* def CONFIG_VT_EXTENDED */      
+#endif /* def CONFIG_VT_EXTENDED */
+					
 
 static void setterm_command(int currcons)
 {
@@ -1656,8 +1581,8 @@ static void setterm_command(int currcons)
 		case 1:	/* set color for underline mode */
 			if (can_do_color && par[1] < 16) {
 				ulcolor = color_table[par[1]];
-				i
-					update_attr(currcons)RPM - Report mode
+				if (underline)
+					update_attr(currcons);
 			}
 			break;
 		case 2:	/* set color for half intensity mode */
@@ -1694,15 +1619,9 @@ static void setterm_command(int currcons)
 		case 12: /* bring specified console to the front */
 			if (par[1] >= 1 && vc_cons_allocated(par[1]-1))
 				set_console(par[1] - 1);
-
-			if (vc_cons_allocated(par[1]-1)) {
-                               int want = par[1]-1;
-                               kbd_set_console(kbd_table[currcons].keyb, want);
-                               /* in case there's no kbd */
-			       want_console = want;
 			break;
 		case 13: /* unblank the screen */
-			poke_blanked_console();   /* FIXME: Race ? */
+			poke_blanked_console();
 			break;
 		case 14: /* set vesa powerdown interval */
 			vesa_off_interval = ((par[1] < 60) ? par[1] : 60) * 60 * HZ;
@@ -1725,7 +1644,7 @@ static void delete_line(int currcons, unsigned int nr)
 
 /*
  * ICH - INSERT CHARACTER [VT220]
- */                 
+ */
 static void vte_ich(int currcons, unsigned int nr)
 {
 	if (nr > video_num_columns - x)
@@ -1748,7 +1667,7 @@ static void vte_il(int currcons, unsigned int nr)
 }
 
 /*
- * DCH - DELETE CHARACTER 
+ * DCH - DELETE CHARACTER
  */
 static void vte_dch(int currcons, unsigned int nr)
 {
@@ -1760,7 +1679,7 @@ static void vte_dch(int currcons, unsigned int nr)
 }
 
 /*
- * DL - DELETE LINE 
+ * DL - DELETE LINE
  */
 static void vte_dl(int currcons, unsigned int nr)
 {
@@ -1772,7 +1691,7 @@ static void vte_dl(int currcons, unsigned int nr)
 }
 
 /*
- * DECSC - SAVE CURSOR 
+ * DECSC - SAVE CURSOR
  *
  * This saves the following states:
  *  - cursor position
@@ -1794,10 +1713,14 @@ static void vte_decsc(int currcons)
 	s_color		= color;
 	saved_G0	= G0_charset;
 	saved_G1	= G1_charset;
+#ifdef CONFIG_VT_EXTENDED
+	saved_G2	= G2_charset;
+	saved_G3	= G3_charset;
+#endif /* def CONFIG_VT_EXTENDED */
 }
 
 /*
- * DECRC - RESTORE CURSOR 
+ * DECRC - RESTORE CURSOR
  */
 static void vte_decrc(int currcons)
 {
@@ -1810,6 +1733,10 @@ static void vte_decrc(int currcons)
 	color		= s_color;
 	G0_charset	= saved_G0;
 	G1_charset	= saved_G1;
+#ifdef CONFIG_VT_EXTENDED
+	G2_charset	= saved_G2;
+	G3_charset	= saved_G3;
+#endif /* ndef CONFIG_VT_EXTENDED */
 	translate	= set_translate(charset ? G1_charset : G0_charset,currcons);
 	update_attr(currcons);
 	need_wrap = 0;
@@ -1835,10 +1762,10 @@ static void vte_ris(int currcons, int do_clear)
 	top		= 0;
 	bottom		= video_num_lines;
 	vc_state	= ESinit;
-	priv1           = 0;
-	priv2           = 0;
-	priv3           = 0;
-	priv4           = 0;            
+	priv1		= 0;
+	priv2		= 0;
+	priv3		= 0;
+	priv4		= 0;
 	translate	= set_translate(LAT1_MAP,currcons);
 	G0_charset	= LAT1_MAP;
 	G1_charset	= GRAF_MAP;
@@ -1852,25 +1779,25 @@ static void vte_ris(int currcons, int do_clear)
 	toggle_meta	= 0;
 
 #ifdef CONFIG_VT_EXTENDED
-        c8bit           = 0;    /* disable 8-bit controls */
+	c8bit		= 0;	/* disable 8-bit controls */
 #endif
-        decckm          = 0;    /* cursor key sequences */
-	decsclm         = 0;    /* jump scroll */
-       	decscnm         = 0;    /* normal screen */
-       	decom           = 0;    /* absolute adressing */
-       	decawm          = 1;    /* autowrap disabled */
-       	decarm          = 1;    /* autorepeat enabled */
-       	dectcem         = 1;    /* text cursor enabled */
+	decckm		= 0;	/* cursor key sequences */
+	decsclm		= 0;	/* jump scroll */
+	decscnm		= 0;	/* normal screen */
+	decom		= 0;	/* absolute adressing */
+	decawm		= 1;	/* autowrap disabled */
+	decarm		= 1;	/* autorepeat enabled */
+	dectcem		= 1;	/* text cursor enabled */
 
-    	kam             = 0;    /* keyboard enabled */
-       	crm             = 0;    /* execute control functions */
-       	irm             = 0;    /* replace */
-       	lnm             = 0;    /* line feed */
+	kam		= 0;	/* keyboard enabled */
+	crm		= 0;	/* execute control functions */
+	irm		= 0;	/* replace */
+	lnm		= 0;	/* line feed */
 
-       	set_kbd(VC_REPEAT);
-       	clr_kbd(VC_CKMODE);
-       	clr_kbd(VC_APPLIC);
-       	clr_kbd(VC_CRLF);                     
+	set_kbd(VC_REPEAT);
+	clr_kbd(VC_CKMODE);
+	clr_kbd(VC_APPLIC);
+	clr_kbd(VC_CRLF);
 	kbd_table[currcons].lockstate = 0;
 	kbd_table[currcons].slockstate = 0;
 	kbd_table[currcons].ledmode = LED_SHOW_FLAGS;
@@ -1914,6 +1841,7 @@ static void vte_ris(int currcons, int do_clear)
  */
 static void vte_tbc(int currcons, int vpar)
 {
+
 	switch (vpar) {
 	case 0:
 		/*
@@ -1942,26 +1870,27 @@ static void vte_tbc(int currcons, int vpar)
 	}
 }
 
+
 static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 {
 	/*
 	 * C0 CONTROL CHARACTERS
 	 *
 	 * NOTE: Control characters can be used in the _middle_
-	 *       of an escape sequence.
+	 *       of an escape sequence.  (XXX: Really? Test!)
 	 */
 	switch (c) {
 	case 0x00:	/* NUL - Null */
-	case 0x01:      /* SOH - Start of header */
-        case 0x02:      /* STX - */
-        case 0x03:      /* ETX - */
-        case 0x04:      /* EOT - End of transmission */   
+	case 0x01:	/* SOH - Start of header */
+	case 0x02:	/* STX - */
+	case 0x03:	/* ETX - */
+	case 0x04:	/* EOT - End of transmission */
 		return;
-	case 0x05:	/* ENQ - Inquiry */
+	case 0x05:	/* ENQ - Enquiry */
 		vte_answerback(tty);
 		return;
-	case 0x06:      /* ACK - Acknowledge */
-		return;           
+	case 0x06:	/* ACK - Acknowledge */
+		return;
 	case 0x07:	/* BEL - Bell */
 		if (bell_duration)
 			kd_mksound(bell_pitch, bell_duration);
@@ -2005,116 +1934,107 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 		translate = set_translate(G0_charset,currcons);
 		disp_ctrl = 0;
 		return;
-	case 0x10:      /* DLE - */
-       	case 0x11:      /* DC1 - Device control 1 */
-       	case 0x12:      /* DC2 - Device control 1 */
-       	case 0x13:      /* DC3 - Device control 1 */
-       	case 0x14:      /* DC4 - Device control 1 */
-       	case 0x15:      /* NAK - Negative acknowledge */
-       	case 0x16:      /* SYN - Synchronize */
-       	case 0x17:      /* ETB - */
-               	return;     
+	case 0x10:	/* DLE - */
+	case 0x11:	/* DC1 - Device control 1 */
+	case 0x12:	/* DC2 - Device control 1 */
+	case 0x13:	/* DC3 - Device control 1 */
+	case 0x14:	/* DC4 - Device control 1 */
+	case 0x15:	/* NAK - Negative acknowledge */
+	case 0x16:	/* SYN - Synchronize */
+	case 0x17:	/* ETB - */
+		return;
 	case 0x18:	/* CAN - Cancel */
+		vc_state = ESinit;
+		return;
+	case 0x19:	/* EM - */
+		return;
 	case 0x1a:	/* SUB - Substitute */
 		vc_state = ESinit;
 		return;
 	case 0x1b:	/* ESC - Escape */
 		vc_state = ESesc;
 		return;
-        case 0x19:      /* EM - */
-                return;
-        case 0x1a:      /* SUB - Substitute */
-                vc_state = ESinit;
-                return;
-	case 0x1b:      /* ESC - Escape */
-                vc_state = ESesc;
-                return;            
-        case 0x1c:      /* IS4 - */
-       	case 0x1d:      /* IS3 - */
-       	case 0x1e:      /* IS2 - */
-       	case 0x1f:      /* IS1 - */
-         	return;              	
+	case 0x1c:	/* IS4 - */
+	case 0x1d:	/* IS3 - */
+	case 0x1e:	/* IS2 - */
+	case 0x1f:	/* IS1 - */
+	  return;
 	case 0x7f:	/* DEL - Delete */
 		/*
 		 * This character is ignored, unless a 96-set has been mapped,
 		 * but this is not supported at the moment.
 		 */
 		return;
+	}
+
 #ifdef CONFIG_VT_EXTENDED
-	/*
-	 * C1 control functions (8-bit mode).
-	 *
-	 * XXX Fixme! Should only be interpreted if 8-bit controls are enabled.
-	 * XXX Fixme! Should have all C1 controls implemented (acc. to ECMA).
-	 */
 	if (c8bit == 1)
 		/*
 		 * C1 control functions (8-bit mode).
-                 */
+		 */
 		switch (c) {
-		case 0x80:      /* unused */
-                case 0x81:      /* unused */
-                case 0x82:      /* BPH - Break permitted here */
-                case 0x83:      /* NBH - No break here */
-			return;           
-
-
-		case 0x84: /* IND - Line feed (DEC only, dropped by ECMA/ISO) */
+		case 0x80:	/* unused */
+		case 0x81:	/* unused */
+		case 0x82:	/* BPH - Break permitted here */
+		case 0x83:	/* NBH - No break here */
+			return;
+		case 0x84:	/* IND - Line feed (DEC only) */
 #ifndef VTE_STRICT_ISO
 			vte_lf(currcons);
-#endif /* ndef VTE_STRICT_ISO */            
+#endif /* ndef VTE_STRICT_ISO */
 			return;
 		case 0x85:	/* NEL - Next line */
 			vte_lf(currcons);
 			vte_cr(currcons);
 			return;
-                case 0x86:      /* SSA - Start of selected area */
-                case 0x87:      /* ESA - End of selected area */
-                        return;           
+		case 0x86:	/* SSA - Start of selected area */
+		case 0x87:	/* ESA - End of selected area */
+			return;
 		case 0x88:	/* HTS - Character tabulation set */
 			tab_stop[x >> 5] |= (1 << (x & 31));
 			return;
-		case 0x89:      /* HTJ - Character tabulation with justify */
-                case 0x8a:      /* VTS - Line tabulation set */
-                case 0x8b:      /* PLD - Partial line down */
-                case 0x8c:      /* PLU - Partial line up */
-                        return;                                
+		case 0x89:	/* HTJ - Character tabulation with justify */
+		case 0x8a:	/* VTS - Line tabulation set */
+		case 0x8b:	/* PLD - Partial line down */
+		case 0x8c:	/* PLU - Partial line up */
+			return;
 		case 0x8d:	/* RI - Reverse line feed */
 			vte_ri(currcons);
 			return;
 #if 0
-                case 0x8e:      /* SS2 - Single shift 2 */
-                        need_shift = 1;
-                        GS_charset = G2_charset; /* G2 -> GS */
-                        return;
-                case 0x8f:      /* SS3 - Single shift 3 */
-                        need_shift = 1;
-                        GS_charset = G3_charset; /* G3 -> GS */
-                        return;
+		case 0x8e:	/* SS2 - Single shift 2 */
+			need_shift = 1;
+			GS_charset = G2_charset; /* G2 -> GS */
+			return;
+		case 0x8f:	/* SS3 - Single shift 3 */
+			need_shift = 1;
+			GS_charset = G3_charset; /* G3 -> GS */
+			return;
 #endif
-                case 0x90:      /* DCS - Device control string */
-                        return;
-                case 0x91:      /* PU1 - Private use 1 */
-                case 0x92:      /* PU2 - Private use 2 */
-                case 0x93:      /* STS - Set transmit state*/
-                case 0x94:      /* CCH - Cancel character */
-                case 0x95:      /* MW  - Message waiting */
-                case 0x96:      /* SPA - Start of guarded area */
-                case 0x97:      /* EPA - End of guarded area */
-                case 0x98:      /* SOS - Start of string */
-                case 0x99:      /* unused */
-                        return;
-               	case 0x9a:      /* SCI - Single character introducer */     
+		case 0x90:	/* DCS - Device control string */
+			return;
+		case 0x91:	/* PU1 - Private use 1 */
+		case 0x92:	/* PU2 - Private use 2 */
+		case 0x93:	/* STS - Set transmit state*/
+		case 0x94:	/* CCH - Cancel character */
+		case 0x95:	/* MW  - Message waiting */
+		case 0x96:	/* SPA - Start of guarded area */
+		case 0x97:	/* EPA - End of guarded area */
+		case 0x98:	/* SOS - Start of string */
+		case 0x99:	/* unused */
+			return;
+		case 0x9a:	/* SCI - Single character introducer */
 #ifndef VTE_STRICT_ISO
-                        vte_da(currcons, tty);
+			vte_da(currcons, tty);
 #endif /* ndef VTE_STRICT_ISO */
-                        return;         	
+			return;
 		case 0x9b:	/* CSI - Control sequence introducer */
 			vc_state = EScsi;
-                case 0x9c:      /* ST  - String Terminator */
-                case 0x9d:      /* OSC - Operating system command */
-                case 0x9e:      /* PM  - Privacy message */
-                case 0x9f:      /* APC - Application program command */    
+			return;
+		case 0x9c:	/* ST  - String Terminator */
+		case 0x9d:	/* OSC - Operating system command */
+		case 0x9e:	/* PM  - Privacy message */
+		case 0x9f:	/* APC - Application program command */
 			return;
 	}
 #endif /* CONFIG_VT_EXTENDED */
@@ -2123,11 +2043,12 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 	case ESesc:
 		vc_state = ESinit;
 		switch (c) {
-#ifdef CONFIG_VT_EXTENDED    
+
+#ifdef CONFIG_VT_EXTENDED
 		case ' ':	/* ACS - Announce code structure */
 			vc_state = ESacs;
 			return;
-#endif
+#endif /* CONFIG_VT_EXTENDED */
 		case '#':	/* SCF - Single control functions */
 			vc_state = ESscf;
 			return;
@@ -2135,10 +2056,10 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			vc_state = ESdocs;
 			return;
 #ifdef CONFIG_VT_HP
-                case '&':       /* HP terminal emulation */
-                        vc_state = ESesc_and;
-                        return;
-#endif /* def CONFIG_VT_HP */       
+		case '&':	/* HP terminal emulation */
+			vc_state = ESesc_and;
+			return;
+#endif /* def CONFIG_VT_HP */
 		case '(':	/* GZD4 - G0-designate 94-set */
 			vc_state = ESgzd4;
 			return;
@@ -2147,26 +2068,30 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			return;
 #ifdef CONFIG_VT_EXTENDED
 #if 0
-                case '*':       /* G2D4 - G2-designate 94-set */
-                        vc_state = ESg2d4;
-                        return;
-                case '+':       /* G3D4 - G3-designate 94-set */
-                        vc_state = ESg3d4;
-                        return;
-                case '-':       /* G1D6 - G1-designate 96-set */
-                        vc_state = ESg1d6;
-                        return;
-                case '.':       /* G2D6 - G2-designate 96-set */
-                        vc_state = ESg2d6;
-                        return;
-                case '/':       /* G3D6 - G3-designate 96-set */
-                        vc_state = ESg3d6;
-                        return;
+		case '*':	/* G2D4 - G2-designate 94-set */
+			vc_state = ESg2d4;
+			return;
+		case '+':	/* G3D4 - G3-designate 94-set */
+			vc_state = ESg3d4;
+			return;
+		case '-':	/* G1D6 - G1-designate 96-set */
+			vc_state = ESg1d6;
+			return;
+		case '.':	/* G2D6 - G2-designate 96-set */
+			vc_state = ESg2d6;
+			return;
+		case '/':	/* G3D6 - G3-designate 96-set */
+			vc_state = ESg3d6;
+			return;
 #endif
-		/* ===== Private control functions ===== */
-		case '6':       /* DECBI - Back index */
-                        return;
-#endif /* def CONFIG_VT_EXTENDED */           
+#endif /* def CONFIG_VT_EXTENDED */
+
+			/* ===== Private control functions ===== */
+
+#ifdef CONFIG_VT_EXTENDED
+		case '6':	/* DECBI - Back index */
+			return;
+#endif /* def CONFIG_VT_EXTENDED */
 		case '7':	/* DECSC - Save cursor */
 			vte_decsc(currcons);
 			return;
@@ -2174,170 +2099,160 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			vte_decrc(currcons);
 			return;
 #ifdef CONFIG_VT_EXTENDED
-                case '9':       /* DECFI - Forward index */
-                        return;
-#endif /* def CONFIG_VT_EXTENDED */    
+		case '9':	/* DECFI - Forward index */
+			return;
+#endif /* def CONFIG_VT_EXTENDED */
 		case '=':	/* DECKPAM - Keypad application mode */
+			decnkm = 1;
 			set_kbd(VC_APPLIC);
 			return;
 		case '>':	/* DECKPNM - Keypad numeric mode */
+			decnkm = 0;
 			clr_kbd(VC_APPLIC);
 			return;
 
 			/* ===== C1 control functions ===== */
-      		case '@': /* unallocated */
-                case 'A': /* unallocated */
-                case 'B': /* BPH - Break permitted here */
-                case 'C': /* NBH - No break here */
-                case 'D': /* IND - Line feed (DEC only) */ 
+
+		case '@': /* unallocated */
+		case 'A': /* unallocated */
+		case 'B': /* BPH - Break permitted here */
+		case 'C': /* NBH - No break here */
+		case 'D': /* IND - Line feed (DEC only) */
 #ifndef VTE_STRICT_ISO
 			vte_lf(currcons);
-#endif /* ndef VTE_STRICT_ISO */  			
+#endif /* ndef VTE_STRICT_ISO */
 			return;
-		case 'E':	/* NEL - Next line */
+		case 'E': /* NEL - Next line */
 			vte_cr(currcons);
 			vte_lf(currcons);
 			return;
-                case 'F': /* SSA - Start of selected area */
-                case 'G': /* ESA - End of selected area */
-                        return;     
-		case 'H':	/* HTS - Character tabulation set */
+		case 'F': /* SSA - Start of selected area */
+		case 'G': /* ESA - End of selected area */
+			return;
+		case 'H': /* HTS - Character tabulation set */
 			tab_stop[x >> 5] |= (1 << (x & 31));
 			return;
-                case 'I': /* HTJ - Character tabulation with justify */
-                case 'J': /* VTS - Line tabulation set */
-                case 'K': /* PLD - Partial line down */
-                case 'L': /* PLU - Partial line up */
-                        return;        
-		case 'M':	/* RI - Reverse line feed */
+		case 'I': /* HTJ - Character tabulation with justify */
+		case 'J': /* VTS - Line tabulation set */
+		case 'K': /* PLD - Partial line down */
+		case 'L': /* PLU - Partial line up */
+			return;
+		case 'M': /* RI - Reverse line feed */
 			vte_ri(currcons);
 			return;
-		case 'Z':	/* DECID - Identify terminal */
-			/* XXX: This clashes with ISO 6429! */
-			vte_da(tty);
-			return;
 #ifdef CONFIG_VT_EXTENDED
-                case 'N': /* SS2 - Single shift 2 */
-                        shift = 1;
-                        GS_charset = G2_charset; /* G2 -> GS */
-                        return;
-                case 'O': /* SS3 - Single shift 3 */
-                        shift = 1;
-                        GS_charset = G3_charset;
-                        return;
+		case 'N': /* SS2 - Single shift 2 */
+			shift = 1;
+			GS_charset = G2_charset; /* G2 -> GS */
+			return;
+		case 'O': /* SS3 - Single shift 3 */
+			shift = 1;
+			GS_charset = G3_charset;
+			return;
 #endif /* def VTE_STRICT_ISO */
-                case 'P': /* DCS - Device control string */
-                        return;
-                case 'Q': /* PU1 - Private use 1 */
-                case 'R': /* PU2 - Private use 2 */
-                case 'S': /* STS - Set transmit state */
-                case 'T': /* CCH - Cancel character */
-                case 'U': /* MW - Message waiting */  
-                case 'V': /* SPA - Start of guarded area */
-                case 'W': /* EPA - End of guarded area */
-                case 'X': /* SOS - Start of string */
-                case 'Y': /* unallocated */
-                         return;
-                case 'Z': /* SCI - Single character introducer */
+		case 'P': /* DCS - Device control string */
+			return;
+		case 'Q': /* PU1 - Private use 1 */
+		case 'R': /* PU2 - Private use 2 */
+		case 'S': /* STS - Set transmit state */
+		case 'T': /* CCH - Cancel character */
+		case 'U': /* MW - Message waiting */
+		case 'V': /* SPA - Start of guarded area */
+		case 'W': /* EPA - End of guarded area */
+		case 'X': /* SOS - Start of string */
+		case 'Y': /* unallocated */
+			return;
+		case 'Z': /* SCI - Single character introducer */
 #ifndef VTE_STRICT_ISO
-                        vte_da(currcons, tty);
+			vte_da(currcons, tty);
 #endif /* ndef VTE_STRICT_ISO */
-                        return;                                       
+			return;
 		case '[':	/* CSI - Control sequence introducer */
 			vc_state = EScsi;
 			return;
-                case '\\':      /* ST  - String Terminator */
-                        return;
+		case '\\':	/* ST  - String Terminator */
+			return;
 		case ']':	/* OSC - Operating system command */
 			/* XXX: Fixme! Wrong sequence and format! */
 			vc_state = ESosc;
 			return;
-                case '^':       /* PM  - Privacy Message */
-                case '_':       /* APC - Application Program Command */
-                        return;                
+		case '^':	/* PM  - Privacy Message */
+		case '_':	/* APC - Application Program Command */
+			return;
 
 			/* ===== Single control functions ===== */
-#ifdef CONFIG_VT_EXTENDED 
+
+#ifdef CONFIG_VT_EXTENDED
 		case '`':	/* DMI - Disable manual input */
 			kam = 0;
 			return;
 		case 'b':	/* EMI - Enable manual input */
 			kam = 1;
 			return;
-#endif /* def CONFIG_VT_EXTENDED */     
+#endif /* def CONFIG_VT_EXTENDED */
 		case 'c':	/* RIS - Reset ti initial state */
 			vte_ris(currcons,1);
 			return;
+#ifdef CONFIG_VT_EXTENDED
+		case 'd':	/* CMD - Coding Method Delimiter */
+			return;
+#if 0
+		case 'n':	/* LS2 - Locking shift G2 */
+			GL_charset = G2_charset; /*  (G2 -> GL) */
+			return;
+		case 'o':	/* LS3 - Locking shift G3 */
+			GL_charset = G3_charset; /*  (G3 -> GL) */
+			return;
+		case '|':	/* LS3R - Locking shift G3 right */
+			GR_charset = G3_charset; /* G3 -> GR */
+			return;
+		case '}':	/* LS2R - Locking shift G2 right */
+			GR_charset = G2_charset; /* G2 -> GR */
+			return;
+		case '~':	/* LS1R - Locking shift G1 right */
+			GR_charset = G1_charset; /* G1 -> GR */
+			return;
+#endif
+#endif /* def CONFIG_VT_EXTENDED */
 		}
 		return;
 #ifdef CONFIG_VT_EXTENDED
-		case 'd':       /* CMD - Coding Method Delimiter */
-               		return;
-#if 0
-               	case 'n':       /* LS2 - Locking shift G2 */
-			GL_charset = G2_charset; /*  (G2 -> GL) */
-                       	return;
-                case 'o':       /* LS3 - Locking shift G3 */
-                        GL_charset = G3_charset; /*  (G3 -> GL) */
-                        return;
-                case '|':       /* LS3R - Locking shift G3 right */
-                        GR_charset = G3_charset; /* G3 -> GR */
-                        return;
-                case '}':       /* LS2R - Locking shift G2 right */
-                        GR_charset = G2_charset; /* G2 -> GR */
-                        return;
-                case '~':       /* LS1R - Locking shift G1 right */
-                        GR_charset = G1_charset; /* G1 -> GR */
-                        return;   
-#endif
-#endif /* def CONFIG_VT_EXTENDED */
-                }
-                return;                            
-#ifdef CONFIG_VT_EXTENDED       
 	case ESacs:
 		vc_state = ESinit;
 		switch (c) {
 		case 'F':       /* Select 7-bit C1 control transmission */
 			if (decscl != 1) /* Ignore if in VT100 mode */
-                                c8bit = 0;
-                        return; 
+				c8bit = 0;
+			return;
 		case 'G':       /* Select 8-Bit C1 control transmission */
 			if (decscl != 1) /* Ignore if in VT100 mode */
-                                c8bit = 1;
-                        return; 
+				c8bit = 1;
+			return;
 		case 'L':       /* ANSI conformance level 1 */
 		case 'M':       /* ANSI conformance level 2 */
 		case 'N':       /* ANSI conformance level 3 */
 			/* Not yet implemented. */
 			return;
-		} 
+		}
 		return;
-#endif
+#endif /* def CONFIG_VT_EXTENDED */
 	case ESosc:
                 vc_state = ESinit;
                 switch (c) {
                 case 'P':       /* palette escape sequence */
-                        /*
-                         * XXX Fixme! We should use the documented DEC
-                         * device control strings (DCS) instead.  OSC has
-                         * an entirely different meaning!
-                         */
                         for (npar = 0; npar < NPAR; npar++)
                                 par[npar] = 0;
                         npar = 0;
                         vc_state = ESpalette;
                         return;
                 case 'R':       /* reset palette */
-                        /*
-                         * XXX Fixme! See comment above.
-                         */
                         reset_palette(currcons);
                         vc_state = ESinit;
                         return;
                 }
                 return;
 	case ESpalette:
-		if ((c>='0'&&c<='9') || (c>='A'&&c<='F') || (c>='a'&&c<='f')) {
+		if ( (c>='0'&&c<='9') || (c>='A'&&c<='F') || (c>='a'&&c<='f') ) {
 			par[npar++] = (c>'9' ? (c&0xDF)-'A'+10 : c-'0') ;
 			if (npar==7) {
 				int i = par[0]*3, j = 1;
@@ -2352,29 +2267,29 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			}
 		} else
 			vc_state = ESinit;
-			return;
+		return;
 	case EScsi:
 		for(npar = 0 ; npar < NPAR ; npar++)
 			par[npar] = 0;
 		npar = 0;
-		vc_state =  EScsi_getpars; 
-		if (c == '[') { 
+		vc_state = EScsi_getpars;
+		if (c == '[') {
 			/* Function key */
 			vc_state = ESfunckey;
 			return;
 		}
-                priv1 = (c == '<');
-                priv2 = (c == '=');
-                priv3 = (c == '>');
-                priv4 = (c == '?');
-                if (priv1) {
-                        vc_state = ESinit;    
+		priv1 = (c == '<'); 
+		priv2 = (c == '=');	
+		priv3 = (c == '>');
+		priv4 = (c == '?');
+		if (priv1) {
+			vc_state = ESinit;
 			return;
-	        }
-                if (priv2 || priv3 || priv4) {
-                        return;
-                }
-        case EScsi_getpars:                
+		}
+		if (priv2 || priv3 || priv4) {
+			return;
+		}
+	case EScsi_getpars:
 		if (c==';' && npar<NPAR-1) {
 			npar++;
 			return;
@@ -2382,53 +2297,53 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			par[npar] *= 10;
 			par[npar] += c-'0';
 			return;
-		} else vc_state = EScsi_gotpars;
+		} else vc_state=EScsi_gotpars;
 	case EScsi_gotpars:
 		vc_state = ESinit;
 		/*
-                 * Process control functions  with private parameter flag.
-                 */            
+		 * Process control functions  with private parameter flag.
+		 */
 		switch(c) {
 #ifdef CONFIG_VT_EXTENDED
-                case '$':
-                        if (priv4) {
-                                vc_state = EScsi_dollar;
-                                return;
-                        }
-                        break;
-                case 'J':
-                        if (priv4) {
-                                /* DECSED - Selective erase in display */
-                                return;
-                        }
-                        break;
-                case 'K':
-                       if (priv4) {
-                                /* DECSEL - Selective erase in display */
-                                return;
-                       }
-                       break;  
-#endif /* def CONFIG_VT_EXTENDED */                   	
-		case 'h':	/* SM / DECSM - set mode */
+		case '$':
+			if (priv4) {
+				vc_state = EScsi_dollar;
+				return;
+			}
+			break;
+		case 'J':
+			if (priv4) {
+				/* DECSED - Selective erase in display */
+				return;
+			}
+			break;
+		case 'K':
+			if (priv4) {
+				/* DECSEL - Selective erase in display */
+				return;
+			}
+			break;
+#endif /* def CONFIG_VT_EXTENDED */
+		case 'h':	/* SM - Set Mode */
 			set_mode(currcons,1);
 			return;
-		case 'l':	/* RM / DECRM - reset mode */
+		case 'l':	/* RM - Reset Mode */
 			set_mode(currcons,0);
 			return;
 		case 'c':
-                        if (priv2) {
-                                if (!par[0])
-                                        vte_dec_da3(currcons, tty);
-                                priv2 = 0;
-                                return;
-                        }
-                        if (priv3) {
-                                if (!par[0])
-                                        vte_dec_da2(currcons, tty);
-                                priv3 = 0;
-                                return;
-                        }
-                        if (priv4) {                       
+			if (priv2) {
+				if (!par[0])
+					vte_dec_da3(currcons, tty);
+				priv2 = 0;
+				return;
+			}
+			if (priv3) {
+				if (!par[0])
+					vte_dec_da2(currcons, tty);
+				priv3 = 0;
+				return;
+			}
+			if (priv4) {
 				if (par[0])
 					cursor_type = par[0] | (par[1]<<8) | (par[2]<<16);
 				else
@@ -2456,32 +2371,32 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
                                         vte_cpr(currcons, tty, 1);
                                         break;
                                 case 15:        /* DEC printer status */
-                                        vte_fake_dec_dsr(tty, "13");
+                                        vte_fake_dec_dsr(currcons, tty, "13");
                                         break;
                                 case 25:        /* DEC UDK status */
-                                        vte_fake_dec_dsr(tty, "21");
+                                        vte_fake_dec_dsr(currcons, tty, "21");
                                         break;
                                 case 26:        /* DEC keyboard status */
-                                        vte_fake_dec_dsr(tty, "27;1;0;1");
+                                        vte_fake_dec_dsr(currcons, tty, "27;1;0;1");
                                         break;
-				case 53:        /* DEC locator status */
-                                        vte_fake_dec_dsr(currcons, tty, "53");
-                                        break;
-                                case 62:        /* DEC macro space */
-                                        vte_decmsr(currcons, tty);
-                                        break;         
+				case 53:	/* DEC locator status */
+					vte_fake_dec_dsr(currcons, tty, "53");
+					break;
+				case 62:	/* DEC macro space */
+					vte_decmsr(currcons, tty);
+					break;
                                 case 75:        /* DEC data integrity */
-                                        vte_fake_dec_dsr(tty, "70");
+                                        vte_fake_dec_dsr(currcons, tty, "70");
                                         break;
-				case 85:    /* DEC multiple session status */
-                                        vte_fake_dec_dsr(currcons, tty, "83");
-                                        break;
+				case 85:	/* DEC multiple session status */
+					vte_fake_dec_dsr(currcons, tty, "83");
+					break;
                                 }
-			} else
-#endif /* CONFIG_VT_EXTENDED */ 
+			} else 
+#endif /* CONFIG_VT_EXTENDED */
 				switch (par[0]) {
 				case 5:	/* DSR - Device status report */
-					vte_dsr(tty);
+					vte_dsr(currcons, tty);
 					break;
 				case 6:	/* CPR - Cursor position report */
 					vte_cpr(currcons,tty,0);
@@ -2491,48 +2406,52 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			return;
 		}
 		if (priv1 || priv2 || priv3 || priv4) {
-                        priv1 =
-                        priv2 =
-                        priv3 =
-                        priv4 = 0;          
+			priv1 =
+			priv2 = 
+			priv3 =
+			priv4 = 0;
 			return;
 		}
-                /*
-                 * Process control functions with standard parameter strings.
-                 */      
+		/*
+		 * Process control functions with standard parameter strings.
+		 */
 		switch(c) {
+
 			/* ===== Control functions w/ intermediate byte ===== */
-#ifdef CONFIG_VT_EXTENDED    
+
+#ifdef CONFIG_VT_EXTENDED
 		case ' ':	/* Intermediate byte: SP (ISO 6429) */
 			vc_state = EScsi_space;
 			return;
-                case '!':       /* Intermediate byte: ! (DEC VT series) */
-                        vc_state = EScsi_exclam;
-                        return;
-                case '"':       /* Intermediate byte: " (DEC VT series) */
-                        vc_state = EScsi_dquote;
-                        return;
-                case '$':       /* Intermediate byte: $ (DEC VT series) */
-                        vc_state = EScsi_dollar;
-                        return;
-                case '&':       /* Intermediate byte: & (DEC VT series) */
-                        vc_state = EScsi_and;
-                        return;
-                case '*':       /* Intermediate byte: * (DEC VT series) */
-                        vc_state = EScsi_star;
-                        return;
-                case '+':       /* Intermediate byte: + (DEC VT series) */
-                        vc_state = EScsi_plus;
-                        return;
-#endif /* def CONFIG_VT_EXTENDED */               
-		/* ===== Control functions w/o intermediate byte ===== */
+		case '!':	/* Intermediate byte: ! (DEC VT series) */
+			vc_state = EScsi_exclam;
+			return;
+		case '"':	/* Intermediate byte: " (DEC VT series) */
+			vc_state = EScsi_dquote;
+			return;
+		case '$':	/* Intermediate byte: $ (DEC VT series) */
+			vc_state = EScsi_dollar;
+			return;
+		case '&':	/* Intermediate byte: & (DEC VT series) */
+			vc_state = EScsi_and;
+			return;
+		case '*':	/* Intermediate byte: * (DEC VT series) */
+			vc_state = EScsi_star;
+			return;
+		case '+':	/* Intermediate byte: + (DEC VT series) */
+			vc_state = EScsi_plus;
+			return;
+#endif /* def CONFIG_VT_EXTENDED */
+
+			/* ===== Control functions w/o intermediate byte ===== */
+
 		case '@':	/* ICH - Insert character */
 			vte_ich(currcons,par[0]);
 			return;
 		case 'A':	/* CUU - Cursor up */
 #ifdef CONFIG_VT_EXTENDED
-                case 'k':       /* VPB - Line position backward */
-#endif /* def CONFIG_VT_EXTENDED */   
+		case 'k':	/* VPB - Line position backward */
+#endif /* def CONFIG_VT_EXTENDED */
 			if (!par[0]) par[0]++;
 			gotoxy(currcons,x,y-par[0]);
 			return;
@@ -2564,13 +2483,13 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 		case 'G':	/* CHA - Cursor character absolute */
 		case '`':	/* HPA - Character position absolute */
 			if (par[0]) par[0]--;
-			gotoxy(currcons, par[0], y);
+			gotoxy(currcons,par[0],y);
 			return;
 		case 'H':	/* CUP - Cursor position */
 		case 'f':	/* HVP - Horizontal and vertical position */
 			if (par[0]) par[0]--;
 			if (par[1]) par[1]--;
-			gotoxay(currcons,par[1], par[0]);
+			gotoxay(currcons,par[1],par[0]);
 			return;
 #ifdef CONFIG_VT_EXTENDED
                 case 'I':       /* CHT - Cursor forward tabulation */
@@ -2578,7 +2497,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
                                 par[0]++;
                         vte_cht(currcons, par[0]);
                         return;
-#endif
+#endif /* def CONFIG_VT_EXTENDED */
 		case 'J':	/* ED - Erase in page */
 			vte_ed(currcons,par[0]);
 			return;
@@ -2595,8 +2514,9 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			vte_dch(currcons,par[0]);
 			return;
 #ifdef CONFIG_VT_EXTENDED
-                case 'U':       /* NP - Next page */
-                case 'V':       /* PP - Preceeding page */
+		case 'U':	/* NP - Next page */
+		case 'V':	/* PP - Preceeding page */
+			return;
 		case 'W':	/* CTC - Cursor tabulation control */
 			switch (par[0]) {
 			case 0:	/* Set character tab stop at current position */
@@ -2610,7 +2530,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 				return;
 			}
 			return;
-#endif 
+#endif /* def CONFIG_VT_EXTENDED */
 		case 'X':	/* ECH - Erase character */
 			vte_ech(currcons, par[0]);
 			return;
@@ -2623,16 +2543,15 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 		case 'Z':	/* CBT - Cursor backward tabulation */
 			vte_cbt(currcons, par[0]);
 			return;
-#endif 
-		case ']':	/* setterm functions */
-			/* This collides with ISO 6429 */
+#endif /* def CONFIG_VT_EXTENDED */
+		case ']':
 #ifndef VT_STRICT_ISO
 			setterm_command(currcons);
-#endif
+#endif /* def VT_STRICT_ISO */
 			return;
 		case 'c':	/* DA - Device attribute */
 			if (!par[0])
-				vte_da(tty);
+				vte_da(currcons, tty);
 			return;
 		case 'd':	/* VPA - Line position absolute */
 			if (par[0]) par[0]--;
@@ -2654,7 +2573,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			case 2: /* LED 2 on */
 			case 3: /* LED 3 on */
 				setledstate(kbd_table + currcons,
-                                            (par[0] < 3) ? par[0] : 4);	
+					    (par[0] < 3) ? par[0] : 4);
 			case 4: /* LED 4 on */
 			}
 			return;
@@ -2671,7 +2590,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 				gotoxay(currcons,0,0);
 			}
 			return;
-#ifndef CONFIG_VT_EXTENDED 
+#ifndef CONFIG_VT_EXTENDED
 		case 's':	/* DECSC - Save cursor */
 			vte_decsc(currcons);
 			return;
@@ -2679,151 +2598,143 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			vte_decrc(currcons);
 			return;
 #else
-		case 's':       /* DECSLRM - Set left and right margin */
-                        return;
-		case 't':       /* DECSLPP - Set lines per page */
-                        return;
+		case 's':	/* DECSLRM - Set left and right margin */
+			return;
+		case 't':	/* DECSLPP - Set lines per page */
+			return;
 		case 'x':	/* DECREQTPARM - Request terminal parameters */
 			vte_decreptparm(currcons, tty);
 			return;
 		case 'y':
-                        if (par[0] == 4) {
+			if (par[0] == 4) {
 				/* DECTST - Invoke confidence test */
-                                return;
-                        }
-#endif 
+				return;
+			}
+#endif /* CONFIG_VT_EXTENDED */
 		}
 		return;
 #if CONFIG_VT_EXTENDED
-        case EScsi_space:
-                vc_state = ESinit;
-                switch (c) {
-                        /*
-                         * Note: All codes betweem 0x40 and 0x6f are subject to
-                         * standardisation by the ISO. The codes netweem 0x70
-                         * and 0x7f are free for private use.
-                         */
-                        case '@':       /* SL - Scroll left */
-                        case 'A':       /* SR - Scroll right */
-                                return;
-                        case 'P':       /* PPA - Page position absolute */
-                        case 'Q':       /* PPR - Page position forward */
-                        case 'R':       /* PPB - Page position backward */
-                                return;
-                }
-                return;
-        case EScsi_exclam:
-                vc_state = ESinit;
-                switch (c) {
-                        case 'p':       /* DECSTR - Soft terminal reset */
-                                /*
-                                 * Note: On a true DEC VT there are differences
-                                 * between RIS and DECSTR. Right now we ignore
-                                 * this... -dbk
-                                 */
-                                vte_ris(currcons,1);
-                                return;
-                }
-                return;
-       	case EScsi_dquote:
-               	vc_state = ESinit;
-        	switch (c) {
-                       case 'p':       /* DECSCL - Set operating level */
-                               vte_decscl(currcons);
-                               return;
-                       case 'q':       
-			/* DECSCA - Select character protection attribute */
-                               return;
-                       case 'v':       
-			/* DECRQDE - Request window report */
-                }
-                return;
-        case EScsi_dollar:
-                vc_state = ESinit;
-                switch (c) {
-                        case 'p':       /* DECRQM - Request mode */
-                                vte_decrqm(currcons, tty, priv4);
-                                return;
-                        case 'r': 
-			/* DECCARA - Change attributes in rectangular area */
-                                return;
-                        case 't':       
-			/* DECRARA - Reverse attributes in rectangular area */
-                                return;
-                        case 'u':       /* DECRQTSR - Request terminal state */
-                                if (par[0] == 1)
-                                        vte_dectsr(currcons, tty);
-
-                                return;
-                        case 'v':  /* DECCRA - Copy rectangular area */
-                                return;
-                        case 'w':  /* DECRQPSR - Request presentation status */
-                                switch (par[0]) {
-                                        case 1:
-                                                vte_deccir(currcons, tty);
-                                                break;
-                                        case 2:
-                                                vte_dectabsr(currcons, tty);
-                                                break;
-                                }
-                                return;
-                        case 'x':       /* DECFRA - Fill rectangular area */
-                                return;
-                        case 'z':       /* DECERA - Erase rectangular area */
-                                return;
-                        case '{':       
-			        /* DECSERA - Selective erase rectangular area */
-                                return;
-                        case '|':       /* DECSCPP - Set columns per page */
-                                return;
-                        case '}': /* DECSASD - Select active status  display */
-                                return;
-                        case '~': /* DECSSDT - Select status display type */
-                                return;
-                }
-                return;
-        case EScsi_and:
-                vc_state = ESinit;
-                switch (c) {
-                        case 'u':      
-		      /* DECRQUPSS - Request user-preferred supplemental set */
-                                return;
-                        case 'x':       /* Enable Session Command */
-                                return;
-                }
-                return;
-        case EScsi_squote:
-                vc_state = ESinit;
-                switch (c) {
-                        case '}':       /* DECIC - Insert column */
-                                return;
-                        case '~':       /* DECDC - Delete column */
-                                return;
-                }
-        case EScsi_star:
-                vc_state = ESinit;
-                switch (c) {
-                        case 'x': /* DECSACE - Select attribute change extent */
-                                return;
-                        case 'y': 
-			/* DECRQCRA - Request checksum on rectangular area */
-                                return;
-                        case 'z':       /* DECINVM - Invoke macro */
-                                return;
-                        case '|':       /* DECSNLS - Select number of lines */
-                                return;
-                        case '}':   /* DECLFKC - Local function key control */
-                                return;
-                }
-                return;
-        case EScsi_plus:
-                vc_state = ESinit;
-                switch (c) {
-                        case 'p':       /* DECSR - Secure reset */
-                                return;
-                }
-                return;
-#endif
+	case EScsi_space:
+		vc_state = ESinit;
+		switch (c) {
+			/*
+			 * Note: All codes betweem 0x40 and 0x6f are subject to
+			 * standardisation by the ISO. The codes netweem 0x70
+			 * and 0x7f are free for private use.
+			 */
+			case '@':	/* SL - Scroll left */
+			case 'A':	/* SR - Scroll right */
+				return;
+			case 'P':	/* PPA - Page position absolute */
+			case 'Q':	/* PPR - Page position forward */
+			case 'R':	/* PPB - Page position backward */
+				return;
+		}
+ 		return;
+	case EScsi_exclam:
+		vc_state = ESinit;
+		switch (c) {
+			case 'p':	/* DECSTR - Soft terminal reset */
+				/*
+				 * Note: On a true DEC VT there are differences
+				 * between RIS and DECSTR. Right now we ignore
+				 * this... -dbk
+				 */
+				vte_ris(currcons,1);
+				return;
+		}
+		return;
+	case EScsi_dquote:
+		vc_state = ESinit;
+		switch (c) {
+			case 'p':	/* DECSCL - Set operating level */
+				vte_decscl(currcons);
+				return;
+			case 'q':	/* DECSCA - Select character protection attribute */
+				return;
+			case 'v':	/* DECRQDE - Request window report */
+		}
+		return;
+	case EScsi_dollar:
+		vc_state = ESinit;
+		switch (c) {
+			case 'p':	/* DECRQM - Request mode */
+				vte_decrqm(currcons, tty, priv4);
+				return;
+			case 'r':	/* DECCARA - Change attributes in rectangular area */
+				return;
+			case 't':	/* DECRARA - Reverse attributes in rectangular area */
+				return;
+			case 'u':	/* DECRQTSR - Request terminal state */
+				if (par[0] == 1)
+					vte_dectsr(currcons, tty);
+				return;
+			case 'v':	/* DECCRA - Copy rectangular area */
+				return;
+			case 'w':	/* DECRQPSR - Request presentation status */
+				switch (par[0]) {
+					case 1:
+						vte_deccir(currcons, tty);
+						break;
+					case 2:
+						vte_dectabsr(currcons, tty);
+						break;
+				}
+				return;
+			case 'x':	/* DECFRA - Fill rectangular area */
+				return;
+			case 'z':	/* DECERA - Erase rectangular area */
+				return;
+			case '{':	/* DECSERA - Selective erase rectangular area */
+				return;
+			case '|':	/* DECSCPP - Set columns per page */
+				return;
+			case '}':	/* DECSASD - Select active status  display */
+				return;
+			case '~':	/* DECSSDT - Select status display type */
+				return;
+		}
+		return;
+	case EScsi_and:
+		vc_state = ESinit;
+		switch (c) {
+			case 'u':	/* DECRQUPSS - Request user-preferred supplemental set */
+				return;
+			case 'x':	/* Enable Session Command */
+				return;
+		}
+		return;
+	case EScsi_squote:
+		vc_state = ESinit;
+		switch (c) {
+			case '}':	/* DECIC - Insert column */
+				return;
+			case '~':	/* DECDC - Delete column */
+				return;
+		}
+	case EScsi_star:
+		vc_state = ESinit;
+		switch (c) {
+			case 'x':	/* DECSACE - Select attribute change extent */
+				return;
+			case 'y':	/* DECRQCRA - Request checksum on rectangular area */
+				return;
+			case 'z':	/* DECINVM - Invoke macro */
+				return;
+			case '|':	/* DECSNLS - Select number of lines */
+				return;
+			case '}':	/* DECLFKC - Local function key control */
+				return;
+		}
+		return;
+	case EScsi_plus:
+		vc_state = ESinit;
+		switch (c) {
+			case 'p':	/* DECSR - Secure reset */
+				return;
+		}
+		return;
+#endif /* CONFIG_VT_EXTENDED */
 	case ESdocs:
 		vc_state = ESinit;
 		switch (c) {
@@ -2837,15 +2748,15 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 		}
 		return;
 #ifdef CONFIG_VT_HP
-        case ESesc_and:
-                vc_state = ESinit;
-                switch (c) {
-                        case 'f':       /* Set function key label */
-                                return;
-                        case 'j':       /* Display function key labels */
-                                return;
-                }
-                return;
+	case ESesc_and:
+		vc_state = ESinit;
+		switch (c) {
+			case 'f':	/* Set function key label */
+				return;
+			case 'j':	/* Display function key labels */
+				return;
+		}
+		return;
 #endif
 	case ESfunckey:
 		vc_state = ESinit;
@@ -2873,7 +2784,7 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
                         break;
 #endif
                 case 'A':       /* ISO Latin-1 supplemental */
-                        G0_charset = ISO_LAT1_MAP;
+                        G0_charset = LAT1_MAP;
                         break;
 		case 'B':	/* ASCII */
 			G0_charset = LAT1_MAP;
@@ -2882,11 +2793,6 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			G0_charset = IBMPC_MAP;
 			break;
 		case 'K':
-			/*
-			 * XXX FIXME!
-			 * This is German NRCS on DEC VT!  User-preferred
-			 * supplemental map is '<'!
-			 */
 			G0_charset = USER_MAP;
 			break;
 		}
@@ -2899,13 +2805,13 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 		case '0':	/* DEC Special graphics */
 			G1_charset = GRAF_MAP;
 			break;
-#if 0
+#if 0 
 		case '>':	/* DEC Technical */
 			G1_charset = DEC_TECH_MAP;
 			break;
 #endif
-		case 'A':	/* ISO Latin-1 supplemental */
-			G1_charset = ISO_LAT1_MAP;
+		case 'A':	/* Latin-1 supplemental */
+			G1_charset = LAT1_MAP;
 			break;
 		case 'B':	/* ASCII */
 			G1_charset = LAT1_MAP;
@@ -2914,11 +2820,6 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 			G1_charset = IBMPC_MAP;
 			break;
 		case 'K':
-			/*
-			 * XXX FIXME!
-			 * This is German NRCS on DEC VT!  User-preferred
-			 * supplemental map is '<'!
-			 */
 			G1_charset = USER_MAP;
 			break;
 		}
@@ -2927,60 +2828,60 @@ static void do_con_trol(struct tty_struct *tty, unsigned int currcons, int c)
 		vc_state = ESinit;
 		return;
 #ifdef CONFIG_VT_EXTENDED
-        case ESg2d4:
-                switch (c) {
-                case '0':       /* DEC Special graphics */
-                        G2_charset = GRAF_MAP;
-                        break;
+	case ESg2d4:
+		switch (c) {
+		case '0':	/* DEC Special graphics */
+			G2_charset = GRAF_MAP;
+			break;
 #if 0
-                case '>':       /* DEC Technical */
-                        G2_charset = DEC_TECH_MAP;
-                        break;
+		case '>':	/* DEC Technical */
+			G2_charset = DEC_TECH_MAP;
+			break;
 #endif
-                case 'A':       /* ISO Latin-1 supplemental */
-                        G2_charset = LAT1_MAP;
-                        break;
-                case 'B':       /* ASCII */
-                        G2_charset = LAT1_MAP;
-                        break;
-                case 'U':
-                        G2_charset = IBMPC_MAP;
-                        break;
-                case 'K':
-                        G2_charset = USER_MAP;
-                        break;
-                }
-                if (charset == 1)
-                        translate = set_translate(G2_charset,currcons);
-                vc_state = ESinit;
-                return;
-         case ESg3d4:
-                switch (c) {
-                case '0':       /* DEC Special graphics */
-                        G3_charset = GRAF_MAP;
-                        break;
+		case 'A':	/* ISO Latin-1 supplemental */
+			G2_charset = LAT1_MAP;
+			break;
+		case 'B':	/* ASCII */
+			G2_charset = LAT1_MAP;
+			break;
+		case 'U':
+			G2_charset = IBMPC_MAP;
+			break;
+		case 'K':
+			G2_charset = USER_MAP;
+			break;
+		}
+		if (charset == 1)
+			translate = set_translate(G2_charset,currcons);
+		vc_state = ESinit;
+		return;
+	case ESg3d4:
+		switch (c) {
+		case '0':	/* DEC Special graphics */
+			G3_charset = GRAF_MAP;
+			break;
 #if 0
-                case '>':       /* DEC Technical */
-                        G3_charset = DEC_TECH_MAP;
-                        break;
+		case '>':	/* DEC Technical */
+			G3_charset = DEC_TECH_MAP;
+			break;
 #endif
-                case 'A':       /* ISO Latin-1 supplemental */
-                        G3_charset = LAT1_MAP;
-                        break;
-                case 'B':       /* ASCII */
-                        G3_charset = LAT1_MAP;
-                        break;
-                case 'U':
-                        G3_charset = IBMPC_MAP;
-                        break;
-                case 'K':
-                        G3_charset = USER_MAP;
-                        break;
-                }
-                if (charset == 1)
-                        translate = set_translate(G3_charset,currcons);
-                vc_state = ESinit;
-                return;
+		case 'A':	/* ISO Latin-1 supplemental */
+			G3_charset = LAT1_MAP;
+			break;
+		case 'B':	/* ASCII */
+			G3_charset = LAT1_MAP;
+			break;
+		case 'U':
+			G3_charset = IBMPC_MAP;
+			break;
+		case 'K':
+			G3_charset = USER_MAP;
+			break;
+		}
+		if (charset == 1)
+			translate = set_translate(G3_charset,currcons);
+		vc_state = ESinit;
+		return;
 #endif /* CONFIG_VT_EXTENDED */
 	default:
 		vc_state = ESinit;
@@ -3197,14 +3098,13 @@ out:
 }
 
 /*
- * This is the console switching tasklet. It takes care of 
- * console switches, unblanking, and calling keyboard_tasklet.
+ * This is the console switching tasklet.
  *
  * Doing console switching in a tasklet allows
  * us to do the switches asynchronously (needed when we want
  * to switch due to a keyboard interrupt).  Synchronization
  * with other console code and prevention of re-entrancy is
- * ensured with console_lock. 
+ * ensured with console_lock.
  */
 static void console_softint(unsigned long ignored)
 {
@@ -3212,7 +3112,6 @@ static void console_softint(unsigned long ignored)
 	 * callbacks can come back into the console code and thus
 	 * will perform their own locking.
 	 */
-	tasklet_schedule(&keyboard_tasklet);
 	run_task_queue(&con_task_queue);
 
 	spin_lock_irq(&console_lock);
@@ -3392,7 +3291,7 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
 	 * kernel-internal variable; programs not closely
 	 * related to the kernel should not use this.
 	 */
-	 		data = kbd_table[0].keyb->shift_state; /* FIXME */
+	 		data = shift_state;
 			return __put_user(data, (char *) arg);
 		case 7:
 			data = mouse_reporting();
@@ -3655,8 +3554,8 @@ void __init con_init(void)
 	vte_ed(currcons, 0);
 	update_screen(fg_console);
 	printk("Console device driver v%d.%d with extended features %sabled.\n",
-               VTE_VERSION/100, VTE_VERSION%100,
-               (CONFIG_VT_EXTENDED == 1 ? "en" : "dis"));
+		       	VTE_VERSION/100, VTE_VERSION%100,
+			(CONFIG_VT_EXTENDED == 1 ? "en" : "dis"));
 	printk("Console: %s %s %dx%d",
 		can_do_color ? "colour" : "mono",
 		display_desc, video_num_columns, video_num_lines);
