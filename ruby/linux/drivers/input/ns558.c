@@ -182,6 +182,7 @@ static int __devinit ns558_pci_probe(struct pci_dev *pdev, const struct pci_devi
 
 	if (!(port = kmalloc(sizeof(struct ns558), GFP_KERNEL))) {
 		printk(KERN_ERR "Memory allocation failed.\n");
+		release_region(ioport, iolen);
 		return -ENOMEM;
 	}
 	memset(port, 0, sizeof(struct ns558));
