@@ -577,6 +577,7 @@ void __init mda_console_init(void)
 	/* Allocate the memory we need for this VT */
         vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
         if (!vt) return;
+	memset(vt, 0, sizeof(struct vt_struct));
 	vt->default_mode = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
 	if (!vt->default_mode) {
 		kfree(vt);
