@@ -398,8 +398,8 @@ static void gc_timer(unsigned long private)
 
 			case GC_PSX_RUMBLE:
 
-				input_report_key(dev + i, BTN_THUMB,  ~data[0] & 0x04);
-				input_report_key(dev + i, BTN_THUMB2, ~data[0] & 0x02);
+				input_report_key(dev + i, BTN_THUMBL, ~data[0] & 0x04);
+				input_report_key(dev + i, BTN_THUMBR, ~data[0] & 0x02);
 
 			case GC_PSX_NEGCON:
 			case GC_PSX_ANALOG:
