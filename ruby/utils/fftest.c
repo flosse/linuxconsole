@@ -41,7 +41,7 @@ int main(int argc, char** argv)
 	struct input_event play, stop;
 	int fd;
 	char device_file_name[64];
-	unsigned long axes;
+	unsigned long features;
 	int i;
 
 	strncpy(device_file_name, "/dev/input/event0", 64);
@@ -66,19 +66,31 @@ int main(int argc, char** argv)
 	printf("Device %s opened\n", device_file_name);
 
 	/* Query device */
-	if (ioctl(fd, EVIOCGBIT(EV_FF, sizeof(unsigned long)), &axes) == -1) {
+	if (ioctl(fd, EVIOCGBIT(EV_FF, sizeof(unsigned long)), &features) == -1) {
 		perror("Ioctl query");
 		exit(1);
 	}
 	printf("Axes query: ");
-	if (axes == 0) {
-		printf("No axes, strange ?!");
+	if ((features & (BIT(FF_X) | BIT(FF_Y))) == 0) {
+		printf("No features, strange ?!");
 	}
 	else {
-		if (axes & BIT(FF_X)) printf("Axis X ");
-		if (axes & BIT(FF_Y)) printf("Axis Y ");
+		if (features & BIT(FF_X)) printf("Axis X ");
+		if (features & BIT(FF_Y)) printf("Axis Y ");
 	}
-	printf("\n");
+	printf("\nEffects: ");
+	if ((features & ~(BIT(FF_X) | BIT(FF_Y))) == 0) {
+		printf("No effects supported ?!");
+	}
+	else {
+		if (features & BIT(FF_CONSTANT)) printf("Constant ");
+		if (features & BIT(FF_PERIODIC)) printf("Periodic ");
+		if (features & BIT(FF_SPRING)) printf("Spring ");
+		if (features & BIT(FF_FRICTION)) printf("Friction ");
+		if (features & BIT(FF_RUMBLE)) printf("Rumble ");
+	}
+	printf("\nNumber of simultaneous effects: ");
+	printf("%d\n", (features>>FF_N_EFFECTS_0) & 0xff);
 
 	/* download a constant effect */
 	effects[1].type = FF_CONSTANT;
