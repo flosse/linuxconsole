@@ -281,6 +281,8 @@ static int analog_button_read(struct analog_port *port, char saitek, char chf)
 		i++;
 	}
 
+	printk(KERN_DEBUG "analog.c: Saitek read: t:%d i:%d btn:%#x\n", t, i, port->buttons);
+
 	return -(!t || (i == 16));
 }
 
@@ -402,7 +404,10 @@ static void analog_name(struct analog *analog)
 	if (analog->mask & ANALOG_HAT_FCS)
 			strcat(analog->name, " FCS");
 	if (analog->mask & ANALOG_ANY_CHF)
-			strcat(analog->name, (analog->mask & ANALOG_SAITEK) ? " Saitek" : " CHF");
+			strcat(analog->name, " CHF");
+	if (analog->mask & ANALOG_SAITEK)
+			strcat(analog->name, " Saitek");
+
 	strcat(analog->name, (analog->mask & ANALOG_GAMEPAD) ? " gamepad": " joystick");
 }
 
@@ -412,7 +417,7 @@ static void analog_name(struct analog *analog)
 
 static void analog_init_device(struct analog_port *port, struct analog *analog, int index)
 {
-	int i, j, t, x, y, z;
+	int i, j, t, v, x, y, z;
 
 	analog_name(analog);
 
@@ -437,14 +442,20 @@ static void analog_init_device(struct analog_port *port, struct analog *analog, 
 			y = (port->axes[0] + port->axes[1]) >> 1;
 			z = y - port->axes[i];
 			z = z > 0 ? z : -z;
+			v = (x >> 3);
 
 			set_bit(t, analog->dev.absbit);
 
 			if ((i == 2 || i == 3) && (j == 2 || j == 3) && (z > (y >> 3)))
 				x = y;
 
-			analog->dev.absmax[t] = (x << 1) - (x >> 3);
-			analog->dev.absmin[t] = (x >> 3);
+			if (analog->mask & ANALOG_SAITEK) {
+				v = (x >> 2);
+				if (i == 2) x = port->axes[i];
+			}
+
+			analog->dev.absmax[t] = (x << 1) - v;
+			analog->dev.absmin[t] = v;
 			analog->dev.absfuzz[t] = port->fuzz;
 			analog->dev.absflat[t] = (x >> 3);
 
@@ -519,9 +530,6 @@ static int analog_init_masks(struct analog_port *port)
 			| port->mask | ((port->mask << 8) & ANALOG_HAT_FCS)
 			| ((port->mask << 10) & ANALOG_BTNS_TLR) | ((port->mask << 12) & ANALOG_BTNS_TLR2);
 
-	analog[0].mask &= ~(ANALOG_SAITEK)
-			| ((analog[0].mask & ANALOG_ANY_CHF) ? ANALOG_SAITEK : 0);
-	
 	analog[0].mask &= ~(ANALOG_HAT2_CHF)
 			| ((analog[0].mask & ANALOG_HBTN_CHF) ? 0 : ANALOG_HAT2_CHF);
 
@@ -677,7 +685,6 @@ struct analog_types analog_types[] = {
 	{ "gamepad",	0x000830f3 },
 	{ "gamepad8",	0x0008f0f3 },
 	{ "saitek",	0x000103ff },
-	{ "saidigi",	0x000303ff },
 	{ NULL, 0 }
 };
 
