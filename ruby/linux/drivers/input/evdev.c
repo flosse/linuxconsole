@@ -230,7 +230,7 @@ static int evdev_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 	struct evdev_list *list = file->private_data;
 	struct evdev *evdev = list->evdev;
 	struct input_dev *dev = evdev->handle.dev;
-	int retval;
+	int retval, t, u;
 
 	switch (cmd) {
 
@@ -242,6 +242,40 @@ static int evdev_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 			if ((retval = put_user(dev->idvendor,  ((short *) arg) + 1))) return retval;
 			if ((retval = put_user(dev->idproduct, ((short *) arg) + 2))) return retval;
 			if ((retval = put_user(dev->idversion, ((short *) arg) + 3))) return retval;
+			return 0;
+		
+		case EVIOCGREP:
+			if ((retval = put_user(dev->rep[0], ((int *) arg) + 0))) return retval;
+			if ((retval = put_user(dev->rep[1], ((int *) arg) + 1))) return retval;
+			return 0;
+
+		case EVIOCSREP:
+			if ((retval = get_user(dev->rep[0], ((int *) arg) + 0))) return retval;
+			if ((retval = get_user(dev->rep[1], ((int *) arg) + 1))) return retval;
+			return 0;
+
+		case EVIOCGKEYCODE:
+			if ((retval = get_user(t, ((int *) arg) + 0))) return retval;
+			if (t < 0 || t > dev->keycodemax) return -EINVAL;
+			switch (dev->keycodesize) {
+				case 1: u = *(u8*)(dev->keycode + t); break;
+				case 2: u = *(u16*)(dev->keycode + t * 2); break;
+				case 4: u = *(u32*)(dev->keycode + t * 4); break;
+				default: return -EINVAL;
+			}
+			if ((retval = put_user(u, ((int *) arg) + 1))) return retval;
+			return 0;
+
+		case EVIOCSKEYCODE:
+			if ((retval = get_user(t, ((int *) arg) + 0))) return retval;
+			if (t < 0 || t > dev->keycodemax) return -EINVAL;
+			if ((retval = get_user(u, ((int *) arg) + 1))) return retval;
+			switch (dev->keycodesize) {
+				case 1: *(u8*)(dev->keycode + t) = u; break;
+				case 2: *(u16*)(dev->keycode + t * 2) = u; break;
+				case 4: *(u32*)(dev->keycode + t * 4) = u; break;
+				default: return -EINVAL;
+			}
 			return 0;
 
 		case EVIOCSFF:
@@ -291,20 +325,53 @@ static int evdev_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 					default: return -EINVAL;
 				}
 				len = NBITS(len) * sizeof(long);
-				if (len > _IOC_SIZE(cmd)) {
-					printk(KERN_WARNING "evdev.c: Truncating bitfield length from %d to %d\n",
-						len, _IOC_SIZE(cmd));
-					len = _IOC_SIZE(cmd);
-				}
+				if (len > _IOC_SIZE(cmd)) len = _IOC_SIZE(cmd);
 				return copy_to_user((char *) arg, bits, len) ? -EFAULT : len;
+			}
+
+			if (_IOC_NR(cmd) == _IOC_NR(EVIOCGKEY(0))) {
+				int len;
+				len = NBITS(KEY_MAX) * sizeof(long);
+				if (len > _IOC_SIZE(cmd)) len = _IOC_SIZE(cmd);
+				return copy_to_user((char *) arg, dev->key, len) ? -EFAULT : len;
+			}
+
+			if (_IOC_NR(cmd) == _IOC_NR(EVIOCGLED(0))) {
+				int len;
+				len = NBITS(LED_MAX) * sizeof(long);
+				if (len > _IOC_SIZE(cmd)) len = _IOC_SIZE(cmd);
+				return copy_to_user((char *) arg, dev->led, len) ? -EFAULT : len;
+			}
+
+			if (_IOC_NR(cmd) == _IOC_NR(EVIOCGSND(0))) {
+				int len;
+				len = NBITS(SND_MAX) * sizeof(long);
+				if (len > _IOC_SIZE(cmd)) len = _IOC_SIZE(cmd);
+				return copy_to_user((char *) arg, dev->snd, len) ? -EFAULT : len;
 			}
 
 			if (_IOC_NR(cmd) == _IOC_NR(EVIOCGNAME(0))) {
 				int len;
-				if (!dev->name) return 0;
+				if (!dev->name) return -ENOENT;
 				len = strlen(dev->name) + 1;
 				if (len > _IOC_SIZE(cmd)) len = _IOC_SIZE(cmd);
 				return copy_to_user((char *) arg, dev->name, len) ? -EFAULT : len;
+			}
+
+			if (_IOC_NR(cmd) == _IOC_NR(EVIOCGPHYS(0))) {
+				int len;
+				if (!dev->phys) return -ENOENT;
+				len = strlen(dev->phys) + 1;
+				if (len > _IOC_SIZE(cmd)) len = _IOC_SIZE(cmd);
+				return copy_to_user((char *) arg, dev->phys, len) ? -EFAULT : len;
+			}
+
+			if (_IOC_NR(cmd) == _IOC_NR(EVIOCGUNIQ(0))) {
+				int len;
+				if (!dev->uniq) return -ENOENT;
+				len = strlen(dev->uniq) + 1;
+				if (len > _IOC_SIZE(cmd)) len = _IOC_SIZE(cmd);
+				return copy_to_user((char *) arg, dev->uniq, len) ? -EFAULT : len;
 			}
 
 			if ((_IOC_NR(cmd) & ~ABS_MAX) == _IOC_NR(EVIOCGABS(0))) {
