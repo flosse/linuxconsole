@@ -215,7 +215,7 @@ comment 'Console drivers'
       #bool 'IODC console' CONFIG_IODC_CONSOLE
       bool 'STI console' CONFIG_STI_CONSOLE
    fi
-   if [ "$CONFIG_ARCH_ACORN" != "y" -a "$CONFIG_ARCH_EBSA110" != "y" ]; then
+   if [ "$ARCH" = "arm" -a "$CONFIG_ARCH_ACORN" != "y" -a "$CONFIG_ARCH_EBSA110" != "y" ]; then
       bool 'VGA text console' CONFIG_VGA_CONSOLE
    fi
    if [ "$ARCH" = "mips" -a "$CONFIG_SGI_IP22" != "y" -a "$CONFIG_DECSTATION" != "y" ]; then
