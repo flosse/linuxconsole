@@ -948,7 +948,7 @@ const struct consw vga_con = {
 	con_blank:		vgacon_blank,
 	con_font_op:		vgacon_font_op,
 	con_set_palette:	vgacon_set_palette,
-	con_resize:		vgacon_resize,
+	//con_resize:		vgacon_resize,
 	con_scroll:		vgacon_scroll,
 	con_set_origin:		vgacon_set_origin,
 	con_build_attr:		vgacon_build_attr,
