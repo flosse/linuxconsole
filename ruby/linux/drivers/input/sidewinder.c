@@ -695,9 +695,9 @@ static void sw_connect(struct gameport *gameport, struct gameport_dev *dev)
 	
 		sw->dev[i].evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 
-		for (j = 0; (code = sw_abs[sw->type][j]); j++) {
+		for (j = 0; (bits = sw_bit[sw->type][j]); j++) {
 			set_bit(code, sw->dev[i].absbit);
-			bits = sw_bit[sw->type][j];
+			code = sw_abs[sw->type][j];
 			sw->dev[i].absmax[code] = (1 << bits) - 1;
 			sw->dev[i].absmin[code] = (bits == 1) ? -1 : 0;
 			sw->dev[i].absflat[code] = (bits >= 5) ? (1 << (bits - 5)) : 0;

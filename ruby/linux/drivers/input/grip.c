@@ -60,13 +60,13 @@ struct grip {
 	int bads;
 };
 
-static int grip_btn_gpp[] = { BTN_START, BTN_SELECT, BTN_TR2, BTN_Y, -1, BTN_TL2, BTN_A, BTN_B, BTN_X, -1, BTN_TL, BTN_TR, 0 };
-static int grip_btn_xt[] = { BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_TRIGGER, BTN_TOP, BTN_SELECT, BTN_MODE, BTN_START, 0 };
-static int grip_btn_bd[] = { BTN_THUMB, BTN_THUMB2, BTN_TRIGGER, BTN_TOP, BTN_BASE, 0 };
+static int grip_btn_gpp[] = { BTN_START, BTN_SELECT, BTN_TR2, BTN_Y, 0, BTN_TL2, BTN_A, BTN_B, BTN_X, 0, BTN_TL, BTN_TR, -1 };
+static int grip_btn_xt[] = { BTN_A, BTN_B, BTN_C, BTN_X, BTN_Y, BTN_Z, BTN_TRIGGER, BTN_TOP, BTN_SELECT, BTN_MODE, BTN_START, -1 };
+static int grip_btn_bd[] = { BTN_THUMB, BTN_THUMB2, BTN_TRIGGER, BTN_TOP, BTN_BASE, -1 };
 
-static int grip_abs_gpp[] = { ABS_X, ABS_Y, 0 };
-static int grip_abs_xt[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_TL, ABS_TR, ABS_HAT0X, ABS_HAT0Y, ABS_HAT1X, ABS_HAT0Y, 0 };
-static int grip_abs_bd[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, 0 };
+static int grip_abs_gpp[] = { ABS_X, ABS_Y, -1 };
+static int grip_abs_xt[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_TL, ABS_TR, ABS_HAT0X, ABS_HAT0Y, ABS_HAT1X, ABS_HAT0Y, -1 };
+static int grip_abs_bd[] = { ABS_X, ABS_Y, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y, -1 };
 
 static char *grip_name[] = { [1] = "Gravis GamePad Pro", [2] = "Gravis Blackhawk Digital", [9] = "Gravis Xterminator" };
 static int *grip_abs[] = { [1] = grip_abs_gpp, [2] = grip_abs_bd, [9] = grip_abs_xt };
@@ -202,7 +202,7 @@ static void grip_timer(unsigned long private)
 				input_report_abs(dev, ABS_Y, ((*data >> 13) & 1) - ((*data >> 12) & 1));
 
 				for (j = 0; j < 12; j++)
-					if (grip_btn_gpp[i] > 0)
+					if (grip_btn_gpp[i])
 						input_report_key(dev, grip_btn_gpp[i], (*data >> i) & 1);
 				break;
 
@@ -319,7 +319,7 @@ static void grip_connect(struct gameport *gameport, struct gameport_dev *dev)
 		
 			grip->dev[i].evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
 
-			for (j = 0; (t = grip_abs[grip->mode[i]][j]); j++) {
+			for (j = 0; (t = grip_abs[grip->mode[i]][j]) >= 0; j++) {
 
 				set_bit(t, grip->dev[i].absbit);
 
@@ -333,7 +333,7 @@ static void grip_connect(struct gameport *gameport, struct gameport_dev *dev)
 				}
 			}
 
-			for (j = 0; (t = grip_btn[grip->mode[i]][j]); j++)
+			for (j = 0; (t = grip_btn[grip->mode[i]][j]) >= 0; j++)
 				if (t > 0)
 					set_bit(t, grip->dev[i].absbit);
 
