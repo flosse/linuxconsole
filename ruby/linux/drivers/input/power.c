@@ -133,11 +133,33 @@ static void power_disconnect(struct input_handle *handle)
 	input_close_device(handle);
 	kfree(handle);
 }
+
+static struct input_device_id power_ids[] = {
+	{
+		flags: INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT,
+		evbit: { BIT(EV_KEY) },
+		keybit: { BIT(KEY_SUSPEND) }
+	},	
+	{
+		flags: INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT,
+		evbit: { BIT(EV_KEY) },
+		keybit: { BIT(KEY_POWER) }
+	},	
+	{
+		flags: INPUT_DEVICE_ID_MATCH_EVBIT
+		evbit: { BIT(EV_PWR) },
+	},	
+	{ }, 	/* Terminating entry */
+};
+
+MODULE_DEVICE_TABLE(input, power_ids);
 	
 static struct input_handler power_handler = {
 	event:		power_event,
 	connect:	power_connect,
 	disconnect:	power_disconnect,
+	name:		"power",
+	id_table:	power_ids,
 };
 
 static int __init power_init(void)
