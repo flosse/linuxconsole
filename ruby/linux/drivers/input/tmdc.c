@@ -290,10 +290,10 @@ static void tmdc_connect(struct gameport *gameport, struct gameport_dev *dev)
 		tmdc->dev.absmax[tmdc_abs_hat[i]] = 1;
 	}
 
-	for (i = 0; tmdc_btn_joy[i] && i < TMDC_BTN_JOY; i++)
+	for (i = 0; i < models[m].joybtn && i < TMDC_BTN_JOY; i++)
 		set_bit(tmdc_btn_joy[i], tmdc->dev.keybit);
 
-	for (i = 0; tmdc_btn_pad[i] && i < TMDC_BTN_PAD; i++)
+	for (i = 0; i < models[m].padbtn && i < TMDC_BTN_PAD; i++)
 		set_bit(tmdc_btn_pad[i], tmdc->dev.keybit);
 
 	input_register_device(&tmdc->dev);
