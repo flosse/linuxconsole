@@ -93,6 +93,8 @@ rm -fv drivers/video/fbcon-mac.c
 rm -fv drivers/video/fbcon-mfb.c
 rm -fv drivers/video/fbcon-vga-planes.c
 rm -fv drivers/video/fbcon-vga.c
+rm -fv drivers/video/atyfb.h
+rm -fv drivers/video/atyfb.h
 rm -fv include/asm-m68k/adb_mouse.h
 rm -fv include/asm-m68k/atari_joystick.h
 rm -fv include/asm-m68k/mac_mouse.h
