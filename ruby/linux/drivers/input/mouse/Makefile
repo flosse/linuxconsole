@@ -10,7 +10,6 @@ O_TARGET	:= mousedrv.o
 
 obj-$(CONFIG_MOUSE_AMIGA)	+= amimouse.o
 obj-$(CONFIG_MOUSE_ACORN)	+= rpcmouse.o
-obj-$(CONFIG_MOUSE_GUNZE)	+= gunze.o
 obj-$(CONFIG_MOUSE_INPORT)	+= inport.o
 obj-$(CONFIG_MOUSE_LOGIBM)	+= logibm.o
 obj-$(CONFIG_MOUSE_MAPLE)	+= maplemouse.o
