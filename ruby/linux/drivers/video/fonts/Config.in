@@ -1,0 +1,30 @@
+#
+# Font configuration
+#
+
+if [ "$CONFIG_FBCON_FONTS" = "y" ]; then
+   bool '    VGA 8x8 font' CONFIG_FONT_8x8
+   bool '    VGA 8x16 font' CONFIG_FONT_8x16
+   bool '    Sparc console 8x16 font' CONFIG_FONT_SUN8x16
+   if [ "$CONFIG_FBCON_FONTWIDTH8_ONLY" = "n" ]; then
+      bool '    Sparc console 12x22 font (not supported by all drivers)' CONFIG_FONT_SUN12x22
+      bool '    Mac console 6x11 font (not supported by all drivers)' CONFIG_FONT_6x11
+   fi
+   bool '    Pearl (old m68k) console 8x8 font' CONFIG_FONT_PEARL_8x8
+   bool '    Acorn console 8x8 font' CONFIG_FONT_ACORN_8x8
+else
+   define_bool CONFIG_FONT_8x8 y
+   define_bool CONFIG_FONT_8x16 y
+   if [ "$CONFIG_MAC" = "y" ]; then
+      if [ "$CONFIG_FBCON_FONTWIDTH8_ONLY" = "n" ]; then
+         define_bool CONFIG_FONT_6x11 y
+      fi
+   fi
+   if [ "$CONFIG_AMIGA" = "y" ]; then
+      define_bool CONFIG_FONT_PEARL_8x8 y
+   fi
+   if [ "$CONFIG_ARM" = "y" -a "$CONFIG_ARCH_ACORN" = "y" ]; then
+      define_bool CONFIG_FONT_ACORN_8x8 y
+   fi
+fi
+

@@ -1,5 +1,5 @@
 /*
- * linux/drivers/video/fonts.c -- `Soft' font definitions
+ * linux/drivers/video/fonts/fbcon_fonts.c -- `Soft' font definitions
  *
  *    Created 1995 by Geert Uytterhoeven
  *    Rewritten 1998 by Martin Mares <mj@ucw.cz>
@@ -19,7 +19,7 @@
 #if defined(__mc68000__) || defined(CONFIG_APUS)
 #include <asm/setup.h>
 #endif
-#include "font.h"
+#include <video/font.h>
 
 #define NO_FONTS
 

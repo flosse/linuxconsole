@@ -98,7 +98,7 @@
 #include <asm/linux_logo.h>
 
 #include "fbcon.h"
-#include "font.h"
+#include <video/font.h>
 
 #ifdef FBCONDEBUG
 #  define DPRINTK(fmt, args...) printk(KERN_DEBUG "%s: " fmt, __FUNCTION__ , ## args)

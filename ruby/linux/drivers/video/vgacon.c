@@ -47,7 +47,7 @@
 #include <linux/spinlock.h>
 
 #include <video/vga.h>
-#include "font.h"
+#include <video/font.h>
 
 #define BLANK 0x0020
 
