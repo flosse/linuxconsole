@@ -39,7 +39,7 @@
 #include <linux/input.h>
 #include <linux/config.h>
 #include <linux/smp_lock.h>
-#include <linux/random./h>
+#include <linux/random.h>
 
 #ifndef CONFIG_INPUT_MOUSEDEV_SCREEN_X
 #define CONFIG_INPUT_MOUSEDEV_SCREEN_X	1024
@@ -285,7 +285,7 @@ static ssize_t mousedev_write(struct file * file, const char * buffer, size_t co
 
 	for (i = 0; i < count; i++) {
 
-		if (get_user(&c, buffer + i))
+		if (get_user(c, buffer + i))
 			return -EFAULT;
 
 		if (c == mousedev_imex_seq[list->imexseq]) {
