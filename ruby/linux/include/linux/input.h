@@ -70,6 +70,8 @@ struct input_event {
 #define EVIOCGBIT(ev,len)	_IOC(_IOC_READ, 'E', 0x20 + ev, len)	/* get event bits */
 #define EVIOCGABS(abs)		_IOR('E', 0x40 + abs, int[5])		/* get abs value/limits */ 
 
+#define EVIOCSFF		_IOC(_IOC_WRITE, 'E', 0x80, sizeof(struct ff_effect))	/* send a force effect to a force feedback device */
+
 /*
  * Event types
  */
@@ -82,6 +84,7 @@ struct input_event {
 #define EV_LED			0x11
 #define EV_SND			0x12
 #define EV_REP			0x14
+#define EV_FF			0x15
 #define EV_MAX			0x1f
 
 /*
@@ -468,6 +471,127 @@ struct input_event {
 #define BUS_ADB			0x17
 #define BUS_I2C			0x18
 
+/*
+ * Structures used in ioctls to upload effects to a device
+ * The first structures are not passed directly by using ioctls.
+ * They are sub-structures of the actually sent structure (called ff_effect)
+ */
+
+struct ff_replay {
+	__u16 length;   /* Duration of an effect */
+	__u16 delay;    /* Time to wait before to start playing an effect */
+};
+
+struct ff_trigger {
+	__u16 button;   /* Number of button triggering an effect */
+	__u16 interval; /* Time to wait before an effect can be re-triggered */
+};
+
+struct ff_shape {
+	__u16 attack_length;    /* Duration of attack */
+	__s16 attack_level;     /* Level at beginning of attack */
+	__u16 fade_length;      /* Duration of fade */
+	__s16 fade_level;       /* Level at end of fade */
+};
+
+/* FF_CONSTANT */
+struct ff_constant_effect {
+        __s16 level;            /* Strength of effect */
+	__u16 direction;        /* Direction of effect (see periodic effects) */ 
+	struct ff_shape shape;
+	struct ff_trigger trigger;
+	struct ff_replay replay;
+};
+
+/* FF_SPRING of FF_FRICTION */
+struct ff_position_effect {
+	__u16 axis;		/* Axis along which effect must be created */
+ 
+	__s16 right_saturation; /* Max level when joystick is on the right */
+	__s16 left_saturation;  /* Max level when joystick in on the left */
+ 
+	__s16 right_coeff;      /* Indicates how fast the force grows when the
+                                   joystick moves to the right */
+	__s16 left_coeff;       /* Same for left side */
+ 
+	__u16 deadband;         /* Size of area where no force is produced */
+	__s16 center;           /* Position of dead dead zone */
+ 
+	struct ff_trigger trigger;
+	struct ff_replay replay;
+};
+
+/* FF_PERIODIC */
+struct ff_periodic_effect {
+	__u16 waveform;         /* Kind of wave (sine, square...) */
+	__u16 period;
+	__s16 magnitude;        /* Peak value */
+	__s16 offset;           /* Mean value of wave (roughly) */
+	__u16 phase;            /* 'Horizontal' shift */
+	__u16 direction;        /* Direction. 0 deg -> 0x0000
+                                              90 deg -> 0x4000 */
+ 
+	struct ff_shape shape;
+	struct ff_trigger trigger;
+	struct ff_replay replay;
+};
+
+/*
+ * Structure sent through ioctl from the application to the driver
+ */
+struct ff_effect {
+	__u16 type;
+	__u16 id;	/* Unique id of created effect */
+	union {
+		struct ff_constant_effect force;
+		struct ff_periodic_effect periodic;
+		struct ff_position_effect spring;
+	} u;
+};
+
+/*
+ * Force feedback axes
+ */
+#define FF_X		0x00
+#define FF_Y		0x01
+#define FF_AXES_MAX	0x01
+
+/*
+ * Types of force feedback effects
+ * Used in field 'type' of struct ff_effect.
+ */
+#define FF_PERIODIC	0x00
+#define FF_CONSTANT	0x01
+#define FF_SPRING	0x10
+#define FF_FRICTION	0x11
+
+/*
+ * Waveforms of periodic effects
+ */
+#define FF_SQUARE	0x00
+#define FF_TRIANGLE	0x01
+#define FF_SINE		0x02
+#define FF_SAW_UP	0x03
+#define FF_SAW_DOWN	0x04
+
+/*
+ * Buttons that can trigger an effect when pressed
+ */
+#define FF_BUTTON_NONE	0x00
+#define FF_BUTTON_1	0x01
+/* ... */
+
+/*
+ * Commands issued by using write()
+ * They trigger effects
+ * To be used for the field 'code' of struct input_event
+ * The lower byte contains the id of effect to play or stop.
+ */
+#define FF_CTRL_SHIFT   8
+#define FF_CTRL_MASK	0xff
+#define FF_PLAY		(0x01<<FF_CTRL_SHIFT)
+#define FF_STOP		(0x02<<FF_CTRL_SHIFT)
+
 #ifdef __KERNEL__
 
 /*
@@ -499,6 +623,7 @@ struct input_dev {
 	unsigned long mscbit[NBITS(MSC_MAX)];
 	unsigned long ledbit[NBITS(LED_MAX)];
 	unsigned long sndbit[NBITS(SND_MAX)];
+	unsigned long ffbit[NBITS(FF_AXES_MAX)];
 
 	unsigned int keycodemax;
 	unsigned int keycodesize;
@@ -522,6 +647,7 @@ struct input_dev {
 	int (*open)(struct input_dev *dev);
 	void (*close)(struct input_dev *dev);
 	int (*event)(struct input_dev *dev, unsigned int type, unsigned int code, int value);
+	void (*upload_effect)(struct input_dev *dev, struct ff_effect *effect);
 
 	struct input_handle *handle;
 	struct input_dev *next;

@@ -1,0 +1,70 @@
+Force feedback for Linux.
+By Johann Deneux <deneux@esil.univ-mrs.fr> on 2001/04/22.
+
+----------------------------------------------------------------------------
+
+0. Introduction
+~~~~~~~~~~~~~~~
+
+2. Instructions to the user
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+3. Instructions to the developper
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  All interactions are done using the event API. That is, you can use ioctl()
+and write() on /dev/input/eventXX.
+
+3.1 Querying device capabilities
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#include <linux/input.h>
+#include <sys/ioctl.h>
+
+int ioctl(int file_descriptor, int request, unsigned long *axes);
+
+"request" must be EVIOCGBIT(EV_FF, sizeof(unsigned long))
+
+Axes able to render effects are returned in the long pointed by axes. They are
+represented as a bitfield:
+  - bit 0 stands for the X axis
+  - bit 1 stands for the Y axis
+Normally, wheels only have the X axis, while joystick have both X and Y.
+
+3.2 Uploading effects to the device
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#include <linux/input.h>
+#include <sys/ioctl.h>
+ 
+int ioctl(int file_descriptor, int request, struct ff_effect *effect);
+
+"request" must be EVIOCSFF.
+
+"effect" points to a structure describing the effect to upload. The effect is
+uploaded, but not played.
+
+3.3 Controlling the playing of effects
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Control of playing is done with write(). Below is an example:
+
+#include <linux/input.h>
+#include <unistd.h>
+
+	struct input_event play;
+	struct input_event stop;
+	struct ff_effect effect;
+	int fd;
+...
+	fd = open("/dev/input/eventXX", O_RDWR);
+...
+	/* Play three times */
+	play.type = EV_FF;
+	play.code = FF_PLAY | effect.id;
+	play.value = 3;
+	
+	write(fd, (const void*) &play, sizeof(play));
+...
+	/* Stop an effect */
+	stop.type = EV_FF;
+	stop.code = FF_STOP | effect.id;
+	
+	write(fd, (const void*) &play, sizeof(stop));
+

@@ -36,7 +36,7 @@
 #include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/init.h>
-#include <linux/input.h>
+#include "input.h"
 #include <linux/smp_lock.h>
 
 struct evdev {
@@ -231,6 +231,17 @@ static int evdev_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 			if ((retval = put_user(dev->idversion, ((short *) arg) + 3))) return retval;
 			return 0;
 
+		case EVIOCSFF:
+			if (dev->upload_effect) {
+				struct ff_effect effect;
+				if (copy_from_user((char *)arg, &effect, sizeof(effect))) {
+					return -EINVAL;
+				}
+				dev->upload_effect(dev, &effect);
+				return 0;
+			}
+			else return -ENOSYS;
+			
 		default:
 
 			if (_IOC_TYPE(cmd) != 'E' || _IOC_DIR(cmd) != _IOC_READ)
@@ -248,6 +259,8 @@ static int evdev_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 					case EV_ABS: bits = dev->absbit; len = ABS_MAX; break;
 					case EV_LED: bits = dev->ledbit; len = LED_MAX; break;
 					case EV_SND: bits = dev->sndbit; len = SND_MAX; break;
+					/* FF: get handled axes */
+					case EV_FF:  bits = dev->ffbit; len = FF_AXES_MAX; break;
 					default: return -EINVAL;
 				}
 				len = NBITS(len) * sizeof(long);
