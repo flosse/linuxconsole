@@ -286,15 +286,13 @@ asmlinkage long sys_syslog(int type, char * buf, int len)
  */
 static void __call_console_drivers(struct console *con, unsigned long start, unsigned long end)
 {
-	struct tty_driver *driver = get_tty_driver(con->device(con));
-
 	/* Make sure that we print immediately */
 	if (oops_in_progress)
-		init_MUTEX(&driver->tty_lock);
+		init_MUTEX(&con->lock);
 
-	down(&driver->tty_lock);
+	down(&con->lock);
 	con->write(con, &LOG_BUF(start), end - start);
-	up(&driver->tty_lock);
+	up(&con->lock);
 }
 
 /*
@@ -396,7 +394,6 @@ asmlinkage int printk(const char *fmt, ...)
                 unsigned long semi_random;
         } printk_buf;
        	static int log_level_unknown = 1;
-       	struct tty_driver *driver;
        	unsigned long sr_copy;
         unsigned long flags;
        	struct console *con;
@@ -450,11 +447,8 @@ asmlinkage int printk(const char *fmt, ...)
 		 */
 		spin_unlock(&console_lock);
 		if ((con->flags & CON_ENABLED) && con->write) {
-			driver = get_tty_driver(con->device(con));
-			if (driver && !down_trylock(&driver->tty_lock)) {
-				driver->may_schedule = 0;
+			if (!down_trylock(&con->lock)) 
 				release_console_sem(con->device(con));
-			}
 		}
 		spin_lock(&console_lock);
 	}
@@ -473,14 +467,22 @@ EXPORT_SYMBOL(printk);
  */
 void acquire_console_sem(kdev_t device)
 {
-	struct tty_driver *driver = get_tty_driver(device);
+	struct console *con;
 
 	if (in_interrupt())
 		BUG();
-	
-	if (driver) {
-		down(&driver->tty_lock);
-		driver->may_schedule = 1;
+
+	spin_lock(&console_lock);
+	/* Look for new messages */
+	for (con = console_drivers; con; con = con->next) {
+		if (con->device(con) == device)
+			break;
+	}
+	spin_unlock(&console_lock);
+
+	if (con) {
+		down(&con->lock);
+		//driver->may_schedule = 1;
 	}
 }
 EXPORT_SYMBOL(acquire_console_sem);
@@ -530,7 +532,9 @@ void release_console_sem(kdev_t device)
 		spin_unlock_irqrestore(&logbuf_lock, flags);
 		if (must_wake_klogd && !oops_in_progress)
 			wake_up_interruptible(&log_wait);
+		up(&con->lock);
 	}
+
 	if (driver) {
 		driver->may_schedule = 0;
 		up(&driver->tty_lock);
@@ -567,7 +571,6 @@ EXPORT_SYMBOL(console_print);
  */
 void register_console(struct console * console)
 {
-	struct tty_driver *driver;
 	unsigned long flags;
 	int i;
 
@@ -625,11 +628,7 @@ void register_console(struct console * console)
 	}
        	spin_unlock(&console_lock);
 
-       	driver = get_tty_driver(console->device(console));
-       	if (driver) {
-               	init_MUTEX(&driver->tty_lock);
-               	driver->flags |= TTY_DRIVER_CONSOLE;
-       	}
+	init_MUTEX(&console->lock);
 
 	if (console->flags & CON_PRINTBUFFER) {
 		/*

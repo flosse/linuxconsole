@@ -2077,8 +2077,8 @@ int tty_register_driver(struct tty_driver *driver)
 	if (tty_drivers) tty_drivers->prev = driver;
 	tty_drivers = driver;
 
-	if (!(driver->flags & TTY_DRIVER_CONSOLE))
-		init_MUTEX(&driver->tty_lock);
+	//if (!(driver->flags & TTY_DRIVER_CONSOLE))
+	//	init_MUTEX(&driver->tty_lock);
 	
 	if ( !(driver->flags & TTY_DRIVER_NO_DEVFS) ) {
 		for(i = 0; i < driver->num; i++)
