@@ -258,10 +258,10 @@ request_standard_resources(struct meminfo *mi, struct machine_desc *mdesc)
 	struct resource *res;
 	int i;
 
-	kernel_code.start  = __virt_to_bus(init_mm.start_code);
-	kernel_code.end    = __virt_to_bus(init_mm.end_code - 1);
-	kernel_data.start  = __virt_to_bus(init_mm.end_code);
-	kernel_data.end    = __virt_to_bus(init_mm.brk - 1);
+	kernel_code.start  = __virt_to_phys(init_mm.start_code);
+	kernel_code.end    = __virt_to_phys(init_mm.end_code - 1);
+	kernel_data.start  = __virt_to_phys(init_mm.end_code);
+	kernel_data.end    = __virt_to_phys(init_mm.brk - 1);
 
 	for (i = 0; i < mi->nr_banks; i++) {
 		unsigned long virt_start, virt_end;
@@ -338,7 +338,7 @@ static int __init parse_tag_mem32(const struct tag *tag)
 	}
 	meminfo.bank[meminfo.nr_banks].start = tag->u.mem.start;
 	meminfo.bank[meminfo.nr_banks].size  = tag->u.mem.size;
-	meminfo.bank[meminfo.nr_banks].node  = PHYS_TO_NID(tag->u.mem.start); 
+	meminfo.bank[meminfo.nr_banks].node  = PHYS_TO_NID(tag->u.mem.start);
 	meminfo.nr_banks += 1;
 
 	return 0;
@@ -510,9 +510,44 @@ void __init setup_arch(char **cmdline_p)
 	init_arch_irq = mdesc->init_irq;
 }
 
-int get_cpuinfo(char * buffer)
+static const char *hwcap_str[] = {
+	"swp",
+	"half",
+	"thumb",
+	"26bit",
+	"fastmult",
+	"fpa",
+	"vfp",
+	"edsp",
+	NULL
+};
+
+/*
+ * get_cpuinfo - Get information on one CPU for use by the procfs.
+ *
+ *	Prints info on the next CPU into buffer.  Beware, doesn't check for
+ *	buffer overflow.  Current implementation of procfs assumes that the
+ *	resulting data is <= 1K.
+ *
+ * Args:
+ *	buffer	-- you guessed it, the data buffer
+ *	cpu_np	-- Input: next cpu to get (start at 0).  Output: Updated.
+ *
+ *	Returns number of bytes written to buffer.
+ */
+
+int get_cpuinfo(char *buffer, unsigned *cpu_np)
 {
 	char *p = buffer;
+	unsigned n;
+	int i;
+
+ 	/* No SMP at the moment, so just toggle 0/1 */
+	n = *cpu_np;
+	*cpu_np = 1;
+	if (n != 0) {
+		return (0);
+	}
 
 	p += sprintf(p, "Processor\t: %s %s rev %d (%s)\n",
 		     proc_info.manufacturer, proc_info.cpu_name,
@@ -521,6 +556,15 @@ int get_cpuinfo(char * buffer)
 	p += sprintf(p, "BogoMIPS\t: %lu.%02lu\n",
 		     loops_per_jiffy / (500000/HZ),
 		     (loops_per_jiffy / (5000/HZ)) % 100);
+
+	/* dump out the processor features */
+	p += sprintf(p, "Features\t: ");
+
+	for (i = 0; hwcap_str[i]; i++)
+		if (elf_hwcap & (1 << i))
+			p += sprintf(p, "%s ", hwcap_str[i]);
+
+	p += sprintf(p, "\n\n");
 
 	p += sprintf(p, "Hardware\t: %s\n", machine_name);
 

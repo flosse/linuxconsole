@@ -18,8 +18,6 @@ obj-m		:=
 obj-n		:=
 obj-		:=
 
-obj-clps7500	:= defkeymap-acorn.o
-
 obj-$(CONFIG_ATOMWIDE_SERIAL)	+= serial-atomwide.o
 obj-$(CONFIG_DUALSP_SERIAL)	+= serial-dualsp.o
 obj-$(CONFIG_ARCH_ACORN)	+= defkeymap-acorn.o i2c.o pcf8583.o

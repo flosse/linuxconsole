@@ -19,8 +19,10 @@
 #include <linux/sched.h>
 #include <linux/mm.h>
 #include <linux/spinlock.h>
+#include <linux/personality.h>
 #include <linux/ptrace.h>
 #include <linux/elf.h>
+#include <linux/interrupt.h>
 #include <linux/init.h>
 
 #include <asm/atomic.h>
@@ -175,7 +177,7 @@ NORET_TYPE void die(const char *str, struct pt_regs *regs, int err)
 	printk("Process %s (pid: %d, stackpage=%08lx)\n",
 		current->comm, current->pid, 4096+(unsigned long)tsk);
 
-	if (!user_mode(regs)) {
+	if (!user_mode(regs) || in_interrupt()) {
 		mm_segment_t fs;
 
 		/*
@@ -208,12 +210,19 @@ void die_if_kernel(const char *str, struct pt_regs *regs, int err)
 
 asmlinkage void do_undefinstr(int address, struct pt_regs *regs, int mode)
 {
-	unsigned long addr = instruction_pointer(regs);
+	unsigned long *pc;
 	siginfo_t info;
 
+	/*
+	 * According to the ARM ARM, PC is 2 or 4 bytes ahead, depending
+	 * whether we're in Thumb mode or not.
+	 */
+	regs->ARM_pc -= thumb_mode(regs) ? 2 : 4;
+	pc = (unsigned long *)instruction_pointer(regs);
+
 #ifdef CONFIG_DEBUG_USER
-	printk(KERN_INFO "%s (%d): undefined instruction: pc=%08lx\n",
-		current->comm, current->pid, addr);
+	printk(KERN_INFO "%s (%d): undefined instruction: pc=%p\n",
+		current->comm, current->pid, pc);
 	dump_instr(regs);
 #endif
 
@@ -223,13 +232,14 @@ asmlinkage void do_undefinstr(int address, struct pt_regs *regs, int mode)
 	info.si_signo = SIGILL;
 	info.si_errno = 0;
 	info.si_code  = ILL_ILLOPC;
-	info.si_addr  = (void *)addr;
+	info.si_addr  = pc;
 
 	force_sig_info(SIGILL, &info, current);
 
 	die_if_kernel("Oops - undefined instruction", regs, mode);
 }
 
+#ifdef CONFIG_CPU_26
 asmlinkage void do_excpt(int address, struct pt_regs *regs, int mode)
 {
 	siginfo_t info;
@@ -252,6 +262,7 @@ asmlinkage void do_excpt(int address, struct pt_regs *regs, int mode)
 
 	die_if_kernel("Oops - address exception", regs, mode);
 }
+#endif
 
 asmlinkage void do_unexp_fiq (struct pt_regs *regs)
 {
@@ -269,33 +280,84 @@ asmlinkage void do_unexp_fiq (struct pt_regs *regs)
  */
 asmlinkage void bad_mode(struct pt_regs *regs, int reason, int proc_mode)
 {
+	unsigned int vectors = vectors_base();
+	mm_segment_t fs;
+
 	console_verbose();
 
 	printk(KERN_CRIT "Bad mode in %s handler detected: mode %s\n",
 		handler[reason], processor_modes[proc_mode]);
 
 	/*
+	 * We need to switch to kernel mode so that we can
+	 * use __get_user to safely read from kernel space.
+	 * Note that we now dump the code first, just in case
+	 * the backtrace kills us.
+	 */
+	fs = get_fs();
+	set_fs(KERNEL_DS);
+
+	/*
 	 * Dump out the vectors and stub routines.  Maybe a better solution
 	 * would be to dump them out only if we detect that they are corrupted.
 	 */
 	printk(KERN_CRIT "Vectors:\n");
-	dump_mem(0, 0x40);
+	dump_mem(vectors, 0x40);
 	printk(KERN_CRIT "Stubs:\n");
-	dump_mem(0x200, 0x4b8);
+	dump_mem(vectors + 0x200, 0x4b8);
+
+	set_fs(fs);
 
 	die("Oops", regs, 0);
 	cli();
 	panic("bad mode");
 }
 
+static int bad_syscall(int n, struct pt_regs *regs)
+{
+	siginfo_t info;
+
+	/* You might think just testing `handler' would be enough, but PER_LINUX
+	 * points it to no_lcall7 to catch undercover SVr4 binaries.  Gutted.
+	 */
+	if (current->personality != PER_LINUX && current->exec_domain->handler) {
+		/* Hand it off to iBCS.  The extra parameter and consequent type 
+		 * forcing is necessary because of the weird ARM calling convention.
+		 */
+		current->exec_domain->handler(n, regs);
+		return regs->ARM_r0;
+	}
+
+#ifdef CONFIG_DEBUG_USER
+	printk(KERN_ERR "[%d] %s: obsolete system call %08x.\n",
+		current->pid, current->comm, n);
+	dump_instr(regs);
+#endif
+
+	info.si_signo = SIGILL;
+	info.si_errno = 0;
+	info.si_code  = ILL_ILLTRP;
+	info.si_addr  = (void *)instruction_pointer(regs) -
+			 (thumb_mode(regs) ? 2 : 4);
+
+	force_sig_info(SIGILL, &info, current);
+	die_if_kernel("Oops", regs, n);
+	return regs->ARM_r0;
+}
+
 /*
- * Handle some more esoteric system calls
+ * Handle all unrecognised system calls.
+ *  0x9f0000 - 0x9fffff are some more esoteric system calls
  */
+#define NR(x) ((__ARM_NR_##x) - __ARM_NR_BASE)
 asmlinkage int arm_syscall(int no, struct pt_regs *regs)
 {
 	siginfo_t info;
 
-	switch (no) {
+	if ((no >> 16) != 0x9f)
+		return bad_syscall(no, regs);
+
+	switch (no & 0xffff) {
 	case 0: /* branch through 0 */
 		info.si_signo = SIGSEGV;
 		info.si_errno = 0;
@@ -305,9 +367,9 @@ asmlinkage int arm_syscall(int no, struct pt_regs *regs)
 		force_sig_info(SIGSEGV, &info, current);
 
 		die_if_kernel("branch through zero", regs, 0);
-		break;
+		return 0;
 
-	case 1: /* SWI BREAK_POINT */
+	case NR(breakpoint): /* SWI BREAK_POINT */
 		/*
 		 * The PC is always left pointing at the next
 		 * instruction.  Fix this.
@@ -318,17 +380,50 @@ asmlinkage int arm_syscall(int no, struct pt_regs *regs)
 		info.si_signo = SIGTRAP;
 		info.si_errno = 0;
 		info.si_code  = TRAP_BRKPT;
-		info.si_addr  = (void *)instruction_pointer(regs);
+		info.si_addr  = (void *)instruction_pointer(regs) -
+				 (thumb_mode(regs) ? 2 : 4);
 
 		force_sig_info(SIGTRAP, &info, current);
 		return regs->ARM_r0;
 
-	case 2:	/* sys_cacheflush */
 #ifdef CONFIG_CPU_32
-		/* r0 = start, r1 = end, r2 = flags */
+	/*
+	 * Flush a region from virtual address 'r0' to virtual address 'r1'
+	 * _inclusive_.  There is no alignment requirement on either address;
+	 * user space does not need to know the hardware cache layout.
+	 *
+	 * r2 contains flags.  It should ALWAYS be passed as ZERO until it
+	 * is defined to be something else.  For now we ignore it, but may
+	 * the fires of hell burn in your belly if you break this rule. ;)
+	 *
+	 * (at a later date, we may want to allow this call to not flush
+	 * various aspects of the cache.  Passing '0' will guarantee that
+	 * everything necessary gets flushed to maintain consistency in
+	 * the specified region).
+	 */
+	case NR(cacheflush):
 		cpu_cache_clean_invalidate_range(regs->ARM_r0, regs->ARM_r1, 1);
-#endif
+		return 0;
+
+	case NR(usr26):
+		if (!(elf_hwcap & HWCAP_26BIT))
+			break;
+		regs->ARM_cpsr &= ~0x10;
+		return regs->ARM_r0;
+
+	case NR(usr32):
+		if (!(elf_hwcap & HWCAP_26BIT))
+			break;
+		regs->ARM_cpsr |= 0x10;
+		return regs->ARM_r0;
+#else
+	case NR(cacheflush):
+		return 0;
+
+	case NR(usr26):
+	case NR(usr32):
 		break;
+#endif
 
 	default:
 		/* Calls 9f00xx..9f07ff are defined to return -ENOSYS
@@ -337,45 +432,29 @@ asmlinkage int arm_syscall(int no, struct pt_regs *regs)
 		   a feature is supported.  */
 		if (no <= 0x7ff)
 			return -ENOSYS;
-#ifdef CONFIG_DEBUG_USER
-		/* experience shows that these seem to indicate that
-		 * something catastrophic has happened
-		 */
-		printk("[%d] %s: arm syscall %d\n", current->pid, current->comm, no);
-		dump_instr(regs);
-		if (user_mode(regs)) {
-			show_regs(regs);
-			c_backtrace(regs->ARM_fp, processor_mode(regs));
-		}
-#endif
-		force_sig(SIGILL, current);
-		die_if_kernel("Oops", regs, no);
 		break;
 	}
-	return 0;
-}
-
-asmlinkage void deferred(int n, struct pt_regs *regs)
-{
-	/* You might think just testing `handler' would be enough, but PER_LINUX
-	 * points it to no_lcall7 to catch undercover SVr4 binaries.  Gutted.
-	 */
-	if (current->personality != PER_LINUX && current->exec_domain->handler) {
-		/* Hand it off to iBCS.  The extra parameter and consequent type 
-		 * forcing is necessary because of the weird ARM calling convention.
-		 */
-		void (*handler)(int nr, struct pt_regs *regs) = (void *)current->exec_domain->handler;
-		(*handler)(n, regs);
-		return;
-	}
-
 #ifdef CONFIG_DEBUG_USER
-	printk(KERN_ERR "[%d] %s: obsolete system call %08x.\n",
-		current->pid, current->comm, n);
+	/*
+	 * experience shows that these seem to indicate that
+	 * something catastrophic has happened
+	 */
+	printk("[%d] %s: arm syscall %d\n", current->pid, current->comm, no);
 	dump_instr(regs);
+	if (user_mode(regs)) {
+		show_regs(regs);
+		c_backtrace(regs->ARM_fp, processor_mode(regs));
+	}
 #endif
-	force_sig(SIGILL, current);
-	die_if_kernel("Oops", regs, n);
+	info.si_signo = SIGILL;
+	info.si_errno = 0;
+	info.si_code  = ILL_ILLTRP;
+	info.si_addr  = (void *)instruction_pointer(regs) -
+			 (thumb_mode(regs) ? 2 : 4);
+
+	force_sig_info(SIGILL, &info, current);
+	die_if_kernel("Oops", regs, no);
+	return 0;
 }
 
 void __bad_xchg(volatile void *ptr, int size)
@@ -467,7 +546,7 @@ void __init trap_init(void)
 
 	__trap_init((void *)vectors_base());
 	if (vectors_base() != 0)
-		printk("Relocating machine vectors to 0x%08x\n",
+		printk(KERN_DEBUG "Relocating machine vectors to 0x%08x\n",
 			vectors_base());
 #ifdef CONFIG_CPU_32
 	modify_domain(DOMAIN_USER, DOMAIN_CLIENT);
