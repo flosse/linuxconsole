@@ -127,7 +127,6 @@ static struct iforce_device {
 } iforce_device[] = {
 	{ 0x044f, 0xa01c, "Thrustmaster Motor Sport GT",		btn_wheel, abs_wheel, ff_iforce },
 	{ 0x046d, 0xc281, "Logitech WingMan Force",			btn_joystick, abs_joystick, ff_iforce },
-	{ 0x046d, 0xc283, "Logitech WingMan Force 3D",			btn_joystick, abs_joystick, ff_iforce },
 	{ 0x046d, 0xc285, "Logitech WingMan Strike Force 3D",		btn_joystick, abs_joystick, ff_iforce },
 	{ 0x046d, 0xc291, "Logitech WingMan Formula Force",		btn_wheel, abs_wheel, ff_iforce },
 	{ 0x05ef, 0x020a, "AVB Top Shot Pegasus",			btn_joystick, abs_joystick, ff_iforce },
@@ -370,7 +369,7 @@ static void send_packet(struct iforce *iforce, u16 cmd, unsigned char* data)
 
 /* Mark an effect that was being updated as ready. That means it can be updated
  * again */
-static void mark_core_as_ready(struct iforce *iforce, unsigned short addr)
+static int mark_core_as_ready(struct iforce *iforce, unsigned short addr)
 {
 	int i;
 	for (i=0; i<iforce->dev.ff_effects_max; ++i) {
@@ -379,16 +378,22 @@ static void mark_core_as_ready(struct iforce *iforce, unsigned short addr)
 		     iforce->core_effects[i].mod2_chunk.start == addr)) {
 			clear_bit(FF_CORE_UPDATE, iforce->core_effects[i].flags);
 printk(KERN_DEBUG "iforce.c: marked effect %d as ready\n", i);
-			return;
+			return 0;
 		}
 	}
-	printk(KERN_WARNING "iforce.c: unused effect %04x updated !!!\n", addr);
+	printk(KERN_DEBUG "iforce.c: unused effect %04x updated !!!\n", addr);
+	return -1;
 }
 
 static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char *data)
 {
 	struct input_dev *dev = &iforce->dev;
 	int i;
+	static int being_used = 0;
+
+	if (being_used)
+		printk(KERN_WARNING "iforce.c: re-entrant call to iforce_process %d\n", being_used);
+	being_used++;
 
 #ifdef IFORCE_232
 	if (HI(iforce->expect_packet) == HI(cmd)) {
@@ -427,7 +432,6 @@ static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char 
 			break;
 
 		case 0x02:	/* status report */
-
 			input_report_key(dev, BTN_DEAD, data[0] & 0x02);
 
 			/* Check if an effect was just started or stopped */
@@ -459,6 +463,7 @@ dump_packet("ff status", cmd, data);
 			}
 			break;
 	}
+	being_used--;
 }
 
 static int get_id_packet(struct iforce *iforce, char *packet)
@@ -1046,14 +1051,15 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 		if (!CHECK_OWNERSHIP(effect->id, iforce)) return -1;
 		
 		/* Check the effect is not allready being updated */
-		if (test_bit(FF_CORE_UPDATE, iforce->core_effects[effect->id].flags))
+		if (test_and_set_bit(FF_CORE_UPDATE, iforce->core_effects[effect->id].flags)) {
+			printk(KERN_DEBUG "iforce.c: update too frequent refused\n");
 			return -1;
+		}
 	}
 
 /*
  * Upload the effect
  */
-
 	switch (effect->type) {
 
 		case FF_PERIODIC:
@@ -1069,7 +1075,6 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 		default:
 			return -1;
 	}
-	set_bit(FF_CORE_UPDATE, iforce->core_effects[id].flags);
 }
 
 /*
@@ -1350,7 +1355,6 @@ static void iforce_usb_disconnect(struct usb_device *dev, void *ptr)
 static struct usb_device_id iforce_usb_ids [] = {
 	{ USB_DEVICE(0x044f, 0xa01c) },		/* Thrustmaster Motor Sport GT */
 	{ USB_DEVICE(0x046d, 0xc281) },		/* Logitech WingMan Force */
-	{ USB_DEVICE(0x046d, 0xc283) },		/* Logitech WingMan Force 3D */
 	{ USB_DEVICE(0x046d, 0xc285) },		/* Logitech WingMan Strike Force 3D */
 	{ USB_DEVICE(0x046d, 0xc291) },		/* Logitech WingMan Formula Force */
 	{ USB_DEVICE(0x05ef, 0x020a) },		/* AVB Top Shot Pegasus */
