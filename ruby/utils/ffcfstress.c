@@ -79,7 +79,7 @@ void parse_args(int argc, char * argv[])
 l_help:
 	printf("-------- ffcfstress - Force Feedback: Constant Force Stress Test --------\n");
 	printf("Description:\n");
-	printf("  This program is for stress testing constant non-shaped forces on\n");
+	printf("  This program is for stress testing constant non-enveloped forces on\n");
 	printf("  a force feedback device via the event interface. It simulates a\n");
 	printf("  moving spring force by a frequently updated constant force effect.\n");
 	printf("  BE CAREFUL IN USAGE, YOUR DEVICE MAY GET DAMAGED BY THE STRESS TEST!\n");
@@ -187,10 +187,10 @@ void init_device()
 	effect.replay.delay=0;
 	effect.u.constant.level=0;
 	effect.direction=0xC000;
-	effect.u.constant.shape.attack_length=0;
-	effect.u.constant.shape.attack_level=0;
-	effect.u.constant.shape.fade_length=0;
-	effect.u.constant.shape.fade_level=0;
+	effect.u.constant.envelope.attack_length=0;
+	effect.u.constant.envelope.attack_level=0;
+	effect.u.constant.envelope.fade_length=0;
+	effect.u.constant.envelope.fade_level=0;
 
 	/* Upload effect */
 	if (ioctl(device_handle,EVIOCSFF,&effect)==-1) {
@@ -232,8 +232,8 @@ void update_device(double force, double * position)
 	if (force<-1.0) force=1.0;
 	effect.u.constant.level=(short)(force*32767.0); /* only to be safe */
 	effect.direction=0xC000;
-	effect.u.constant.shape.attack_level=(short)(force*32767.0); /* this one counts! */
-	effect.u.constant.shape.fade_level=(short)(force*32767.0); /* only to be safe */
+	effect.u.constant.envelope.attack_level=(short)(force*32767.0); /* this one counts! */
+	effect.u.constant.envelope.fade_level=(short)(force*32767.0); /* only to be safe */
 
 	/* Upload effect */
 	if (ioctl(device_handle,EVIOCSFF,&effect)==-1) {
