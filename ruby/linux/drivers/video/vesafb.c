@@ -21,7 +21,6 @@
 #include <linux/init.h>
 
 #include <asm/io.h>
-#include <asm/mtrr.h>
 
 #define dac_reg	(0x3c8)
 #define dac_val	(0x3c9)
@@ -56,7 +55,6 @@ static struct fb_info fb_info;
 static u32 pseudo_palette[17];
 
 static int             inverse   = 0;
-static int             mtrr      = 0;
 static int             pmi_setpal = 0;	/* pmi for palette changes ??? */
 static int             ypan       = 0;  /* 0..nothing, 1..ypan, 2..ywrap */
 static unsigned short  *pmi_base  = 0;
@@ -64,18 +62,6 @@ static void            (*pmi_start)(void);
 static void            (*pmi_pal)(void);
 
 /* --------------------------------------------------------------------- */
-
-static int vesafb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
-{
-/*
-	if (var->yres_virtual < video_height_virtual ||
-	    var->yres_virtual > info->var.yres) 
-		return 0;
-	printk(KERN_ERR "Vesafb does not support changing the video mode\n");
-	return -EINVAL;	
-*/
-	return 0;
-}
 
 static int vesafb_pan_display(struct fb_var_screeninfo *var, 
                               struct fb_info *info)
@@ -188,7 +174,6 @@ static int vesafb_setcolreg(unsigned regno, unsigned red, unsigned green,
 
 static struct fb_ops vesafb_ops = {
 	owner:		THIS_MODULE,
-	fb_check_var:	vesafb_check_var,
 	fb_setcolreg:	vesafb_setcolreg,
 	fb_pan_display:	vesafb_pan_display,
 	fb_fillrect:	cfb_fillrect,
@@ -218,8 +203,6 @@ int __init vesafb_setup(char *options)
 			pmi_setpal=0;
 		else if (! strcmp(this_opt, "pmipal"))
 			pmi_setpal=1;
-		else if (! strcmp(this_opt, "mtrr"))
-			mtrr=1;
 	}
 	return 0;
 }
@@ -364,13 +347,6 @@ int __init vesafb_init(void)
 	 * region already (FIXME) */
 	request_region(0x3c0, 32, "vesafb");
 
-	if (mtrr) {
-		int temp_size = video_size;
-		while (mtrr_add(video_base, temp_size, MTRR_TYPE_WRCOMB, 1)==-EINVAL) {
-			temp_size >>= 1;
-		}
-	}
-	
 	fb_info.node = -1;
 	fb_info.fbops = &vesafb_ops;
 	fb_info.var = vesafb_defined;
