@@ -59,7 +59,6 @@
 #define bell_pitch	(vc_cons[currcons]->vc_bell_pitch)
 #define bell_duration	(vc_cons[currcons]->vc_bell_duration)
 #define cursor_type	(vc_cons[currcons]->vc_cursor_type)
-#define display_fg	(vc_cons[currcons]->display_fg)
 #define complement_mask (vc_cons[currcons]->vc_complement_mask)
 #define s_complement_mask (vc_cons[currcons]->vc_s_complement_mask)
 #define hi_font_mask	(vc_cons[currcons]->vc_hi_font_mask)
