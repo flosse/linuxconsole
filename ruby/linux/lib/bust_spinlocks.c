@@ -21,6 +21,9 @@ void bust_spinlocks(int yes)
        spin_lock_init(&timerlist_lock);
        if (yes) {
                oops_in_progress = 1;
+#ifdef CONFIG_SMP
+                atomic_set(&global_irq_lock,0);
+#endif
        } else {
                int loglevel_save = console_loglevel;
                oops_in_progress = 0;
