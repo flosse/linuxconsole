@@ -345,8 +345,8 @@ static void gc_timer(unsigned long private)
 			s = gc_status_bit[i];
 
 			if (s & (gc->pads[GC_NES] | gc->pads[GC_SNES])) {
-				input_report_abs(dev + i, ABS_X, ! - !(s & data[6]) - !(s & data[7]));
-				input_report_abs(dev + i, ABS_Y, ! - !(s & data[4]) - !(s & data[5]));
+				input_report_abs(dev + i, ABS_X, !(s & data[6]) - !(s & data[7]));
+				input_report_abs(dev + i, ABS_Y, !(s & data[4]) - !(s & data[5]));
 			}
 
 			if (s & gc->pads[GC_NES])
