@@ -1305,6 +1305,9 @@ static void vt_flush_chars(struct tty_struct *tty)
 {
         struct vc_data *vc = (struct vc_data *)tty->driver_data;
 
+	if (in_interrupt())     /* from flush_to_ldisc */
+		return;
+
         pm_access(vc->display_fg->pm_con);
 	down(&vc->vc_tty->driver.tty_lock);
         set_cursor(vc);
