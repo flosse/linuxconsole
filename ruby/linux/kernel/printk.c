@@ -121,6 +121,7 @@ __setup("console=", console_setup);
  * 	6 -- Disable printk's to console
  * 	7 -- Enable printk's to console
  *	8 -- Set level of messages printed to console
+ *	9 -- Return the number of unread characters in the log buffer
  */
 int do_syslog(int type, char * buf, int len)
 {
@@ -237,6 +238,11 @@ int do_syslog(int type, char * buf, int len)
 		spin_unlock_irq(&console_lock);
 		error = 0;
 		break;
+	case 9:		/* Number of chars in the log buffer */
+		spin_lock_irq(&console_lock);
+		error = log_size;
+		spin_unlock_irq(&console_lock);
+		break;	
 	default:
 		error = -EINVAL;
 		break;
