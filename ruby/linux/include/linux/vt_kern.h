@@ -19,7 +19,8 @@
 /* cursor */
 #define CM_DRAW     (1)
 #define CM_ERASE    (2)
-#define CM_MOVE     (3)
+#define CM_CHANGE   (3)
+#define CM_MOVE     (4)
 
 #define CUR_DEF         0
 #define CUR_NONE        1
@@ -265,6 +266,7 @@ void vc_init(struct vc_data *vc, int do_clear);
 void add_softcursor(struct vc_data *vc);
 void set_cursor(struct vc_data *vc);
 void hide_cursor(struct vc_data *vc);
+void update_cursor_attr(struct vc_data *vc);
 void gotoxy(struct vc_data *vc, int new_x, int new_y);
 inline void gotoxay(struct vc_data *vc, int new_x, int new_y);
 void reset_palette(struct vc_data *vc);
