@@ -1,5 +1,5 @@
 /*
- *  interact.c  Version 0.1
+ * $Id$
  *
  *  Copyright (c) 2000 Vojtech Pavlik
  *
@@ -32,11 +32,9 @@
  * e-mail - mail your message to <vojtech@suse.cz>, or by paper mail:
  * Vojtech Pavlik, Ucitelska 1576, Prague 8, 182 00 Czech Republic
  */
- */
 
-#include <linux/config.h>
-#include <linux/delay.h>
 #include <linux/kernel.h>
+#include <linux/malloc.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/gameport.h>
@@ -47,17 +45,17 @@
 #define INTERACT_MAX_LENGTH	32	/* 32 bits */
 #define INTERACT_REFRESH_TIME	HZ/50	/* 20 ms */
 
-#define INTERACT_HHFX		1	/* HammerHead/FX */
+#define INTERACT_TYPE_HHFX	1	/* HammerHead/FX */
 
 struct interact {
 	struct gameport *gameport;
 	struct input_dev dev;
 	struct timer_list timer;
-	int mode;
+	int type;
 	int used;
 	int bads;
 	int reads;
-}
+};
 
 /*
  * interact_read_packet() reads and Hammerhead/FX joystick data.
@@ -84,8 +82,8 @@ static int interact_read_packet(struct gameport *gameport, int length, u32 *data
 		t--;
 		u = v; v = gameport_read(gameport);
 		if (v & ~u & 0x40) {
-			data[0] |= ((v >> 4) & 1) << i;
-			data[1] |= ((v >> 5) & 1) << i;
+			data[0] = (data[0] << 1) | ((v >> 4) & 1);
+			data[1] = (data[1] << 1) | ((v >> 5) & 1);
 			i++;
 			t = s;
 		}
@@ -103,12 +101,12 @@ static int interact_read_packet(struct gameport *gameport, int length, u32 *data
 static void interact_timer(unsigned long private)
 {
 	struct interact *interact = (struct interact *) private;
-	struct input_dev *dev = interact->dev;
+	struct input_dev *dev = &interact->dev;
 	u32 data[2];
 
 	interact->reads++;
 
-	if (interact_read_packet(gameport, interact->length, data) < interact->length) {
+	if (interact_read_packet(interact->gameport, INTERACT_MAX_LENGTH, data) < INTERACT_MAX_LENGTH) {
 		interact->bads++;
 	} else
 
@@ -133,7 +131,7 @@ static int interact_open(struct input_dev *dev)
 {
 	struct interact *interact = dev->private;
 	if (!interact->used++)
-		mod_timer(&interact->timer, jiffies + A3D_REFRESH_TIME);	
+		mod_timer(&interact->timer, jiffies + INTERACT_REFRESH_TIME);	
 	return 0;
 }
 
@@ -155,7 +153,7 @@ static void interact_close(struct input_dev *dev)
 static void interact_connect(struct gameport *gameport, struct gameport_dev *dev)
 {
 	struct interact *interact;
-	char data[A3D_MAX_LENGTH];
+	__u32 *data[INTERACT_MAX_LENGTH];
 	int i;
 
 	if (!(interact = kmalloc(sizeof(struct interact), GFP_KERNEL)))
@@ -172,7 +170,7 @@ static void interact_connect(struct gameport *gameport, struct gameport_dev *dev
 	if (gameport_open(gameport, dev, GAMEPORT_MODE_RAW))
 		goto fail1;
 
-	i = interact_read_packet(gameport, A3D_MAX_LENGTH, data);
+	i = interact_read_packet(gameport, INTERACT_MAX_LENGTH, data);
 
 	if (i != 32) {
 		printk("Initial packet read failed: %d\n", i);
@@ -181,9 +179,14 @@ static void interact_connect(struct gameport *gameport, struct gameport_dev *dev
 
 	interact->type = INTERACT_TYPE_HHFX;
 
+	interact->dev.private = interact;
+	interact->dev.open = interact_open;
+	interact->dev.close = interact_close;
+	interact->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS);
+
 	input_register_device(&interact->dev);
-	printk(KERN_INFO "input%d: %s on gameport%d\n",
-		interact->dev.number, interact_names[interact->type], gameport->number);
+	printk(KERN_INFO "input%d: HammerHead/FX on gameport%d.0\n",
+		interact->dev.number, gameport->number);
 
 	return;
 fail2:	gameport_close(gameport);
