@@ -128,6 +128,7 @@ extern int sstfb_init(void);
 extern int e1355fb_init(void);
 extern int e1355fb_setup(char*);
 extern int dcfb_init(void);
+extern int sfb_init(void);
 
 static struct {
 	const char *name;
@@ -225,6 +226,9 @@ static struct {
 #ifdef CONFIG_FB_VESA
 	{ "vesa", vesafb_init, vesafb_setup },
 #endif 
+#ifdef CONFIG_FB_SIMPLE
+	{ "sfb", sfb_init, NULL },
+#endif
 
 	/*
 	 * Chipset specific drivers that don't use resource management (yet)
@@ -706,6 +710,10 @@ register_framebuffer(struct fb_info *fb_info)
 	    devfs_register (devfs_handle, name_buf, DEVFS_FL_DEFAULT,
 			    FB_MAJOR, i, S_IFCHR | S_IRUGO | S_IWUGO,
 			    &fb_fops, NULL);
+
+	printk(KERN_INFO "fb%d: %s frame buffer device\n",
+	       GET_FB_IDX(fb_info->node), fb_info->fix.id);
+
 #ifdef CONFIG_MTRR
 	/*
 	 * Enable MTRR support if desired.
