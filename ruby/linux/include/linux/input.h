@@ -393,6 +393,10 @@ struct input_event {
 #define BTN_STYLUS		0x14b
 #define BTN_STYLUS2		0x14c
 
+#define BTN_WHEEL		0x150
+#define BTN_GEAR_DOWN		0x150
+#define BTN_GEAR_UP		0x151
+
 #define KEY_MAX			0x1ff
 
 /*
