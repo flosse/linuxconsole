@@ -64,7 +64,7 @@ void iforce_usb_xmit(struct iforce *iforce)
 	}
 	XMIT_INC(iforce->xmit.tail, n);
 
-	if ( (n=usb_submit_urb(&iforce->out, GFP_KERNEL)) ) {
+	if ( (n=usb_submit_urb(&iforce->out, GFP_ATOMIC)) ) {
 		printk(KERN_WARNING "iforce-usb.c: iforce_usb_xmit: usb_submit_urb failed %d\n", n);
 	}
 
