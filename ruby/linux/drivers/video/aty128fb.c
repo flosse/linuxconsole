@@ -128,6 +128,12 @@ static struct fb_videomode defaultmode __initdata = {
 	vmode:		FB_VMODE_NONINTERLACED
 };
 
+static struct fb_fix_screeninfo aty128fb_fix __initdata = {
+    "ATY Rage128", (unsigned long) NULL, 0, FB_TYPE_PACKED_PIXELS, 0,
+    FB_VISUAL_PSEUDOCOLOR, 8, 1, 0, 0, (unsigned long) NULL, 0x1fff, 
+    FB_ACCEL_ATI_RAGE128
+};
+
 /* struct to hold chip description information */
 struct aty128_chip_info {
     const char *name;
@@ -209,7 +215,6 @@ static const struct aty128_meminfo sdr_sgram =
 static const struct aty128_meminfo ddr_sgram =
     { 4, 4, 3, 3, 2, 3, 1, 16, 31, 16, "64-bit DDR SGRAM" };
 
-static const char *aty128fb_name = "ATY Rage128";
 static char fontname[40] __initdata = { 0 };
 
 static int  noaccel __initdata = 0;
@@ -248,6 +253,7 @@ struct aty128_crtc {
     u32 offset, offset_cntl;
     u32 xoffset, yoffset;
     u32 vxres, vyres;
+    u32 bpp;
 };
 
 struct aty128_pll {
@@ -269,21 +275,25 @@ struct aty128fb_par {
     u32 accel_flags;
 };
 
-static struct display disp;
-
 struct fb_info_aty128 {
     struct fb_info fb_info;
     struct fb_info_aty128 *next;
     struct aty128_constants constants;  /* PLL and others      */
-    unsigned long regbase_phys;         /* physical mmio       */
     void *regbase;                      /* remapped mmio       */
-    unsigned long frame_buffer_phys;    /* physical fb memory  */
-    void *frame_buffer;                 /* remaped framebuffer */
-    u32 vram_size;                      /* onboard video ram   */
     int chip_gen;
     const struct aty128_meminfo *mem;   /* onboard mem info    */
-    struct aty128fb_par default_par, current_par;
     struct { u8 red, green, blue, pad; } palette[256];
+    union {
+#ifdef FBCON_HAS_CFB16
+    u16 cfb16[16];
+#endif
+#ifdef FBCON_HAS_CFB24
+    u32 cfb24[16];
+#endif
+#ifdef FBCON_HAS_CFB32
+    u32 cfb32[16];
+#endif
+    } fbcon_cmap;
 #ifdef CONFIG_PCI
     struct pci_dev *pdev;
 #endif
@@ -295,6 +305,8 @@ struct fb_info_aty128 {
 };
 
 static struct fb_info_aty128 *board_list = NULL;
+static struct display disp;
+static struct aty128fb_par default_par;
 
 #define round_div(n, d) ((n+(d/2))/d)
 
@@ -330,10 +342,6 @@ static void aty128fbcon_blank(int blank, struct fb_info *fb);
     /*
      *  Internal routines
      */
-
-static void aty128_encode_fix(struct fb_fix_screeninfo *fix,
-				struct aty128fb_par *par,
-				const struct fb_info_aty128 *info);
 static void aty128_set_dispsw(struct display *disp,
 			struct fb_info_aty128 *info, int bpp, int accel);
 static int aty128_getcolreg(u_int regno, u_int *red, u_int *green, u_int *blue,
@@ -662,7 +670,7 @@ aty128_init_engine(const struct aty128fb_par *par,
     aty128_reset_engine(info);
 
     pitch_value = par->crtc.pitch;
-    if (info->fb_info.var.bits_per_pixel == 24) {
+    if (par->crtc.bpp == 24) {
         pitch_value = pitch_value * 3;
     }
 
@@ -683,7 +691,7 @@ aty128_init_engine(const struct aty128fb_par *par,
 		GMC_SRC_CLIP_DEFAULT			|
 		GMC_DST_CLIP_DEFAULT			|
 		GMC_BRUSH_SOLIDCOLOR			|
-		(bpp_to_depth(info->fb_info.var.bits_per_pixel) << 8)	|
+		(bpp_to_depth(par->crtc.bpp) << 8)	|
 		GMC_SRC_DSTCOLOR			|
 		GMC_BYTE_ORDER_MSB_TO_LSB		|
 		GMC_DP_CONVERSION_TEMP_6500		|
@@ -817,7 +825,7 @@ aty128_var_to_crtc(const struct fb_var_screeninfo *var,
     bytpp = mode_bytpp[depth];
 
     /* make sure there is enough video ram for the mode */
-    if ((u32)(vxres * vyres * bytpp) > info->vram_size) {
+    if ((u32)(vxres * vyres * bytpp) > info->fb_info.fix.smem_len) {
         printk(KERN_ERR "aty128fb: Not enough memory for mode\n");
         return -EINVAL;
     }
@@ -874,6 +882,8 @@ aty128_var_to_crtc(const struct fb_var_screeninfo *var,
     crtc->vyres = vyres;
     crtc->xoffset = xoffset;
     crtc->yoffset = yoffset;
+    crtc->bpp = bpp;
+
     return 0;
 }
 
@@ -1165,7 +1175,7 @@ aty128_set_par(struct aty128fb_par *par,
 { 
     u32 config;
 
-    info->current_par = *par;
+    info->fb_info.par = par;
     
     if (info->blitter_may_be_busy)
         wait_for_idle(info);
@@ -1193,9 +1203,9 @@ aty128_set_par(struct aty128fb_par *par,
     config = aty_ld_le32(CONFIG_CNTL) & ~3;
 
 #if defined(__BIG_ENDIAN)
-    if (info->fb_info.var.bits_per_pixel >= 24)
+    if (par->crtc.bpp >= 24)
 	config |= 2;	/* make aperture do 32 byte swapping */
-    else if (info->fb_info.var.bits_per_pixel > 8)
+    else if (par->crtc.bpp > 8)
 	config |= 1;	/* make aperture do 16 byte swapping */
 #endif
 
@@ -1212,18 +1222,18 @@ aty128_set_par(struct aty128fb_par *par,
 
 	display_info.height = ((par->crtc.v_total >> 16) & 0x7ff) + 1;
 	display_info.width = (((par->crtc.h_total >> 16) & 0xff) + 1) << 3;
-	display_info.depth = info->fb_info.var.bits_per_pixel;
-	display_info.pitch = (par->crtc.vxres * info->fb_info.var.bits_per_pixel) >> 3;
+	display_info.depth = par->crtc.bpp;
+	display_info.pitch = (par->crtc.vxres * par->crtc.bpp) >> 3;
         aty128_encode_var(&var, par, info);
 	if (mac_var_to_vmode(&var, &vmode, &cmode))
 	    display_info.mode = 0;
 	else
 	    display_info.mode = vmode;
-	strcpy(display_info.name, aty128fb_name);
-	display_info.fb_address = info->frame_buffer_phys;
+	strcpy(display_info.name, info->fb_info.fix.id);
+	display_info.fb_address = info->fb_info.fix.smem_start;
 	display_info.cmap_adr_address = 0;
 	display_info.cmap_data_address = 0;
-	display_info.disp_reg_address = info->regbase_phys;
+	display_info.disp_reg_address = info->fb_info.mmio_start;
     }
 #endif /* CONFIG_FB_COMPAT_XPMAC */
 }
@@ -1244,7 +1254,7 @@ aty128_decode_var(struct fb_var_screeninfo *var, struct aty128fb_par *par,
     if ((err = aty128_var_to_pll(var->pixclock, &par->pll, info)))
 	return err;
 
-    if ((err = aty128_ddafifo(&par->fifo_reg, &par->pll, info->fb_info.var.bits_per_pixel, info)))
+    if ((err = aty128_ddafifo(&par->fifo_reg, &par->pll, par->crtc.bpp, info)))
 	return err;
 
     if (var->accel_flags & FB_ACCELF_TEXT)
@@ -1294,10 +1304,7 @@ aty128fb_get_var(struct fb_var_screeninfo *var, int con, struct fb_info *fb)
 {
     const struct fb_info_aty128 *info = (struct fb_info_aty128 *)fb;
 
-    if (con == -1)
-	aty128_encode_var(var, &info->default_par, info); 
-    else
-	*var = fb_display[con].var;
+    *var = info->fb_info.var;
     return 0;
 }
 
@@ -1363,21 +1370,21 @@ aty128fb_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *fb)
 	oldvxres != var->xres_virtual || oldvyres != var->yres_virtual ||
 	oldbpp != var->bits_per_pixel || oldaccel != var->accel_flags) {
 
-	struct fb_fix_screeninfo fix;
+    	info->fb_info.fix.line_length = (par.crtc.vxres * par.crtc.bpp) >> 3;
+    	info->fb_info.fix.visual      = par.crtc.bpp <= 8 ? FB_VISUAL_PSEUDOCOLOR : FB_VISUAL_DIRECTCOLOR;
 
-	aty128_encode_fix(&fix, &par, info);
-        display->screen_base = info->frame_buffer;
-	display->visual = fix.visual;
-	display->type = fix.type;
-	display->type_aux = fix.type_aux;
-	display->ypanstep = fix.ypanstep;
-	display->ywrapstep = fix.ywrapstep;
-	display->line_length = fix.line_length;
+        display->screen_base = info->fb_info.screen_base;
+	display->visual = info->fb_info.fix.visual;
+	display->type = info->fb_info.fix.type;
+	display->type_aux = info->fb_info.fix.type_aux;
+	display->ypanstep = info->fb_info.fix.ypanstep;
+	display->ywrapstep = info->fb_info.fix.ywrapstep;
+	display->line_length = info->fb_info.fix.line_length;
 	display->can_soft_blank = 1;
 	display->inverse = 0;
 
 	accel = var->accel_flags & FB_ACCELF_TEXT;
-        aty128_set_dispsw(display, info, info->fb_info.var.bits_per_pixel, accel);
+        aty128_set_dispsw(display, info, par.crtc.bpp, accel);
 
 	if (accel)
 	    display->scrollmode = SCROLL_YNOMOVE;
@@ -1415,53 +1422,25 @@ aty128_set_dispsw(struct display *disp,
     case 15:
     case 16:
 	disp->dispsw = accel ? &fbcon_aty128_16 : &fbcon_cfb16;
+	disp->dispsw_data = info->fbcon_cmap.cfb16;
 	break;
 #endif
 #ifdef FBCON_HAS_CFB24
     case 24:
 	disp->dispsw = accel ? &fbcon_aty128_24 : &fbcon_cfb24;
+	disp->dispsw_data = info->fbcon_cmap.cfb24;
 	break;
 #endif
 #ifdef FBCON_HAS_CFB32
     case 32:
 	disp->dispsw = accel ? &fbcon_aty128_32 : &fbcon_cfb32;
+	disp->dispsw_data = info->fbcon_cmap.cfb32;
 	break;
 #endif
     default:
 	disp->dispsw = &fbcon_dummy;
     }
 }
-
-
-static void
-aty128_encode_fix(struct fb_fix_screeninfo *fix,
-			struct aty128fb_par *par,
-			const struct fb_info_aty128 *info)
-{
-    memset(fix, 0, sizeof(struct fb_fix_screeninfo));
-    
-    strcpy(fix->id, aty128fb_name);
-
-    fix->smem_start = (unsigned long)info->frame_buffer_phys;
-    fix->mmio_start = (unsigned long)info->regbase_phys;
-
-    fix->smem_len = info->vram_size;
-    fix->mmio_len = 0x1fff;
-
-    fix->type        = FB_TYPE_PACKED_PIXELS;
-    fix->type_aux    = 0;
-    fix->line_length = (par->crtc.vxres * info->fb_info.var.bits_per_pixel) >> 3;
-    fix->visual      = info->fb_info.var.bits_per_pixel <= 8 ? FB_VISUAL_PSEUDOCOLOR
-                                          : FB_VISUAL_DIRECTCOLOR;
-    fix->ywrapstep = 0;
-    fix->xpanstep  = 8;
-    fix->ypanstep  = 1;
-
-    fix->accel = FB_ACCEL_ATI_RAGE128;
-
-    return;
-}
-
 
     /*
      *  Get the Fixed Part of the Display
@@ -1470,15 +1449,8 @@ static int
 aty128fb_get_fix(struct fb_fix_screeninfo *fix, int con, struct fb_info *fb)
 {
     const struct fb_info_aty128 *info = (struct fb_info_aty128 *)fb;
-    struct aty128fb_par par;
-
-    if (con == -1)
-	par = info->default_par;
-    else
-	aty128_decode_var(&fb_display[con].var, &par, info); 
-
-    aty128_encode_fix(fix, &par, info);
-
+   
+    *fix = info->fb_info.fix;	 
     return 0;            
 }
 
@@ -1493,7 +1465,7 @@ aty128fb_pan_display(struct fb_var_screeninfo *var, int con,
 			   struct fb_info *fb)
 {
     struct fb_info_aty128 *info = (struct fb_info_aty128 *)fb;
-    struct aty128fb_par *par = &info->current_par;
+    struct aty128fb_par *par = (struct aty128fb_par *) info->fb_info.par;
     u32 xoffset, yoffset;
     u32 offset;
     u32 xres, yres;
@@ -1510,7 +1482,7 @@ aty128fb_pan_display(struct fb_var_screeninfo *var, int con,
     par->crtc.xoffset = xoffset;
     par->crtc.yoffset = yoffset;
 
-    offset = ((yoffset * par->crtc.vxres + xoffset) * info->fb_info.var.bits_per_pixel) >> 6;
+    offset = ((yoffset * par->crtc.vxres + xoffset) * par->crtc.bpp) >> 6;
 
     aty_st_le32(CRTC_OFFSET, offset);
 
@@ -1596,7 +1568,7 @@ aty128fb_setup(char *options)
     if (!options || !*options)
 	return 0;
 
-    while (this_opt = strsep(&options, ",")) {
+    while ((this_opt = strsep(&options, ","))) {
 	if (!strncmp(this_opt, "font:", 5)) {
 	    char *p;
 	    int i;
@@ -1660,8 +1632,8 @@ aty128_init(struct fb_info_aty128 *info, const char *name)
     const struct aty128_chip_info *aci = &aty128_pci_probe_list[0];
     char *video_card = "Rage128";
 
-    if (!info->vram_size)	/* may have already been probed */
-	info->vram_size = aty_ld_le32(CONFIG_MEMSIZE) & 0x03FFFFFF;
+    if (!info->fb_info.fix.smem_len)	/* may have already been probed */
+	info->fb_info.fix.smem_len = aty_ld_le32(CONFIG_MEMSIZE) & 0x03FFFFFF;
 
     /* Get the chip revision */
     chip_rev = (aty_ld_le32(CONFIG_CNTL) >> 16) & 0x1F;
@@ -1673,13 +1645,13 @@ aty128_init(struct fb_info_aty128 *info, const char *name)
 
     printk(KERN_INFO "aty128fb: %s [chip rev 0x%x] ", video_card, chip_rev);
 
-    if (info->vram_size % (1024 * 1024) == 0)
-	printk("%dM %s\n", info->vram_size / (1024*1024), info->mem->name);
+    if (info->fb_info.fix.smem_len % (1024 * 1024) == 0)
+	printk("%dM %s\n", info->fb_info.fix.smem_len / (1024*1024), info->mem->name);
     else
-	printk("%dk %s\n", info->vram_size / 1024, info->mem->name);
+	printk("%dk %s\n", info->fb_info.fix.smem_len / 1024, info->mem->name);
 
     /* fill in info */
-    strcpy(info->fb_info.modename, aty128fb_name);
+    strcpy(info->fb_info.modename, info->fb_info.fix.id);
     info->fb_info.node  = -1;
     info->fb_info.fbops = &aty128fb_ops;
     info->fb_info.disp  = &disp;
@@ -1714,17 +1686,17 @@ aty128_init(struct fb_info_aty128 *info, const char *name)
             var = default_var;
     }
 
-    info->fb_info.var = var;	
-
     if (noaccel)
         var.accel_flags &= ~FB_ACCELF_TEXT;
     else
         var.accel_flags |= FB_ACCELF_TEXT;
 
-    if (aty128_decode_var(&var, &info->default_par, info)) {
+    if (aty128_decode_var(&var, &default_par, info)) {
 	printk(KERN_ERR "aty128fb: Cannot set default mode.\n");
 	return 0;
     }
+
+    info->fb_info.par = &default_par;	
 
     /* load up the palette with default colors */
     for (j = 0; j < 16; j++) {
@@ -1744,7 +1716,7 @@ aty128_init(struct fb_info_aty128 *info, const char *name)
     aty_st_le32(BUS_CNTL, aty_ld_le32(BUS_CNTL) | BUS_MASTER_DIS);
 
     aty128fb_set_var(&var, -1, &info->fb_info);
-    aty128_init_engine(&info->default_par, info);
+    aty128_init_engine(&default_par, info);
 
     board_list = aty128_board_list_add(board_list, info);
 
@@ -1758,7 +1730,7 @@ aty128_init(struct fb_info_aty128 *info, const char *name)
 #endif /* CONFIG_PMAC_BACKLIGHT */
 
     printk(KERN_INFO "fb%d: %s frame buffer device on %s\n",
-	   GET_FB_IDX(info->fb_info.node), aty128fb_name, name);
+	   GET_FB_IDX(info->fb_info.node), info->fb_info.fix.id, name);
 
     return 1;	/* success! */
 }
@@ -1851,21 +1823,24 @@ aty128_pci_register(struct pci_dev *pdev,
 
 	info->fb_info.currcon = -1;
 
+	info->fb_info.fix = aty128fb_fix;
+	
 	/* Virtualize mmio region */
-	info->regbase_phys = reg_addr;
+    	info->fb_info.fix.mmio_start = (unsigned long) reg_addr;
+
 	info->regbase = ioremap(reg_addr, 0x1FFF);
 
 	if (!info->regbase)
 		goto err_free_info;
 
 	/* Grab memory size from the card */
-	info->vram_size = aty_ld_le32(CONFIG_MEMSIZE) & 0x03FFFFFF;
+	info->fb_info.fix.smem_len = aty_ld_le32(CONFIG_MEMSIZE) & 0x03FFFFFF;
 
 	/* Virtualize the framebuffer */
-	info->frame_buffer_phys = fb_addr;
-	info->frame_buffer = ioremap(fb_addr, info->vram_size);
+	info->fb_info.fix.smem_start = (unsigned long) fb_addr;
+	info->fb_info.screen_base = ioremap(fb_addr, info->fb_info.fix.smem_len);
 
-	if (!info->frame_buffer) {
+	if (!info->fb_info.screen_base) {
 		iounmap((void *)info->regbase);
 		goto err_free_info;
 	}
@@ -1893,8 +1868,8 @@ aty128_pci_register(struct pci_dev *pdev,
 
 #ifdef CONFIG_MTRR
 	if (mtrr) {
-		info->mtrr.vram = mtrr_add(info->frame_buffer_phys,
-				info->vram_size, MTRR_TYPE_WRCOMB, 1);
+		info->mtrr.vram = mtrr_add(info->fb_info.fix.smem_start,
+				info->fb_info.fix.smem_len, MTRR_TYPE_WRCOMB, 1);
 		info->mtrr.vram_valid = 1;
 		/* let there be speed */
 		printk(KERN_INFO "aty128fb: Rage128 MTRR set to ON\n");
@@ -1909,7 +1884,7 @@ aty128_pci_register(struct pci_dev *pdev,
 	return 0;
 
 err_out:
-	iounmap(info->frame_buffer);
+	iounmap(info->fb_info.screen_base);
 	iounmap(info->regbase);
 err_free_info:
 	kfree(info);
@@ -2108,7 +2083,7 @@ aty128fbcon_switch(int con, struct fb_info *fb)
     aty128_decode_var(&fb_display[con].var, &par, info);
     aty128_set_par(&par, info);
 
-    aty128_set_dispsw(&fb_display[con], info, info->fb_info.var.bits_per_pixel,
+    aty128_set_dispsw(&fb_display[con], info, par.crtc.bpp,
         par.accel_flags & FB_ACCELF_TEXT);
 
     do_install_cmap(con, fb);
@@ -2178,6 +2153,7 @@ aty128_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
                          u_int transp, struct fb_info *fb)
 {
     struct fb_info_aty128 *info = (struct fb_info_aty128 *)fb;
+    struct aty128fb_par *par = (struct aty128fb_par *) info->fb_info.par;	
     u32 col;
 
     if (regno > 255)
@@ -2195,7 +2171,7 @@ aty128_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 
     /* initialize gamma ramp for hi-color+ */
 
-    if ((info->fb_info.var.bits_per_pixel > 8) && (regno == 0)) {
+    if ((par->crtc.bpp > 8) && (regno == 0)) {
         int i;
 
         if (info->chip_gen == rage_M3)
@@ -2223,7 +2199,7 @@ aty128_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
     if (info->chip_gen == rage_M3)
         aty_st_le32(DAC_CNTL, aty_ld_le32(DAC_CNTL) & ~DAC_PALETTE_ACCESS_CNTL);
 
-    if (info->fb_info.var.bits_per_pixel == 16)
+    if (par->crtc.bpp == 16)
         aty_st_8(PALETTE_INDEX, (regno << 3));
     else
         aty_st_8(PALETTE_INDEX, regno);
@@ -2231,7 +2207,7 @@ aty128_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
     aty_st_le32(PALETTE_DATA, col);
     if (info->chip_gen == rage_M3) {
     	aty_st_le32(DAC_CNTL, aty_ld_le32(DAC_CNTL) | DAC_PALETTE_ACCESS_CNTL);
-        if (info->fb_info.var.bits_per_pixel == 16)
+        if (par->crtc.bpp == 16)
             aty_st_8(PALETTE_INDEX, (regno << 3));
         else
             aty_st_8(PALETTE_INDEX, regno);
@@ -2239,15 +2215,17 @@ aty128_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
     }
 
     if (regno < 16)
-	switch (info->fb_info.var.bits_per_pixel) {
+	switch (par->crtc.bpp) {
 #ifdef FBCON_HAS_CFB16
 	case 9 ... 16:
-	    ((u16 *)info->fb_info.pseudo_palette)[regno] = (regno << 10) | (regno << 5) | regno;
+	    info->fbcon_cmap.cfb16[regno] = (regno << 10) | (regno << 5) |
+                regno;
 	    break;
 #endif
 #ifdef FBCON_HAS_CFB24
 	case 17 ... 24:
-	    ((u32 *)info->fb_info.pseudo_palette)[regno] = (regno << 16) | (regno << 8) | regno;
+	    info->fbcon_cmap.cfb24[regno] = (regno << 16) | (regno << 8) |
+		regno;
 	    break;
 #endif
 #ifdef FBCON_HAS_CFB32
@@ -2255,7 +2233,7 @@ aty128_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
             u32 i;
 
             i = (regno << 8) | regno;
-            ((u32 *)info->fb_info.pseudo_palette)[regno] = (i << 16) | i;
+            info->fbcon_cmap.cfb32[regno] = (i << 16) | i;
 	    break;
         }
 #endif
@@ -2322,12 +2300,13 @@ aty128_rectcopy(int srcx, int srcy, int dstx, int dsty,
 		u_int width, u_int height,
 		struct fb_info_aty128 *info)
 {
+    struct aty128fb_par *par = (struct aty128fb_par *) info->fb_info.par;	
     u32 save_dp_datatype, save_dp_cntl, bppval;
 
     if (!width || !height)
         return;
 
-    bppval = bpp_to_depth(info->fb_info.var.bits_per_pixel);
+    bppval = bpp_to_depth(par->crtc.bpp);
     if (bppval == DST_24BPP) {
         srcx *= 3;
         dstx *= 3;
@@ -2623,11 +2602,11 @@ cleanup_module(void)
         unregister_framebuffer(&info->fb_info);
 #ifdef CONFIG_MTRR
         if (info->mtrr.vram_valid)
-            mtrr_del(info->mtrr.vram, info->frame_buffer_phys,
-                     info->vram_size);
+            mtrr_del(info->mtrr.vram, info->fb_info.fix.smem_start,
+                     info->fb_info.fix.smem_len);
 #endif /* CONFIG_MTRR */
         iounmap(info->regbase);
-        iounmap(info->frame_buffer);
+        iounmap(info->fb_info.screen_base);
 
         release_mem_region(pci_resource_start(info->pdev, 0),
                            pci_resource_len(info->pdev, 0));
