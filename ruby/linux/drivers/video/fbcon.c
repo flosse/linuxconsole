@@ -287,6 +287,8 @@ static const char *fbcon_startup(struct vt_struct *vt, int init)
     if (logo) {
 	/* Need to make room for the logo */
     }
+    if (info->pm_fb)	
+    	vt->pm_con = info->pm_fb;	
     vt->data_hook = info;
     return display_desc;
 }

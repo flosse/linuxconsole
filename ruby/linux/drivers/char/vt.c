@@ -686,7 +686,7 @@ void poke_blanked_console(struct vt_struct *vt)
 /*
  * Power management for the console system.
  */
-static int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
+int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data)
 {
 	struct vt_struct *vt = dev->data;
 	
@@ -780,6 +780,8 @@ const char *create_vt(struct vt_struct *vt, int init)
         vt->vt_blanked = 0;
         vt->blank_interval = 10*60*HZ;
         vt->off_interval = 0;
+	if (vt->pm_con)
+		vt->pm_con->data = vt;
 	init_MUTEX(&vt->lock);
 	vt->default_mode->display_fg = vt;
 	memcpy(vt->vc_cons[0], vt->default_mode, sizeof(struct vc_data));
@@ -881,11 +883,6 @@ found_pool:
             vc_init(vc, 1);
 	
 	    vt->vc_cons[currcons - vt->first_vc] = vc;		
-            if (!vt->pm_con) { 
-            	vt->pm_con = pm_register(PM_SYS_DEV,PM_SYS_VGA,pm_con_request);	
-		if (vt->pm_con)
-			vt->pm_con->data = vt;			
-	    }	
         }
         return 0;
 }

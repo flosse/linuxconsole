@@ -7,6 +7,7 @@
  */
 
 #include <linux/config.h>
+#include <linux/pm.h>
 #include <linux/vt.h>
 #include <linux/kd.h>
 #include <linux/kbd_kern.h>
@@ -289,6 +290,7 @@ inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed);
 void invert_screen(struct vc_data *vc, int offset, int count, int viewed);
 void unblank_screen(struct vt_struct *vt);
 void poke_blanked_console(struct vt_struct *vt);
+int pm_con_request(struct pm_dev *dev, pm_request_t rqst, void *data);
 
 struct tty_struct;
 void respond_string(const char * p, struct tty_struct * tty);	

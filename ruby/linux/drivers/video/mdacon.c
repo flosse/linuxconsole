@@ -322,6 +322,7 @@ static const char __init *mdacon_startup(struct vt_struct *vt, int init)
 
 	vt->default_mode->vc_cols = mda_num_columns;
 	vt->default_mode->vc_rows = mda_num_lines;
+	vt->pm_con = pm_register(PM_SYS_DEV, PM_SYS_VGA, pm_con_request);
 
 	printk("mdacon: %s with %ldK of memory detected.\n",
 		mda_type_name, mda_vram_len/1024);
@@ -573,13 +574,13 @@ int __init mda_module_init(void)
 
 	/* Allocate the memory we need for this VT */
         vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
-        if (!vt) return;
+        if (!vt) return -ENOMEM;
 	memset(vt, 0, sizeof(struct vt_struct));
 	
 	vc = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
 	if (!vc) {
 		kfree(vt);
-		return;
+		return -ENOMEM;
 	}
 	vt->kmalloced = 1;
 	vt->vt_sw = &mda_con;
@@ -591,12 +592,12 @@ int __init mda_module_init(void)
                 kfree(vt);
 		if (q)
 			kfree((char *) q);	
-		return;
+		return -ENOMEM;
         }
 	vc->vc_screenbuf = (unsigned short *) q;
 	vc_init(vc, 1);			
 	printk("Console: mono %s %dx%d\n",display_desc,vc->vc_cols,vc->vc_rows);
-        return;
+        return 0;
 }
 
 void __exit mda_module_exit()
