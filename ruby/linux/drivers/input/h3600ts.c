@@ -103,19 +103,6 @@ struct h3600_dev {
 	unsigned char buf[H3600_MAX_LENGTH];
 };
 
-/*
-static int h3600_write(struct serio *dev, unsigned char val)
-{
-	return 0;
-}
-
-static struct serio h3600_port =
-{
-        type:   SERIO_RS232,
-        write:  h3600_write,
-};
-*/
-
 static void action_button_handler(int irq, void *dev_id, struct pt_regs *regs)
 {
         int down = (GPLR & GPIO_BITSY_ACTION_BUTTON) ? 0 : 1;
@@ -138,18 +125,42 @@ static void npower_button_handler(int irq, void *dev_id, struct pt_regs *regs)
 }
 
 #ifdef CONFIG_PM
+
+static int flite_brightness = 25;
+
+enum flite_pwr {
+        FLITE_PWR_OFF = 0,
+        FLITE_PWR_ON = 1
+};
+
+/*
+ * h3600_flite_power: enables or disables power to frontlight, using last bright */
+unsigned int h3600_flite_power(struct input_dev *dev, enum flite_pwr pwr)
+{
+	unsigned char brightness = ((pwr==FLITE_PWR_OFF) ? 0:flite_brightness);
+	struct h3600_dev *ts = dev->private;
+
+	/* Must be in this order */	
+       	ts->serio->write(ts->serio, 1);
+	ts->serio->write(ts->serio, pwr);
+      	ts->serio->write(ts->serio, brightness); 
+	return 0;
+}
+
 static int suspended = 0;
-static int h3600_ts_pm_callback(struct pm_dev *pm_dev, pm_request_t req, 
+static int h3600ts_pm_callback(struct pm_dev *pm_dev, pm_request_t req, 
 				void *data)
 {
+	struct input_dev *dev = (struct input_dev *) data;	
+
         switch (req) {
         case PM_SUSPEND: /* enter D1-D3 */
                 suspended = 1;
-                //h3600_flite_power(FLITE_PWR_OFF);
+                h3600_flite_power(dev, FLITE_PWR_OFF);
                 break;
         case PM_BLANK:
                 if (!suspended)
-                        //h3600_flite_power(FLITE_PWR_OFF);
+                        h3600_flite_power(dev, FLITE_PWR_OFF);
                 break;
         case PM_RESUME:  /* enter D0 */
                 /* same as unblank */
@@ -158,7 +169,7 @@ static int h3600_ts_pm_callback(struct pm_dev *pm_dev, pm_request_t req,
                         //initSerial();
                         suspended = 0;
                 }
-               // h3600_flite_power(FLITE_PWR_ON);
+                h3600_flite_power(dev, FLITE_PWR_ON);
                 break;
         }
         return 0;
@@ -196,16 +207,16 @@ static void h3600ts_process_packet(struct h3600_dev *ts)
 					key = KEY_RECORD;
 					break;
 				case H3600_SCANCODE_CALENDAR:
-					key = 0;
+					key = KEY_PROG1;
                                         break;
 				case H3600_SCANCODE_CONTACTS:
-					key = 0;
+					key = KEY_PROG2;
                                         break;
 				case H3600_SCANCODE_Q:        
 					key = KEY_Q;
                                         break;
 				case H3600_SCANCODE_START:
-					key = 0;
+					key = KEY_PROG3;
                                         break;
 				case H3600_SCANCODE_UP:
 					key = KEY_UP;
@@ -300,16 +311,6 @@ static int h3600ts_event(struct input_dev *dev, unsigned int type,
                         		suspend_button_pushed = 1;
                         		schedule_task(&suspend_button_task);
                 		}
-
-/*
-				if (value == 0) {
-					Turn off the power 
-					h3600_flite_power(FLITE_PWR_OFF);
-				} else {
-					Lite this little light of mine 
-					h3600_flite_power(FLITE_PWR_ON);
-				}  		 
-*/ 
 			}  	
 			return 0;	
 	}					
@@ -456,7 +457,8 @@ static void h3600ts_connect(struct serio *serio, struct serio_dev *dev)
 
 	//h3600_flite_control(1, 25);     /* default brightness */
 #ifdef CONFIG_PM
-	pm_register(PM_ILLUMINATION_DEV, PM_SYS_LIGHT, h3600_ts_pm_callback);
+	ts->dev.pm_dev = pm_register(PM_ILLUMINATION_DEV, PM_SYS_LIGHT, 
+					h3600ts_pm_callback);
 	printk("registered pm callback\n");
 #endif
 	input_register_device(&ts->dev);
@@ -475,9 +477,6 @@ static void h3600ts_disconnect(struct serio *serio)
 	
         free_irq(IRQ_GPIO_BITSY_ACTION_BUTTON, &ts->dev);
         free_irq(IRQ_GPIO_BITSY_NPOWER_BUTTON, &ts->dev);
-#ifdef CONFIG_PM
-        pm_unregister_all(h3600_ts_pm_callback);
-#endif
 	input_unregister_device(&ts->dev);
 	serio_close(serio);
 	kfree(ts);
