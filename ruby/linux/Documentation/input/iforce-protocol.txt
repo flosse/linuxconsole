@@ -27,25 +27,28 @@ LEN= 0e
 	Val 41 Friction (Force = f(velocity)) and Inertia (Force = f(acceleration)) (Hum, I thought that accel = d(velocity)/dt...)
 
 	
-02 Map Y to X and trigger
-	Bits 4-7: Val 2 = No mapping (Joystick) | See 05
-	          Val 4 = Mapping (Wheel)       |
+02 Axes affected and trigger
+	Bits 4-7: Val 2 = effect along one axis. Byte 05 indicates direction
+	          Val 4 = X axis only. Byte 05 must contain 5a
+	          Val 8 = Y axis only. Byte 05 must contain b4
+	          Val c = X and Y axes. Bytes 05 must contain 60
 	Bits 0-3: Val 0 = No trigger
 	          Val x+1 = Button x triggers the effect
 	When the whole byte is 0, cancel the previously set trigger
 
 03-04 Duration of effect (little endian encoding). 1s = 03e8
 
-05 Direction of effect. If axis Y isn't mapped to X, Val 00 corresponds to 0 degrees (points forward), Val 40 corresponds to 90 degres (right).
-   Else, if Y is mapped to X (See byte 02 above)m value must be 5a.
+05 Direction of effect, if applicable. Else, see 02 for value to assign.
 
 06-07 Related to the use of a trigger. If a trigger is declared or canceled, value is ffff, 0000 else. I guess it can be the interval of time between two consecutive replaying.
 
 08-09 Periodicity or magnitude modifier id.
 0a-0b Attack and fade modifier id, or ffff if none.
 *or*
-08-09 Modifier id of position based modifier for X-axis
-0a-0b Modifier id of position based modifier for Y-axis, or ffff if not applicable
+08-09 Modifier id of position based modifier for X-axis, or ffff if not
+applicable
+0a-0b Modifier id of position based modifier for Y-axis, or ffff if not
+applicable
 
 0c-0d Delay before execution of effect (little endian encoding). 1s = 03e8
 
@@ -137,12 +140,10 @@ procedure make_modifier(modifier_type)
 	}
 }
 
-This looks quite uselessly complex to me, but there must be a good reason for
-Immerse to design such a twisted system. I have been stuck on this allocation
-scheme for quite a long time, but this solution is the one that worked best
-for me until now.
-As for any information contained in this document, but especially for those
-ones, you should keep in your mind that I may be completely wrong...
+This can seem quite complex, but what I called modifier ids might actually be
+adresses. That would explain why these 'ids' are incremented depending on the
+modifier. This makes sense, as all those increments are always greater or
+equal than the amount of information needed to specify the matching modifier.
 		
 ** Appendix: How to study the protocole ? **
 
