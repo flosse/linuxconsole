@@ -156,9 +156,16 @@ factor depending on how strong they want effects to be. This setting is
 persistent accross access to the driver, so you should not care about it if
 you are writing games, as another utility probably already set this for you.
 
-int ioctl(int fd, EVIOCSGAIN, unsigned short gain);
+/* Set the gain of the device
+int gain;		/* between 0 and 100 */
+struct input_event ie;	/* structure used to communicate with the driver */
 
-Values for gain range from 0 (0%) to 0xFFFF (100%).
+ie.type = EV_FF;
+ie.code = FF_GAIN;
+ie.value = 0xFFFFUL * gain / 100;
+
+if (write(fd, &ie, sizeof(ie)) == -1)
+	perror("set gain");
 
 3.6 Enabling/Disabling autocenter
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -166,10 +173,17 @@ The autocenter feature quite disturbs the rendering of effects in my opinion,
 and I think it should be an effect, which computation depends on the game
 type. But you can enable it if you want.
 
-int ioctl(int fd, EVIOCSAUTOCENTER, unsigned short strength);
+int autocenter;		/* between 0 and 100 */
+struct input_event ie;
 
-Possible values for strength range from 0 (no autocenter) to 0xFFFF (strongest
-spring possible).
+ie.type = EV_FF;
+ie.code = FF_AUTOCENTER;
+ie.value = 0xFFFFUL * autocenter / 100;
+
+if (write(fd, &ie, sizeof(ie)) == -1)
+	perror("set auto-center");
+
+A value of 0 means "no auto-center".
 
 3.7 Dynamic update of an effect
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
