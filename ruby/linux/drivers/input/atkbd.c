@@ -127,7 +127,7 @@ struct atkbd {
 	char ack;
 	char emul;
 	char error;
-	short id;
+	unsigned short id;
 };
 
 /*
@@ -356,7 +356,8 @@ static int atkbd_probe(struct atkbd *atkbd)
 /*
  * Next, we check if it's a keyboard. It should send 0xab83
  * (0xab84 on IBM ThinkPad, and 0xaca1 on a NCD Sun layout keyboard,
- * 0xab02 on unxlated i8042 and 0xab03 on unxlated ThinkPad).
+ * 0xab02 on unxlated i8042 and 0xab03 on unxlated ThinkPad, 0xab7f
+ * on Fujitsu Lifebook).
  * If it's a mouse, it'll only send 0x00 (0x03 if it's MS mouse),
  * and we'll time out here, and report an error.
  */
@@ -369,7 +370,7 @@ static int atkbd_probe(struct atkbd *atkbd)
 	atkbd->id = (param[0] << 8) | param[1];
 
 	if (atkbd->id != 0xab83 && atkbd->id != 0xab84 && atkbd->id != 0xaca1 &&
-	    atkbd->id != 0xab02 && atkbd->id != 0xab03)
+	    atkbd->id != 0xab7f && atkbd->id != 0xab02 && atkbd->id != 0xab03)
 		printk(KERN_WARNING "atkbd.c: Unusual keyboard ID: %#x\n", atkbd->id);
 
 	return 0;
