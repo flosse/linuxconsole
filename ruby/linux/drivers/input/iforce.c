@@ -808,7 +808,7 @@ static void iforce_init_device(struct iforce *iforce)
  */
 
 	expect_packet(iforce, 0x0207);
-	wait_packet(iforce, HZ);
+	wait_packet(iforce, HZ*10);
 
 /*
  * Get device info.
@@ -837,6 +837,24 @@ static void iforce_init_device(struct iforce *iforce)
 
 	send_packet(iforce, FF_CMD_INIT_0_A, "\004\000");
 	send_packet(iforce, FF_CMD_INIT_2, "\004");
+
+/*
+ * Detect if the device is a wheel or a joystick
+ */
+	expect_packet(iforce, 0x0100);
+	if (wait_packet(iforce, HZ/5)) {
+		
+		expect_packet(iforce, 0x0200);
+		if (wait_packet(iforce, HZ/5)) {
+			printk(KERN_WARNING "iforce.c: failed to determine device type\n");
+		}
+		else {
+			iforce->type = 3;
+		}
+	}
+	else {
+		iforce->type = 1;
+	}
 
 /*
  * Close again.
