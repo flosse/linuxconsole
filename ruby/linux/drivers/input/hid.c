@@ -902,6 +902,13 @@ static void hid_configure_usage(struct hid_device *device, struct hid_field *fie
 		unknown:
 
 			if (field->report_size == 1) {
+
+				if (field->report->type == HID_OUTPUT_REPORT) {
+					usage->code = LED_MISC;
+					usage->type = EV_LED; bit = input->ledbit; max = LED_MAX; 
+					break;
+				}
+
 				usage->code = BTN_MISC;
 				usage->type = EV_KEY; bit = input->keybit; max = KEY_MAX;
 				break;
