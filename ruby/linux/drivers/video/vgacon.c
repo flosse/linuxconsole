@@ -513,6 +513,8 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
                	}
        	}
  	vc->vc_font.data = vga_fonts;	
+	vc->vc_x = ORIG_X;
+	vc->vc_y = ORIG_Y;
 	/* This maybe be suboptimal but is a safe bet - go with it */
 	vc->vc_scan_lines = vc->vc_font.height * vc->vc_rows; 
 	return display_desc;
@@ -815,17 +817,6 @@ static int vgacon_set_origin(struct vc_data *c)
 
 static void vgacon_save_screen(struct vc_data *c)
 {
-	static int vga_bootup_console;
-
-	if (!vga_bootup_console) {
-		/* This is a gross hack, but here is the only place we can
-		 * set bootup console parameters without messing up generic
-		 * console initialization routines.
-		 */
-		vga_bootup_console = 1;
-		c->vc_x = ORIG_X;
-		c->vc_y = ORIG_Y;
-	}
 	if (!vga_is_gfx)
 		scr_memcpyw_from((u16 *) c->vc_screenbuf, (u16 *) c->vc_origin, c->vc_screenbuf_size);
 }
