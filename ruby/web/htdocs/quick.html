@@ -1,0 +1,249 @@
+<!DOCTYPE "-//IETF//DTD HTML 3.2//EN" PUBLIC>
+<html>
+<head>
+<meta name="description" content="Linux Input drivers">
+<meta name="keywords" content="joystick gamepad keyboard mouse wheel force feedback touchpad tablet input device linux driver gnu">
+<title>Linux Input Drivers</title>
+<LINK REV=MADE HREF="mailto:vojtech@suse.cz">
+</head>
+
+<body text="#000000" bgcolor="#ffffff">
+
+<table border=0 cellspacing=0 cellpadding=0 width="100%" bgcolor="#FFFFFF">
+<tr><td><img SRC="l1i.png" border=0 width=32 height=64 alt=""><br></td><td width="100%" background="m1i.png">
+<img src="title.png" border=0 alt="Linux Input Drivers" width=512 height=64><br></td><td>
+<img SRC="r1i.png" border=0 width=32 height=64 alt=""><br></td></tr>
+<tr><td><img src="l2i.png" border=0 width=32 height=16 alt=""><br></td><td></td><td>
+<img SRC="r2i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td background="l3i.png"><img src="l3i.png" border=0 width=32 height=16 alt=""><br></td><td>
+<div align=center><strong>
+
+<a href="http://www.suse.cz/development/">SuSE Labs</a> -
+<a href="index.html#introduction">Introduction</a> -
+<a href="index.html#news">News</a> -
+<a href="quick.html#download">Download</a> -
+<a href="joystick.html">Joysticks</a> -
+<a href="quick.html">Quick Start</a> -
+<a href="index.html#documentation">Documentation</a> -
+<a href="hardware.html">Supported Hardware</a> -
+<a href="adapters.html">Adapters</a> -
+<a href="links.html">Links</a><br>
+
+</strong></div></td><td background="r3i.png"><img src="r3i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="l4i.png" border=0 width=32 height=16 alt=""><br></td><td>
+</td><td><img SRC="r4i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="l6i.png" border=0 width=32 height=16 alt=""><br></td><td background="m2i.png">
+<img src="m2i.png" border=0 width=32 height=16 alt=""><br></td><td>
+<img src="r6i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="l2i.png" border=0 width=32 height=16 alt=""><br></td><td>
+</td><td><img SRC="r2i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td background="l3i.png"><img src="l3i.png" border=0 width=32 height=16 alt=""><br></td><td>
+
+<!----------------------------------------------------------------------------------------------------------->
+<h2>Quick Start</h2>
+
+This section describes how to download, compile and use the Input Drivers.
+Change to your source directory, fasten your seatbelts, and here we go:
+<p>
+
+<code>
+cd /usr/src<br>
+</code>
+<p>
+
+<h2><a name="download">Download</a></h2>
+<p>
+
+You can get the development tree and necessary utilities via
+<a href="http://cvs.sourceforge.net/cgi-bin/cvsweb.cgi/ruby/?cvsroot=linuxconsole">CVS</a>.
+To access the CVS you can use the following commands (use an empty password):
+<p>
+
+<code>
+cvs -d :pserver:anonymous@cvs1.sourceforge.net:/cvsroot/linuxconsole login<br>
+cvs -z3 -d :pserver:anonymous@cvs1.sourceforge.net:/cvsroot/linuxconsole checkout ruby<br>
+</code>
+<p>
+
+Once you have downloaded the CVS, you can always update it to the most recent version using
+the following command:
+<p>
+
+<code>
+cvs -z3 update ruby<br>
+</code>
+<p>
+
+<h2>Patching</h2>
+<p>
+
+To compile and use the files you download, you first have to get a 2.4
+kernel to use the drivers with. You can get it from
+<code><a href="ftp://ftp.kernel.org/pub/linux/kernel/v2.4/">ftp.kernel.org</a></code>.
+<p>
+
+<code>
+wget ftp://ftp.kernel.org/pub/linux/kernel/v2.4/linux-2.4.0-test1.tar.bz2<br>
+mv linux linux-old<br>
+tar xIvf linux-2.4.0-test1.tar.bz2<br>
+</code>
+<p>
+
+When you've got the kernel unpacked, you have to copy the ruby files over
+it, and clean files not used anymore:
+<p>
+
+<code>
+cd ruby/linux<br>
+cp -avP * ../../linux/<br>
+cd ../../linux<br>
+sh ../ruby/utils/remove-unused-files<br>
+</code>
+<p>
+
+<h2>Configuration</h2>
+<p>
+
+Then you configure the kernel:
+<p>
+
+<code>
+make menuconfig<br>
+</code>
+<p>
+
+This part is a little tricky. You have to select quite a bunch of options to
+have your system operate correctly. For a most usual setup with a PS/2 mouse
+and a AT keyboard you need to select:
+<p>
+
+<code>
+Input device support  ---&gt;<br>
+&nbsp;&nbsp;Input device support<br>
+&nbsp;&nbsp;i8042 aux+kbd controller<br> 
+&nbsp;&nbsp;AT and PS/2 keyboards<br>
+&nbsp;&nbsp;PS/2 mouse<br>
+&nbsp;&nbsp;Mouse interface<br>
+</code>
+<p>
+
+For a setup with an USB mouse and keyboard you'd use:
+<p>
+
+<code>
+USB support  ---&gt;<br>
+&nbsp;&nbsp;Support for USB<br>
+&nbsp;&nbsp;Preliminary USB device filesystem<br>
+&nbsp;&nbsp;UHCI (Intel PIIX4, VIA, ...) support<br>
+&nbsp;&nbsp;OHCI (Compaq, iMacs, OPTi, SiS, ALi, ...) support<br>
+Input device support  ---&gt;<br>
+&nbsp;&nbsp;Input device support<br>
+&nbsp;&nbsp;USB Human Interface Device<br>
+&nbsp;&nbsp;Mouse interface<br>
+</code>
+<p>
+
+For serial mice you need:
+<p>
+
+<code>
+Input device support  ---&gt;<br>
+&nbsp;&nbsp;Serial port input line discipline<br>
+&nbsp;&nbsp;Serial mouse<br>
+&nbsp;&nbsp;Mouse interface<br>
+</code>
+<p>
+
+And in your init scripts a call to the inputattach utility (can be found in
+the utils subdir in the ruby tree). See the help for this utility about what
+the command line will be for your mouse - there are quite a couple different
+types of them.
+<p>
+
+<code>
+&nbsp;&nbsp;inputattach -t mman /dev/ttyS0 &amp;<br>
+</code>
+<p>
+
+To get an analog joystick working, you add:
+<p>
+
+<code>
+Input device support  ---&gt<br>
+&nbsp;&nbsp;ns558 gameports<br>
+&nbsp;&nbsp;Analog joysticks and gamepads<br>
+&nbsp;&nbsp;Joystick interface<br>
+</code>
+<p>
+
+For other joystick types and gameport types you can select other joystick
+and gameport drivers if you have them. The same for mice, keyboards and
+other drivers.
+<p>
+
+When you're done with configuring the kernel, you compile and install it
+(make sure your /etc/lilo.conf has an entry for this new kernel):
+<p>
+
+<code>
+make dep modules modules_install bzImage<br>
+cp arch/i386/boot/bzImage /boot/vmlinuz<br>
+lilo<br>
+</code>
+<p>
+
+Then, to keep a working system after you boot with the new kernel, you also
+need to change a couple nodes in /dev:
+<p>
+
+<code>
+cd /dev<br>
+mkdir old<br>
+mv mouse js? old<br>
+mkdir input<br>
+cd input<br>
+mknod js0 c 13 0<br>
+mknod js1 c 13 1<br>
+mknod js2 c 13 2<br>
+mknod js3 c 13 3<br>
+mknod mouse0 c 13 32<br>
+mknod mouse1 c 13 33<br>
+mknod mouse2 c 13 34<br>
+mknod mouse3 c 13 35<br>
+mknod mice c 13 63<br>
+mknod event0 c 13 64<br>
+mknod event1 c 13 65<br>
+mknod event2 c 13 66<br>
+mknod event3 c 13 67<br>
+cd ..<br>
+ln -s input/js0 js0<br>
+ln -s input/js1 js1<br>
+ln -s input/mice mouse<br>
+</code>
+<p>
+
+After this, reboot, load any modules you didn't compile straight into the
+kernel, and everything should work. If it doesn't, well, something went
+wrong.
+<p>
+<!----------------------------------------------------------------------------------------------------------->
+
+<address>
+<p>Send any questions, comments, bug reports to:
+<a href="mailto:vojtech@suse.cz">Vojtech Pavlik &lt;vojtech@suse.cz&gt;</a></p>
+</address>
+
+<div align=center>
+<a href="http://www.suse.cz/"><img src="sponsor.png" alt="Sponsored by SuSE" border=0 width=298 height=61></a>
+</div>
+
+</td><td background="r3i.png"><img src="r3i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="l5i.png" border=0 width=32 height=16 alt=""><br></td><td>
+</td><td><img SRC="r5i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+<tr><td><img src="l7i.png" border=0 width=32 height=16 alt=""><br></td><td background="m2i.png">
+<img src="m2i.png" border=0 width=32 height=16 alt=""><br>
+</td><td><img SRC="r7i.png" border=0 width=32 height=16 alt=""><br></td></tr>
+</table>
+
+</body>
+</html>
