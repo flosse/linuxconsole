@@ -292,9 +292,9 @@ static void __init mda_initialize(void)
 }
 
 #ifdef MODULE
-static const char *mdacon_startup(void)
+static const char *mdacon_startup(struct vt_struct *vt)
 #else
-static const char __init *mdacon_startup(void)
+static const char __init *mdacon_startup(struct vt_struct *vt)
 #endif
 {
 	mda_num_columns = 80;
@@ -333,7 +333,6 @@ static const char __init *mdacon_startup(void)
 static void mdacon_init(struct vc_data *c, int init)
 {
 	c->vc_complement_mask = 0x0800;	 /* reverse video */
-	c->vc_display_fg = &mda_display_fg;
 
 	if (init) {
 		c->vc_cols = mda_num_columns;

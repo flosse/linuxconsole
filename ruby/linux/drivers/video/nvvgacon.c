@@ -52,7 +52,7 @@
  *  Interface used by the world
  */
 
-static const char *nvvgacon_startup(void);
+static const char *nvvgacon_startup(struct vt_struct *vt);
 static void nvvgacon_init(struct vc_data *c, int init);
 static void nvvgacon_deinit(struct vc_data *c);
 static void nvvgacon_cursor(struct vc_data *c, int mode);
@@ -145,9 +145,9 @@ static inline void scr_memmovew(u16 *dest, u16 *src, unsigned int length) {
 }
 
 #ifdef MODULE
-static const char *nvvgacon_startup(void)
+static const char *nvvgacon_startup(struct vt_struct *vt)
 #else
-__initfunc(static const char *nvvgacon_startup(void))
+__initfunc(static const char *nvvgacon_startup(struct vt_struct *vt))
 #endif
 {
         int i;
@@ -591,7 +591,7 @@ nvvgacon_do_font_op(char *arg, int set, int ch512)
  * Adjust the screen to fit a font of a certain height
  */
 static int
-nvvgacon_adjust_height(unsigned fontheight)
+nvvgacon_adjust_height(struct vc_data *vc, unsigned fontheight)
 {
 	int rows, maxscan;
 	unsigned char ovr, vde, fsr;
@@ -636,10 +636,7 @@ nvvgacon_adjust_height(unsigned fontheight)
 	writeb( vde, nvvga_video_port_val );
 	sti();
 
-	for (i = 0; i < MAX_NR_USER_CONSOLES; i++) {
-                struct vc_data *tmp = vc->display_fg->vcs.vc_cons[i];
-                vc_resize(tmp, rows, 0);   /* Adjust console size */
-        }
+        vc_resize(vc, rows, 0);   /* Adjust console size */
 	return 0;
 }
 
@@ -652,7 +649,7 @@ static int nvvgacon_font_op(struct vc_data *c, struct console_font_op *op)
 			return -EINVAL;
 		rc = nvvgacon_do_font_op(op->data, 1, op->charcount == 512);
 		if (!rc && !(op->flags & KD_FONT_FLAG_DONT_RECALC))
-			rc = nvvgacon_adjust_height(op->height);
+			rc = nvvgacon_adjust_height(c, op->height);
 	} else if (op->op == KD_FONT_OP_GET) {
 		op->width = 8;
 		op->height = nvvga_video_font_height;
@@ -771,24 +768,22 @@ static void nvvgacon_bmove(struct vc_data *c, int sy, int sx,
  *  The console `switch' structure for the VGA based console
  */
 struct consw nvvga_con = {
-	nvvgacon_startup,
-	nvvgacon_init,
-	nvvgacon_deinit,
-	nvvgacon_clear,			/* con_clear */
-        nvvgacon_putc,			/* con_putc */
-        nvvgacon_putcs,			/* con_putcs */
-	nvvgacon_cursor,
-	nvvgacon_scroll,		/* con_scroll */
-        nvvgacon_bmove,			/* con_bmove */
-	nvvgacon_switch,
-	nvvgacon_blank,
-	nvvgacon_font_op,
-	nvvgacon_set_palette,
-	nvvgacon_scrolldelta,
-        NULL,
-        NULL,
-	nvvgacon_build_attr,
-	nvvgacon_invert_region,
+	con_startup:		nvvgacon_startup,
+	con_init:		nvvgacon_init,
+	con_deinit:		nvvgacon_deinit,
+	con_clear:		nvvgacon_clear,
+        con_putc:		nvvgacon_putc,
+        con_putcs:		nvvgacon_putcs,
+	con_cursor:		nvvgacon_cursor,
+	con_scroll:		nvvgacon_scroll,
+        con_bmove:		nvvgacon_bmove,		
+	con_switch:		nvvgacon_switch,
+	con_blank:		nvvgacon_blank,
+	con_font_op:		nvvgacon_font_op,
+	con_set_palette:	nvvgacon_set_palette,
+	con_scrolldelta:	nvvgacon_scrolldelta,
+	con_build_attr:		nvvgacon_build_attr,
+	con_invert_region:	nvvgacon_invert_region,
 };
 
 #ifndef MODULE
@@ -875,7 +870,7 @@ int init_module(void)
 
 void cleanup_module(void)
 {
-	give_up_console(&nvvga_con);
+	/* give_up_console(&nvvga_con); */
 }
 
 #endif
