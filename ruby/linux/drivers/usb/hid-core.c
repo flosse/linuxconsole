@@ -49,6 +49,7 @@
 #include <linux/hiddev.h>
 #endif
 
+
 /*
  * Version Information
  */
@@ -990,7 +991,7 @@ static int hid_submit_out(struct hid_device *hid)
 
 	dbg("submitting out urb");
 
-	if (usb_submit_urb(hid->urbout)) {
+	if (usb_submit_urb(hid->urbout, GFP_ATOMIC)) {
 		err("usb_submit_urb(out) failed");
 		return -1;
 	}
@@ -1021,7 +1022,7 @@ static int hid_submit_ctrl(struct hid_device *hid)
 
 	dbg("submitting ctrl urb");
 
-	if (usb_submit_urb(hid->urbctrl)) {
+	if (usb_submit_urb(hid->urbctrl, GFP_ATOMIC)) {
 		err("usb_submit_urb(ctrl) failed");
 		return -1;
 	}
@@ -1047,6 +1048,7 @@ static void hid_irq_out(struct urb *urb)
 
 	if (hid->outhead != hid->outtail) {
 		hid_submit_out(hid);
+		spin_unlock_irqrestore(&hid->outlock, flags);
 		return;
 	}
 
@@ -1078,6 +1080,7 @@ static void hid_ctrl(struct urb *urb)
 
 	if (hid->ctrlhead != hid->ctrltail) {
 		hid_submit_ctrl(hid);
+		spin_unlock_irqrestore(&hid->ctrllock, flags);
 		return;
 	}
 
@@ -1169,7 +1172,7 @@ int hid_open(struct hid_device *hid)
 
 	hid->urbin->dev = hid->dev;
 
-	if (usb_submit_urb(hid->urbin))
+	if (usb_submit_urb(hid->urbin, GFP_KERNEL))
 		return -EIO;
 
 	return 0;
@@ -1316,14 +1319,14 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 		if (endpoint->bEndpointAddress & USB_DIR_IN) {
 			if (hid->urbin)
 				continue;
-			if (!(hid->urbin = usb_alloc_urb(0)))
+			if (!(hid->urbin = usb_alloc_urb(0, GFP_KERNEL)))
 				goto fail;
 			pipe = usb_rcvintpipe(dev, endpoint->bEndpointAddress);
 			FILL_INT_URB(hid->urbin, dev, pipe, hid->inbuf, 0, hid_irq_in, hid, endpoint->bInterval);
 		} else {
 			if (hid->urbout)
 				continue;
-			if (!(hid->urbout = usb_alloc_urb(0)))
+			if (!(hid->urbout = usb_alloc_urb(0, GFP_KERNEL)))
 				goto fail;
 			pipe = usb_sndbulkpipe(dev, endpoint->bEndpointAddress);
 			FILL_BULK_URB(hid->urbout, dev, pipe, hid->outbuf, 0, hid_irq_out, hid);
@@ -1365,7 +1368,7 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 
 	kfree(buf);
 
-	hid->urbctrl = usb_alloc_urb(0);
+	hid->urbctrl = usb_alloc_urb(0, GFP_KERNEL);
 	FILL_CONTROL_URB(hid->urbctrl, dev, 0, (void*) &hid->cr, hid->ctrlbuf, 1, hid_ctrl, hid);
 
 	return hid;
