@@ -39,11 +39,12 @@ You also need inputattach.
 You then need to insert the modules into the following order:
 % modprobe joydev
 % modprobe serport
-% sleep 2
-% ./inputattach -ifor $2 &
-% sleep 2
 % modprobe iforce
 % modprobe evdev
+% ./inputattach -ifor $2 &
+For convenience, you may use the shell script named "ff" available from
+the cvs tree of the Linux Console Project at sourceforge. You can also
+retrieve it from http://www.esil.univ-mrs.fr/~jdeneux/projects/ff/.
 
 Please check that you have all the /dev/input entries needed:
 cd /dev
@@ -100,9 +101,16 @@ int ioctl(int file_descriptor, int request, struct ff_effect *effect);
 
 "effect" points to a structure describing the effect to upload. The effect is
 uploaded, but not played.
+The content of effect may be modified. In particular, its field "id" is set
+to the unique id assigned by the driver. This data is required for performing
+some operations (removing an effect, controlling the playback).
 
-3.3 Controlling the playing of effects
+3.3 Removing an effect from the device
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+int ioctl(int fd, EVIOCRMFF, effect.id);
+
+3.4 Controlling the playback of effects
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Control of playing is done with write(). Below is an example:
 
 #include <linux/input.h>
