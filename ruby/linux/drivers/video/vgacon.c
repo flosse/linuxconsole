@@ -68,7 +68,7 @@
 static const char *vgacon_startup(struct vt_struct *vt, int init);
 static void vgacon_init(struct vc_data *vc);
 static void vgacon_deinit(struct vc_data *vc);
-static void vgacon_clear(struct vc_data *vc,int x,int y,int height,int width);
+static void vgacon_clear(struct vc_data *vc,int x,int y,int width,int height);
 static void vgacon_putc(struct vc_data *vc, int c, int y, int x);
 static void vgacon_putcs(struct vc_data *vc, const unsigned short *s, int count,
                          int y, int x);
@@ -573,8 +573,7 @@ static void vgacon_deinit(struct vc_data *c)
 	con_set_default_unimap(c);
 }
 
-static void vgacon_clear(struct vc_data *vc, int x, int y, int height,
-                         int width)
+static void vgacon_clear(struct vc_data *vc, int x, int y, int width,int height)
 {
 	u16 *dest = VGA_ADDR(vc, x, y);
         u16 eattr = vc->vc_video_erase_char;
@@ -583,7 +582,7 @@ static void vgacon_clear(struct vc_data *vc, int x, int y, int height,
         	return;
 
         if (x == 0 && width == vc->vc_cols) {
-                scr_memsetw(dest, eattr, (height+1)*width*2); 
+                scr_memsetw(dest, eattr, height*width*2); 
         } else {
                 for (; height > 0; height--, dest += vc->vc_cols)
                         scr_memsetw(dest, eattr, width*2);
@@ -711,15 +710,11 @@ static int vgacon_scroll_region(struct vc_data *vc, int t, int b, int dir,
         case SM_UP:
                 scr_memcpyw(VGA_ADDR(vc, 0, t), VGA_ADDR(vc, 0, t+lines),
                                 (b-t-lines)*vc->vc_cols*2);
-                scr_memsetw(VGA_ADDR(vc, 0, b-t-lines), vc->vc_video_erase_char,
-                                lines*vc->vc_cols*2);
                 break;
 
         case SM_DOWN:
                 scr_memmovew(VGA_ADDR(vc, 0, t+lines), VGA_ADDR(vc, 0, t),
                                 (b-t-lines)*vc->vc_cols*2);
-                scr_memsetw(VGA_ADDR(vc, 0, t), vc->vc_video_erase_char, 
-			    	lines*vc->vc_cols*2);
                 break;
 	}	
 	return 1;

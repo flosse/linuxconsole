@@ -396,8 +396,7 @@ static void mdacon_putcs(struct vc_data *c, const unsigned short *s,
 	}
 }
 
-static void mdacon_clear(struct vc_data *vc, int y, int x, 
-			  int height, int width)
+static void mdacon_clear(struct vc_data *vc,int x,int y, int width, int height) 
 {
 	u16 *dest = MDA_ADDR(x, y);
 	u16 eattr = mda_convert_attr(vc->vc_video_erase_char);
@@ -406,7 +405,7 @@ static void mdacon_clear(struct vc_data *vc, int y, int x,
 		return;
 
 	if (x==0 && width == vc->vc_cols) {
-		scr_memsetw(dest, eattr, (height+1)*width*2);
+		scr_memsetw(dest, eattr, height*width*2);
 	} else {
 		for (; height > 0; height--, dest += vc->vc_cols)
 			scr_memsetw(dest, eattr, width*2);
@@ -530,17 +529,13 @@ static int mdacon_scroll_region(struct vc_data *vc, int t, int b, int dir,
 	case SM_UP:
 		scr_memmovew(MDA_ADDR(0, t), MDA_ADDR(0, t+lines),
 				(b-t-lines)*vc->vc_cols*2);
-		scr_memsetw(MDA_ADDR(0, b-t-lines), eattr,
-				lines*vc->vc_cols*2);
 		break;
 
 	case SM_DOWN:
 		scr_memmovew(MDA_ADDR(0, t+lines), MDA_ADDR(0, t),
 				(b-t-lines)*vc->vc_cols*2);
-		scr_memsetw(MDA_ADDR(0, t), eattr, lines*vc->vc_cols*2);
 		break;
 	}
-
 	return 0;
 }
 
