@@ -239,6 +239,7 @@ int __init ns558_init(void)
 	int i = 0;
 #ifdef NSS558_ISAPNP
 	struct isapnp_device_id *devid;
+	struct pci_dev *dev = NULL;
 #endif
 
 /*
