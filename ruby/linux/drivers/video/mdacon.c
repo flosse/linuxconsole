@@ -570,7 +570,7 @@ void __init mda_console_init(void)
 	}
 	vt->kmalloced = 1;
 	vt->vt_sw = &mda_con;
-	vt->vcs.vc_cons[0] = vc;
+	vt->vc_cons[0] = vc;
 #ifdef MODULE
         display_desc = create_vt(vt, 1);
 #else
@@ -578,7 +578,7 @@ void __init mda_console_init(void)
 #endif
 	q = (long) kmalloc(vc->vc_screenbuf_size, GFP_KERNEL);
         if (!display_desc || !q) {
-		kfree(vt->vcs.vc_cons[0]);
+		kfree(vt->vc_cons[0]);
 		kfree(vt->default_mode);
                 kfree(vt);
 		if (q)
