@@ -40,7 +40,6 @@
 struct evdev {
 	int exist;
 	int open;
-	int open_for_write;
 	int minor;
 	char name[16];
 	struct input_handle handle;
