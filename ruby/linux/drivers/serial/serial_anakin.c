@@ -64,10 +64,12 @@
 #define CALLOUT_ANAKIN_MINOR	32
 
 static struct tty_driver normal, callout;
-static struct tty_struct *anakin_table[UART_NR];
-static struct termios *anakin_termios[UART_NR], *anakin_termios_locked[UART_NR];
-static struct uart_state anakin_state[UART_NR];
 static u_int txenable[NR_IRQS];		/* Software interrupt register */
+
+struct uart_anakin_port {
+	struct uart_port	port;
+	struct uart_info	*info;
+};
 
 static inline unsigned int
 anakin_in(struct uart_port *port, u_int offset)
@@ -112,6 +114,7 @@ anakin_transmit_x_char(struct uart_port *port)
 static void
 anakin_start_tx(struct uart_port *port, u_int nonempty, u_int from_tty)
 {
+	struct uart_anakin_port *up = (struct uart_anakin_port *)port;
 	unsigned int flags;
 
 	save_flags_cli(flags);
@@ -121,7 +124,7 @@ anakin_start_tx(struct uart_port *port, u_int nonempty, u_int from_tty)
 		txenable[port->irq] = TXENABLE;
 
 		if ((anakin_in(port, 0x10) & TXEMPTY) && nonempty) {
-		    anakin_transmit_buffer(port);
+		    anakin_transmit_buffer(up->port);
 		}
 	}
 	restore_flags(flags);
@@ -273,8 +276,9 @@ anakin_break_ctl(struct uart_port *port, int break_state)
 static int
 anakin_startup(struct uart_port *port, struct uart_info *info)
 {
-	int retval;
+	struct uart_anakin_port *up = (struct uart_anakin_port *)port;
 	unsigned int read,write;
+	int retval;
 
 	/*
 	 * Allocate the IRQ
@@ -300,8 +304,7 @@ anakin_startup(struct uart_port *port, struct uart_info *info)
 
 	/* Store the uart_info pointer so we can reference it in 
 	 * anakin_start_tx() */
-	port->unused = (u_int)info;
-	
+	up->info = info;
 	return 0;
 }
 
@@ -354,41 +357,51 @@ static struct uart_ops anakin_pops = {
 	type:		anakin_type,
 };
 
-static struct uart_port anakin_ports[UART_NR] = {
+static struct uart_anakin_port anakin_ports[UART_NR] = {
 	{
-		base:		IO_BASE + UART0,
-		irq:		IRQ_UART0,
-		uartclk:	3686400,
-		fifosize:	0,
-		ops:		&anakin_pops,
+		port:	{
+			base:		IO_BASE + UART0,
+			irq:		IRQ_UART0,
+			uartclk:	3686400,
+			fifosize:	0,
+			ops:		&anakin_pops,
+		},
 	},
 	{
-		base:		IO_BASE + UART1,
-		irq:		IRQ_UART1,
-		uartclk:	3686400,
-		fifosize:	0,
-		ops:		&anakin_pops,
+		port:	{
+			base:		IO_BASE + UART1,
+			irq:		IRQ_UART1,
+			uartclk:	3686400,
+			fifosize:	0,
+			ops:		&anakin_pops,
+		},
 	},
 	{
-		base:		IO_BASE + UART2,
-		irq:		IRQ_UART2,
-		uartclk:	3686400,
-		fifosize:	0,
-		ops:		&anakin_pops,
+		port:	{
+			base:		IO_BASE + UART2,
+			irq:		IRQ_UART2,
+			uartclk:	3686400,
+			fifosize:	0,
+			ops:		&anakin_pops,
+		},
 	},
 	{
-		base:		IO_BASE + UART3,
-		irq:		IRQ_UART3,
-		uartclk:	3686400,
-		fifosize:	0,
-		ops:		&anakin_pops,
+		port:	{
+			base:		IO_BASE + UART3,
+			irq:		IRQ_UART3,
+			uartclk:	3686400,
+			fifosize:	0,
+			ops:		&anakin_pops,
+		},
 	},
 	{
-		base:		IO_BASE + UART4,
-		irq:		IRQ_UART4,
-		uartclk:	3686400,
-		fifosize:	0,
-		ops:		&anakin_pops,
+		port:	{
+			base:		IO_BASE + UART4,
+			irq:		IRQ_UART4,
+			uartclk:	3686400,
+			fifosize:	0,
+			ops:		&anakin_pops,
+		},
 	},
 };
 
@@ -398,7 +411,7 @@ static struct uart_port anakin_ports[UART_NR] = {
 static void
 anakin_console_write(struct console *co, const char *s, u_int count)
 {
-	struct uart_port *port = anakin_ports + co->index;
+	struct uart_port *port = &anakin_ports[co->index].port;
 	unsigned int flags, status, i;
 
 	/*
@@ -436,10 +449,11 @@ anakin_console_write(struct console *co, const char *s, u_int count)
 	 */
 	while (!(anakin_in(port, 0x10) & TXEMPTY));
 
-	if (status & IRQENABLE)
+	if (status & IRQENABLE) {
 		save_flags_cli(flags);
  		anakin_out(port, 0x18, anakin_in(port, 0x18) | IRQENABLE);
 		restore_flags(flags);
+	}
 }
 
 static kdev_t
@@ -451,7 +465,7 @@ anakin_console_device(struct console *co)
 static int
 anakin_console_wait_key(struct console *co)
 {
-	struct uart_port *port = anakin_ports + co->index;
+	struct uart_port *port = &anakin_ports[co->index].port;
 	unsigned int flags, status, ch;
 
 	save_flags_cli(flags);
@@ -501,7 +515,13 @@ anakin_console_setup(struct console *co, char *options)
 	 * if so, search for the first available port that does have
 	 * console support.
 	 */
+#if 0
 	port = uart_get_console(anakin_ports, UART_NR, co);
+#else
+	if (co->index >= UART_NR)
+		co->index = 0;
+	port = &anakin_ports[co->index].port;
+#endif
 
 	if (options)
 		uart_parse_options(options, &baud, &parity, &bits);
@@ -539,20 +559,24 @@ static struct uart_register anakin_reg = {
 	callout_major:		CALLOUT_ANAKIN_MAJOR,
 	callout_name:		CALLOUT_ANAKIN_NAME,
 	callout_driver:		&callout,
-	table:			anakin_table,
-	termios:		anakin_termios,
-	termios_locked:		anakin_termios_locked,
 	minor:			SERIAL_ANAKIN_MINOR,
 	nr:			UART_NR,
-	state:			anakin_state,
-	port:			anakin_ports,
 	cons:			ANAKIN_CONSOLE,
 };
 
 static int __init
 anakin_init(void)
 {
-	return uart_register_port(&anakin_reg);
+	int ret;
+
+	ret = uart_register_driver(&anakin_reg);
+	if (ret == 0) {
+		int i;
+
+		for (i = 0; i < UART_NR; i++)
+			uart_add_one_port(&anakin_reg, &anakin_ports[i].port);
+	}
+	return ret;
 }
 
 __initcall(anakin_init);

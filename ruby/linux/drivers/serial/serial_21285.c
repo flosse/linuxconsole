@@ -54,9 +54,6 @@
 #define H_UBRLCR_FIFO		(1 << 4)
 
 static struct tty_driver normal, callout;
-static struct tty_struct *serial21285_table[1];
-static struct termios *serial21285_termios[1];
-static struct termios *serial21285_termios_locked[1];
 static const char serial21285_name[] = "Footbridge UART";
 
 /*
@@ -471,9 +468,6 @@ static struct uart_driver serial21285_reg = {
 	normal_driver:		&normal,
 	callout_major:		SERIAL_21285_AUXMAJOR,
 	callout_driver:		&callout,
-	table:			serial21285_table,
-	termios:		serial21285_termios,
-	termios_locked:		serial21285_termios_locked,
 	minor:			SERIAL_21285_MINOR,
 	nr:			1,
 	port:			&serial21285_port,

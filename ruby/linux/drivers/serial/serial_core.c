@@ -831,7 +831,8 @@ static int uart_do_autoconfig(struct uart_info *info)
 	 * from incrementing, and hence any extra opens
 	 * of the port while we're auto-configging.
 	 */
-	down(&info->state->count_sem);
+	if (down_interruptible(&info->state->count_sem))
+		return -ERESTARTSYS;
 
 	ret = -EBUSY;
 	if (info->state->count == 1) {
@@ -1348,38 +1349,38 @@ static int uart_block_til_ready(struct tty_struct *tty, struct file *filp,
 static struct uart_info *uart_get(struct uart_driver *drv, int line)
 {
 	struct uart_state *state = drv->state + line;
-	struct uart_info *info;
+	struct uart_info *info = NULL;
 
 	down(&state->count_sem);
-	state->count++;
-	if (state->info)
+	if (!state->port)
 		goto out;
 
-	info = kmalloc(sizeof(struct uart_info), GFP_KERNEL);
-	if (info) {
-		memset(info, 0, sizeof(struct uart_info));
-		init_waitqueue_head(&info->open_wait);
-		init_waitqueue_head(&info->close_wait);
-		init_waitqueue_head(&info->delta_msr_wait);
-		info->port  = state->port;
-		info->flags = info->port->flags;
-		info->state = state;
-		tasklet_init(&info->tlet, uart_tasklet_action,
-			     (unsigned long)info);
+	state->count++;
+	info = state->info;
+
+	if (!info) {
+		info = kmalloc(sizeof(struct uart_info), GFP_KERNEL);
+		if (info) {
+			memset(info, 0, sizeof(struct uart_info));
+			init_waitqueue_head(&info->open_wait);
+			init_waitqueue_head(&info->close_wait);
+			init_waitqueue_head(&info->delta_msr_wait);
+			info->port  = state->port;
+			info->flags = info->port->flags;
+			info->state = state;
+			tasklet_init(&info->tlet, uart_tasklet_action,
+			     		(unsigned long)info);
+			state->info = info;	
+		} else
+			state->count--;
 	}
-	if (state->info)
-		kfree(info);
-	else
-		state->info = info;
 out:
 	up(&state->count_sem);
-	return state->info;
+	return info;
 }
 
 /*
- * Make sure we have the temporary buffer allocated.  Note
- * that we set retval appropriately above, and we rely on
- * this.
+ * Make sure we have the temporary buffer allocated.  
  */
 static inline int uart_alloc_tmpbuf(void)
 {
@@ -1411,23 +1412,44 @@ static int uart_open(struct tty_struct *tty, struct file *filp)
 	printk("uart_open(%d) called\n", line);
 #endif
 
+	/*
+	 * tty->driver.num won't change, so we won't fail here with
+	 * tty->driver_data set to something non-NULL (and therefore
+	 * we won't get caught by uart_close()).
+	 */
 	retval = -ENODEV;
 	if (line >= tty->driver.num)
 		goto fail;
 
-	if (!try_inc_mod_count(drv->owner))
+	/*
+	 * If we fail to increment the module use count, we can't have
+	 * any other users of this tty (since this implies that the module
+	 * is about to be unloaded).  Therefore, it is safe to set
+	 * tty->driver_data to be NULL, so uart_close() doesn't bite us.
+	 */
+	if (!try_inc_mod_count(drv->owner)) {
+		tty->driver_data = NULL;
 		goto fail;
-
-	info = uart_get(drv, line);
-	retval = -ENOMEM;
-	if (!info)
-		goto out;
+	}
 
 	/*
-	 * Set the tty driver_data.  If we fail from this point on,
-	 * the generic tty layer will cause uart_close(), which will
-	 * decrement the module use count.
+	 * FIXME: This one isn't fun.  We can't guarantee that the tty isn't
+	 * already in open, nor can we guarantee the state of tty->driver_data
 	 */
+	info = uart_get(drv, line);
+	retval = -ENOMEM;
+	if (!info) {
+		if (tty->driver_data)
+			goto out;
+		else
+			goto fail;
+	}
+
+	/*
+	 * Once we set tty->driver_data here, we are guaranteed that
+	 * uart_close() will decrement the driver module use count.
+	 * Any failures from here onwards should not touch the count.
+         */
 	tty->driver_data = info;
 	info->tty = tty;
 	info->tty->low_latency = (info->flags & ASYNC_LOW_LATENCY) ? 1 : 0;
@@ -1485,7 +1507,7 @@ static int uart_open(struct tty_struct *tty, struct file *filp)
 		 * Copy across the serial console cflag setting
 		 */
 		{
-			struct console *c = drv->cons;
+			struct console *c = info->port->cons;
 			if (c && c->cflag && c->index == line) {
 				tty->termios->c_cflag = c->cflag;
 				c->cflag = 0;
@@ -1767,7 +1789,7 @@ static int uart_pm_set_state(struct uart_state *state, int pm_state, int oldstat
 	int running = state->info &&
 		      state->info->flags & ASYNC_INITIALIZED;
 
-	if (port->type == PORT_UNKNOWN)
+	if (!port || port->type == PORT_UNKNOWN)
 		return 0;
 
 //printk("pm: %08x: %d -> %d, %srunning\n", port->iobase, dev->state, pm_state, running ? "" : "not ");
@@ -1785,8 +1807,8 @@ static int uart_pm_set_state(struct uart_state *state, int pm_state, int oldstat
 		/*
 		 * Re-enable the console device after suspending.
 		 */
-		if (state->cons && state->cons->index == port->line)
-			state->cons->flags |= CON_ENABLED;
+		if (port->cons && port->cons->index == port->line)
+			port->cons->flags |= CON_ENABLED;
 	} else if (pm_state == 1) {
 		if (ops->pm)
 			ops->pm(port, pm_state, oldstate);
@@ -1794,8 +1816,8 @@ static int uart_pm_set_state(struct uart_state *state, int pm_state, int oldstat
 		/*
 		 * Disable the console device before suspending.
 		 */
-		if (state->cons && state->cons->index == port->line)
-			state->cons->flags &= ~CON_ENABLED;
+		if (port->cons && port->cons->index == port->line)
+			port->cons->flags &= ~CON_ENABLED;
 
 		if (running) {
 			ops->stop_tx(port, 0);
@@ -1860,24 +1882,15 @@ uart_report_port(struct uart_driver *drv, struct uart_port *port)
 }
 
 static void
-uart_setup_port(struct uart_driver *drv, struct uart_state *state)
+__uart_register_port(struct uart_driver *drv, struct uart_state *state,
+		    struct uart_port *port)
 {
-	struct uart_port *port = state->port;
-	int flags = UART_CONFIG_TYPE;
+	u_int flags;
 
-	init_MUTEX(&state->count_sem);
-
-	state->close_delay	= 5 * HZ / 10;
-	state->closing_wait	= 30 * HZ;
-
+	state->port = port;
+	
 	port->type = PORT_UNKNOWN;
-
-#ifdef CONFIG_PM
-	state->cons = drv->cons;
-	state->pm = pm_register(PM_SYS_DEV, PM_SYS_COM, uart_pm);
-	if (state->pm)
-		state->pm->data = state;
-#endif
+	port->cons = drv->cons;
 
 	/*
 	 * If there isn't a port here, don't do anything further.
@@ -1889,39 +1902,80 @@ uart_setup_port(struct uart_driver *drv, struct uart_state *state)
 	 * Now do the auto configuration stuff.  Note that config_port
 	 * is expected to claim the resources and map the port for us.
 	 */
+	flags = UART_CONFIG_TYPE;
 	if (port->flags & ASYNC_AUTO_IRQ)
 		flags |= UART_CONFIG_IRQ;
 	if (port->flags & ASYNC_BOOT_AUTOCONF)
 		port->ops->config_port(port, flags);
 
 	/*
-	 * Only register this port if it is detected.
+	 * Register the port whether it's detected or not.  This allows
+	 * setserial to be used to alter this ports parameters.
 	 */
+	tty_register_devfs(drv->normal_driver, 0, drv->minor + port->line);
+	tty_register_devfs(drv->callout_driver, 0, drv->minor + port->line);
+
 	if (port->type != PORT_UNKNOWN) {
-		tty_register_devfs(drv->normal_driver, 0, drv->minor +
-					state->port->line);
-		tty_register_devfs(drv->callout_driver, 0, drv->minor +
-					state->port->line);
 		uart_report_port(drv, port);
-	}
 
 #ifdef CONFIG_PM
-	/*
-	 * Power down all ports by default, except the console if we have one.
-	 */
-	if (state->pm && (!drv->cons || port->line != drv->cons->index))
-		pm_send(state->pm, PM_SUSPEND, (void *)3);
+		/*
+	 	 * Power down all ports by default, except 
+		 * the console if we have one.
+	 	 */
+		if (state->pm && (!drv->cons || port->line != drv->cons->index))
+			pm_send(state->pm, PM_SUSPEND, (void *)3);
 #endif
+	}
 }
 
 /*
- * Register a set of ports with the core driver.  Note that we don't
- * printk any information about the ports; that is up to the low level
- * driver to do if they so wish.
+ * This reverses the affects of __uart_register_port.
+ */
+static void
+__uart_unregister_port(struct uart_driver *drv, struct uart_state *state)
+{
+	struct uart_port *port = state->port;
+
+	/*
+	 * Hang up the line to kill all usage of this port.
+         */
+	if (state->info && state->info->tty)
+		tty_hangup(state->info->tty);
+
+	/*
+	 * Remove the devices from devfs
+	 */
+	tty_unregister_devfs(drv->normal_driver, drv->minor + port->line);
+	tty_unregister_devfs(drv->callout_driver, drv->minor + port->line);
+
+	/*
+	 * Free the ports resources, if any.
+	 */
+	if (port->type != PORT_UNKNOWN)
+		port->ops->release_port(port);
+
+	/*
+	 * Indicate that there isn't a port here anymore.
+	 */
+	port->type = PORT_UNKNOWN;
+
+	/*
+	 * Kill the tasklet, and free resources.
+	 */
+	if (state->info) {
+		tasklet_kill(&state->info->tlet);
+		kfree(state->info);
+	}
+}
+
+/*
+ * Register a set of ports with the core driver.
  */
 int uart_register_driver(struct uart_driver *drv)
 {
 	struct tty_driver *normal, *callout;
+	struct termios **termios;
 	int i, retval;
 
 	if (drv->state)
@@ -1941,6 +1995,11 @@ int uart_register_driver(struct uart_driver *drv)
 	memset(drv->state, 0, sizeof(struct uart_state) * drv->nr +
 			sizeof(int));
 
+	termios = kmalloc(sizeof(struct termios *) * drv->nr * 2 +
+			  sizeof(struct tty_struct *) * drv->nr, GFP_KERNEL);
+	if (!termios)
+		goto out;
+
 	normal  = drv->normal_driver;
 	callout = drv->callout_driver;
 
@@ -1956,9 +2015,9 @@ int uart_register_driver(struct uart_driver *drv)
 	normal->init_termios.c_cflag = B38400 | CS8 | CREAD | HUPCL | CLOCAL;
 	normal->flags		= TTY_DRIVER_REAL_RAW | TTY_DRIVER_NO_DEVFS;
 	normal->refcount	= (int *)(drv->state + drv->nr);
-	normal->table		= drv->table;
-	normal->termios		= drv->termios;
-	normal->termios_locked	= drv->termios_locked;
+	normal->termios		= termios;
+	normal->termios_locked	= termios + drv->nr;
+	normal->table		= (struct tty_struct **)(termios + drv->nr * 2);
 	normal->driver_state    = drv;
 
 	normal->open		= uart_open;
@@ -1992,27 +2051,53 @@ int uart_register_driver(struct uart_driver *drv)
 	callout->major		= drv->callout_major;
 	callout->subtype	= SERIAL_TYPE_CALLOUT;
 	callout->read_proc	= NULL;
-	callout->proc_entry	= NULL;
 
+	/*
+	 * Initialise the UART state(s).
+	 */
 	for (i = 0; i < drv->nr; i++) {
 		struct uart_state *state = drv->state + i;
 
+		init_MUTEX(&state->count_sem);
 		state->callout_termios	= callout->init_termios;
 		state->normal_termios	= normal->init_termios;
-		state->port		= drv->port + i;
-		state->port->line	= i;
-
-		uart_setup_port(drv, state);
-	}
+		state->close_delay	= 5 * HZ / 10;
+		state->closing_wait	= 30 * HZ;
+#ifdef CONFIG_PM
+		state->pm = pm_register(PM_SYS_DEV, PM_SYS_COM, uart_pm);
+		if (state->pm)
+			state->pm->data = state;
+#endif
+	}	
 
 	retval = tty_register_driver(normal);
-	if (retval)
+	if (retval) 
 		goto out;
 
 	retval = tty_register_driver(callout);
-	if (retval)
+	if (retval) {
 		tty_unregister_driver(normal);
+		goto out;
+	}
 
+	/*
+	 * And finally the port(s).  This part will eventually
+	 * become the responsibility of the low level drivers -
+	 * and will allow the low level drivers to extend the
+	 * uart_port structure in any way they see fit.
+	 *
+	 * Any drivers using this method should not set drv->port.
+	 */
+	if (drv->port) {
+		printk("serial_core: driver %s uses obsolete registration\n",
+			drv->normal_name);
+		for (i = 0; i < drv->nr; i++) {
+			struct uart_port *port = drv->port + i;
+
+			port->line = i;
+			__uart_register_port(drv, drv->state + i, port);
+		}
+	}
 out:
 	if (retval && drv->state)
 		kfree(drv->state);
@@ -2023,32 +2108,59 @@ void uart_unregister_driver(struct uart_driver *drv)
 {
 	int i;
 
-	for (i = 0; i < drv->nr; i++) {
-		struct uart_state *state = drv->state + i;
+	/*
+	 * First, remove all ports.  We only do this if the driver
+	 * isn't using the new API (and therefore registering its own
+	 * port structures).
+	 */
+	if (drv->port) {
+		for (i = 0; i < drv->nr; i++) {
+			struct uart_state *state = drv->state + i;
+		
+			__uart_unregister_port(drv, state);
+                }
+        }
 
-		if (state->info && state->info->tty)
-			tty_hangup(state->info->tty);
-
-		pm_unregister(state->pm);
-
-		if (state->port->type != PORT_UNKNOWN)
-			state->port->ops->release_port(state->port);
-		if (state->info) {
-			tasklet_kill(&state->info->tlet);
-			kfree(state->info);
-		}
-	}
+	for (i = 0; i < drv->nr; i++)
+		pm_unregister(drv->state[i].pm);
 
 	tty_unregister_driver(drv->normal_driver);
 	tty_unregister_driver(drv->callout_driver);
 
 	kfree(drv->state);
+	kfree(drv->normal_driver->termios);
+}
+
+int uart_add_one_port(struct uart_driver *drv, struct uart_port *port)
+{
+	struct uart_state *state = drv->state + port->line;
+
+	down(&state->count_sem);
+	__uart_register_port(drv, state, port);
+	up(&state->count_sem);
+
+	return 0;
+}
+
+int uart_remove_one_port(struct uart_driver *drv, struct uart_port *port)
+{
+	struct uart_state *state = drv->state + port->line;
+
+	if (state->port != port)
+		printk(KERN_ALERT "Removing wrong port: %p != %p\n",
+			state->port, port);
+
+	down(&state->count_sem);
+	__uart_unregister_port(drv, state);
+	up(&state->count_sem);
+	return 0;
 }
 
 static int uart_match_port(struct uart_port *port1, struct uart_port *port2)
 {
 	if (port1->iotype != port2->iotype)
 		return 0;
+
 	switch (port1->iotype) {
 	case SERIAL_IO_PORT:	return (port1->iobase == port2->iobase);
 	case SERIAL_IO_MEM:	return (port1->membase == port2->membase);
@@ -2065,19 +2177,23 @@ static int uart_match_port(struct uart_port *port1, struct uart_port *port2)
  *	type of the port if ASYNC_BOOT_AUTOCONF is set, and detect the IRQ
  *	if ASYNC_AUTO_IRQ is set.
  *
+ *      We try to pick the same port for the same IO base address, so that
+ *      when a modem is plugged in, unplugged and plugged back in, it gets
+ *      allocated the same port.
+ *
  *	Returns negative error, or positive line number.
  */
 int uart_register_port(struct uart_driver *drv, struct uart_port *port)
 {
 	struct uart_state *state = NULL;
-	int i, flags = UART_CONFIG_TYPE;
+	int i;
 
+	down(&port_sem);
 	/*
 	 * First, find a port entry which matches.  Note: if we do
 	 * find a matching entry, and it has a non-zero use count,
 	 * then we can't register the port.
 	 */
-	down(&port_sem);
 	for (i = 0; i < drv->nr; i++) {
 		if (uart_match_port(drv->state[i].port, port)) {
 			down(&drv->state[i].count_sem);
@@ -2120,6 +2236,11 @@ int uart_register_port(struct uart_driver *drv, struct uart_port *port)
 		}
 	}
 
+	/*
+	 * Ok, we've found a line that we can use.  We have taken the
+	 * per-port semaphore, so we can release the global port
+	 * semaphore now.
+	 */
 	up(&port_sem);
 
 	if (!state)
@@ -2149,34 +2270,9 @@ int uart_register_port(struct uart_driver *drv, struct uart_port *port)
 	state->port->regshift = port->regshift;
 	state->port->iotype   = port->iotype;
 	state->port->flags    = port->flags;
+	state->port->line     = drv->state - state;
 
-#if 0 //def CONFIG_PM
-	/* we have already registered the power management handlers */
-	state->pm = pm_register(PM_SYS_DEV, PM_SYS_COM, uart_pm);
-	if (state->pm) {
-		state->pm->data = state;
-
-		/*
-		 * Power down all ports by default, except
-		 * the console if we have one.
-		 */
-		if (!drv->cons || state->port->line != drv->cons->index)
-			pm_send(state->pm, PM_SUSPEND, (void *)3);
-	}
-#endif
-
-	if (state->port->flags & ASYNC_AUTO_IRQ)
-		flags |= UART_CONFIG_IRQ;
-	if (state->port->flags & ASYNC_BOOT_AUTOCONF)
-		state->port->ops->config_port(state->port, flags);
-
-	tty_register_devfs(drv->normal_driver, 0, drv->minor +
-					state->port->line);
-	tty_register_devfs(drv->callout_driver, 0, drv->minor +
-					state->port->line);
-
-	uart_report_port(drv, state->port);
-
+	__uart_register_port(drv, state, state->port);
 	up(&state->count_sem);
 	return i;
 }
@@ -2197,36 +2293,7 @@ void uart_unregister_port(struct uart_driver *drv, int line)
 	state = drv->state + line;
 
 	down(&state->count_sem);
-	/*
-	 * The port has already gone.  We have to hang up the line
-	 * to kill all usage of this port.
-	 */
-	if (state->info && state->info->tty)
-		tty_hangup(state->info->tty);
-
-	/*
-	 * Free the ports resources, if any.
-	 */
-	state->port->ops->release_port(state->port);
-
-	/*
-	 * Indicate that there isn't a port here anymore.
-	 */
-	state->port->type = PORT_UNKNOWN;
-
-#if 0 // not yet
-	/*
-	 * No point in doing power management for hardware that
-	 * isn't present.
-	 */
-	pm_unregister(state->pm);
-#endif
-
-	/*
-	 * Remove the devices from devfs
-	 */
-	tty_unregister_devfs(drv->normal_driver, drv->minor + line);
-	tty_unregister_devfs(drv->callout_driver, drv->minor + line);
+	__uart_unregister_port(drv, state);
 	up(&state->count_sem);
 }
 

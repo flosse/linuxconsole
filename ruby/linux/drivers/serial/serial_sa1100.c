@@ -98,13 +98,8 @@
 #define UART_PORT_SIZE	0x24
 
 static struct tty_driver normal, callout;
-static struct tty_struct *sa1100_table[NR_PORTS];
-static struct termios *sa1100_termios[NR_PORTS], *sa1100_termios_locked[NR_PORTS];
 static int (*sa1100_open)(struct uart_port *, struct uart_info *);
 static void (*sa1100_close)(struct uart_port *, struct uart_info *);
-#ifdef SUPPORT_SYSRQ
-static struct console sa1100_console;
-#endif
 
 /*
  * interrupts disabled on entry
@@ -289,7 +284,7 @@ static void sa1100_int(int irq, void *dev_id, struct pt_regs *regs)
 
 		if (status & UTSR0_REB) {
 #ifdef SUPPORT_SYSRQ
-			if (port->line == sa1100_console.index &&
+			if (port->line == port->cons->index &&
 			    !info->sysrq) {
 				info->sysrq = jiffies + HZ*5;
 			}
@@ -787,9 +782,6 @@ static struct uart_driver sa1100_reg = {
 	normal_driver:		&normal,
 	callout_major:		CALLOUT_SA1100_MAJOR,
 	callout_driver:		&callout,
-	table:			sa1100_table,
-	termios:		sa1100_termios,
-	termios_locked:		sa1100_termios_locked,
 	minor:			MINOR_START,
 	nr:			NR_PORTS,
 	port:			sa1100_ports,

@@ -81,13 +81,8 @@
 #define CALLOUT_UART00_MINOR	16      /* Temporary - will change in future */
 #define CALLOUT_UART00_NR	UART_NR
 
-
-
 static struct tty_driver normal, callout;
-static struct tty_struct *uart00_table[UART_NR];
-static struct termios *uart00_termios[UART_NR], *uart00_termios_locked[UART_NR];
 //static struct uart_state uart00_state[UART_NR];
-static struct console uart00_console;
 
 #define UART00_ISR_PASS_LIMIT	256
 
@@ -187,7 +182,7 @@ handle_error:
 		port->icount.brk++;
 
 #ifdef SUPPORT_SYSRQ
-		if (uart_handle_break(info, &uart00_console))
+		if (uart_handle_break(info, port->cons))
 			goto ignore_char;
 #endif
 	} else if (rds & UART_RDS_PE_MSK)
@@ -782,9 +777,6 @@ static struct uart_driver uart00_reg = {
 	callout_major:		CALLOUT_UART00_MAJOR,
 	callout_name:		CALLOUT_UART00_NAME,
 	callout_driver:		&callout,
-	table:			uart00_table,
-	termios:		uart00_termios,
-	termios_locked:		uart00_termios_locked,
 	minor:			SERIAL_UART00_MINOR,
 	nr:			UART_NR,
 	state:			NULL,

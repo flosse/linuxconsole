@@ -24,6 +24,7 @@ struct serial8250_probe {
 
 int serial8250_register_probe(struct serial8250_probe *probe);
 void serial8250_unregister_probe(struct serial8250_probe *probe);
+void serial8250_get_irq_map(int *map);
 
 struct old_serial_port {
 	unsigned int uart;
@@ -46,7 +47,7 @@ struct old_serial_port {
 #endif
 #endif
 
-#if defined(CONFIG_ISAPNP)|| (defined(CONFIG_ISAPNP_MODULE) && defined(MODULE))
+#ifdef __ISAPNP__
 #ifndef ENABLE_SERIAL_PNP
 #define ENABLE_SERIAL_PNP
 #endif

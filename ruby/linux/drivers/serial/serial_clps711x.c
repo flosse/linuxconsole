@@ -59,19 +59,17 @@
 
 #define UART_NR		2
 
-#define SERIAL_CLPS711X_NAME	"ttyAM"
+#define SERIAL_CLPS711X_NAME	"ttyCL"
 #define SERIAL_CLPS711X_MAJOR	204
-#define SERIAL_CLPS711X_MINOR	16
+#define SERIAL_CLPS711X_MINOR	40	
 #define SERIAL_CLPS711X_NR	UART_NR
 
-#define CALLOUT_CLPS711X_NAME	"cuaam"
+#define CALLOUT_CLPS711X_NAME	"cuacl"
 #define CALLOUT_CLPS711X_MAJOR	205
-#define CALLOUT_CLPS711X_MINOR	16
+#define CALLOUT_CLPS711X_MINOR	40	
 #define CALLOUT_CLPS711X_NR	UART_NR
 
 static struct tty_driver normal, callout;
-static struct tty_struct *clps711x_table[UART_NR];
-static struct termios *clps711x_termios[UART_NR], *clps711x_termios_locked[UART_NR];
 
 /*
  * We use the relevant SYSCON register as a base address for these ports.
@@ -661,10 +659,6 @@ static struct uart_driver clps711x_reg = {
 	normal_driver:		&normal,
 	callout_major:		CALLOUT_CLPS711X_MAJOR,
 	callout_driver:		&callout,
-
-	table:			clps711x_table,
-	termios:		clps711x_termios,
-	termios_locked:		clps711x_termios_locked,
 
 	minor:			SERIAL_CLPS711X_MINOR,
 	nr:			UART_NR,

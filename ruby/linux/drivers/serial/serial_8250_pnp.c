@@ -29,9 +29,6 @@
 
 #include "serial_8250.h"
 
-static struct serial_state rs_table[] = { };
-#define NR_PORTS 0
-
 struct pnpbios_device_id
 {
 	char id[8];
@@ -312,16 +309,11 @@ static const struct pnpbios_device_id pnp_dev_table[] = {
 
 static void inline avoid_irq_share(struct pci_dev *dev)
 {
-	int i, map = 0x1FF8;
-	struct serial_state *state = rs_table;
 	struct isapnp_irq *irq;
 	struct isapnp_resources *res = dev->sysdata;
+	int map = 0x1FF8;
 
-	for (i = 0; i < NR_PORTS; i++) {
-		if (state->type != PORT_UNKNOWN)
-			clear_bit(state->irq, &map);
-		state++;
-	}
+	serial8250_get_irq_map(&map);
 
 	for ( ; res; res = res->alt)
 		for(irq = res->irq; irq; irq = irq->next)
@@ -549,5 +541,4 @@ EXPORT_NO_SYMBOLS;
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Generic 8250/16x50 PNPBIOS serial probe module");
-//MODULE_GENERIC_TABLE(pnp, pnp_dev_table);
-
+MODULE_DEVICE_TABLE(pnpbios, pnp_dev_table);

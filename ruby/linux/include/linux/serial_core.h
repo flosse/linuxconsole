@@ -126,16 +126,18 @@ struct uart_port {
 	u_char			x_char;
 	u_char			regshift;		/* reg offset shift */
 	u_char			iotype;			/* io access style */
-	u_char			hub6;
-	u_char			unused[7];
 	u_int			read_status_mask;
 	u_int			ignore_status_mask;
 	u_int			flags;
 	u_int			type;			/* port type */
 	struct uart_ops		*ops;
 	struct uart_icount	icount;
+	struct circ_buf		xmit;
+	struct console          *cons;          /* need this to handle cons */
 	u_int			line;
 	u_long			mapbase;		/* for ioremap */
+	u_char			hub6;			/* this should be in the 8250 driver */
+	u_char			unused[3];
 };
 
 /*
@@ -157,7 +159,6 @@ struct uart_state {
 	struct semaphore	count_sem;	/* this protects 'count' */
 #ifdef CONFIG_PM
 	struct pm_dev		*pm;
-	struct console		*cons;		/* need this to handle cons */
 #endif
 };
 
@@ -171,10 +172,8 @@ struct uart_state {
 struct uart_info {
 	spinlock_t		lock;
 	struct uart_port	*port;
-	struct uart_ops		*ops;
 	struct uart_state	*state;
 	struct tty_struct	*tty;
-	struct circ_buf		xmit;
 	u_int			flags;
 
 	u_int			event;
@@ -219,14 +218,15 @@ struct uart_driver {
 	int			 callout_major;
 	const char		*callout_name;
 	struct tty_driver	*callout_driver;
-	struct tty_struct	**table;
-	struct termios		**termios;
-	struct termios		**termios_locked;
 	int			 minor;
 	int			 nr;
-	struct uart_state	*state;			/* driver should pass NULL */
-	struct uart_port	*port;			/* array of port information */
 	struct console		*cons;
+	
+	/* This is obsolete */
+	struct uart_port	*port;		/* array of port information */
+	
+	/* These are private */
+	struct uart_state	*state;		/* driver should pass NULL */
 };
 
 void uart_event(struct uart_info *info, int event);
@@ -240,6 +240,8 @@ int uart_register_driver(struct uart_driver *uart);
 void uart_unregister_driver(struct uart_driver *uart);
 void uart_unregister_port(struct uart_driver *reg, int line);
 int uart_register_port(struct uart_driver *reg, struct uart_port *port);
+int uart_add_one_port(struct uart_driver *reg, struct uart_port *port);
+int uart_remove_one_port(struct uart_driver *reg, struct uart_port *port);
 
 /*
  * The following are helper functions for the low level drivers.
@@ -284,7 +286,7 @@ static inline int __uart_handle_break(struct uart_info *info, struct console *co
 #define uart_handle_break(info,con)		__uart_handle_break(info,con)
 #define uart_handle_sysrq_char(info,ch,regs)	__uart_handle_sysrq_char(info,ch,regs)
 #else
-#define uart_handle_break(info,con)	__uart_handle_break(info,NULL)
+#define uart_handle_break(info,con)		__uart_handle_break(info,NULL)
 #define uart_handle_sysrq_char(info,ch,regs)	(0)
 #endif
 
@@ -334,13 +336,13 @@ uart_handle_cts_change(struct uart_info *info, unsigned int status)
 		if (info->tty->hw_stopped) {
 			if (status) {
 				info->tty->hw_stopped = 0;
-				info->ops->start_tx(port, 1, 0);
+				port->ops->start_tx(port, 1, 0);
 				uart_event(info, EVT_WRITE_WAKEUP);
 			}
 		} else {
 			if (!status) {
 				info->tty->hw_stopped = 1;
-				info->ops->stop_tx(port, 0);
+				port->ops->stop_tx(port, 0);
 			}
 		}
 		spin_unlock_irqrestore(&info->lock, flags);

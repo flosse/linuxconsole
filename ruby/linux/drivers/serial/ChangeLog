@@ -9,3 +9,10 @@
 2001-12-24  James Simmons <jsimmons@users.sf.net>
   	* Removed ops field in uart_info. Instead use in in uart_port instead.
 
+2001-12-24  James Simmons <jsimmons@users.sf.net>
+        * Synced to RMK latest changes. He removed the awful table, termios
+          stuff from struct uart_driver. This makes life easier for us :-)
+  	  He also implemented a struct uart_xxx_port that wraps around the
+	  default struct uart_port. From my experience with the fbdev layer
+ 	  this is a bad idea and will lead to really bad code. This must 
+	  change.

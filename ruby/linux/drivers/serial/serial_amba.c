@@ -78,11 +78,6 @@
 #define CALLOUT_AMBA_NR		UART_NR
 
 static struct tty_driver normal, callout;
-static struct tty_struct *amba_table[UART_NR];
-static struct termios *amba_termios[UART_NR], *amba_termios_locked[UART_NR];
-#ifdef SUPPORT_SYSRQ
-static struct console amba_console;
-#endif
 
 #define AMBA_ISR_PASS_LIMIT	256
 
@@ -120,17 +115,18 @@ static struct console amba_console;
  * We encode this bit information into port->driver_priv using the
  * following macros.
  */
-//#define PORT_CTRLS(dtrbit,rtsbit)	((1 << dtrbit) | (1 << (16 + rtsbit)))
-#define PORT_CTRLS_DTR(port)		(1 << (port)->unused[1])
-#define PORT_CTRLS_RTS(port)		(1 << (port)->unused[0])
-
 #define SC_CTRLC	(IO_ADDRESS(INTEGRATOR_SC_BASE) + INTEGRATOR_SC_CTRLC_OFFSET)
 #define SC_CTRLS	(IO_ADDRESS(INTEGRATOR_SC_BASE) + INTEGRATOR_SC_CTRLS_OFFSET)
 
 /*
- * Our private driver data mappings.
+ * We wrap our port structure around the generic uart_port.
  */
-#define drv_old_status	driver_priv
+struct uart_amba_port {
+	struct uart_port	port;
+	u_int			dtr_mask;
+	u_int			rts_mask;
+	u_int			old_status;
+};
 
 static void ambauart_stop_tx(struct uart_port *port, u_int from_tty)
 {
@@ -206,7 +202,7 @@ ambauart_rx_chars(struct uart_info *info)
 			if (rsr & AMBA_UARTRSR_BE) {
 				rsr &= ~(AMBA_UARTRSR_FE | AMBA_UARTRSR_PE);
 				port->icount.brk++;
-				if (uart_handle_break(info, &amba_console))
+				if (uart_handle_break(info, port->cons))
 					goto ignore_char;
 			} else if (rsr & AMBA_UARTRSR_PE)
 				port->icount.parity++;
@@ -288,15 +284,16 @@ static void ambauart_tx_chars(struct uart_info *info)
 
 static void ambauart_modem_status(struct uart_info *info)
 {
+	struct uart_amba_port *uap = (struct uart_amba_port *)info->port;
 	struct uart_port *port = info->port;
 	unsigned int status, delta;
 
-	UART_PUT_ICR(port, 0);
+	UART_PUT_ICR(&uap->port, 0);
 
-	status = UART_GET_FR(port) & AMBA_UARTFR_MODEM_ANY;
+	status = UART_GET_FR(&uap->port) & AMBA_UARTFR_MODEM_ANY;
 
-	delta = status ^ info->drv_old_status;
-	info->drv_old_status = status;
+	delta = status ^ uap->old_status;
+	uap->old_status = status;
 
 	if (!delta)
 		return;
@@ -362,17 +359,18 @@ static u_int ambauart_get_mctrl(struct uart_port *port)
 
 static void ambauart_set_mctrl(struct uart_port *port, u_int mctrl)
 {
+	struct uart_amba_port *uap = (struct uart_amba_port *)port;
 	u_int ctrls = 0, ctrlc = 0;
 
 	if (mctrl & TIOCM_RTS)
-		ctrlc |= PORT_CTRLS_RTS(port);
+		ctrlc |= uap->rts_mask;
 	else
-		ctrls |= PORT_CTRLS_RTS(port);
+		ctrls |= uap->rts_mask; 
 
 	if (mctrl & TIOCM_DTR)
-		ctrlc |= PORT_CTRLS_DTR(port);
+		ctrlc |= uap->dtr_mask;
 	else
-		ctrls |= PORT_CTRLS_DTR(port);
+		ctrls |= uap->dtr_mask;
 
 	__raw_writel(ctrls, SC_CTRLS);
 	__raw_writel(ctrlc, SC_CTRLC);
@@ -392,6 +390,7 @@ static void ambauart_break_ctl(struct uart_port *port, int break_state)
 
 static int ambauart_startup(struct uart_port *port, struct uart_info *info)
 {
+	struct uart_amba_port *uap = (struct uart_amba_port *)port;
 	int retval;
 
 	/*
@@ -404,7 +403,7 @@ static int ambauart_startup(struct uart_port *port, struct uart_info *info)
 	/*
 	 * initialise the old status of the modem signals
 	 */
-	info->drv_old_status = UART_GET_FR(port) & AMBA_UARTFR_MODEM_ANY;
+	uap->old_status = UART_GET_FR(port) & AMBA_UARTFR_MODEM_ANY;
 
 	/*
 	 * Finally, enable interrupts
@@ -578,28 +577,36 @@ static struct uart_ops amba_pops = {
 	verify_port:	ambauart_verify_port,
 };
 
-static struct uart_port amba_ports[UART_NR] = {
+static struct uart_amba_port amba_ports[UART_NR] = {
 	{
-		membase:	(void *)IO_ADDRESS(INTEGRATOR_UART0_BASE),
-		mapbase:	INTEGRATOR_UART0_BASE,
-		iotype:		SERIAL_IO_MEM,
-		irq:		IRQ_UARTINT0,
-		uartclk:	14745600,
-		fifosize:	16,
-		unused:		{ 4, 5 }, /*driver_priv:	PORT_CTRLS(5, 4), */
-		ops:		&amba_pops,
-		flags:		ASYNC_BOOT_AUTOCONF,
+		port:	{
+			membase:	(void *)IO_ADDRESS(INTEGRATOR_UART0_BASE),
+			mapbase:	INTEGRATOR_UART0_BASE,
+			iotype:		SERIAL_IO_MEM,
+			irq:		IRQ_UARTINT0,
+			uartclk:	14745600,
+			fifosize:	16,
+			unused:		{ 4, 5 }, /*driver_priv:	PORT_CTRLS(5, 4), */
+			ops:		&amba_pops,
+			flags:		ASYNC_BOOT_AUTOCONF,
+		},
+		dtr_mask:	1 << 5,
+		rts_mask:	1 << 4,
 	},
 	{
-		membase:	(void *)IO_ADDRESS(INTEGRATOR_UART1_BASE),
-		mapbase:	INTEGRATOR_UART1_BASE,
-		iotype:		SERIAL_IO_MEM,
-		irq:		IRQ_UARTINT1,
-		uartclk:	14745600,
-		fifosize:	16,
-		unused:		{ 6, 7 }, /*driver_priv:	PORT_CTRLS(7, 6), */
-		ops:		&amba_pops,
-		flags:		ASYNC_BOOT_AUTOCONF,
+		port:	{
+			membase:	(void *)IO_ADDRESS(INTEGRATOR_UART1_BASE),
+			mapbase:	INTEGRATOR_UART1_BASE,
+			iotype:		SERIAL_IO_MEM,
+			irq:		IRQ_UARTINT1,
+			uartclk:	14745600,
+			fifosize:	16,
+			unused:		{ 6, 7 }, /*driver_priv:	PORT_CTRLS(7, 6), */
+			ops:		&amba_pops,
+			flags:		ASYNC_BOOT_AUTOCONF,
+		},
+		dtr_mask:	1 << 7,
+		rts_mask:	1 << 6,
 	}
 };
 
@@ -631,7 +638,7 @@ static int ambauart_console_read(struct uart_port *port, char *s, u_int count)
 
 static void ambauart_console_write(struct console *co, const char *s, u_int count)
 {
-	struct uart_port *port = amba_ports + co->index;
+	struct uart_port *port = &amba_ports[co->index].port;
 	unsigned int status, old_cr;
 	int i;
 
@@ -674,7 +681,7 @@ static kdev_t ambauart_console_device(struct console *co)
 
 static int ambauart_console_wait_key(struct console *co)
 {
-	struct uart_port *port = amba_ports + co->index;
+	struct uart_port *port = &amba_ports[co->index].port;
 	unsigned int status;
 
 	do {
@@ -721,8 +728,14 @@ static int __init ambauart_console_setup(struct console *co, char *options)
 	 * if so, search for the first available port that does have
 	 * console support.
 	 */
+#if 0
 	port = uart_get_console(amba_ports, UART_NR, co);
-
+#else
+	if (co->index >= UART_NR)
+		co->index = 0;
+	port = &amba_ports[co->index].port;
+#endif
+	
 	if (options)
 		uart_parse_options(options, &baud, &parity, &bits, &flow);
 	else
@@ -767,22 +780,32 @@ static struct uart_driver amba_reg = {
 	normal_driver:		&normal,
 	callout_major:		CALLOUT_AMBA_MAJOR,
 	callout_driver:		&callout,
-	table:			amba_table,
-	termios:		amba_termios,
-	termios_locked:		amba_termios_locked,
 	minor:			SERIAL_AMBA_MINOR,
 	nr:			UART_NR,
-	port:			amba_ports,
 	cons:			AMBA_CONSOLE,
 };
 
 static int __init ambauart_init(void)
 {
-	return uart_register_driver(&amba_reg);
+	int ret;
+
+	ret = uart_register_driver(&amba_reg);
+	if (ret == 0) {
+		int i;
+
+		for (i = 0; i < UART_NR; i++)
+			uart_add_one_port(&amba_reg, &amba_ports[i].port);
+	}
+	return ret;
 }
 
 static void __exit ambauart_exit(void)
 {
+	int i;
+
+	for (i = 0; i < UART_NR; i++)
+		uart_remove_one_port(&amba_reg, &amba_ports[i].port);
+
 	uart_unregister_driver(&amba_reg);
 }
 
