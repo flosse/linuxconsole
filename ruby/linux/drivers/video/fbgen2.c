@@ -164,9 +164,9 @@ int fbgen_set_var(struct fb_var_screeninfo *var, int con, struct fb_info *info)
 			oldgreen = info->var.green;
 			oldalpha = info->var.transp;
 
-               		if (info->fbops->fb_set_par)
-                		info->fbops->fb_set_par(info);
                		info->var = *var;
+			if (info->fbops->fb_set_par)
+                		info->fbops->fb_set_par(info);
                		fbgen2_set_disp(con, info);
                		if (info->changevar)
                 		(*info->changevar)(con);

@@ -319,7 +319,7 @@ static void _call_console_drivers(struct console *con, unsigned long start, unsi
 static void call_console_drivers(struct console *con, unsigned long start, unsigned long end)
 {
 	unsigned long cur_index, start_print;
-	static int msg_level = -1;
+	int msg_level = -1;
 
 	if (((long)(start - end)) > 0)
 		BUG();
@@ -445,6 +445,7 @@ asmlinkage int printk(const char *fmt, ...)
 	 	 * We own the drivers list.  We can drop the lock and 
 		 * let release_console_sem() print the text
 		 */
+		con->con_start = con_start;
 		spin_unlock(&console_lock);
 		if ((con->flags & CON_ENABLED) && con->write) {
 			if (!down_trylock(&con->lock)) 
@@ -452,6 +453,7 @@ asmlinkage int printk(const char *fmt, ...)
 		}
 		spin_lock(&console_lock);
 	}
+	con_start = log_end;	/* Flush all consoles */
 	spin_unlock(&console_lock);
 	return printed_len;
 }
@@ -528,11 +530,11 @@ void release_console_sem(kdev_t device)
 		for ( ; ; ) {
 			spin_lock_irqsave(&logbuf_lock, flags);
 			must_wake_klogd |= log_start - log_end;
-			if (con_start == log_end)
+			if (con->con_start == log_end)
 				break;  /* Nothing to print */
-			_con_start = con_start;
+			_con_start = con->con_start;
 			_log_end = log_end;
-			con_start = log_end;    /* Flush */
+			con->con_start = log_end; /* Flush current console */
 			spin_unlock_irqrestore(&logbuf_lock, flags);
 			call_console_drivers(con, _con_start, _log_end);
 		}

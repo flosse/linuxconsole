@@ -47,6 +47,7 @@ struct console
 	kdev_t	(*device)(struct console *);
 	int	(*setup)(struct console *, char *);
 	struct  semaphore lock;
+	unsigned long con_start;
 	short	flags;
 	short	index;
 	int	cflag;
