@@ -73,6 +73,7 @@ struct iforce_core_effect {
 	struct resource mod1_chunk;
 	struct resource mod2_chunk;
 	unsigned long flags[NBITS(FF_MODCORE_MAX)];
+	pid_t owner;
 };
 
 #define FF_CMD_EFFECT		0x010e
@@ -345,17 +346,6 @@ static int get_id_packet(struct iforce *iforce, char *packet)
 	return -(iforce->edata[0] != packet[0]);
 }
 
-/* Allow only one writer process at a time */
-static int iforce_accept(struct input_dev *dev, struct file *file)
-{
-	if (file->f_mode & FMODE_WRITE) {
-		struct iforce *iforce = dev->private;
-		if (iforce->writer_pid) return -EBUSY;
-		iforce->writer_pid = current->pid;
-	}
-	return 0;
-}
-
 static int iforce_open(struct input_dev *dev)
 {
 	struct iforce *iforce = dev->private;
@@ -381,9 +371,24 @@ static int iforce_open(struct input_dev *dev)
 static int iforce_flush(struct input_dev *dev, struct file *file)
 {
 	struct iforce *iforce = dev->private;
+	int i;
 
-	if ((file->f_mode & FMODE_WRITE) && current->pid == iforce->writer_pid) {
-		iforce->writer_pid = 0;
+	/* Erase all effects this process owns */
+	for (i=0; i<dev->ff_effects_max; ++i) {
+
+		if (test_bit(FF_CORE_IS_USED, iforce->core_effects[i].flags) &&
+			current->pid == iforce->core_effects[i].owner) {
+			
+			/* Stop effect */
+			input_event(dev, EV_FF, i, 0);
+
+			/* Free ressources assigned to effect */
+			if (iforce_erase_effect(dev, i)) {
+				printk(KERN_WARNING "input%d: iforce_flush: erase effect %d failed\n",
+					dev->number, i);
+			}
+		}
+
 	}
 	return 0;
 }
@@ -391,18 +396,10 @@ static int iforce_flush(struct input_dev *dev, struct file *file)
 static void iforce_close(struct input_dev *dev)
 {
 	struct iforce *iforce = dev->private;
-	int i;
 
 	/* Disable force feedback playback */
 	send_packet(iforce, FF_CMD_ENABLE, "\001");
 
-	/* Erase all effects */
-	for (i=0; i<dev->ff_effects_max; ++i) {
-		if (test_bit(FF_CORE_IS_USED, iforce->core_effects[i].flags) && iforce_erase_effect(dev, i)) {
-			printk(KERN_WARNING "input%d: iforce_close: erase effect %d failed\n",
-				dev->number, i);
-		}
-	}
 
 	switch (iforce->bus) {
 #ifdef IFORCE_USB
@@ -413,10 +410,6 @@ static void iforce_close(struct input_dev *dev)
 #endif
 	}
 }
-
-/*
- * Start or stop playing an effect
- */
 
 static int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {
@@ -454,6 +447,10 @@ static int iforce_input_event(struct input_dev *dev, unsigned int type, unsigned
 			if (code >= iforce->dev.ff_effects_max)
 				return -1;
 
+			if (iforce->core_effects[code].owner != current->pid) {
+				printk(KERN_WARNING "iforce.c: Attempt by %d to play or stop an effect it does not own\n", current->pid);
+				return -1;
+			}
 			data[0] = LO(code);
 			data[1] = (value > 0) ? ((value > 1) ? 0x41 : 0x01) : 0;
 			data[2] = LO(value);
@@ -832,6 +829,7 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 
 	effect->id = id;
 	set_bit(FF_CORE_IS_USED, iforce->core_effects[id].flags);
+	iforce->core_effects[id].owner = current->pid;
 
 /*
  * Upload the effect
@@ -863,6 +861,12 @@ static int iforce_erase_effect(struct input_dev *dev, int effect_id)
 	struct iforce* iforce = (struct iforce*)(dev->private);
 	int err = 0;
 	struct iforce_core_effect* core_effect;
+
+	/* Check who is trying to erase this effect */
+	if (iforce->core_effects[effect_id].owner != current->pid) {
+		printk(KERN_WARNING "iforce.c: %d tried to erase an effect belonging to %d\n", current->pid, iforce->core_effects[effect_id].owner);
+		return -EACCES;
+	}
 
 	printk(KERN_DEBUG "iforce.c: erase effect %d\n", effect_id);
 
@@ -899,7 +903,6 @@ static int iforce_init_device(struct iforce *iforce)
 	iforce->dev.name = iforce->name;
 	iforce->dev.open = iforce_open;
 	iforce->dev.close = iforce_close;
-	iforce->dev.accept = iforce_accept;
 	iforce->dev.flush = iforce_flush;
 	iforce->dev.event = iforce_input_event;
 	iforce->dev.upload_effect = iforce_upload_effect;
