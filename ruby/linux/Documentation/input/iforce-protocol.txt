@@ -12,6 +12,10 @@ All values are hexadecimal with big-endian encoding (msb on the left). Beware, v
 Bytes whose roles are unknown are marked ???
 Information that needs deeper inspection is marked (?)
 
+** General form of a packet **
+2B OP LEN DATA CS
+CS is the checksum. It is equal to the exclusive or of all bytes.
+
 ** Force effect **
 OP=  01
 LEN= 0e
