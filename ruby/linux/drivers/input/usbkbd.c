@@ -202,15 +202,9 @@ static void *usb_kbd_probe(struct usb_device *dev, unsigned int ifnum)
 	FILL_CONTROL_URB(&kbd->led, dev, usb_sndctrlpipe(dev, 0),
 		(void*) &kbd->dr, &kbd->leds, 1, usb_kbd_led, kbd);
 			
-	if (usb_submit_urb(&kbd->irq)) {
-		kfree(kbd);
-		return NULL;
-	}
-
 	input_register_device(&kbd->dev);
 
 	printk(KERN_INFO "input%d: USB HIDBP keyboard\n", kbd->dev.number);
-
 
 	return kbd;
 }
