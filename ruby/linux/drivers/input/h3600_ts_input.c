@@ -387,7 +387,7 @@ static void h3600ts_connect(struct serio *serio, struct serio_dev *dev)
 		return;
 	}
 	/* Now we have things going we setup our input device */
-	ts->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS) | BIT(EV_LED);	
+	ts->dev.evbit[0] = BIT(EV_KEY) | BIT(EV_ABS) | BIT(EV_LED) | BIT(EV_PWR);
 	ts->dev.absbit[0] = BIT(ABS_X) | BIT(ABS_Y);
 	ts->dev.ledbit[0] = BIT(LED_SLEEP); 
 
