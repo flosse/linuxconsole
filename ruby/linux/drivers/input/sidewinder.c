@@ -77,9 +77,8 @@
  * Names, buttons, axes ...
  */
 
-static char *sw_name[] = {	"SideWinder 3D Pro", "SideWinder GamePad", "SideWinder Precision Pro",
-				"SideWinder Force Feedback Pro", "SideWinder FreeStyle Pro",
-				"SideWinder Force Feedback Wheel" };
+static char *sw_name[] = {	"3D Pro", "GamePad", "Precision Pro", "Force Feedback Pro", "FreeStyle Pro",
+				"Force Feedback Wheel" };
 
 static char sw_abs[][7] = {
 	{ ABS_X, ABS_Y, ABS_RZ, ABS_THROTTLE, ABS_HAT0X, ABS_HAT0Y },
@@ -114,6 +113,7 @@ struct sw {
 	struct gameport *gameport;
 	struct timer_list timer;
 	struct input_dev dev[4];
+	char name[64];
 	int length;
 	int type;
 	int bits;
@@ -687,12 +687,14 @@ static void sw_connect(struct gameport *gameport, struct gameport_dev *dev)
 	for (i = 0; i < sw->number; i++) {
 		int bits, code;
 
+		sprintf(sw->name, "Microsoft SideWinder %s", sw_name[sw->type]);
+
 		sw->dev[i].private = sw;
 
 		sw->dev[i].open = sw_open;
 		sw->dev[i].close = sw_close;
 
-		sw->dev[i].name = sw_name[sw->type];
+		sw->dev[i].name = sw->name;
 		sw->dev[i].idbus = BUS_GAMEPORT;
 		sw->dev[i].idvendor = GAMEPORT_ID_VENDOR_MICROSOFT;
 		sw->dev[i].idproduct = sw->type;
@@ -715,7 +717,7 @@ static void sw_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 		input_register_device(sw->dev + i);
 		printk(KERN_INFO "input%d: %s%s on gameport%d.%d [%d-bit id %d data %d]\n",
-			sw->dev[i].number, sw_name[sw->type], comment, gameport->number, i, m, l, k);
+			sw->dev[i].number, sw->name, comment, gameport->number, i, m, l, k);
 	}
 
 	return;
