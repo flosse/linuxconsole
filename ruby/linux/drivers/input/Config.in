@@ -31,6 +31,7 @@ if [ "$CONFIG_INPUT" != "n" ]; then
       tristate '  Serial mouse' CONFIG_INPUT_SERMOUSE
       tristate '  Sun keyboard' CONFIG_INPUT_SUNKBD
       tristate '  PS/2 keyboards' CONFIG_INPUT_PS2SERIAL
+      tristate '  Twiddler Serial support' CONFIG_INPUT_TWIDSERIAL
       tristate '  Logitech WingMan Warrior joystick' CONFIG_INPUT_WARRIOR
       tristate '  LogiCad3d Magellan/SpaceMouse 6dof controllers' CONFIG_INPUT_MAGELLAN
       tristate '  SpaceTec SpaceOrb/Avenger 6dof controllers' CONFIG_INPUT_SPACEORB
