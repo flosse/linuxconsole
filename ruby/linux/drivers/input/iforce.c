@@ -35,6 +35,7 @@
 #include <linux/init.h>
 #include <linux/usb.h>
 #include <linux/serio.h>
+#include <linux/config.h>
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 
@@ -43,12 +44,20 @@ MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 
 #define IFORCE_MAX_LENGTH		16
 
+#if defined(CONFIG_INPUT_IFORCE_232) || defined(CONFIG_INPUT_IFORCE_232_MODULE)
+#define IFORCE_232
+#endif
+#if defined(CONFIG_INPUT_IFORCE_USB) || defined(CONFIG_INPUT_IFORCE_USB_MODULE)
+#define IFORCE_USB
+#endif
+
 struct iforce {
 	signed char data[IFORCE_MAX_LENGTH];
 	struct input_dev dev;
 	struct urb irq;
 	int open;
-	int idx, pkt, len, id, csum;
+	int idx, pkt, len, id;
+	unsigned char csum;
 };
 
 static struct {
@@ -150,7 +159,7 @@ static void iforce_input_setup(struct iforce *iforce)
 	input_register_device(&iforce->dev);
 }
 
-#ifdef CONFIG_INPUT_IFORCE_USB
+#ifdef IFORCE_USB
 
 static void iforce_usb_irq(struct urb *urb)
 {
@@ -206,7 +215,7 @@ static struct usb_driver iforce_usb_driver = {
 
 #endif
 
-#ifdef CONFIG_INPUT_IFORCE_232
+#ifdef IFORCE_232
 
 static void iforce_serio_irq(struct serio *serio, unsigned char data, unsigned int flags)
 {
@@ -235,7 +244,7 @@ static void iforce_serio_irq(struct serio *serio, unsigned char data, unsigned i
 			iforce->id = 0;
 			return;
 		}
-		iforce->len = data + 1;
+		iforce->len = data;
 		return;
 	}
 
@@ -301,10 +310,10 @@ static struct serio_dev iforce_serio_dev = {
 
 static int __init iforce_init(void)
 {
-#ifdef CONFIG_INPUT_IFORCE_USB
+#ifdef IFORCE_USB
 	usb_register(&iforce_usb_driver);
 #endif
-#ifdef CONFIG_INPUT_IFORCE_232
+#ifdef IFORCE_232
 	serio_register_device(&iforce_serio_dev);
 #endif
 	return 0;
@@ -312,10 +321,10 @@ static int __init iforce_init(void)
 
 static void __exit iforce_exit(void)
 {
-#ifdef CONFIG_INPUT_IFORCE_USB
+#ifdef IFORCE_USB
 	usb_deregister(&iforce_usb_driver);
 #endif
-#ifdef CONFIG_INPUT_IFORCE_232
+#ifdef IFORCE_232
 	serio_unregister_device(&iforce_serio_dev);
 #endif
 }
