@@ -10,6 +10,15 @@ bool 'Prompt for development and/or incomplete code/drivers' CONFIG_EXPERIMENTAL
 endmenu
 
 mainmenu_option next_comment
+comment 'Loadable module support'
+bool 'Enable loadable module support' CONFIG_MODULES
+if [ "$CONFIG_MODULES" = "y" ]; then
+   bool '  Set version information on all symbols for modules' CONFIG_MODVERSIONS
+   bool '  Kernel module loader' CONFIG_KMOD
+fi
+endmenu
+
+mainmenu_option next_comment
 comment 'General setup'
 
 define_bool CONFIG_VT y
@@ -60,18 +69,11 @@ if [ "$CONFIG_PCI" = "y" ]; then
 fi
 endmenu
 
-mainmenu_option next_comment
-comment 'Loadable module support'
-bool 'Enable loadable module support' CONFIG_MODULES
-if [ "$CONFIG_MODULES" = "y" ]; then
-   bool '  Set version information on all symbols for modules' CONFIG_MODVERSIONS
-   bool '  Kernel module loader' CONFIG_KMOD
-fi
-endmenu
-
 source drivers/video/Config.in
+
 source drivers/sbus/char/Config.in
 source drivers/sbus/audio/Config.in
+source drivers/input/Config.in
 
 mainmenu_option next_comment
 comment 'Block devices'
@@ -288,7 +290,7 @@ endmenu
 mainmenu_option next_comment
 comment 'XFree86 DRI support'
 bool 'Direct Rendering Manager (XFree86 DRI support)' CONFIG_DRM
-# dep_tristate '  Creator/Creator3D/Elite3D' CONFIG_DRM_FFB $CONFIG_DRM
+dep_tristate '  Creator/Creator3D' CONFIG_DRM_FFB $CONFIG_DRM
 endmenu
 
 source fs/Config.in

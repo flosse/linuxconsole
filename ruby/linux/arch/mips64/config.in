@@ -205,6 +205,7 @@ source drivers/char/Config.in
 source fs/Config.in
 
 source drivers/video/Config.in
+source drivers/input/Config.in
 
 if [ "$CONFIG_PROC_FS" = "y" ]; then
    define_bool CONFIG_KCORE_ELF y

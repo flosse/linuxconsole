@@ -1,6 +1,6 @@
 #
 # For a description of the syntax of this configuration file,
-# see Documentation/kbuild/config-language.txt. 
+# see Documentation/kbuild/config-language.txt.
 #
 
 define_bool CONFIG_UID16 y
@@ -493,6 +493,7 @@ source fs/Config.in
 if [ "$CONFIG_VME" = "n" ]; then
    source drivers/video/Config.in
 fi
+source drivers/input/Config.in
 
 mainmenu_option next_comment
 comment 'Kernel hacking'
