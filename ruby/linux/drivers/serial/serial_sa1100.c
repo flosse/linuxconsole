@@ -101,7 +101,7 @@ static struct tty_driver normal, callout;
 static struct tty_struct *sa1100_table[NR_PORTS];
 static struct termios *sa1100_termios[NR_PORTS], *sa1100_termios_locked[NR_PORTS];
 static int (*sa1100_open)(struct uart_port *, struct uart_info *);
-static int (*sa1100_close)(struct uart_port *, struct uart_info *);
+static void (*sa1100_close)(struct uart_port *, struct uart_info *);
 #ifdef SUPPORT_SYSRQ
 static struct console sa1100_console;
 #endif

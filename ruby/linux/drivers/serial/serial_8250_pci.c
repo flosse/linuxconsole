@@ -271,7 +271,7 @@ pci_inteli960ni_fn(struct pci_dev *dev,
 {
 	unsigned long oldval;
 	
-	if (!(pci_get_subvendor(dev) & 0x1000))
+	if (!(pci_get_subdevice(dev) & 0x1000))
 		return(-1);
 
 	if (!enable) /* is there something to deinit? */
