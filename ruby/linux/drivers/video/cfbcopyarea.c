@@ -27,7 +27,7 @@
 #include <asm/types.h>
 #include <asm/io.h>
 
-void cfba_copyarea(struct fb_info *p, int sx, int sy, unsigned int width, 
+void cfb_copyarea(struct fb_info *p, int sx, int sy, unsigned int width, 
 		   unsigned int rows, int dx, int dy)
 {
   unsigned long start_index, end_index, start_mask, end_mask, last,tmp, height;
