@@ -31,8 +31,6 @@
 
 #include <video/vga.h>
 
-static spinlock_t vga_lock = SPIN_LOCK_UNLOCKED;
-
 void vga_clock_chip(struct vga_hw_state *state, unsigned int pixclock, int mul,
                     int div)
 {
@@ -106,24 +104,12 @@ int vga_set_mode(struct vga_hw_state *state, int double_scan)
 {
 	int xtotal = state->xres + state->right + state->hslen + state->left;
 	int ytotal = state->yres + state->lower + state->vslen + state->upper;
+ 	caddr_t regs = state->regsbase;	
 	u8 crtc[VGA_CRT_C];
 	u8 gdc[VGA_GFX_C];
 	u8 seq[VGA_SEQ_C];
 	u8 atc[VGA_ATT_C];
 	int pos, r7, fh, i;
-
-	/*
-	printk("xres is %d, vxres is %d, right is %d, hslen is %d, left is %d,
-                yres is %d, lower is %d, vslen is %d, upper is %d, 
-		xoffset is %d, yoffset is %d, palette_blank is %d, 
-		vesa_blanked is %d, pel_mask is %d, clk_div is %d, 
-		rMode is %d, misc is %d\n", 
-                state->xres, state->vxres, state->right, state->hslen, state->left, 
-		state->yres, state->lower, state->vslen, state->upper, state->xoffset,
-		state->yoffset, state->palette_blanked, state->vesa_blanked,
-		state->pel_mask, state->clkdiv,  
-		state->rMode, state->misc);
-	*/
 
         if (ytotal > 1024) {
                 ytotal >>= 1;
@@ -247,109 +233,110 @@ int vga_set_mode(struct vga_hw_state *state, int double_scan)
 
         if (state->mode & MODE_TEXT) {
 		/* Font size register 
-                fh = vga_rcrt(NULL, VGA_CRTC_MAX_SCAN); */
+                fh = vga_rcrt(regs, VGA_CRTC_MAX_SCAN); */
 		fh = 16;
 		crtc[VGA_CRTC_MAX_SCAN] = (crtc[VGA_CRTC_MAX_SCAN]
                                                & ~0x1F) | (fh - 1);
         }
-        vga_w(NULL, VGA_MIS_W, vga_r(NULL, VGA_MIS_R) | 0x01);
+        vga_w(regs, VGA_MIS_W, vga_r(regs, VGA_MIS_R) | 0x01);
 
         /* Enable graphics register modification */ 
         if (state->video_type == VIDEO_TYPE_EGAC) {
-                vga_w(NULL, EGA_GFX_E0, 0x00);
-                vga_w(NULL, EGA_GFX_E1, 0x01);
+                vga_w(regs, EGA_GFX_E0, 0x00);
+                vga_w(regs, EGA_GFX_E1, 0x01);
         }
 
         /* update misc output register */
-        vga_w(NULL, VGA_MIS_W, state->misc);
+        vga_w(regs, VGA_MIS_W, state->misc);
 
         /* synchronous reset on */
-        vga_wseq(NULL, VGA_SEQ_RESET, 0x01);
+        vga_wseq(regs, VGA_SEQ_RESET, 0x01);
 
         if (state->video_type == VIDEO_TYPE_VGAC)
-                vga_w(NULL, VGA_PEL_MSK, state->pel_mask);
+                vga_w(regs, VGA_PEL_MSK, state->pel_mask);
 
         /* write sequencer registers */
-        vga_wseq(NULL, VGA_SEQ_CLOCK_MODE, seq[VGA_SEQ_CLOCK_MODE] | 0x20);
+        vga_wseq(regs, VGA_SEQ_CLOCK_MODE, seq[VGA_SEQ_CLOCK_MODE] | 0x20);
         for (i = 2; i < VGA_SEQ_C; i++) {
-                vga_wseq(NULL, i, seq[i]);
+                vga_wseq(regs, i, seq[i]);
         }
 
         /* synchronous reset off */
-        vga_wseq(NULL, VGA_SEQ_RESET, 0x03);
+        vga_wseq(regs, VGA_SEQ_RESET, 0x03);
 
         /* deprotect CRT registers 0-7 */
-        vga_wcrt(NULL, VGA_CRTC_V_SYNC_END, crtc[VGA_CRTC_V_SYNC_END]);
+        vga_wcrt(regs, VGA_CRTC_V_SYNC_END, crtc[VGA_CRTC_V_SYNC_END]);
 
         /* write CRT registers */
         for (i = 0; i < VGA_CRTC_REGS; i++) {
-                vga_wcrt(NULL, i, crtc[i]);
+                vga_wcrt(regs, i, crtc[i]);
         }
 
         /* write graphics controller registers */
         for (i = 0; i < VGA_GFX_C; i++) {
-                vga_wgfx(NULL, i, gdc[i]);
+                vga_wgfx(regs, i, gdc[i]);
         }
 
         /* write attribute controller registers */
         for (i = 0; i < VGA_ATT_C; i++) {
-                vga_r(NULL, VGA_IS1_RC);           /* reset flip-flop */
-                vga_wattr(NULL, i, atc[i]);
+                vga_r(regs, VGA_IS1_RC);           /* reset flip-flop */
+                vga_wattr(regs, i, atc[i]);
         }
 
         /* Wait for screen to stabilize. */
         mdelay(50);
 
-        vga_wseq(NULL, VGA_SEQ_CLOCK_MODE, seq[VGA_SEQ_CLOCK_MODE]);
+        vga_wseq(regs, VGA_SEQ_CLOCK_MODE, seq[VGA_SEQ_CLOCK_MODE]);
 
-        vga_r(NULL, VGA_IS1_RC);
-        vga_w(NULL, VGA_ATT_IW, 0x20);
+        vga_r(regs, VGA_IS1_RC);
+        vga_w(regs, VGA_ATT_IW, 0x20);
 	return 0;
 }
 
-void vga_pal_blank(void)
+void vga_pal_blank(caddr_t regs)
 {
 	int i;
 	
 	for (i=0; i<16; i++) {
-		vga_w(NULL, VGA_PEL_IW, i);
-		vga_w(NULL, VGA_PEL_D, 0);
-		vga_w(NULL, VGA_PEL_D, 0);
-		vga_w(NULL, VGA_PEL_D, 0);
+		vga_w(regs, VGA_PEL_IW, i);
+		vga_w(regs, VGA_PEL_D, 0);
+		vga_w(regs, VGA_PEL_D, 0);
+		vga_w(regs, VGA_PEL_D, 0);
 	}
 }
 
 void vga_vesa_blank(struct vga_hw_state *state, int mode) 
 {
 	/* Save the original values of VGA controller register */
+ 	caddr_t regs = state->regsbase;	
 	unsigned long flags;
 
 	if (state->vesa_blanked) {
-	 	spin_lock_irqsave(&vga_lock, flags);	
-		state->SeqCtrlIndex = vga_r(NULL, VGA_SEQ_I);
-		state->CrtCtrlIndex = vga_r(NULL, VGA_CRT_IC);	
+	 	spin_lock_irqsave(&state->vga_lock, flags);	
+		state->SeqCtrlIndex = vga_r(regs, VGA_SEQ_I);
+		state->CrtCtrlIndex = vga_r(regs, VGA_CRT_IC);	
 	 	spin_unlock_irqrestore(&vga_lock, flags);	
 
-		state->HorizontalTotal = vga_rcrt(NULL, 0x00); 
-		state->HorizDisplayEnd = vga_rcrt(NULL, 0x01);
-		state->StartHorizRetrace = vga_rcrt(NULL, 0x04);
-		state->EndHorizRetrace = vga_rcrt(NULL, 0x05);
-		state->Overflow = vga_rcrt(NULL, 0x07);
-		state->StartVertRetrace = vga_rcrt(NULL, 0x10);
-		state->EndVertRetrace = vga_rcrt(NULL, 0x11);
-		state->ModeControl = vga_rcrt(NULL, 0x17);
-		state->ClockingMode = vga_rseq(NULL, 0x01);
+		state->HorizontalTotal = vga_rcrt(regs, 0x00); 
+		state->HorizDisplayEnd = vga_rcrt(regs, 0x01);
+		state->StartHorizRetrace = vga_rcrt(regs, 0x04);
+		state->EndHorizRetrace = vga_rcrt(regs, 0x05);
+		state->Overflow = vga_rcrt(regs, 0x07);
+		state->StartVertRetrace = vga_rcrt(regs, 0x10);
+		state->EndVertRetrace = vga_rcrt(regs, 0x11);
+		state->ModeControl = vga_rcrt(regs, 0x17);
+		state->ClockingMode = vga_rseq(regs, 0x01);
 	}
 	/* 
 	 * assure that video is enabled 
 	 * "0x20" is VIDEO_EBABLE bit in register 01 of sequencer 
 	 */
-	spin_lock_irqsave(&vga_lock, flags);	
-	vga_wseq(NULL, VGA_SEQ_CLOCK_MODE, state->ClockingMode | 0x20);
+	spin_lock_irqsave(&state->vga_lock, flags);	
+	vga_wseq(regs, VGA_SEQ_CLOCK_MODE, state->ClockingMode | 0x20);
 	
 	/* Test for vertical retrace in progress... */
 	if ((state->CrtMiscIO & 0x80) == 0x80)
-		vga_w(NULL, VGA_MIS_W, state->CrtMiscIO & 0xef);
+		vga_w(regs, VGA_MIS_W, state->CrtMiscIO & 0xef);
 	
 	/*
 	 * Set <End of vertical retrace> to minimum (0) and 
@@ -358,11 +345,11 @@ void vga_vesa_blank(struct vga_hw_state *state, int mode)
 	 */
 	if (mode & VESA_VSYNC_SUSPEND) {
 		/* StartVert Retrace - maximum value */
-		vga_wcrt(NULL, VGA_CRTC_V_SYNC_START, 0xFF); 
+		vga_wcrt(regs, VGA_CRTC_V_SYNC_START, 0xFF); 
 		/* EndVertRetrace - minimum (bits 0..3) */
-		vga_wcrt(NULL, VGA_CRTC_V_SYNC_END, 0x40); 
+		vga_wcrt(regs, VGA_CRTC_V_SYNC_END, 0x40); 
 	        /* Overflow - bits 09,10 of vert. retrace */
-		vga_wcrt(NULL, VGA_CRTC_OVERFLOW, state->Overflow | 0x84);
+		vga_wcrt(regs, VGA_CRTC_OVERFLOW, state->Overflow | 0x84);
 	}
 	if (mode & VESA_HSYNC_SUSPEND) {
 		/*
@@ -370,46 +357,47 @@ void vga_vesa_blank(struct vga_hw_state *state, int mode)
 		 * <Start of horizontal Retrace> to maximum
 		 * Result: turn off horizontal sync (HSync) pulse.
 		 */
-		vga_wcrt(NULL, 0x04, 0xFF); /* StartHorizRetrace - maximum */
-		vga_wcrt(NULL, 0x05, 0x00); /* EndHorizRetrace - minimum */
+		vga_wcrt(regs, 0x04, 0xFF); /* StartHorizRetrace - maximum */
+		vga_wcrt(regs, 0x05, 0x00); /* EndHorizRetrace - minimum */
 	}
 	/* Restore both index registers */
-	vga_w(NULL, VGA_SEQ_I, state->SeqCtrlIndex);
-	vga_w(NULL, VGA_CRT_IC, state->CrtCtrlIndex);
-	spin_unlock_irqrestore(&vga_lock, flags);			
+	vga_w(regs, VGA_SEQ_I, state->SeqCtrlIndex);
+	vga_w(regs, VGA_CRT_IC, state->CrtCtrlIndex);
+	spin_unlock_irqrestore(&state->vga_lock, flags);			
 }
 
 void vga_vesa_unblank(struct vga_hw_state *state)
 {
 	/* restore original values of VGA controller registers */
+ 	caddr_t regs = state->regsbase;	
 	unsigned long flags;
 
-	spin_lock_irqsave(&vga_lock, flags);	
-	vga_w(NULL, VGA_MIS_W, state->CrtMiscIO);
+	spin_lock_irqsave(&state->vga_lock, flags);	
+	vga_w(regs, VGA_MIS_W, state->CrtMiscIO);
 		
 	/* HorizontalTotal */
-	vga_wcrt(NULL, 0x00, state->HorizontalTotal);
+	vga_wcrt(regs, 0x00, state->HorizontalTotal);
 	/* HorizDisplayEnd */
-	vga_wcrt(NULL, 0x01, state->HorizDisplayEnd);
+	vga_wcrt(regs, 0x01, state->HorizDisplayEnd);
 	/* StartHorizRetrace */
-	vga_wcrt(NULL, 0x04, state->StartHorizRetrace);
+	vga_wcrt(regs, 0x04, state->StartHorizRetrace);
 	/* EndHorizRetrace */
-	vga_wcrt(NULL, 0x05, state->EndHorizRetrace);
+	vga_wcrt(regs, 0x05, state->EndHorizRetrace);
 	/* Overflow */
-	vga_wcrt(NULL, 0x07, state->Overflow);
+	vga_wcrt(regs, 0x07, state->Overflow);
 	/* StartVertRetrace */
-	vga_wcrt(NULL, 0x10, state->StartVertRetrace);
+	vga_wcrt(regs, 0x10, state->StartVertRetrace);
 	/* EndVertRetrace */
-	vga_wcrt(NULL, 0x11, state->EndVertRetrace);
+	vga_wcrt(regs, 0x11, state->EndVertRetrace);
 	/* ModeControl */
-	vga_wcrt(NULL, 0x17, state->ModeControl);
+	vga_wcrt(regs, 0x17, state->ModeControl);
 	/* ClockingMode */
-	vga_wseq(NULL, 0x01, state->ClockingMode);
+	vga_wseq(regs, 0x01, state->ClockingMode);
 	
 	/* Restore index/control registers */
-	vga_w(NULL, VGA_SEQ_I, state->SeqCtrlIndex);
-	vga_w(NULL, VGA_CRT_IC, state->CrtCtrlIndex);
-	spin_unlock_irqrestore(&vga_lock, flags);	
+	vga_w(regs, VGA_SEQ_I, state->SeqCtrlIndex);
+	vga_w(regs, VGA_CRT_IC, state->CrtCtrlIndex);
+	spin_unlock_irqrestore(&state->vga_lock, flags);	
 }
 
 EXPORT_SYMBOL(vga_check_mode);

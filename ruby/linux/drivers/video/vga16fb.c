@@ -342,7 +342,7 @@ static int vga16fb_blank(int blank, struct fb_info *info)
 		}
 		break;
 	case 1:				/* blank */
-		vga_pal_blank();
+		vga_pal_blank(par->regsbase);
 		par->palette_blanked = 1;
 		break;
 	default:			/* VESA blanking */
