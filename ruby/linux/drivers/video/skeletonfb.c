@@ -312,7 +312,13 @@ static int xxxfb_blank(int blank_mode, const struct fb_info *info)
 
 /*
  * We provide our own functions if we have hardware acceleration
- * or non packed pixel format layouts.  
+ * or non packed pixel format layouts. If we have no hardware 
+ * acceleration, we use a generic unaccelerated function. If using
+ * a pack pixel format just use the functions in cfb*.c. Each file 
+ * has one of the three different accel functions we support. You   
+ * can use these functions as fallbacks if hardware unsupported
+ * action is requested. Also if you have non pack pixel modes and
+ * non accelerated cards you have to provide your own functions.
  */
 
 /**
@@ -490,7 +496,7 @@ static struct fb_ops xxxfb_ops = {
 
 #ifdef MODULE
 module_init(xxxfb_init);
+#endif 
 module_exit(xxxfb_cleanup);
 
 MODULE_LICENSE("GPL");
-#endif /* MODULE */
