@@ -403,7 +403,7 @@ static void fn_dec_console(struct vc_data *vc)
 
        for (i = j-1; i != j; i--) {
 		if (i < vc->display_fg->first_vc)
-                	i = vc->display_fg->first_vc + MAX_NR_USER_CONSOLES;
+                	i = vc->display_fg->first_vc + MAX_NR_USER_CONSOLES-1;
 		vc = find_vc(i);
                 if (vc)
 			break;
