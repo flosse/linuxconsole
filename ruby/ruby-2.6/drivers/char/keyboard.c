@@ -784,13 +784,13 @@ static void k_slock(struct vc_data *vc, unsigned char value, char up_flag)
  */
 unsigned char getledstate(struct vc_data *vc)
 {
-	return vc->vc_ledstate;
+	return vc->display_fg->vt_ledstate;
 }
 
 void setledstate(struct vc_data *vc, unsigned int led)
 {
 	if (!(led & ~7)) {
-		vc->vc_ledioctl = led;
+		vc->display_fg->vt_ledioctl = led;
 		vc->kbd_table.ledmode = LED_SHOW_IOCTL;
 	} else
 		vc->kbd_table.ledmode = LED_SHOW_FLAGS;
@@ -815,7 +815,7 @@ static inline unsigned char getleds(struct vc_data *vc)
 	int i;
 
 	if (vc->kbd_table.ledmode == LED_SHOW_IOCTL)
-		return vc->vc_ledioctl;
+		return vc->display_fg->vt_ledioctl;
 
 	leds = vc->kbd_table.ledflagstate;
 
@@ -857,12 +857,12 @@ static void kbd_bh(unsigned long dummy)
 		if (vt) {
 			leds = getleds(vt->fg_console);
 
-			if (leds != vt->fg_console->vc_ledstate) {
+			if (leds != vt->vt_ledstate) {
 				input_event(handle->dev, EV_LED, LED_SCROLLL, !!(leds & 0x01));
 				input_event(handle->dev, EV_LED, LED_NUML,    !!(leds & 0x02));
 				input_event(handle->dev, EV_LED, LED_CAPSL,   !!(leds & 0x04));
 				input_sync(handle->dev);
-				vt->fg_console->vc_ledstate = leds;
+				vt->vt_ledstate = leds;
 			}
 		}
 	}	
@@ -882,12 +882,12 @@ void kbd_refresh_leds(struct input_handle *handle)
 		tasklet_disable(&keyboard_tasklet);
 		leds = getleds(vt->fg_console);
 			
-		if (leds != vt->fg_console->vc_ledstate) {
+		if (leds != vt->vt_ledstate) {
 			input_event(handle->dev, EV_LED, LED_SCROLLL, !!(leds & 0x01));
 			input_event(handle->dev, EV_LED, LED_NUML,    !!(leds & 0x02));
 			input_event(handle->dev, EV_LED, LED_CAPSL,   !!(leds & 0x04));
 			input_sync(handle->dev);
-			vt->fg_console->vc_ledstate = leds;
+			vt->vt_ledstate = leds;
 		}
 		tasklet_enable(&keyboard_tasklet);
 	}
@@ -1155,9 +1155,8 @@ static struct input_handle *kbd_connect(struct input_handler *handler,
                                 vt->keyboard = handle;
                                 handle->private = vt;
                                 printk(KERN_INFO "keyboard.c: %s vc:%d-%d\n",
-                                       dev->name,
-                                       vt->first_vc,
-                                       vt->first_vc + vt->vc_count - 1);
+                                       dev->name, vt->first_vc + 1,
+				       vt->first_vc + vt->vc_count);
 				if(test_bit(EV_SND, dev->evbit)) {
 					vt->beeper = handle;
 					vt_map_input(vt);

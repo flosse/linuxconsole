@@ -979,7 +979,7 @@ struct vc_data *vc_allocate(unsigned int currcons)
 	/* although the numbers above are not valid since long ago, the
 	   point is still up-to-date and the comment still has its value
 	   even if only as a historical artifact.  --mj, July 1998 */
-	if (vt->vt_kmalloced || !((vt->first_vc + 1)== currcons))
+	if (vt->vt_kmalloced || !((vt->first_vc)== currcons))
 		vc = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
 	else
 		vc = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
@@ -992,7 +992,7 @@ struct vc_data *vc_allocate(unsigned int currcons)
 	cons_num = currcons;
 	vc->display_fg = vt;
 	visual_init(vc, 1);
-	if (vt->vt_kmalloced || !((vt->first_vc + 1) == currcons)) {
+	if (vt->vt_kmalloced || !((vt->first_vc) == currcons)) {
 		screenbuf = (unsigned short *) kmalloc(screenbuf_size, GFP_KERNEL);
 		if (!screenbuf) {
 			kfree(vc);
@@ -1016,7 +1016,7 @@ struct vc_data *vc_allocate(unsigned int currcons)
 		}
 	}
 	vt->vc_cons[currcons - vt->first_vc] = vc;
-	if ((vt->first_vc + 1) == currcons)
+	if ((vt->first_vc) == currcons)
 		vt->want_vc = vt->fg_console = vt->last_console = vc;
 	vc_init(vc, 1);
 	return vc;
@@ -1732,7 +1732,7 @@ const char *vt_map_display(struct vt_struct *vt, int init, int vc_count)
 {
         const char *display_desc;
 	
-	if (current_vc + vc_count > MAX_NR_CONSOLES + 1)
+	if (current_vc + vc_count - 1 > MAX_NR_CONSOLES)
 	        return NULL;
 
 	display_desc = vt->vt_sw->con_startup(vt, init);
@@ -1757,7 +1757,7 @@ const char *vt_map_display(struct vt_struct *vt, int init, int vc_count)
 	mod_timer(&vt->timer, jiffies + vt->blank_interval);
 	if (vt->pm_con)
 		vt->pm_con->data = vt;
-	vt->vc_cons[1] = vc_allocate(current_vc+1);	
+	vt->vc_cons[0] = vc_allocate(current_vc);	
 	vt->keyboard = NULL;
 	INIT_WORK(&vt->vt_work, vt_callback, vt);
 	
@@ -1830,9 +1830,9 @@ int __init vty_init(void)
 	console_driver->owner = THIS_MODULE;
 	console_driver->devfs_name = "vc/";
 	console_driver->name = "tty";
-	console_driver->name_base = 0;
+	console_driver->name_base = 1;
 	console_driver->major = TTY_MAJOR;
-	console_driver->minor_start = 0;
+	console_driver->minor_start = 1;
 	console_driver->type = TTY_DRIVER_TYPE_CONSOLE;
 	console_driver->init_termios = tty_std_termios;
 	console_driver->flags = TTY_DRIVER_REAL_RAW | TTY_DRIVER_RESET_TERMIOS;

@@ -10,7 +10,7 @@
 #include <linux/vt.h>
 #include <linux/kbd_kern.h>
 
-#define MIN_NR_CONSOLES 2 	/* must be at least 2 */
+#define MIN_NR_CONSOLES 1	/* must be at least 1 */
 #define MAX_NR_CONSOLES 63	/* serial lines start at 64 */
 #define MAX_NR_USER_CONSOLES 16 /* number of VCs per VT */
 
@@ -99,8 +99,6 @@ struct vc_data {
 	unsigned int vc_saved_y;
 	unsigned int vc_state;		/* Escape sequence parser state */
 	unsigned int vc_npar, vc_par[NPAR];	/* Parameters of current escape sequence */
-	unsigned char vc_ledstate;
-	unsigned char vc_ledioctl;
 	struct kbd_struct kbd_table;	/* VC keyboard state */
 	unsigned short vc_hi_font_mask;	/* [#] Attribute set for upper 256 chars of font or 0 if not supported */
 	struct console_font_op vc_font;	/* VC current font set */
@@ -244,6 +242,8 @@ struct vt_struct {
 	struct vc_data *vc_cons[MAX_NR_USER_CONSOLES];	/* VT's VC pool */
 	struct vt_struct *next;
         struct proc_dir_entry *procdir;
+	unsigned char vt_ledstate;
+	unsigned char vt_ledioctl;
 };
 
 extern struct vt_struct *vt_cons;

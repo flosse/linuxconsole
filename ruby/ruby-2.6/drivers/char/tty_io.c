@@ -100,6 +100,7 @@
 
 #include <linux/kmod.h>
 
+#define IS_CONSOLE_DEV(dev)	(kdev_val(dev) == __mkdev(TTY_MAJOR,0))
 #define IS_TTY_DEV(dev)		(kdev_val(dev) == __mkdev(TTYAUX_MAJOR,0))
 #define IS_SYSCONS_DEV(dev)	(kdev_val(dev) == __mkdev(TTYAUX_MAJOR,1))
 #define IS_PTMX_DEV(dev)	(kdev_val(dev) == __mkdev(TTYAUX_MAJOR,2))
@@ -1316,7 +1317,21 @@ retry_open:
 		/* noctty = 1; */
 		goto got_driver;
 	}
-	
+#ifdef CONFIG_VT
+	if (IS_CONSOLE_DEV(device)) {
+		struct vc_data *vc;
+		extern struct tty_driver *console_driver;
+		if (!current->tty)
+			return -ENXIO;
+		driver = console_driver;
+		vc = (struct vc_data *)current->tty->driver_data;
+		if (!vc)
+			return -ENXIO;
+		index = vc->display_fg->fg_console->vc_num;
+		noctty = 1;
+		goto got_driver;
+	}
+#endif	
 	if (IS_SYSCONS_DEV(device)) {
 		struct console *c = console_drivers;
 		for (c = console_drivers; c; c = c->next) {
@@ -2412,6 +2427,9 @@ static struct cdev tty_cdev, console_cdev;
 #ifdef CONFIG_UNIX98_PTYS
 static struct cdev ptmx_cdev;
 #endif
+#ifdef CONFIG_VT
+static struct cdev vc0_cdev;
+#endif          
 
 /*
  * Ok, now we can initialize the rest of the tty devices and can count
@@ -2449,6 +2467,14 @@ void __init tty_init(void)
 #endif
 	
 #ifdef CONFIG_VT
+        strcpy(vc0_cdev.kobj.name, "dev.vc0");
+        cdev_init(&vc0_cdev, &tty_fops);
+        if (cdev_add(&vc0_cdev, MKDEV(TTY_MAJOR, 0), 1) ||
+            register_chrdev_region(MKDEV(TTY_MAJOR, 0), 1, "/dev/vc/0") < 0)
+                panic("Couldn't register /dev/tty0 driver\n");
+        devfs_mk_cdev(MKDEV(TTY_MAJOR, 0), S_IFCHR|S_IRUSR|S_IWUSR, "vc/0");
+        tty_add_class_device ("tty0", MKDEV(TTY_MAJOR, 0), NULL);
+
 	vty_init();
 #endif
 #ifdef CONFIG_ESPSERIAL  /* init ESP before rs, so rs doesn't see the port */

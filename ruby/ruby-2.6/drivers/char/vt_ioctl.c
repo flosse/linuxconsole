@@ -1010,9 +1010,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		unsigned short mask, state = 0;
 		struct vc_data *tmp;
 
-		if (put_user(vc->display_fg->fg_console->vc_num, &vtstat->v_active))
+		if (put_user(vc->display_fg->fg_console->vc_num + 1, &vtstat->v_active))
 			return -EFAULT;
-		for (i = 0, mask = 0; i < MAX_NR_CONSOLES && mask; ++i, mask <<= 1) {
+		for (i = 0, mask = 0; i < vc->display_fg->vc_count && mask; ++i, mask <<= 1) {
 			tmp = find_vc(i + vc->display_fg->first_vc);
 			if (tmp && VT_IS_IN_USE(tmp))
 				state |= mask;
@@ -1027,7 +1027,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	{
 		int j = vc->display_fg->first_vc;
 	
-		for ((j) ? (i = 0) : (i = j = 1); i < vc->display_fg->vc_count; ++i, j++) {
+		for (i = 0; i < vc->display_fg->vc_count; ++i, j++) {
 			struct vc_data *tmp = find_vc(j);	
 			
 			if (!tmp || (tmp && !VT_IS_IN_USE(tmp)))
@@ -1047,9 +1047,10 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 
 		if (!perm)
 			return -EPERM;
-		if (arg > MAX_NR_CONSOLES)
+		if (arg == 0 || arg > MAX_NR_CONSOLES)
 			return -ENXIO;
 
+		arg--;
 		tmp = find_vc(arg);
 		if (!tmp) {
 			tmp = vc_allocate(arg);
@@ -1067,7 +1068,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 	 */
 	case VT_WAITACTIVE:
 	{
-		struct vc_data *tmp = find_vc(arg);
+		struct vc_data *tmp = find_vc(arg-1);
 
 		if (!perm)
 			return -EPERM;
@@ -1097,7 +1098,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		 * Switching-from response
 		 */
 		if (vc->vt_newvt >= 0) {
-			if (arg == vc->display_fg->fg_console->vc_num)
+			if (arg == 0)
 				/*
 				 * Switch disallowed, so forget we were trying
 				 * to do it.
@@ -1147,9 +1148,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 
 		if (arg > MAX_NR_CONSOLES)
 			return -ENXIO;
-		if (arg == vt->fg_console->vc_num) {
+		if (arg == 0) {
 			/* disallocate all unused consoles, but leave visible VC */
-			for (i = 0; i < MAX_NR_CONSOLES; i++) {
+			for (i = 1; i < vt->vc_count; i++) {
 				tmp = find_vc(i + vt->first_vc);
 		
 				if (tmp && !VT_BUSY(tmp)) 
@@ -1157,7 +1158,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 			}
 		} else {
 			/* disallocate a single console, if possible */
-			tmp = find_vc(arg);
+			tmp = find_vc(arg-1);
 			if (!tmp || VT_BUSY(tmp))
 				return -EBUSY;
 			vc_disallocate(tmp);

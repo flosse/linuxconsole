@@ -95,7 +95,7 @@ int __init dumbcon_init(void)
 	printk("Console: mono %s %dx%d vc:%d-%d\n", display_desc,
 		dummy_vt.default_mode->vc_cols,	
 		dummy_vt.default_mode->vc_rows,
-		dummy_vt.first_vc, dummy_vt.first_vc + dummy_vt.vc_count - 1);
+		dummy_vt.first_vc + 1, dummy_vt.first_vc + dummy_vt.vc_count);
 	return 0;
 }
 
@@ -119,7 +119,7 @@ int dumbcon_add(void)
 	printk("Console: mono %s %dx%d vc:%d-%d\n", display_desc,
 		vt->default_mode->vc_cols,	
 		vt->default_mode->vc_rows,
-		vt->first_vc, vt->first_vc + vt->vc_count - 1);
+		vt->first_vc + 1, vt->first_vc + vt->vc_count);
         return 0;
 }
 

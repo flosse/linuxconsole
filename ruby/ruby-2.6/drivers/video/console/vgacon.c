@@ -1099,7 +1099,7 @@ int __init vga_console_init(void)
 			vga_vt.default_mode->vc_can_do_color ? "Colour" : "Mono",
 			display_desc, vga_vt.default_mode->vc_cols,
 			vga_vt.default_mode->vc_rows,
-			vga_vt.first_vc, vga_vt.first_vc + vga_vt.vc_count - 1);
+			vga_vt.first_vc + 1, vga_vt.first_vc + vga_vt.vc_count);
 	return 0;
 }	
 
