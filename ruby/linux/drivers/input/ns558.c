@@ -218,8 +218,11 @@ static struct pci_driver ns558_pci_driver = {
 };
 #endif /* CONFIG_PCI */
 
+#if defined(CONFIG_ISAPNP) || (defined(CONFIG_ISAPNP_MODULE) && defined(MODULE))
+#define NSS558_ISAPNP
+#endif
 
-#ifdef CONFIG_ISAPNP
+#ifdef NSS558_ISAPNP
 /*
  * PnP IDs:
  *
@@ -297,7 +300,7 @@ deactivate:
 int __init ns558_init(void)
 {
 	int i = 0;
-#ifdef CONFIG_ISAPNP
+#ifdef NSS558_ISAPNP
 	struct pci_dev *dev = NULL;
 	struct pnp_devid *devid;
 #endif
@@ -320,7 +323,7 @@ int __init ns558_init(void)
  * Probe for PnP ports.
  */
 
-#ifdef CONFIG_ISAPNP
+#ifdef NSS558_ISAPNP
 	for (devid = pnp_devids; devid->vendor; devid++) {
 		while ((dev = isapnp_find_dev(NULL, devid->vendor, devid->device, dev))) {
 			ns558 = ns558_pnp_probe(dev, ns558);
@@ -339,7 +342,7 @@ void __exit ns558_exit(void)
 		gameport_unregister_port(&port->gameport);
 		switch (port->type) {
 
-#ifdef CONFIG_ISAPNP
+#ifdef NSS558_ISAPNP
 			case NS558_PNP:
 				if (port->dev->deactivate)
 					port->dev->deactivate(port->dev);
