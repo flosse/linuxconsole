@@ -89,8 +89,6 @@ static void mousedev_event(struct input_handle *handle, unsigned int type, unsig
 	struct mousedev_list *list;
 	int index, size;
 
-	add_mouse_randomness((type << 4) ^ code ^ (code >> 4) ^ value);
-
 	while (*mousedev) {
 		list = (*mousedev)->list;
 		while (list) {

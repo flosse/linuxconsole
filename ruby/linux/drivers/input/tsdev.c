@@ -231,9 +231,6 @@ static void tsdev_event(struct input_handle *handle, unsigned int type, unsigned
 	struct timeval time;
 	int size;
 
-	/* Yes it is not a mouse but it is great for the entropy pool */
-	add_mouse_randomness((type << 4) ^ code ^ (code >> 4) ^ value);
-
 	while (list) {
 		switch (type) {
 			case EV_ABS:

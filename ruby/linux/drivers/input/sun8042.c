@@ -387,7 +387,7 @@ void pcimouse_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 	if ((pcimouse_inb(pcimouse_iobase + KBD_STATUS_REG) & AUX_STAT_OBF) != AUX_STAT_OBF)
 		return;
 
-	add_mouse_randomness(queue->buf[head] = pcimouse_inb(pcimouse_iobase + KBD_DATA_REG));
+	queue->buf[head] = pcimouse_inb(pcimouse_iobase + KBD_DATA_REG);
 	if (head != maxhead) {
 		head++;
 		head &= AUX_BUF_SIZE-1;
