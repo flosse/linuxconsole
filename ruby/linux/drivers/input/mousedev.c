@@ -3,7 +3,7 @@
  *
  *  Copyright (c) 1999-2000 Vojtech Pavlik
  *
- *  Input driver to PS/2 or ImPS/2 device driver module.
+ *  Input driver to ImExPS/2 device driver module.
  *
  *  Sponsored by SuSE
  */
@@ -65,14 +65,13 @@ struct mousedev_list {
 	signed char ps2[6];
 	unsigned long buttons;
 	unsigned char ready, buffer, bufsiz;
-	unsigned char mode, genseq, impseq;
+	unsigned char mode, imexseq, impsseq;
 };
 
-#define MOUSEDEV_GENIUS_LEN	5
-#define MOUSEDEV_IMPS_LEN	6
+#define MOUSEDEV_SEQ_LEN	6
 
-static unsigned char mousedev_genius_seq[] = { 0xe8, 3, 0xe6, 0xe6, 0xe6 };
 static unsigned char mousedev_imps_seq[] = { 0xf3, 200, 0xf3, 100, 0xf3, 80 };
+static unsigned char mousedev_imex_seq[] = { 0xf3, 200, 0xf3, 200, 0xf3, 80 };
 
 static struct input_handler mousedev_handler;
 
@@ -121,12 +120,12 @@ static void mousedev_event(struct input_handle *handle, unsigned int type, unsig
 						case BTN_TOUCH:
 						case BTN_LEFT:   index = 0; break;
 						case BTN_4:
-						case BTN_EXTRA:  if (list->mode > 1) { index = 4; break; }
+						case BTN_EXTRA:  if (list->mode == 2) { index = 4; break; }
 						case BTN_STYLUS:
 						case BTN_1:
 						case BTN_RIGHT:  index = 1; break;
 						case BTN_3:
-						case BTN_SIDE:   if (list->mode > 1) { index = 3; break; }
+						case BTN_SIDE:   if (list->mode == 2) { index = 3; break; }
 						case BTN_2:
 						case BTN_STYLUS2:
 						case BTN_MIDDLE: index = 2; break;	
@@ -254,14 +253,19 @@ static void mousedev_packet(struct mousedev_list *list, unsigned char off)
 	list->dy -= list->ps2[off + 2];
 	list->bufsiz = off + 3;
 
-	if (list->mode > 1)
-		list->ps2[off] |= ((list->buttons & 0x18) << 3);
-	
-	if (list->mode) {
-		list->ps2[off + 3] = (list->dz > 127 ? 127 : (list->dz < -127 ? -127 : list->dz));
-		list->bufsiz++;
+	if (list->mode == 2) {
+		list->ps2[off + 3] = (list->dz > 7 ? 7 : (list->dz < -7 ? -7 : list->dz));
 		list->dz -= list->ps2[off + 3];
+		list->ps2[off + 3] |= ((list->buttons & 0x18) << 1);
+		list->bufsiz++;
 	}
+	
+	if (list->mode == 1) {
+		list->ps2[off + 3] = (list->dz > 127 ? 127 : (list->dz < -127 ? -127 : list->dz));
+		list->dz -= list->ps2[off + 3];
+		list->bufsiz++;
+	}
+
 	if (!list->dx && !list->dy && (!list->mode || !list->dz)) list->ready = 0;
 	list->buffer = list->bufsiz;
 }
@@ -277,24 +281,23 @@ static ssize_t mousedev_write(struct file * file, const char * buffer, size_t co
 
 		c = buffer[i];
 
-		if (c == mousedev_genius_seq[list->genseq]) {
-			if (++list->genseq == MOUSEDEV_GENIUS_LEN) {
-				list->genseq = 0;
-				list->ready = 1;
+		if (c == mousedev_imex_seq[list->imexseq]) {
+			if (++list->imexseq == MOUSEDEV_SEQ_LEN) {
+				list->imexseq = 0;
 				list->mode = 2;
 			}
-		} else list->genseq = 0;
+		} else list->imexseq = 0;
 
-		if (c == mousedev_imps_seq[list->impseq]) {
-			if (++list->impseq == MOUSEDEV_IMPS_LEN) {
-				list->impseq = 0;
-				list->ready = 1;
+		if (c == mousedev_imps_seq[list->impsseq]) {
+			if (++list->impsseq == MOUSEDEV_SEQ_LEN) {
+				list->impsseq = 0;
 				list->mode = 1;
 			}
-		} else list->impseq = 0;
+		} else list->impsseq = 0;
 
 		list->ps2[0] = 0xfa;
 		list->bufsiz = 1;
+		list->ready = 1;
 
 		switch (c) {
 
@@ -303,16 +306,16 @@ static ssize_t mousedev_write(struct file * file, const char * buffer, size_t co
 				break;
 
 			case 0xf2: /* Get ID */
-				list->ps2[1] = (list->mode == 1) ? 3 : 0;
+				switch (list->mode) {
+					case 0: list->ps2[1] = 0;
+					case 1: list->ps2[1] = 3;
+					case 2: list->ps2[1] = 4;
+				}
 				list->bufsiz = 2;
 				break;
 
 			case 0xe9: /* Get info */
-				if (list->mode == 2) {
-					list->ps2[1] = 0x00; list->ps2[2] = 0x33; list->ps2[3] = 0x55;
-				} else {
-					list->ps2[1] = 0x60; list->ps2[2] = 3; list->ps2[3] = 200;
-				}
+				list->ps2[1] = 0x60; list->ps2[2] = 3; list->ps2[3] = 200;
 				list->bufsiz = 4;
 				break;
 		}
