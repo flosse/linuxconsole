@@ -61,9 +61,9 @@ extern int unregister_console(struct console *);
 extern struct console *console_drivers;
 
 /* VESA Blanking Levels */
-#define VESA_NO_BLANKING        0
-#define VESA_VSYNC_SUSPEND      1
-#define VESA_HSYNC_SUSPEND      2
-#define VESA_POWERDOWN          3
+#define VESA_NO_BLANKING	0
+#define VESA_VSYNC_SUSPEND	1
+#define VESA_HSYNC_SUSPEND	2
+#define VESA_POWERDOWN		3
 
 #endif /* _LINUX_CONSOLE_H */
