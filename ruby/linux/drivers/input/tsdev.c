@@ -27,8 +27,8 @@
  * e-mail - mail your message to <jsimmons@transvirtual.com>.
  */
 
-#define TSDEV_MINOR_BASE 	16	
-#define TSDEV_MINORS		16	
+#define TSDEV_MINOR_BASE 	128
+#define TSDEV_MINORS		32
 #define TSDEV_BUFFER_SIZE	64
 
 #include <linux/slab.h>
@@ -42,10 +42,10 @@
 #include <linux/time.h>
 
 #ifndef CONFIG_INPUT_TSDEV_SCREEN_X
-#define CONFIG_INPUT_TSDEV_SCREEN_X	240	
+#define CONFIG_INPUT_TSDEV_SCREEN_X	240
 #endif
 #ifndef CONFIG_INPUT_TSDEV_SCREEN_Y
-#define CONFIG_INPUT_TSDEV_SCREEN_Y	320	
+#define CONFIG_INPUT_TSDEV_SCREEN_Y	320
 #endif
 
 struct tsdev {
@@ -240,7 +240,8 @@ static void tsdev_event(struct input_handle *handle, unsigned int type,
 		case EV_ABS:
 			switch (code) {
 			case ABS_X:
-				if (!list->pendown)     return;
+				if (!list->pendown)
+					return;
 
 				size =
 				    handle->dev->absmax[ABS_X] -
@@ -256,7 +257,8 @@ static void tsdev_event(struct input_handle *handle, unsigned int type,
 					      handle->dev->absmin[ABS_X]));
 				break;
 			case ABS_Y:
-				if (!list->pendown)     return;		
+				if (!list->pendown)
+					return;
 
 				size =
 				    handle->dev->absmax[ABS_Y] -
@@ -284,7 +286,8 @@ static void tsdev_event(struct input_handle *handle, unsigned int type,
 		case EV_REL:
 			switch (code) {
 			case REL_X:
-				if (!list->pendown)     return;
+				if (!list->pendown)
+					return;
 
 				list->oldx += value;
 				if (list->oldx < 0)
@@ -293,7 +296,8 @@ static void tsdev_event(struct input_handle *handle, unsigned int type,
 					list->oldx = xres;
 				break;
 			case REL_Y:
-				if (!list->pendown)     return;
+				if (!list->pendown)
+					return;
 
 				list->oldy += value;
 				if (list->oldy < 0)
@@ -321,7 +325,7 @@ static void tsdev_event(struct input_handle *handle, unsigned int type,
 				return;
 			break;
 		}
-		get_fast_time(&time);
+		do_gettimeofday(&time);
 		list->event[list->head].millisecs = time.tv_usec / 100;
 		list->event[list->head].pressure = list->pendown;
 		list->event[list->head].x = list->oldx;
@@ -388,22 +392,20 @@ static void tsdev_disconnect(struct input_handle *handle)
 
 static struct input_device_id tsdev_ids[] = {
 	{
-	      flags:INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT |
-	 INPUT_DEVICE_ID_MATCH_RELBIT,
-	      evbit:{BIT(EV_KEY) | BIT(EV_REL)},
-	      keybit:{[LONG(BTN_LEFT)] = BIT(BTN_LEFT)},
-	      relbit:{BIT(REL_X) | BIT(REL_Y)},
-	 },			/* A mouse like device, at least one button, two relative axes */
+	      flags:	INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT | INPUT_DEVICE_ID_MATCH_RELBIT,
+	      evbit:	{ BIT(EV_KEY) | BIT(EV_REL) },
+	      keybit:	{ [LONG(BTN_LEFT)] = BIT(BTN_LEFT) },
+	      relbit:	{ BIT(REL_X) | BIT(REL_Y) },
+	 },/* A mouse like device, at least one button, two relative axes */
 
 	{
-	      flags:INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT |
-	 INPUT_DEVICE_ID_MATCH_ABSBIT,
-	      evbit:{BIT(EV_KEY) | BIT(EV_ABS)},
-	      keybit:{[LONG(BTN_TOUCH)] = BIT(BTN_TOUCH)},
-	      absbit:{BIT(ABS_X) | BIT(ABS_Y)},
-	 },			/* A tablet like device, at least touch detection, two absolute axes */
+	      flags:	INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT | INPUT_DEVICE_ID_MATCH_ABSBIT,
+	      evbit:	{ BIT(EV_KEY) | BIT(EV_ABS) },
+	      keybit:	{ [LONG(BTN_TOUCH)] = BIT(BTN_TOUCH) },
+	      absbit:	{ BIT(ABS_X) | BIT(ABS_Y) },
+	 },/* A tablet like device, at least touch detection, two absolute axes */
 
-	{},			/* Terminating entry */
+	{},/* Terminating entry */
 };
 
 MODULE_DEVICE_TABLE(input, tsdev_ids);
