@@ -1256,6 +1256,7 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 	struct hid_descriptor *hdesc;
 	struct hid_device *hid;
 	unsigned rsize = 0;
+	u8 *rdesc;
 	char *buf;
 	int n;
 
@@ -1278,26 +1279,31 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum)
 		return NULL;
 	}
 
-	{
-		__u8 rdesc[rsize];
+	if (!(rdesc = kmalloc(rsize, GFP_KERNEL))) {
+		dbg("couldn't allocate rdesc memory");
+		return NULL;
+	}
 
-		if ((n = hid_get_class_descriptor(dev, interface->bInterfaceNumber, HID_DT_REPORT, rdesc, rsize)) < 0) {
-			dbg("reading report descriptor failed");
-			return NULL;
-		}
+	if ((n = hid_get_class_descriptor(dev, interface->bInterfaceNumber, HID_DT_REPORT, rdesc, rsize)) < 0) {
+		dbg("reading report descriptor failed");
+		kfree(rdesc);
+		return NULL;
+	}
 
 #ifdef DEBUG_DATA
-		printk(KERN_DEBUG __FILE__ ": report descriptor (size %u, read %d) = ", rsize, n);
-		for (n = 0; n < rsize; n++)
-			printk(" %02x", (unsigned) rdesc[n]);
-		printk("\n");
+	printk(KERN_DEBUG __FILE__ ": report descriptor (size %u, read %d) = ", rsize, n);
+	for (n = 0; n < rsize; n++)
+		printk(" %02x", (unsigned) rdesc[n]);
+	printk("\n");
 #endif
 
-		if (!(hid = hid_parse_report(rdesc, rsize))) {
-			dbg("parsing report descriptor failed");
-			return NULL;
-		}
+	if (!(hid = hid_parse_report(rdesc, rsize))) {
+		dbg("parsing report descriptor failed");
+		kfree(rdesc);
+		return NULL;
 	}
+
+	kfree(rdesc);
 
 	for (n = 0; n < interface->bNumEndpoints; n++) {
 
