@@ -310,11 +310,6 @@ if [ "$CONFIG_ALL_PPC" = "y" ]; then
   if [ "$CONFIG_ADB" = "y" ]; then
     bool '   Include MacIO (CHRP) ADB driver' CONFIG_ADB_MACIO
   fi
-  # This is for drivers/macintosh/mac_hid.o, which is needed if the input
-  # layer is used.
-  if [ "$CONFIG_INPUT" != "n" ]; then
-    define_bool CONFIG_MAC_HID y
-  fi
 fi
 endmenu
 

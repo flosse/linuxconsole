@@ -127,7 +127,10 @@ adbhid_keyboard_input(unsigned char *data, int nb, struct pt_regs *regs, int apo
 	/* first check this is from register 0 */
 	if (nb != 3 || (data[0] & 3) != KEYB_KEYREG)
 		return;		/* ignore it */
+#if 0
+	/* How will this be handled now?  */
 	kbd_pt_regs = regs;
+#endif
 	adbhid_input_keycode(id, data[1], 0);
 	if (!(data[2] == 0xff || (data[2] == 0x7f && data[1] == 0x7f)))
 		adbhid_input_keycode(id, data[2], 0);
