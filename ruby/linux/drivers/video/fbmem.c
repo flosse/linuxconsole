@@ -749,7 +749,8 @@ unregister_framebuffer(struct fb_info *fb_info)
 	 * Disable MTRR support if it's enabled.
 	 */
 	if (enable_mtrr) {
-		mtrr_del(fb_info->fix.smem_start, fb_info->fix.smem_len);
+		mtrr_del(fb_info->mtrr_handle, fb_info->fix.smem_start, 
+			 fb_info->fix.smem_len);
 		printk("%s: MTRR turned off\n", fb_info->fix.id);
 	}
 #endif
