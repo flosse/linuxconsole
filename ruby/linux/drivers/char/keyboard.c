@@ -501,8 +501,7 @@ static void fn_boot_it(struct tty_struct *tty)
 		/* Stop other key events from coming */
 		for (handle = kbd_handler.handle; handle; 
 		     handle = handle->hnext) {		 
-			if (handle->private) 
-				kbd_disconnect(handle);	
+			kbd_disconnect(handle);	
 		}
 		ctrl_alt_del(); 
 	}
@@ -858,7 +857,6 @@ static void kbd_bh(unsigned long dummy)
 	struct input_handle *handle;	
 	unsigned char leds;
 
-#ifdef CONFIG_INPUT
 	for (handle = kbd_handler.handle; handle; handle = handle->hnext) {
 		if (handle->private) {
 			leds = getleds(handle->private);
@@ -870,12 +868,9 @@ static void kbd_bh(unsigned long dummy)
 			}
 		}	
 	}
-#endif
 }
 
 DECLARE_TASKLET_DISABLED(keyboard_tasklet, kbd_bh, 0);
-
-#ifdef CONFIG_INPUT
 
 #if defined(CONFIG_X86) || defined(CONFIG_IA64) || defined(CONFIG_ALPHA) || defined(CONFIG_MIPS) || defined(CONFIG_PPC)
 
@@ -974,8 +969,9 @@ void emulate_raw(struct tty_struct *tty,unsigned int code,unsigned char up_flag)
 }
 #endif
 
-void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down)
+void kbd_keycode(void  *private, unsigned int keycode, int down)
 {
+	struct vt_struct *vt = (struct vt_struct *) private; 
 	struct vc_data *vc = vt->fg_console;
 	unsigned short keysym, *key_map;
 	unsigned char type, raw_mode;
@@ -1107,6 +1103,7 @@ static struct input_handle *kbd_connect(struct input_handler *handler, struct in
                 if (!vt->keyboard) {
                         vt->keyboard = handle;
 			handle->private = vt;
+			printk(KERN_INFO "Keyboard attaching to VT\n");
 			break;
 		} else 
 			vt = vt->next;
@@ -1125,9 +1122,10 @@ static void kbd_disconnect(struct input_handle *handle)
 	printk(KERN_INFO "keyboard.c: Removing keyboard: input%d\n", 
 	       handle->dev->number);
 
-	if (vt->keyboard == handle) 
+	if (vt && vt->keyboard == handle) { 
 		vt->keyboard = NULL;
-	handle->private = NULL;
+		handle->private = NULL;
+	}
 	input_close_device(handle);
 	kfree(handle);
 }
@@ -1137,8 +1135,6 @@ static struct input_handler kbd_handler = {
 	connect:	kbd_connect,
 	disconnect:	kbd_disconnect,
 };
-
-#endif
 
 int __init kbd_init(void)
 {
@@ -1151,8 +1147,6 @@ int __init kbd_init(void)
 
 	pm_kbd = pm_register(PM_SYS_DEV, PM_SYS_KBC, NULL);
 
-#ifdef CONFIG_INPUT
 	input_register_handler(&kbd_handler);
-#endif
 	return 0;
 }
