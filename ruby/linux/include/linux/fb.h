@@ -276,14 +276,13 @@ struct fb_ops {
     /* get settable parameters */
     int (*fb_get_var)(struct fb_var_screeninfo *var, int con,
 		      struct fb_info *info);		
-    /* checks var and creates a par based on it */
-    int (*fb_check_var)(const struct fb_var_screeninfo *var, void *par,
-                        struct fb_info *info);
-    /* set the video mode according to par */
-    void (*fb_set_par)(const void *par, struct fb_info *info);
     /* set settable parameters */
     int (*fb_set_var)(struct fb_var_screeninfo *var, int con,
-		      struct fb_info *info);		
+                      struct fb_info *info);
+    /* checks var and creates a par based on it */
+    int (*fb_check_var)(struct fb_var_screeninfo *var, struct fb_info *info); 
+    /* set the video mode according to par */
+    int (*fb_set_par)(struct fb_info *info);
     /* get colormap */
     int (*fb_get_cmap)(struct fb_cmap *cmap, int kspc, int con,
 		       struct fb_info *info);
