@@ -40,7 +40,7 @@
 /* Driver name */
 static const char permedia3_name[16] = "Permedia3";
 
-+/* memory timings */
+/* memory timings */
 struct pm3fb_timings
 {
 	unsigned long caps;
@@ -94,8 +94,6 @@ struct pm3fb_par {
 	struct pm3fb_info *l_fb_info; /* HW-specific description */
 	struct fb_info *f_fb_info; /* FBCON fb_info, non-HW specific */
 };
-
-
 
 /* more mandatory stuff (see skeletonfb.c + framebuffer driver HOWTO */
 static struct pm3fb_info pm3fb_fb_info[PM3_MAX_BOARD];
