@@ -88,7 +88,7 @@ static int analog_options[ANALOG_PORTS];
 #define ANALOG_AXIS_TIME	2	/* 2 * refresh */
 #define ANALOG_INIT_RETRIES	8	/* 8 times */
 #define ANALOG_FUZZ_BITS	2	/* 2 bit more */
-#define ANALOG_FUZZ_FILTER	5	/* 5 bit gauss */
+#define ANALOG_FUZZ_MAGIC	32	/* 32 u*ms/loop */
 
 #define ANALOG_MAX_NAME_LENGTH  128
 
@@ -576,7 +576,7 @@ static int analog_init_port(struct gameport *gameport, struct gameport_dev *dev,
 		t = gameport_read(gameport);
 		wait_ms(ANALOG_MAX_TIME);
 		port->mask = (gameport_read(gameport) ^ t) & t & 0xf;
-		port->fuzz = 1 << ANALOG_FUZZ_FILTER;
+		port->fuzz = (port->speed * ANALOG_FUZZ_MAGIC) / port->loop / 1000;
 	
 		for (i = 0; i < ANALOG_INIT_RETRIES; i++) {
 			if (!analog_cooked_read(port)) break;
