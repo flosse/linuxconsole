@@ -271,8 +271,8 @@ static void tmdc_connect(struct gameport *gameport, struct gameport_dev *dev)
 
 	for (i = 0; i < models[m].abs && i < TMDC_ABS; i++) {
 		set_bit(tmdc_abs[i], tmdc->dev.absbit);
-		tmdc->dev.absmin[tmdc_abs[i]] = 248;
-		tmdc->dev.absmax[tmdc_abs[i]] = 8;
+		tmdc->dev.absmin[tmdc_abs[i]] = 8;
+		tmdc->dev.absmax[tmdc_abs[i]] = 248;
 		tmdc->dev.absfuzz[tmdc_abs[i]] = 2;
 		tmdc->dev.absflat[tmdc_abs[i]] = 4;
 	}

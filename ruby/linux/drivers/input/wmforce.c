@@ -109,8 +109,8 @@ static void *wmforce_probe(struct usb_device *dev, unsigned int ifnum)
 		wmforce->dev.absflat[i] = 128;
 	}
 
-	wmforce->dev.absmax[ABS_THROTTLE] = 0;
-	wmforce->dev.absmin[ABS_THROTTLE] = 255;
+	wmforce->dev.absmax[ABS_THROTTLE] = 255;
+	wmforce->dev.absmin[ABS_THROTTLE] = 0;
 	wmforce->dev.absfuzz[ABS_THROTTLE] = 0;
 	wmforce->dev.absflat[ABS_THROTTLE] = 0;
 

@@ -649,7 +649,7 @@ static int __init analog_setup(char *str)
 	if (!str || !*str) return 0;
 
 	while ((str = s) && (i < ANALOG_PORTS)) {
-		if ((s = strchr(str,',')) *s++ = 0;
+		if ((s = strchr(str,','))) *s++ = 0;
 		js[i++] = str;
 	}
 
