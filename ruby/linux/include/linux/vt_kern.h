@@ -307,6 +307,7 @@ inline unsigned short *screenpos(struct vc_data *vc, int offset, int viewed);
 void invert_screen(struct vc_data *vc, int offset, int count, int viewed);
 void do_update_region(struct vc_data *vc, unsigned long start, int count);
 void update_region(struct vc_data *vc, unsigned long start, int count);
+void update_screen(struct vc_data *vc);
 void unblank_screen(struct vt_struct *vt);
 void poke_blanked_console(struct vt_struct *vt);
 
