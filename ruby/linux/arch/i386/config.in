@@ -274,7 +274,7 @@ tristate 'Kernel support for MISC binaries' CONFIG_BINFMT_MISC
 bool 'Power Management support' CONFIG_PM
 
 dep_tristate '  Advanced Power Management BIOS support' CONFIG_APM $CONFIG_PM
-if [ "$CONFIG_APM" != "n" ]; then
+if [ "$CONFIG_PM" != "n" -a "$CONFIG_APM" != "n" ]; then
    bool '    Ignore USER SUSPEND' CONFIG_APM_IGNORE_USER_SUSPEND
    bool '    Enable PM at boot time' CONFIG_APM_DO_ENABLE
    bool '    Make CPU Idle calls when idle' CONFIG_APM_CPU_IDLE
