@@ -452,7 +452,8 @@ config A2232
 source "drivers/serial/Kconfig"
 
 config UNIX98_PTYS
-	bool "Unix98 PTY support"
+	bool "Unix98 PTY support" if EMBEDDED
+	default y
 	---help---
 	  A pseudo terminal (PTY) is a software device consisting of two
 	  halves: a master and a slave. The slave device behaves identical to
@@ -470,28 +471,38 @@ config UNIX98_PTYS
 	  terminal slave can be accessed as /dev/pts/<number>. What was
 	  traditionally /dev/ttyp2 will then be /dev/pts/2, for example.
 
-	  The entries in /dev/pts/ are created on the fly by a virtual
-	  file system; therefore, if you say Y here you should say Y to
-	  "/dev/pts file system for Unix98 PTYs" as well.
+	  All modern Linux systems use the Unix98 ptys.  Say Y unless
+	  you're on an embedded system and want to conserve memory.
 
-	  If you want to say Y here, you need to have the C library glibc 2.1
-	  or later (equal to libc-6.1, check with "ls -l /lib/libc.so.*").
-	  Read the instructions in <file:Documentation/Changes> pertaining to
-	  pseudo terminals. It's safe to say N.
+config LEGACY_PTYS
+	bool "Legacy (BSD) PTY support"
+	default y
+	---help---
+	  A pseudo terminal (PTY) is a software device consisting of two
+	  halves: a master and a slave. The slave device behaves identical to
+	  a physical terminal; the master device is used by a process to
+	  read data from and write data to the slave, thereby emulating a
+	  terminal. Typical programs for the master side are telnet servers
+	  and xterms.
 
-config UNIX98_PTY_COUNT
-	int "Maximum number of Unix98 PTYs in use (0-2048)"
-	depends on UNIX98_PTYS
+	  Linux has traditionally used the BSD-like names /dev/ptyxx
+	  for masters and /dev/ttyxx for slaves of pseudo
+	  terminals. This scheme has a number of problems, including
+	  security.  This option enables these legacy devices; on most
+	  systems, it is safe to say N.
+
+
+config LEGACY_PTY_COUNT
+	int "Maximum number of legacy PTY in use"
+	depends on LEGACY_PTYS
 	default "256"
-	help
-	  The maximum number of Unix98 PTYs that can be used at any one time.
-	  The default is 256, and should be enough for desktop systems. Server
-	  machines which support incoming telnet/rlogin/ssh connections and/or
-	  serve several X terminals may want to increase this: every incoming
-	  connection and every xterm uses up one PTY.
+	---help---
+	  The maximum number of legacy PTYs that can be used at any one time.
+	  The default is 256, and should be more than enough.  Embedded
+	  systems may want to reduce this to save memory.
 
-	  When not in use, each additional set of 256 PTYs occupy
-	  approximately 8 KB of kernel memory on 32-bit architectures.
+	  When not in use, each legacy PTY occupies 12 bytes on 32-bit
+	  architectures and 24 bytes on 64-bit architectures.
 
 config PRINTER
 	tristate "Parallel printer support"
@@ -594,30 +605,6 @@ config PC9800_OLDLP
 config PC9800_OLDLP_CONSOLE
 	bool "Support for console on line printer"
 	depends on PC9800_OLDLP
-
-
-menu "Mice"
-
-config BUSMOUSE
-	tristate "Bus Mouse Support"
-	---help---
-	  Say Y here if your machine has a bus mouse as opposed to a serial
-	  mouse. Most people have a regular serial MouseSystem or
-	  Microsoft mouse (made by Logitech) that plugs into a COM port
-	  (rectangular with 9 or 25 pins). These people say N here. 
-
-	  If you have a laptop, you either have to check the documentation or
-	  experiment a bit to find out whether the trackball is a serial mouse
-	  or not; it's best to say Y here for you.
-
-	  This is the generic bus mouse driver code. If you have a bus mouse,
-	  you will have to say Y here and also to the specific driver for your
-	  mouse below.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called busmouse.
-
-endmenu
 
 config QIC02_TAPE
 	tristate "QIC-02 tape support"
@@ -736,6 +723,7 @@ config HW_RANDOM
 
 config NVRAM
 	tristate "/dev/nvram support"
+	depends on ATARI || X86 || X86_64 || ARM || GENERIC_NVRAM
 	---help---
 	  If you say Y here and create a character special file /dev/nvram
 	  with major number 10 and minor number 144 using mknod ("man mknod"),
@@ -761,7 +749,7 @@ config NVRAM
 
 config RTC
 	tristate "Enhanced Real Time Clock Support"
-	depends on !PPC32 && !PARISC && !IA64 && !X86_PC9800
+	depends on !PPC32 && !PARISC && !IA64 && !X86_PC9800 && !M68K
 	---help---
 	  If you say Y here and create a character special file /dev/rtc with
 	  major number 10 and minor number 135 using mknod ("man mknod"), you
@@ -801,8 +789,7 @@ config GEN_RTC
 	  precision in some cases.
 
 	  To compile this driver as a module, choose M here: the
-	  module will be called genrtc. To load the module automatically
-	  add 'alias char-major-10-135 genrtc' to your /etc/modules.conf
+	  module will be called genrtc.
 
 config GEN_RTC_X
 	bool "Extended RTC operation"

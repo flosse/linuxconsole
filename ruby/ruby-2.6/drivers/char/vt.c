@@ -715,11 +715,11 @@ static void powerdown_screen(unsigned long private)
 
 	switch (vc->display_fg->blank_mode) {
 	case VESA_NO_BLANKING:
-		sw->con_blank(vc, VESA_VSYNC_SUSPEND+1);
+		sw->con_blank(vc, VESA_VSYNC_SUSPEND+1, 0);
 		break;
 	case VESA_VSYNC_SUSPEND:
 	case VESA_HSYNC_SUSPEND:
-		sw->con_blank(vc, VESA_POWERDOWN+1);
+		sw->con_blank(vc, VESA_POWERDOWN+1, 0);
 		break;
 	}
 }
@@ -746,7 +746,7 @@ void do_blank_screen(struct vt_struct *vt, int entering_gfx)
 	if (entering_gfx) {
 		hide_cursor(vc);
 		save_screen(vc);
-		sw->con_blank(vc, -1);
+		sw->con_blank(vc, -1, 1);
 		vc->display_fg->vt_blanked = 1;
 		set_origin(vc);
 		return;
@@ -764,7 +764,7 @@ void do_blank_screen(struct vt_struct *vt, int entering_gfx)
 
 	save_screen(vc);
 	/* In case we need to reset origin, blanking hook returns 1 */
-	i = sw->con_blank(vc, 1);
+	i = sw->con_blank(vc, 1, 0);
 	vc->display_fg->vt_blanked = 1;
 	if (i)
 		set_origin(vc);
@@ -776,7 +776,7 @@ void do_blank_screen(struct vt_struct *vt, int entering_gfx)
 		mod_timer(&vc->display_fg->timer, jiffies + vc->display_fg->off_interval);
 	}
 	if (vc->display_fg->blank_mode)
-		sw->con_blank(vc, vc->display_fg->blank_mode + 1);
+		sw->con_blank(vc, vc->display_fg->blank_mode + 1, 0);
 }
 
 /*
@@ -816,7 +816,7 @@ void unblank_vt(struct vt_struct *vt)
 	}
 
 	vc->display_fg->vt_blanked = 0;
-	if (sw->con_blank(vc, 0))
+	if (sw->con_blank(vc, 0, 1))
 		/* Low-level driver cannot restore -> do it ourselves */
 		update_screen(vc);
 	if (console_blank_hook)
@@ -1229,6 +1229,8 @@ static int do_con_write(struct tty_struct * tty, int from_user,
 	if (in_interrupt())
 		return count;
 		
+	might_sleep();
+
 	if (!vc) {
 		printk("vt_write: tty %d not allocated\n", tty->index);
 	    	return 0;
@@ -1436,15 +1438,20 @@ static int vt_open(struct tty_struct *tty, struct file * filp)
 static void vt_close(struct tty_struct *tty, struct file * filp)
 {
 	struct vc_data *vc;
+	acquire_console_sem();
 	
-	if (!tty || tty->count != 1)
-		return;
+	if (!tty || tty->count != 1) {
+	        release_console_sem();
+	        return;
+	}
+
 	vc = (struct vc_data *)tty->driver_data;
 	if (vc) {
 		vcs_remove_devfs(tty);
 		vc->vc_tty = NULL;
 	}
 	tty->driver_data = NULL;
+	release_console_sem();
 }
 
 static int vt_write(struct tty_struct * tty, int from_user,
@@ -1721,7 +1728,7 @@ int tioclinux(struct tty_struct *tty, unsigned long arg)
 			if (get_user(data, (char *) arg + 1))
 				return -EFAULT;
 			vc->display_fg->blank_mode = (data < 4) ? data : 0;
-			break;;
+			break;
 		case TIOCL_SETKMSGREDIRECT: 
 			if (!capable(CAP_SYS_ADMIN)) {
 				ret = -EPERM;
@@ -1789,8 +1796,7 @@ const char *vt_map_display(struct vt_struct *vt, int init, int vc_count)
 	vt->timer.function = blank_screen_t;
 	mod_timer(&vt->timer, jiffies + vt->blank_interval);
 	if (vt->pm_con)
-		vt->pm_con->data = vt;
-	vt->vc_cons[0] = vc_allocate(current_vc);	
+		vt->pm_con->data = vt;	
 	vt->keyboard = NULL;
 	INIT_WORK(&vt->vt_work, vt_callback, vt);
 	
@@ -1800,10 +1806,13 @@ const char *vt_map_display(struct vt_struct *vt, int init, int vc_count)
 		register_console(&vt_console_driver);
 		printable = 1;
 #endif
-	}	
+	}
+	acquire_console_sem();
+	vt->vc_cons[0] = vc_allocate(current_vc);
 	gotoxy(vt->fg_console, vt->fg_console->vc_x, vt->fg_console->vc_y);
 	vte_ed(vt->fg_console, 0);
 	update_screen(vt->fg_console);
+	release_console_sem();
 	current_vc += vc_count;
 	current_vt += 1;
 	if (vt->vt_kmalloced) {

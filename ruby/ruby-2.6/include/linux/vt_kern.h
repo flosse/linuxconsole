@@ -196,7 +196,7 @@ struct consw {
 	int	(*con_scroll_region)(struct vc_data *, int, int, int, int);
 	void	(*con_bmove)(struct vc_data *, int, int, int, int, int, int);
 	int	(*con_switch)(struct vc_data *);
-	int	(*con_blank)(struct vc_data *, int);
+	int	(*con_blank)(struct vc_data *, int, int);
 	int	(*con_font_op)(struct vc_data *, struct console_font_op *);
 	int	(*con_resize)(struct vc_data *, unsigned int, unsigned int);
 	int	(*con_set_palette)(struct vc_data *, unsigned char *);
@@ -268,7 +268,7 @@ void terminal_emulation(struct tty_struct *tty, int c);
 
 /* vt.c */
 /* Some debug stub to catch some of the obvious races in the VT code */
-#if 0
+#if 1
 #define WARN_CONSOLE_UNLOCKED() WARN_ON(!is_console_locked() && !oops_in_progress)
 #else
 #define WARN_CONSOLE_UNLOCKED()

@@ -1,8 +1,8 @@
 VERSION = 2
 PATCHLEVEL = 6
-SUBLEVEL = 3
+SUBLEVEL = 5
 EXTRAVERSION = -ruby
-NAME=Feisty Dunnart
+NAME=Zonked Quokka
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
@@ -106,6 +106,16 @@ endif # ifeq ($(KBUILD_SRC),)
 
 # We process the rest of the Makefile if this is the final invocation of make
 ifeq ($(skip-makefile),)
+
+# Make sure we're not wasting cpu-cycles doing locale handling, yet do make
+# sure error messages appear in the user-desired language
+ifdef LC_ALL
+LANG := $(LC_ALL)
+LC_ALL :=
+endif
+LC_COLLATE := C
+LC_CTYPE := C
+export LANG LC_ALL LC_COLLATE LC_CTYPE
 
 srctree		:= $(if $(KBUILD_SRC),$(KBUILD_SRC),$(CURDIR))
 TOPDIR		:= $(srctree)
@@ -304,17 +314,10 @@ RCS_TAR_IGNORE := --exclude SCCS --exclude BitKeeper --exclude .svn --exclude CV
 # ===========================================================================
 # Rules shared between *config targets and build targets
 
-# Helpers built in scripts/
-
-scripts/docproc scripts/split-include : scripts ;
-
-.PHONY: scripts scripts/fixdep
-scripts:
-	$(Q)$(MAKE) $(build)=scripts
-
-scripts/fixdep:
-	$(Q)$(MAKE) $(build)=scripts $@
-
+# Basic helpers built in scripts/
+.PHONY: scripts_basic
+scripts_basic:
+	$(Q)$(MAKE) $(build)=scripts/basic
 
 # To make sure we do not include .config for any of the *config targets
 # catch them early, and hand them over to scripts/kconfig/Makefile
@@ -358,15 +361,25 @@ ifeq ($(config-targets),1)
 # *config targets only - make sure prerequisites are updated, and descend
 # in scripts/kconfig to make the *config target
 
-%config: scripts/fixdep FORCE
+config: scripts_basic FORCE
 	$(Q)$(MAKE) $(build)=scripts/kconfig $@
-config : scripts/fixdep FORCE
+%config: scripts_basic FORCE
 	$(Q)$(MAKE) $(build)=scripts/kconfig $@
 
 else
 # ===========================================================================
 # Build targets only - this includes vmlinux, arch specific targets, clean
 # targets and others. In general all targets except *config targets.
+
+# Additional helpers built in scripts/
+# Carefully list dependencies so we do not try to build scripts twice
+# in parrallel
+.PHONY: scripts
+scripts: scripts_basic include/config/MARKER
+	$(Q)$(MAKE) $(build)=$(@)
+
+scripts_basic: include/linux/autoconf.h
+
 
 # That's our default target when none is given on the command line
 # Note that 'modules' will be added as a prerequisite as well, 
@@ -400,7 +413,9 @@ include .config
 # with it and forgot to run make oldconfig
 include/linux/autoconf.h: .config
 	$(Q)$(MAKE) -f $(srctree)/Makefile silentoldconfig
-
+else
+# Dummy target needed, because used as prerequisite
+include/linux/autoconf.h: ;
 endif
 
 include $(srctree)/arch/$(ARCH)/Makefile
@@ -558,7 +573,7 @@ $(sort $(vmlinux-objs)) arch/$(ARCH)/kernel/vmlinux.lds.s: $(SUBDIRS) ;
 # 	Handle descending into subdirectories listed in $(SUBDIRS)
 
 .PHONY: $(SUBDIRS)
-$(SUBDIRS): prepare-all
+$(SUBDIRS): prepare-all scripts
 	$(Q)$(MAKE) $(build)=$@
 
 # Things we need to do before we recursively start building the kernel
@@ -633,9 +648,9 @@ include/asm:
 
 # 	Split autoconf.h into include/linux/config/*
 
-include/config/MARKER: scripts/split-include include/linux/autoconf.h
+include/config/MARKER: include/linux/autoconf.h
 	@echo '  SPLIT   include/linux/autoconf.h -> include/config/*'
-	@scripts/split-include include/linux/autoconf.h include/config
+	@scripts/basic/split-include include/linux/autoconf.h include/config
 	@touch $@
 
 # Generate some files
@@ -647,7 +662,7 @@ include/config/MARKER: scripts/split-include include/linux/autoconf.h
 uts_len := 64
 
 define filechk_version.h
-	if expr length "$(KERNELRELEASE)" \> $(uts_len) >/dev/null ; then \
+	if ((`echo -n "$(KERNELRELEASE)" | wc -c ` > $(uts_len))); then \
 	  echo '"$(KERNELRELEASE)" exceeds $(uts_len) characters' >&2; \
 	  exit 1; \
 	fi; \
@@ -757,26 +772,15 @@ endef
 #                Any core files spread around are deleted as well
 # make distclean Remove editor backup files, patch leftover files and the like
 
-# Files removed with 'make clean'
-CLEAN_FILES += vmlinux System.map MC*
+# Directories & files removed with 'make clean'
+CLEAN_DIRS  += $(MODVERDIR) include/config include2
+CLEAN_FILES +=	vmlinux System.map \
+		include/linux/autoconf.h include/linux/version.h \
+		include/asm include/linux/modversions.h \
+		kernel.spec .tmp*
 
 # Files removed with 'make mrproper'
-MRPROPER_FILES += \
-	include/linux/autoconf.h include/linux/version.h \
-	.version .config .config.old config.in config.old \
-	.menuconfig.log \
-	include/asm \
-	.hdepend include/linux/modversions.h \
-	tags TAGS cscope* kernel.spec \
-	.tmp*
-
-# Directories removed with 'make mrproper'
-MRPROPER_DIRS += \
-	$(MODVERDIR) \
-	.tmp_export-objs \
-	include/config \
-	include/linux/modules \
-	include2
+MRPROPER_FILES += .version .config .config.old tags TAGS cscope*
 
 # clean - Delete all intermediate files
 #
@@ -785,28 +789,36 @@ clean-dirs += $(addprefix _clean_,$(ALL_SUBDIRS) Documentation/DocBook scripts)
 $(clean-dirs):
 	$(Q)$(MAKE) $(clean)=$(patsubst _clean_%,%,$@)
 
-quiet_cmd_rmclean = RM  $$(CLEAN_FILES)
-cmd_rmclean	  = rm -f $(CLEAN_FILES)
+clean:		rm-dirs  := $(wildcard $(CLEAN_DIRS))
+mrproper:	rm-dirs  := $(wildcard $(MRPROPER_DIRS))
+quiet_cmd_rmdirs = $(if $(rm-dirs),CLEAN   $(rm-dirs))
+      cmd_rmdirs = rm -rf $(rm-dirs)
+
+clean:		rm-files := $(wildcard $(CLEAN_FILES))
+mrproper:	rm-files := $(wildcard $(MRPROPER_FILES))
+quiet_cmd_rmfiles = $(if $(rm-files),CLEAN   $(rm-files))
+      cmd_rmfiles = rm -rf $(rm-files)
+
 clean: archclean $(clean-dirs)
-	$(call cmd,rmclean)
+	$(call cmd,rmdirs)
+	$(call cmd,rmfiles)
 	@find . $(RCS_FIND_IGNORE) \
 	 	\( -name '*.[oas]' -o -name '*.ko' -o -name '.*.cmd' \
 		-o -name '.*.d' -o -name '.*.tmp' -o -name '*.mod.c' \) \
 		-type f -print | xargs rm -f
 
-# mrproper - delete configuration + modules + core files
+# mrproper
 #
-quiet_cmd_mrproper = RM  $$(MRPROPER_DIRS) + $$(MRPROPER_FILES)
-cmd_mrproper = rm -rf $(MRPROPER_DIRS) && rm -f $(MRPROPER_FILES)
-mrproper distclean: clean archmrproper
-	@echo '  Making $@ in the srctree'
+distclean: mrproper
+mrproper: clean archmrproper
+	$(call cmd,rmdirs)
+	$(call cmd,rmfiles)
 	@find . $(RCS_FIND_IGNORE) \
 	 	\( -name '*.orig' -o -name '*.rej' -o -name '*~' \
 		-o -name '*.bak' -o -name '#*#' -o -name '.*.orig' \
 	 	-o -name '.*.rej' -o -size 0 \
 		-o -name '*%' -o -name '.*.cmd' -o -name 'core' \) \
 		-type f -print | xargs rm -f
-	$(call cmd,mrproper)
 
 # Generate tags for editors
 # ---------------------------------------------------------------------------
@@ -889,6 +901,9 @@ rpm:	clean spec
 # Brief documentation of the typical targets used
 # ---------------------------------------------------------------------------
 
+boards := $(wildcard $(srctree)/arch/$(ARCH)/configs/*_defconfig)
+boards := $(notdir $(boards))
+
 help:
 	@echo  'Cleaning targets:'
 	@echo  '  clean		  - remove most generated files but keep the config'
@@ -906,6 +921,7 @@ help:
 	@echo  '  dir/file.[ois]  - Build specified target only'
 	@echo  '  rpm		  - Build a kernel as an RPM package'
 	@echo  '  tags/TAGS	  - Generate tags file for editors'
+	@echo  '  cscope	  - Generate cscope index'
 	@echo  ''
 	@echo  'Documentation targets:'
 	@$(MAKE) -f $(srctree)/Documentation/DocBook/Makefile dochelp
@@ -914,6 +930,11 @@ help:
 	@$(if $(archhelp),$(archhelp),\
 		echo '  No architecture specific help defined for $(ARCH)')
 	@echo  ''
+	@$(if $(boards), \
+		$(foreach b, $(boards), \
+		printf "  %-24s - Build for %s\\n" $(b) $(subst _defconfig,,$(b));) \
+		echo '')
+
 	@echo  '  make V=0|1 [targets] 0 => quiet build (default), 1 => verbose build'
 	@echo  '  make O=dir [targets] Locate all output files in "dir", including .config'
 	@echo  '  make C=1   [targets] Check all c source with checker tool'
@@ -924,7 +945,7 @@ help:
 
 # Documentation targets
 # ---------------------------------------------------------------------------
-%docs: scripts/docproc FORCE
+%docs: scripts FORCE
 	$(Q)$(MAKE) $(build)=Documentation/DocBook $@
 
 # Scripts to check various things for consistency
@@ -977,7 +998,7 @@ if_changed_dep = $(if $(strip $? $(filter-out FORCE $(wildcard $^),$^)\
 	@set -e; \
 	$(if $($(quiet)cmd_$(1)),echo '  $(subst ','\'',$($(quiet)cmd_$(1)))';) \
 	$(cmd_$(1)); \
-	scripts/fixdep $(depfile) $@ '$(subst $$,$$$$,$(subst ','\'',$(cmd_$(1))))' > $(@D)/.$(@F).tmp; \
+	scripts/basic/fixdep $(depfile) $@ '$(subst $$,$$$$,$(subst ','\'',$(cmd_$(1))))' > $(@D)/.$(@F).tmp; \
 	rm -f $(depfile); \
 	mv -f $(@D)/.$(@F).tmp $(@D)/.$(@F).cmd)
 
