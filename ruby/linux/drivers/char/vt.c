@@ -704,6 +704,11 @@ const char *create_vt(struct vt_struct *vt, int init)
 	return display_desc;
 }
 
+int release_vt(struct vt_struct *vt)
+{
+	return 0;
+}
+
 struct vc_data* find_vc(int currcons)
 {
 	struct vt_struct *vt = vt_cons;
@@ -1564,12 +1569,13 @@ void __init vt_console_init(void)
 #elif defined(CONFIG_DUMMY_CONSOLE)
 	vt->vt_sw = &dummy_con;
 #endif
+	vc = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
 	display_desc = create_vt(vt, 1);
 	if (!display_desc) { 
 		free_bootmem((unsigned long) vt, sizeof(struct vt_struct));
+		free_bootmem((unsigned long) vc, sizeof(struct vc_data));
 		return;
 	}
-	vc = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
 	vt->last_console = vt->fg_console = vt->vcs.vc_cons[0] = vc; 
 	vc->vc_num = 0;
         vc->display_fg = admin_vt = vt;
@@ -1595,8 +1601,6 @@ void __init vt_console_init(void)
         tasklet_enable(&console_tasklet);
         tasklet_schedule(&console_tasklet);
 }
-
-#ifndef VT_SINGLE_DRIVER
 
 static void clear_buffer_attributes(struct vc_data *vc)
 {
@@ -1652,12 +1656,6 @@ void take_over_console(struct vt_struct *vt, const struct consw *csw)
                 desc, vc->vc_cols, vc->vc_rows);
 }
 
-void give_up_console(struct vt_struct *vt, const struct consw *csw)
-{
-}
-
-#endif
-
 /* We can't register the console with devfs during con_init(), because it
  * is called before kmalloc() works.  This function is called later to
  * do the registration.
@@ -1680,8 +1678,8 @@ EXPORT_SYMBOL(default_red);
 EXPORT_SYMBOL(default_grn);
 EXPORT_SYMBOL(default_blu);
 EXPORT_SYMBOL(create_vt);
+EXPORT_SYMBOL(release_vt);
 EXPORT_SYMBOL(vc_resize);
 EXPORT_SYMBOL(vc_allocate);
 EXPORT_SYMBOL(console_blank_hook);
 EXPORT_SYMBOL(take_over_console);
-EXPORT_SYMBOL(give_up_console);
