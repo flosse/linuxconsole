@@ -12,7 +12,6 @@
 #include <linux/spinlock.h>
 #include <linux/tty.h>
 #include <linux/wait.h>
-#include <linux/vt_kern.h>
 
 extern spinlock_t timerlist_lock;
 
@@ -35,3 +34,5 @@ void bust_spinlocks(int yes)
                console_loglevel = loglevel_save;
        }
 }
+
+EXPORT_SYMBOL(bust_spinlocks);
