@@ -483,17 +483,23 @@ static int __init i8042_controller_init(void)
 	}
 
 /*
- * Set nontranslated mode for the kbd interface. This is vital for a working
- * scancode set 2/3 support. After this the kbd interface becomes a simple serial
- * in/out, like the aux interface is. If the user doesn't wish this, the driver
- * tries to untranslate the values after the i8042 translates them.
+ * If the chip is configured into nontranslated mode by the BIOS, don't
+ * bother enabling translating and just use that happily.
+ */
+
+	if (~i8042_ctr & I8042_CTR_XLATE)
+		i8042_direct = 1;
+
+/*
+ * Set nontranslated mode for the kbd interface if requested by an option.
+ * This is vital for a working scancode set 3 support. After this the kbd
+ * interface becomes a simple serial in/out, like the aux interface is. If
+ * the user doesn't wish this, the driver tries to untranslate the values
+ * after the i8042 translates them.
  */
 
 	if (i8042_direct)
 		i8042_ctr &= ~I8042_CTR_XLATE;
-
-	if (~i8042_ctr & I8042_CTR_XLATE)
-		i8042_direct = 1;
 
 /*
  * Write CTR back.
