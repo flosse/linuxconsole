@@ -130,7 +130,7 @@ static struct fb_ops tdfxfb_ops = {
 	owner:		THIS_MODULE,
 	fb_check_var:	tdfxfb_check_var,
 	fb_set_par:	tdfxfb_set_par,
-	fb_cursor:	tdfxfb_cursor,
+	//fb_cursor:	tdfxfb_cursor,
 	fb_setcolreg:	tdfxfb_setcolreg,
 	fb_blank:	tdfxfb_blank,
 	fb_pan_display:	tdfxfb_pan_display,
@@ -711,7 +711,7 @@ static int tdfxfb_set_par(struct fb_info *info)
   info->fix.line_length = info->var.xres * ((info->var.bits_per_pixel + 7)>>3);
   info->fix.visual = (info->var.bits_per_pixel == 8) 
   	  	                 ? FB_VISUAL_PSEUDOCOLOR
-                     		 : FB_VISUAL_DIRECTCOLOR;
+                     		 : FB_VISUAL_TRUECOLOR;
   return 0;	
 }
 
