@@ -88,7 +88,7 @@ if [ "$CONFIG_INPUT" != "n" ]; then
    comment 'Userland interfaces'
       tristate '  Mouse interface' CONFIG_INPUT_MOUSEDEV
          int '   Horizontal screen resolution' CONFIG_INPUT_MOUSEDEV_SCREEN_X 1024
-         int '   Vertical screen resolution' CONFIG_INPUT_MOUSEDEV_SCREEN_Y  768
+         int '   Vertical screen resolution' CONFIG_INPUT_MOUSEDEV_SCREEN_Y 768
       tristate '  Joystick interface' CONFIG_INPUT_JOYDEV
       tristate '  Event interface' CONFIG_INPUT_EVDEV
       tristate '  Event logging' CONFIG_INPUT_EVBUG
