@@ -257,6 +257,18 @@ static int evdev_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 			}
 			else return -ENOSYS;
 
+		case EVIOCSGAIN:
+			if (dev->set_forcegain) {
+				return dev->set_forcegain(dev, (unsigned short)arg);
+			}
+			else return -ENOSYS;
+
+		case EVIOCSAUTOCENTER:
+			if (dev->set_autocenter) {
+				return dev->set_autocenter(dev, (unsigned short)arg);
+			}
+			else return -ENOSYS;
+
 		default:
 
 			if (_IOC_TYPE(cmd) != 'E' || _IOC_DIR(cmd) != _IOC_READ)

@@ -635,6 +635,10 @@ static int iforce_upload_effect(struct input_dev *dev, struct ff_effect *effect)
 	}
 }
 
+/*
+ * Erases an effect: it frees the effect id and mark as unused the memory
+ * allocated for the parameters
+ */
 static int iforce_erase_effect(struct input_dev *dev, int effect_id)
 {
 	struct iforce* iforce = (struct iforce*)(dev->private);
@@ -660,6 +664,47 @@ static int iforce_erase_effect(struct input_dev *dev, int effect_id)
 	return err;
 }
 
+/*
+ * Sets the gain for all forces.
+ * 100% = 0xFFFF
+ * 50%  = 0x8000
+ * 0%   = 0x0000
+ */
+static int iforce_set_forcegain(struct input_dev *dev, unsigned short gain)
+{
+	struct iforce* iforce = (struct iforce*)(dev->private);
+	unsigned char data = gain>>9;
+	
+printk(KERN_DEBUG "iforce.c: set gain %02x\n", (unsigned int)data);
+	send_packet(iforce, FF_CMD_GAIN, &data);                                               
+
+	return 0;
+}
+
+/*
+ * Enables or disables auto-centering
+ * 0 -> auto-centering disabled
+ * value up to 0xFFFF -> Set strength of spring providing auto-centering
+ */
+static int iforce_set_autocenter(struct input_dev *dev, unsigned short strength)
+{
+	struct iforce* iforce = (struct iforce*)(dev->private);
+	unsigned char data[2];
+
+	data[0] = 0x03;
+	data[1] = strength>>9;
+
+printk(KERN_DEBUG "iforce.c: set auto-center %02x\n", (unsigned int)data[1]);
+	send_packet(iforce, FF_CMD_DEF_SPRING, data);
+
+	data[0] = 0x04;
+	data[1] = 0x01;
+
+	send_packet(iforce, FF_CMD_DEF_SPRING, data);
+
+	return 0;
+}
+	
 static void iforce_process_packet(struct iforce *iforce, u16 cmd, unsigned char *data)
 {
 	struct input_dev *dev = &iforce->dev;
@@ -774,6 +819,8 @@ static int iforce_init_device(struct iforce *iforce)
 	iforce->dev.event = iforce_input_event;
 	iforce->dev.upload_effect = iforce_upload_effect;
 	iforce->dev.erase_effect = iforce_erase_effect;
+	iforce->dev.set_forcegain = iforce_set_forcegain;
+	iforce->dev.set_autocenter = iforce_set_autocenter;
 
 /*
  * On-device memory allocation.
