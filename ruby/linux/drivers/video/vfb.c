@@ -72,8 +72,6 @@ MODULE_PARM(vfb_enable, "i");
 int vfb_init(void);
 int vfb_setup(char*);
 
-static int vfb_open(struct fb_info *info, int user);
-static int vfb_release(struct fb_info *info, int user);
 static int vfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info); 
 static int vfb_set_par(struct fb_info *info);
 static int vfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
@@ -84,8 +82,7 @@ static int vfb_mmap(struct fb_info *info, struct file *file,
                     struct vm_area_struct *vma);
 
 static struct fb_ops vfb_ops = {
-    fb_open:		vfb_open, 
-    fb_release:		vfb_release, 
+    owner:              THIS_MODULE,
     fb_get_fix:		fbgen_get_fix,
     fb_get_var:		fbgen_get_var,
     fb_check_var:	vfb_check_var, 
@@ -110,26 +107,6 @@ static u_long get_line_length(int xres_virtual, int bpp)
     /* Convert number of bits to number of bytes */	
     length >>= 3;
     return(length);
-}
-
-    /*
-     *  Open/Release the frame buffer device
-     */
-
-static int vfb_open(struct fb_info *info, int user)
-{
-    /*                                                                     
-     *  Nothing, only a usage count for the moment                          
-     */                                                                    
-
-    MOD_INC_USE_COUNT;
-    return(0);                              
-}
-        
-static int vfb_release(struct fb_info *info, int user)
-{
-    MOD_DEC_USE_COUNT;
-    return(0);                                                    
 }
 
     /*
