@@ -478,20 +478,34 @@ static int fbcon_scroll_region(struct vc_data *vc, int t, int b, int dir,
 				int count)
 {
     struct fb_info *info = (struct fb_info *) vc->display_fg->data_hook;
-    unsigned int height = count * vc->vc_font.height;
-    unsigned int sy = t * vc->vc_font.height;	 	
-    int dy = 0;	
+    unsigned int height = (b-t-count) * vc->vc_font.height;
+    unsigned int sy, dy, y;	 	
+    unsigned long color;	
+
+    if (info->fix.visual == FB_VISUAL_PSEUDOCOLOR) 
+	color = attr_bgcol_ec(vc);
+    else {
+	if (info->var.bits_per_pixel > 16)
+		color = ((u32*)info->pseudo_palette)[attr_bgcol_ec(vc)];
+	else
+		color = ((u16*)info->pseudo_palette)[attr_bgcol_ec(vc)];
+    }
 
     switch (dir) {
 	case SM_UP:
-		dy = sy - height;	
+		sy = (t + count) * vc->vc_font.height;
+		dy = t * vc->vc_font.height;
+		y = (b - count) * vc->vc_font.height;	
 		break;
 	case SM_DOWN:
-		dy = sy + height;
+		y = sy = t * vc->vc_font.height; 
+		dy = (t + count) * vc->vc_font.height;
 		break;
     }		
 
     info->fbops->fb_copyarea(info, 0, sy, info->var.xres, height, 0, dy);
+    info->fbops->fb_fillrect(info, 0, y, info->var.xres, 
+			     count * vc->vc_font.height, color, ROP_COPY); 
     return 0;
 }
 
@@ -626,7 +640,7 @@ const struct consw fb_con = {
     con_clear: 		fbcon_clear,
     con_putc: 		fbcon_putc,
     con_putcs: 		fbcon_putcs,
-    con_cursor: 	fbcon_cursor,
+    //con_cursor: 	fbcon_cursor,
     con_scroll_region: 	fbcon_scroll_region,
     con_bmove: 		fbcon_bmove,
     con_blank: 		fbcon_blank,
