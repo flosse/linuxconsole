@@ -73,6 +73,8 @@ MODULE_PARM(videomemorysize, "l");
 static struct fb_info fb_info;
 static u32 vfb_pseudo_palette[17];
 
+#define DEFAULT_MODE "640x480@60"
+
 static struct fb_var_screeninfo vfb_default __initdata = {
     /* 640x480, 8 bpp */
     640, 480, 640, 480, 0, 0, 8, 0,
@@ -80,15 +82,6 @@ static struct fb_var_screeninfo vfb_default __initdata = {
     0, 0, -1, -1, 0, 20000, 64, 64, 32, 32, 64, 2,
     0, FB_VMODE_NONINTERLACED
 };
-
-#ifndef MODULE
-/* default modedb mode */
-static struct fb_videomode default_mode __initdata = {
-    /* 640x480, 60 Hz, Non-Interlaced (25.172 MHz dotclock) */
-    NULL, 60, 640, 480, 39722, 48, 16, 33, 10, 96, 2,
-    0, FB_VMODE_NONINTERLACED
-};
-#endif
 
 static struct fb_fix_screeninfo vfb_fix __initdata = {
     "Virtual FB", (unsigned long) NULL, 0, FB_TYPE_PACKED_PIXELS, 0,
@@ -412,6 +405,8 @@ int __init vfb_setup(char *options)
 
 int __init vfb_init(void)
 {
+    int retval;	
+
     if (!vfb_enable)
 	return -ENXIO;
 
@@ -434,14 +429,11 @@ int __init vfb_init(void)
     fb_info.node = -1;
     fb_info.fbops = &vfb_ops;
 
-#ifndef MODULE
-    if (!fb_find_mode(&fb_info.var, &fb_info, NULL,
-            NULL, 0, &default_mode, 8)) {
+    retval = fb_find_mode(&fb_info.var, &fb_info, mode_option,
+            			NULL, 0, DEFAULT_MODE, 8);
+
+    if (!retval || (retval == 4))
     	fb_info.var = vfb_default;
-    }
-#else
-    fb_info.var = vfb_default;
-#endif
     fb_info.fix = vfb_fix;
     fb_info.pseudo_palette = &vfb_pseudo_palette;	
     fb_info.flags = FBINFO_FLAG_DEFAULT;
