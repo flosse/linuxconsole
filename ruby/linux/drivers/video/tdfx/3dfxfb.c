@@ -78,7 +78,7 @@
 #define PCI_DEVICE_ID_3DFX_VOODOO5      0x0009
 #endif
 
-//#define TDFXFB_DEBUG 
+#undef TDFXFB_DEBUG 
 #ifdef TDFXFB_DEBUG
 #define DPRINTK(a,b...) printk(KERN_DEBUG "fb: %s: " a, __FUNCTION__ , ## b)
 #else
@@ -502,7 +502,7 @@ static int tdfxfb_check_var(struct fb_var_screeninfo *var,struct fb_info *info)
   }
   
   if (PICOS2KHZ(var->pixclock) > par->max_pixclock) {
-    DPRINTK("pixclock too high (%uKHz)\n", PICOS2KHZ(var->pixclock));
+    DPRINTK("pixclock too high (%ldKHz)\n", PICOS2KHZ(var->pixclock));
     return -EINVAL;
   }
 
@@ -740,6 +740,7 @@ static int tdfxfb_set_par(struct fb_info *info)
   info->fix.visual = (info->var.bits_per_pixel == 8) 
   	  	                 ? FB_VISUAL_PSEUDOCOLOR
                      		 : FB_VISUAL_TRUECOLOR;
+  DPRINTK("Graphics mode is now set at %dx%d depth %d\n", info->var.xres, info->var.yres, info->var.bits_per_pixel);
   return 0;	
 }
 
@@ -1238,10 +1239,6 @@ void tdfxfb_setup(char *options, int *ints)
       nowrap = 1;
     } else if (!strcmp(this_opt, "nohwcursor")) {
       nohwcursor = 1;
-#ifdef CONFIG_MTRR
-    } else if (!strcmp(this_opt, "nomtrr")) {
-      fb_disable_mtrrs();
-#endif
     } else {
       mode_option = this_opt;
     }
