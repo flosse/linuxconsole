@@ -32,7 +32,7 @@
 #define decscnm		(vc_cons[currcons].d->vc_decscnm)
 #define decom		(vc_cons[currcons].d->vc_decom)
 #define decawm		(vc_cons[currcons].d->vc_decawm)
-#define dectcm		(vc_cons[currcons].d->vc_dectcm)
+#define dectcem		(vc_cons[currcons].d->vc_dectcem)
 #define irm		(vc_cons[currcons].d->vc_irm)
 #define deccolm		(vc_cons[currcons].d->vc_deccolm)
 #define need_wrap	(vc_cons[currcons].d->vc_need_wrap)
