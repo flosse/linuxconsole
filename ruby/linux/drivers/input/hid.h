@@ -281,7 +281,7 @@ struct hid_report_enum {
 struct hid_control_fifo {
 	devrequest dr;
 	char buffer[HID_BUFFER_SIZE];
-}
+};
 
 struct hid_device {							/* device report descriptor */
 	 __u8 *rdesc;

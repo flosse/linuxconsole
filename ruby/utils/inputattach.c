@@ -111,6 +111,14 @@ int mzp_init(int fd)
 	return 0;
 }
 
+int dump_init(int fd)
+{
+	unsigned char c;
+	while (1)
+		if (!readchar(fd, &c, 1000)) 
+			printf("%02x ", c);
+}
+
 struct input_types {
 	char name[16];
 	char name2[16];
@@ -118,22 +126,25 @@ struct input_types {
 	int flags;
 	unsigned long type;
 	unsigned long extra;
+	int flush;
 	int (*init)(int fd);
 };
 
 struct input_types input_types[] = {
 
-{ "--sunkbd",		"-skb",		B1200, CS8,			SERIO_SUNKBD,	0x00,	NULL },
-{ "--spaceorb",		"-orb",		B9600, CS8,			SERIO_SPACEORB,	0x00,	NULL },
-{ "--magellan",		"-mag",		B9600, CS8 | CSTOPB | CRTSCTS,	SERIO_MAGELLAN,	0x00,	magellan_init },
-{ "--warrior",		"-war",		B1200, CS7 | CSTOPB,		SERIO_WARRIOR,	0x00,	warrior_init },
-{ "--mousesystems",	"-msc",		B1200, CS8,			SERIO_MSC,	0x01,	NULL },
-{ "--sunmouse",		"-sun",		B1200, CS8,			SERIO_SUN,	0x01,	NULL },
-{ "--microsoft",	"-bare",	B1200, CS7,			SERIO_MS,	0x00,	NULL },
-{ "--mshack",		"-ms",		B1200, CS7,			SERIO_MS,	0x01,	NULL },
-{ "--mouseman",		"-mman",	B1200, CS7,			SERIO_MP,	0x01,	NULL },
-{ "--intellimouse",	"-ms3",		B1200, CS7,			SERIO_MZ,	0x11,	NULL },
-{ "--mmwheel",		"-mmw",		B1200, CS7 | CSTOPB,		SERIO_MZP,	0x13,	mzp_init },
+{ "--sunkbd",		"-skb",		B1200, CS8,			SERIO_SUNKBD,	0x00,	1,	NULL },
+{ "--spaceorb",		"-orb",		B9600, CS8,			SERIO_SPACEORB,	0x00,	1,	NULL },
+{ "--magellan",		"-mag",		B9600, CS8 | CSTOPB | CRTSCTS,	SERIO_MAGELLAN,	0x00,	1,	magellan_init },
+{ "--warrior",		"-war",		B1200, CS7 | CSTOPB,		SERIO_WARRIOR,	0x00,	1,	warrior_init },
+{ "--mousesystems",	"-msc",		B1200, CS8,			SERIO_MSC,	0x01,	1,	NULL },
+{ "--sunmouse",		"-sun",		B1200, CS8,			SERIO_SUN,	0x01,	1,	NULL },
+{ "--microsoft",	"-bare",	B1200, CS7,			SERIO_MS,	0x00,	1,	NULL },
+{ "--mshack",		"-ms",		B1200, CS7,			SERIO_MS,	0x01,	1,	NULL },
+{ "--mouseman",		"-mman",	B1200, CS7,			SERIO_MP,	0x01,	1,	NULL },
+{ "--intellimouse",	"-ms3",		B1200, CS7,			SERIO_MZ,	0x11,	1,	NULL },
+{ "--mmwheel",		"-mmw",		B1200, CS7 | CSTOPB,		SERIO_MZP,	0x13,	1,	mzp_init },
+{ "--wmforce",		"-wmf",		B38400, CS8 | CRTSCTS,		SERIO_WMFORCE,	0x00,	0,	NULL },
+{ "--iforce",		"-ifor",	B38400, CS8 | CRTSCTS,		0,		0x00,	0,	dump_init },
 { "", "", 0, 0 }
 
 };
@@ -162,6 +173,7 @@ int main(int argc, char **argv)
 		puts("  --mouseman      -mman  3-button Logitech and Genius mice");
 		puts("  --intellimouse  -ms3   Microsoft IntelliMouse");
 		puts("  --mmwheel       -mmw   Logitech mice with 4-5 buttons or wheel");
+		puts("  --wmforce       -wmf   Logitech WingMan Force");
                 puts("");
                 return 1;
         }
@@ -184,7 +196,8 @@ int main(int argc, char **argv)
 
 	setline(fd, input_types[type].flags, input_types[type].speed);
 
-	while (!readchar(fd, &c, 100));
+	if (input_types[type].flush)
+		while (!readchar(fd, &c, 100));
 
 	if (input_types[type].init && input_types[type].init(fd)) {
 		fprintf(stderr, "inputattach: device initialization failed\n");

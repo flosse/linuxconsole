@@ -58,32 +58,23 @@ static struct {
 
 static char *wmforce_name = "Logitech WingMan Force";
 
-static void wmforce_process_packet(struct wmforce *wmforce)
+static void wmforce_process_packet(struct input_dev *dev, unsigned char *data)
 {
-	struct input_dev *dev = &wmforce->dev;
-	unsigned char *data = wmforce->data;
+	input_report_abs(dev, ABS_X, (__s16) (((__s16)data[1] << 8) | data[0]));
+	input_report_abs(dev, ABS_Y, (__s16) (((__s16)data[3] << 8) | data[2]));
+	input_report_abs(dev, ABS_THROTTLE, data[4]);
+	input_report_abs(dev, ABS_HAT0X, wmforce_hat_to_axis[data[6] >> 4].x);
+	input_report_abs(dev, ABS_HAT0Y, wmforce_hat_to_axis[data[6] >> 4].y);
 
-	if (data[0] != 1) {
-		if (data[0] != 2)
-			warn("received unknown report #%d", data[0]);
-		return;
-	}
-
-	input_report_abs(dev, ABS_X, (__s16) (((__s16)data[2] << 8) | data[1]));
-	input_report_abs(dev, ABS_Y, (__s16) (((__s16)data[4] << 8) | data[3]));
-	input_report_abs(dev, ABS_THROTTLE, data[5]);
-	input_report_abs(dev, ABS_HAT0X, wmforce_hat_to_axis[data[7] >> 4].x);
-	input_report_abs(dev, ABS_HAT0Y, wmforce_hat_to_axis[data[7] >> 4].y);
-
-	input_report_key(dev, BTN_TRIGGER, data[6] & 0x01);
-	input_report_key(dev, BTN_TOP,     data[6] & 0x02);
-	input_report_key(dev, BTN_THUMB,   data[6] & 0x04);
-	input_report_key(dev, BTN_TOP2,    data[6] & 0x08);
-	input_report_key(dev, BTN_BASE,    data[6] & 0x10);
-	input_report_key(dev, BTN_BASE2,   data[6] & 0x20);
-	input_report_key(dev, BTN_BASE3,   data[6] & 0x40);
-	input_report_key(dev, BTN_BASE4,   data[6] & 0x80);
-	input_report_key(dev, BTN_BASE5,   data[7] & 0x01);
+	input_report_key(dev, BTN_TRIGGER, data[5] & 0x01);
+	input_report_key(dev, BTN_TOP,     data[5] & 0x02);
+	input_report_key(dev, BTN_THUMB,   data[5] & 0x04);
+	input_report_key(dev, BTN_TOP2,    data[5] & 0x08);
+	input_report_key(dev, BTN_BASE,    data[5] & 0x10);
+	input_report_key(dev, BTN_BASE2,   data[5] & 0x20);
+	input_report_key(dev, BTN_BASE3,   data[5] & 0x40);
+	input_report_key(dev, BTN_BASE4,   data[5] & 0x80);
+	input_report_key(dev, BTN_BASE5,   data[6] & 0x01);
 
 }
 
@@ -91,8 +82,8 @@ static void wmforce_usb_irq(struct urb *urb)
 {
 	struct wmforce *wmforce = urb->context;
 	if (urb->status) return;
-	wmforce_process_packet(wmforce);
-
+	if (wmforce->data[0] == 1)
+		wmforce_process_packet(&wmforce->dev, wmforce->data + 1);
 }
 
 static void wmforce_serio_irq(struct serio *serio, unsigned char data, unsigned int flags)
@@ -100,7 +91,7 @@ static void wmforce_serio_irq(struct serio *serio, unsigned char data, unsigned 
         struct wmforce* wmforce = serio->private;
 
 	if (!wmforce->pkt) {
-		if (data == 0x28)
+		if (data == 0x2b)
 			wmforce->pkt = 1;
 		return;
 	}
@@ -111,14 +102,15 @@ static void wmforce_serio_irq(struct serio *serio, unsigned char data, unsigned 
 			return;
 		}
                 wmforce->idx = 0;
-                wmforce->len = data * 4 + 2;
+                wmforce->len = 14 - data * 4;
         }
 
         if (wmforce->idx < wmforce->len)
                 wmforce->data[wmforce->idx++] = data;
 
         if (wmforce->idx == wmforce->len) {
-		wmforce_process_packet(wmforce);
+		if (wmforce->data[0] == 1)
+			wmforce_process_packet(&wmforce->dev, wmforce->data + 2);
 		wmforce->pkt = 0;
                 wmforce->idx = 0;
                 wmforce->len = 0;
@@ -157,6 +149,7 @@ static void wmforce_input_setup(struct wmforce *wmforce)
 		wmforce->dev.absmax[i] =  1920;
 		wmforce->dev.absmin[i] = -1920;
 		wmforce->dev.absflat[i] = 128;
+		wmforce->dev.absfuzz[i] = 16;
 	}
 
 	wmforce->dev.absmax[ABS_THROTTLE] = 255;

@@ -140,6 +140,6 @@ int serio_open(struct serio *serio, struct serio_dev *dev)
 void serio_close(struct serio *serio)
 {
 	MOD_DEC_USE_COUNT;
-	serio->dev = NULL;
 	serio->close(serio);
+	serio->dev = NULL;
 }

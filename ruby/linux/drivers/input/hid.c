@@ -1228,7 +1228,7 @@ static int hid_submit_out(struct hid_device *hid)
 {
 	hid->urbout.transfer_buffer_length = hid->out[hid->outtail].dr.length;
 	hid->urbout.transfer_buffer = hid->out[hid->outtail].buffer;
-	hid->urbout.setup_packet = &hid->out[hid->outtail].dr;
+	hid->urbout.setup_packet = (void *) &(hid->out[hid->outtail].dr);
 
 	if (usb_submit_urb(&hid->urbout)) {
 		err("usb_submit_urb(out) failed");
@@ -1240,7 +1240,7 @@ static int hid_submit_out(struct hid_device *hid)
 
 static void hid_ctrl(struct urb *urb)
 {
-	struct hid_device *hid = urb->private;
+	struct hid_device *hid = urb->context;
 
         if (urb->status)
 		warn("ctrl urb status %d received", urb->status);
@@ -1263,10 +1263,10 @@ static int hid_event(struct input_dev *dev, unsigned int type, unsigned int code
 	}
 
 	hid_set_field(field, offset, value);
-	hid_output_report(field->report, hid->bufout[hid->outhead]);
+	hid_output_report(field->report, hid->out[hid->outhead].buffer);
 
 	hid->out[hid->outhead].dr.value = 0x200 | field->report->id;
-	hid->out[hid->outhead].length = ((field->report->size - 1) >> 3) + 1;
+	hid->out[hid->outhead].dr.length = ((field->report->size - 1) >> 3) + 1;
 
 	hid->outhead = (hid->outhead + 1) & (HID_CONTROL_FIFO_SIZE - 1);
 
@@ -1458,7 +1458,7 @@ static struct hid_device *usb_hid_configure(struct usb_device *dev, int ifnum, c
 			hid->input.idvendor, hid->input.idproduct);
 
 	FILL_CONTROL_URB(&hid->urbout, dev, usb_sndctrlpipe(dev, 0),
-		(void*) &hid->dr, hid->bufout[0], 1, hid_ctrl, hid);
+		(void*) &hid->out[0].dr, hid->out[0].buffer, 1, hid_ctrl, hid);
 
 	if (interface->bInterfaceSubClass == 1)
         	usb_set_protocol(dev, hid->ifnum, 1);
