@@ -23,7 +23,7 @@
 
 #include <asm/uaccess.h>
 
-#define LOG_BUF_LEN	(16384)
+#define LOG_BUF_LEN	(16384)		/* This must be a power of two */
 #define LOG_BUF_MASK	(LOG_BUF_LEN-1)
 
 static char buf[1024];
@@ -52,6 +52,7 @@ static unsigned long log_start;
 static unsigned long logged_chars;
 struct console_cmdline console_cmdline[MAX_CMDLINECONSOLES];
 static int preferred_console = -1;
+int oops_in_progress;
 
 /*
  *	Setup a list of consoles. Called from init/main.c
@@ -253,13 +254,14 @@ asmlinkage long sys_syslog(int type, char * buf, int len)
 
 asmlinkage int printk(const char *fmt, ...)
 {
-	va_list args;
-	int i;
-	char *msg, *p, *buf_end;
-	int line_feed;
 	static signed char msg_level = -1;
+	char *msg, *p, *buf_end;
+	int line_feed, i;
+	va_list args;
 	long flags;
 
+	if (oops_in_progress)
+		spin_lock_init(&console_lock);
 	spin_lock_irqsave(&console_lock, flags);
 	va_start(args, fmt);
 	i = vsprintf(buf + 3, fmt, args); /* hopefully i < sizeof(buf)-4 */
@@ -308,7 +310,8 @@ asmlinkage int printk(const char *fmt, ...)
 			msg_level = -1;
 	}
 	spin_unlock_irqrestore(&console_lock, flags);
-	wake_up_interruptible(&log_wait);
+	if (!oops_in_progress)
+		wake_up_interruptible(&log_wait);
 	return i;
 }
 
