@@ -586,6 +586,16 @@ struct ff_periodic_effect {
  * therefore dispose of the memory after the upload/update */
 };
 
+/* FF_RUMBLE */
+/* Some rumble pads have two motors of different weight.
+   strong_magnitude represents the magnitude of the vibration generated
+   by the heavy motor.
+*/
+struct ff_rumble_effect {
+	__u16 strong_magnitude;  /* Magnitude of the heavy motor */
+	__u16 weak_magnitude;    /* Magnitude of the light one */
+};
+
 /*
  * Structure sent through ioctl from the application to the driver
  */
@@ -611,6 +621,7 @@ struct ff_effect {
 		struct ff_ramp_effect ramp;
 		struct ff_periodic_effect periodic;
 		struct ff_condition_effect condition[2];	/* One for each axis */
+		struct ff_rumble_effect rumble;
 	} u;
 };
 
