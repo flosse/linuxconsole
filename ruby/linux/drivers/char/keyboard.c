@@ -47,6 +47,7 @@
 #include <linux/init.h>
 #include <linux/slab.h>
 
+#include <linux/kbd_kern.h>
 #include <linux/kbd_diacr.h>
 #include <linux/vt_kern.h>
 #include <linux/consolemap.h>
@@ -96,6 +97,7 @@ static fn_handler_fn *fn_handler[] = { FN_HANDLERS };
  * Variables/functions exported for vt_ioctl.c
  */
 
+/* maximum values each key_handler can handle */
 const int max_vals[] = {
 	255, SIZE(func_table) - 1, SIZE(fn_handler) - 1, NR_PAD - 1,
 	NR_DEAD - 1, 255, 3, NR_SHIFT - 1, 255, NR_ASCII - 1, NR_LOCK - 1,
@@ -134,14 +136,14 @@ static struct input_handler kbd_handler;
 static unsigned long key_down[256/BITS_PER_LONG]; /* keyboard key bitmap */
 static unsigned char shift_down[NR_SHIFT];	/* shift state counters.. */
 static int dead_key_next;
-static int npadch = -1;				/* -1 or number assembled on pad */
+static int npadch = -1;			/* -1 or number assembled on pad */
 static unsigned char diacr;
-static char rep;				/* flag telling character repeat */
+static char rep;			/* flag telling character repeat */
 pm_callback pm_kbd_request_override = NULL;
 typedef void (pm_kbd_func) (void);
 static struct pm_dev *pm_kbd;
 
-static unsigned char ledstate = 0xff;		/* undefined */
+static unsigned char ledstate = 0xff;	/* undefined */
 static unsigned char ledioctl;
 
 static struct ledptr {
@@ -227,7 +229,7 @@ static void applkey(struct vc_data *vc, int key, char mode)
 void to_utf8(struct vc_data *vc, ushort c)
 {
 	if (c < 0x80)
-		/* 0*******  */
+		/* 0******* */
 		put_queue(vc, c);
 	else if (c < 0x800) {
 		/* 110***** 10****** */
@@ -338,7 +340,7 @@ static void fn_enter(struct vc_data *vc)
 		diacr = 0;
 	}
 	put_queue(vc, 13);
-	if (vc_kbd_mode(&vc->kbd_table, VC_CRLF))
+	if (get_kbd_mode(&vc->kbd_table, VC_CRLF))
 		put_queue(vc, 10);
 }
 
@@ -346,14 +348,14 @@ static void fn_caps_toggle(struct vc_data *vc)
 {
 	if (rep)
 		return;
-	chg_vc_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
+	chg_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
 }
 
 static void fn_caps_on(struct vc_data *vc)
 {
 	if (rep)
 		return;
-	set_vc_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
+	set_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
 }
 
 static void fn_show_ptregs(struct vc_data *vc)
@@ -368,6 +370,7 @@ static void fn_hold(struct vc_data *vc)
 
 	if (rep || !tty)
 		return;
+
 	/*
 	 * Note: SCROLLOCK will be set (cleared) by stop_tty (start_tty);
 	 * these routines are also activated by ^S/^Q.
@@ -381,7 +384,7 @@ static void fn_hold(struct vc_data *vc)
 
 static void fn_num(struct vc_data *vc)
 {
-	if (vc_kbd_mode(&vc->kbd_table, VC_APPLIC))
+	if (get_kbd_mode(&vc->kbd_table, VC_APPLIC))
 		applkey(vc, 'P', 1);
 	else
 		fn_bare_num(vc);
@@ -396,7 +399,7 @@ static void fn_num(struct vc_data *vc)
 static void fn_bare_num(struct vc_data *vc)
 {
 	if (!rep)
-		chg_vc_kbd_led(&vc->kbd_table, VC_NUMLOCK);
+		chg_kbd_led(&vc->kbd_table, VC_NUMLOCK);
 }
 
 static void fn_lastcons(struct vc_data *vc)
@@ -517,7 +520,6 @@ static void fn_null(struct vc_data *vc)
 /*
  * Special key handlers
  */
-
 static void k_ignore(struct vc_data *vc, unsigned char value, char up_flag)
 {
 }
@@ -528,12 +530,14 @@ static void k_spec(struct vc_data *vc, unsigned char value, char up_flag)
 		return;
 	if (value >= SIZE(fn_handler))
 		return;
-	if ((vc->kbd_table.kbdmode == VC_RAW || vc->kbd_table.kbdmode == VC_MEDIUMRAW) && value != K_SAK)
+	if ((vc->kbd_table.kbdmode == VC_RAW || 
+	     vc->kbd_table.kbdmode == VC_MEDIUMRAW) && 
+	     value != K_SAK)
 		return;		/* SAK is allowed even in raw mode */
 	fn_handler[value](vc);
 }
 
-static void k_lowercase(struct vc_data *vc, unsigned char value, char up_flag) 
+static void k_lowercase(struct vc_data *vc, unsigned char value, char up_flag)
 {
 	printk(KERN_ERR "keyboard.c: k_lowercase was called - impossible\n");
 }
@@ -602,7 +606,7 @@ static void k_cur(struct vc_data *vc, unsigned char value, char up_flag)
 
 	if (up_flag)
 		return;
-	applkey(vc, cur_chars[value], vc_kbd_mode(&vc->kbd_table, VC_CKMODE));
+	applkey(vc, cur_chars[value], get_kbd_mode(&vc->kbd_table, VC_CKMODE));
 }
 
 static void k_pad(struct vc_data *vc, unsigned char value, char up_flag)
@@ -614,12 +618,12 @@ static void k_pad(struct vc_data *vc, unsigned char value, char up_flag)
 		return;		/* no action, if this is a key release */
 
 	/* kludge... shift forces cursor/number keys */
-	if (vc_kbd_mode(&vc->kbd_table, VC_APPLIC) && !shift_down[KG_SHIFT]) {
+	if (get_kbd_mode(&vc->kbd_table, VC_APPLIC) && !shift_down[KG_SHIFT]) {
 		applkey(vc, app_map[value], 1);
 		return;
 	}
 
-	if (!vc_kbd_led(&vc->kbd_table, VC_NUMLOCK))
+	if (!get_kbd_led(&vc->kbd_table, VC_NUMLOCK))
 		switch (value) {
 			case KVAL(K_PCOMMA):
 			case KVAL(K_PDOT):
@@ -653,13 +657,13 @@ static void k_pad(struct vc_data *vc, unsigned char value, char up_flag)
 				k_fn(vc, KVAL(K_PGUP), 0);
 				return;
 			case KVAL(K_P5):
-				applkey(vc,'G', vc_kbd_mode(&vc->kbd_table, 
+				applkey(vc, 'G', get_kbd_mode(&vc->kbd_table,
 					VC_APPLIC));
 				return;
 		}
 
 	put_8bit(vc, pad_chars[value]);
-	if (value == KVAL(K_PENTER) && vc_kbd_mode(&vc->kbd_table, VC_CRLF))
+	if (value == KVAL(K_PENTER) && get_kbd_mode(&vc->kbd_table, VC_CRLF))
 		put_queue(vc, 10);
 }
 
@@ -673,11 +677,10 @@ static void k_shift(struct vc_data *vc, unsigned char value, char up_flag)
 	 * Mimic typewriter:
 	 * a CapsShift key acts like Shift but undoes CapsLock
 	 */
-
 	if (value == KVAL(K_CAPSSHIFT)) {
 		value = KVAL(K_SHIFT);
 		if (!up_flag)
-			clr_vc_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
+			clr_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
 	}
 
 	if (up_flag) {
@@ -709,7 +712,8 @@ static void k_meta(struct vc_data *vc, unsigned char value, char up_flag)
 {
 	if (up_flag)
 		return;
-	if (vc_kbd_mode(&vc->kbd_table, VC_META)) {
+
+	if (get_kbd_mode(&vc->kbd_table, VC_META)) {
 		put_queue(vc, '\033');
 		put_queue(vc, value);
 	} else
@@ -723,10 +727,10 @@ static void k_ascii(struct vc_data *vc, unsigned char value, char up_flag)
 	if (up_flag)
 		return;
 
-	if (value < 10) {		
+	if (value < 10) {
 		/* decimal input of code, while Alt depressed */
 		base = 10;
-	} else {		
+	} else {
 		/* hexadecimal input of code, while AltGr depressed */
 		value -= 10;
 		base = 16;
@@ -743,18 +747,20 @@ static void k_lock(struct vc_data *vc, unsigned char value, char up_flag)
 	if (up_flag || rep)
 		return;
 	if (value >= NR_LOCK) {
-                /* Change the lock state and
-                   set the CapsLock LED to the new state */
-                unsigned char mask;
+		/* 
+		 * Change the lock state and
+		 * set the CapsLock LED to the new state 
+		 */
+		unsigned char mask;
 
-                mask = 1 << (value -= NR_LOCK);
-                if ((vc->kbd_table.lockstate ^= mask) & mask)
-                        set_vc_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
-                else
-                        clr_vc_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
-        } else {
-                /* Just change the lock state */
-		chg_vc_kbd_lock(&vc->kbd_table, value);
+		mask = 1 << (value -= NR_LOCK);
+		if ((vc->kbd_table.lockstate ^= mask) & mask)
+			set_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
+		else
+			clr_kbd_led(&vc->kbd_table, VC_CAPSLOCK);
+	} else {
+		/* Just change the lock state */
+		chg_kbd_lock(&vc->kbd_table, value);
 	}
 }
 
@@ -763,11 +769,11 @@ static void k_slock(struct vc_data *vc, unsigned char value, char up_flag)
 	k_shift(vc, value, up_flag);
 	if (up_flag || rep)
 		return;
-	chg_vc_kbd_slock(&vc->kbd_table, value);
+	chg_kbd_slock(&vc->kbd_table, value);
 	/* try to make Alt, oops, AltGr and such work */
 	if (!key_maps[vc->kbd_table.lockstate ^ vc->kbd_table.slockstate]) {
 		vc->kbd_table.slockstate = 0;
-		chg_vc_kbd_slock(&vc->kbd_table, value);
+		chg_kbd_slock(&vc->kbd_table, value);
 	}
 }
 
@@ -776,8 +782,8 @@ static void k_slock(struct vc_data *vc, unsigned char value, char up_flag)
  * or (ii) whatever pattern of lights people want to show using KDSETLED,
  * or (iii) specified bits of specified words in kernel memory.
  */
-
-unsigned char getledstate(void) {
+unsigned char getledstate(void)
+{
 	return ledstate;
 }
 
@@ -791,8 +797,8 @@ void setledstate(struct kbd_struct *kbd, unsigned int led)
 	set_leds();
 }
 
-void register_leds(struct kbd_struct *kbd, unsigned int led,unsigned int *addr,
-		   unsigned int mask)
+void register_leds(struct kbd_struct *kbd, unsigned int led,
+		   unsigned int *addr, unsigned int mask)
 {
 	if (led < 3) {
 		ledptrs[led].addr = addr;
