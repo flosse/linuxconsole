@@ -133,7 +133,7 @@ procedure make_modifier(modifier_type)
 		MAGNITUDE: next_type += 0x02; break;
 		SHAPE: next_type += 0x0e; break;
 		FRICTION:
-		SPRING: ??? /* I don't know yet */
+		SPRING: next_type += 0x08; break;
 	}
 }
 
