@@ -291,6 +291,16 @@ static int iforce_flush(struct input_dev *dev, struct file *file)
 static void iforce_release(struct input_dev *dev)
 {
 	struct iforce *iforce = dev->private;
+	int i;
+
+	/* Check: no effect should be present in memory */
+	for (i=0; i<dev->ff_effects_max; ++i) {
+		if (test_bit(FF_CORE_IS_USED, iforce->core_effects[i].flags))
+			break;
+	}
+	if (i<dev->ff_effects_max) {
+		printk(KERN_WARNING "iforce_release: Device still owns effects\n");
+	}
 
 	/* Disable force feedback playback */
 	iforce_send_packet(iforce, FF_CMD_ENABLE, "\001");
