@@ -1976,7 +1976,7 @@ attribute */
                         vte_ed(vc, 2);
                         video_erase_char =
                                 (video_erase_char & 0xff00) | ' ';
-                        do_update_region(vc, origin, screenbuf_size/2);
+                        do_update_region(vc, origin, video_num_columns*video_num_lines);
                 }
                 return;
         case ESgzd4:
