@@ -178,8 +178,8 @@ r Set */
 };                                 
 
 struct consw {
-        const char *(*con_startup)(struct vt_struct *);
-        void    (*con_init)(struct vc_data *, int);
+        const char *(*con_startup)(struct vt_struct *, int);
+        void    (*con_init)(struct vc_data *);
         void    (*con_deinit)(struct vc_data *);
         void    (*con_clear)(struct vc_data *, int, int, int, int);
         void    (*con_putc)(struct vc_data *, int, int, int);
@@ -201,8 +201,6 @@ struct consw {
         unsigned long (*con_getxy)(struct vc_data *,unsigned long,int *,int *);
 };
 
-extern const struct consw *conswitchp;
-
 extern const struct consw dummy_con;   /* dummy console buffer */
 extern const struct consw fb_con;      /* frame buffer based console */
 extern const struct consw vga_con;     /* VGA text console */
@@ -210,7 +208,6 @@ extern const struct consw newport_con; /* SGI Newport console  */
 extern const struct consw prom_con;    /* SPARC PROM console */
 
 void take_over_console(struct vt_struct *vt, const struct consw *sw);
-void give_up_console(struct vt_struct *vt, const struct consw *sw);
 
 struct vc_pool {
 	/* 
@@ -267,7 +264,8 @@ void terminal_emulation(struct tty_struct *tty, int c);
 
 /* vt.c */
 struct console_font_op;
-const char* create_vt(struct vt_struct *vt);
+const char* create_vt(struct vt_struct *vt, int init);
+int release_vt(struct vt_struct *vt);
 struct vc_data* find_vc(int currcons);
 int vc_allocate(unsigned int console);
 int vc_resize(struct vc_data *vc, unsigned int lines, unsigned int cols);
