@@ -13,7 +13,6 @@
 
 #include <linux/config.h>
 #include <linux/types.h>
-#include <linux/console_struct.h>
 #include <linux/vt_buffer.h>
 
 #include <asm/io.h>
