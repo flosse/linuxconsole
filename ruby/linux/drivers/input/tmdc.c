@@ -172,6 +172,7 @@ static void tmdc_timer(unsigned long private)
 
 	if ((r = tmdc_read_packet(tmdc->gameport, data)) != tmdc->exists)
 		bad = 1;
+	else
 
 	for (j = 0; j < 2; j++) 
 		if (r & (1 << j) & tmdc->exists) {
