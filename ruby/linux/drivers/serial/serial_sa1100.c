@@ -55,8 +55,6 @@
 #define SUPPORT_SYSRQ
 #endif
 
-#include <asm/arch/serial_reg.h> /* ? */
-
 #include <linux/serial_core.h>
 
 /* We've been assigned a range on the "Low-density serial ports" major */
@@ -482,7 +480,7 @@ static void sa1100_init_ports(void)
 	PPSR |= PPC_TXD1 | PPC_TXD3;
 }
 
-void __init sa1100_register_port_fns(struct sa1100_port_fns *fns)
+void __init sa1100_register_uart_fns(struct sa1100_port_fns *fns)
 {
 	if (fns->enable_ms)
 		sa1100_pops.enable_ms = fns->enable_ms;
@@ -493,7 +491,7 @@ void __init sa1100_register_port_fns(struct sa1100_port_fns *fns)
 	sa1100_pops.pm	      = fns->pm;
 }
 
-void __init sa1100_register_port(int idx, int port)
+void __init sa1100_register_uart(int idx, int port)
 {
 	if (idx >= NR_PORTS) {
 		printk(KERN_ERR __FUNCTION__ ": bad index number %d\n", idx);
@@ -671,6 +669,7 @@ static struct console sa1100_console = {
 void __init sa1100_rs_console_init(void)
 {
 	sa1100_init_ports();
+	sa1100_console.driver = &normal;	
 	register_console(&sa1100_console);
 }
 
@@ -682,10 +681,10 @@ void __init sa1100_rs_console_init(void)
 static struct uart_register sa1100_reg = {
 	owner:			THIS_MODULE,
 	normal_major:		SERIAL_SA1100_MAJOR,
-	normal_name:		"ttySA",
+	normal_name:		"ttySA%d",
 	normal_driver:		&normal,
 	callout_major:		CALLOUT_SA1100_MAJOR,
-	callout_name:		"cusa",
+	callout_name:		"cusa%d",
 	callout_driver:		&callout,
 	table:			sa1100_table,
 	termios:		sa1100_termios,
