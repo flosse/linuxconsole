@@ -407,9 +407,7 @@ fb_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 	case FBIOPUT_VSCREENINFO:
 		if (copy_from_user(&var, (void *) arg, sizeof(var)))
 			return -EFAULT;
-		i = var.activate & FB_ACTIVATE_ALL
-			    ? set_all_vcs(fbidx, fb, &var, info)
-			    : fb->fb_set_var(&var, info);
+		i = fb->fb_set_var(&var, info); 
 		if (i)
 			return i;
 		if (copy_to_user((void *) arg, &var, sizeof(var)))
@@ -642,8 +640,9 @@ register_framebuffer(struct fb_info *fb_info)
 {
 	const char *display_desc = NULL;
         struct vt_struct *vt;
+	struct vc_data *vc;
 	char name_buf[8];
-	int i, j;
+	int i;
 
 	if (num_registered_fb == FB_MAX || fb_info->open)
 		return -ENXIO;
@@ -667,8 +666,8 @@ register_framebuffer(struct fb_info *fb_info)
         	kfree(vt);
                 return -ENXIO;
         }
-	vt->last_console = vt->fg_console = vt->vcs.vc_cons[0];
-	printk("Console: %s %s %dx%d", can_do_color ? "colour" : "mono",
+	vt->last_console = vt->fg_console = vc = vt->vcs.vc_cons[0];
+	printk("Console: %s %s %dx%d", vc->vc_can_do_color ? "colour" : "mono",
                 display_desc, vc->vc_cols, vc->vc_rows);
         /* take_over_console(vt, &fb_con); */
 
@@ -684,7 +683,7 @@ register_framebuffer(struct fb_info *fb_info)
 int
 unregister_framebuffer(struct fb_info *fb_info)
 {
-	int i, j;
+	int i;
 
 	i = GET_FB_IDX(fb_info->node);
 	if (fb_info->open)
