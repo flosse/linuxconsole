@@ -1,0 +1,13 @@
+#
+# For a description of the syntax of this configuration file,
+# see Documentation/kbuild/config-language.txt.
+#
+# Parport configuration.
+#
+
+mainmenu_option next_comment
+comment 'Serial port support'
+
+tristate 'Serial port support' CONFIG_UART
+
+endmenu
