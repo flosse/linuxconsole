@@ -19,11 +19,6 @@ extern int sel_loadlut(const unsigned long arg);
 extern int mouse_reporting(struct tty_struct *tty);
 extern void mouse_report(struct tty_struct *tty, int butt, int mrx, int mry);
 
-#define video_num_columns	(vc->vc_cols)
-#define video_num_lines		(vc->vc_rows)
-#define video_size_row		(vc->vc_size_row)
-#define can_do_color		(vc->vc_can_do_color)
-
 extern unsigned short *screen_pos(struct vc_data *vc, int w_offset, int viewed);
 extern u16 screen_glyph(struct vc_data *vc, int offset);
 extern void complement_pos(struct vc_data *vc, int offset);
