@@ -1285,48 +1285,40 @@ static int tdfxfb_setcolreg(unsigned regno, unsigned red, unsigned green,
    u32 rgbcol;
 
    if (regno >= info->cmap.len) return 1;
-   
-   switch(info->var.bits_per_pixel) {
-#ifdef FBCON_HAS_CFB8
-    case 8:
-      rgbcol=(((u32) red & 0xff00) << 8) |
-	(((u32)green & 0xff00) << 0) |
-	(((u32)blue  & 0xff00) >> 8);
-      banshee_make_room(2); 
-      tdfx_outl(DACADDR, regno); 
-      tdfx_outl(DACDATA, rgbcol); 
-      break;
-#endif
-#ifdef FBCON_HAS_CFB16
-    case 16:
-      info->fbcon_cmap.cfb16[regno] =
-	(((u32)red   & 0xf800) >> 0) |
-	(((u32)green & 0xfc00) >> 5) |
-	(((u32)blue  & 0xf800) >> 11);
-	 break;
-#endif
-#ifdef FBCON_HAS_CFB24
-    case 24:
-      info->fbcon_cmap.cfb24[regno] =
-	(((u32)red & 0xff00) << 8) |
-	(((u32)green & 0xff00) << 0) |
-	(((u32)blue & 0xff00) >> 8);
-      break;
-#endif
-#ifdef FBCON_HAS_CFB32
-    case 32:
-      fb_info->fbcon_cmap.cfb32[regno] =
-	(((u32)red   & 0xff00) << 8) |
-	(((u32)green & 0xff00) << 0) |
-	(((u32)blue  & 0xff00) >> 8);
-      break;
-#endif
-    default:
-      DPRINTK("bad depth %u\n", info->var.bits_per_pixel);
-      break;
+
+   /* grayscale works only partially under directcolor */
+   if (info->var.grayscale) {
+      /* grayscale = 0.30*R + 0.59*G + 0.11*B */
+      red = green = blue = (red * 77 + green * 151 + blue * 28) >> 8;
+   }
+
+   switch (info->fix.visual) {
+	case FB_VISUAL_PSEUDOCOLOR:
+		/* This is only 8 bpp colro depth */
+		rgbcol=(((u32) red   & 0xff00) << 8) |
+		       (((u32) green & 0xff00) << 0) |
+       		       (((u32) blue  & 0xff00) >> 8);
+		banshee_make_room(2);
+		tdfx_outl(DACADDR, regno);
+		tdfx_outl(DACDATA, rgbcol);
+		break;
+   	/* Truecolor has hardware independent palette. This is all other bpp
+	   for this video card */
+   	case FB_VISUAL_TRUECOLOR:
+		u32 v;
+
+		v = (red << info->var.red.offset) |
+		    (green << info->var.green.offset) |
+		    (blue << info->var.blue.offset) |
+		    (transp << info->var.transp.offset);
+		if (info->var.bits_per_pixel <= 16)
+			((u16*)(info->pseudo_palette))[regno] = v;
+		else
+			((u32*)(info->pseudo_palette))[regno] = v;
+		return 0;
    }
    return 0;
-}	
+}
 
 static int tdfxfb_pan_display(struct fb_var_screeninfo *var, 
 			      struct fb_info *info) 
@@ -1339,7 +1331,7 @@ static int tdfxfb_pan_display(struct fb_var_screeninfo *var,
   if(nowrap && 
      (var->yoffset + var->yres > var->yres_virtual)) return -EINVAL;
   
-  addr = var->yoffset * info->par.lpitch;
+  addr = var->yoffset * info->fix.line_length;
   banshee_make_room(1);
   tdfx_outl(VIDDESKSTART, addr);
  
