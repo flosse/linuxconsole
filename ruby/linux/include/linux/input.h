@@ -47,16 +47,6 @@ struct input_event {
 };
 
 /*
- * The device ID structure;
- */
-
-struct input_id {
-	__u16 bus;
-	__u16 vendor;
-	__u16 product;
-};
-
-/*
  * Protocol version.
  */
 
@@ -67,16 +57,16 @@ struct input_id {
  */
 
 #define EVIOCGVERSION		_IOR('E', 0x01, __u32)                  /* get driver version */
-#define EVIOCGID		_IOR('E', 0x02, struct input_id)	/* get device ID */
+#define EVIOCGID		_IOR('E', 0x02, short[4])		/* get device ID */
 #define EVIOCGREP		_IOR('E', 0x03, int[2])			/* get repeat settings */
 #define EVIOCSREP		_IOW('E', 0x03, int[2])			/* get repeat settings */
-#define EVIOCGKEYCODE		_IOR
-#define EVIOCSKEYCODE		_IOW
-#define EVIOCGNAME(len)		_IOC(_IOC_READ, 'E', 0x03, len)		/* get device name */
+#define EVIOCGKEYCODE		_IOR('E', 0x04, int[2])			/* get keycode */
+#define EVIOCSKEYCODE		_IOW('E', 0x04, int[2])			/* set keycode */
+#define EVIOCGKEY		_IOR('E', 0x05, int[2])			/* get key value */
+#define EVIOCGABSLIM(num)	_IOR('E', 0x10, int[5])			/* get abs event limits */ 
+#define EVIOCGABS(num)		_IOR('E', 0x11, int[2])			/* get abs value */
+#define EVIOCGNAME(len)		_IOC(_IOC_READ, 'E', 0x18, len)		/* get device name */
 #define EVIOCGBIT(ev,len)	_IOC(_IOC_READ, 'E', 0x20 + ev, len)	/* get event bits */
-#define EVIOCGABSLIM(num)	_IOR('E', 0x40 + num, int[4])		/* get abs event limits */ 
-#define EVIOCGABS(num)		_IOR('E', 0x80 + num, int)		/* get abs value */
-#define EVIOCGKEY		_IOR
 
 /*
  * Event types
