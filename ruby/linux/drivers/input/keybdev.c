@@ -35,10 +35,6 @@
 #include <linux/module.h>
 #include <linux/kbd_kern.h>
 
-MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
-MODULE_DESCRIPTION("Input core to console keyboard binding");
-MODULE_LICENSE("GPL");
-
 char keybdev_name[] = "keyboard";
 
 #if defined(CONFIG_X86) || defined(CONFIG_IA64) || defined(__alpha__) || \
@@ -243,4 +239,8 @@ static void __exit keybdev_exit(void)
 
 module_init(keybdev_init);
 module_exit(keybdev_exit);
+
+MODULE_AUTHOR("Vojtech Pavlik <vojtech@ucw.cz>");
+MODULE_DESCRIPTION("Input core to console keyboard binding");
+MODULE_LICENSE("GPL");
 
