@@ -57,7 +57,8 @@ MODULE_PARM(js_db9_3, "2i");
 #define JS_SATURN_PAD	0x07
 #define JS_MULTI_0802	0x08
 #define JS_MULTI_0802_2	0x09
-#define JS_MAX_PAD	0x0A
+#define JS_CD32	        0x0A
+#define JS_MAX_PAD	0x0B
 
 #define JS_DB9_UP	0x01
 #define JS_DB9_DOWN	0x02
@@ -235,6 +236,28 @@ static int js_db9_read(void *xinfo, int **axes, int **buttons)
 
 		break;
 
+	case JS_CD32:
+		data=JS_PAR_DATA_IN(info->port);
+		axes[0][1] = (data&JS_DB9_DOWN ?0:1) - (data&JS_DB9_UP  ?0:1);
+		axes[0][0] = (data&JS_DB9_RIGHT?0:1) - (data&JS_DB9_LEFT?0:1);
+		buttons[0][0] = 0;
+		
+		JS_PAR_CTRL_OUT(0x2a, info->port); 
+		{
+			int i;
+			for (i=1; i<=64; i*=2) { 
+				data = JS_PAR_DATA_IN(info->port);
+				JS_PAR_CTRL_OUT(0x22, info->port); 
+				JS_PAR_CTRL_OUT(0x2a, info->port); 
+				buttons[0][0] |= (data&JS_DB9_FIRE2?0:i);
+			}
+		}
+		JS_PAR_CTRL_OUT(0x20, info->port); 
+		
+		if (buttons[0][0] & 0xf) buttons[0][0] &= 0xf;
+		
+		break;
+
 	  default:
 		return -1;
 	}
@@ -331,10 +354,10 @@ static struct js_port __init *js_db9_probe(int *config, struct js_port *port)
 	struct js_db9_info info;
 	struct parport *pp;
 	int i;
-	char buttons[JS_MAX_PAD] = {0,1,2,4,0,6,8,8,1,1};
+	char buttons[JS_MAX_PAD] = {0,1,2,4,0,6,8,8,1,1,7};
 	char *name[JS_MAX_PAD] = {NULL, "Multisystem joystick", "Multisystem joystick (2 fire)", "Genesis pad",
 					NULL, "Genesis 5 pad", "Genesis 6 pad", "Saturn pad", "Multisystem (0.8.0.2) joystick",
-					"Multisystem (0.8.0.2-dual) joystick"};
+					"Multisystem (0.8.0.2-dual) joystick","CD-32 pad"};
 
 	if (config[0] < 0) return port;
 	if (config[1] < 0 || config[1] >= JS_MAX_PAD || !name[config[1]]) return port;
