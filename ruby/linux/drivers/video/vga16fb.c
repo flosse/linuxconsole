@@ -21,7 +21,7 @@
 #include <linux/ioport.h>
 #include <linux/init.h>
 
-#include "vga.h"
+#include <video/vga.h>
 
 #define VGA_FB_PHYS 0xA0000
 #define VGA_FB_PHYS_LEN 65536

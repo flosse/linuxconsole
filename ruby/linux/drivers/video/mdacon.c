@@ -38,7 +38,7 @@
 #include <linux/delay.h>
 #include <linux/init.h>
 
-#include "vga.h"
+#include <video/vga.h>
 
 #define TEST_MDA_B
 
