@@ -18,7 +18,9 @@
  *			relative mode, proximity.
  *	v0.5 (vp)  - Big cleanup, nifty features removed,
  * 			they belong in userspace
- *	v1.1 (vp)  - Submit URB only when operating, moved to CVS
+ *	v1.8 (vp)  - Submit URB only when operating, moved to CVS,
+ *			use input_report_key instead of report_btn and
+ *			other cleanups
  */
 
 /*
