@@ -47,19 +47,28 @@ static char *sel_buffer = NULL;
 /* set reverse video on characters s-e of console with selection. */
 inline static void
 highlight(const int s, const int e) {
-	invert_screen(sel_cons, s, e-s+2, 1);
+	invert_screen(vc_cons[sel_cons].d, s, e-s+2, 1);
 }
 
 /* use complementary color to show the pointer */
 inline static void
 highlight_pointer(const int where) {
-	complement_pos(sel_cons, where);
+	complement_pos(vc_cons[sel_cons].d, where);
 }
 
-static unsigned char
-sel_pos(int n)
+/* used by selection */
+u16 screen_glyph(struct vc_data *vc, int offset)
 {
-	return inverse_translate(vc_cons[sel_cons].d, screen_glyph(sel_cons, n));
+        u16 w = scr_readw(screenpos(vc, offset, 1));                                    u16 c = w & 0xff;
+
+        if (w & vc->vc_hi_font_mask)
+                c |= 0x100;
+        return c;
+}             
+
+static unsigned char sel_pos(int n)
+{
+	return inverse_translate(vc_cons[sel_cons].d, screen_glyph(vc_cons[sel_cons].d, n));
 }
 
 /* remove the current selection highlight, if any,
@@ -121,7 +130,6 @@ int set_selection(const unsigned long arg, struct tty_struct *tty, int user)
 	char *bp, *obp;
 	int i, ps, pe;
 	unsigned int currcons = fg_console;
-	struct vc_data *vc = vc_cons[currcons].d;
 
 	unblank_screen();
 	poke_blanked_console();
