@@ -969,10 +969,11 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		if (arg > MAX_NR_CONSOLES) 
 			return -ENXIO;
 
-		i = vc_allocate(arg);
-		if (i)
-			return i;
 		tmp = find_vc(arg);
+		if (!tmp) {
+			tmp = vc_allocate(arg);
+			if (!tmp) return arg;
+		}
 		if (tmp->display_fg != vc->display_fg)
 			return -ENXIO;
 		set_console(tmp);
@@ -1026,14 +1027,15 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 				 */
 				struct vc_data *tmp;
 
-				i = vc_allocate(vc->vt_newvt);
-				if (i) {
-					vc->vt_newvt = -1;
-					return i;
-				}
 				tmp = find_vc(vc->vt_newvt);
-				if (!tmp)
-                                	return -ENXIO;
+				if (!tmp) {
+					tmp = vc_allocate(vc->vt_newvt);
+					if (!tmp) {
+						i = vc->vt_newvt;
+						vc->vt_newvt = -1;
+						return i;
+					}
+				}
 
 				/*
 				 * When we actually do the console switch,
@@ -1070,14 +1072,14 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		    	for (i=0; i < MAX_NR_USER_CONSOLES; i++) {
 		      		tmp = find_vc(i + vt->first_vc);
 		      		if (tmp && (vt->fg_console->vc_num != tmp->vc_num) && !VT_BUSY(tmp)) 
-					vc_disallocate(tmp->vc_num);
+					vc_disallocate(tmp);
 		    	}	
 		} else {
 		    /* disallocate a single console, if possible */
 		    tmp = find_vc(arg);
 		    if (!tmp || VT_BUSY(tmp))
 		      return -EBUSY;
-		    vc_disallocate(arg);
+		    vc_disallocate(tmp);
 		}
 		return 0;
 	}

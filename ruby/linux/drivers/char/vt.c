@@ -48,6 +48,12 @@
 #define CTRL_ALWAYS 0x0800f501  /* Cannot be overridden by disp_ctrl */
 
 extern void vcs_make_devfs (unsigned int index, int unregister);
+#ifdef CONFIG_VGA_CONSOLE
+extern void vga_console_init(void);
+#endif
+#ifdef CONFIG_MDA_CONSOLE
+extern void mda_console_init(void);	
+#endif
 
 #ifndef MIN
 #define MIN(a,b)        ((a) < (b) ? (a) : (b))
@@ -56,8 +62,6 @@ extern void vcs_make_devfs (unsigned int index, int unregister);
 static struct tty_struct *console_table[MAX_NR_CONSOLES];
 static struct termios *console_termios[MAX_NR_CONSOLES];
 static struct termios *console_termios_locked[MAX_NR_CONSOLES];
-
-static void vt_flush_chars(struct tty_struct *tty);
 
 struct vt_struct *admin_vt;		/* Administrative VT */
 static int current_vc;			/* Which /dev/vc/X to allocate next */
@@ -791,84 +795,81 @@ struct vc_data* find_vc(int currcons)
 	return NULL;
 }
 
-/* return 0 on success */
-int vc_allocate(unsigned int currcons)  
+/* return a vc on success */
+struct vc_data* vc_allocate(unsigned int currcons)  
 {
+	struct vc_data *vc = NULL;
 	struct vt_struct *vt;
-	struct vc_data *vc;
-	
-	if (currcons >= MAX_NR_CONSOLES)
-		return -ENXIO;
+
+	/* prevent users from taking too much memory */
+        if (currcons >= MAX_NR_CONSOLES && !capable(CAP_SYS_RESOURCE)) {
+                currcons = -EPERM;
+                return NULL;
+        }
 	
 	for (vt = vt_cons; vt != NULL; vt = vt->next) { 
                	if (currcons < vt->first_vc + MAX_NR_USER_CONSOLES &&
                             currcons >= vt->first_vc) 
                                 goto found_pool;
 	}
-	return -ENXIO;	
+	currcons = -ENXIO;
+	return NULL;	
 found_pool:
-	vc = vt->vc_cons[currcons - vt->first_vc];
+        /* due to the granularity of kmalloc, we waste some memory here */
+        /* the alloc is done in two steps, to optimize the common situation
+           of a 25x80 console (structsize=216, screenbuf_size=4000) */
+        /* although the numbers above are not valid since long ago, the
+           point is still up-to-date and the comment still has its value
+           even if only as a historical artifact.  --mj, July 1998 */
 
-        if (!vc) {
-            long p, q;
-
-            /* prevent users from taking too much memory */
-            if (currcons >= MAX_NR_CONSOLES && !capable(CAP_SYS_RESOURCE))
-              return -EPERM;
-
-            /* due to the granularity of kmalloc, we waste some memory here */
-            /* the alloc is done in two steps, to optimize the common situation
-               of a 25x80 console (structsize=216, screenbuf_size=4000) */
-            /* although the numbers above are not valid since long ago, the
-               point is still up-to-date and the comment still has its value
-               even if only as a historical artifact.  --mj, July 1998 */
-            p = (long) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
-            if (!p)
-                return -ENOMEM;
-            vc = (struct vc_data *)p;
-	    vc->vc_num = currcons;	
-            vc->display_fg = vt;
-            visual_init(vc);
-            if (!*vc->vc_uni_pagedir_loc)
-                con_set_default_unimap(vc);
-            q = (long)kmalloc(screenbuf_size, GFP_KERNEL);
-            if (!q) {
-                kfree((char *) p);
-                vc = NULL;
-                return -ENOMEM;
-            }
-            screenbuf = (unsigned short *) q;
-            vc_init(vc, 1);
+	if (vt->kmalloced || !(vt->first_vc == currcons))
+		vc = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
+	else
+		vc = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
 	
-	    vt->vc_cons[currcons - vt->first_vc] = vc;		
-        }
-        return 0;
+	if (!vc) {
+		currcons = -ENOMEM; 
+               	return NULL;
+	}
+ 	vc->vc_num = currcons;	
+        vc->display_fg = vt;
+        visual_init(vc);
+        if (vt->kmalloced || !(vt->first_vc == currcons)) { 
+        	screenbuf = (unsigned short *) kmalloc(screenbuf_size, GFP_KERNEL);
+		if (!screenbuf) {
+			kfree(vc);
+			currcons = -ENOMEM;
+			return NULL;
+		}
+        	if (!*vc->vc_uni_pagedir_loc)
+        		con_set_default_unimap(vc);
+	} else {
+		screenbuf = (unsigned short *) alloc_bootmem(screenbuf_size);
+		if (!screenbuf) {
+			free_bootmem((unsigned long) vc,sizeof(struct vc_data));
+			currcons = -ENOMEM;
+			return NULL;
+		}			
+	}
+        vc_init(vc, 1);
+	vt->vc_cons[currcons - vt->first_vc] = vc;		
+        return vc;
 }
 
-int vc_disallocate(unsigned int currcons)
+int vc_disallocate(struct vc_data *vc)
 {
-	struct vt_struct *vt;
-        struct vc_data *vc;
+	struct vt_struct *vt = vc->display_fg;
 
-	if (currcons >= MAX_NR_CONSOLES)
-		return -ENXIO;
-	
-	for (vt = vt_cons; vt != NULL; vt = vt->next) {
-               	if (currcons < vt->first_vc + MAX_NR_USER_CONSOLES &&
-                           currcons >= vt->first_vc) 
-                                goto found_pool;
-	}
-	return -ENXIO;	
-found_pool:
-	vc = vt->vc_cons[currcons - vt->first_vc];
-        
 	if (vc) {
-            sw->con_deinit(vc);
-            if (vc->display_fg->kmalloced)
-                kfree(screenbuf);
-            if (currcons >= MIN_NR_CONSOLES)
-                kfree(vc);
-            vt->vc_cons[currcons - vt->first_vc] = NULL;
+        	sw->con_deinit(vc);
+		vt->vc_cons[cons_num - vt->first_vc] = NULL;
+        	if (vt->kmalloced || !(vt->first_vc == cons_num)) { 
+                	kfree(screenbuf);
+            		kfree(vc);
+	    	} else {
+			free_bootmem((unsigned long) screenbuf, screenbuf_size);
+			free_bootmem((unsigned long) vc,sizeof(struct vc_data));
+	    	}
         }
 	return 0;
 }                     
@@ -962,14 +963,17 @@ int vc_resize(struct vc_data *vc, unsigned int cols, unsigned int lines)
 }
 
 /*
- * Mapping and unmapping VT functions 
+ * Mapping and unmapping VT display  
  */
 const char *create_vt(struct vt_struct *vt, int init)
 {
 	const char *display_desc = vt->vt_sw->con_startup(vt, init);
 
 	if (!display_desc) return NULL;	
+	vt->first_vc = current_vc;
 	INIT_TQUEUE(&vt->vt_tq, vt_callback, vt);
+	init_MUTEX(&vt->lock);
+	vt->first_vc = current_vc;
 	vt->next = vt_cons;
 	vt_cons = vt;
 	vt->vt_dont_switch = 0;
@@ -979,14 +983,12 @@ const char *create_vt(struct vt_struct *vt, int init)
         vt->off_interval = 0;
 	if (vt->pm_con)
 		vt->pm_con->data = vt;
-	init_MUTEX(&vt->lock);
 	vt->default_mode->display_fg = vt;
-	memcpy(vt->vc_cons[0], vt->default_mode, sizeof(struct vc_data));
-	visual_init(vt->vc_cons[0]);
-	vt->first_vc = vt->vc_cons[0]->vc_num = current_vc;
-	vt->want_vc = vt->fg_console = vt->last_console = vt->vc_cons[0];
+
+	vt->vc_cons[0] = vc_allocate(current_vc);
+	if (vt->vc_cons[0])
+		vt->want_vc= vt->fg_console= vt->last_console = vt->vc_cons[0];
 	vt->keyboard = NULL;
-	current_vc += MAX_NR_USER_CONSOLES;
 	if (!admin_vt) {
 		admin_vt = vt;
 #ifdef CONFIG_VT_CONSOLE
@@ -994,11 +996,15 @@ const char *create_vt(struct vt_struct *vt, int init)
 		register_console(&vt_console_driver);
         	printable = 1;
 #endif
+                gotoxy(vt->vc_cons[0], x, y);
+                vte_ed(vt->vc_cons[0], 0);
+                update_screen(vt->vc_cons[0]);
 	}
         init_timer(&vt->timer);
         vt->timer.data = (long) vt;
         vt->timer.function = blank_screen;
         mod_timer(&vt->timer, jiffies + vt->blank_interval);
+	current_vc += MAX_NR_USER_CONSOLES;
 	return display_desc;
 }
 
@@ -1237,13 +1243,13 @@ static int vt_open(struct tty_struct *tty, struct file * filp)
 {
         unsigned int currcons = MINOR(tty->device) - tty->driver.minor_start;
 	struct vc_data *vc = (struct vc_data *) tty->driver_data;
-	int i;
 
 	if (!vc) {
-        	i = vc_allocate(currcons);
-		if (i)               
-	 		return i;
 		vc = find_vc(currcons);
+		if (!vc) {
+        		vc = vc_allocate(currcons);
+			if (!vc) return currcons;               
+		}
         	tty->driver_data = vc;
 		vc->vc_tty = tty;	
 	
@@ -1271,11 +1277,14 @@ static int vt_write(struct tty_struct * tty, int from_user,
                     const unsigned char *buf, int count)
 {
         struct vc_data *vc = (struct vc_data *) tty->driver_data;
-	int     retval;
+	unsigned long flags;
+	int retval;
 
         pm_access(vc->display_fg->pm_con);
         retval = do_con_write(tty, from_user, buf, count);
-        vt_flush_chars(tty);
+	spin_lock_irqsave(&vc->vc_tty->driver.tty_lock, flags);
+        set_cursor(vc);
+	spin_unlock_irqrestore(&vc->vc_tty->driver.tty_lock, flags);
         return retval;
 }
 
@@ -1532,8 +1541,6 @@ static int console_refcount;
 
 void __init vt_console_init(void)
 {
-        const char *display_desc = NULL;
-	struct vt_struct *vt;
 	struct vc_data *vc;
 
         memset(&vt_driver, 0, sizeof(struct tty_driver));
@@ -1572,35 +1579,18 @@ void __init vt_console_init(void)
         if (tty_register_driver(&vt_driver))
                 panic("Couldn't register console driver\n");
 
-        /*
-         * kmalloc is not running yet - we use the bootmem allocator.
-         */
-	vt = (struct vt_struct *) alloc_bootmem(sizeof(struct vt_struct));
-        vt->vc_cons[0] = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
 #if defined(CONFIG_VGA_CONSOLE)
-	vt->vt_sw = &vga_con;
-#elif defined(CONFIG_MDA_CONSOLE)
-	vt->vt_sw = &mda_con;
-#elif defined(CONFIG_DUMMY_CONSOLE)
-	vt->vt_sw = &dummy_con;
+	vga_console_init();
 #endif
-	vt->kmalloced = 0;
-	display_desc = create_vt(vt, 1);
-	if (!display_desc) { 
-		free_bootmem((unsigned long) vt, sizeof(struct vt_struct));
-		free_bootmem((unsigned long) vt->vc_cons[0], sizeof(struct vc_data));
-		return;
+#if defined(CONFIG_MDA_CONSOLE)
+	mda_console_init();
+#endif
+	if (admin_vt) {
+		vc = admin_vt->vc_cons[0];
+        	gotoxy(vc, x, y);
+        	vte_ed(vc, 0);
+        	update_screen(vc);
 	}
-	vc = vt->vc_cons[0];
-        screenbuf = (unsigned short *) alloc_bootmem(screenbuf_size);
-        vc_init(vc, 0); 
-        
-        gotoxy(vc, x, y);
-        vte_ed(vc, 0);
-        update_screen(vc);
-        printk("Console: %s %s %dx%d\n",
-                can_do_color ? "colour" : "mono",
-                display_desc, video_num_columns, video_num_lines);
 }
 
 static void clear_buffer_attributes(struct vc_data *vc)

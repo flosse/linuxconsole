@@ -62,6 +62,7 @@
 #undef TRIDENT_GLITCH
 
 static struct vc_data vga_default;
+static struct vt_struct vga_vt;
 
 /*
  *  Interface used by the world
@@ -530,6 +531,7 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 	vc->vc_y = ORIG_Y;
 	/* This maybe be suboptimal but is a safe bet - go with it */
 	vc->vc_scan_lines = vc->vc_font.height * vc->vc_rows; 
+	vc->vc_scrollback = 1;
 	return display_desc;
 }
 
@@ -940,17 +942,33 @@ const struct consw vga_con = {
 	con_invert_region:	vgacon_invert_region,
 };
 
+int __init vga_console_init(void)
+{
+        const char *display_desc = NULL;
+
+        memset(&vga_vt, 0, sizeof(struct vt_struct));
+
 #ifdef MODULE
-
-void module_init(void)
-{
-       take_over_console(&vga_con, 0, MAX_NR_USER_CONSOLES-1, 0);
-}
-
-void module_exit(void)
-{
-       give_up_console(&vga_con);
-}
+        vga_vt.kmalloced = 1;
+#else
+        vga_vt.kmalloced = 0;
 #endif
+        vga_vt.vt_sw = &vga_con;
+        display_desc = create_vt(&vga_vt, 1);
+        if (!display_desc) return -ENODEV;
+	printk("Console: %s %s %dx%d\n",
+                vga_vt.default_mode->vc_can_do_color ? "colour" : "mono",
+                display_desc, vga_vt.default_mode->vc_cols, 
+		vga_vt.default_mode->vc_rows);
+        return 0;
+}
 
-EXPORT_SYMBOL(vga_con);
+#ifdef MODULE
+void __exit vga_module_exit(void)
+{
+        /* release_vt(&vga_vt); */
+}
+
+module_init(vga_console_init);
+module_exit(vga_module_exit);
+#endif

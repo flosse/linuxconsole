@@ -193,11 +193,8 @@ struct consw {
 };
 
 extern const struct consw dummy_con;   	/* dummy console buffer */
-extern const struct consw fb_con;      	/* frame buffer based console */
-extern const struct consw vga_con;     	/* VGA text console */
 extern const struct consw newport_con; 	/* SGI Newport console  */
 extern const struct consw prom_con;    	/* SPARC PROM console */
-extern const struct consw mda_con;	/* MDA text console */
 extern const struct consw nvvga_con;	/* NVIDIA text console */ 
 
 void take_over_console(struct vt_struct *vt, const struct consw *sw);
@@ -228,7 +225,7 @@ struct vt_struct {
 	struct vc_data *default_mode;	 	/* Default mode */
 	struct tq_struct vt_tq;			/* VT task queue */
 	struct input_handle *keyboard;		/* Keyboard attached */
-	int first_vc;
+	unsigned int first_vc;
         struct vc_data *vc_cons[MAX_NR_USER_CONSOLES];  /* VT's VC pool */
 	struct vt_struct *next;				
 }; 
@@ -259,9 +256,9 @@ struct console_font_op;
 const char* create_vt(struct vt_struct *vt, int init);
 int release_vt(struct vt_struct *vt);
 struct vc_data* find_vc(int currcons);
-int vc_allocate(unsigned int console);
+struct vc_data* vc_allocate(unsigned int console);
 int vc_resize(struct vc_data *vc, unsigned int lines, unsigned int cols);
-int vc_disallocate(unsigned int console);
+int vc_disallocate(struct vc_data *vc);
 void vc_init(struct vc_data *vc, int do_clear);
 void add_softcursor(struct vc_data *vc);
 void set_cursor(struct vc_data *vc);

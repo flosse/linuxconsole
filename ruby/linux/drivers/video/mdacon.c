@@ -68,6 +68,7 @@ static enum { TYPE_MDA, TYPE_HERC, TYPE_HERCPLUS, TYPE_HERCCOLOR } mda_type;
 static char *mda_type_name;
 
 static struct vc_data mda_default;
+static struct vt_struct mda_vt;
 
 /* MDA register values
  */
@@ -322,7 +323,8 @@ static const char __init *mdacon_startup(struct vt_struct *vt, int init)
 
 	vt->default_mode->vc_cols = mda_num_columns;
 	vt->default_mode->vc_rows = mda_num_lines;
-	vt->pm_con = pm_register(PM_SYS_DEV, PM_SYS_VGA, pm_con_request);
+	vt->default_mode->vc_scrollback = 1;
+	//vt->pm_con = pm_register(PM_SYS_DEV, PM_SYS_VGA, pm_con_request);
 
 	printk("mdacon: %s with %ldK of memory detected.\n",
 		mda_type_name, mda_vram_len/1024);
@@ -565,46 +567,31 @@ const struct consw mda_con = {
 	con_invert_region:	mdacon_invert_region,
 };
 
-int __init mda_module_init(void)
+int __init mda_console_init(void)
 {
         const char *display_desc = NULL;
-        struct vt_struct *vt;
-	struct vc_data *vc;
-	long q;
 
-	/* Allocate the memory we need for this VT */
-        vt = (struct vt_struct *) kmalloc(sizeof(struct vt_struct),GFP_KERNEL);
-        if (!vt) return -ENOMEM;
-	memset(vt, 0, sizeof(struct vt_struct));
-	
-	vc = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
-	if (!vc) {
-		kfree(vt);
-		return -ENOMEM;
-	}
-	vt->kmalloced = 1;
-	vt->vt_sw = &mda_con;
-	vt->vc_cons[0] = vc;
-        display_desc = create_vt(vt, 1);
-	q = (long) kmalloc(vc->vc_screenbuf_size, GFP_KERNEL);
-        if (!display_desc || !q) {
-		kfree(vt->vc_cons[0]);
-                kfree(vt);
-		if (q)
-			kfree((char *) q);	
-		return -ENOMEM;
-        }
-	vc->vc_screenbuf = (unsigned short *) q;
-	vc_init(vc, 1);			
-	printk("Console: mono %s %dx%d\n",display_desc,vc->vc_cols,vc->vc_rows);
+        memset(&mda_vt, 0, sizeof(struct vt_struct));
+
+#ifdef MODULE
+        mda_vt.kmalloced = 1;
+#else
+        mda_vt.kmalloced = 0;
+#endif
+        mda_vt.vt_sw = &mda_con;
+        display_desc = create_vt(&mda_vt, 1);
+        if (!display_desc) return -ENODEV;
+        printk("Console: mono %s %dx%d\n", display_desc,
+                mda_vt.default_mode->vc_cols, mda_vt.default_mode->vc_rows);
         return 0;
 }
 
-void __exit mda_module_exit()
+#ifdef MODULE
+void __exit mda_module_exit(void)
 {
 	/* release_vt(&mda_vt); */
 }
 
-module_init(mda_module_init);
+module_init(mda_console_init);
 module_exit(mda_module_exit);
-
+#endif
