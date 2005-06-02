@@ -23,6 +23,7 @@
 #include <linux/major.h>
 #include <linux/fs.h>
 #include <linux/console.h>
+#include <linux/signal.h>
 
 #include <asm/io.h>
 #include <asm/uaccess.h>
@@ -1055,7 +1056,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		extern int spawnpid, spawnsig;
 		if (!perm || !capable(CAP_KILL))
 		  return -EPERM;
-		if (arg < 1 || arg > _NSIG || arg == SIGKILL)
+		if (!valid_signal(arg) || arg < 1 || arg == SIGKILL)
 		  return -EINVAL;
 		spawnpid = current->pid;
 		spawnsig = arg;
