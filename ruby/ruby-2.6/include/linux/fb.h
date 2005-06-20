@@ -102,7 +102,11 @@
 #define FB_ACCEL_I810           39      /* Intel 810/815                */
 #define FB_ACCEL_SIS_GLAMOUR_2  40	/* SiS 315, 650, 740		*/
 #define FB_ACCEL_SIS_XABRE      41	/* SiS 330 ("Xabre")		*/
-
+#define FB_ACCEL_I830           42      /* Intel 830M/845G/85x/865G     */
+#define FB_ACCEL_NV_10          43      /* nVidia Arch 10               */
+#define FB_ACCEL_NV_20          44      /* nVidia Arch 20               */
+#define FB_ACCEL_NV_30          45      /* nVidia Arch 30               */
+#define FB_ACCEL_NV_40          46      /* nVidia Arch 40               */
 #define FB_ACCEL_NEOMAGIC_NM2070 90	/* NeoMagic NM2070              */
 #define FB_ACCEL_NEOMAGIC_NM2090 91	/* NeoMagic NM2090              */
 #define FB_ACCEL_NEOMAGIC_NM2093 92	/* NeoMagic NM2093              */
@@ -113,6 +117,21 @@
 #define FB_ACCEL_NEOMAGIC_NM2360 97	/* NeoMagic NM2360              */
 #define FB_ACCEL_NEOMAGIC_NM2380 98	/* NeoMagic NM2380              */
 
+#define FB_ACCEL_SAVAGE4        0x80	/* S3 Savage4                   */
+#define FB_ACCEL_SAVAGE3D       0x81	/* S3 Savage3D                  */
+#define FB_ACCEL_SAVAGE3D_MV    0x82	/* S3 Savage3D-MV               */
+#define FB_ACCEL_SAVAGE2000     0x83	/* S3 Savage2000                */
+#define FB_ACCEL_SAVAGE_MX_MV   0x84	/* S3 Savage/MX-MV              */
+#define FB_ACCEL_SAVAGE_MX      0x85	/* S3 Savage/MX                 */
+#define FB_ACCEL_SAVAGE_IX_MV   0x86	/* S3 Savage/IX-MV              */
+#define FB_ACCEL_SAVAGE_IX      0x87	/* S3 Savage/IX                 */
+#define FB_ACCEL_PROSAVAGE_PM   0x88	/* S3 ProSavage PM133           */
+#define FB_ACCEL_PROSAVAGE_KM   0x89	/* S3 ProSavage KM133           */
+#define FB_ACCEL_S3TWISTER_P    0x8a	/* S3 Twister                   */
+#define FB_ACCEL_S3TWISTER_K    0x8b	/* S3 TwisterK                  */
+#define FB_ACCEL_SUPERSAVAGE    0x8c    /* S3 Supersavage               */
+#define FB_ACCEL_PROSAVAGE_DDR  0x8d	/* S3 ProSavage DDR             */
+#define FB_ACCEL_PROSAVAGE_DDRK 0x8e	/* S3 ProSavage DDR-K           */
 
 struct fb_fix_screeninfo {
 	char id[16];			/* identification string eg "TT Builtin" */
@@ -242,6 +261,24 @@ struct fb_con2fbmap {
 #define VESA_HSYNC_SUSPEND      2
 #define VESA_POWERDOWN          3
 
+
+enum {
+	/* screen: unblanked, hsync: on,  vsync: on */
+	FB_BLANK_UNBLANK       = VESA_NO_BLANKING,
+
+	/* screen: blanked,   hsync: on,  vsync: on */
+	FB_BLANK_NORMAL        = VESA_NO_BLANKING + 1,
+
+	/* screen: blanked,   hsync: on,  vsync: off */
+	FB_BLANK_VSYNC_SUSPEND = VESA_VSYNC_SUSPEND + 1,
+
+	/* screen: blanked,   hsync: off, vsync: on */
+	FB_BLANK_HSYNC_SUSPEND = VESA_HSYNC_SUSPEND + 1,
+
+	/* screen: blanked,   hsync: off, vsync: off */
+	FB_BLANK_POWERDOWN     = VESA_POWERDOWN + 1
+};
+
 #define FB_VBLANK_VBLANKING	0x001	/* currently in a vertical blank */
 #define FB_VBLANK_HBLANKING	0x002	/* currently in a horizontal blank */
 #define FB_VBLANK_HAVE_VBLANK	0x004	/* vertical blanks can be detected */
@@ -298,7 +335,7 @@ struct fb_image {
  * hardware cursor control
  */
 
-#define FB_CUR_SETCUR   0x01
+#define FB_CUR_SETIMAGE 0x01
 #define FB_CUR_SETPOS   0x02
 #define FB_CUR_SETHOT   0x04
 #define FB_CUR_SETCMAP  0x08
@@ -317,8 +354,6 @@ struct fb_cursor {
 	const char *mask;	/* cursor mask bits */
 	struct fbcurpos hot;	/* cursor hot spot */
 	struct fb_image	image;	/* Cursor image */
-/* all fields below are for fbcon use only */
-	char  *data;             /* copy of bitmap */
 };
 
 #ifdef __KERNEL__
@@ -456,7 +491,10 @@ struct fb_cursor_user {
 #define FB_EVENT_GET_CONSOLE_MAP        0x06
 /*      set console to framebuffer mapping */
 #define FB_EVENT_SET_CONSOLE_MAP        0x07
-
+/*      A display blank is requested       */
+#define FB_EVENT_BLANK                  0x08
+/*      Private modelist is to be replaced */
+#define FB_EVENT_NEW_MODELIST           0x09
 
 struct fb_event {
 	struct fb_info *info;
@@ -525,6 +563,9 @@ struct fb_ops {
 	int (*fb_setcolreg)(unsigned regno, unsigned red, unsigned green,
 			    unsigned blue, unsigned transp, struct fb_info *info);
 
+	/* set color registers in batch */
+	int (*fb_setcmap)(struct fb_cmap *cmap, struct fb_info *info);
+
 	/* blank display */
 	int (*fb_blank)(int blank, struct fb_info *info);
 
@@ -551,9 +592,89 @@ struct fb_ops {
 	int (*fb_ioctl)(struct inode *inode, struct file *file, unsigned int cmd,
 			unsigned long arg, struct fb_info *info);
 
+	/* Handle 32bit compat ioctl (optional) */
+	long (*fb_compat_ioctl)(struct file *f, unsigned cmd, unsigned long arg,
+			       struct fb_info *info);
+
 	/* perform fb specific mmap */
 	int (*fb_mmap)(struct fb_info *info, struct file *file, struct vm_area_struct *vma);
 };
+
+#ifdef CONFIG_FB_TILEBLITTING
+
+#define FB_TILE_CURSOR_NONE        0
+#define FB_TILE_CURSOR_UNDERLINE   1
+#define FB_TILE_CURSOR_LOWER_THIRD 2
+#define FB_TILE_CURSOR_LOWER_HALF  3
+#define FB_TILE_CURSOR_TWO_THIRDS  4
+#define FB_TILE_CURSOR_BLOCK       5
+
+struct fb_tilemap {
+	__u32 width;                /* width of each tile in pixels */
+	__u32 height;               /* height of each tile in scanlines */
+	__u32 depth;                /* color depth of each tile */
+	__u32 length;               /* number of tiles in the map */
+	__u8  *data;                /* actual tile map: a bitmap array, packed
+				       to the nearest byte */
+};
+
+struct fb_tilerect {
+	__u32 sx;                   /* origin in the x-axis */
+	__u32 sy;                   /* origin in the y-axis */
+	__u32 width;                /* number of tiles in the x-axis */
+	__u32 height;               /* number of tiles in the y-axis */
+	__u32 index;                /* what tile to use: index to tile map */
+	__u32 fg;                   /* foreground color */
+	__u32 bg;                   /* background color */
+	__u32 rop;                  /* raster operation */
+};
+
+struct fb_tilearea {
+	__u32 sx;                   /* source origin in the x-axis */
+	__u32 sy;                   /* source origin in the y-axis */
+	__u32 dx;                   /* destination origin in the x-axis */
+	__u32 dy;                   /* destination origin in the y-axis */
+	__u32 width;                /* number of tiles in the x-axis */
+	__u32 height;               /* number of tiles in the y-axis */
+};
+
+struct fb_tileblit {
+	__u32 sx;                   /* origin in the x-axis */
+	__u32 sy;                   /* origin in the y-axis */
+	__u32 width;                /* number of tiles in the x-axis */
+	__u32 height;               /* number of tiles in the y-axis */
+	__u32 fg;                   /* foreground color */
+	__u32 bg;                   /* background color */
+	__u32 length;               /* number of tiles to draw */
+	__u32 *indices;             /* array of indices to tile map */
+};
+
+struct fb_tilecursor {
+	__u32 sx;                   /* cursor position in the x-axis */
+	__u32 sy;                   /* cursor position in the y-axis */
+	__u32 mode;                 /* 0 = erase, 1 = draw */
+	__u32 shape;                /* see FB_TILE_CURSOR_* */
+	__u32 fg;                   /* foreground color */
+	__u32 bg;                   /* background color */
+};
+
+struct fb_tile_ops {
+	/* set tile characteristics */
+	void (*fb_settile)(struct fb_info *info, struct fb_tilemap *map);
+
+	/* all dimensions from hereon are in terms of tiles */
+
+	/* move a rectangular region of tiles from one area to another*/
+	void (*fb_tilecopy)(struct fb_info *info, struct fb_tilearea *area);
+	/* fill a rectangular region with a tile */
+	void (*fb_tilefill)(struct fb_info *info, struct fb_tilerect *rect);
+	/* copy an array of tiles */
+	void (*fb_tileblit)(struct fb_info *info, struct fb_tileblit *blit);
+	/* cursor */
+	void (*fb_tilecursor)(struct fb_info *info,
+			      struct fb_tilecursor *cursor);
+};
+#endif /* CONFIG_FB_TILEBLITTING */
 
 /* FBINFO_* = fb_info.flags bit flags */
 #define FBINFO_MODULE		0x0001	/* Low-level driver is a module */
@@ -582,10 +703,9 @@ struct fb_ops {
 #define FBINFO_HWACCEL_YPAN		0x2000 /* optional */
 #define FBINFO_HWACCEL_YWRAP		0x4000 /* optional */
 
-#define FBINFO_MISC_MODECHANGEUSER     0x10000 /* mode change request
+#define FBINFO_MISC_USEREVENT          0x10000 /* event request
 						  from userspace */
-#define FBINFO_MISC_MODESWITCH         0x20000 /* mode switch */
-#define FBINFO_MISC_MODESWITCHLATE     0x40000 /* init hardware later */
+#define FBINFO_MISC_TILEBLITTING       0x20000 /* use tile blitting */
 
 struct fb_info {
 	int node;
@@ -593,23 +713,25 @@ struct fb_info {
 	struct fb_var_screeninfo var;	/* Current var */
 	struct fb_fix_screeninfo fix;	/* Current fix */
 	struct fb_monspecs monspecs;	/* Current Monitor specs */
-	struct fb_cursor cursor;	/* Current cursor */	
 	struct work_struct queue;	/* Framebuffer event queue */
-	struct timer_list cursor_timer; /* Cursor timer */
 	struct fb_pixmap pixmap;	/* Image hardware mapper */
 	struct fb_pixmap sprite;	/* Cursor hardware mapper */
 	struct fb_cmap cmap;		/* Current cmap */
 	struct list_head modelist;      /* mode list */
+	struct fb_videomode *mode;	/* current mode */
 	struct fb_ops *fbops;
+	struct device *device;
+	struct class_device *class_device; /* sysfs per device attrs */
+#ifdef CONFIG_FB_TILEBLITTING
+	struct fb_tile_ops *tileops;    /* Tile Blitting */
+#endif
 	char __iomem *screen_base;	/* Virtual address */
 	unsigned long screen_size;	/* Amount of ioremapped VRAM or 0 */ 
-	struct vt_struct *display_fg;   /* Console visible on this display */
-	int currcon;			/* Current VC. */
 	void *pseudo_palette;		/* Fake palette of 16 colors */ 
 #define FBINFO_STATE_RUNNING	0
 #define FBINFO_STATE_SUSPENDED	1
 	u32 state;			/* Hardware state i.e suspend */
-
+	void *fbcon_par;                /* fbcon use-only private area */
 	/* From here on everything is device dependent */
 	void *par;	
 };
@@ -706,10 +828,10 @@ extern void fb_sysmove_buf_unaligned(struct fb_info *info, struct fb_pixmap *buf
 extern void fb_sysmove_buf_aligned(struct fb_info *info, struct fb_pixmap *buf,
 				u8 *dst, u32 d_pitch, u8 *src, u32 s_pitch,
 				u32 height);
-extern void fb_load_cursor_image(struct fb_info *);
 extern void fb_set_suspend(struct fb_info *info, int state);
-extern int fb_get_color_depth(struct fb_info *info);
+extern int fb_get_color_depth(struct fb_var_screeninfo *var);
 extern int fb_get_options(char *name, char **option);
+extern int fb_new_modelist(struct fb_info *info);
 
 extern struct fb_info *registered_fb[FB_MAX];
 extern int num_registered_fb;
@@ -717,6 +839,8 @@ extern int num_registered_fb;
 /* drivers/video/fbsysfs.c */
 extern struct fb_info *framebuffer_alloc(size_t size, struct device *dev);
 extern void framebuffer_release(struct fb_info *info);
+extern int fb_init_class_device(struct fb_info *fb_info);
+extern void fb_cleanup_class_device(struct fb_info *head);
 
 /* drivers/video/fbmon.c */
 #define FB_MAXTIMINGS		0
@@ -741,15 +865,11 @@ extern int fb_get_mode(int flags, u32 val, struct fb_var_screeninfo *var,
 extern int fb_validate_mode(const struct fb_var_screeninfo *var,
 			    struct fb_info *info);
 extern int fb_parse_edid(unsigned char *edid, struct fb_var_screeninfo *var);
-extern int fb_get_monitor_limits(unsigned char *edid, struct fb_monspecs *specs);
 extern void fb_edid_to_monspecs(unsigned char *edid, struct fb_monspecs *specs);
-extern int fb_get_monitor_limits(unsigned char *edid, struct fb_monspecs *specs);
-extern struct fb_videomode *fb_create_modedb(unsigned char *edid, int *dbsize);
 extern void fb_destroy_modedb(struct fb_videomode *modedb);
 
 /* drivers/video/modedb.c */
 #define VESA_MODEDB_SIZE 34
-extern const struct fb_videomode vesa_modes[];
 extern void fb_var_to_videomode(struct fb_videomode *mode,
 				struct fb_var_screeninfo *var);
 extern void fb_videomode_to_var(struct fb_var_screeninfo *var,
@@ -763,6 +883,8 @@ extern struct fb_videomode *fb_match_mode(struct fb_var_screeninfo *var,
 					  struct list_head *head);
 extern struct fb_videomode *fb_find_best_mode(struct fb_var_screeninfo *var,
 					      struct list_head *head);
+extern struct fb_videomode *fb_find_nearest_mode(struct fb_var_screeninfo *var,
+						 struct list_head *head);
 extern void fb_destroy_modelist(struct list_head *head);
 extern void fb_videomode_to_modelist(struct fb_videomode *modedb, int num,
 				     struct list_head *head);
@@ -793,6 +915,8 @@ struct fb_videomode {
 	u32 vmode;
 	u32 flag;
 };
+
+extern const struct fb_videomode vesa_modes[];
 
 struct fb_modelist {
 	struct list_head list;

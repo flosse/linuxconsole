@@ -10,7 +10,7 @@
 #include <linux/tiocl.h>
 #include <linux/vt_buffer.h>
 
-extern int sel_cons;
+extern struct vc_data *sel_cons;
 
 extern void clear_selection(void);
 extern int set_selection(const struct tiocl_selection __user *sel, struct tty_struct *tty);
