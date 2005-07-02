@@ -48,16 +48,21 @@
 #include <linux/spinlock.h>
 #include <linux/ioport.h>
 #include <linux/init.h>
-#include <video/vga.h>
-#include <asm/io.h>
 #ifdef CONFIG_IA64
 #include <linux/efi.h>
 #endif
 
-static spinlock_t vga_lock = SPIN_LOCK_UNLOCKED;
-static struct vc_data vga_default; 
+#include <video/vga.h>
+#include <asm/io.h>
+
+
+static DEFINE_SPINLOCK(vga_lock);
+static struct vc_data vga_default;
 static struct vt_struct vga_vt;
 static struct vgastate state;
+
+static int cursor_size_lastfrom;
+static int cursor_size_lastto;
 
 #define BLANK 0x0020
 
@@ -96,6 +101,7 @@ static unsigned long vgacon_uni_pagedir[2];
 /* Description of the hardware situation */
 static unsigned long	vga_vram_base;		/* Base of video memory */
 static unsigned long	vga_vram_end;		/* End of video memory */
+static int		vga_vram_size;		/* Size of video memory */
 static u16		vga_video_port_reg;	/* Video register select port */
 static u16		vga_video_port_val;	/* Video register value port */
 static unsigned char	vga_video_type;		/* Card type */
@@ -166,11 +172,11 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 #endif			
 	
 	if (ORIG_VIDEO_ISVGA == VIDEO_TYPE_VLFB) {
-	      no_vga:
+no_vga:
 		return NULL;
 	}
 	vt->default_mode = vc;
-	
+
 	/* VGA16 modes are not handled by VGACON */
 	if ((ORIG_VIDEO_MODE == 0x0D) ||	/* 320x200/4 */
 	    (ORIG_VIDEO_MODE == 0x0E) ||	/* 640x200/4 */
@@ -285,6 +291,7 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 
 	vga_vram_base = VGA_MAP_MEM(vga_vram_base);
 	vga_vram_end = VGA_MAP_MEM(vga_vram_end);
+	vga_vram_size = vga_vram_end - vga_vram_base;
 
 	/*
 	 *      Find out if there is a graphics card present.
@@ -323,14 +330,15 @@ static const char __init *vgacon_startup(struct vt_struct *vt, int init)
 
 static void vgacon_init(struct vc_data *c, int init)
 {
+	struct vc_data *default_mode = c->display_fg->default_mode;
 	unsigned long p;
 
 	/* We cannot be loaded as a module, therefore init is always 1 */
-	c->vc_can_do_color = c->display_fg->default_mode->vc_can_do_color;
-	c->vc_cols = c->display_fg->default_mode->vc_cols;
-	c->vc_rows = c->display_fg->default_mode->vc_rows;
-	c->vc_scan_lines = c->display_fg->default_mode->vc_scan_lines;
-	c->vc_font.height = c->display_fg->default_mode->vc_font.height;
+	c->vc_can_do_color = default_mode->vc_can_do_color;
+	c->vc_cols = default_mode->vc_cols;
+	c->vc_rows = default_mode->vc_rows;
+	c->vc_scan_lines = default_mode->vc_scan_lines;
+	c->vc_font.height = default_mode->vc_font.height;
 	c->vc_complement_mask = 0x7700;
 	p = *c->vc_uni_pagedir_loc;
 	if (c->vc_uni_pagedir_loc == &c->vc_uni_pagedir ||
@@ -406,17 +414,16 @@ static void vgacon_set_cursor_size(int xpos, int from, int to)
 {
 	unsigned long flags;
 	int curs, cure;
-	static int lastfrom, lastto;
 
 #ifdef TRIDENT_GLITCH
 	if (xpos < 16)
 		from--, to--;
 #endif
 
-	if ((from == lastfrom) && (to == lastto))
+	if ((from == cursor_size_lastfrom) && (to == cursor_size_lastto))
 		return;
-	lastfrom = from;
-	lastto = to;
+	cursor_size_lastfrom = from;
+	cursor_size_lastto = to;
 
 	spin_lock_irqsave(&vga_lock, flags);
 	outb_p(0x0a, vga_video_port_reg);	/* Cursor start */
@@ -491,14 +498,12 @@ static void vgacon_cursor(struct vc_data *c, int mode)
 
 static int vgacon_switch(struct vc_data *c)
 {
-	/*
-	 * We need to save screen size here as it's the only way
-	 * we can spot the screen has been resized and we need to
-	 * set size of freshly allocated screens ourselves.
-	 */
+	/* We can only copy out the size of the video buffer here,
+	 * otherwise we get into VGA BIOS */
+
 	if (!vga_is_gfx)
 		scr_memcpyw((u16 *) c->vc_origin, (u16 *) c->vc_screenbuf,
-			    c->vc_screenbuf_size);
+			    c->vc_screenbuf_size > vga_vram_size ? vga_vram_size : c->vc_screenbuf_size);
 	return 0;		/* Redrawing not needed */
 }
 
@@ -517,8 +522,7 @@ static void vga_set_palette(struct vc_data *vc, unsigned char *table)
 static int vgacon_set_palette(struct vc_data *vc, unsigned char *table)
 {
 #ifdef CAN_LOAD_PALETTE
-	if (vga_video_type != VIDEO_TYPE_VGAC || vga_palette_blanked
-	    || !IS_VISIBLE)
+	if (vga_video_type != VIDEO_TYPE_VGAC || vga_palette_blanked)
 		return -EINVAL;
 	vga_set_palette(vc, table);
 	return 0;
@@ -673,7 +677,7 @@ static int vgacon_blank(struct vc_data *c, int blank, int mode_switch)
 		/* Tell console.c that it has to restore the screen itself */
 		return 1;
 	case 1:		/* Normal blanking */
-	case -1:        /* Obsolete */
+	case -1:	/* Obsolete */
 		if (!mode_switch && vga_video_type == VIDEO_TYPE_VGAC) {
 			vga_pal_blank(&state);
 			vga_palette_blanked = 1;
@@ -759,6 +763,7 @@ static int vgacon_do_font_op(struct vgastate *state,char *arg,int set,int ch512)
 		charmap += 4 * cmapsz;
 #endif
 
+	unlock_kernel();
 	spin_lock_irq(&vga_lock);
 	/* First, the Sequencer */
 	vga_wseq(state->vgabase, VGA_SEQ_RESET, 0x1);
@@ -845,6 +850,7 @@ static int vgacon_do_font_op(struct vgastate *state,char *arg,int set,int ch512)
 		vga_wattr(state->vgabase, VGA_AR_ENABLE_DISPLAY, 0);	
 	}
 	spin_unlock_irq(&vga_lock);
+	lock_kernel();
 	return 0;
 }
 
@@ -854,7 +860,7 @@ static int vgacon_do_font_op(struct vgastate *state,char *arg,int set,int ch512)
 static int vgacon_adjust_height(struct vc_data *vc, unsigned fontheight)
 {
 	unsigned char ovr, vde, fsr;
-	int rows, maxscan, i;
+	int rows, maxscan;
 
 	if (fontheight == vc->vc_font.height)
 		return 0;
@@ -895,13 +901,13 @@ static int vgacon_adjust_height(struct vc_data *vc, unsigned fontheight)
 	outb_p(vde, vga_video_port_val);
 	spin_unlock_irq(&vga_lock);
 
-	for (i = 0; i < vc->display_fg->vc_count; i++) {
-		struct vc_data *tmp = vc->display_fg->vc_cons[i];
-
-		if (tmp) {
-		        tmp->vc_font.height = fontheight;
-			vc_resize(tmp, 0, rows);	/* Adjust console size */
-		}
+	if (IS_VISIBLE) {
+		/* void size to cause regs to be rewritten */
+		cursor_size_lastfrom = 0;
+		cursor_size_lastto = 0;
+		vgacon_cursor(vc, CM_DRAW);
+		vc->vc_font.height = fontheight;
+		vc_resize(vc, 0, rows);	/* Adjust console size */
 	}
 	return 0;
 }
@@ -951,7 +957,6 @@ static int vgacon_scroll(struct vc_data *c, int lines)
 	if (!lines)		/* Turn scrollback off */
 		c->vc_visible_origin = c->vc_origin;
 	else {
-		int vram_size = vga_vram_end - vga_vram_base;
 		int margin = c->vc_size_row * 4;
 		int ul, we, p, st;
 
@@ -961,7 +966,7 @@ static int vgacon_scroll(struct vc_data *c, int lines)
 			we = vga_rolled_over + c->vc_size_row;
 		} else {
 			ul = 0;
-			we = vram_size;
+			we = vga_vram_size;
 		}
 		p = (c->vc_visible_origin - vga_vram_base - ul + we) % we +
 		    lines * c->vc_size_row;
@@ -991,9 +996,11 @@ static int vgacon_set_origin(struct vc_data *c)
 
 static void vgacon_save_screen(struct vc_data *c)
 {
+	/* We can't copy in more then the size of the video buffer,
+	 * or we'll be copying in VGA BIOS */
 	if (!vga_is_gfx)
 		scr_memcpyw((u16 *) c->vc_screenbuf, (u16 *) c->vc_origin,
-			    c->vc_screenbuf_size);
+			    c->vc_screenbuf_size > vga_vram_size ? vga_vram_size : c->vc_screenbuf_size);
 }
 
 static int vgacon_scroll_region(struct vc_data *c, int t, int b, int dir,
