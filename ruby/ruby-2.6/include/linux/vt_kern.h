@@ -6,6 +6,7 @@
  */
 
 #include <linux/config.h>
+#include <linux/module.h>
 #include <linux/pm.h>
 #include <linux/vt.h>
 #include <linux/kbd_kern.h>
@@ -53,6 +54,8 @@
 #ifdef CONFIG_VGA_CONSOLE
 #define BROKEN_GRAPHICS_PROGRAMS 1
 #endif
+
+#define BUF_SIZE (CONFIG_BASE_SMALL ? 256 : PAGE_SIZE)
 
 extern int is_console_locked(void);
 extern unsigned char color_table[];
@@ -185,8 +188,6 @@ struct vc_data {
 	unsigned char vc_saved_GS;
 };
 
-struct module;
-
 struct consw {
 	struct module *owner;
 	const char *(*con_startup)(struct vt_struct *, int);
@@ -215,7 +216,6 @@ struct consw {
 	unsigned long (*con_getxy)(struct vc_data *, unsigned long, int *, int *);
 };
 
-#define CON_BUF_SIZE    PAGE_SIZE
 struct vt_struct {
         unsigned short vt_num;          /* VT id */
 	struct vc_data *fg_console;	/* VC being displayed */
@@ -223,7 +223,7 @@ struct vt_struct {
 	struct vc_data *want_vc;	/* VC we want to switch to */
 	int scrollback_delta;
 	int cursor_original;
-	char vt_kmalloced;		/* Did we use kmalloced ? */
+	char kmalloced;		/* Did we use kmalloced ? */
 	char vt_dont_switch;	/* VC switching flag */
 	char vt_blanked;	/* Is this display blanked */
 	int blank_mode;		/* 0:none 1:suspendV 2:suspendH 3:powerdown */
@@ -241,7 +241,7 @@ struct vt_struct {
 	 * calls.
          */
 	struct semaphore lock;		/* Lock for con_buf */
-	char con_buf[CON_BUF_SIZE];
+	char con_buf[BUF_SIZE];
 	const struct consw *vt_sw;	/* Display driver for VT */
 	struct vc_data *default_mode;	/* Default mode */
 	struct work_struct vt_work;	/* VT work queue */
@@ -338,7 +338,7 @@ int con_set_trans_new(struct vc_data *vc, unsigned short __user *table);
 int con_get_trans_new(struct vc_data *vc, unsigned short __user *table);
 int con_clear_unimap(struct vc_data *vc, struct unimapinit *ui);
 int con_set_unimap(struct vc_data *vc, ushort ct, struct unipair __user *list);
-int con_get_unimap(struct vc_data *vc, ushort ct, ushort __user * uct,
+int con_get_unimap(struct vc_data *vc, ushort ct, ushort __user *uct,
 		   struct unipair __user *list);
 int con_set_default_unimap(struct vc_data *vc);
 void con_free_unimap(struct vc_data *vc);
@@ -357,7 +357,5 @@ void __init vt_sysfs_init(void);
 extern int vt_proc_attach(struct vt_struct *vt);
 extern int vt_proc_detach(struct vt_struct *vt);
 #endif
-
-extern struct semaphore con_buf_sem;
 
 #endif				/* _VT_KERN_H */
