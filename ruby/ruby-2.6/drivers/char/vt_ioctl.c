@@ -802,7 +802,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 			return -EPERM;
 		if (arg)
 			arg = CLOCK_TICK_RATE / arg;
-		kd_mksound(vc->display_fg->beep, arg, 0);
+		kd_mksound(vc->display_fg->beeper, arg, 0);
 		return 0;
 
 	case KDMKTONE:
@@ -819,7 +819,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		count = ticks ? (arg & 0xffff) : 0;
 		if (count)
 			count = CLOCK_TICK_RATE / count;
-		kd_mksound(vc->display_fg->beep, count, ticks);
+		kd_mksound(vc->display_fg->beeper, count, ticks);
 		return 0;
 	}
 
