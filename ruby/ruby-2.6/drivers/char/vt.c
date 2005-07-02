@@ -991,7 +991,7 @@ found_pool:
 	/* although the numbers above are not valid since long ago, the
 	   point is still up-to-date and the comment still has its value
 	   even if only as a historical artifact.  --mj, July 1998 */
-	if (vt->vt_kmalloced || !((vt->first_vc)== currcons))
+	if (vt->kmalloced || !((vt->first_vc)== currcons))
 		vc = (struct vc_data *) kmalloc(sizeof(struct vc_data), GFP_KERNEL);
 	else
 		vc = (struct vc_data *) alloc_bootmem(sizeof(struct vc_data));
@@ -1004,14 +1004,14 @@ found_pool:
 	vc->vc_num = currcons;
 	vc->display_fg = vt;
 	visual_init(vc, 1);
-	if (vt->vt_kmalloced || !((vt->first_vc) == currcons)) {
+	if (vt->kmalloced || !((vt->first_vc) == currcons)) {
 		vc->vc_screenbuf = (unsigned short *) kmalloc(vc->vc_screenbuf_size, GFP_KERNEL);
 		if (!vc->vc_screenbuf) {
 			kfree(vc);
 			currcons = -ENOMEM;
 			return NULL;
 		}
-		vt->vt_kmalloced = 1;
+		vt->kmalloced = 1;
 		if (!*vc->vc_uni_pagedir_loc)
 			con_set_default_unimap(vc);
 	} else {
@@ -1038,7 +1038,7 @@ int vc_disallocate(struct vc_data *vc)
 	if (vc && vc->vc_num > MIN_NR_CONSOLES) {
 		sw->con_deinit(vc);
 		vt->vc_cons[vc->vc_num - vt->first_vc] = NULL;
-		if (vt->vt_kmalloced)
+		if (vt->kmalloced)
 			kfree(screenbuf);
 		kfree(vc);
 	}
@@ -1132,10 +1132,10 @@ int vc_resize(struct vc_data *vc, unsigned int cols, unsigned int lines)
 	}
 	if (nlend > nl)
 		scr_memsetw((void *) nl, vc->vc_video_erase_char, nlend - nl);
-	if (vc->display_fg->vt_kmalloced)
+	if (vc->display_fg->kmalloced)
 		kfree(vc->vc_screenbuf);
 	vc->vc_screenbuf = newscreen;
-	vc->display_fg->vt_kmalloced = 1;
+	vc->display_fg->kmalloced = 1;
 	vc->vc_screenbuf_size = ss;
 	set_origin(vc);
 
@@ -1191,8 +1191,6 @@ int mouse_reporting(struct vc_data *vc)
  * since console_init (and thus con_init) are called before any
  * kernel memory allocation is available.
  */
-//char con_buf[PAGE_SIZE];
-DECLARE_MUTEX(con_buf_sem);
 
 static int do_con_write(struct tty_struct *tty, const unsigned char *buf, int count)
 {
@@ -1765,7 +1763,7 @@ const char *vt_map_display(struct vt_struct *vt, int init, int vc_count)
 	release_console_sem();
 	current_vc += vc_count;
 	current_vt += 1;
-	if (vt->vt_kmalloced) {
+	if (vt->kmalloced) {
 		vt_create_sysfs_dev_files(vt);
 #ifdef CONFIG_PROC_FS
 		vt_proc_attach(vt);
