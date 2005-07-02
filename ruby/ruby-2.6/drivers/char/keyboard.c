@@ -164,7 +164,7 @@ int setkeycode(struct input_handle *handle, unsigned int scancode, unsigned int 
 /*
  * Making beeps and bells. 
  */
-static void kd_nosound(unsigned long private)
+void kd_nosound(unsigned long private)
 {
 	struct input_handle *handle = (struct input_handle *) private;
 
@@ -236,7 +236,7 @@ static void put_queue(struct vc_data *vc, int ch)
 	}
 }
 
-static void puts_queue(struct vc_data *vc, char *cp)
+void puts_queue(struct vc_data *vc, char *cp)
 {
 	struct tty_struct *tty = vc->vc_tty;
 
@@ -982,7 +982,7 @@ static void kbd_rawcode(struct vc_data *vc, unsigned char data)
 		put_queue(vc, data);
 }
 
-void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down, int hw_raw)
+static void kbd_keycode(struct vt_struct *vt, unsigned int keycode, int down, int hw_raw)
 {
 	struct vc_data *vc = vt->fg_console;
 	unsigned short keysym, *key_map;
