@@ -182,7 +182,7 @@ char *tty_name(struct tty_struct *tty, char *buf)
 
 EXPORT_SYMBOL(tty_name);
 
-inline int tty_paranoia_check(struct tty_struct *tty, struct inode *inode,
+int tty_paranoia_check(struct tty_struct *tty, struct inode *inode,
 			      const char *routine)
 {
 #ifdef TTY_PARANOIA_CHECK
@@ -1786,8 +1786,8 @@ retry_open:
 	}
 #ifdef CONFIG_VT
 	if (device == MKDEV(TTY_MAJOR,0)) {
-		struct vc_data *vc = NULL;
 		extern struct tty_driver *console_driver;
+		struct vc_data *vc = NULL;
 
 		driver = console_driver;
 		if (current->signal->tty &&

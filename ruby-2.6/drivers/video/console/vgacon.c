@@ -55,14 +55,13 @@
 #include <video/vga.h>
 #include <asm/io.h>
 
-
 static DEFINE_SPINLOCK(vga_lock);
 static struct vc_data vga_default;
 static struct vt_struct vga_vt;
-static struct vgastate state;
 
 static int cursor_size_lastfrom;
 static int cursor_size_lastto;
+static struct vgastate state;
 
 #define BLANK 0x0020
 

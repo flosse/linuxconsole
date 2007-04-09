@@ -192,8 +192,8 @@ vcs_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 			if (p < HEADER_SIZE) {
 				size_t tmp_count;
 
-				con_buf0[0] = (char) vc->vc_rows;
-				con_buf0[1] = (char) vc->vc_cols;
+				con_buf0[0] = (char)vc->vc_rows;
+				con_buf0[1] = (char)vc->vc_cols;
 				getconsxy(vc, con_buf0 + 2);
 
 				con_buf_start += p;
@@ -449,7 +449,7 @@ vcs_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 		buf += orig_count;
 		pos += orig_count;
 		if (org0)
-			update_region(vc, (unsigned long)(org0), org-org0);
+			update_region(vc, (unsigned long)(org0), org - org0);
 	}
 	*ppos += written;
 	ret = written;
