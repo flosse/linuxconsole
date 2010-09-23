@@ -202,6 +202,7 @@ void print_info()
 void calibrate()
 {
 	int i, j, t, b;
+	int axis, pos;
 
 	for (i=0; i<MAX_AXES; i++) {
 		corr[i].type = JS_CORR_NONE;
@@ -232,13 +233,19 @@ void calibrate()
 		do {
 			wait_for_event(fd, &js);
 			for(i=0; i < axes; i++) {
-				if (amin[i] > js.axis[i]) amin[i] = js.axis[i];
-				if (amax[i] < js.axis[i]) amax[i] = js.axis[i];
+				if (amin[i] > js.axis[i]) {
+					amin[i] = js.axis[i];
+					t = get_time();
+				}
+				if (amax[i] < js.axis[i]) {
+					amax[i] = js.axis[i];
+					t = get_time();
+				}
 				printf("Axis %d:%5d,%5d ", i, amin[i], amax[i]);
 			}
 			printf("\r");
 			fflush(stdout);
-		} while (get_time() < t+2000);
+		} while (get_time() < t+4000);
 
 		printf("Done. Precision is:                                             \n");
 
@@ -254,30 +261,36 @@ void calibrate()
 
 	b = js.buttons;
 
-	for (j = 0; j < axes; j++)
-	for (i = 0; i < NUM_POS; i++) {
-		while(b ^ js.buttons) wait_for_event(fd, &js);
-		printf("Move axis %d to %s position and push any button.\n", j,  pos_name[i]);
+	for (axis = 0; axis < axes; axis++)
+		for (pos = 0; pos < NUM_POS; pos++) {
+			while(b ^ js.buttons) wait_for_event(fd, &js);
+			printf("Move axis %d to %s position and push any button.\n", axis, pos_name[pos]);
 
-		while (!(b ^ js.buttons)) {
-			print_position(j, js.axis[j]);
-			wait_for_event(fd, &js);
+			while (!(b ^ js.buttons)) {
+				print_position(axis, js.axis[axis]);
+				wait_for_event(fd, &js);
+			}
+
+			putcs("Hold ... ");
+
+			corda[axis].cmin[pos] = js.axis[axis];
+			corda[axis].cmax[pos] = js.axis[axis];
+
+			t = get_time();
+
+			while (get_time() < t + 2000 && (b ^ js.buttons)) {
+				if (js.axis[axis] < corda[axis].cmin[pos]) {
+					corda[axis].cmin[pos] = js.axis[axis];
+					t = get_time();
+				}
+				if (js.axis[axis] > corda[axis].cmax[pos]) {
+					corda[axis].cmax[pos] = js.axis[axis];
+					t = get_time();
+				}
+				wait_for_event(fd, &js);
+			}
+			puts("OK.");
 		}
-
-		putcs("Hold ... ");
-
-		corda[j].cmin[i] = js.axis[j];
-		corda[j].cmax[i] = js.axis[j];
-
-		t = get_time();
-
-		while (get_time() < t + 2000 && (b ^ js.buttons)) {
-			if (js.axis[j] < corda[j].cmin[i]) corda[j].cmin[i] = js.axis[j];
-			if (js.axis[j] > corda[j].cmax[i]) corda[j].cmax[i] = js.axis[j];
-			wait_for_event(fd, &js);
-		}
-		puts("OK.");
-	}
 
 	puts("");
 
