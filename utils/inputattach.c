@@ -16,18 +16,18 @@
 /*
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or 
+ * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- * 
+ *
  * Should you need to contact me, the author, you can do so either by
  * e-mail - mail your message to <vojtech@ucw.cz>, or by paper mail:
  * Vojtech Pavlik, Simunkova 1594, Prague 8, 182 00 Czech Republic
@@ -46,29 +46,33 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <string.h>
+#include <errno.h>
 #include <assert.h>
 #include <ctype.h>
 
-int readchar(int fd, unsigned char *c, int timeout)
+#include "serio-ids.h"
+
+static int readchar(int fd, unsigned char *c, int timeout)
 {
 	struct timeval tv;
 	fd_set set;
-	
+
 	tv.tv_sec = 0;
 	tv.tv_usec = timeout * 1000;
 
 	FD_ZERO(&set);
 	FD_SET(fd, &set);
 
-	if (!select(fd+1, &set, NULL, NULL, &tv)) return -1;
-	if (read(fd, c, 1) != 1) return -1;
+	if (!select(fd + 1, &set, NULL, NULL, &tv))
+		return -1;
+
+	if (read(fd, c, 1) != 1)
+		return -1;
 
 	return 0;
 }
 
-
-
-void setline(int fd, int flags, int speed)
+static void setline(int fd, int flags, int speed)
 {
 	struct termios t;
 
@@ -87,10 +91,11 @@ void setline(int fd, int flags, int speed)
 	tcsetattr(fd, TCSANOW, &t);
 }
 
-int logitech_command(int fd, char *c)
+static int logitech_command(int fd, char *c)
 {
 	int i;
 	unsigned char d;
+
 	for (i = 0; c[i]; i++) {
 		write(fd, c + i, 1);
 		if (readchar(fd, &d, 1000))
@@ -101,27 +106,32 @@ int logitech_command(int fd, char *c)
 	return 0;
 }
 
-int magellan_init(int fd, long *id, long *extra)
+static int magellan_init(int fd, unsigned long *id, unsigned long *extra)
 {
 	write(fd, "m3\rpBB\rz\r", 9);
 	return 0;
 }
 
-int warrior_init(int fd, long *id, long *extra)
+static int warrior_init(int fd, unsigned long *id, unsigned long *extra)
 {
-	if (logitech_command(fd, "*S")) return -1;
+	if (logitech_command(fd, "*S"))
+		return -1;
+
 	setline(fd, CS8, B4800);
 	return 0;
 }
 
-int spaceball_waitchar(int fd, unsigned char c, unsigned char *d, int timeout)
+static int spaceball_waitchar(int fd, unsigned char c, unsigned char *d,
+				int timeout)
 {
 	unsigned char b = 0;
 
 	while (!readchar(fd, &b, timeout)) {
-		if (b == 0x0a) continue;
+		if (b == 0x0a)
+			continue;
 		*d++ = b;
-		if (b == c) break;
+		if (b == c)
+			break;
 	}
 
 	*d = 0;
@@ -129,7 +139,7 @@ int spaceball_waitchar(int fd, unsigned char c, unsigned char *d, int timeout)
 	return -(b != c);
 }
 
-int spaceball_waitcmd(int fd, char c, char *d)
+static int spaceball_waitcmd(int fd, char c, char *d)
 {
 	int i;
 
@@ -143,7 +153,7 @@ int spaceball_waitcmd(int fd, char c, char *d)
 	return -1;
 }
 
-int spaceball_cmd(int fd, char *c, char *d)
+static int spaceball_cmd(int fd, char *c, char *d)
 {
 	int i;
 
@@ -161,9 +171,9 @@ int spaceball_cmd(int fd, char *c, char *d)
 #define SPACEBALL_2003C		4
 #define SPACEBALL_3003C		7
 #define SPACEBALL_4000FLX	8
-#define SPACEBALL_4000FLX_L 	9
+#define SPACEBALL_4000FLX_L	9
 
-int spaceball_init(int fd, long *id, long *extra)
+static int spaceball_init(int fd, unsigned long *id, unsigned long *extra)
 {
 	char r[64];
 
@@ -172,13 +182,13 @@ int spaceball_init(int fd, long *id, long *extra)
 		return -1;
 
 	if (spaceball_waitcmd(fd, '@', r))
-		return -1; 
+		return -1;
 
 	if (strncmp("@1 Spaceball alive", r, 18))
 		return -1;
 
 	if (spaceball_waitcmd(fd, '@', r))
-		return -1; 
+		return -1;
 
 	if (spaceball_cmd(fd, "hm", r))
 		return -1;
@@ -199,7 +209,7 @@ int spaceball_init(int fd, long *id, long *extra)
 			return -1;
 
 		if (spaceball_waitcmd(fd, '"', r))
-			return -1; 
+			return -1;
 
 		if (strstr(r, " L "))
 			*id = SPACEBALL_4000FLX_L;
@@ -207,13 +217,13 @@ int spaceball_init(int fd, long *id, long *extra)
 			*id = SPACEBALL_4000FLX;
 
 		if (spaceball_waitcmd(fd, '"', r))
-			return -1; 
+			return -1;
 
 		if (spaceball_cmd(fd, "YS", r))
-        	        return -1;
+			return -1;
 
 		if (spaceball_cmd(fd, "M", r))
-        	        return -1;
+			return -1;
 
 		return 0;
 	}
@@ -226,70 +236,79 @@ int spaceball_init(int fd, long *id, long *extra)
 	return 0;
 }
 
-int stinger_init(int fd, long *id, long *extra)
+static int stinger_init(int fd, unsigned long *id, unsigned long *extra)
 {
 	int i;
 	unsigned char c;
 	unsigned char *response = "\r\n0600520058C272";
 
 	if (write(fd, " E5E5", 5) != 5)		/* Enable command */
-		return -1; 
+		return -1;
 
 	for (i = 0; i < 16; i++)		/* Check for Stinger */
-		if (readchar(fd, &c, 200) || (c != response[i])) 
+		if (readchar(fd, &c, 200) || c != response[i])
 			return -1;
 
 	return 0;
 }
 
-int mzp_init(int fd, long *id, long *extra)
+static int mzp_init(int fd, unsigned long *id, unsigned long *extra)
 {
-	if (logitech_command(fd, "*X*q")) return -1;
+	if (logitech_command(fd, "*X*q"))
+		return -1;
+
 	setline(fd, CS8, B9600);
 	return 0;
 }
 
-int newton_init(int fd, long *id, long *extra)
+static int newton_init(int fd, unsigned long *id, unsigned long *extra)
 {
-  int i;
-  unsigned char c;
-  unsigned char response[35] =
-  { 0x16, 0x10, 0x02, 0x64, 0x5f, 0x69, 0x64, 0x00,
-    0x00, 0x00, 0x0c, 0x6b, 0x79, 0x62, 0x64, 0x61,
-    0x70, 0x70, 0x6c, 0x00, 0x00, 0x00, 0x01, 0x6e,
-    0x6f, 0x66, 0x6d, 0x00, 0x00, 0x00, 0x00, 0x10,
-    0x03, 0xdd, 0xe7 };
+	int i;
+	unsigned char c;
+	unsigned char response[35] = {
+		0x16, 0x10, 0x02, 0x64, 0x5f, 0x69, 0x64, 0x00,
+		0x00, 0x00, 0x0c, 0x6b, 0x79, 0x62, 0x64, 0x61,
+		0x70, 0x70, 0x6c, 0x00, 0x00, 0x00, 0x01, 0x6e,
+		0x6f, 0x66, 0x6d, 0x00, 0x00, 0x00, 0x00, 0x10,
+		0x03, 0xdd, 0xe7
+	};
 
-  for (i = 0; i < 35; i++)
-    if (readchar(fd, &c, 400) || (c != response[i]))
-      return -1;
+	for (i = 0; i < sizeof(response); i++)
+		if (readchar(fd, &c, 400) || c != response[i])
+			return -1;
 
-  return 0;
+	return 0;
 }
 
-int twiddler_init(int fd, long *id, long *extra)
+static int twiddler_init(int fd, unsigned long *id, unsigned long *extra)
 {
 	unsigned char c[10];
 	int count, line;
 
 	/* Turn DTR off, otherwise the Twiddler won't send any data. */
-	if (ioctl(fd, TIOCMGET, &line)) return -1;
+	if (ioctl(fd, TIOCMGET, &line))
+		return -1;
 	line &= ~TIOCM_DTR;
-	if (ioctl(fd, TIOCMSET, &line)) return -1;
+	if (ioctl(fd, TIOCMSET, &line))
+		return -1;
 
-	/* Check whether the device on the serial line is the Twiddler.
+	/*
+	 * Check whether the device on the serial line is the Twiddler.
 	 *
 	 * The Twiddler sends data packets of 5 bytes which have the following
 	 * properties: the MSB is 0 on the first and 1 on all other bytes, and
 	 * the high order nibble of the last byte is always 0x8.
 	 *
 	 * We read and check two of those 5 byte packets to be sure that we
-	 * are indeed talking to a Twiddler. */
+	 * are indeed talking to a Twiddler.
+	 */
 
 	/* Read at most 5 bytes until we find one with the MSB set to 0 */
 	for (count = 0; count < 5; count++) {
-		if (readchar(fd, c+0, 500)) return -1;
-		if ((c[0] & 0x80) == 0) break;
+		if (readchar(fd, c, 500))
+			return -1;
+		if ((c[0] & 0x80) == 0)
+			break;
 	}
 
 	if (count == 5) {
@@ -298,16 +317,16 @@ int twiddler_init(int fd, long *id, long *extra)
 	}
 
 	/* Read remaining 4 bytes plus the full next data packet */
-	for (count = 1; count < 10; count++) {
-		if (readchar(fd, c+count, 500)) return -1;
-	}
+	for (count = 1; count < 10; count++)
+		if (readchar(fd, c + count, 500))
+			return -1;
 
 	/* Check whether the bytes of both data packets obey the rules */
 	for (count = 1; count < 10; count++) {
-		if ((count % 5 == 0 && (c[count] & 0x80) != 0)
-		    || (count % 5 == 4 && (c[count] & 0xF0) != 0x80)
-		    || (count % 5 != 0 && (c[count] & 0x80) != 0x80)) {
-		    	/* Invalid byte in data packet */
+		if ((count % 5 == 0 && (c[count] & 0x80) != 0x00) ||
+		    (count % 5 == 4 && (c[count] & 0xF0) != 0x80) ||
+		    (count % 5 != 0 && (c[count] & 0x80) != 0x80)) {
+			/* Invalid byte in data packet */
 			return -1;
 		}
 	}
@@ -315,7 +334,35 @@ int twiddler_init(int fd, long *id, long *extra)
 	return 0;
 }
 
-int dump_init(int fd, long *id, long *extra)
+static int fujitsu_init(int fd, unsigned long *id, unsigned long *extra)
+{
+	unsigned char cmd, data;
+
+	/* Wake up the touchscreen */
+	cmd = 0xff; /* Dummy data */;
+	if (write(fd, &cmd, 1) != 1)
+		return -1;
+
+	/* Wait to settle down */
+	usleep(100 * 1000); /* 100 ms */
+
+	/* Reset the touchscreen */
+	cmd = 0x81; /* Cold reset */
+	if (write(fd, &cmd, 1) != 1)
+		return -1;
+
+	/* Read ACK */
+	if (readchar(fd, &data, 100) || (data & 0xbf) != 0x90)
+		return -1;
+
+	/* Read status */
+	if (readchar(fd, &data, 100) || data != 0x00)
+		return -1;
+
+	return 0;
+}
+
+static int dump_init(int fd, unsigned long *id, unsigned long *extra)
 {
 	unsigned char c, o = 0;
 
@@ -337,129 +384,230 @@ int dump_init(int fd, long *id, long *extra)
 }
 
 struct input_types {
-	char name[16];
-	char name2[16];
+	const char *name;
+	const char *name2;
+	const char *desc;
 	int speed;
 	int flags;
 	unsigned long type;
 	unsigned long id;
 	unsigned long extra;
 	int flush;
-	int (*init)(int fd, long *id, long *extra);
+	int (*init)(int fd, unsigned long *id, unsigned long *extra);
 };
 
-struct input_types input_types[] = {
-
-{ "--sunkbd",		"-skb",		B1200, CS8,			SERIO_SUNKBD,	0,	0,	1,	NULL },
-{ "--lkkbd",		"-lk",		B4800, CS8|CSTOPB,		SERIO_LKKBD,	0,	0,	1,	NULL },
-{ "--vsxxx-aa",		"-vs",		B4800, CS8|CSTOPB|PARENB|PARODD,SERIO_VSXXXAA,	0,	0,	1,	NULL },
-{ "--spaceorb",		"-orb",		B9600, CS8,			SERIO_SPACEORB,	0,	0,	1,	NULL },
-{ "--spaceball",	"-sbl",		B9600, CS8,			SERIO_SPACEBALL,0,	0,	0,	spaceball_init },
-{ "--magellan",		"-mag",		B9600, CS8 | CSTOPB | CRTSCTS,	SERIO_MAGELLAN,	0,	0,	1,	magellan_init },
-{ "--warrior",		"-war",		B1200, CS7 | CSTOPB,		SERIO_WARRIOR,	0,	0,	1,	warrior_init },
-{ "--stinger",		"-sting",	B1200, CS8,			SERIO_STINGER,	0,	0,	1,	stinger_init },
-{ "--mousesystems",	"-msc",		B1200, CS8,			SERIO_MSC,	0,	0x01,	1,	NULL },
-{ "--sunmouse",		"-sun",		B1200, CS8,			SERIO_SUN,	0,	0x01,	1,	NULL },
-{ "--microsoft",	"-bare",	B1200, CS7,			SERIO_MS,	0,	0,	1,	NULL },
-{ "--mshack",		"-ms",		B1200, CS7,			SERIO_MS,	0,	0x01,	1,	NULL },
-{ "--mouseman",		"-mman",	B1200, CS7,			SERIO_MP,	0,	0x01,	1,	NULL },
-{ "--intellimouse",	"-ms3",		B1200, CS7,			SERIO_MZ,	0,	0x11,	1,	NULL },
-{ "--mmwheel",		"-mmw",		B1200, CS7 | CSTOPB,		SERIO_MZP,	0,	0x13,	1,	mzp_init },
-{ "--iforce",		"-ifor",	B38400, CS8,			SERIO_IFORCE,	0,	0,	0,	NULL },
-{ "--newtonkbd",        "-newt",        B9600, CS8,                     SERIO_NEWTON,	0,	0,	0,      newton_init },
-{ "--h3600ts",          "-ipaq",     	B115200, CS8,                   SERIO_H3600,	0,	0,	0,      NULL },
-{ "--stowawaykbd",      "-ipaqkbd",     B115200, CS8,                   SERIO_STOWAWAY, 0,	0,	0,      NULL },
-{ "--ps2serkbd",	"-ps2ser",	B1200, CS8,			SERIO_PS2SER,	0,	0,	1,	NULL },
-{ "--twiddler",		"-twid",	B2400, CS8,			SERIO_TWIDKBD,	0,	0,	0,	twiddler_init },
-{ "--twiddler-joy",	"-twidjoy",	B2400, CS8,			SERIO_TWIDJOY,	0,	0,	0,	twiddler_init },
-{ "--elotouch",		"-elo",		B9600, CS8 | CRTSCTS,		SERIO_ELO,	0,	0,	0,	NULL },
-{ "--elo4002",		"-elo6b",	B9600, CS8 | CRTSCTS,		SERIO_ELO,	1,	0,	0,	NULL },
-{ "--elo271-140",	"-elo4b",	B9600, CS8 | CRTSCTS,		SERIO_ELO,	2,	0,	0,	NULL },
-{ "--elo261-280",	"-elo3b",	B9600, CS8 | CRTSCTS,		SERIO_ELO,	3,	0,	0,	NULL },
-{ "--dump",		"-dump",	B2400, CS8, 			0,		0,	0,	0,	dump_init },
-{ "", "", 0, 0 }
-
+static struct input_types input_types[] = {
+{ "--sunkbd",		"-skb",		"Sun Type 4 and Type 5 keyboards",
+	B1200, CS8,
+	SERIO_SUNKBD,		0x00,	0x00,	1,	NULL },
+{ "--lkkbd",		"-lk",		"DEC LK201 / LK401 keyboards",
+	B4800, CS8|CSTOPB,
+	SERIO_LKKBD,		0x00,	0x00,	1,	NULL },
+{ "--vsxxx-aa",		"-vs",
+			"DEC VSXXX-AA / VSXXX-GA mouse and VSXXX-A tablet",
+	B4800, CS8|CSTOPB|PARENB|PARODD,
+	SERIO_VSXXXAA,		0x00,	0x00,	1,	NULL },
+{ "--spaceorb",		"-orb",		"SpaceOrb 360 / SpaceBall Avenger",
+	B9600, CS8,
+	SERIO_SPACEORB,		0x00,	0x00,	1,	NULL },
+{ "--spaceball",	"-sbl",		"SpaceBall 2003 / 3003 / 4000 FLX",
+	B9600, CS8,
+	SERIO_SPACEBALL,	0x00,	0x00,	0,	spaceball_init },
+{ "--magellan",		"-mag",		"Magellan / SpaceMouse",
+	B9600, CS8 | CSTOPB | CRTSCTS,
+	SERIO_MAGELLAN,		0x00,	0x00,	1,	magellan_init },
+{ "--warrior",		"-war",		"WingMan Warrior",
+	B1200, CS7 | CSTOPB,
+	SERIO_WARRIOR,		0x00,	0x00,	1,	warrior_init },
+{ "--stinger",		"-sting",	"Gravis Stinger",
+	B1200, CS8,
+	SERIO_STINGER,		0x00,	0x00,	1,	stinger_init },
+{ "--mousesystems",	"-msc",		"3-button Mouse Systems mouse",
+	B1200, CS8,
+	SERIO_MSC,		0x00,	0x01,	1,	NULL },
+{ "--sunmouse",		"-sun",		"3-button Sun mouse",
+	B1200, CS8,
+	SERIO_SUN,		0x00,	0x01,	1,	NULL },
+{ "--microsoft",	"-bare",	"2-button Microsoft mouse",
+	B1200, CS7,
+	SERIO_MS,		0x00,	0x00,	1,	NULL },
+{ "--mshack",		"-ms",		"3-button mouse in Microsoft mode",
+	B1200, CS7,
+	SERIO_MS,		0x00,	0x01,	1,	NULL },
+{ "--mouseman",		"-mman",	"3-button Logitech / Genius mouse",
+	B1200, CS7,
+	SERIO_MP,		0x00,	0x01,	1,	NULL },
+{ "--intellimouse",	"-ms3",		"Microsoft IntelliMouse",
+	B1200, CS7,
+	SERIO_MZ,		0x00,	0x11,	1,	NULL },
+{ "--mmwheel",		"-mmw",
+			"Logitech mouse with 4-5 buttons or a wheel",
+	B1200, CS7 | CSTOPB,
+	SERIO_MZP,		0x00,	0x13,	1,	mzp_init },
+{ "--iforce",		"-ifor",	"I-Force joystick or wheel",
+	B38400, CS8,
+	SERIO_IFORCE,		0x00,	0x00,	0,	NULL },
+{ "--newtonkbd",	"-newt",	"Newton keyboard",
+	B9600, CS8,
+	SERIO_NEWTON,		0x00,	0x00,	1,	newton_init },
+{ "--h3600ts",		"-ipaq",	"Ipaq h3600 touchscreen",
+	B115200, CS8,
+	SERIO_H3600,		0x00,	0x00,	0,	NULL },
+{ "--stowawaykbd",	"-ipaqkbd",	"Stowaway keyboard",
+	B115200, CS8,
+	SERIO_STOWAWAY,		0x00,	0x00,	1,	NULL },
+{ "--ps2serkbd",	"-ps2ser",	"PS/2 via serial keyboard",
+	B1200, CS8,
+	SERIO_PS2SER,		0x00,	0x00,	1,	NULL },
+{ "--twiddler",		"-twid",	"Handykey Twiddler chording keyboard",
+	B2400, CS8,
+	SERIO_TWIDKBD,		0x00,	0x00,	0,	twiddler_init },
+{ "--twiddler-joy",	"-twidjoy",	"Handykey Twiddler used as a joystick",
+	B2400, CS8,
+	SERIO_TWIDJOY,		0x00,	0x00,	0,	twiddler_init },
+{ "--elotouch",		"-elo",		"ELO touchscreen, 10-byte mode",
+	B9600, CS8 | CRTSCTS,
+	SERIO_ELO,		0x00,	0x00,	0,	NULL },
+{ "--elo4002",		"-elo6b",	"ELO touchscreen, 6-byte mode",
+	B9600, CS8 | CRTSCTS,
+	SERIO_ELO,		0x01,	0x00,	0,	NULL },
+{ "--elo271-140",	"-elo4b",	"ELO touchscreen, 4-byte mode",
+	B9600, CS8 | CRTSCTS,
+	SERIO_ELO,		0x02,	0x00,	0,	NULL },
+{ "--elo261-280",	"-elo3b",	"ELO Touchscreen, 3-byte mode",
+	B9600, CS8 | CRTSCTS,
+	SERIO_ELO,		0x03,	0x00,	0,	NULL },
+{ "--mtouch",		"-mtouch",	"MicroTouch (3M) touchscreen",
+	B9600, CS8 | CRTSCTS,
+	SERIO_MICROTOUCH,	0x00,	0x00,	0,	NULL },
+{ "--touchright",	"-tr",	"Touchright serial touchscreen",
+	B9600, CS8 | CRTSCTS,
+	SERIO_TOUCHRIGHT,	0x00,	0x00,	0,	NULL },
+{ "--touchwin",		"-tw",	"Touchwindow serial touchscreen",
+	B4800, CS8 | CRTSCTS,
+	SERIO_TOUCHWIN,		0x00,	0x00,	0,	NULL },
+{ "--penmount",		"-pm",	"Penmount touchscreen",
+	B19200, CS8 | CRTSCTS,
+	SERIO_PENMOUNT,		0x00,	0x00,	0,	NULL },
+{ "--fujitsu",		"-fjt",	"Fujitsu serial touchscreen",
+	B9600, CS8,
+	SERIO_FUJITSU,		0x00,	0x00,	1,	fujitsu_init },
+{ "--dump",		"-dump",	"Just enable device",
+	B2400, CS8,
+	0,			0x00,	0x00,	0,	dump_init },
+{ NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, NULL }
 };
+
+static void show_help(void)
+{
+	struct input_types *type;
+
+	puts("");
+	puts("Usage: inputattach [--daemon] <mode> <device>");
+	puts("");
+	puts("Modes:");
+
+	for (type = input_types; type->name; type++)
+		printf("  %-16s %-8s  %s\n",
+			type->name, type->name2, type->desc);
+
+	puts("");
+}
 
 int main(int argc, char **argv)
 {
 	unsigned long devt;
 	int ldisc;
-        int type;
-	long id, extra;
-        int fd;
+	struct input_types *type = NULL;
+	const char *device = NULL;
+	int daemon_mode = 0;
+	int need_device = 0;
+	unsigned long id, extra;
+	int fd;
+	int i;
 	char c;
+	int retval;
 
-        if (argc < 2 || argc > 3 || !strcmp("--help", argv[1])) {
-                puts("");
-                puts("Usage: inputttach <mode> <device>");
-                puts("");
-                puts("Modes:");
-                puts("  --sunkbd        -skb   Sun Type 4 and Type 5 keyboards");
-		puts("  --lkkbd         -lk    DEC LK201 / LK401 keyboards");
-		puts("  --vsxxx-aa      -vs    DEC VSXXX-AA / VSXXX-GA mouse and VSXXX-AB tablet");
-                puts("  --spaceorb      -orb   SpaceOrb 360 / SpaceBall Avenger");
-		puts("  --spaceball     -sbl   SpaceBall 2003 / 3003 / 4000 FLX");
-                puts("  --magellan      -mag   Magellan / SpaceMouse");
-                puts("  --warrior       -war   WingMan Warrior");
-		puts("  --stinger       -stng  Gravis Stinger");
-		puts("  --mousesystems  -msc   3-button Mouse Systems mice");
-		puts("  --sunmouse      -sun   3-button Sun mice");
-		puts("  --microsoft     -bare  2-button Microsoft mice");
-		puts("  --mshack        -ms    3-button mice in Microsoft mode");
-		puts("  --mouseman      -mman  3-button Logitech and Genius mice");
-		puts("  --intellimouse  -ms3   Microsoft IntelliMouse");
-		puts("  --mmwheel       -mmw   Logitech mice with 4-5 buttons or wheel");
-		puts("  --iforce        -ifor  I-Force joysticks and wheels");
-                puts("  --h3600ts       -ipaq  Ipaq h3600 touchscreen");
-		puts("  --stowawaykbd   -ipaqkbd  Stowaway keyboard");
-		puts("  --ps2serkbd     -ps2ser PS/2 via serial keyboard");
-		puts("  --twiddler      -twid   Handykey Twiddler chording keyboard");
-		puts("  --twiddler-joy  -twidjoy  Handykey Twiddler used as a joystick");
-		puts("");
-                return 1;
+	for (i = 1; i < argc; i++) {
+		if (!strcasecmp(argv[i], "--help")) {
+			show_help();
+			return EXIT_SUCCESS;
+		} else if (!strcasecmp(argv[i], "--daemon")) {
+			daemon_mode = 1;
+		} else if (need_device) {
+			device = argv[i];
+			need_device = 0;
+		} else {
+			if (type && type->name) {
+				fprintf(stderr,
+					"inputattach: '%s' - "
+					"only one mode allowed\n", argv[i]);
+				return EXIT_FAILURE;
+			}
+			for (type = input_types; type->name; type++) {
+				if (!strcasecmp(argv[i], type->name) ||
+				    !strcasecmp(argv[i], type->name2)) {
+					break;
+				}
+			}
+			if (!type->name) {
+				fprintf(stderr,
+					"inputattach: invalid mode '%s'\n",
+					argv[i]);
+				return EXIT_FAILURE;
+			}
+			need_device = 1;
+		}
+	}
+
+	if (!type || !type->name) {
+		fprintf(stderr, "inputattach: must specify mode\n");
+		return EXIT_FAILURE;
         }
 
-        for (type = 0; input_types[type].speed; type++) {
-                if (!strncasecmp(argv[1], input_types[type].name, 16) ||
-			!strncasecmp(argv[1], input_types[type].name2, 16))
-                        break;
-        }
+	if (need_device) {
+		fprintf(stderr, "inputattach: must specify device\n");
+		return EXIT_FAILURE;
+	}
 
-	if (!input_types[type].speed) {
-		fprintf(stderr, "inputattach: invalid mode\n");
+	fd = open(device, O_RDWR | O_NOCTTY | O_NONBLOCK);
+	if (fd < 0) {
+		fprintf(stderr, "inputattach: '%s' - %s\n",
+			device, strerror(errno));
 		return 1;
 	}
 
-	if ((fd = open(argv[2], O_RDWR | O_NOCTTY | O_NONBLOCK)) < 0) {
-		perror("inputattach");
-		return 1;
-	}
+	setline(fd, type->flags, type->speed);
 
-	setline(fd, input_types[type].flags, input_types[type].speed);
+	if (type->flush)
+		while (!readchar(fd, &c, 100))
+			/* empty */;
 
-	if (input_types[type].flush)
-		while (!readchar(fd, &c, 100));
+	id = type->id;
+	extra = type->extra;
 
-	id = input_types[type].id;
-	extra = input_types[type].extra;
-
-	if (input_types[type].init && input_types[type].init(fd, &id, &extra)) {
+	if (type->init && type->init(fd, &id, &extra)) {
 		fprintf(stderr, "inputattach: device initialization failed\n");
-		return 1;
+		return EXIT_FAILURE;
 	}
 
 	ldisc = N_MOUSE;
-	if(ioctl(fd, TIOCSETD, &ldisc)) {
-		fprintf(stderr, "inputattach: can't set line discipline\n"); 
-		return 1;
+	if (ioctl(fd, TIOCSETD, &ldisc)) {
+		fprintf(stderr, "inputattach: can't set line discipline\n");
+		return EXIT_FAILURE;
 	}
 
-	devt = input_types[type].type | (id << 8) | (extra << 16);
+	devt = type->type | (id << 8) | (extra << 16);
 
-	if(ioctl(fd, SPIOCSTYPE, &devt)) {
+	if (ioctl(fd, SPIOCSTYPE, &devt)) {
 		fprintf(stderr, "inputattach: can't set device type\n");
-		return 1;
+		return EXIT_FAILURE;
+	}
+
+	retval = EXIT_SUCCESS;
+	if (daemon_mode && daemon(0, 0) < 0) {
+		perror("inputattach");
+		retval = EXIT_FAILURE;
 	}
 
 	read(fd, NULL, 0);
@@ -468,5 +616,5 @@ int main(int argc, char **argv)
 	ioctl(fd, TIOCSETD, &ldisc);
 	close(fd);
 
-	return 0;
+	return retval;
 }
