@@ -49,6 +49,8 @@
 #include <linux/input.h>
 #include <linux/joystick.h>
 
+#include "axbtnmap.h"
+
 char *axis_names[ABS_MAX + 1] = {
 "X", "Y", "Z", "Rx", "Ry", "Rz", "Throttle", "Rudder", 
 "Wheel", "Gas", "Brake", "?", "?", "?", "?", "?",
@@ -74,8 +76,9 @@ int main (int argc, char **argv)
 	unsigned char buttons = 2;
 	int version = 0x000800;
 	char name[NAME_LENGTH] = "Unknown";
-	uint16_t btnmap[KEY_MAX - BTN_MISC + 1];
-	uint8_t axmap[ABS_MAX + 1];
+	uint16_t btnmap[BTNMAP_SIZE];
+	uint8_t axmap[AXMAP_SIZE];
+	int btnmapok = 1;
 
 	if (argc < 2 || argc > 3 || !strcmp("--help", argv[1])) {
 		puts("");
@@ -99,15 +102,23 @@ int main (int argc, char **argv)
 	ioctl(fd, JSIOCGAXES, &axes);
 	ioctl(fd, JSIOCGBUTTONS, &buttons);
 	ioctl(fd, JSIOCGNAME(NAME_LENGTH), name);
-	ioctl(fd, JSIOCGAXMAP, axmap);
-	ioctl(fd, JSIOCGBTNMAP, btnmap);
 
+	getaxmap(fd, axmap);
+	getbtnmap(fd, btnmap);
 
 	printf("Driver version is %d.%d.%d.\n",
 		version >> 16, (version >> 8) & 0xff, version & 0xff);
 
-	if (buttons > 0 && btnmap[0] < BTN_MISC) {
+	/* Determine whether the button map is usable. */
+	for (i = 0; btnmapok && i < buttons; i++) {
+		if (btnmap[i] < BTN_MISC || btnmap[i] > KEY_MAX) {
+			btnmapok = 0;
+			break;
+		}
+	}
+	if (!btnmapok) {
 		/* btnmap out of range for names. Don't print any. */
+		puts("jstest is not fully compatible with your kernel. Unable to retrieve button map!");
 		printf("Joystick (%s) has %d axes ", name, axes);
 		printf("and %d buttons.\n", buttons);
 	} else {
@@ -117,8 +128,9 @@ int main (int argc, char **argv)
 		puts(")");
 
 		printf("and %d buttons (", buttons);
-		for (i = 0; i < buttons; i++)
+		for (i = 0; i < buttons; i++) {
 			printf("%s%s", i > 0 ? ", " : "", button_names[btnmap[i] - BTN_MISC]);
+		}
 		puts(").");
 	}
 

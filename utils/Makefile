@@ -50,8 +50,16 @@ ffmvforce.o: ffmvforce.c
 ffmvforce: ffmvforce.o
 	$(CC) $^ -o $@ $(LDFLAGS) -g -lm `sdl-config --libs`
 
-jscal: jscal.o
+axbtnmap.o: axbtnmap.c axbtnmap.h
+
+jscal.o: jscal.c axbtnmap.h
+
+jscal: jscal.o axbtnmap.o
 	$(CC) $(CFLAGS) $(CPPFLAGS) -lm $^ -o $@
+
+jstest.o: jstest.c axbtnmap.h
+
+jstest: jstest.o axbtnmap.o
 
 gencodes: gencodes.c scancodes.h
 	$(CC) $(CFLAGS) $(CPPFLAGS) gencodes.c -o gencodes
