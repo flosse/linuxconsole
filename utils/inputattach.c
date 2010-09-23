@@ -7,6 +7,8 @@
  *
  *  Twiddler support Copyright (c) 2001 Arndt Schoenewald
  *  Sponsored by Quelltext AG (http://www.quelltext-ag.de), Dortmund, Germany
+ *
+ *  Sahara Touchit-213 mode added by Claudio Nieder 2008-05-01.
  */
 
 /*
@@ -33,24 +35,17 @@
  * Vojtech Pavlik, Simunkova 1594, Prague 8, 182 00 Czech Republic
  */
 
+#include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <linux/serio.h>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/ioctl.h>
-#include <sys/time.h>
-
+#include "serio-ids.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <termios.h>
 #include <string.h>
-#include <errno.h>
-#include <assert.h>
-#include <ctype.h>
-
-#include "serio-ids.h"
+#include <sys/ioctl.h>
+#include <termios.h>
+#include <unistd.h>
 
 static int readchar(int fd, unsigned char *c, int timeout)
 {
@@ -121,7 +116,7 @@ static int warrior_init(int fd, unsigned long *id, unsigned long *extra)
 	return 0;
 }
 
-static int spaceball_waitchar(int fd, unsigned char c, unsigned char *d,
+static int spaceball_waitchar(int fd, unsigned char c, char *d,
 				int timeout)
 {
 	unsigned char b = 0;
@@ -240,7 +235,7 @@ static int stinger_init(int fd, unsigned long *id, unsigned long *extra)
 {
 	int i;
 	unsigned char c;
-	unsigned char *response = "\r\n0600520058C272";
+	unsigned char *response = (unsigned char *)"\r\n0600520058C272";
 
 	if (write(fd, " E5E5", 5) != 5)		/* Enable command */
 		return -1;
@@ -362,6 +357,52 @@ static int fujitsu_init(int fd, unsigned long *id, unsigned long *extra)
 	return 0;
 }
 
+static int t213_init(int fd, unsigned long *id, unsigned long *extra)
+{
+	char cmd[]={0x0a,1,'A'};
+	int count=10;
+	int state=0;
+	unsigned char data;
+
+	/*
+	 * In case the controller is in "ELO-mode" send a few times
+	 * the check active packet to force it into the documented
+	 * touchkit mode.
+	 */
+	while (count>0) {
+		if (write(fd, &cmd, 3) != 3)
+			return -1;
+		while (!readchar(fd, &data, 100)) {
+			switch (state) {
+			case 0:
+				if (data==0x0a) {
+					state=1;
+				}
+				break;
+			case 1:
+				if (data==1) {
+					state=2;
+				} else if (data!=0x0a) {
+					state=0;
+				}
+				break;
+			case 2:
+				if (data=='A') {
+					return 0;
+				} else if (data==0x0a) {
+					state=1;
+				} else {
+					state=0;
+				}
+				break;
+			}
+					
+		}
+		count--;
+	}
+	return -1;
+}
+
 static int dump_init(int fd, unsigned long *id, unsigned long *extra)
 {
 	unsigned char c, o = 0;
@@ -480,6 +521,9 @@ static struct input_types input_types[] = {
 { "--mtouch",		"-mtouch",	"MicroTouch (3M) touchscreen",
 	B9600, CS8 | CRTSCTS,
 	SERIO_MICROTOUCH,	0x00,	0x00,	0,	NULL },
+{ "--touchit213",	"-t213",	"Sahara Touch-iT213 Tablet PC",
+	B9600, CS8,
+	SERIO_TOUCHIT213,	0x00,	0x00,	0,	t213_init },
 { "--touchright",	"-tr",	"Touchright serial touchscreen",
 	B9600, CS8 | CRTSCTS,
 	SERIO_TOUCHRIGHT,	0x00,	0x00,	0,	NULL },
@@ -503,7 +547,7 @@ static void show_help(void)
 	struct input_types *type;
 
 	puts("");
-	puts("Usage: inputattach [--daemon] <mode> <device>");
+	puts("Usage: inputattach [--daemon] [--always] [--noinit] <mode> <device>");
 	puts("");
 	puts("Modes:");
 
@@ -525,8 +569,10 @@ int main(int argc, char **argv)
 	unsigned long id, extra;
 	int fd;
 	int i;
-	char c;
+	unsigned char c;
 	int retval;
+	int ignore_init_res = 0;
+	int no_init = 0;
 
 	for (i = 1; i < argc; i++) {
 		if (!strcasecmp(argv[i], "--help")) {
@@ -534,6 +580,10 @@ int main(int argc, char **argv)
 			return EXIT_SUCCESS;
 		} else if (!strcasecmp(argv[i], "--daemon")) {
 			daemon_mode = 1;
+		} else if (!strcasecmp(argv[i], "--always")) {
+			ignore_init_res = 1;
+		} else if (!strcasecmp(argv[i], "--noinit")) {
+			no_init = 1;
 		} else if (need_device) {
 			device = argv[i];
 			need_device = 0;
@@ -586,9 +636,15 @@ int main(int argc, char **argv)
 	id = type->id;
 	extra = type->extra;
 
-	if (type->init && type->init(fd, &id, &extra)) {
-		fprintf(stderr, "inputattach: device initialization failed\n");
-		return EXIT_FAILURE;
+	if (type->init && !no_init) {
+		if (type->init(fd, &id, &extra)) {
+			if (ignore_init_res) {
+				fprintf(stderr, "inputattach: ignored device initialization failure\n");
+			} else {
+				fprintf(stderr, "inputattach: device initialization failed\n");
+				return EXIT_FAILURE;
+			}
+		}
 	}
 
 	ldisc = N_MOUSE;
