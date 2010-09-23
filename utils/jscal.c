@@ -62,6 +62,7 @@ struct correction_data {
 int fd;
 struct js_corr corr[MAX_AXES];
 __u8 axmap[ABS_MAX + 1];
+__u8 axmap2[ABS_MAX + 1];
 __u16 buttonmap[(KEY_MAX - BTN_MISC + 1)];
 char axes, buttons, fuzz;
 int version;
@@ -354,8 +355,7 @@ void print_mappings(char *devicename)
 		exit(1);
 	}
 	if (ioctl(fd, JSIOCGBTNMAP, &buttonmap)) {
-		perror("jscal: error getting button map");
-		exit(1);
+	        buttons=0;
 	}
 
 	printf("jscal -u %d", axes);
@@ -371,6 +371,48 @@ void print_mappings(char *devicename)
 	}
 
 	printf(" %s\n",devicename);
+}
+
+
+void get_axmap2(void)
+{
+        if (ioctl(fd, JSIOCGAXMAP, &axmap2)) {
+		perror("jscal: error getting axis map");
+		exit(1);
+	}
+}
+
+/*
+ * Remap the calibration data to fit the (potentially) new axis map.
+ * axmap2 stores the original axis map, axmap the new one.
+ */
+void correct_axes(void)
+{
+        int axmes[ABS_MAX + 1];
+        struct js_corr corr_tmp[MAX_AXES];
+        int i;
+        int ax[axes];
+	//Create remapping table
+        for(i=0;i<axes;++i){
+	        axmes[(axmap2[i])]=i;
+	}
+	for(i=0;i<axes;++i){
+	        ax[i]=axmes[(axmap[i])];
+	}
+	//Read again current callibration settings
+	if (ioctl(fd, JSIOCGCORR, &corr)) {
+		perror("jscal: error getting correction");
+		exit(1);
+	}
+	//Remap callibration settings
+	for (i = 0; i < axes; i++) {
+	        corr_tmp[i]=corr[(ax[i])];
+	}
+	if (ioctl(fd, JSIOCSCORR, &corr_tmp)) {
+		perror("jscal: error setting correction");
+		exit(1);
+	}
+
 }
 
 void print_settings(char *devicename)
@@ -425,7 +467,7 @@ void set_mappings(char *p)
 		exit(1);
 	}
 
-  //axes
+   //axes
 	sscanf(p, "%d", &axes_on_cl);
 	p = strstr(p, ",");
 
@@ -457,15 +499,15 @@ void set_mappings(char *p)
 	sscanf(++p, "%d", &btns_on_cl);
 	p = strstr(p, ",");
 
-	if (btns_on_cl != buttons) {
+	if ((btns_on_cl != buttons)&&(btns_on_cl!=0)) {
 		fprintf(stderr, "jscal: joystick has %d buttons and not %d as specified on command line\n", 
 			buttons, btns_on_cl);
 		exit(1);
 	}
 
 
-	for (i = 0; i < buttons; i++)
-  {
+	for (i = 0; i < btns_on_cl; i++)
+	  {
 		if (!p) {
 			fprintf(stderr, "jscal: missing mapping for button %d\n", i);
 			exit(1);
@@ -483,21 +525,31 @@ void set_mappings(char *p)
 			exit(1);
 		}
 		buttonmap[i] = btn_mapping;
-	}
+	  }
 
 	if (p) {
 		fprintf(stderr, "jscal: too many values\n");
 		exit(1);
 	}
+
+	// Save the current axis map
+	get_axmap2();
 	
+	// Apply the new axis map
 	if (ioctl(fd, JSIOCSAXMAP, &axmap)) {
 		perror("jscal: error setting axis map");
 		exit(1);
 	}
-	if (ioctl(fd, JSIOCSBTNMAP, &buttonmap)) {
-		perror("jscal: error setting button map");
-		exit(1);
-	}
+
+	// Move the calibration data accordingly
+	correct_axes();
+
+	if (btns_on_cl!=0){
+		if (ioctl(fd, JSIOCSBTNMAP, &buttonmap)) {
+		       perror("jscal: error setting button map");
+	               exit(1);
+		}
+       }
 }
 
 void set_correction(char *p)
