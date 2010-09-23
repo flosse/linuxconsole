@@ -333,14 +333,14 @@ int main (int argc, char **argv)
 	printf("Input device name: \"%s\"\n", name);
 
 	memset(bit, 0, sizeof(bit));
-	ioctl(fd, EVIOCGBIT(0, EV_MAX), bit[0]);
+	ioctl(fd, EVIOCGBIT(0, sizeof(bit[0])), bit[0]);
 	printf("Supported events:\n");
 
 	for (i = 0; i < EV_MAX; i++)
 		if (test_bit(i, bit[0])) {
 			printf("  Event type %d (%s)\n", i, events[i] ? events[i] : "?");
 			if (!i) continue;
-			ioctl(fd, EVIOCGBIT(i, KEY_MAX), bit[i]);
+			ioctl(fd, EVIOCGBIT(i, sizeof(bit[0])), bit[i]);
 			for (j = 0; j < KEY_MAX; j++) 
 				if (test_bit(j, bit[i])) {
 					printf("    Event code %d (%s)\n", j, names[i] ? (names[i][j] ? names[i][j] : "?") : "?");
