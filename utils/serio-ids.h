@@ -104,8 +104,23 @@
 #ifndef SERIO_TOUCHWIN
 # define SERIO_TOUCHWIN		0x33
 #endif
+#ifndef SERIO_TAOSEVM
+# define SERIO_TAOSEVM		0x34
+#endif
 #ifndef SERIO_FUJITSU
-# define SERIO_FUJITSU		0x34
+# define SERIO_FUJITSU		0x35
+#endif
+#ifndef SERIO_ZHENHUA
+# define SERIO_ZHENHUA		0x36
+#endif
+#ifndef SERIO_INEXIO
+# define SERIO_INEXIO		0x37
+#endif
+#ifndef SERIO_TOUCHIT213
+# define SERIO_TOUCHIT213	0x38
+#endif
+#ifndef SERIO_W8001
+# define SERIO_W8001		0x39
 #endif
 
 #endif
