@@ -86,7 +86,7 @@ int main(int argc, char** argv)
 	printf("Device %s opened\n", device_file_name);
 
 	/* Query device */
-	if (ioctl(fd, EVIOCGBIT(EV_FF, sizeof(unsigned long) * 4), features) == -1) {
+	if (ioctl(fd, EVIOCGBIT(EV_FF, sizeof(unsigned long) * 4), features) < 0) {
 		perror("Ioctl query");
 		exit(1);
 	}
@@ -107,7 +107,7 @@ int main(int argc, char** argv)
 
 	printf("\nNumber of simultaneous effects: ");
 
-	if (ioctl(fd, EVIOCGEFFECTS, &n_effects) == -1) {
+	if (ioctl(fd, EVIOCGEFFECTS, &n_effects) < 0) {
 		perror("Ioctl number of effects");
 	}
 
@@ -131,7 +131,7 @@ int main(int argc, char** argv)
 	effects[0].replay.length = 20000;  /* 20 seconds */
 	effects[0].replay.delay = 0;
 
-	if (ioctl(fd, EVIOCSFF, &effects[0]) == -1) {
+	if (ioctl(fd, EVIOCSFF, &effects[0]) < 0) {
 		perror("Upload effects[0]");
 	}
 	
@@ -149,7 +149,7 @@ int main(int argc, char** argv)
 	effects[1].replay.length = 20000;  /* 20 seconds */
 	effects[1].replay.delay = 0;
 
-	if (ioctl(fd, EVIOCSFF, &effects[1]) == -1) {
+	if (ioctl(fd, EVIOCSFF, &effects[1]) < 0) {
 		perror("Upload effects[1]");
 	}
 
@@ -168,7 +168,7 @@ int main(int argc, char** argv)
 	effects[2].replay.length = 20000;  /* 20 seconds */
 	effects[2].replay.delay = 0;
 
-	if (ioctl(fd, EVIOCSFF, &effects[2]) == -1) {
+	if (ioctl(fd, EVIOCSFF, &effects[2]) < 0) {
 		perror("Upload effects[2]");
 	}
 
@@ -187,7 +187,7 @@ int main(int argc, char** argv)
 	effects[3].replay.length = 20000;  /* 20 seconds */
 	effects[3].replay.delay = 0;
 
-	if (ioctl(fd, EVIOCSFF, &effects[3]) == -1) {
+	if (ioctl(fd, EVIOCSFF, &effects[3]) < 0) {
 		perror("Upload effects[3]");
 	}
 
@@ -199,7 +199,7 @@ int main(int argc, char** argv)
 	effects[4].replay.length = 5000;
 	effects[4].replay.delay = 1000;
 
-	if (ioctl(fd, EVIOCSFF, &effects[4]) == -1) {
+	if (ioctl(fd, EVIOCSFF, &effects[4]) < 0) {
 		perror("Upload effects[4]");
 	}
 
@@ -211,7 +211,7 @@ int main(int argc, char** argv)
 	effects[5].replay.length = 5000;
 	effects[5].replay.delay = 0;
 
-	if (ioctl(fd, EVIOCSFF, &effects[5]) == -1) {
+	if (ioctl(fd, EVIOCSFF, &effects[5]) < 0) {
 		perror("Upload effects[5]");
 	}
 

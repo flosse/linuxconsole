@@ -317,7 +317,7 @@ int main (int argc, char **argv)
 		return 1;
 	}
 
-	if (ioctl(fd, EVIOCGVERSION, &version)) {
+	if (ioctl(fd, EVIOCGVERSION, &version) < 0) {
 		perror("evtest: can't get version");
 		return 1;
 	}

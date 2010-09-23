@@ -179,15 +179,15 @@ void print_info()
 {
 	int i,j;
 
-	if (ioctl(fd, JSIOCGAXES, &axes)) {
+	if (ioctl(fd, JSIOCGAXES, &axes) < 0) {
 		perror("jscal: error getting axes");
 		exit(1);
 	}
-	if (ioctl(fd, JSIOCGBUTTONS, &buttons)) {
+	if (ioctl(fd, JSIOCGBUTTONS, &buttons) < 0) {
 		perror("jscal: error getting buttons");
 		exit(1);
 	}
-	if (ioctl(fd, JSIOCGCORR, &corr)) {
+	if (ioctl(fd, JSIOCGCORR, &corr) < 0) {
 		perror("jscal: error getting correction");
 		exit(1);
 	}
@@ -218,7 +218,7 @@ void calibrate()
 		corr[i].prec = 0;
 	}
 
-	if (ioctl(fd, JSIOCSCORR, &corr)) {
+	if (ioctl(fd, JSIOCSCORR, &corr) < 0) {
 		perror("jscal: error setting correction");
 		exit(1);
 	}
@@ -324,7 +324,7 @@ void calibrate()
 
 	putchar('\n');
 
-	if (ioctl(fd, JSIOCSCORR, &corr)) {
+	if (ioctl(fd, JSIOCSCORR, &corr) < 0) {
 		perror("jscal: error setting correction");
 		exit(1);
 	}
@@ -342,19 +342,19 @@ void print_mappings(char *devicename)
 {
 	int i;
 
-	if (ioctl(fd, JSIOCGAXES, &axes)) {
+	if (ioctl(fd, JSIOCGAXES, &axes) < 0) {
 		perror("jscal: error getting axes");
 		exit(1);
 	}
-	if (ioctl(fd, JSIOCGBUTTONS, &buttons)) {
+	if (ioctl(fd, JSIOCGBUTTONS, &buttons) < 0) {
 		perror("jscal: error getting buttons");
 		exit(1);
 	}
-	if (ioctl(fd, JSIOCGAXMAP, &axmap)) {
+	if (ioctl(fd, JSIOCGAXMAP, &axmap) < 0) {
 		perror("jscal: error getting axis map");
 		exit(1);
 	}
-	if (ioctl(fd, JSIOCGBTNMAP, &buttonmap)) {
+	if (ioctl(fd, JSIOCGBTNMAP, &buttonmap) < 0) {
 	        buttons=0;
 	}
 
@@ -376,7 +376,7 @@ void print_mappings(char *devicename)
 
 void get_axmap2(void)
 {
-        if (ioctl(fd, JSIOCGAXMAP, &axmap2)) {
+        if (ioctl(fd, JSIOCGAXMAP, &axmap2) < 0) {
 		perror("jscal: error getting axis map");
 		exit(1);
 	}
@@ -400,7 +400,7 @@ void correct_axes(void)
 	        ax[i]=axmes[(axmap[i])];
 	}
 	//Read again current callibration settings
-	if (ioctl(fd, JSIOCGCORR, &corr)) {
+	if (ioctl(fd, JSIOCGCORR, &corr) < 0) {
 		perror("jscal: error getting correction");
 		exit(1);
 	}
@@ -408,7 +408,7 @@ void correct_axes(void)
 	for (i = 0; i < axes; i++) {
 	        corr_tmp[i]=corr[(ax[i])];
 	}
-	if (ioctl(fd, JSIOCSCORR, &corr_tmp)) {
+	if (ioctl(fd, JSIOCSCORR, &corr_tmp) < 0) {
 		perror("jscal: error setting correction");
 		exit(1);
 	}
@@ -419,15 +419,15 @@ void print_settings(char *devicename)
 {
 	int i,j;
 
-	if (ioctl(fd, JSIOCGAXES, &axes)) {
+	if (ioctl(fd, JSIOCGAXES, &axes) < 0) {
 		perror("jscal: error getting axes");
 		exit(1);
 	}
-	if (ioctl(fd, JSIOCGBUTTONS, &buttons)) {
+	if (ioctl(fd, JSIOCGBUTTONS, &buttons) < 0) {
 		perror("jscal: error getting buttons");
 		exit(1);
 	}
-	if (ioctl(fd, JSIOCGCORR, &corr)) {
+	if (ioctl(fd, JSIOCGCORR, &corr) < 0) {
 		perror("jscal: error getting correction");
 		exit(1);
 	}
@@ -451,11 +451,11 @@ void set_mappings(char *p)
   int axis_mapping = 0;
   int btn_mapping = 0;
 
-	if (ioctl(fd, JSIOCGAXES, &axes)) {
+	if (ioctl(fd, JSIOCGAXES, &axes) < 0) {
 		perror("jscal: error getting axes");
 		exit(1);
 	}
-	if (ioctl(fd, JSIOCGBUTTONS, &buttons)) {
+	if (ioctl(fd, JSIOCGBUTTONS, &buttons) < 0) {
 		perror("jscal: error getting buttons");
 		exit(1);
 	}
@@ -536,7 +536,7 @@ void set_mappings(char *p)
 	get_axmap2();
 	
 	// Apply the new axis map
-	if (ioctl(fd, JSIOCSAXMAP, &axmap)) {
+	if (ioctl(fd, JSIOCSAXMAP, &axmap) < 0) {
 		perror("jscal: error setting axis map");
 		exit(1);
 	}
@@ -545,7 +545,7 @@ void set_mappings(char *p)
 	correct_axes();
 
 	if (btns_on_cl!=0){
-		if (ioctl(fd, JSIOCSBTNMAP, &buttonmap)) {
+		if (ioctl(fd, JSIOCSBTNMAP, &buttonmap) < 0) {
 		       perror("jscal: error setting button map");
 	               exit(1);
 		}
@@ -557,7 +557,7 @@ void set_correction(char *p)
 	int i,j;
 	int t = 0;
 
-	if (ioctl(fd, JSIOCGAXES, &axes)) {
+	if (ioctl(fd, JSIOCGAXES, &axes) < 0) {
 		perror("jscal: error getting axes");
 		exit(1);
 	}
@@ -618,7 +618,7 @@ void set_correction(char *p)
 		exit(1);
 	}
 	
-	if (ioctl(fd, JSIOCSCORR, &corr)) {
+	if (ioctl(fd, JSIOCSCORR, &corr) < 0) {
 		perror("jscal: error setting correction");
 		exit(1);
 	}
@@ -629,12 +629,12 @@ void test_center()
 	int i;
 	struct js_event ev;
 
-	if (ioctl(fd, JSIOCGAXES, &axes)) {
+	if (ioctl(fd, JSIOCGAXES, &axes) < 0) {
 		perror("jscal: error getting axes");
 		exit(1);
 	}
 
-	if (ioctl(fd, JSIOCGBUTTONS, &buttons)) {
+	if (ioctl(fd, JSIOCGBUTTONS, &buttons) < 0) {
 		perror("jscal: error getting buttons");
 		exit(1);
 	}
@@ -735,7 +735,7 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	if (ioctl(fd, JSIOCGVERSION, &version)) {
+	if (ioctl(fd, JSIOCGVERSION, &version) < 0) {
 		perror("jscal: error getting version");
 		exit(1);
 	}

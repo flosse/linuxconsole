@@ -193,7 +193,7 @@ void init_device()
 	effect.u.constant.envelope.fade_level=0;
 
 	/* Upload effect */
-	if (ioctl(device_handle,EVIOCSFF,&effect)==-1) {
+	if (ioctl(device_handle,EVIOCSFF,&effect)<0) {
 		fprintf(stderr,"ERROR: uploading effect failed (%s) [%s:%d]\n",
 		        strerror(errno),__FILE__,__LINE__);
 		exit(1);
@@ -219,7 +219,7 @@ void update_device(double force, double * position)
 
 	/* Delete effect */
 	if (stop_and_play && effect.id!=-1) {
-		if (ioctl(device_handle,EVIOCRMFF,effect.id)==-1) {
+		if (ioctl(device_handle,EVIOCRMFF,effect.id)<0) {
 			fprintf(stderr,"ERROR: removing effect failed (%s) [%s:%d]\n",
 			        strerror(errno),__FILE__,__LINE__);
 			exit(1);
@@ -236,7 +236,7 @@ void update_device(double force, double * position)
 	effect.u.constant.envelope.fade_level=(short)(force*32767.0); /* only to be safe */
 
 	/* Upload effect */
-	if (ioctl(device_handle,EVIOCSFF,&effect)==-1) {
+	if (ioctl(device_handle,EVIOCSFF,&effect)<0) {
 		perror("upload effect");
 		/* We do not exit here. Indeed, too frequent updates may be
 		 * refused, but that is not a fatal error */

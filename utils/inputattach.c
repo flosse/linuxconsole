@@ -281,10 +281,10 @@ static int twiddler_init(int fd, unsigned long *id, unsigned long *extra)
 	int count, line;
 
 	/* Turn DTR off, otherwise the Twiddler won't send any data. */
-	if (ioctl(fd, TIOCMGET, &line))
+	if (ioctl(fd, TIOCMGET, &line) < 0)
 		return -1;
 	line &= ~TIOCM_DTR;
-	if (ioctl(fd, TIOCMSET, &line))
+	if (ioctl(fd, TIOCMSET, &line) < 0)
 		return -1;
 
 	/*
@@ -648,14 +648,14 @@ int main(int argc, char **argv)
 	}
 
 	ldisc = N_MOUSE;
-	if (ioctl(fd, TIOCSETD, &ldisc)) {
+	if (ioctl(fd, TIOCSETD, &ldisc) < 0) {
 		fprintf(stderr, "inputattach: can't set line discipline\n");
 		return EXIT_FAILURE;
 	}
 
 	devt = type->type | (id << 8) | (extra << 16);
 
-	if (ioctl(fd, SPIOCSTYPE, &devt)) {
+	if (ioctl(fd, SPIOCSTYPE, &devt) < 0) {
 		fprintf(stderr, "inputattach: can't set device type\n");
 		return EXIT_FAILURE;
 	}
