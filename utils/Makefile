@@ -41,8 +41,7 @@ clean:
 	$(RM) *.o *.swp $(PROGRAMS) *.orig *.rej map *~
 
 ffcfstress: ffcfstress.c
-	$(CC) -O2 -fno-implement-inlines -funsigned-char \
-	 -lm ffcfstress.c -o ffcfstress
+	$(CC) -O2 -funsigned-char -lm ffcfstress.c -o ffcfstress
 
 ffmvforce.o: ffmvforce.c
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $^ -o $@ `sdl-config --cflags`

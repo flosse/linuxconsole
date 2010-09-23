@@ -147,7 +147,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "Could not initialize SDL: %s\n", SDL_GetError());
 		exit(1);
 	}
-	on_exit(SDL_Quit, NULL);
+	atexit(SDL_Quit);
 	screen = SDL_SetVideoMode(WIN_W, WIN_H, 0, SDL_SWSURFACE);
 	if (screen == NULL) {
 		fprintf(stderr, "Could not set video mode: %s\n", SDL_GetError());
