@@ -106,15 +106,21 @@ int main (int argc, char **argv)
 	printf("Driver version is %d.%d.%d.\n",
 		version >> 16, (version >> 8) & 0xff, version & 0xff);
 
-	printf("Joystick (%s) has %d axes (", name, axes);
-	for (i = 0; i < axes; i++)
-		printf("%s%s", i > 0 ? ", " : "", axis_names[axmap[i]]);
-	puts(")");
+	if (buttons > 0 && btnmap[0] < BTN_MISC) {
+		/* btnmap out of range for names. Don't print any. */
+		printf("Joystick (%s) has %d axes ", name, axes);
+		printf("and %d buttons.\n", buttons);
+	} else {
+		printf("Joystick (%s) has %d axes (", name, axes);
+		for (i = 0; i < axes; i++)
+			printf("%s%s", i > 0 ? ", " : "", axis_names[axmap[i]]);
+		puts(")");
 
-	printf("and %d buttons (", buttons);
-	for (i = 0; i < buttons; i++)
-		printf("%s%s", i > 0 ? ", " : "", button_names[btnmap[i] - BTN_MISC]);
-	puts(").");
+		printf("and %d buttons (", buttons);
+		for (i = 0; i < buttons; i++)
+			printf("%s%s", i > 0 ? ", " : "", button_names[btnmap[i] - BTN_MISC]);
+		puts(").");
+	}
 
 	printf("Testing ... (interrupt to exit)\n");
 
