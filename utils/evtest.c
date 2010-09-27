@@ -386,5 +386,7 @@ int main (int argc, char **argv)
 					ev[i].value);
 			}	
 
+		fflush(stdout);
+
 	}
 }
