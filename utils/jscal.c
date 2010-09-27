@@ -47,7 +47,6 @@
 #define PIT_HZ 1193180L
 
 #define NUM_POS 3
-#define MAX_AXES 16
 #define MAX_CORR 1
 
 const char *pos_name[] = {"minimum", "center", "maximum"};
@@ -60,17 +59,17 @@ struct correction_data {
 };
 
 int fd;
-struct js_corr corr[MAX_AXES];
+struct js_corr corr[ABS_MAX + 1];
 __u8 axmap[ABS_MAX + 1];
 __u8 axmap2[ABS_MAX + 1];
 __u16 buttonmap[(KEY_MAX - BTN_MISC + 1)];
 char axes, buttons, fuzz;
 int version;
-struct correction_data corda[MAX_AXES];
+struct correction_data corda[ABS_MAX + 1];
 
 struct js_info {
 	int buttons;
-	int axis[MAX_AXES];
+	int axis[ABS_MAX + 1];
 	} js;
 
 void print_position(int i, int a)
@@ -213,7 +212,7 @@ void calibrate()
 	int i, j, t, b;
 	int axis, pos;
 
-	for (i=0; i<MAX_AXES; i++) {
+	for (i=0; i<ABS_MAX + 1; i++) {
 		corr[i].type = JS_CORR_NONE;
 		corr[i].prec = 0;
 	}
@@ -226,7 +225,7 @@ void calibrate()
 	{
 
 		int i;
-		int amax[MAX_AXES], amin[MAX_AXES];
+		int amax[ABS_MAX + 1], amin[ABS_MAX + 1];
 
 		puts("Calibrating precision: wait and don't touch the joystick.");
 
@@ -389,7 +388,7 @@ void get_axmap2(void)
 void correct_axes(void)
 {
         int axmes[ABS_MAX + 1];
-        struct js_corr corr_tmp[MAX_AXES];
+        struct js_corr corr_tmp[ABS_MAX + 1];
         int i;
         int ax[axes];
 	//Create remapping table
@@ -460,7 +459,7 @@ void set_mappings(char *p)
 		exit(1);
 	}
 
-	if (axes > MAX_AXES) axes = MAX_AXES;
+	if (axes > ABS_MAX + 1) axes = ABS_MAX + 1;
 
 	if (!p) {
 		fprintf(stderr, "jscal: missing argument for --set-mappings\n");
@@ -562,7 +561,7 @@ void set_correction(char *p)
 		exit(1);
 	}
 
-	if (axes > MAX_AXES) axes = MAX_AXES;
+	if (axes > ABS_MAX + 1) axes = ABS_MAX + 1;
 
 	if (!p) {
 		fprintf(stderr, "jscal: missing number of axes\n");
