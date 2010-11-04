@@ -403,6 +403,44 @@ static int t213_init(int fd, unsigned long *id, unsigned long *extra)
 	return -1;
 }
 
+static int zhenhua_init(int fd, unsigned long *id, unsigned long *extra)
+{
+	/* Zhen Hua 5 byte protocol: first (synchronization) byte allways
+	 * contain 0xF7, next four bytes are axis of controller with values
+	 * between 50-200.
+	 * Incoming data (each byte) have reversed bits (lowest bit is
+	 * highest bit) - something like little-endian but on bit level.
+	 * Synchronization byte without reversing bits have (raw) value:
+	 * 0xEF
+	 *
+	 * Initialization is almost same as twiddler_init */
+
+	unsigned char c[10];
+	int count;
+
+	for (count=0 ; count < 5 ; count++) {
+		if(readchar(fd, c+0, 500)) return -1;
+		if(c[0] == 0xef) break;
+	}
+
+	if (count == 5) {
+		/* Could not find header byte in data stream */
+		return -1;
+	}
+
+	/* Read remaining 4 bytes plus the full next data packet */
+	for (count = 1; count < 10; count++) {
+		if (readchar(fd, c+count, 500)) return -1;
+	}
+
+	/* check if next sync byte exists */
+	if (c[5] != 0xef)
+		return -1;
+
+	return 0;
+		
+}
+
 static int dump_init(int fd, unsigned long *id, unsigned long *extra)
 {
 	unsigned char c, o = 0;
@@ -539,6 +577,9 @@ static struct input_types input_types[] = {
 { "--ps2mult",	"-ps2m",	"PS/2 serial multiplexer",
 	B57600, CS8,
 	SERIO_PS2MULT,		0x00,	0x00,	1,	NULL },
+{ "--zhen-hua",		"-zhen",	"Zhen Hua 5-byte protocol",
+	B19200, CS8,
+	SERIO_ZHENHUA,		0x00,	0x00,	0,	zhenhua_init },
 { "--dump",		"-dump",	"Just enable device",
 	B2400, CS8,
 	0,			0x00,	0x00,	0,	dump_init },
