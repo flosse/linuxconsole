@@ -122,5 +122,8 @@
 #ifndef SERIO_W8001
 # define SERIO_W8001		0x39
 #endif
+#ifndef SERIO_PSMULT
+# define SERIO_PS2MULT		0x3c
+#endif
 
 #endif
