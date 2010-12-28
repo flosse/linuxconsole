@@ -41,7 +41,7 @@ clean:
 	$(RM) *.o *.swp $(PROGRAMS) *.orig *.rej map *~
 
 ffcfstress: ffcfstress.c
-	$(CC) -O2 -funsigned-char -lm ffcfstress.c -o ffcfstress
+	$(CC) -O2 -funsigned-char ffcfstress.c -lm -o ffcfstress
 
 ffmvforce.o: ffmvforce.c
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $^ -o $@ `sdl-config --cflags`
@@ -54,7 +54,7 @@ axbtnmap.o: axbtnmap.c axbtnmap.h
 jscal.o: jscal.c axbtnmap.h
 
 jscal: jscal.o axbtnmap.o
-	$(CC) $(CFLAGS) $(CPPFLAGS) -lm $^ -o $@
+	$(CC) $(CFLAGS) $(CPPFLAGS) $^ -lm -o $@
 
 jstest.o: jstest.c axbtnmap.h
 
@@ -64,4 +64,4 @@ gencodes: gencodes.c scancodes.h
 	$(CC) $(CFLAGS) $(CPPFLAGS) gencodes.c -o gencodes
 
 acceltest: acceltest.c
-	$(CC) $(CFLAGS) $(CPPFLAGS) -lm $^ -o $@
+	$(CC) $(CFLAGS) $(CPPFLAGS) $^ -lm -o $@
