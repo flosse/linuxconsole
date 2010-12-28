@@ -1,0 +1,84 @@
+.TH jscal 1 "Jul 11, 2010" jscal
+.SH NAME
+jscal \- joystick calibration and remapping program
+.SH SYNOPSIS
+.BR jscal
+.RI "[" options "] <" device\(hyname ">"
+.SH DESCRIPTION
+.B jscal
+calibrates joysticks and maps joystick axes and buttons.
+Calibrating a joystick ensures the positions on the various axes are
+correctly interpreted.
+Mapping axes and buttons allows the meanings of the joystick's axes
+and buttons to be redefined.
+.PP
+On Debian systems the calibration settings can be stored and later
+applied automatically using the
+.B jscal-store
+command.
+.SH OPTIONS
+.TP
+.BR \-c ", " \-\-calibrate
+Calibrate the joystick.
+.TP
+.BR \-h ", " \-\-help
+Print out a summary of available options.
+.TP
+.BR \-s ", " \-\-set\-correction " <\fInb_axes\fP,\fItype\fP,\fIprecision\fP,\fIcoefficients\fP,...>"
+Sets correction to specified values.
+For each axis, specify the correction type (0 for none, 1 for "broken
+line"), the precision, and if necessary the correction coefficients
+("broken line" corrections take four coefficients).
+.TP
+.BR \-u ", " \-\-set\-mappings " <\fInb_axes\fP,\fIaxmap1\fP,\fIaxmap2\fP,...,\fInb_buttons\fP,\fIbtnmap1\fP,\fIbtnmap2\fP,...>"
+Sets axis and button mappings.
+\fIn_of_buttons\fP can be set to 0 to remap axes only.
+.IP "\fB\-t\fR, \fB\-\-test\-center\fR"
+Tests if the joystick is correctly calibrated.
+Returns 2 if the axes are not calibrated, 3 if buttons were pressed, 1
+if there was any other error, and 0 on success.
+.IP "\fB\-V\fR, \fB\-\-version\fR"
+Prints the version numbers of the running joystick driver and that
+which jscal was compiled for.
+.IP "\fB\-p\fR, \fB\-\-print\-correction\fR"
+Prints the current correction settings.
+The format of the output is a jscal command line.
+.IP "\fB\-q\fR, \fB\-\-print\-mappings\fR"
+Prints the current axis and button mappings.
+The format of the output is a jscal command line.
+.SH CALIBRATION
+Using the Linux input system, joysticks are expected to produce values
+between \-32767 and 32767 for axes, with 0 meaning the joystick is
+centred.
+Thus, full\(hyleft should produce \-32767 on the X axis, full\(hyright
+32767 on the X axis, full\(hyforward \-32767 on the Y axis, and so on.
+.PP
+Many joysticks and gamepads (especially older ones) are slightly
+mis\(hyaligned; as a result they may not use the full range of values
+(for the extremes of the axes), or more annoyingly they may not give 0
+when centred.
+Calibrating a joystick provides the kernel with information on a
+joystick's real behaviour, which allows the kernel to correct various
+joysticks' deficiencies and produce consistent output as far as
+joystick\(hyusing software is concerned.
+.PP
+\fBjstest\fP(1) is useful to determine whether a joystick is
+calibrated: when run, it should produce all 0s when the joystick is at
+rest, and each axis should be able to produce the values \-32767 and
+32767.
+Analog joysticks should produce values in between 0 and the extremes,
+but this is not necessary; digital directional pads work fine with
+only the three values.
+.SH SEE ALSO
+\fBffset\fP(1), \fBjstest\fP(1), \fBjscal\-store\fP(1).
+.SH AUTHORS
+.B jscal
+was written by Vojtech Pavlik.
+The version packaged for Debian includes patches by Dr. László Kaján,
+Johann Walles and Krzysztof A. Sobiecki.
+.PP
+This manual page was written by Stephen Kitt <steve@sk2.org>, for the Debian
+GNU/Linux system (but may be used by others).
+It was last modified for
+.B jscal
+version 1.2 dated October 19, 2004.

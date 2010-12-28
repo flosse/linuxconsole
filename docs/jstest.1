@@ -1,0 +1,39 @@
+.TH jstest 1 "April 21, 2009" jstest
+.SH NAME
+jstest \- joystick test program
+.SH SYNOPSIS
+.BR jstest " [" \-\-normal "] [" \-\-old "] [" \-\-event "] [" \-\-nonblock "] [" \-\-select "] <\fIdevice-name\fP>"
+.SH DESCRIPTION
+\fBjstest\fP can be used to test all the features of the Linux
+joystick API, including non-blocking and \fBselect\fP(2) access, as
+well as version 0.x compatibility mode.
+.PP
+It is also intended to serve as an example implementation for those
+who wish to learn how to write their own joystick using applications.
+.SH OPTIONS
+.TP
+.B \-\-normal
+One-line mode showing immediate status.
+.TP
+.B \-\-old
+Same as \-\-normal, using 0.x interface.
+.TP
+.B \-\-event
+Prints events as they come in.
+.TP
+.B \-\-nonblock
+Same as \-\-event, in nonblocking mode.
+.TP
+.B \-\-select
+Same as \--event, using \fBselect\fP(2) call.
+.SH SEE ALSO
+\fBfftest\fP(1), \fBjscal\fP(1).
+.SH AUTHOR
+.B jstest
+was written by Vojtech Pavlik.
+.PP
+This manual page was written by Stephen Kitt <steve@sk2.org>, for the Debian
+GNU/Linux system (but may be used by others).
+It was last modified for
+.B jstest
+version 1.2, dated March 22, 2005.

@@ -1,0 +1,16 @@
+.TH jskeepalive 1 "April 7, 2010" jskeepalive
+.SH NAME
+jskeepalive \- keeps a joystick alive
+.SH SYNOPSIS
+.BR jskeepalive
+.RI "<" device-name ">"
+.SH DESCRIPTION
+.B jskeepalive
+continuously reads from the given joystick device. (This doesn't
+prevent other programs from accessing the same joystick device.) This
+is necessary for certains joysticks which disappear if they are not
+accessed during a given interval (see
+https://bugs.launchpad.net/ubuntu/+source/joystick/+bug/448446).
+.SH AUTHOR
+.B jskeepalive
+was written by Stephen Kitt.

@@ -1,0 +1,30 @@
+.TH ffmvforce 1 "March 8, 2009" ffmvforce
+.SH NAME
+ffmvforce \- force orientation test for force-feedback devices
+.SH SYNOPSIS
+.B ffmvforce
+.RI "<" device "> [\fB-u\fP <" "update rate" ">]"
+.SH "DESCRIPTION"
+ffmvforce generates a force in a given direction, indicated by the
+position of the mouse pointer in relation to the center of the tool's
+window.
+.PP
+.B Beware, the stress test may damage your device!
+.SH OPTIONS
+.TP
+.RI "<" device ">"
+The device to test.
+.TP
+.BR \-u " <\fIupdate rate\fP>"
+The update rate in Hz (5 by default).
+.SH SEE ALSO
+\fBffcfstress\fP(1), \fBfftest\fP(1), \fBjstest\fP(1).
+.SH AUTHOR
+.B ffmvforce
+was written by Oliver Hamann.
+.PP
+This manual page was written by Stephen Kitt <steve@sk2.org>, for the Debian
+GNU/Linux system (but may be used by others).
+It was last modified for
+.B ffmvforce
+dated February 15, 2002.

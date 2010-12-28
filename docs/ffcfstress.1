@@ -1,0 +1,46 @@
+.TH ffcfstress 1 "March 8, 2009" ffcfstress
+.SH NAME
+ffcfstress \- constant force stress test for force-feedback devices
+.SH SYNOPSIS
+.B ffcfstress
+.RB "[" \-d " <\fIdevice\fP>] [" \-u " <\fIupdate rate\fP>] [" \-f " <\fIfrequency\fP>] [" \-a " <\fIamplitude\fP>] [" \-s " <\fIstrength\fP>] [" \-o "]"
+.SH "DESCRIPTION"
+ffcfstress stress tests constant non-enveloped forces on a force
+feedback device.
+It simulates a moving spring force by applying a frequently updated
+constant force effect.
+.PP
+.B Beware, the stress test may damage your device!
+.SH OPTIONS
+At least one option is required.
+.TP
+.BR \-d " <\fIdevice\fP>"
+The device to test (by default \fI/dev/input/event0\fR).
+.TP
+.BR \-u " <\fIupdate rate\fP>"
+The update rate in Hz (25 by default).
+.TP
+.BR \-f " <\fIfrequency\fP>"
+The spring center motion frequency in Hz (0.1 by default).
+.TP
+.BR \-a " <\fIamplitude\fP>"
+The spring center motion amplitude, between 0.0 and 1.0 (1.0 by
+default).
+.TP
+.BR \-s " <\fIstrength\fP>"
+The spring strength factor (1.0 by default).
+.TP
+.B \-o
+Dummy option, useful when all defaults should be used.
+.SH SEE ALSO
+\fBffmvforce\fP(1), \fBfftest\fP(1), \fBjstest\fP(1).
+.SH AUTHOR
+.B ffcfstress
+was written by Oliver Hamann.
+.PP
+This manual page was written by Stephen Kitt <steve@sk2.org>, for the Debian
+GNU/Linux system (but may be used by others).
+It was last modified for
+.B ffcfstress
+dated February 15, 2002.
+
