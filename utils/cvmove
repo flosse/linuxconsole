@@ -1,7 +1,0 @@
-#!/bin/bash
-
-mv $1 $2
-cvs remove $1
-cd $2
-cvs add $1
-cvs commit -r 1.`expr \`grep \\\\$Id$1 | sed -e "s/^.*,v 1\.//" | sed -e "s/200.*\\\\$//"\` + 1` -m Moved. $1 
