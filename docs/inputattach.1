@@ -1,9 +1,9 @@
-.TH inputattach 1 "June 16, 2009" inputattach
+.TH inputattach 1 "March 6, 2011" inputattach
 .SH NAME
 inputattach \- attach a serial line to an input-layer device
 .SH SYNOPSIS
-.BR inputattach " [" \-\-daemon "] [" \-\-always "] [" \-\-noinit "]"
-.RI "<" mode "> <" device ">"
+.BR inputattach " [" \-\-daemon "] [" \-\-always "] [" \-\-noinit "] [" \-\-baud
+.IR baud ">] <" mode "> <" device ">"
 .SH DESCRIPTION
 .B inputattach
 attaches a serial line to an input-layer device via a line
@@ -21,6 +21,9 @@ Ignore initialization failures when attaching the device.
 .TP
 .B \-\-noinit
 Skip device initialization.
+.TP
+.B \-\-baud
+Specify the baud rate to use (for w8001).
 .SS Modes
 .TP
 .BR \-dump ", " \-\-dump
@@ -119,8 +122,14 @@ Handykey Twiddler chording keyboard
 .BR \-vs ", " \-\-vsxxx-aa
 DEC VSXXX-AA / VSXXX-GA mouse and VSXXX-A tablet 
 .TP
+.BR \-w8001 ", " \-\-w8001
+Wacom W8001
+.TP
 .BR \-war ", " \-\-warrior
 WingMan Warrior 
+.TP
+.BR \-zhen ", " \-\-zhen-hua
+Zhen Hua 5-byte protocol
 .SH AUTHORS
 .B inputattach
 was written by Vojtech Pavlik and Arndt Schoenewald.
