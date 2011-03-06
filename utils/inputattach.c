@@ -583,6 +583,9 @@ static struct input_types input_types[] = {
 { "--dump",		"-dump",	"Just enable device",
 	B2400, CS8,
 	0,			0x00,	0x00,	0,	dump_init },
+{ "--w8001",		"-w8001",	"Wacom W8001",
+	B38400, CS8,
+	SERIO_W8001,		0x00,	0x00,	0,	NULL },
 { NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, NULL }
 };
 
@@ -591,7 +594,7 @@ static void show_help(void)
 	struct input_types *type;
 
 	puts("");
-	puts("Usage: inputattach [--daemon] [--always] [--noinit] <mode> <device>");
+	puts("Usage: inputattach [--daemon] [--baud <baud>] [--always] [--noinit] <mode> <device>");
 	puts("");
 	puts("Modes:");
 
@@ -615,6 +618,7 @@ int main(int argc, char **argv)
 	int i;
 	unsigned char c;
 	int retval;
+	int baud = -1;
 	int ignore_init_res = 0;
 	int no_init = 0;
 
@@ -631,6 +635,15 @@ int main(int argc, char **argv)
 		} else if (need_device) {
 			device = argv[i];
 			need_device = 0;
+		} else if (!strcasecmp(argv[i], "--baud")) {
+			if (argc <= i + 1) {
+				show_help();
+				fprintf(stderr,
+					"inputattach: require baud rate\n");
+				return EXIT_FAILURE;
+			}
+
+			baud = atoi(argv[++i]);
 		} else {
 			if (type && type->name) {
 				fprintf(stderr,
@@ -669,6 +682,19 @@ int main(int argc, char **argv)
 		fprintf(stderr, "inputattach: '%s' - %s\n",
 			device, strerror(errno));
 		return 1;
+	}
+
+	switch(baud) {
+	case -1: break;
+	case 2400: type->speed = B2400; break;
+	case 4800: type->speed = B4800; break;
+	case 9600: type->speed = B9600; break;
+	case 19200: type->speed = B19200; break;
+	case 38400: type->speed = B38400; break;
+	default:
+		fprintf(stderr, "inputattach: invalid baud rate '%d'\n",
+				baud);
+		return EXIT_FAILURE;
 	}
 
 	setline(fd, type->flags, type->speed);
