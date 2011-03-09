@@ -1,0 +1,33 @@
+#!/bin/sh
+
+if [ ! -x /sbin/udevadm ]; then
+    echo Restoring joystick configuration requires udev! >&2
+fi
+
+ident=$(mktemp)
+/sbin/udevadm info -a -n $1 | @@PREFIX@@/share/joystick/ident > $ident
+. $ident
+rm -f $ident
+
+STORE=/var/lib/joystick/joystick.state
+
+# Retrieve the applicable commands
+commands=$(mktemp)
+if [ -f $STORE ]; then
+    if [ -z "$NAME" ] && [ -z "$VENDOR" ]; then
+	# Use the device name only
+	@@PREFIX@@/share/joystick/extract kernel="$DEVICE" < $STORE > $commands
+    else
+	@@PREFIX@@/share/joystick/extract name="$NAME" serial="$SERIAL" vendor="$VENDOR" product="$PRODUCT" < $STORE > $commands
+    fi
+fi
+
+# Run the commands if any
+if [ -f $commands ] && [ ! -z "$(cat $commands)" ]; then
+    while read command; do
+	$command $1
+    done < $commands
+fi
+
+# Delete the generated file
+rm -f $commands

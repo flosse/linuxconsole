@@ -33,7 +33,9 @@ CC		= gcc
 CFLAGS		= -g -O2 -Wall -I../linux/include
 
 PROGRAMS	= evtest inputattach jstest jscal fftest ffmvforce ffset \
-		  ffcfstress # acceltest
+		  ffcfstress jscal-restore jscal-store # acceltest
+
+PREFIX          ?= /usr/local
 
 compile: $(PROGRAMS)
 
@@ -65,3 +67,16 @@ gencodes: gencodes.c scancodes.h
 
 acceltest: acceltest.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) $^ -lm -o $@
+
+jscal-restore: jscal-restore.in
+	sed "s^@@PREFIX@@^$(PREFIX)^g" < $^ > $@
+
+jscal-store: jscal-store.in
+	sed "s^@@PREFIX@@^$(PREFIX)^g" < $^ > $@
+
+install: compile
+	install $(PROGRAMS) $(DESTDIR)$(PREFIX)/bin
+	install -d $(DESTDIR)$(PREFIX)/share/joystick
+	install extract filter ident $(DESTDIR)$(PREFIX)/share/joystick
+
+.PHONY: compile clean install
