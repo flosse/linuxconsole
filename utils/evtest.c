@@ -225,6 +225,11 @@ char *keys[KEY_MAX + 1] = {
 	[KEY_TWEN] = "TWEN",			[KEY_DEL_EOL] = "Delete EOL",
 	[KEY_DEL_EOS] = "Delete EOS",		[KEY_INS_LINE] = "Insert line",
 	[KEY_DEL_LINE] = "Delete line",
+	[KEY_NUMERIC_0] = "0",			[KEY_NUMERIC_1] = "1",
+	[KEY_NUMERIC_2] = "2",			[KEY_NUMERIC_3] = "3",
+	[KEY_NUMERIC_4] = "4",			[KEY_NUMERIC_5] = "5",
+	[KEY_NUMERIC_6] = "6",			[KEY_NUMERIC_7] = "7",
+	[KEY_NUMERIC_8] = "8",			[KEY_NUMERIC_9] = "9",
 };
 
 char *absval[5] = { "Value", "Min  ", "Max  ", "Fuzz ", "Flat " };
