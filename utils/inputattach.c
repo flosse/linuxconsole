@@ -580,6 +580,11 @@ static struct input_types input_types[] = {
 { "--zhen-hua",		"-zhen",	"Zhen Hua 5-byte protocol",
 	B19200, CS8,
 	SERIO_ZHENHUA,		0x00,	0x00,	0,	zhenhua_init },
+#ifdef SERIO_TAOSEVM
+{ "--taos-evm",		"-taos",	"TAOS evaluation module",
+	B1200, CS8,
+	SERIO_TAOSEVM,		0,	0,	0,	NULL },
+#endif
 { "--dump",		"-dump",	"Just enable device",
 	B2400, CS8,
 	0,			0x00,	0x00,	0,	dump_init },
