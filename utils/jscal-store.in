@@ -14,6 +14,7 @@ fi
 
 if [ ! -x /sbin/udevadm ]; then
     echo Storing joystick configuration requires udev! >&2
+    exit 1
 fi
 
 ident=$(mktemp)
@@ -53,8 +54,10 @@ fi
 if [ ! -z "$PRODUCT" ]; then
     echo "PRODUCT=\"$PRODUCT\"" >> $STORE.new
 fi
-jscal -p $1 | cut -d' ' -f-3 >> $STORE.new
+# First store the axes mapping, then the calibration
+# as they must be restored in the same order
 jscal -q $1 | cut -d' ' -f-3 >> $STORE.new
+jscal -p $1 | cut -d' ' -f-3 >> $STORE.new
 
 if [ -f $STORE ]; then
     mv $STORE $STORE.old
