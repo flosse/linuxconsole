@@ -1,0 +1,137 @@
+			  linuxconsole tools
+			    Release 1.4rc1
+
+
+This package contains the following utilities and associated
+documentation:
+* evtest - input layer event monitor
+* inputattach - connects legacy serial devices to the input layer
+* joystick utilities - calibrate and test joysticks and joypads
+
+The evtest and inputattach manpages provide more details on their
+operation.
+
+
+Joystick utilities
+------------------
+
+The following utilities are provided to calibrate and test joysticks:
+* ffcfstress, ffmvforce, fftest - test force-feedback devices
+* ffset - set force-feedback device parameters
+* jscal - calibrate joystick devices, reconfigure the axes and buttons
+* jscal-store, jscal-restore - store and retrieve joystick device
+  settings as configured using jscal
+* jstest - test joystick devices
+
+The typical scenario when configuring a new device is as follows:
+1. Check the basic functions using jstest (number of buttons, axes,
+   etc.).
+2. Calibrate the joystick using jscal (this can be useful even if the
+   device functions correctly, if only to configure the dead-zone at
+   the centre).
+3. Repeat steps 1 and 2 until the joystick is configured to the user's
+   satisfaction.
+4. Store the device's setup using jscal-store.
+
+
+Auto-loading inputattach and jscal-restore
+------------------------------------------
+
+udev can be used to start inputattach and jscal-restore when the
+appropriate device is connected to the system (or detected when the
+system is booting up).
+
+The following rule restores the stored calibration and axis/button
+mappings whenever a joystick device is connected:
+	KERNEL=="js*", ACTION=="add", RUN+="/usr/bin/jscal-restore %E{DEVNAME}"
+(change the path as appropriate). This rule needs /usr to be
+available, which can cause issues on systems where udev is run from
+the initramfs or where /usr is a separate partition. To work around
+this, the Debian package uses a script provided by Debian's udev
+package to wait for jscal-restore to become available. Should you wish
+to reproduce this, you need to create a udev agent
+(/lib/udev/jscal-restore) containing the following:
+
+#!/bin/sh -e
+# udev agent for jscal-restore
+
+wait_for_file() {
+	local file=$1
+	local count=120
+	while [ $count != 0 ]; do
+		[ -e "$file" ] && return 0
+		sleep 1
+		count=$(($count - 1))
+	done
+	exit 1
+}
+
+(
+	wait_for_file /usr/bin/jscal-restore
+	exec /usr/bin/jscal-restore $1
+) &
+
+and change the udev rule to
+	KERNEL=="js*", ACTION=="add", RUN+="/lib/udev/jscal-restore %E{DEVNAME}"
+
+The following rule forces flaky Acrux gamepads to stay awake:
+	KERNEL=="js*", ACTION=="add", ATTRS{name}=="ACRUX USB GAMEPAD 8116", RUN+="/bin/sleep 5000 < %p"
+(This should only be necessary on kernels older than 2.6.39-rc1.)
+
+The following rule configures a Mouse Systems mouse on the first
+serial port:
+	KERNEL=="ttyS0", ACTION=="add", RUN+="/usr/bin/inputattach --daemon -msc %p"
+If you need to wait for /usr you can adapt the recipe above.
+
+The following rules configures a Wacom W8001 devices on a Fujitsu
+T2010[2]:
+	SUBSYSTEM=="tty", KERNEL=="ttyS[0-9]*", ATTRS{id}=="FUJ02e5", ACTION=="add", RUN+="/usr/bin/inputattach --daemon --baud 19200 --w8001 /dev/%k"
+
+
+Contributors
+------------
+
+The following people have contributed to this release:
+* Johann Walles: jscal jitter tolerance.
+* Dr. László Kaján: button and axis remapping.
+* Sebastian Siewior: EVIOCGBIT correction.
+* Krzysztof A. Sobiecki: improvements to the button and axis remapping
+  functions.
+* Claudio Nieder: Sahara Touch-iT213 support.
+* Florian Fainelli: evtest fixes.
+* Alexander Clouter: W8001 support.
+* Roberto Neri: much discussion, and fixes and improvements to
+  jscal-store/jscal-restore and the udev rules given above.
+
+
+License
+-------
+
+The linuxconsole tools are
+	Copyright © 1996-2005 Vojtech Pavlik
+	Copyright © 2001 Romain Dolbeau
+	Copyright © 2001 Oliver Hamann
+	Copyright © 2001-2002 Johann Deneux
+	Copyright © 2001 Arndt Schoenewald
+	Copyright © 2008-2011 Stephen Kitt
+
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or (at
+your option) any later version. (acceltest.c is provided only under
+the terms of version 1 of the License.)
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301,
+USA.
+
+
+The GNU General Public License version 1 is provided in the COPYING-1
+file; version 2 is provided in the COPYING file.
