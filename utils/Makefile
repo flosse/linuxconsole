@@ -35,6 +35,7 @@ PREFIX          ?= /usr/local
 
 compile: $(PROGRAMS)
 
+distclean: clean
 clean:
 	$(RM) *.o *.swp $(PROGRAMS) *.orig *.rej map *~
 
@@ -68,8 +69,10 @@ jscal-store: jscal-store.in
 	sed "s^@@PREFIX@@^$(PREFIX)^g" < $^ > $@
 
 install: compile
+	install -d $(DESTDIR)$(PREFIX)/bin
 	install $(PROGRAMS) $(DESTDIR)$(PREFIX)/bin
 	install -d $(DESTDIR)$(PREFIX)/share/joystick
 	install extract filter ident $(DESTDIR)$(PREFIX)/share/joystick
 
-.PHONY: compile clean install
+.PHONY: compile clean distclean install
+ 

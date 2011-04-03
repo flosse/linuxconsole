@@ -34,6 +34,20 @@ The typical scenario when configuring a new device is as follows:
 4. Store the device's setup using jscal-store.
 
 
+Installation
+------------
+
+To install the utilities and their manpages, run
+	make install
+from the distribution's top directory. This will install everything
+into /usr/local. Should you wish to install the tools elsewhere, you
+can use the PREFIX variable:
+	PREFIX=/usr make install
+The Makefiles also recognise the DESTDIR variable which can be used to
+install into a temporary directory (this is useful mainly for
+distribution packagers).
+
+
 Auto-loading inputattach and jscal-restore
 ------------------------------------------
 
@@ -102,6 +116,7 @@ The following people have contributed to this release:
 * Alexander Clouter: W8001 support.
 * Roberto Neri: much discussion, and fixes and improvements to
   jscal-store/jscal-restore and the udev rules given above.
+* Jean Delvare: inputattach improvements, TAOS support.
 
 
 License
@@ -119,8 +134,7 @@ The linuxconsole tools are
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation; either version 2 of the License, or (at
-your option) any later version. (acceltest.c is provided only under
-the terms of version 1 of the License.)
+your option) any later version.
 
 This program is distributed in the hope that it will be useful, but
 WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -133,5 +147,5 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301,
 USA.
 
 
-The GNU General Public License version 1 is provided in the COPYING-1
-file; version 2 is provided in the COPYING file.
+The GNU General Public License version 2 is provided in the COPYING
+file.
