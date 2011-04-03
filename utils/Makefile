@@ -75,4 +75,3 @@ install: compile
 	install extract filter ident $(DESTDIR)$(PREFIX)/share/joystick
 
 .PHONY: compile clean distclean install
- 
