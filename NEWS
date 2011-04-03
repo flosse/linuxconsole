@@ -1,0 +1,40 @@
+Version 1.4rc1
+--------------
+
+The following user-visible changes have been made since the last
+commonly used snapshot (20051019):
+
+* inputattach has been cleaned up, and now supports the following new
+  devices:
+  - Sahara Touch-iT213
+  - PS/2 multiplexers on TQM85xx boards
+  - Zhen Hua PCM-4CH RC transmitters
+  - TAOS evaluation modules
+  - Wacom W8001
+  - Microtouch, Touchright, Touchwindow, Penmount and Fujitsu
+    touchscreens
+
+* jscal tolerates greater jitter (so joysticks which don't send stable
+  values can still be calibrated).
+
+* jscal supports axis and button remapping.
+
+* Various USB devices which caused jscal and/or jstest to segfault are
+  now handled correctly.
+
+* jscal-store and jscal-restore allow joystick calibration and
+  remapping settings to be stored and restored.
+
+* Documentation is provided, with manpages for all the provided
+  utilities and sample udev rules.
+
+In addition, the 20051019 snapshot included the following user-visible
+changes since version 1.2.15:
+
+* jstest includes axis and button names.
+
+* New utilities:
+  - inputattach connects devices to the input layer, allowing them to
+    be used even if they are not directly supported;
+  - force-feedback utilities;
+  - evtest event-layer monitoring utility.
