@@ -29,7 +29,7 @@ CC		= gcc
 CFLAGS		= -g -O2 -Wall -I../linux/include
 
 PROGRAMS	= evtest inputattach jstest jscal fftest ffmvforce ffset \
-		  ffcfstress jscal-restore jscal-store # acceltest
+		  ffcfstress jscal-restore jscal-store
 
 PREFIX          ?= /usr/local
 
@@ -60,9 +60,6 @@ jstest: jstest.o axbtnmap.o
 
 gencodes: gencodes.c scancodes.h
 	$(CC) $(CFLAGS) $(CPPFLAGS) gencodes.c -o gencodes
-
-acceltest: acceltest.c
-	$(CC) $(CFLAGS) $(CPPFLAGS) $^ -lm -o $@
 
 jscal-restore: jscal-restore.in
 	sed "s^@@PREFIX@@^$(PREFIX)^g" < $^ > $@
