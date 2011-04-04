@@ -1,0 +1,24 @@
+.TH jscal-store 1 "April 7, 2010" jscal-store
+.SH NAME
+jscal-store \- stores joystick calibration
+.SH SYNOPSIS
+.BR jscal-store
+.RI "<" device-name ">"
+.SH DESCRIPTION
+.B jscal-store
+stores the calibration and mapping information for the given joystick
+device. This information can later be restored using the
+.B jscal-restore
+command.
+.PP
+On Debian systems any stored calibration settings are restored when
+the relevant device is connected, using udev.
+.SH FILES
+.TP
+/var/lib/joystick/joystick.state
+File used to store the calibration settings.
+.SH SEE ALSO
+\fBjscal\fP(1), \fBjscal-restore\fP(1).
+.SH AUTHOR
+.B jscal-store
+was written by Stephen Kitt.
