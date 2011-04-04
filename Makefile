@@ -19,5 +19,24 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 # 02110-1301 USA.
 
-%:
+VERSION := 1.4rc1
+
+PACKAGE := linuxconsoletools-$(VERSION)
+
+all: compile
+
+clean distclean compile:
 	$(MAKE) -C utils $@
+
+install:
+	$(MAKE) -C utils $@
+	$(MAKE) -C docs $@
+
+dist: clean
+	rm -rf $(PACKAGE)
+	mkdir $(PACKAGE)
+	cp -a docs utils COPYING Makefile NEWS README $(PACKAGE)
+	(cd $(PACKAGE); find . -name .svn -o -name *~ | xargs rm -rf; rm docs/FB-Driver-HOWTO docs/console.txt)
+	tar cjf $(PACKAGE).tar.bz2 $(PACKAGE)
+
+.PHONY: all clean distclean compile install dist
