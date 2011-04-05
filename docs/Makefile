@@ -19,7 +19,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 # 02110-1301 USA.
 
-MANPAGES	= evtest.1 inputattach.1 jstest.1 jscal.1 fftest.1 \
+MANPAGES	= inputattach.1 jstest.1 jscal.1 fftest.1 \
 		  ffmvforce.1 ffset.1 ffcfstress.1 jscal-store.1 \
 		  jscal-restore.1
 

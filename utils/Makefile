@@ -28,7 +28,7 @@
 CC		= gcc
 CFLAGS		= -g -O2 -Wall -I../linux/include
 
-PROGRAMS	= evtest inputattach jstest jscal fftest ffmvforce ffset \
+PROGRAMS	= inputattach jstest jscal fftest ffmvforce ffset \
 		  ffcfstress jscal-restore jscal-store
 
 PREFIX          ?= /usr/local

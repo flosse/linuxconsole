@@ -1,15 +1,16 @@
 			  linuxconsole tools
-			    Release 1.4rc1
+			    Release 1.4rc2
+		 http://sf.net/projects/linuxconsole/
 
 
 This package contains the following utilities and associated
 documentation:
-* evtest - input layer event monitor
 * inputattach - connects legacy serial devices to the input layer
 * joystick utilities - calibrate and test joysticks and joypads
 
-The evtest and inputattach manpages provide more details on their
-operation.
+The evtest tool, which used to be part of this package, is now
+maintained separately at http://cgit.freedesktop.org/evtest/ and
+https://bugzilla.freedesktop.org/enter_bug.cgi?product=evtest
 
 
 Joystick utilities
@@ -37,7 +38,14 @@ The typical scenario when configuring a new device is as follows:
 Installation
 ------------
 
+Most of the utilities have no particular requirement beyond a libc and
+the Linux input layer headers (normally part of your libc
+installation). ffmvforce requires SDL (libsdl1.2-dev on Debian
+derivatives).
+
 To install the utilities and their manpages, run
+	make
+and then as root
 	make install
 from the distribution's top directory. This will install everything
 into /usr/local. Should you wish to install the tools elsewhere, you
@@ -124,7 +132,6 @@ License
 
 The linuxconsole tools are
 	Copyright © 1996-2005 Vojtech Pavlik
-	Copyright © 2001 Romain Dolbeau
 	Copyright © 2001 Oliver Hamann
 	Copyright © 2001-2002 Johann Deneux
 	Copyright © 2001 Arndt Schoenewald
