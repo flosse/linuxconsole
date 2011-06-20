@@ -1,5 +1,5 @@
 			  linuxconsole tools
-			    Release 1.4rc2
+			     Release 1.4
 		 http://sf.net/projects/linuxconsole/
 
 
@@ -97,17 +97,17 @@ and change the udev rule to
 	KERNEL=="js*", ACTION=="add", RUN+="/lib/udev/jscal-restore %E{DEVNAME}"
 
 The following rule forces flaky Acrux gamepads to stay awake:
-	KERNEL=="js*", ACTION=="add", ATTRS{name}=="ACRUX USB GAMEPAD 8116", RUN+="/bin/sleep 5000 < %p"
+	KERNEL=="js*", ACTION=="add", ATTRS{name}=="ACRUX USB GAMEPAD 8116", RUN+="/bin/sleep 5000 < /dev/%k"
 (This should only be necessary on kernels older than 2.6.39-rc1.)
 
 The following rule configures a Mouse Systems mouse on the first
 serial port:
-	KERNEL=="ttyS0", ACTION=="add", RUN+="/usr/bin/inputattach --daemon -msc %p"
+	KERNEL=="ttyS0", ACTION=="add", RUN+="/usr/bin/inputattach --daemon -msc /dev/%k"
 If you need to wait for /usr you can adapt the recipe above.
 
 The following rules configures a Wacom W8001 devices on a Fujitsu
-T2010[2]:
-	SUBSYSTEM=="tty", KERNEL=="ttyS[0-9]*", ATTRS{id}=="FUJ02e5", ACTION=="add", RUN+="/usr/bin/inputattach --daemon --baud 19200 --w8001 /dev/%k"
+T2010[2] or on Lenovo X200-series laptops and tablets:
+	SUBSYSTEM=="tty", KERNEL=="ttyS[0-9]*", ATTRS{id}=="FUJ02e5|WACf00c", ACTION=="add|change", RUN+="/usr/bin/inputattach --daemon --baud 19200 --w8001 /dev/%k"
 
 
 Contributors
@@ -125,6 +125,8 @@ The following people have contributed to this release:
 * Roberto Neri: much discussion, and fixes and improvements to
   jscal-store/jscal-restore and the udev rules given above.
 * Jean Delvare: inputattach improvements, TAOS support.
+* Brian Murray and Kees Cook: Lenovo W8001 support.
+* Raoul Bönish: fixes for the udev rules.
 
 
 License
