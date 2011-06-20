@@ -11,8 +11,10 @@ device. This information can later be restored using the
 .B jscal-restore
 command.
 .PP
-On Debian systems any stored calibration settings are restored when
-the relevant device is connected, using udev.
+An appropriate rule can be set up with udev so that any stored
+calibration settings are restored when the relevant device is
+connected. Some distributions (at least Debian, Ubuntu and Slackware)
+provide joystick packages which install such rules automatically.
 .SH FILES
 .TP
 /var/lib/joystick/joystick.state
