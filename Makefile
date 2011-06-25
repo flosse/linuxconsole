@@ -19,7 +19,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 # 02110-1301 USA.
 
-VERSION := 1.4
+VERSION := 1.4.1
 
 PACKAGE := linuxconsoletools-$(VERSION)
 

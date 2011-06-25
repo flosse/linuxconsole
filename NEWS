@@ -1,3 +1,9 @@
+Version 1.4.1
+-------------
+
+* inputattach correctly handles non-retry errors other than EINTR
+  (thanks to Alexander Clouter <alex@digriz.org.uk> for the patch).
+
 Version 1.4
 -----------
 

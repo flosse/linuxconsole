@@ -607,6 +607,9 @@ static void show_help(void)
 	puts("");
 }
 
+/* palmed wisdom from http://stackoverflow.com/questions/1674162/ */
+#define RETRY_ERROR(x) (x == EAGAIN || x == EWOULDBLOCK || x == EINTR)
+
 int main(int argc, char **argv)
 {
 	unsigned long devt;
@@ -738,7 +741,13 @@ int main(int argc, char **argv)
 		retval = EXIT_FAILURE;
 	}
 
-	for (errno = 0; errno != EINTR; read(fd, NULL, 0)) ;
+	do {
+		i = read(fd, NULL, 0);
+		if (i == -1) {
+			if (RETRY_ERROR(errno))
+				continue;
+		}
+	} while (!i);
 
 	ldisc = 0;
 	ioctl(fd, TIOCSETD, &ldisc);

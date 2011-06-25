@@ -1,5 +1,5 @@
 			  linuxconsole tools
-			     Release 1.4
+			    Release 1.4.1
 		 http://sf.net/projects/linuxconsole/
 
 
@@ -121,7 +121,7 @@ The following people have contributed to this release:
   functions.
 * Claudio Nieder: Sahara Touch-iT213 support.
 * Florian Fainelli: evtest fixes.
-* Alexander Clouter: W8001 support.
+* Alexander Clouter: W8001 support and error-handling fixes.
 * Roberto Neri: much discussion, and fixes and improvements to
   jscal-store/jscal-restore and the udev rules given above.
 * Jean Delvare: inputattach improvements, TAOS support.
