@@ -24,6 +24,14 @@ rm $ident
 
 STORE=/var/lib/joystick/joystick.state
 
+if [ ! -d $(dirname $STORE) ]; then
+    mkdir -p $(dirname $STORE)
+    if [ $? -gt 0 ]; then
+        echo Unable to create directory $(dirname $STORE)! >&2
+        exit 1
+    fi
+fi
+
 # Filter the existing file
 if [ -f $STORE ]; then
     if [ -z "$NAME" ] && [ -z "$VENDOR" ]; then
