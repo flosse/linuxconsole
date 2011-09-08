@@ -107,7 +107,16 @@ If you need to wait for /usr you can adapt the recipe above.
 
 The following rules configures a Wacom W8001 devices on a Fujitsu
 T2010[2] or on Lenovo X200-series laptops and tablets:
-	SUBSYSTEM=="tty", KERNEL=="ttyS[0-9]*", ATTRS{id}=="FUJ02e5|WACf00c", ACTION=="add|change", RUN+="/usr/bin/inputattach --daemon --baud 19200 --w8001 /dev/%k"
+	SUBSYSTEM=="tty", KERNEL=="ttyS[0-9]*", ATTRS{id}=="FUJ02e5", ACTION=="add|change", RUN+="/usr/bin/inputattach --daemon --baud 19200 --w8001 /dev/%k"
+	SUBSYSTEM=="tty", KERNEL=="ttyS[0-9]*", ATTRS{id}=="WACf00c", ACTION=="add|change", RUN+="/usr/bin/inputattach --daemon --baud 38400 --w8001 /dev/%k"
+
+These rules are liable to cause conflicts with the X.org wacom
+driver. For example, on some Debian-based systems the
+/usr/share/X11/xorg.conf.d/50-wacom.conf configuration file needs to
+be amended so that the "MatchProduct" line matching one of the
+identifiers used above ("FUJ02e5" or "WACf00c", the latter being
+matched by "WACf") no longer contains the matching identifier. The
+appropriate X.org driver when using inputattach in this way is evdev.
 
 
 Contributors
