@@ -1,8 +1,23 @@
+Version 1.4.2
+-------------
+
+* The udev rule matching w8001 devices has been split to handle
+  devices using different baud rates, and the different baud rates are
+  documented.
+
+* inputattach no longer resets the line discipline before exiting when
+  it discovers the device is already managed by another inputattach
+  instance.
+
+* jscal-store creates its target directory if necessary.
+
+
 Version 1.4.1
 -------------
 
 * inputattach correctly handles non-retry errors other than EINTR
   (thanks to Alexander Clouter <alex@digriz.org.uk> for the patch).
+
 
 Version 1.4
 -----------
