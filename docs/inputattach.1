@@ -1,4 +1,4 @@
-.TH inputattach 1 "May 25, 2011" inputattach
+.TH inputattach 1 "August 9, 2011" inputattach
 .SH NAME
 inputattach \- attach a serial line to an input-layer device
 .SH SYNOPSIS
@@ -23,116 +23,119 @@ Ignore initialization failures when attaching the device.
 Skip device initialization.
 .TP
 .B \-\-baud
-Specify the baud rate to use (for w8001).
+Specify the baud rate to use. (This is only necessary if the default
+rate is incorrect.)
 .SS Modes
 .TP
 .BR \-dump ", " \-\-dump
-Just enable device 
+Just enable device .
 .TP
 .BR \-elo3b ", " \-\-elo261-280
-ELO Touchscreen, 3-byte mode 
+ELO Touchscreen, 3-byte mode.
 .TP
 .BR \-elo4b ", " \-\-elo271-140
-ELO touchscreen, 4-byte mode 
+ELO touchscreen, 4-byte mode.
 .TP
 .BR \-elo6b ", " \-\-elo4002
-ELO touchscreen, 6-byte mode 
+ELO touchscreen, 6-byte mode.
 .TP
 .BR \-elo ", " \-\-elotouch
-ELO touchscreen, 10-byte mode 
+ELO touchscreen, 10-byte mode.
 .TP
 .BR \-fjt ", " \-\-fujitsu
-Fujitsu serial touchscreen 
+Fujitsu serial touchscreen.
 .TP
 .BR \-ipaq ", " \-\-h3600ts
-Ipaq h3600 touchscreen 
+Ipaq h3600 touchscreen.
 .TP
 .BR \-ifor ", " \-\-iforce
-I-Force joystick or wheel 
+I-Force joystick or wheel.
 .TP
 .BR \-ms3 ", " \-\-intellimouse
-Microsoft IntelliMouse 
+Microsoft IntelliMouse.
 .TP
 .BR \-lk ", " \-\-lkkbd
-DEC LK201 / LK401 keyboards 
+DEC LK201 / LK401 keyboards.
 .TP
 .BR \-mag ", " \-\-magellan
-Magellan / SpaceMouse 
+Magellan / SpaceMouse.
 .TP
 .BR \-bare ", " \-\-microsoft
-2-button Microsoft mouse 
+2-button Microsoft mouse.
 .TP
 .BR \-mmw ", " \-\-mmwheel
-Logitech mouse with 4-5 buttons or a wheel 
+Logitech mouse with 4-5 buttons or a wheel.
 .TP
 .BR \-mman ", " \-\-mouseman
-3-button Logitech / Genius mouse 
+3-button Logitech / Genius mouse.
 .TP
 .BR \-msc ", " \-\-mousesystems
-3-button Mouse Systems mouse 
+3-button Mouse Systems mouse.
 .TP
 .BR \-ms ", " \-\-mshack
-3-button mouse in Microsoft mode 
+3-button mouse in Microsoft mode.
 .TP
 .BR \-mtouch ", " \-\-mtouch
-MicroTouch (3M) touchscreen 
+MicroTouch (3M) touchscreen.
 .TP
 .BR \-newt ", " \-\-newtonkbd
-Newton keyboard 
+Newton keyboard.
 .TP
 .BR \-pm ", " \-\-penmount
-Penmount touchscreen 
+Penmount touchscreen.
 .TP
 .BR \-ps2ser ", " \-\-ps2serkbd
-PS/2 via serial keyboard 
+PS/2 via serial keyboard.
 .TP
 .BR \-sbl ", " \-\-spaceball
-SpaceBall 2003 / 3003 / 4000 FLX 
+SpaceBall 2003 / 3003 / 4000 FLX.
 .TP
 .BR \-orb ", " \-\-spaceorb
-SpaceOrb 360 / SpaceBall Avenger 
+SpaceOrb 360 / SpaceBall Avenger.
 .TP
 .BR \-sting ", " \-\-stinger
-Gravis Stinger 
+Gravis Stinger.
 .TP
 .BR \-ipaqkbd ", " \-\-stowawaykbd
-Stowaway keyboard 
+Stowaway keyboard.
 .TP
 .BR \-skb ", " \-\-sunkbd
-Sun Type 4 and Type 5 keyboards 
+Sun Type 4 and Type 5 keyboards.
 .TP
 .BR \-sun ", " \-\-sunmouse
-3-button Sun mouse 
+3-button Sun mouse.
 .TP
 .BR \-taos ", " \-\-taos\-evm
-TAOS evaluation module
+TAOS evaluation module.
 .TP
 .BR \-t213 ", " \-\-touchit213
-Sahara Touch-iT213 Tablet PC 
+Sahara Touch-iT213 Tablet PC.
 .TP
 .BR \-tr ", " \-\-touchright
-Touchright serial touchscreen 
+Touchright serial touchscreen.
 .TP
 .BR \-tw ", " \-\-touchwin
-Touchwindow serial touchscreen 
+Touchwindow serial touchscreen.
 .TP
 .BR \-twidjoy ", " \-\-twiddler-joy
-Handykey Twiddler used as a joystick 
+Handykey Twiddler used as a joystick.
 .TP
 .BR \-twid ", " \-\-twiddler
-Handykey Twiddler chording keyboard 
+Handykey Twiddler chording keyboard.
 .TP
 .BR \-vs ", " \-\-vsxxx-aa
-DEC VSXXX-AA / VSXXX-GA mouse and VSXXX-A tablet 
+DEC VSXXX-AA / VSXXX-GA mouse and VSXXX-A tablet.
 .TP
 .BR \-w8001 ", " \-\-w8001
-Wacom W8001
+Wacom W8001 pen and/or touch devices. The default baud rate, 38400bps,
+allows for touch-only or pen and touch devices; for pen-only devices,
+"\fB\-\-baud 19200\fP" must be specified.
 .TP
 .BR \-war ", " \-\-warrior
-WingMan Warrior 
+WingMan Warrior.
 .TP
 .BR \-zhen ", " \-\-zhen-hua
-Zhen Hua 5-byte protocol
+Zhen Hua 5-byte protocol.
 .SH AUTHORS
 .B inputattach
 was written by Vojtech Pavlik and Arndt Schoenewald, and improved by
