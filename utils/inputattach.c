@@ -326,6 +326,24 @@ static int twiddler_init(int fd, unsigned long *id, unsigned long *extra)
 	return 0;
 }
 
+static int pm6k_init(int fd, unsigned long *id, unsigned long *extra)
+{
+	int i = 0;
+	unsigned char cmd[6] = {0xF1, 0x00, 0x00, 0x00, 0x00, 0x0E};
+	unsigned char data[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
+	/* Enable the touchscreen */
+	if (write(fd, cmd, sizeof(cmd)) != sizeof(cmd))
+		return -1;
+
+	/* Read ACK */
+	for(i=0;i<sizeof(data);i++)
+		if (readchar(fd, &data[i], 100)<0)
+			break ;
+
+	return 0;
+}
+
 static int fujitsu_init(int fd, unsigned long *id, unsigned long *extra)
 {
 	unsigned char cmd, data;
@@ -565,9 +583,18 @@ static struct input_types input_types[] = {
 { "--touchwin",		"-tw",	"Touchwindow serial touchscreen",
 	B4800, CS8 | CRTSCTS,
 	SERIO_TOUCHWIN,		0x00,	0x00,	0,	NULL },
-{ "--penmount",		"-pm",	"Penmount touchscreen",
-	B19200, CS8 | CRTSCTS,
+{ "--penmount9000",		"-pm9k",	"PenMount 9000 touchscreen",
+	B19200, CS8,
 	SERIO_PENMOUNT,		0x00,	0x00,	0,	NULL },
+{ "--penmount6000",		"-pm6k",	"PenMount 6000 touchscreen",
+	B19200, CS8,
+	SERIO_PENMOUNT,		0x01,	0x00,	0,	pm6k_init },
+{ "--penmount3000",		"-pm3k",	"PenMount 3000 touchscreen",
+	B38400, CS8,
+	SERIO_PENMOUNT,		0x02,	0x00,	0,	NULL },
+{ "--penmount6250",		"-pmm1",	"PenMount 6250 touchscreen",
+	B19200, CS8,
+	SERIO_PENMOUNT,		0x03,	0x00,	0,	NULL },
 { "--fujitsu",		"-fjt",	"Fujitsu serial touchscreen",
 	B9600, CS8,
 	SERIO_FUJITSU,		0x00,	0x00,	1,	fujitsu_init },
