@@ -1,5 +1,5 @@
 			  linuxconsole tools
-			    Release 1.4.2
+			    Release 1.4.3
 		 http://sf.net/projects/linuxconsole/
 
 
@@ -136,6 +136,8 @@ The following people have contributed to this release:
 * Jean Delvare: inputattach improvements, TAOS support.
 * Brian Murray and Kees Cook: Lenovo W8001 support.
 * Raoul Bönish: fixes for the udev rules.
+* John Sung: PenMount 3000, 6000 and 6250 support.
+* Christian Gmeiner: TSC-40 support.
 
 
 License
@@ -146,7 +148,7 @@ The linuxconsole tools are
 	Copyright © 2001 Oliver Hamann
 	Copyright © 2001-2002 Johann Deneux
 	Copyright © 2001 Arndt Schoenewald
-	Copyright © 2008-2011 Stephen Kitt
+	Copyright © 2008-2012 Stephen Kitt
 
 
 This program is free software; you can redistribute it and/or modify

@@ -1,3 +1,11 @@
+Version 1.4.3
+-------------
+
+* inputattach supports PenMount 3000, 6000 and 6250 devices (thanks to
+  John Sung <penmount.touch@gmail.com>) and TSC-40 devices (thanks to
+  Christian Gmeiner <christian.gmainer@gmail.com>).
+
+
 Version 1.4.2
 -------------
 
