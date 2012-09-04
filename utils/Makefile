@@ -53,7 +53,7 @@ axbtnmap.o: axbtnmap.c axbtnmap.h
 jscal.o: jscal.c axbtnmap.h
 
 jscal: jscal.o axbtnmap.o
-	$(CC) $(CFLAGS) $(CPPFLAGS) $^ -lm -o $@
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS)  $^ -lm -o $@
 
 jstest.o: jstest.c axbtnmap.h
 
