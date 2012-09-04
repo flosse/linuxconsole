@@ -650,9 +650,11 @@ static struct input_types input_types[] = {
 { "--mtouch",		"-mtouch",	"MicroTouch (3M) touchscreen",
 	B9600, CS8 | CRTSCTS,
 	SERIO_MICROTOUCH,	0x00,	0x00,	0,	NULL },
+#ifdef SERIO_TSC40
 { "--tsc",		"-tsc",		"TSC-10/25/40 serial touchscreen",
 	B9600, CS8,
 	SERIO_TSC40,		0x00,	0x00,	0,	tsc40_init },
+#endif
 { "--touchit213",	"-t213",	"Sahara Touch-iT213 Tablet PC",
 	B9600, CS8,
 	SERIO_TOUCHIT213,	0x00,	0x00,	0,	t213_init },
