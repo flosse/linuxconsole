@@ -25,7 +25,6 @@
 # Edit the options below to suit your needs
 #
 
-CC		= gcc
 CFLAGS		= -g -O2 -Wall -I../linux/include
 
 PROGRAMS	= inputattach jstest jscal fftest ffmvforce ffset \
