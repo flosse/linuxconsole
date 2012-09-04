@@ -259,14 +259,14 @@ int main (int argc, char **argv)
 	if (!strcmp("--select", argv[1])) {
 
 		struct js_event js;
-		struct timeval tv;
 		fd_set set;
 
-		tv.tv_sec = 1;
-		tv.tv_usec = 0;
 
 		while (1) {
 
+			struct timeval tv;
+			tv.tv_sec = 1;
+			tv.tv_usec = 0;
 			FD_ZERO(&set);
 			FD_SET(fd, &set);
 
