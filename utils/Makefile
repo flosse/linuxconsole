@@ -4,7 +4,7 @@
 # Makefile for Linux input utilities
 #
 # © 1998-2000 Vojtech Pavlik (sponsored by SuSE)
-# © 2008-2011 Stephen Kitt <steve@sk2.org>
+# © 2008-2012 Stephen Kitt <steve@sk2.org>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 # Edit the options below to suit your needs
 #
 
-CFLAGS		= -g -O2 -Wall -I../linux/include
+CFLAGS		?= -g -O2 -Wall
 
 PROGRAMS	= inputattach jstest jscal fftest ffmvforce ffset \
 		  ffcfstress jscal-restore jscal-store
@@ -39,10 +39,10 @@ clean:
 	$(RM) *.o *.swp $(PROGRAMS) *.orig *.rej map *~
 
 ffcfstress: ffcfstress.c
-	$(CC) -O2 -funsigned-char ffcfstress.c -lm -o ffcfstress
+	$(CC) $(CFLAGS) $(CPPFLAGS) -funsigned-char $^ $(LDFLAGS) -lm -o $@
 
 ffmvforce.o: ffmvforce.c
-	$(CC) -c $(CFLAGS) $(CPPFLAGS) $^ -o $@ `sdl-config --cflags`
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c $^ -o $@ `sdl-config --cflags`
 
 ffmvforce: ffmvforce.o
 	$(CC) $^ -o $@ $(LDFLAGS) -g -lm `sdl-config --libs`
@@ -52,14 +52,14 @@ axbtnmap.o: axbtnmap.c axbtnmap.h
 jscal.o: jscal.c axbtnmap.h
 
 jscal: jscal.o axbtnmap.o
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS)  $^ -lm -o $@
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) $^ -lm -o $@
 
 jstest.o: jstest.c axbtnmap.h
 
 jstest: jstest.o axbtnmap.o
 
 gencodes: gencodes.c scancodes.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) gencodes.c -o gencodes
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) gencodes.c -o $@
 
 jscal-restore: jscal-restore.in
 	sed "s^@@PREFIX@@^$(PREFIX)^g" < $^ > $@
