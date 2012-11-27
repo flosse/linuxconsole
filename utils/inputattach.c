@@ -536,6 +536,33 @@ static int zhenhua_init(int fd, unsigned long *id, unsigned long *extra)
 		
 }
 
+#define EP_PROMPT_MODE  "B"     /* Prompt mode */
+#define EP_ABSOLUTE     "F"     /* Absolute Mode */
+#define EP_UPPER_ORIGIN "b"     /* Origin upper left */
+#define EP_STREAM_MODE  "@"     /* Stream mode */
+
+static int easypen_init(int fd, unsigned long *id, unsigned long *extra)
+{
+	char buf[256];
+
+	/* reset */
+	write(fd, 0, 1);
+	usleep(400000);
+
+	/* set prompt mode */
+	if (write(fd, EP_PROMPT_MODE, 1) == -1)
+		return -1;
+
+	/* clear buffer */
+	while (read(fd, buf, sizeof(buf)) == sizeof(buf));
+
+	/* set options */
+	if (write(fd, EP_ABSOLUTE EP_STREAM_MODE EP_UPPER_ORIGIN, 3) == -1)
+		return -1;
+
+	return 0;
+}
+
 static int dump_init(int fd, unsigned long *id, unsigned long *extra)
 {
 	unsigned char c, o = 0;
@@ -689,6 +716,9 @@ static struct input_types input_types[] = {
 { "--zhen-hua",		"-zhen",	"Zhen Hua 5-byte protocol",
 	B19200, CS8,
 	SERIO_ZHENHUA,		0x00,	0x00,	0,	zhenhua_init },
+{ "--easypen",		"-ep",		"Genius EasyPen 3x4 tablet",
+	B9600, CS8|CREAD|CLOCAL|HUPCL|PARENB|PARODD,
+	SERIO_EASYPEN,		0x00,	0x00,	0,	easypen_init },
 #ifdef SERIO_TAOSEVM
 { "--taos-evm",		"-taos",	"TAOS evaluation module",
 	B1200, CS8,

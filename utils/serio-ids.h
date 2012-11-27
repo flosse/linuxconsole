@@ -125,5 +125,8 @@
 #ifndef SERIO_PSMULT
 # define SERIO_PS2MULT		0x3c
 #endif
+#ifndef SERIO_EASYPEN
+# define SERIO_EASYPEN		0x3e
+#endif
 
 #endif
