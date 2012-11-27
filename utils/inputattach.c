@@ -89,7 +89,8 @@ static int logitech_command(int fd, char *c)
 	unsigned char d;
 
 	for (i = 0; c[i]; i++) {
-		write(fd, c + i, 1);
+		if (write(fd, c + i, 1) != 1)
+			return -1;
 		if (readchar(fd, &d, 1000))
 			return -1;
 		if (c[i] != d)
@@ -100,7 +101,8 @@ static int logitech_command(int fd, char *c)
 
 static int magellan_init(int fd, unsigned long *id, unsigned long *extra)
 {
-	write(fd, "m3\rpBB\rz\r", 9);
+	if (write(fd, "m3\rpBB\rz\r", 9) != 9)
+		return -1;
 	return 0;
 }
 
@@ -150,8 +152,10 @@ static int spaceball_cmd(int fd, char *c, char *d)
 	int i;
 
 	for (i = 0; c[i]; i++)
-		write(fd, c + i, 1);
-	write(fd, "\r", 1);
+		if (write(fd, c + i, 1) != 1)
+			return -1;
+	if (write(fd, "\r", 1) != 1)
+		return -1;
 
 	i = spaceball_waitcmd(fd, toupper(c[0]), d);
 

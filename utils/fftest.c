@@ -220,8 +220,11 @@ int main(int argc, char** argv)
 	/* Ask user what effects to play */
 	do {
 		printf("Enter effect number, -1 to exit\n");
-		scanf("%d", &i);
-		if (i >= 0 && i < N_EFFECTS) {
+		i = -1;
+		if (scanf("%d", &i) == EOF) {
+			printf("Read error\n");
+		}
+		else if (i >= 0 && i < N_EFFECTS) {
 			play.type = EV_FF;
 			play.code = effects[i].id;
 			play.value = 1;
