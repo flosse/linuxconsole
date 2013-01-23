@@ -768,7 +768,6 @@ int main(int argc, char **argv)
 	int baud = -1;
 	int ignore_init_res = 0;
 	int no_init = 0;
-	int one_read = 0;
 
 	for (i = 1; i < argc; i++) {
 		if (!strcasecmp(argv[i], "--help")) {
@@ -884,18 +883,13 @@ int main(int argc, char **argv)
 		retval = EXIT_FAILURE;
 	}
 
+	errno = 0;
 	do {
 		i = read(fd, NULL, 0);
-		if (i == -1) {
-			if (RETRY_ERROR(errno))
-				continue;
-		} else {
-			one_read = 1;
-		}
-	} while (!i);
+	} while (RETRY_ERROR(errno));
 
 	ldisc = 0;
-	if (one_read) {
+	if (errno == 0) {
 		// If we've never managed to read, avoid resetting the line
 		// discipline - another inputattach is probably running
 		ioctl(fd, TIOCSETD, &ldisc);
