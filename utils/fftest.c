@@ -35,11 +35,8 @@
 #include <sys/ioctl.h>
 #include <linux/input.h>
 
-#define BITS_PER_LONG (sizeof(long) * 8)
-#define OFF(x)  ((x)%BITS_PER_LONG)
-#define BIT(x)  (1UL<<OFF(x))
-#define LONG(x) ((x)/BITS_PER_LONG)
-#define test_bit(bit, array)    ((array[LONG(bit)] >> OFF(bit)) & 1)
+#include "bitmaskros.h"
+
 
 #define N_EFFECTS 6
 
@@ -55,10 +52,12 @@ char* effect_names[] = {
 int main(int argc, char** argv)
 {
 	struct ff_effect effects[N_EFFECTS];
-	struct input_event play, stop;
+	struct input_event play, stop, gain;
 	int fd;
 	char device_file_name[64];
-	unsigned long features[4];
+	unsigned char relFeatures[1 + REL_MAX/8/sizeof(unsigned char)];
+	unsigned char absFeatures[1 + ABS_MAX/8/sizeof(unsigned char)];
+	unsigned char ffFeatures[1 + FF_MAX/8/sizeof(unsigned char)];
 	int n_effects;	/* Number of effects the device can play at the same time */
 	int i;
 
@@ -87,53 +86,157 @@ int main(int argc, char** argv)
 	printf("Device %s opened\n", device_file_name);
 
 	/* Query device */
-	if (ioctl(fd, EVIOCGBIT(EV_FF, sizeof(unsigned long) * 4), features) < 0) {
-		perror("Ioctl query");
+	printf("Features:\n");
+
+	/* Absolute axes */
+	memset(absFeatures, 0, sizeof(absFeatures)*sizeof(unsigned char));
+	if (ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(absFeatures)*sizeof(unsigned char)), absFeatures) == -1) {
+		perror("Ioctl absolute axes features query");
 		exit(1);
 	}
 
-	printf("Axes query: ");
+	printf("  * Absolute axes: ");
 
-	if (test_bit(ABS_X, features)) printf("Axis X ");
-	if (test_bit(ABS_Y, features)) printf("Axis Y ");
-	if (test_bit(ABS_WHEEL, features)) printf("Wheel ");
+	if (testBit(ABS_X, absFeatures)) printf("X, ");
+	if (testBit(ABS_Y, absFeatures)) printf("Y, ");
+	if (testBit(ABS_Z, absFeatures)) printf("Z, ");
+	if (testBit(ABS_RX, absFeatures)) printf("RX, ");
+	if (testBit(ABS_RY, absFeatures)) printf("RY, ");
+	if (testBit(ABS_RZ, absFeatures)) printf("RZ, ");
+	if (testBit(ABS_THROTTLE, absFeatures)) printf("Throttle, ");
+	if (testBit(ABS_RUDDER, absFeatures)) printf("Rudder, ");
+	if (testBit(ABS_WHEEL, absFeatures)) printf("Wheel, ");
+	if (testBit(ABS_GAS, absFeatures)) printf("Gas, ");
+	if (testBit(ABS_BRAKE, absFeatures)) printf("Brake, ");
+	if (testBit(ABS_HAT0X, absFeatures)) printf("Hat 0 X, ");
+	if (testBit(ABS_HAT0Y, absFeatures)) printf("Hat 0 Y, ");
+	if (testBit(ABS_HAT1X, absFeatures)) printf("Hat 1 X, ");
+	if (testBit(ABS_HAT1Y, absFeatures)) printf("Hat 1 Y, ");
+	if (testBit(ABS_HAT2X, absFeatures)) printf("Hat 2 X, ");
+	if (testBit(ABS_HAT2Y, absFeatures)) printf("Hat 2 Y, ");
+	if (testBit(ABS_HAT3X, absFeatures)) printf("Hat 3 X, ");
+	if (testBit(ABS_HAT3Y, absFeatures)) printf("Hat 3 Y, ");
+	if (testBit(ABS_PRESSURE, absFeatures)) printf("Pressure, ");
+	if (testBit(ABS_DISTANCE, absFeatures)) printf("Distance, ");
+	if (testBit(ABS_TILT_X, absFeatures)) printf("Tilt X, ");
+	if (testBit(ABS_TILT_Y, absFeatures)) printf("Tilt Y, ");
+	if (testBit(ABS_TOOL_WIDTH, absFeatures)) printf("Tool width, ");
+	if (testBit(ABS_VOLUME, absFeatures)) printf("Volume, ");
+	if (testBit(ABS_MISC, absFeatures)) printf("Misc ,");
 
-	printf("\nEffects: ");
+	printf("\n    [");
+	for (i=0; i<sizeof(absFeatures)/sizeof(unsigned char);i++)
+	    printf("%02X ", absFeatures[i]);
+	printf("]\n");
 
-	if (test_bit(FF_CONSTANT, features)) printf("Constant ");
-	if (test_bit(FF_PERIODIC, features)) printf("Periodic ");
-	if (test_bit(FF_SPRING, features)) printf("Spring ");
-	if (test_bit(FF_FRICTION, features)) printf("Friction ");
-	if (test_bit(FF_RUMBLE, features)) printf("Rumble ");
+	/* Relative axes */
+	memset(relFeatures, 0, sizeof(relFeatures)*sizeof(unsigned char));
+	if (ioctl(fd, EVIOCGBIT(EV_REL, sizeof(relFeatures)*sizeof(unsigned char)), relFeatures) == -1) {
+		perror("Ioctl relative axes features query");
+		exit(1);
+	}
 
-	printf("\nNumber of simultaneous effects: ");
+	printf("  * Relative axes: ");
 
-	if (ioctl(fd, EVIOCGEFFECTS, &n_effects) < 0) {
+	if (testBit(REL_X, relFeatures)) printf("X, ");
+	if (testBit(REL_Y, relFeatures)) printf("Y, ");
+	if (testBit(REL_Z, relFeatures)) printf("Z, ");
+	if (testBit(REL_RX, relFeatures)) printf("RX, ");
+	if (testBit(REL_RY, relFeatures)) printf("RY, ");
+	if (testBit(REL_RZ, relFeatures)) printf("RZ, ");
+	if (testBit(REL_HWHEEL, relFeatures)) printf("HWheel, ");
+	if (testBit(REL_DIAL, relFeatures)) printf("Dial, ");
+	if (testBit(REL_WHEEL, relFeatures)) printf("Wheel, ");
+	if (testBit(REL_MISC, relFeatures)) printf("Misc, ");
+
+	printf("\n    [");
+	for (i=0; i<sizeof(relFeatures)/sizeof(unsigned char);i++)
+	    printf("%02X ", relFeatures[i]);
+	printf("]\n");
+
+	/* Force feedback effects */
+	memset(ffFeatures, 0, sizeof(ffFeatures)*sizeof(unsigned char));
+	if (ioctl(fd, EVIOCGBIT(EV_FF, sizeof(ffFeatures)*sizeof(unsigned char)), ffFeatures) == -1) {
+		perror("Ioctl force feedback features query");
+		exit(1);
+	}
+
+	printf("  * Force feedback effects types: ");
+
+	if (testBit(FF_CONSTANT, ffFeatures)) printf("Constant, ");
+	if (testBit(FF_PERIODIC, ffFeatures)) printf("Periodic, ");
+	if (testBit(FF_RAMP, ffFeatures)) printf("Ramp, ");
+	if (testBit(FF_SPRING, ffFeatures)) printf("Spring, ");
+	if (testBit(FF_FRICTION, ffFeatures)) printf("Friction, ");
+	if (testBit(FF_DAMPER, ffFeatures)) printf("Damper, ");
+	if (testBit(FF_RUMBLE, ffFeatures)) printf("Rumble, ");
+	if (testBit(FF_INERTIA, ffFeatures)) printf("Inertia, ");
+	if (testBit(FF_GAIN, ffFeatures)) printf("Gain, ");
+	if (testBit(FF_AUTOCENTER, ffFeatures)) printf("Autocenter, ");
+
+	printf("\n    Force feedback periodic effects: ");
+
+	if (testBit(FF_SQUARE, ffFeatures)) printf("Square, ");
+	if (testBit(FF_TRIANGLE, ffFeatures)) printf("Triangle, ");
+	if (testBit(FF_SINE, ffFeatures)) printf("Sine, ");
+	if (testBit(FF_SAW_UP, ffFeatures)) printf("Saw up, ");
+	if (testBit(FF_SAW_DOWN, ffFeatures)) printf("Saw down, ");
+	if (testBit(FF_CUSTOM, ffFeatures)) printf("Custom, ");
+
+	printf("\n    [");
+	for (i=0; i<sizeof(ffFeatures)/sizeof(unsigned char);i++)
+	    printf("%02X ", ffFeatures[i]);
+	printf("]\n");
+
+	printf("  * Number of simultaneous effects: ");
+
+	if (ioctl(fd, EVIOCGEFFECTS, &n_effects) == -1) {
 		perror("Ioctl number of effects");
 	}
 
-	printf("%d\n", n_effects);
+	printf("%d\n\n", n_effects);
+
+	/* Set master gain to 75% if supported */
+	if (testBit(FF_GAIN, ffFeatures)) {
+		memset(&gain, 0, sizeof(gain));
+		gain.type = EV_FF;
+		gain.code = FF_GAIN;
+		gain.value = 0xC000; /* [0, 0xFFFF]) */
+
+		printf("Setting master gain to 75%% ... ");
+		fflush(stdout);
+		if (write(fd, &gain, sizeof(gain)) != sizeof(gain)) {
+		  perror("Error:");
+		} else {
+		  printf("OK\n");
+		}
+	}
 
 	/* download a periodic sinusoidal effect */
+	memset(&effects[0],0,sizeof(effects[0]));
 	effects[0].type = FF_PERIODIC;
 	effects[0].id = -1;
 	effects[0].u.periodic.waveform = FF_SINE;
-	effects[0].u.periodic.period = 0.1*0x100;	/* 0.1 second */
-	effects[0].u.periodic.magnitude = 0x4000;	/* 0.5 * Maximum magnitude */
+	effects[0].u.periodic.period = 10;	/* 0.1 second */
+	effects[0].u.periodic.magnitude = 0x7fff;	/* 0.5 * Maximum magnitude */
 	effects[0].u.periodic.offset = 0;
 	effects[0].u.periodic.phase = 0;
 	effects[0].direction = 0x4000;	/* Along X axis */
-	effects[0].u.periodic.envelope.attack_length = 0x100;
-	effects[0].u.periodic.envelope.attack_level = 0;
-	effects[0].u.periodic.envelope.fade_length = 0x100;
-	effects[0].u.periodic.envelope.fade_level = 0;
+	effects[0].u.periodic.envelope.attack_length = 1000;
+	effects[0].u.periodic.envelope.attack_level = 0x7fff;
+	effects[0].u.periodic.envelope.fade_length = 1000;
+	effects[0].u.periodic.envelope.fade_level = 0x7fff;
 	effects[0].trigger.button = 0;
 	effects[0].trigger.interval = 0;
 	effects[0].replay.length = 20000;  /* 20 seconds */
-	effects[0].replay.delay = 0;
+	effects[0].replay.delay = 1000;
 
-	if (ioctl(fd, EVIOCSFF, &effects[0]) < 0) {
-		perror("Upload effects[0]");
+	printf("Uploading effect #0 (Periodic sinusoidal) ... ");
+	fflush(stdout);
+	if (ioctl(fd, EVIOCSFF, &effects[0]) == -1) {
+		perror("Error:");
+	} else {
+		printf("OK (id %d)\n", effects[0].id);
 	}
 	
 	/* download a constant effect */
@@ -141,20 +244,24 @@ int main(int argc, char** argv)
 	effects[1].id = -1;
 	effects[1].u.constant.level = 0x2000;	/* Strength : 25 % */
 	effects[1].direction = 0x6000;	/* 135 degrees */
-	effects[1].u.constant.envelope.attack_length = 0x100;
-	effects[1].u.constant.envelope.attack_level = 0;
-	effects[1].u.constant.envelope.fade_length = 0x100;
-	effects[1].u.constant.envelope.fade_level = 0;
+	effects[1].u.constant.envelope.attack_length = 1000;
+	effects[1].u.constant.envelope.attack_level = 0x1000;
+	effects[1].u.constant.envelope.fade_length = 1000;
+	effects[1].u.constant.envelope.fade_level = 0x1000;
 	effects[1].trigger.button = 0;
 	effects[1].trigger.interval = 0;
 	effects[1].replay.length = 20000;  /* 20 seconds */
 	effects[1].replay.delay = 0;
 
-	if (ioctl(fd, EVIOCSFF, &effects[1]) < 0) {
-		perror("Upload effects[1]");
+	printf("Uploading effect #1 (Constant) ... ");
+	fflush(stdout);
+	if (ioctl(fd, EVIOCSFF, &effects[1]) == -1) {
+		perror("Error");
+	} else {
+		printf("OK (id %d)\n", effects[1].id);
 	}
 
-	/* download an condition spring effect */
+	/* download a condition spring effect */
 	effects[2].type = FF_SPRING;
 	effects[2].id = -1;
 	effects[2].u.condition[0].right_saturation = 0x7fff;
@@ -169,11 +276,15 @@ int main(int argc, char** argv)
 	effects[2].replay.length = 20000;  /* 20 seconds */
 	effects[2].replay.delay = 0;
 
-	if (ioctl(fd, EVIOCSFF, &effects[2]) < 0) {
-		perror("Upload effects[2]");
+	printf("Uploading effect #2 (Spring) ... ");
+	fflush(stdout);
+	if (ioctl(fd, EVIOCSFF, &effects[2]) == -1) {
+		perror("Error");
+	} else {
+		printf("OK (id %d)\n", effects[2].id);
 	}
 
-	/* download an condition damper effect */
+	/* download a condition damper effect */
 	effects[3].type = FF_DAMPER;
 	effects[3].id = -1;
 	effects[3].u.condition[0].right_saturation = 0x7fff;
@@ -188,8 +299,12 @@ int main(int argc, char** argv)
 	effects[3].replay.length = 20000;  /* 20 seconds */
 	effects[3].replay.delay = 0;
 
-	if (ioctl(fd, EVIOCSFF, &effects[3]) < 0) {
-		perror("Upload effects[3]");
+	printf("Uploading effect #3 (Damper) ... ");
+	fflush(stdout);
+	if (ioctl(fd, EVIOCSFF, &effects[3]) == -1) {
+		perror("Error");
+	} else {
+		printf("OK (id %d)\n", effects[3].id);
 	}
 
 	/* a strong rumbling effect */
@@ -200,8 +315,12 @@ int main(int argc, char** argv)
 	effects[4].replay.length = 5000;
 	effects[4].replay.delay = 1000;
 
-	if (ioctl(fd, EVIOCSFF, &effects[4]) < 0) {
-		perror("Upload effects[4]");
+	printf("Uploading effect #4 (Strong rumble, with heavy motor) ... ");
+	fflush(stdout);
+	if (ioctl(fd, EVIOCSFF, &effects[4]) == -1) {
+		perror("Error");
+	} else {
+		printf("OK (id %d)\n", effects[4].id);
 	}
 
 	/* a weak rumbling effect */
@@ -212,8 +331,12 @@ int main(int argc, char** argv)
 	effects[5].replay.length = 5000;
 	effects[5].replay.delay = 0;
 
-	if (ioctl(fd, EVIOCSFF, &effects[5]) < 0) {
-		perror("Upload effects[5]");
+	printf("Uploading effect #5 (Weak rumble, with light motor) ... ");
+	fflush(stdout);
+	if (ioctl(fd, EVIOCSFF, &effects[5]) == -1) {
+		perror("Error");
+	} else {
+		printf("OK (id %d)\n", effects[5].id);
 	}
 
 
@@ -225,6 +348,7 @@ int main(int argc, char** argv)
 			printf("Read error\n");
 		}
 		else if (i >= 0 && i < N_EFFECTS) {
+			memset(&play,0,sizeof(play));
 			play.type = EV_FF;
 			play.code = effects[i].id;
 			play.value = 1;
@@ -241,19 +365,21 @@ int main(int argc, char** argv)
 			int i = *((int *)0);
 			printf("Crash test: %d\n", i);
 		}
-		else {
+		else if (i != -1) {
 			printf("No such effect\n");
 		}
 	} while (i>=0);
 
 	/* Stop the effects */
+	printf("Stopping effects\n");
 	for (i=0; i<N_EFFECTS; ++i) {
+		memset(&stop,0,sizeof(stop));
 		stop.type = EV_FF;
 		stop.code =  effects[i].id;
 		stop.value = 0;
         
 		if (write(fd, (const void*) &stop, sizeof(stop)) == -1) {
-			perror("Stop effect");
+			perror("");
 			exit(1);
 		}
 	}
