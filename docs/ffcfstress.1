@@ -3,7 +3,7 @@
 ffcfstress \- constant force stress test for force-feedback devices
 .SH SYNOPSIS
 .B ffcfstress
-.RB "[" \-d " <\fIdevice\fP>] [" \-u " <\fIupdate rate\fP>] [" \-f " <\fIfrequency\fP>] [" \-a " <\fIamplitude\fP>] [" \-s " <\fIstrength\fP>] [" \-o "]"
+.RB "[" \-d " <\fIdevice\fP>] [" \-u " <\fIupdate rate\fP>] [" \-f " <\fIfrequency\fP>] [" \-a " <\fIamplitude\fP>] [" \-s " <\fIstrength\fP>] [" \-x " <\fIaxis\fP>] [" \-A "] [" \-o "]"
 .SH "DESCRIPTION"
 ffcfstress stress tests constant non-enveloped forces on a force
 feedback device.
@@ -29,6 +29,14 @@ default).
 .TP
 .BR \-s " <\fIstrength\fP>"
 The spring strength factor (1.0 by default).
+.TP
+.BR \-x " <\fIaxis\fP>"
+absolute axis to test (default: 0)
+.br
+[0 = X, 1 = Y, 2 = Z, 3 = RX, 4 = RY, 5 = RZ, 6 = WHEEL]
+.TP
+.B \-A
+switch off auto-centering
 .TP
 .B \-o
 Dummy option, useful when all defaults should be used.
