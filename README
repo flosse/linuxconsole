@@ -1,5 +1,5 @@
 			  linuxconsole tools
-			    Release 1.4.4
+			    Release 1.4.5
 		 http://sf.net/projects/linuxconsole/
 
 
@@ -140,6 +140,8 @@ The following people have contributed to this release:
 * Christian Gmeiner: TSC-40 support.
 * Kyle Manna: various build fixes.
 * Denis Gonsiorovsky: Genius EasyPen 3x4 tablet support.
+* Jaromir Capik: 64-bit fixes and changes from ff-utils (based on a
+  patch originally by Jean-Philippe Meure).
 
 
 License
