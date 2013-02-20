@@ -667,7 +667,7 @@ static struct input_types input_types[] = {
 	B2400, CS8,
 	SERIO_TWIDJOY,		0x00,	0x00,	0,	twiddler_init },
 { "--elotouch",		"-elo",		"ELO touchscreen, 10-byte mode",
-	B9600, CS8 | CRTSCTS,
+	B9600, CS8,
 	SERIO_ELO,		0x00,	0x00,	0,	NULL },
 { "--elo4002",		"-elo6b",	"ELO touchscreen, 6-byte mode",
 	B9600, CS8 | CRTSCTS,
