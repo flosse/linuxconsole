@@ -54,7 +54,7 @@ int main(int argc, char** argv)
 	struct ff_effect effects[N_EFFECTS];
 	struct input_event play, stop, gain;
 	int fd;
-	char device_file_name[64];
+	const char * device_file_name = "/dev/input/event0";
 	unsigned char relFeatures[1 + REL_MAX/8/sizeof(unsigned char)];
 	unsigned char absFeatures[1 + ABS_MAX/8/sizeof(unsigned char)];
 	unsigned char ffFeatures[1 + FF_MAX/8/sizeof(unsigned char)];
@@ -64,8 +64,6 @@ int main(int argc, char** argv)
 	printf("Force feedback test program.\n");
 	printf("HOLD FIRMLY YOUR WHEEL OR JOYSTICK TO PREVENT DAMAGES\n\n");
 
-	strncpy(device_file_name, "/dev/input/event0", 64);
-
 	for (i=1; i<argc; ++i) {
 		if (strncmp(argv[i], "--help", 64) == 0) {
 			printf("Usage: %s /dev/input/eventXX\n", argv[0]);
@@ -73,7 +71,7 @@ int main(int argc, char** argv)
 			exit(1);
 		}
 		else {
-			strncpy(device_file_name, argv[i], 64);
+			device_file_name = argv[i];
 		}
 	}
 

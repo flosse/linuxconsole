@@ -36,12 +36,10 @@
 int main(int argc, char** argv)
 {
 	int fd;
-	char device_file_name[64];
+	const char * device_file_name = "/dev/input/event0";
 	int i;
 	int gain = -1;
 	int autocenter = -1;
-
-	strncpy(device_file_name, "/dev/input/event0", 64);
 
 	for (i=1; i<argc; ++i) {
 		if (strcmp(argv[i], "--help") == 0) {
@@ -65,7 +63,7 @@ int main(int argc, char** argv)
 			autocenter = atoi(argv[i]);
 		}
 		else {
-			strncpy(device_file_name, argv[i], 64);
+			device_file_name = argv[i];
 		}
 	}
 

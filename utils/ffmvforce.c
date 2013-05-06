@@ -38,7 +38,6 @@
 #include <SDL.h>
 
 #define BIT(x) (1<<(x))
-#define STR_LEN	64
 #define	WIN_W	400
 #define WIN_H	400
 #define max(a,b)	((a)>(b)?(a):(b))
@@ -116,7 +115,7 @@ printf("level: %04x direction: %04x\n", (unsigned int)effect.u.constant.level, (
 int main(int argc, char** argv)
 {
 	SDL_Surface* screen;
-	char dev_name[STR_LEN];
+	const char * dev_name = "/dev/input/event0";
 	int i;
 	Uint32 ticks, period = 200;
 
@@ -124,7 +123,6 @@ int main(int argc, char** argv)
 	if (argc <= 1) return 0;
 
 	/* Parse parameters */
-	strcpy(dev_name, "/dev/input/event0");
 	for (i=1; i<argc; ++i) {
 		if (strcmp(argv[i], "--help") == 0) {
 			printf("Usage: %s /dev/input/eventXX [-u update frequency in HZ]\n", argv[0]);
@@ -139,7 +137,7 @@ int main(int argc, char** argv)
 			period = 1000.0/atof(argv[i]);
 		}
 		else {
-			strncpy(dev_name, argv[i], STR_LEN);
+			dev_name = argv[i];
 		}
 	}
 
