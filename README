@@ -1,5 +1,5 @@
 			  linuxconsole tools
-			    Release 1.4.5
+			    Release 1.4.6
 		 http://sf.net/projects/linuxconsole/
 
 
@@ -142,6 +142,7 @@ The following people have contributed to this release:
 * Denis Gonsiorovsky: Genius EasyPen 3x4 tablet support.
 * Jaromir Capik: 64-bit fixes and changes from ff-utils (based on a
   patch originally by Jean-Philippe Meure).
+* Ralf Jung: fixes for long device names.
 
 
 License
@@ -152,7 +153,7 @@ The linuxconsole tools are
 	Copyright © 2001 Oliver Hamann
 	Copyright © 2001-2002 Johann Deneux
 	Copyright © 2001 Arndt Schoenewald
-	Copyright © 2008-2012 Stephen Kitt
+	Copyright © 2008-2013 Stephen Kitt
 
 
 This program is free software; you can redistribute it and/or modify

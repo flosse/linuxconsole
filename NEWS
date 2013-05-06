@@ -1,3 +1,10 @@
+Version 1.4.6
+-------------
+
+* The force-feedback test tools (ffmvforce, ffset, fftest) now handle
+  device names longer than 64 characters (thanks to Ralf Jung
+  <post@ralfj.de>). This fixes Debian #706744.
+
 Version 1.4.5
 -------------
 
