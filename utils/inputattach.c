@@ -196,7 +196,8 @@ static int spaceball_init(int fd, unsigned long *id, unsigned long *extra)
 	if (!strncmp("Hm3003C", r, 7))
 		*id = SPACEBALL_3003C;
 
-	if (!strncmp("HvFirmware", r, 10)) {
+	/* spaceball 4000 returns 'HVFirmware' with v2.4.3 */
+	if (!strncasecmp("HvFirmware", r, 10)) {
 
 		if (spaceball_cmd(fd, "\"", r))
 			return -1;
