@@ -585,6 +585,43 @@ static int dump_init(int fd, unsigned long *id, unsigned long *extra)
 		}
 }
 
+#define WACOM_IV_RESET_BAUD "\r$"
+#define WACOM_IV_RESET "\r#"
+#define WACOM_IV_STOP "SP\r"
+enum { WACOM_IV_RESET_BAUD_LEN = 2, WACOM_IV_RESET_LEN = 2, WACOM_IV_STOP_LEN = 3 };
+
+static int wacom_iv_init(int fd, unsigned long *id, unsigned long *extra)
+{
+	setline(fd, CS8 | CRTSCTS, B38400);
+	if (write(fd, WACOM_IV_RESET_BAUD, WACOM_IV_RESET_BAUD_LEN) != WACOM_IV_RESET_BAUD_LEN)
+		return -1;
+	usleep(250 * 1000);
+	if (write(fd, WACOM_IV_RESET, WACOM_IV_RESET_LEN) != WACOM_IV_RESET_LEN)
+		return -1;
+	usleep(75 * 1000);
+
+	setline(fd, CS8 | CRTSCTS, B19200);
+	if (write(fd, WACOM_IV_RESET_BAUD, WACOM_IV_RESET_BAUD_LEN) != WACOM_IV_RESET_BAUD_LEN)
+		return -1;
+	usleep(250 * 1000);
+	if (write(fd, WACOM_IV_RESET, WACOM_IV_RESET_LEN) != WACOM_IV_RESET_LEN)
+		return -1;
+	usleep(75 * 1000);
+
+	setline(fd, CS8 | CRTSCTS, B9600);
+	if (write(fd, WACOM_IV_RESET_BAUD, WACOM_IV_RESET_BAUD_LEN) != WACOM_IV_RESET_BAUD_LEN)
+		return -1;
+	usleep(250 * 1000);
+	if (write(fd, WACOM_IV_RESET, WACOM_IV_RESET_LEN) != WACOM_IV_RESET_LEN)
+		return -1;
+	usleep(75 * 1000);
+	if (write(fd, WACOM_IV_STOP, WACOM_IV_STOP_LEN) != WACOM_IV_STOP_LEN)
+		return -1;
+	usleep(30 * 1000);
+
+	return 0;
+}
+
 struct input_types {
 	const char *name;
 	const char *name2;
@@ -731,6 +768,9 @@ static struct input_types input_types[] = {
 { "--w8001",		"-w8001",	"Wacom W8001",
 	B38400, CS8,
 	SERIO_W8001,		0x00,	0x00,	0,	NULL },
+{ "--wacom_iv",		"-wacom_iv",	"Wacom protocol 4 tablet",
+	B9600, CS8 | CRTSCTS,
+	SERIO_WACOM_IV,		0x00,	0x00,	0,	wacom_iv_init },
 { NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, NULL }
 };
 
