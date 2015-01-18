@@ -161,7 +161,8 @@ The following people have contributed to this release:
   patch originally by Jean-Philippe Meure).
 * Ralf Jung: fixes for long device names.
 * Andrew Basterfield: fix for Spaceball 4000FLX support.
-* bri: PS3 controller LED configuration.
+* bri: PS3 controller LED configuration
+* Julian Squires: Wacom IV support.
 
 
 License
