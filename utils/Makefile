@@ -72,5 +72,7 @@ install: compile
 	install $(PROGRAMS) $(DESTDIR)$(PREFIX)/bin
 	install -d $(DESTDIR)$(PREFIX)/share/joystick
 	install extract filter ident $(DESTDIR)$(PREFIX)/share/joystick
+	install -d $(DESTDIR)/lib/udev
+	install js-set-enum-leds $(DESTDIR)/lib/udev
 
 .PHONY: compile clean distclean install
