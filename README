@@ -1,5 +1,5 @@
 			  linuxconsole tools
-			    Release 1.4.7
+			    Release 1.4.8
 		 http://sf.net/projects/linuxconsole/
 
 
@@ -119,6 +119,23 @@ matched by "WACf") no longer contains the matching identifier. The
 appropriate X.org driver when using inputattach in this way is evdev.
 
 
+Configuring PS3 controller LEDs
+-------------------------------
+
+The js-set-enum-leds can be used with udev to ensure that the
+controller LEDs on PS3 controllers match their identifiers as set by
+Bluetooth host software. This ensures that if the controllers are
+plugged in before the Bluetooth daemon starts, the LEDs still match
+the identifier assigned once the daemon has initialised.
+
+The following udev rule achieves this:
+
+	# Set PS3 controller leds to the same value bluez will choose for it.
+	# IMPORT{parent} used because $parent did not appear to be working; we
+	# don't need the devpath of the js device for this so it is OK to overwrite.
+	ACTION=="add", KERNEL=="js*", IMPORT{parent}="DEVPATH", ATTRS{name}=="Sony PLAYSTATION(R)3 Controller", RUN+="/lib/udev/js-set-enum-leds /sys/%E{DEVPATH}/device/leds/ $number"
+
+
 Contributors
 ------------
 
@@ -144,6 +161,8 @@ The following people have contributed to this release:
   patch originally by Jean-Philippe Meure).
 * Ralf Jung: fixes for long device names.
 * Andrew Basterfield: fix for Spaceball 4000FLX support.
+* bri: PS3 controller LED configuration
+* Julian Squires: Wacom IV support.
 
 
 License
@@ -154,7 +173,7 @@ The linuxconsole tools are
 	Copyright © 2001 Oliver Hamann
 	Copyright © 2001-2002 Johann Deneux
 	Copyright © 2001 Arndt Schoenewald
-	Copyright © 2008-2014 Stephen Kitt
+	Copyright © 2008-2015 Stephen Kitt
 
 
 This program is free software; you can redistribute it and/or modify

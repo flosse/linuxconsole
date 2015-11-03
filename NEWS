@@ -1,3 +1,12 @@
+Version 1.4.8
+-------------
+
+* Set up PS3 controller LEDs correctly (thanks to bri
+  <bri@abrij.org>).
+
+* inputattach supports Wacom IV tablets on kernels 3.17 and greater
+  (thanks to Julian Squires <julian@cipht.net>).
+
 Version 1.4.7
 -------------
 

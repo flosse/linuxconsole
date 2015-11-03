@@ -1,0 +1,76 @@
+#!/bin/sh
+
+# js-set-enum-leds: Set gamepad enumerator LEDS to match the js device number.
+
+# Copyright © 2014 bri <bri@abrij.org>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+
+# If the gamepad/joystick is bluetooth-capable, bluez may set the leds
+# even before the gamepad is connected.  In these cases please match what
+# bluez will do (or may already have done if it is already running.)
+
+. /lib/udev/hotplug.functions
+
+# If the set_gamepad_leds function provided for convenience is to be used
+# for a particular type of gamepad, the udev rule should provide the following
+# postional parameters.  See /lib/udev/rules.d/60-joystick for examples.
+
+# A partial path string containing the common part of the names of affected
+# led-class sysfs directories.
+LEDGLOB=$1
+# The number of the js device.  These start at 0 but enumerator LEDs are
+# 1-based. (Having at least one LED on lets user see controller is on.)
+JSNUM=$2
+
+set_gamepad_leds() {
+	for led in "$LEDGLOB"*; do
+		if [ -d $led ] && [ -w $led/brightness ] && [ "$1" ]; then
+			echo $1 > $led/brightness
+			shift 1
+	        else
+			mesg "set_gamepad_leds: wrong number of leds or values"
+			exit -1
+		fi
+	done
+}
+
+# In addition it is assumed ID_MODEL will have been set appropriately by udev
+# This is used to select the appropriate actions for the particular model.
+
+case $ID_MODEL in
+	PLAYSTATION_R_3_Controller)
+		case $JSNUM in
+			0) set_gamepad_leds 1 0 0 0;
+			;;
+			1) set_gamepad_leds 0 1 0 0;
+			;;
+			2) set_gamepad_leds 0 0 1 0;
+			;;
+			3) set_gamepad_leds 0 0 0 1;
+			;;
+			4) set_gamepad_leds 1 0 0 1;
+			;;
+			5) set_gamepad_leds 0 1 0 1;
+			;;
+			6) set_gamepad_leds 0 0 1 1;
+			;;
+			*) set_gamepad_leds 0 0 0 0;
+			;;
+		esac
+		;;
+	*) mesg "called with no matching model"
+esac
