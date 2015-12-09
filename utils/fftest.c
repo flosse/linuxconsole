@@ -215,7 +215,7 @@ int main(int argc, char** argv)
 	effects[0].type = FF_PERIODIC;
 	effects[0].id = -1;
 	effects[0].u.periodic.waveform = FF_SINE;
-	effects[0].u.periodic.period = 10;	/* 0.1 second */
+	effects[0].u.periodic.period = 100;	/* 0.1 second */
 	effects[0].u.periodic.magnitude = 0x7fff;	/* 0.5 * Maximum magnitude */
 	effects[0].u.periodic.offset = 0;
 	effects[0].u.periodic.phase = 0;
