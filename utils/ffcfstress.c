@@ -287,7 +287,7 @@ void update_device(double force, double * position)
 	/* Get events */
 	while (read(device_handle,&event,sizeof(event))==sizeof(event)) {
 		if (event.type==EV_ABS && event.code==axis_code) {
-			*position=((double)(((short)event.value)-axis_min))*2.0/(axis_max-axis_min)-1.0;
+			*position=((double)(((unsigned short)event.value)-axis_min))*2.0/(axis_max-axis_min)-1.0;
 			if (*position>1.0) *position=1.0;
 			else if (*position<-1.0) *position=-1.0;
 		}
